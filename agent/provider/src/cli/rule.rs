@@ -16,6 +16,11 @@ pub enum RuleCommand {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum SetRule {
+    Outbound(SetOutboundRule),
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum SetOutboundRule {
     Disable,
     Enable,
     Everyone {
@@ -43,13 +48,15 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
     let rules = RuleStore::load_or_create(&config.rules_file)?;
 
     match set_rule {
-        SetRule::Everyone { mode } => rules.set_everyone_mode(mode),
-        SetRule::AuditedPayload { certificate, mode } => match certificate {
-            Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-            None => rules.set_default_audited_payload_mode(mode),
+        SetRule::Outbound(outbound) => match outbound {
+            SetOutboundRule::Disable => rules.set_enabled(false),
+            SetOutboundRule::Enable => rules.set_enabled(true),
+            SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
+            SetOutboundRule::AuditedPayload { certificate, mode } => match certificate {
+                Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
+                None => rules.set_default_audited_payload_mode(mode),
+            },
         },
-        SetRule::Disable => rules.set_enabled(false),
-        SetRule::Enable => rules.set_enabled(true),
     }
 }
 

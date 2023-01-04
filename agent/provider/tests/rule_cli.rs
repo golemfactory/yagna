@@ -47,6 +47,7 @@ fn rule_set_should_disable_and_enable_feature() {
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .arg("rule")
         .arg("set")
+        .arg("outbound")
         .arg("disable")
         .assert()
         .success();
@@ -60,6 +61,7 @@ fn rule_set_should_disable_and_enable_feature() {
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .arg("rule")
         .arg("set")
+        .arg("outbound")
         .arg("enable")
         .assert()
         .success();
@@ -81,6 +83,7 @@ fn rule_set_should_edit_everyone_mode(mode: &str) {
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .arg("rule")
         .arg("set")
+        .arg("outbound")
         .arg(rule)
         .arg(mode)
         .assert()
@@ -102,6 +105,7 @@ fn rule_set_should_edit_default_modes_for_certificate_rules(rule: &str, mode: &s
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .arg("rule")
         .arg("set")
+        .arg("outbound")
         .arg(rule)
         .arg(mode)
         .assert()
