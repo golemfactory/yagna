@@ -13,7 +13,6 @@ use ya_core_model::NodeId;
 use crate::appkey;
 use crate::command::{
     NetworkGroup, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER, NETWORK_GROUP_MAP,
-    ZKSYNC_DRIVER,
 };
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
