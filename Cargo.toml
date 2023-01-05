@@ -16,6 +16,7 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
+framework-test = []
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 
@@ -78,6 +79,10 @@ tokio = { version = "1", features = ["net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
+
+[dev-dependencies]
+ya-test-framework = "0.1"
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
 
 [package.metadata.deb]
 name="golem-requestor"
@@ -157,7 +162,8 @@ members = [
     "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
-    "core/metrics"
+    "core/metrics",
+    "test-utils/test-framework"
 ]
 
 [patch.crates-io]
@@ -221,6 +227,7 @@ ya-provider = { path = "agent/provider"}
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
+ya-test-framework = { path = "test-utils/test-framework" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
