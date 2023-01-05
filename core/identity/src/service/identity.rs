@@ -409,6 +409,7 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
             let this = this.clone();
+            println!("GGETTTTTTTTTT");
             async move {
                 match get {
                     model::Get::ByAlias(alias) => this.lock().await.get_by_alias(&alias),

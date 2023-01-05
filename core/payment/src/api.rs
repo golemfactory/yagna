@@ -20,6 +20,7 @@ pub fn api_scope(scope: Scope) -> Scope {
 }
 
 pub fn web_scope(db: &DbExecutor) -> Scope {
+    println!("web_scope");
     Scope::new(PAYMENT_API_PATH)
         .app_data(Data::new(db.clone()))
         .service(api_scope(Scope::new("")))

@@ -43,6 +43,7 @@ tokio = { version = "1", features = ["fs", "signal", "macros"] }
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 humantime="2.0.1"
+erc20_payment_lib = { path= "C:/scx1332/rust_erc20_payment/crates/erc20_payment_lib" }
 
 [dev-dependencies]
 ya-client = "0.7"

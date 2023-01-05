@@ -106,10 +106,11 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let start_datetime = Utc::now().naive_utc();
     // Retrieve an application key entry based on the key itself
     let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
+        println!("get");
         let db = dbx.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
-            if preconfigured_appkey.as_ref() == Some(&get.key) {
+
                 let node_id = match preconfigured_node_id {
                     Some(node_id) => node_id,
                     None => {
@@ -129,21 +130,8 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     identity: node_id,
                     created_date: start_datetime,
                 })
-            } else {
-                let (appkey, role) = db
-                    .as_dao::<AppKeyDao>()
-                    .get(get.key)
-                    .await
-                    .map_err(|e| model::Error::internal(e.to_string()))?;
 
-                Ok(model::AppKey {
-                    name: appkey.name,
-                    key: appkey.key,
-                    role: role.name,
-                    identity: appkey.identity_id,
-                    created_date: appkey.created_date,
-                })
-            }
+
         }
     });
 

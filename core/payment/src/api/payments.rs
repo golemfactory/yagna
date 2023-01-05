@@ -1,7 +1,17 @@
+use std::collections::BTreeMap;
 // External crates
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use std::str::FromStr;
+use std::sync::Arc;
+use erc20_payment_lib::config;
+use erc20_payment_lib::config::AdditionalOptions;
+use erc20_payment_lib::db::create_sqlite_connection;
+use erc20_payment_lib::runtime::{SharedState, SharedInfoTx};
+use erc20_payment_lib::server::{config_endpoint, ServerData};
+use erc20_payment_lib::setup::PaymentSetup;
+use futures::executor;
+use tokio::sync::Mutex;
 
 // Workspace uses
 use ya_client_model::payment::*;
@@ -14,10 +24,50 @@ use crate::dao::*;
 use crate::utils::*;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
+    let private_keys = vec![];
+    let receiver_accounts = vec![];
+    let additional_options = AdditionalOptions {
+        keep_running: true,
+        generate_tx_only: false,
+        skip_multi_contract_check: false
+    };
+    let config = config::Config::load("config-payments.toml").unwrap();
+
+
+    let payment_setup = PaymentSetup::new(
+        &config,
+        private_keys,
+        receiver_accounts,
+        !additional_options.keep_running,
+        additional_options.generate_tx_only,
+        additional_options.skip_multi_contract_check,
+        config.engine.service_sleep,
+        config.engine.process_sleep,
+        config.engine.automatic_recover,
+    ).unwrap();
+
+    let shared_state = SharedState{
+        current_tx_info: Default::default(),
+        faucet: None,
+        inserted: 0,
+        idling: false
+    };
+    let db_filename = "db.sqlite";
+    let conn = executor::block_on(create_sqlite_connection(Some(&db_filename), true)).unwrap();
+
+    let server_data = ServerData {
+        shared_state: Arc::new(Mutex::new(shared_state)),
+        db_connection: Arc::new(Mutex::new(conn)),
+        payment_setup: payment_setup
+    };
+
     scope
         .route("/payments", get().to(get_payments))
         .route("/payments/{payment_id}", get().to(get_payment))
+        .app_data(Data::new(server_data))
+        .route("/payments/erc20/config", get().to(config_endpoint))
 }
+
 
 async fn get_payments(
     db: Data<DbExecutor>,
