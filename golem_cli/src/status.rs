@@ -246,8 +246,7 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
     for net in NetworkName::VARIANTS {
         let net_to_check = net.parse()?;
         let platform = ERC20_DRIVER
-            .platform(&net_to_check)
-            .or_else(|_e| ZKSYNC_DRIVER.platform(&net_to_check))?;
+            .platform(&net_to_check)?;
         let platform_property =
             &format!("golem.com.payment.platform.{}.address", platform.platform,);
         if latest_offer.properties.get(platform_property).is_some() {
