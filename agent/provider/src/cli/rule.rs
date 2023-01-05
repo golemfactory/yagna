@@ -41,6 +41,33 @@ impl RuleCommand {
     }
 }
 
+fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
+    let rules = RuleStore::load_or_create(&config.rules_file)?;
+
+    match set_rule {
+        SetRule::Everyone { mode } => rules.set_everyone_mode(mode),
+        SetRule::AuditedPayload { certificate, mode } => match certificate {
+            Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
+            None => rules.set_default_audited_payload_mode(mode),
+        },
+        SetRule::Disable => rules.set_enabled(false),
+        SetRule::Enable => rules.set_enabled(true),
+    }
+}
+
+fn list(config: ProviderConfig) -> Result<()> {
+    let rules = RuleStore::load_or_create(&config.rules_file)?;
+    let table = RulesTable::from(rules.clone());
+
+    if config.json {
+        rules.print()?
+    } else {
+        table.print()?
+    };
+
+    Ok(())
+}
+
 struct RulesTable {
     header: Option<String>,
     table: ResponseTable,
@@ -109,31 +136,4 @@ impl From<RuleStore> for RulesTable {
 
         table
     }
-}
-
-fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let rules = RuleStore::load_or_create(&config.rules_file)?;
-
-    match set_rule {
-        SetRule::Everyone { mode } => rules.set_everyone_mode(mode),
-        SetRule::AuditedPayload { certificate, mode } => match certificate {
-            Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-            None => rules.set_default_audited_payload_mode(mode),
-        },
-        SetRule::Disable => rules.set_enabled(false),
-        SetRule::Enable => rules.set_enabled(true),
-    }
-}
-
-fn list(config: ProviderConfig) -> Result<()> {
-    let rules = RuleStore::load_or_create(&config.rules_file)?;
-    let table = RulesTable::from(rules.clone());
-
-    if config.json {
-        rules.print()?
-    } else {
-        table.print()?
-    };
-
-    Ok(())
 }
