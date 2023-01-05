@@ -14,7 +14,7 @@ use strum::Display;
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     pub path: PathBuf,
-    config: Arc<RwLock<RulesConfig>>,
+    pub config: Arc<RwLock<RulesConfig>>,
 }
 
 impl RuleStore {
@@ -111,7 +111,7 @@ impl RuleStore {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
-    outbound: OutboundConfig,
+    pub outbound: OutboundConfig,
 }
 
 impl Default for RulesConfig {
@@ -134,20 +134,20 @@ impl Default for RulesConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OutboundConfig {
-    enabled: bool,
-    everyone: Mode,
-    audited_payload: CertRules,
+    pub enabled: bool,
+    pub everyone: Mode,
+    pub audited_payload: CertRules,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRules {
-    default: CertRule,
+    pub default: CertRule,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRule {
-    mode: Mode,
-    description: String,
+    pub mode: Mode,
+    pub description: String,
 }
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
