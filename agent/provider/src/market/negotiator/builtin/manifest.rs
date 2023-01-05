@@ -52,19 +52,32 @@ impl NegotiatorComponent for ManifestSignature {
             Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
 
-        if demand.has_signature() {
-            match demand.verify_signature(&self.keystore) {
-                Ok(()) => match demand.verify_permissions(&self.keystore) {
-                    Ok(_) => acceptance(offer),
-                    Err(e) => rejection(format!("certificate permissions verification: {e}")),
-                },
-                Err(e) => rejection(format!("failed to verify manifest signature: {e}")),
+        if self.rulestore.check_whitelist_for_everyone() {
+            if demand.whitelist_matching(&self.whitelist_matcher) {
+                log::trace!("Everyone Whitelist matched.");
+                return acceptance(offer);
             }
-        } else if demand.requires_signature(&self.whitelist_matcher) {
-            rejection("manifest requires signature but it has none".to_string())
-        } else {
-            log::trace!("No signature required. No signature provided.");
-            acceptance(offer)
+        }
+
+        match demand.verify_signature(&self.keystore) {
+            //TODO Rafał What with "verify permissions"?
+            Ok(()) => {
+                if self.rulestore.accept_all_audited_payload() {
+                    return acceptance(offer);
+                } else if self.rulestore.check_whitelist_for_audited_payload() {
+                    if demand.whitelist_matching(&self.whitelist_matcher) {
+                        log::trace!("Everyone Whitelist matched.");
+                        return acceptance(offer);
+                    } else {
+                        return rejection(format!("Certificate rule set to None"));
+                    }
+                } else {
+                    return rejection(format!("Certificate rule set to None"));
+                }
+            }
+            Err(e) => {
+                return rejection(format!("failed to verify manifest signature: {e}"));
+            }
         }
     }
 
@@ -128,40 +141,32 @@ impl<'demand> DemandWithManifest<'demand> {
             .is_ok()
     }
 
-    fn requires_signature(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
-        let features = self.manifest.features();
-        if features.is_empty() {
-            log::debug!("No features in demand. Signature not required.");
-            return false;
-        // Inet is the only feature
-        } else if features.contains(&Feature::Inet) && features.len() == 1 {
-            if let Some(urls) = self
-                .manifest
-                .comp_manifest
-                .as_ref()
-                .and_then(|comp| comp.net.as_ref())
-                .and_then(|net| net.inet.as_ref())
-                .and_then(|inet| inet.out.as_ref())
-                .and_then(|out| out.urls.as_ref())
-            {
-                let matcher = whitelist_matcher.read().unwrap();
-                let non_whitelisted_urls: Vec<&str> = urls
-                    .iter()
-                    .flat_map(Url::host_str)
-                    .filter(|domain| matcher.matches(domain).not())
-                    .collect();
-                if non_whitelisted_urls.is_empty() {
-                    log::debug!("Demand does not require signature. Every URL on whitelist");
-                    return false;
-                }
-                log::debug!(
-                    "Demand requires signature. Non whitelisted URLs: {:?}",
-                    non_whitelisted_urls
-                );
+    fn whitelist_matching(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
+        //TODO Rafał Refactor + why there was Inet if?
+        if let Some(urls) = self
+            .manifest
+            .comp_manifest
+            .as_ref()
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .and_then(|out| out.urls.as_ref())
+        {
+            let matcher = whitelist_matcher.read().unwrap();
+            let non_whitelisted_urls: Vec<&str> = urls
+                .iter()
+                .flat_map(Url::host_str)
+                .filter(|domain| matcher.matches(domain).not())
+                .collect();
+            if non_whitelisted_urls.is_empty() {
+                log::debug!("Every URL on whitelist");
                 return true;
             }
+            log::debug!("Whitelis. Non whitelisted URLs: {:?}", non_whitelisted_urls);
+            return false;
         }
-        log::debug!("Demand requires signature.");
+        //TODO Rafał is it right?
+        log::debug!("No url's to check");
         true
     }
 

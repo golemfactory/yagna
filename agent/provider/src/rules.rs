@@ -107,6 +107,32 @@ impl RuleStore {
 
         Ok(())
     }
+
+    pub fn check_whitelist_for_everyone(&self) -> bool {
+        self.config.read().unwrap().outbound.everyone == Mode::Whitelist
+    }
+
+    pub fn accept_all_audited_payload(&self) -> bool {
+        self.config
+            .read()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode
+            == Mode::All
+    }
+
+    pub fn check_whitelist_for_audited_payload(&self) -> bool {
+        self.config
+            .read()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode
+            == Mode::Whitelist
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
