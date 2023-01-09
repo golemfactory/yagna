@@ -4,8 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use ya_core_model::appkey as model;
 use ya_core_model::appkey::AppKey;
-use ya_service_bus::RpcEndpoint;
-use ya_service_bus::{actix_rpc, typed as bus};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub const BUS_ID: &str = "/local/middleware/auth";
 
@@ -20,7 +19,7 @@ impl AppKeyCache {
         let mut appkeys = vec![];
 
         loop {
-            let (mut keys, pages) = actix_rpc::service(model::BUS_ID)
+            let (mut keys, pages) = bus::service(model::BUS_ID)
                 .send(model::List {
                     identity: None,
                     page,
@@ -30,7 +29,7 @@ impl AppKeyCache {
                 .map_err(|e| anyhow!("Failed to query app-keys: {e}"))??;
             appkeys.append(&mut keys);
 
-            if page == pages {
+            if page >= pages {
                 break;
             } else {
                 page += 1;
