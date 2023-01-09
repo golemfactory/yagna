@@ -86,6 +86,22 @@ where
         }
 
         Box::pin(async move {
+            let header = if let Some(key) = header {
+                Some(key)
+            } else {
+                //use lazy static to not call env var on every request
+                lazy_static::lazy_static! {
+                    static ref DISABLE_APPKEY_SECURITY : bool = std::env::var("YAGNA_DEV_DISABLE_APPKEY_SECURITY").map(|f|f == "1").unwrap_or(false);
+                }
+                if *DISABLE_APPKEY_SECURITY {
+                    //dev path
+                    log::warn!("AppKey security is disabled. Not for production!");
+                    Some("no_security_appkey".to_string())
+                } else {
+                    //Normal path
+                    None
+                }
+            };
             match header {
                 Some(key) => {
                     let cached = cache.lock().await.get(&key);

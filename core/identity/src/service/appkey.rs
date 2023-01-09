@@ -104,11 +104,18 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let preconfigured_appkey = crate::autoconf::preconfigured_appkey()?;
     let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
     let start_datetime = Utc::now().naive_utc();
+    let disable_appkey_security = std::env::var("YAGNA_DEV_DISABLE_APPKEY_SECURITY")
+        .map(|f| f == "1")
+        .unwrap_or(false);
+    if disable_appkey_security {
+        log::warn!("AppKey security is disabled. Not for production!");
+    }
     // Retrieve an application key entry based on the key itself
     let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
         let db = dbx.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
+            log::warn!("get appkey: {:?}", &get.key);
             if preconfigured_appkey.as_ref() == Some(&get.key) {
                 let node_id = match preconfigured_node_id {
                     Some(node_id) => node_id,
@@ -130,11 +137,43 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     created_date: start_datetime,
                 })
             } else {
-                let (appkey, role) = db
+                let (appkey, role) = match db
                     .as_dao::<AppKeyDao>()
-                    .get(get.key)
+                    .get(get.key.clone())
                     .await
-                    .map_err(|e| model::Error::internal(e.to_string()))?;
+                    .map_err(|e| model::Error::internal(e.to_string()))
+                {
+                    Ok((appkey, role)) => (appkey, role),
+                    Err(e) => {
+                        return if !disable_appkey_security {
+                            //Normal path - return error
+                            Err(e)
+                        } else {
+                            //Dev path - return default app-key, don't worry about unwraps
+                            let node_id = match preconfigured_node_id {
+                                Some(node_id) => node_id,
+                                None => {
+                                    let default_identity = bus::service(idm::BUS_ID)
+                                        .send(idm::Get::ByDefault)
+                                        .await
+                                        .map_err(model::Error::internal)?
+                                        .map_err(model::Error::internal)?
+                                        .ok_or_else(|| {
+                                            model::Error::internal("appkey not found")
+                                        })?;
+                                    default_identity.node_id
+                                }
+                            };
+                            Ok(model::AppKey {
+                                name: "autoconfigured".to_string(),
+                                key: get.key.clone(),
+                                role: model::DEFAULT_ROLE.to_string(),
+                                identity: node_id,
+                                created_date: start_datetime,
+                            })
+                        };
+                    }
+                };
 
                 Ok(model::AppKey {
                     name: appkey.name,

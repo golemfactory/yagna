@@ -8436,6 +8436,7 @@ dependencies = [
  "awc",
  "env_logger 0.7.1",
  "futures 0.3.25",
+ "lazy_static",
  "log",
  "serde",
  "structopt",
