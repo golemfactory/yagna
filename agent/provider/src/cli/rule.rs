@@ -1,6 +1,8 @@
 use anyhow::Result;
 use structopt::StructOpt;
+use ya_utils_cli::{CommandOutput, ResponseTable};
 
+use crate::rules::CertRule;
 use crate::{
     rules::{Mode, RuleStore},
     startup_config::ProviderConfig,
@@ -62,12 +64,83 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
 fn list(config: ProviderConfig) -> Result<()> {
     let rules = RuleStore::load_or_create(&config.rules_file)?;
+    let table = RulesTable::from(rules.clone());
 
     if config.json {
-        rules.print()?;
+        rules.print()?
     } else {
-        todo!("Printing pretty table isn't implemented yet")
-    }
+        table.print()?
+    };
 
     Ok(())
+}
+
+struct RulesTable {
+    header: Option<String>,
+    table: ResponseTable,
+}
+
+impl RulesTable {
+    fn new() -> Self {
+        let columns = vec![
+            "rule".to_string(),
+            "mode".to_string(),
+            "certificate".to_string(),
+            "description".to_string(),
+        ];
+        let values = vec![];
+        let table = ResponseTable { columns, values };
+
+        Self {
+            header: None,
+            table,
+        }
+    }
+
+    fn with_header(&mut self, outbound_status: bool) {
+        let status = if outbound_status {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        let header = format!("\nOutbound status: {status}");
+
+        self.header = Some(header)
+    }
+
+    fn add_everyone(&mut self, outbound_everyone: Mode) {
+        let row = serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]};
+        self.table.values.push(row);
+    }
+
+    fn add(&mut self, rule: CertRule) {
+        let row = serde_json::json! {[ "Audited payload", rule.mode, "", rule.description ]};
+        self.table.values.push(row);
+    }
+
+    pub fn print(self) -> Result<()> {
+        let output = CommandOutput::Table {
+            columns: self.table.columns,
+            values: self.table.values,
+            summary: vec![],
+            header: self.header,
+        };
+
+        output.print(false)?;
+
+        Ok(())
+    }
+}
+
+impl From<RuleStore> for RulesTable {
+    fn from(rules: RuleStore) -> Self {
+        let mut table = RulesTable::new();
+        let outbound = rules.config.read().unwrap().outbound.clone();
+
+        table.with_header(outbound.enabled);
+        table.add_everyone(outbound.everyone);
+        table.add(outbound.audited_payload.default);
+
+        table
+    }
 }
