@@ -115,7 +115,6 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let db = dbx.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
-            log::warn!("get appkey: {:?}", &get.key);
             if preconfigured_appkey.as_ref() == Some(&get.key) {
                 let node_id = match preconfigured_node_id {
                     Some(node_id) => node_id,
