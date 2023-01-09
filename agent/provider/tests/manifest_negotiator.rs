@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use test_case::test_case;
 use ya_agreement_utils::AgreementView;

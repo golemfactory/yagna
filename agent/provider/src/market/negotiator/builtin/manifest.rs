@@ -34,6 +34,8 @@ impl NegotiatorComponent for ManifestSignature {
             return rejection("outbound is disabled".into());
         }
 
+        //TODO Rafał Check if outbound is even needed. If not- accept
+
         if self.enabled.not() || self.rulestore.always_accept_outbound() {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
@@ -59,25 +61,33 @@ impl NegotiatorComponent for ManifestSignature {
             }
         }
 
-        match demand.verify_signature(&self.keystore) {
-            //TODO Rafał What with "verify permissions"?
-            Ok(()) => {
-                if self.rulestore.accept_all_audited_payload() {
-                    return acceptance(offer);
-                } else if self.rulestore.check_whitelist_for_audited_payload() {
-                    if demand.whitelist_matching(&self.whitelist_matcher) {
-                        log::trace!("Everyone Whitelist matched.");
+        if demand.has_signature() {
+            //Check audited-payload Rule
+            match demand.verify_signature(&self.keystore) {
+                //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+                Ok(()) => {
+                    if self.rulestore.accept_all_audited_payload() {
+                        log::trace!("Autited-Payload rule set to all");
                         return acceptance(offer);
+                    } else if self.rulestore.check_whitelist_for_audited_payload() {
+                        if demand.whitelist_matching(&self.whitelist_matcher) {
+                            log::trace!("Autited-Payload whitelist matched");
+                            return acceptance(offer);
+                        } else {
+                            return rejection(format!("Whitelist doesn't match"));
+                        }
                     } else {
-                        return rejection(format!("Whitelist doesn't match"));
+                        //TODO Rafał Better match here
+                        return rejection(format!("Certificate rule set to None"));
                     }
-                } else {
-                    return rejection(format!("Certificate rule set to None"));
+                }
+                Err(e) => {
+                    return rejection(format!("failed to verify manifest signature: {e}"));
                 }
             }
-            Err(e) => {
-                return rejection(format!("failed to verify manifest signature: {e}"));
-            }
+        } else {
+            //Check partner Rule
+            return rejection(format!("Partner Rule is not implemented yet"));
         }
     }
 
