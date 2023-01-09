@@ -1,5 +1,5 @@
 use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse, WsResult};
-use actix::Addr;
+use actix::{Actor, Addr, Context, Handler, Recipient};
 use futures::channel::oneshot::{self, Canceled};
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -11,7 +11,11 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 use ya_core_model::gftp::{self, GetChunk, GetMetadata, GftpChunk, GftpMetadata};
-use ya_service_bus::{typed as bus, RpcMessage};
+use ya_service_bus::{
+    actix_rpc as ubus, typed as bus,
+    untyped::{Fn4Handler, Fn4HandlerExt, RawHandler},
+    RpcMessage, RpcRawCall,
+};
 
 lazy_static! {
     pub(crate) static ref SERVICES: Arc<Mutex<GsbServices>> =
@@ -37,29 +41,63 @@ impl GsbServices {
         let ws_calls = self.ws_responses_dst(path);
         let ws_request_dst = self.ws_request_dst(path);
         for component in components {
-            //TODO handle errors
-            match component {
-                "GetMetadata" => {
-                    log::info!("GetMetadata {path}");
-                    <Self as ServiceBinder<GetMetadata>>::bind_service(
-                        path,
-                        ws_calls.clone(),
-                        ws_request_dst.clone(),
-                    )
-                    .unwrap();
-                }
-                "GetChunk" => {
-                    log::info!("GetChunk {path}");
-                    <Self as ServiceBinder<GetChunk>>::bind_service(
-                        path,
-                        ws_calls.clone(),
-                        ws_request_dst.clone(),
-                    )
-                    .unwrap();
-                }
-                _ => return Err(GsbApiError::BadRequest),
-            }
+            Self::bind_raw(path, component, ws_calls.clone(), ws_request_dst.clone())?;
         }
+        Ok(())
+    }
+
+    fn bind_raw(
+        path: &str,
+        component: &str,
+        senders_map: Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>,
+        request_dst: Arc<RwLock<Option<Addr<WsMessagesHandler>>>>,
+    ) -> Result<(), GsbApiError> {
+        let senders_map = senders_map.clone();
+        let request_dst = request_dst.clone();
+        let addr = format!("{path}/{component}");
+        let component = component.to_string();
+        let rpc = move |addr: &str, path: &str, msg: &[u8]| {
+            let component = component.to_string();
+            let senders_map = senders_map.clone();
+            let id = uuid::Uuid::new_v4().to_string();
+            let request_dst = request_dst.clone();
+            let msg = msg.to_vec();
+            async move {
+                // let ws_request = (id.clone(), msg).try_into()?;
+                let ws_request = WsRequest {
+                    id: id.clone(),
+                    component,
+                    msg,
+                };
+                let (ws_sender, ws_receiver) = oneshot::channel();
+                {
+                    let mut senders = senders_map.write().unwrap();
+                    senders.insert(id, ws_sender);
+                }
+                //TODO handle it properly
+                let request_dst = request_dst.read().unwrap();
+                match &*request_dst {
+                    Some(request_dst) => {
+                        log::info!("Sending msg");
+                        if let Err(err) = request_dst.send(ws_request).await {
+                            log::info!("Mailbox closed: {}", err);
+                        }
+                    }
+                    None => {
+                        //TODO handle it
+                        todo!("handle not initialized/uninitialised request addr");
+                    }
+                };
+                let response = ws_receiver
+                    .await
+                    .map(|resp| resp)
+                    .map_err(|err| ya_service_bus::Error::GsbFailure(err.to_string()))?
+                    .map_err(|err| ya_service_bus::Error::GsbFailure(err.to_string()))?;
+                Ok(response.msg)
+            }
+        };
+        log::info!("Binding service: {addr}");
+        let _ = ya_service_bus::untyped::subscribe(&addr, rpc, ());
         Ok(())
     }
 
@@ -119,7 +157,7 @@ where
                     Some(request_dst) => {
                         log::info!("Sending {:?}", ws_request);
                         if let Err(err) = request_dst.send(ws_request).await {
-                            log::error!("Failed to handle msg: {}", err);
+                            log::info!("Mailbox closed: {}", err);
                         }
                     }
                     None => {
@@ -137,84 +175,4 @@ where
     }
 
     fn map_canceled(err: Canceled) -> MSG::Error;
-}
-
-impl ServiceBinder<GetMetadata> for GsbServices {
-    fn map_canceled(err: Canceled) -> <GetMetadata as RpcMessage>::Error {
-        gftp::Error::InternalError(format!("WS request failed: {}", err))
-    }
-}
-
-impl TryInto<WsRequest> for (String, GetMetadata) {
-    type Error = <GetMetadata as RpcMessage>::Error;
-
-    fn try_into(self) -> Result<WsRequest, Self::Error> {
-        let payload = serde_json::to_value(&self.1)
-            .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
-        let id = self.0;
-        let component = GetMetadata::ID.to_string();
-        Ok(WsRequest {
-            id,
-            component,
-            payload,
-        })
-    }
-}
-
-impl TryFrom<WsResult> for GftpMetadata {
-    type Error = <GetMetadata as RpcMessage>::Error;
-
-    fn try_from(res: WsResult) -> Result<Self, Self::Error> {
-        match res.0 {
-            Ok(ws_response) => {
-                let msg = flexbuffers::Reader::get_root(&*ws_response.msg).unwrap();
-                let msg = msg.as_map();
-                let payload = msg.index("payload").unwrap();
-                let response = GftpMetadata::deserialize(payload)
-                    .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
-                Ok(response)
-            }
-            Err(err) => Err(ya_core_model::gftp::Error::InternalError(err.to_string())),
-        }
-    }
-}
-
-impl ServiceBinder<GetChunk> for GsbServices {
-    fn map_canceled(err: Canceled) -> <GetChunk as RpcMessage>::Error {
-        gftp::Error::InternalError(format!("WS request failed: {}", err))
-    }
-}
-
-impl TryInto<WsRequest> for (String, GetChunk) {
-    type Error = <GetChunk as RpcMessage>::Error;
-
-    fn try_into(self) -> Result<WsRequest, Self::Error> {
-        let payload = serde_json::to_value(&self.1)
-            .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
-        let id = self.0;
-        let component = GetChunk::ID.to_string();
-        Ok(WsRequest {
-            id,
-            component,
-            payload,
-        })
-    }
-}
-
-impl TryFrom<WsResult> for GftpChunk {
-    type Error = <GetChunk as RpcMessage>::Error;
-
-    fn try_from(res: WsResult) -> Result<Self, Self::Error> {
-        match res.0 {
-            Ok(ws_response) => {
-                let msg = flexbuffers::Reader::get_root(&*ws_response.msg).unwrap();
-                let msg = msg.as_map();
-                let payload = msg.index("payload").unwrap();
-                let response = GftpChunk::deserialize(payload)
-                    .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
-                Ok(response)
-            }
-            Err(err) => Err(ya_core_model::gftp::Error::InternalError(err.to_string())),
-        }
-    }
 }

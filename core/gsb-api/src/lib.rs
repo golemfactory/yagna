@@ -87,7 +87,7 @@ impl ResponseError for GsbApiError {
 struct WsRequest {
     id: String,
     component: String,
-    payload: Value,
+    msg: Vec<u8>,
 }
 
 impl actix::Message for WsRequest {
@@ -97,10 +97,10 @@ impl actix::Message for WsRequest {
 #[derive(Debug)]
 struct WsResponse {
     id: String,
-    msg: Bytes,
+    msg: Vec<u8>,
 }
 
-struct WsResult(Result<WsResponse, anyhow::Error>);
+type WsResult = Result<WsResponse, anyhow::Error>;
 
 impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
     fn handle(
@@ -129,12 +129,13 @@ impl WsMessagesHandler {
                 let response = buffer.as_map();
                 //TODO handle errors
                 let id = response.index("id").unwrap().as_str().to_string();
+                let msg = msg.to_vec();
                 let response = WsResponse { id, msg };
-                log::info!("WsResponse: {response:?}");
+                log::info!("WsResponse: {} len: {}", response.id, response.msg.len());
                 let mut responders = self.responders.write().unwrap();
                 match responders.remove(&response.id) {
                     Some(responder) => {
-                        if let Err(err) = responder.send(WsResult(Ok(response))) {
+                        if let Err(err) = responder.send(Ok(response)) {
                             log::error!("Failed to handle msg");
                         }
                     }
@@ -174,11 +175,11 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
         match item {
             Ok(msg) => match msg {
                 ws::Message::Text(msg) => {
-                    log::info!("Text: {:?}", msg);
+                    log::info!("Text (len {})", msg.len());
                     self.handle(msg.into_bytes());
                 }
                 ws::Message::Binary(msg) => {
-                    log::info!("Binary: {:?}", msg);
+                    log::info!("Binary (len {})", msg.len());
                     self.handle(msg);
                 }
                 ws::Message::Continuation(msg) => {
@@ -188,7 +189,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                     log::info!("Close: {:?}", msg);
                 }
                 ws::Message::Ping(msg) => {
-                    log::info!("Ping: {:?}", msg);
+                    log::info!("Ping (len {})", msg.len());
                 }
                 any => todo!("NYI support of: {:?}", any),
             },
