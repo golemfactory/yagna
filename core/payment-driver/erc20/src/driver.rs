@@ -5,10 +5,10 @@
 */
 // Extrnal crates
 use chrono::{Duration, Utc};
+use erc20_payment_lib::runtime::PaymentRuntime;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
-use erc20_payment_lib::runtime::PaymentRuntime;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -52,7 +52,7 @@ pub struct Erc20Driver {
     dao: Erc20Dao,
     sendout_lock: Mutex<()>,
     confirmation_lock: Mutex<()>,
-    pub payment_runtime: PaymentRuntime
+    pub payment_runtime: PaymentRuntime,
 }
 
 impl Erc20Driver {
@@ -213,7 +213,6 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: ShutDown,
     ) -> Result<(), GenericError> {
-
         Ok(())
     }
 }

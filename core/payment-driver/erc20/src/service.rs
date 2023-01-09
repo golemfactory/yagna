@@ -3,10 +3,10 @@
 */
 
 // Extrernal crates
-use std::sync::Arc;
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::runtime::start_payment_engine;
+use std::sync::Arc;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -46,24 +46,27 @@ impl Erc20Service {
 
         log::info!("Successfully connected Erc20Service to gsb.");
 
-
         {
             let private_keys = vec![];
             let receiver_accounts = vec![];
             let additional_options = AdditionalOptions {
                 keep_running: true,
                 generate_tx_only: false,
-                skip_multi_contract_check: false
+                skip_multi_contract_check: false,
             };
             let config = config::Config::load("config-payments.toml")?;
 
-
-
-            let sp = start_payment_engine(&private_keys, &receiver_accounts, "db.sqlite", config, Some(additional_options)).await?;
+            let sp = start_payment_engine(
+                &private_keys,
+                &receiver_accounts,
+                "db.sqlite",
+                config,
+                Some(additional_options),
+            )
+            .await?;
             let driver = Erc20Driver::new(db.clone(), sp);
             let driver_rc = Arc::new(driver);
             bus::bind_service(&db, driver_rc.clone()).await?;
-
         }
         Ok(())
     }

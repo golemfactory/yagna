@@ -110,28 +110,25 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let db = dbx.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
-
-                let node_id = match preconfigured_node_id {
-                    Some(node_id) => node_id,
-                    None => {
-                        let default_identity = bus::service(idm::BUS_ID)
-                            .send(idm::Get::ByDefault)
-                            .await
-                            .map_err(model::Error::internal)?
-                            .map_err(model::Error::internal)?
-                            .ok_or_else(|| model::Error::internal("appkey not found"))?;
-                        default_identity.node_id
-                    }
-                };
-                Ok(model::AppKey {
-                    name: "autoconfigured".to_string(),
-                    key: get.key.clone(),
-                    role: model::DEFAULT_ROLE.to_string(),
-                    identity: node_id,
-                    created_date: start_datetime,
-                })
-
-
+            let node_id = match preconfigured_node_id {
+                Some(node_id) => node_id,
+                None => {
+                    let default_identity = bus::service(idm::BUS_ID)
+                        .send(idm::Get::ByDefault)
+                        .await
+                        .map_err(model::Error::internal)?
+                        .map_err(model::Error::internal)?
+                        .ok_or_else(|| model::Error::internal("appkey not found"))?;
+                    default_identity.node_id
+                }
+            };
+            Ok(model::AppKey {
+                name: "autoconfigured".to_string(),
+                key: get.key.clone(),
+                role: model::DEFAULT_ROLE.to_string(),
+                identity: node_id,
+                created_date: start_datetime,
+            })
         }
     });
 

@@ -86,31 +86,29 @@ where
         }
 
         Box::pin(async move {
+            let key = "f727928548484a8e9707b6ce822db7fe".to_string();
+            let cached = cache.lock().await.get(&key);
+            let resolved = match cached {
+                Some(opt) => opt,
+                None => cache.lock().await.resolve(&key).await,
+            };
 
-                    let key = "f727928548484a8e9707b6ce822db7fe".to_string();
-                    let cached = cache.lock().await.get(&key);
-                    let resolved = match cached {
-                        Some(opt) => opt,
-                        None => cache.lock().await.resolve(&key).await,
-                    };
-
-                    match resolved {
-                        Some(app_key) => {
-                            req.extensions_mut().insert(Identity::from(app_key));
-                            let fut = { service.borrow_mut().call(req) };
-                            Ok(fut.await?)
-                        }
-                        None => {
-                            log::debug!(
-                                "{} {} Invalid application key: {}",
-                                req.method(),
-                                req.path(),
-                                key
-                            );
-                            Err(ErrorUnauthorized("Invalid application key"))
-                        }
-                    }
-
+            match resolved {
+                Some(app_key) => {
+                    req.extensions_mut().insert(Identity::from(app_key));
+                    let fut = { service.borrow_mut().call(req) };
+                    Ok(fut.await?)
+                }
+                None => {
+                    log::debug!(
+                        "{} {} Invalid application key: {}",
+                        req.method(),
+                        req.path(),
+                        key
+                    );
+                    Err(ErrorUnauthorized("Invalid application key"))
+                }
+            }
         })
     }
 }
