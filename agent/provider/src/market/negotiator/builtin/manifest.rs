@@ -69,7 +69,7 @@ impl NegotiatorComponent for ManifestSignature {
                         log::trace!("Everyone Whitelist matched.");
                         return acceptance(offer);
                     } else {
-                        return rejection(format!("Certificate rule set to None"));
+                        return rejection(format!("Whitelist doesn't match"));
                     }
                 } else {
                     return rejection(format!("Certificate rule set to None"));
