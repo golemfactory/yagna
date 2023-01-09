@@ -86,27 +86,50 @@ where
         }
 
         Box::pin(async move {
-            let key = "f727928548484a8e9707b6ce822db7fe".to_string();
-            let cached = cache.lock().await.get(&key);
-            let resolved = match cached {
-                Some(opt) => opt,
-                None => cache.lock().await.resolve(&key).await,
+            let header = if let Some(key) = header {
+                Some(key)
+            } else {
+                //use lazy static to not call env var on every request
+                lazy_static::lazy_static! {
+                    static ref DISABLE_APPKEY_SECURITY : bool = std::env::var("YAGNA_DEV_DISABLE_APPKEY_SECURITY").map(|f|f == "1").unwrap_or(false);
+                }
+                if *DISABLE_APPKEY_SECURITY {
+                    //dev path
+                    log::warn!("AppKey security is disabled. Not for production!");
+                    Some("no_security_appkey".to_string())
+                } else {
+                    //Normal path
+                    None
+                }
             };
+            match header {
+                Some(key) => {
+                    let cached = cache.lock().await.get(&key);
+                    let resolved = match cached {
+                        Some(opt) => opt,
+                        None => cache.lock().await.resolve(&key).await,
+                    };
 
-            match resolved {
-                Some(app_key) => {
-                    req.extensions_mut().insert(Identity::from(app_key));
-                    let fut = { service.borrow_mut().call(req) };
-                    Ok(fut.await?)
+                    match resolved {
+                        Some(app_key) => {
+                            req.extensions_mut().insert(Identity::from(app_key));
+                            let fut = { service.borrow_mut().call(req) };
+                            Ok(fut.await?)
+                        }
+                        None => {
+                            log::debug!(
+                                "{} {} Invalid application key: {}",
+                                req.method(),
+                                req.path(),
+                                key
+                            );
+                            Err(ErrorUnauthorized("Invalid application key"))
+                        }
+                    }
                 }
                 None => {
-                    log::debug!(
-                        "{} {} Invalid application key: {}",
-                        req.method(),
-                        req.path(),
-                        key
-                    );
-                    Err(ErrorUnauthorized("Invalid application key"))
+                    log::debug!("Missing application key");
+                    Err(ErrorUnauthorized("Missing application key"))
                 }
             }
         })
