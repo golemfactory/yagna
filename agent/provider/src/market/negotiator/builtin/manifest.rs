@@ -47,16 +47,16 @@ impl NegotiatorComponent for ManifestSignature {
             Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
 
-        if demand.manifest.is_outbound_requested().not() {
-            log::trace!("Outbound is not requested.");
-            acceptance(offer)
-        } else {
+        if demand.manifest.is_outbound_requested() {
             self.rulestore.negotiate_outbound(
                 offer,
                 demand,
                 &self.keystore,
                 &self.whitelist_matcher,
             )
+        } else {
+            log::trace!("Outbound is not requested.");
+            acceptance(offer)
         }
     }
 

@@ -140,19 +140,17 @@ impl RuleStore {
             match cfg.outbound.audited_payload.default.mode {
                 Mode::All => {
                     log::trace!("Autited-Payload rule set to all");
-                    return acceptance(offer);
+                    acceptance(offer)
                 }
                 Mode::Whitelist => {
                     if demand.whitelist_matching(whitelist_matcher) {
                         log::trace!("Autited-Payload whitelist matched");
-                        return acceptance(offer);
+                        acceptance(offer)
                     } else {
-                        return rejection(format!("Audited-Payload whitelist doesn't match"));
+                        rejection(format!("Audited-Payload whitelist doesn't match"))
                     }
                 }
-                Mode::None => {
-                    return rejection(format!("Audited-Payload rule is disabled"));
-                }
+                Mode::None => rejection(format!("Audited-Payload rule is disabled")),
             }
         } else {
             //Check partner Rule
