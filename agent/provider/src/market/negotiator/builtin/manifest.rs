@@ -47,7 +47,7 @@ impl NegotiatorComponent for ManifestSignature {
             Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
 
-        if demand.is_outbound_requested().not() {
+        if demand.manifest.is_outbound_requested().not() {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
@@ -219,10 +219,6 @@ impl<'demand> DemandWithManifest<'demand> {
         }
 
         keystore.verify_permissions(&cert, required)
-    }
-
-    fn is_outbound_requested(&self) -> bool {
-        self.manifest.has_outbound_urls()
     }
 }
 

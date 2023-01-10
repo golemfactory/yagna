@@ -111,7 +111,7 @@ impl AppManifest {
             })
     }
 
-    pub fn has_outbound_urls(&self) -> bool {
+    pub fn is_outbound_requested(&self) -> bool {
         if let Some(urls) = self
             .comp_manifest
             .as_ref()
