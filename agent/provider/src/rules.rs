@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::Display;
 
+use crate::market::negotiator::{builtin::manifest::DemandWithManifest, NegotiationResult};
+
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     pub path: PathBuf,
@@ -133,8 +135,75 @@ impl RuleStore {
             .mode
             == Mode::Whitelist
     }
+
+    pub fn negotiate_outbound(
+        &self,
+        offer: crate::market::negotiator::ProposalView,
+        demand: DemandWithManifest,
+        keystore: &ya_manifest_utils::Keystore,
+        whitelist_matcher: &ya_manifest_utils::matching::domain::SharedDomainMatchers,
+    ) -> Result<NegotiationResult> {
+        let cfg = self.config.read().unwrap();
+        if cfg.outbound.enabled.not() {
+            log::trace!("Outbound is disabled.");
+            return rejection("outbound is disabled".into());
+        }
+
+        match cfg.outbound.everyone {
+            Mode::All => {
+                log::trace!("Everyone is allowed for outbound");
+                return acceptance(offer);
+            }
+            Mode::Whitelist => {
+                if demand.whitelist_matching(whitelist_matcher) {
+                    log::trace!("Everyone Whitelist matched");
+                    return acceptance(offer);
+                }
+            }
+            Mode::None => log::trace!("Everyone rule is disabled"),
+        }
+
+        if demand.has_signature() {
+            //Check audited-payload Rule
+            match demand.verify_signature(keystore) {
+                //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+                Ok(()) => match cfg.outbound.audited_payload.default.mode {
+                    Mode::All => {
+                        log::trace!("Autited-Payload rule set to all");
+                        return acceptance(offer);
+                    }
+                    Mode::Whitelist => {
+                        if demand.whitelist_matching(whitelist_matcher) {
+                            log::trace!("Autited-Payload whitelist matched");
+                            return acceptance(offer);
+                        } else {
+                            return rejection(format!("Whitelist doesn't match"));
+                        }
+                    }
+                    Mode::None => {
+                        return rejection(format!("Certificate rule set to None"));
+                    }
+                },
+                Err(e) => {
+                    return rejection(format!("failed to verify manifest signature: {e}"));
+                }
+            }
+        } else {
+            //Check partner Rule
+            return rejection(format!("Partner Rule is not implemented yet"));
+        }
+    }
 }
 
+fn acceptance(offer: crate::market::negotiator::ProposalView) -> Result<NegotiationResult> {
+    Ok(NegotiationResult::Ready { offer })
+}
+fn rejection(message: String) -> Result<NegotiationResult> {
+    Ok(NegotiationResult::Reject {
+        message,
+        is_final: true,
+    })
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
     pub outbound: OutboundConfig,

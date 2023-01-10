@@ -48,54 +48,15 @@ impl NegotiatorComponent for ManifestSignature {
         };
 
         if demand.manifest.is_outbound_requested().not() {
-            log::trace!("Manifest signature verification disabled.");
-            return acceptance(offer);
-        }
-
-        if self.rulestore.always_reject_outbound() {
-            log::trace!("Outbound is disabled.");
-            return rejection("outbound is disabled".into());
-        }
-
-        if self.rulestore.always_accept_outbound() {
-            log::trace!("Manifest signature verification disabled.");
-            return acceptance(offer);
-        }
-
-        if self.rulestore.check_whitelist_for_everyone() {
-            if demand.whitelist_matching(&self.whitelist_matcher) {
-                log::trace!("Everyone Whitelist matched.");
-                return acceptance(offer);
-            }
-        }
-
-        if demand.has_signature() {
-            //Check audited-payload Rule
-            match demand.verify_signature(&self.keystore) {
-                //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-                Ok(()) => {
-                    if self.rulestore.accept_all_audited_payload() {
-                        log::trace!("Autited-Payload rule set to all");
-                        return acceptance(offer);
-                    } else if self.rulestore.check_whitelist_for_audited_payload() {
-                        if demand.whitelist_matching(&self.whitelist_matcher) {
-                            log::trace!("Autited-Payload whitelist matched");
-                            return acceptance(offer);
-                        } else {
-                            return rejection(format!("Whitelist doesn't match"));
-                        }
-                    } else {
-                        //TODO Rafał Better match here
-                        return rejection(format!("Certificate rule set to None"));
-                    }
-                }
-                Err(e) => {
-                    return rejection(format!("failed to verify manifest signature: {e}"));
-                }
-            }
+            log::trace!("Outbound is not requested.");
+            acceptance(offer)
         } else {
-            //Check partner Rule
-            return rejection(format!("Partner Rule is not implemented yet"));
+            self.rulestore.negotiate_outbound(
+                offer,
+                demand,
+                &self.keystore,
+                &self.whitelist_matcher,
+            )
         }
     }
 
@@ -146,20 +107,21 @@ impl ManifestSignature {
     }
 }
 
-struct DemandWithManifest<'demand> {
+//TODO Rafał move it / not pass to rulestore
+pub struct DemandWithManifest<'demand> {
     demand: &'demand ProposalView,
     manifest_encoded: String,
     manifest: AppManifest,
 }
 
 impl<'demand> DemandWithManifest<'demand> {
-    fn has_signature(&self) -> bool {
+    pub fn has_signature(&self) -> bool {
         self.demand
             .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
             .is_ok()
     }
 
-    fn whitelist_matching(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
+    pub fn whitelist_matching(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
         //TODO Rafał Refactor + why there was Inet if?
         if let Some(urls) = self
             .manifest
@@ -188,7 +150,7 @@ impl<'demand> DemandWithManifest<'demand> {
         true
     }
 
-    fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
+    pub fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
         let sig = self
             .demand
             .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
@@ -203,7 +165,7 @@ impl<'demand> DemandWithManifest<'demand> {
         keystore.verify_signature(cert, sig, sig_alg, &self.manifest_encoded)
     }
 
-    fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
+    pub fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
         let mut required = required_permissions(&self.manifest.features());
         let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
 
