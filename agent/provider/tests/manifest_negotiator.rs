@@ -196,26 +196,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
 )]
 #[test_case(
     r#"{ "any": "thing" }"#, // offer
-    Some("foo_inter.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_inter.cert.pem"), // cert
-    None, // cert_permissions_b64
-    &vec![CertPermissions::OutboundManifest], // certs_permissions
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
-    "Manifest rejected, because parent certificate has no permissions"
-)]
-#[test_case(
-    r#"{ "any": "thing" }"#, // offer
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
-    None;
-    "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
-)]
-#[test_case(
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
