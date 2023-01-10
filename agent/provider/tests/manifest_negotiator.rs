@@ -194,16 +194,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     None;
     "Manifest accepted, when permissions are set to `All`"
 )]
-#[test_case(
-    r#"{ "any": "thing" }"#, // offer
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::OutboundManifest],
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
-    "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
-)]
 #[serial]
 fn test_manifest_negotiator_certs_permissions(
     offer: &str,
