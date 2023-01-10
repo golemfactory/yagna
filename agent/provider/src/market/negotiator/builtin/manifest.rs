@@ -29,14 +29,7 @@ impl NegotiatorComponent for ManifestSignature {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        if self.rulestore.always_reject_outbound() {
-            log::trace!("Outbound is disabled.");
-            return rejection("outbound is disabled".into());
-        }
-
-        //TODO Rafał Check if outbound is even needed. If not- accept
-
-        if self.enabled.not() || self.rulestore.always_accept_outbound() {
+        if self.enabled.not() {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
@@ -53,6 +46,21 @@ impl NegotiatorComponent for ManifestSignature {
             Err(Error::NoKey(_)) => return acceptance(offer),
             Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
+
+        if demand.is_outbound_requested().not() {
+            log::trace!("Manifest signature verification disabled.");
+            return acceptance(offer);
+        }
+
+        if self.rulestore.always_reject_outbound() {
+            log::trace!("Outbound is disabled.");
+            return rejection("outbound is disabled".into());
+        }
+
+        if self.rulestore.always_accept_outbound() {
+            log::trace!("Manifest signature verification disabled.");
+            return acceptance(offer);
+        }
 
         if self.rulestore.check_whitelist_for_everyone() {
             if demand.whitelist_matching(&self.whitelist_matcher) {
@@ -211,6 +219,10 @@ impl<'demand> DemandWithManifest<'demand> {
         }
 
         keystore.verify_permissions(&cert, required)
+    }
+
+    fn is_outbound_requested(&self) -> bool {
+        self.manifest.has_outbound_urls()
     }
 }
 
