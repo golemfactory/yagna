@@ -52,7 +52,7 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7.1"
+ya-client = "0.7.0"
 ya-client-model = "0.5"
 
 gftp = { version = "0.3.1", optional = true } # just to enable gftp build for cargo-deb
