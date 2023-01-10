@@ -144,6 +144,7 @@ impl RuleStore {
         whitelist_matcher: &ya_manifest_utils::matching::domain::SharedDomainMatchers,
     ) -> Result<NegotiationResult> {
         let cfg = self.config.read().unwrap();
+
         if cfg.outbound.enabled.not() {
             log::trace!("Outbound is disabled.");
             return rejection("outbound is disabled".into());
@@ -165,27 +166,26 @@ impl RuleStore {
 
         if demand.has_signature() {
             //Check audited-payload Rule
-            match demand.verify_signature(keystore) {
-                //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-                Ok(()) => match cfg.outbound.audited_payload.default.mode {
-                    Mode::All => {
-                        log::trace!("Autited-Payload rule set to all");
+            if let Err(e) = demand.verify_signature(keystore) {
+                return rejection(format!("failed to verify manifest signature: {e}"));
+            }
+            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+
+            match cfg.outbound.audited_payload.default.mode {
+                Mode::All => {
+                    log::trace!("Autited-Payload rule set to all");
+                    return acceptance(offer);
+                }
+                Mode::Whitelist => {
+                    if demand.whitelist_matching(whitelist_matcher) {
+                        log::trace!("Autited-Payload whitelist matched");
                         return acceptance(offer);
+                    } else {
+                        return rejection(format!("Audited-Payload whitelist doesn't match"));
                     }
-                    Mode::Whitelist => {
-                        if demand.whitelist_matching(whitelist_matcher) {
-                            log::trace!("Autited-Payload whitelist matched");
-                            return acceptance(offer);
-                        } else {
-                            return rejection(format!("Whitelist doesn't match"));
-                        }
-                    }
-                    Mode::None => {
-                        return rejection(format!("Certificate rule set to None"));
-                    }
-                },
-                Err(e) => {
-                    return rejection(format!("failed to verify manifest signature: {e}"));
+                }
+                Mode::None => {
+                    return rejection(format!("Audited-Payload rule is disabled"));
                 }
             }
         } else {
