@@ -27,7 +27,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     None, // private key file
     None, // sig alg
     None, // cert
@@ -37,7 +36,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     None, // private key file
     None, // sig alg
     None, // cert
@@ -47,7 +45,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     None, // private key file
     None, // sig alg
     None, // cert
@@ -57,7 +54,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     None, // private key file
     None, // sig alg
     None, // cert
@@ -67,7 +63,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"[]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     None, // private key file
     None, // sig alg
     None, // cert
@@ -77,7 +72,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
@@ -87,7 +81,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("dummy_inter.cert.pem"), // untrusted cert
@@ -97,7 +90,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_inter.key.pem"), // private key file not matching certificate
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // certificate not matching private key
@@ -108,7 +100,6 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 fn manifest_negotiator_test(
     whitelist: &str,
     urls: &str,
-    offer: &str,
     signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
@@ -125,7 +116,6 @@ fn manifest_negotiator_test(
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         whitelist,
         comp_manifest_b64,
-        offer,
         signature_b64,
         signature_alg,
         cert_b64,
@@ -139,7 +129,6 @@ fn manifest_negotiator_test(
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    r#"{ "any": "thing" }"#, // offer
     Some("broken_signature"), // signature (broken)
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
@@ -150,7 +139,6 @@ fn manifest_negotiator_test(
 fn manifest_negotiator_test_encoded_sign_and_cert(
     whitelist: &str,
     urls: &str,
-    offer: &str,
     signature_b64: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
@@ -163,7 +151,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         whitelist,
         comp_manifest_b64,
-        offer,
         signature_b64,
         signature_alg,
         cert_b64,
@@ -175,7 +162,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
 }
 
 #[test_case(
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
@@ -185,7 +171,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     "Manifest accepted, because permissions are sufficient"
 )]
 #[test_case(
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
@@ -196,7 +181,6 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
 )]
 #[serial]
 fn test_manifest_negotiator_certs_permissions(
-    offer: &str,
     signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
@@ -205,7 +189,6 @@ fn test_manifest_negotiator_certs_permissions(
     error_msg: Option<&str>,
 ) {
     manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
-        offer,
         signing_key,
         signature_alg,
         cert,
@@ -217,7 +200,6 @@ fn test_manifest_negotiator_certs_permissions(
 }
 
 #[test_case(
-    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_inter_req-chain.cert.pem"), // cert
@@ -229,7 +211,6 @@ fn test_manifest_negotiator_certs_permissions(
 )]
 #[serial]
 fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
-    offer: &str,
     signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
@@ -248,7 +229,6 @@ fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
         comp_manifest_b64,
-        offer,
         signature_b64,
         signature_alg,
         cert_b64,
@@ -263,7 +243,6 @@ fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     whitelist: &str,
     comp_manifest_b64: String,
-    offer: &str,
     signature_b64: Option<String>,
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
@@ -310,9 +289,8 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         json: demand,
         agreement_id: "id".to_string(),
     };
-    let offer: Value = serde_json::from_str(offer).unwrap();
     let offer = AgreementView {
-        json: offer,
+        json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
         agreement_id: "id".to_string(),
     };
 
