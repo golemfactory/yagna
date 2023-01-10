@@ -112,38 +112,18 @@ impl AppManifest {
     }
 
     pub fn has_outbound_urls(&self) -> bool {
-        self.comp_manifest
+        if let Some(urls) = self
+            .comp_manifest
             .as_ref()
-            .map(|cm| {
-                cm.net.as_ref().map(|n| {
-                    n.inet.as_ref().map(|i| {
-                        i.out.as_ref().map(|o| {
-                            if let Some(urls) = &o.urls {
-                                !urls.is_empty()
-                            } else {
-                                false
-                            }
-                        })
-                    })
-                })
-            })
-            .flatten()
-            .flatten()
-            .flatten()
-            .unwrap_or(false)
-        // let x = self
-        //     .comp_manifest
-        //     .unwrap_or(false)
-        //     .net
-        //     .unwrap_or(false)
-        //     .inet
-        //     .unwrap_or(false)
-        //     .out
-        //     .unwrap_or(false)
-        //     .urls
-        //     .unwrap_or(false)
-        //     .is_empty()
-        //     .not();
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .and_then(|out| out.urls.as_ref())
+        {
+            !urls.is_empty()
+        } else {
+            false
+        }
     }
 
     pub fn features(&self) -> HashSet<Feature> {
