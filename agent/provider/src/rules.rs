@@ -93,14 +93,6 @@ impl RuleStore {
         self.save()
     }
 
-    pub fn always_reject_outbound(&self) -> bool {
-        self.config.read().unwrap().outbound.enabled.not()
-    }
-
-    pub fn always_accept_outbound(&self) -> bool {
-        self.config.read().unwrap().outbound.everyone == Mode::All
-    }
-
     pub fn print(&self) -> Result<()> {
         println!(
             "{}",
@@ -108,32 +100,6 @@ impl RuleStore {
         );
 
         Ok(())
-    }
-
-    pub fn check_whitelist_for_everyone(&self) -> bool {
-        self.config.read().unwrap().outbound.everyone == Mode::Whitelist
-    }
-
-    pub fn accept_all_audited_payload(&self) -> bool {
-        self.config
-            .read()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode
-            == Mode::All
-    }
-
-    pub fn check_whitelist_for_audited_payload(&self) -> bool {
-        self.config
-            .read()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode
-            == Mode::Whitelist
     }
 
     pub fn negotiate_outbound(
@@ -190,7 +156,7 @@ impl RuleStore {
             }
         } else {
             //Check partner Rule
-            return rejection(format!("Partner Rule is not implemented yet"));
+            rejection(format!("Didn't match any Rules"))
         }
     }
 }
