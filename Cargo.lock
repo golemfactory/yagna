@@ -5882,7 +5882,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -7822,6 +7822,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-framework-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.3.0"
 dependencies = [
@@ -8520,13 +8529,16 @@ dependencies = [
 name = "ya-test-framework"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
  "assert_cmd",
  "libc",
  "log",
  "nix 0.22.3",
+ "serial_test 0.5.1",
  "tokio 1.23.0",
  "url",
+ "ya-framework-macro",
  "ya-utils-process",
 ]
 
@@ -8774,7 +8786,6 @@ dependencies = [
  "openssl-probe",
  "serde",
  "serde_json",
- "serial_test 0.5.1",
  "structopt",
  "tokio 1.23.0",
  "tokio-stream",

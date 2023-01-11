@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use assert_cmd::cargo::cargo_bin;
 use assert_cmd::Command;
 use std::collections::HashMap;
@@ -51,7 +52,7 @@ impl YagnaCommand {
 }
 
 impl YagnaMock {
-    pub fn new(test_dir: &Path) -> anyhow::Result<Self> {
+    pub fn new(test_dir: &Path) -> Self {
         let yagna = YagnaMock {
             yagna_dir: test_dir.join("yagna"),
             provider_dir: test_dir.join("provider"),
@@ -61,7 +62,7 @@ impl YagnaMock {
             process: Arc::new(Mutex::new(None)),
         };
 
-        Ok(yagna.set_default_env())
+        yagna.set_default_env()
     }
 
     fn set_default_env(mut self) -> Self {
@@ -85,11 +86,11 @@ impl YagnaMock {
 
     pub async fn service_run(self) -> anyhow::Result<Self> {
         let mut cmd = self.command.build_std("yagna");
-        cmd.current_dir(&self.yagna_dir).arg("service")
+        cmd.current_dir(&self.yagna_dir)
+            .arg("service")
             .arg("run")
-            // .stderr(Stdio::null())
-            // .stdout(Stdio::null())
-        ;
+            .stderr(Stdio::null())
+            .stdout(Stdio::null());
 
         #[cfg(target_os = "linux")]
         unsafe {
@@ -110,6 +111,21 @@ impl YagnaMock {
 
         *self.process.lock().unwrap() = Some(tracker);
         Ok(self)
+    }
+
+    pub(crate) async fn tear_down(&self, timeout: std::time::Duration) -> anyhow::Result<()> {
+        if let Some(process) = {
+            self.process
+                .lock()
+                .map_err(|e| anyhow!("{e}"))?
+                .as_ref()
+                .map(|tracker| tracker.child.clone())
+        } {
+            if let Err(_) = process.terminate(timeout).await {
+                process.kill();
+            }
+        }
+        Ok(())
     }
 }
 
@@ -188,17 +204,6 @@ mod tracker {
                     }
                 }
             }
-        }
-    }
-
-    impl Drop for YagnaTracker {
-        fn drop(&mut self) {
-            let process = self.child.clone();
-            tokio::task::spawn_local(async move {
-                if let Err(_) = process.terminate(std::time::Duration::from_secs(1)).await {
-                    process.kill();
-                }
-            });
         }
     }
 }

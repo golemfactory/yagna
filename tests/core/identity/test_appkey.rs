@@ -1,16 +1,10 @@
-use serial_test;
-
-use ya_test_framework::framework::macros::prepare_test_dir;
-use ya_test_framework::YagnaMock;
+use ya_test_framework::framework::macros::{prepare_test_dir, serial_test};
+use ya_test_framework::framework::{framework_test, YagnaFramework};
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
-#[serial_test::serial]
-async fn test_appkey_removal() {
-    let yagna = YagnaMock::new(&prepare_test_dir!())
-        .unwrap()
-        .service_run()
-        .await
-        .unwrap();
+#[framework_test]
+async fn test_appkey_removal(framework: YagnaFramework) -> anyhow::Result<()> {
+    let yagna = framework.new_node("node1").service_run().await?;
 
     yagna
         .command()
@@ -27,4 +21,6 @@ async fn test_appkey_removal() {
         .arg("test-appkey")
         .assert()
         .success();
+
+    Ok(())
 }
