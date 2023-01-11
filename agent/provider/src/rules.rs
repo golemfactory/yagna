@@ -107,24 +107,24 @@ impl RuleStore {
         demand: DemandWithManifest,
         keystore: &ya_manifest_utils::Keystore,
         whitelist_matcher: &ya_manifest_utils::matching::domain::SharedDomainMatchers,
-    ) -> Result<CheckRuleResult> {
+    ) -> CheckRuleResult {
         let cfg = self.config.read().unwrap();
 
         if cfg.outbound.enabled.not() {
             log::trace!("Outbound is disabled.");
-            return Ok(CheckRuleResult::Reject("outbound is disabled".into()));
+            return CheckRuleResult::Reject("outbound is disabled".into());
         }
 
         match cfg.outbound.everyone {
             Mode::All => {
                 log::trace!("Everyone is allowed for outbound");
 
-                return Ok(CheckRuleResult::Accept);
+                return CheckRuleResult::Accept;
             }
             Mode::Whitelist => {
                 if demand.whitelist_matching(whitelist_matcher) {
                     log::trace!("Everyone Whitelist matched");
-                    return Ok(CheckRuleResult::Accept);
+                    return CheckRuleResult::Accept;
                 }
             }
             Mode::None => log::trace!("Everyone rule is disabled"),
@@ -133,34 +133,30 @@ impl RuleStore {
         if demand.has_signature() {
             //Check audited-payload Rule
             if let Err(e) = demand.verify_signature(keystore) {
-                return Ok(CheckRuleResult::Reject(format!(
+                return CheckRuleResult::Reject(format!(
                     "failed to verify manifest signature: {e}"
-                )));
+                ));
             }
             //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
 
             match cfg.outbound.audited_payload.default.mode {
                 Mode::All => {
                     log::trace!("Autited-Payload rule set to all");
-                    Ok(CheckRuleResult::Accept)
+                    CheckRuleResult::Accept
                 }
                 Mode::Whitelist => {
                     if demand.whitelist_matching(whitelist_matcher) {
                         log::trace!("Autited-Payload whitelist matched");
-                        Ok(CheckRuleResult::Accept)
+                        CheckRuleResult::Accept
                     } else {
-                        Ok(CheckRuleResult::Reject(
-                            "Audited-Payload whitelist doesn't match".into(),
-                        ))
+                        CheckRuleResult::Reject("Audited-Payload whitelist doesn't match".into())
                     }
                 }
-                Mode::None => Ok(CheckRuleResult::Reject(
-                    "Audited-Payload rule is disabled".into(),
-                )),
+                Mode::None => CheckRuleResult::Reject("Audited-Payload rule is disabled".into()),
             }
         } else {
             //Check partner Rule
-            return Ok(CheckRuleResult::Reject("Didn't match any Rules".into()));
+            CheckRuleResult::Reject("Didn't match any Rules".into())
         }
     }
 }

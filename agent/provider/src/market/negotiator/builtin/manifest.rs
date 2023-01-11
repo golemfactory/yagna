@@ -52,7 +52,7 @@ impl NegotiatorComponent for ManifestSignature {
                 demand,
                 &self.keystore,
                 &self.whitelist_matcher,
-            )? {
+            ) {
                 crate::rules::CheckRuleResult::Accept => acceptance(offer),
                 crate::rules::CheckRuleResult::Reject(msg) => rejection(msg),
             }
