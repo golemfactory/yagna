@@ -8535,6 +8535,8 @@ dependencies = [
  "libc",
  "log",
  "nix 0.22.3",
+ "serde",
+ "serde_json",
  "serial_test 0.5.1",
  "tokio 1.23.0",
  "url",
