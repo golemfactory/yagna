@@ -53,8 +53,8 @@ impl NegotiatorComponent for ManifestSignature {
                 &self.keystore,
                 &self.whitelist_matcher,
             ) {
-                crate::rules::CheckRuleResult::Accept => acceptance(offer),
-                crate::rules::CheckRuleResult::Reject(msg) => rejection(msg),
+                crate::rules::CheckRulesResult::Accept => acceptance(offer),
+                crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
             }
         } else {
             log::trace!("Outbound is not requested.");
