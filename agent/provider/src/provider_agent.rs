@@ -121,8 +121,6 @@ impl WhitelistManager {
 
 #[derive(Clone, Debug, Default)]
 pub struct AgentNegotiatorsConfig {
-    pub trusted_keys: Keystore,
-    pub domain_patterns: DomainWhitelistState,
     pub rules_config: RuleStore,
 }
 
@@ -136,10 +134,8 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
-    keystore_monitor: FileMonitor,
     rulestore_monitor: FileMonitor,
     net_api: NetApi,
-    domain_whitelist: WhitelistManager,
 }
 
 impl ProviderAgent {
@@ -192,9 +188,13 @@ impl ProviderAgent {
             .unwrap_or_else(|| app_name.to_string());
 
         let cert_dir = config.cert_dir_path()?;
-        let keystore = load_keystore(&cert_dir)?;
+        // let keystore = load_keystore(&cert_dir)?;
 
-        let rulestore = RuleStore::load_or_create(&config.rules_file)?;
+        let rulestore = RuleStore::load_or_create(
+            &config.rules_file,
+            &config.domain_whitelist_file,
+            &cert_dir,
+        )?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
@@ -219,14 +219,12 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore.clone())?;
+        // let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore.clone())?;
         let rulestore_monitor = spawn_rulestore_monitor(rulestore.clone())?;
-        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
-        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
+        // let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
+        // domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
 
         let agent_negotiators_cfg = AgentNegotiatorsConfig {
-            trusted_keys: keystore,
-            domain_patterns: domain_whitelist.get_state(),
             rules_config: rulestore,
         };
         let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
@@ -246,10 +244,8 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
-            keystore_monitor,
             rulestore_monitor,
             net_api,
-            domain_whitelist,
         })
     }
 
@@ -514,7 +510,7 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
 }
 
 fn spawn_rulestore_monitor(rulestore: RuleStore) -> Result<FileMonitor, Error> {
-    let path = rulestore.path.clone();
+    let path = rulestore.rules_file.clone();
     let handler = move |p: PathBuf| match rulestore.reload() {
         Ok(()) => {
             log::info!("rulestore updated from {}", p.display());
@@ -621,9 +617,9 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
-        self.keystore_monitor.stop();
+        // self.keystore_monitor.stop();
         self.rulestore_monitor.stop();
-        self.domain_whitelist.stop();
+        // self.domain_whitelist.stop();
 
         async move {
             market.send(MarketShutdown).await??;

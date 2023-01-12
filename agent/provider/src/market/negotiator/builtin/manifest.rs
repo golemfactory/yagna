@@ -18,9 +18,7 @@ use crate::rules::RuleStore;
 
 pub struct ManifestSignature {
     enabled: bool,
-    keystore: Keystore,
     rulestore: RuleStore,
-    whitelist_matcher: SharedDomainMatchers,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -48,11 +46,7 @@ impl NegotiatorComponent for ManifestSignature {
         };
 
         if demand.manifest.is_outbound_requested() {
-            match self.rulestore.check_outbound_rules(
-                demand,
-                &self.keystore,
-                &self.whitelist_matcher,
-            ) {
+            match self.rulestore.check_outbound_rules(demand) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
             }
@@ -102,9 +96,7 @@ impl ManifestSignature {
 
         ManifestSignature {
             enabled,
-            keystore: agent_negotiators_cfg.trusted_keys,
             rulestore: agent_negotiators_cfg.rules_config,
-            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers,
         }
     }
 }
@@ -217,8 +209,6 @@ mod tests {
         ManifestSignature::new(
             &PolicyConfig::from_iter(arguments),
             AgentNegotiatorsConfig {
-                trusted_keys: Default::default(),
-                domain_patterns: Default::default(),
                 rules_config: Default::default(),
             },
         )
