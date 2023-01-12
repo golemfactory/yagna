@@ -1,5 +1,7 @@
-use crate::services::GsbServices;
+use crate::services::{GsbServices, AService, AServices, ABind, AUnbind, AFind, Listen};
 use crate::{GsbApiError, WsMessagesHandler};
+use actix::dev::MessageResponse;
+use actix::{Actor, Addr};
 use actix_http::ws::Codec;
 use actix_http::StatusCode;
 use actix_web::web::Data;
@@ -13,8 +15,11 @@ use ya_service_api_web::middleware::Identity;
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
 
 pub fn web_scope() -> Scope {
+    let services = AServices {};
+    let services = services.start();
     actix_web::web::scope(crate::GSB_API_PATH)
-        .app_data(Data::new(crate::services::SERVICES.clone()))
+        // .app_data(Data::new(crate::services::SERVICES.clone()))
+        .app_data(Data::new(services))
         .service(post_services)
         .service(delete_services)
         .service(get_service_messages)
@@ -25,14 +30,17 @@ async fn post_services(
     _query: web::Query<Timeout>,
     body: web::Json<ServicesBody>,
     _id: Identity,
-    services: Data<Arc<Mutex<GsbServices>>>,
+    // services: Data<Arc<Mutex<GsbServices>>>,
+    services: Data<Addr<AServices>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
     if let Some(listen) = &body.listen {
         let components = listen.components.clone();
         let listen_on = listen.on.clone();
-        let mut services = services.lock()?;
-        let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
+        // let mut services = services.lock()?;
+        // let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
+        let bind = ABind { components: components.clone(), addr: listen_on.clone() };
+        services.send(bind).await?;
         let listen_on_encoded = base64::encode(&listen_on);
         let services = ServicesBody {
             listen: Some(ServicesListenBody {
@@ -54,10 +62,13 @@ async fn post_services(
 async fn delete_services(
     path: web::Path<ServicesPath>,
     _id: Identity,
-    _services: Data<Arc<Mutex<GsbServices>>>,
-) -> impl Responder {
+    services: Data<Addr<AServices>>,
+) ->  Result<impl Responder, GsbApiError> {
     log::debug!("DELETE /services/{}", path.key);
-    web::Json(())
+    //TODO some prefix/sufix
+    let unbind = AUnbind { addr: path.key.to_string() };
+    let x = services.send(unbind).await??;
+    Ok(web::Json(()))
 }
 
 #[actix_web::get("/services/{key}")]
@@ -65,20 +76,23 @@ async fn get_service_messages(
     path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
-    services: Data<Arc<Mutex<GsbServices>>>,
+    // services: Data<Arc<Mutex<GsbServices>>>,
+    services: Data<Addr<AServices>>,
 ) -> Result<impl Responder, GsbApiError> {
-    let mut services = services.lock()?;
+    // let mut services = services.lock()?;
     //TODO handle decode error
     let key = base64::decode(&path.key).unwrap();
     let key = String::from_utf8_lossy(&key);
-    let responders = services.ws_responses_dst(&key);
-    let responders = responders.clone();
-    let handler = WsMessagesHandler { responders };
+    // let responders = services.ws_responses_dst(&key);
+    // let responders = responders.clone();
+    let service = services.send(AFind { addr: key.to_string() }).await??;
+    let handler = WsMessagesHandler { service:  service.clone() };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    let ws_request_dst = services.ws_request_dst(&key);
-    let mut ws_request_dst = ws_request_dst.write().unwrap();
-    *ws_request_dst = Some(addr);
-    Ok(resp)
+    // let ws_request_dst = services.ws_request_dst(&key);
+    service.send(Listen { listener: addr }).await??;
+    // let mut ws_request_dst = ws_request_dst.write().unwrap();
+    // *ws_request_dst = Some(addr);
+    Ok(resp) 
 }
 
 #[derive(Deserialize)]

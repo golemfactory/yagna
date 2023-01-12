@@ -1,7 +1,7 @@
 mod api;
 mod services;
 
-use actix::{dev::MessageResponse, Actor, Handler, StreamHandler};
+use actix::{dev::{MessageResponse, Mailbox}, Actor, Handler, StreamHandler, MailboxError, Addr};
 use actix_http::{
     ws::{CloseCode, CloseReason, ProtocolError},
     StatusCode,
@@ -13,7 +13,7 @@ use flexbuffers::Reader;
 use futures::channel::oneshot::Sender;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use services::GsbServices;
+use services::{GsbServices, AService};
 use std::{
     collections::HashMap,
     sync::{Arc, MutexGuard, PoisonError, RwLock},
@@ -42,26 +42,38 @@ enum GsbApiError {
     BadRequest,
     //TODO add msg
     #[error("Internal error")]
-    InternalError,
+    InternalError(String),
     #[error(transparent)]
     Any(#[from] anyhow::Error),
 }
 
+impl From<ya_service_bus::Error> for GsbApiError {
+    fn from(value: ya_service_bus::Error) -> Self {
+        GsbApiError::InternalError(format!("GSB error: {value}"))
+    }
+}
+
+impl From<MailboxError> for GsbApiError {
+    fn from(value: MailboxError) -> Self {
+        GsbApiError::InternalError(format!("Actix error: {value}"))
+    }
+}
+
 impl From<PoisonError<MutexGuard<'_, GsbServices>>> for GsbApiError {
-    fn from(_value: PoisonError<MutexGuard<'_, GsbServices>>) -> Self {
-        GsbApiError::InternalError
+    fn from(value: PoisonError<MutexGuard<'_, GsbServices>>) -> Self {
+        GsbApiError::InternalError(format!("Internal error: {value}"))
     }
 }
 
 impl From<serde_json::Error> for GsbApiError {
-    fn from(_value: serde_json::Error) -> Self {
-        GsbApiError::InternalError
+    fn from(value: serde_json::Error) -> Self {
+        GsbApiError::InternalError(format!("Serde error {value}"))
     }
 }
 
 impl From<actix_web::Error> for GsbApiError {
-    fn from(_value: actix_web::Error) -> Self {
-        GsbApiError::InternalError
+    fn from(value: actix_web::Error) -> Self {
+        GsbApiError::InternalError(format!("Actix error: {value}"))
     }
 }
 
@@ -77,7 +89,7 @@ impl ResponseError for GsbApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
             Self::BadRequest => StatusCode::BAD_REQUEST,
-            Self::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -119,7 +131,8 @@ impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
 }
 
 pub(crate) struct WsMessagesHandler {
-    pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
+    // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
+    service: Addr<AService>,
 }
 
 impl WsMessagesHandler {
@@ -132,17 +145,17 @@ impl WsMessagesHandler {
                 let msg = msg.to_vec();
                 let response = WsResponse { id, msg };
                 log::info!("WsResponse: {} len: {}", response.id, response.msg.len());
-                let mut responders = self.responders.write().unwrap();
-                match responders.remove(&response.id) {
-                    Some(responder) => {
-                        if let Err(err) = responder.send(Ok(response)) {
-                            log::error!("Failed to handle msg");
-                        }
-                    }
-                    None => {
-                        log::error!("No matching response id");
-                    }
-                }
+                // let mut responders = self.responders.write().unwrap();
+                // match responders.remove(&response.id) {
+                //     Some(responder) => {
+                //         if let Err(err) = responder.send(Ok(response)) {
+                //             log::error!("Failed to handle msg");
+                //         }
+                //     }
+                //     None => {
+                //         log::error!("No matching response id");
+                //     }
+                // }
             }
             Err(err) => {
                 log::error!("Failed to deserialize msg: {}", err);
@@ -165,6 +178,12 @@ impl Handler<WsRequest> for WsMessagesHandler {
         Ok(())
     }
 }
+
+// impl Handler<WsRequest> for WsMessagesHandler {
+//     fn handle(&mut self, msg: WsResponse, ctx: &mut Self::Context) -> Self::Result {
+//         todo!()
+//     }
+// }
 
 impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessagesHandler {
     fn handle(
