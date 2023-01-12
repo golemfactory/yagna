@@ -34,7 +34,6 @@ pub struct RulesManager {
     whitelist: DomainWhitelistState,
 }
 
-//TODO Rafał Rename all variables inside project from rulestore to rulesmanager
 #[derive(Clone, Debug, Default)]
 pub struct Rulestore {
     pub rules_file: PathBuf,
