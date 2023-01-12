@@ -20,26 +20,26 @@ use crate::{
     market::negotiator::builtin::manifest::DemandWithManifest, startup_config::FileMonitor,
 };
 
+//TODO Rafał Default is set only for unit test purposes in manifest negotiator ...
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     pub rules_file: PathBuf,
     pub whitelist_file: PathBuf,
     pub cert_dir: PathBuf,
-    pub config: Arc<RwLock<RulesConfig>>,
+    pub config: Dupa,
+    //TODO Rafał Move files into keystore and whiteliststate
     keystore: Keystore,
     whitelist: DomainWhitelistState,
 }
 
-impl RuleStore {
-    pub fn load_or_create(
-        rules_file: &Path,
-        whitelist_file: &Path,
-        cert_dir: &Path,
-    ) -> Result<Self> {
-        let keystore = Keystore::load(cert_dir)?;
-        let patterns = DomainPatterns::load_or_create(whitelist_file)?;
-        let whitelist = DomainWhitelistState::try_new(patterns)?;
+#[derive(Clone, Debug, Default)]
+pub struct Dupa {
+    pub rules_file: PathBuf,
+    pub config: Arc<RwLock<RulesConfig>>,
+}
 
+impl Dupa {
+    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
@@ -47,10 +47,6 @@ impl RuleStore {
             Ok(Self {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
                 rules_file: rules_file.to_path_buf(),
-                whitelist_file: whitelist_file.to_path_buf(),
-                cert_dir: cert_dir.to_path_buf(),
-                keystore,
-                whitelist,
             })
         } else {
             log::debug!("Creating default Rules configuration");
@@ -59,62 +55,11 @@ impl RuleStore {
             let store = Self {
                 config: Arc::new(RwLock::new(config)),
                 rules_file: rules_file.to_path_buf(),
-                whitelist_file: whitelist_file.to_path_buf(),
-                cert_dir: cert_dir.to_path_buf(),
-                keystore,
-                whitelist,
             };
             store.save()?;
 
             Ok(store)
         }
-    }
-
-    pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
-        let rules = self.clone();
-        let path = self.rules_file.clone();
-        let handler = move |p: PathBuf| match rules.reload() {
-            Ok(()) => {
-                log::info!("rulestore updated from {}", p.display());
-            }
-            Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
-        };
-        let rulestore_monitor = FileMonitor::spawn(path, FileMonitor::on_modified(handler))?;
-
-        let cert_dir = self.cert_dir.clone();
-        let keystore = self.keystore.clone();
-        let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
-            Ok(()) => {
-                log::info!("Trusted keystore updated from {}", p.display());
-            }
-            Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
-        };
-        let keystore_monitor =
-            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?;
-
-        let state = self.whitelist.clone();
-        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
-            Ok(patterns) => {
-                match DomainsMatcher::try_from(&patterns) {
-                    Ok(matcher) => {
-                        *state.matchers.write().unwrap() = matcher;
-                        *state.patterns.lock().unwrap() = patterns;
-                    }
-                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
-                };
-            }
-            Err(e) => log::warn!(
-                "Error updating whitelist configuration from {:?}: {:?}",
-                p,
-                e
-            ),
-        };
-        let whitelist_monitor = FileMonitor::spawn(
-            self.whitelist_file.clone(),
-            FileMonitor::on_modified(handler),
-        )?;
-
-        Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
     fn save(&self) -> Result<()> {
@@ -127,8 +72,7 @@ impl RuleStore {
 
     pub fn reload(&self) -> Result<()> {
         log::debug!("Reloading RuleStore from: {}", self.rules_file.display());
-        let new_rule_store =
-            Self::load_or_create(&self.rules_file, &self.whitelist_file, &self.cert_dir)?;
+        let new_rule_store = Self::load_or_create(&self.rules_file)?;
 
         self.replace(new_rule_store);
 
@@ -176,9 +120,80 @@ impl RuleStore {
 
         Ok(())
     }
+}
+
+impl RuleStore {
+    pub fn load_or_create(
+        rules_file: &Path,
+        whitelist_file: &Path,
+        cert_dir: &Path,
+    ) -> Result<Self> {
+        let keystore = Keystore::load(cert_dir)?;
+        let patterns = DomainPatterns::load_or_create(whitelist_file)?;
+        let whitelist = DomainWhitelistState::try_new(patterns)?;
+
+        let config = Dupa::load_or_create(rules_file)?;
+
+        Ok(Self {
+            rules_file: rules_file.to_path_buf(),
+            whitelist_file: whitelist_file.to_path_buf(),
+            cert_dir: cert_dir.to_path_buf(),
+            config,
+            keystore,
+            whitelist,
+        })
+    }
+
+    pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
+        let path = self.rules_file.clone();
+        let rulestore = self.config.clone();
+        let handler = move |p: PathBuf| match rulestore.reload() {
+            Ok(()) => {
+                log::info!("rulestore updated from {}", p.display());
+            }
+            Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+        };
+        let rulestore_monitor = FileMonitor::spawn(path, FileMonitor::on_modified(handler))?;
+
+        let cert_dir = self.cert_dir.clone();
+        let keystore = self.keystore.clone();
+        let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+            Ok(()) => {
+                log::info!("Trusted keystore updated from {}", p.display());
+            }
+            Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
+        };
+        let keystore_monitor =
+            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?;
+
+        let state = self.whitelist.clone();
+        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
+            Ok(patterns) => {
+                match DomainsMatcher::try_from(&patterns) {
+                    Ok(matcher) => {
+                        *state.matchers.write().unwrap() = matcher;
+                        *state.patterns.lock().unwrap() = patterns;
+                    }
+                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
+                };
+            }
+            Err(e) => log::warn!(
+                "Error updating whitelist configuration from {:?}: {:?}",
+                p,
+                e
+            ),
+        };
+        let whitelist_monitor = FileMonitor::spawn(
+            self.whitelist_file.clone(),
+            FileMonitor::on_modified(handler),
+        )?;
+
+        Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
+    }
 
     pub fn check_outbound_rules(&self, demand: DemandWithManifest) -> CheckRulesResult {
-        let cfg = self.config.read().unwrap();
+        //TODO Rafał config config + rename Dupa
+        let cfg = self.config.config.read().unwrap();
 
         if cfg.outbound.enabled.not() {
             log::trace!("Outbound is disabled.");

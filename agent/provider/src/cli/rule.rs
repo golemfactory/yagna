@@ -53,12 +53,12 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
     match set_rule {
         SetRule::Outbound(outbound) => match outbound {
-            SetOutboundRule::Disable => rules.set_enabled(false),
-            SetOutboundRule::Enable => rules.set_enabled(true),
-            SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
+            SetOutboundRule::Disable => rules.config.set_enabled(false),
+            SetOutboundRule::Enable => rules.config.set_enabled(true),
+            SetOutboundRule::Everyone { mode } => rules.config.set_everyone_mode(mode),
             SetOutboundRule::AuditedPayload { certificate, mode } => match certificate {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-                None => rules.set_default_audited_payload_mode(mode),
+                None => rules.config.set_default_audited_payload_mode(mode),
             },
         },
     }
@@ -71,7 +71,7 @@ fn list(config: ProviderConfig) -> Result<()> {
     let table = RulesTable::from(rules.clone());
 
     if config.json {
-        rules.print()?
+        rules.config.print()?
     } else {
         table.print()?
     };
@@ -139,7 +139,7 @@ impl RulesTable {
 impl From<RuleStore> for RulesTable {
     fn from(rules: RuleStore) -> Self {
         let mut table = RulesTable::new();
-        let outbound = rules.config.read().unwrap().outbound.clone();
+        let outbound = rules.config.config.read().unwrap().outbound.clone();
 
         table.with_header(outbound.enabled);
         table.add_everyone(outbound.everyone);
