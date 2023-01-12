@@ -136,11 +136,14 @@ impl<'demand> DemandWithManifest<'demand> {
                 log::debug!("Every URL on whitelist");
                 return true;
             }
-            log::debug!("Whitelis. Non whitelisted URLs: {:?}", non_whitelisted_urls);
+            log::debug!(
+                "Whitelist. Non whitelisted URLs: {:?}",
+                non_whitelisted_urls
+            );
             return false;
         }
         //TODO Rafał is it right?
-        log::debug!("No url's to check");
+        log::debug!("No URLs to check");
         true
     }
 

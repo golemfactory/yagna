@@ -208,9 +208,11 @@ impl RulesManager {
                 return CheckRulesResult::Accept;
             }
             Mode::Whitelist => {
-                if demand.whitelist_matching(&self.whitelist.matchers) {
+                return if demand.whitelist_matching(&self.whitelist.matchers) {
                     log::trace!("Everyone Whitelist matched");
-                    return CheckRulesResult::Accept;
+                    CheckRulesResult::Accept
+                } else {
+                    CheckRulesResult::Reject("Everyone Whitelist does not match".into())
                 }
             }
             Mode::None => log::trace!("Everyone rule is disabled"),
