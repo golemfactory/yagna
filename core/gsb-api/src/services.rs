@@ -1,5 +1,9 @@
+
+use actix::prelude::*;
 use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse, WsResult};
-use actix::{Actor, Addr, Context, Handler, Recipient};
+use actix::prelude::*;
+use actix::{Actor, Addr, Context, Handler, Recipient, Message};
+// use actix_web::Handler;
 use futures::channel::oneshot::{self, Canceled};
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -30,11 +34,155 @@ trait GsbCaller {
     ) -> dyn Future<Output = Result<RES, RES::Error>>;
 }
 
+///
+
+pub(crate) struct AServices {
+
+}
+
+impl Actor for AServices {
+    type Context = Context<Self>;
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), ya_service_bus::Error>")]
+pub(crate) struct ABind {
+    pub components: Vec<String>,
+    pub addr: String,
+}
+
+impl Handler<ABind> for AServices {
+    type Result = <ABind as Message>::Result;
+
+    fn handle(&mut self, msg: ABind, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), ya_service_bus::Error>")]
+pub(crate) struct AUnbind {
+    pub addr: String
+}
+
+impl Handler<AUnbind> for AServices {
+    type Result = <AUnbind as Message>::Result;
+
+    fn handle(&mut self, msg: AUnbind, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+
+#[derive(Message)]
+#[rtype(result = "Result<Addr<AService>, ya_service_bus::Error>")]
+pub(crate) struct AFind {
+    pub addr: String,
+}
+
+impl Handler<AFind> for AServices {
+    type Result = <AFind as Message>::Result;
+
+    fn handle(&mut self, msg: AFind, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), anyhow::Error>")]
+pub(crate) struct AWsBind {
+    pub ws: Addr<WsMessagesHandler>,
+    pub addr: String,
+}
+
+impl Handler<AWsBind> for AServices {
+    type Result = <AWsBind as Message>::Result;
+
+    fn handle(&mut self, msg: AWsBind, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+pub(crate) struct AService {
+    addr: String,
+    components: Vec<String>,
+}
+
+impl Actor for AService {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        // bind here
+    }
+
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        // unbind here
+    }
+}
+
+impl Handler<RpcRawCall> for AService {
+    type Result = Result<Vec<u8>, ya_service_bus::Error>;
+
+    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), anyhow::Error>")]
+pub(crate) struct Listen {
+    pub listener: Addr<WsMessagesHandler>,
+}
+
+impl Handler<Listen> for AService {
+    type Result = <Listen as Message>::Result;
+
+    fn handle(&mut self, msg: Listen, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+
+    
+}
+
+
+// pub struct ARequest {
+
+// }
+
+// impl Message for ARequest {
+//     type Result = Result<(), ya_service_bus::Error>;
+// }
+
+// pub struct AResponse {
+
+// }
+
+// impl Message for AResponse {
+//     type Result = Result<(), ya_service_bus::Error>;
+// }
+
+///
+/// 
+
 #[derive(Default)]
 pub(crate) struct GsbServices {
     ws_requests_dst: HashMap<String, Arc<RwLock<Option<Addr<WsMessagesHandler>>>>>,
     ws_responses_dst: HashMap<String, Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>>,
 }
+
+// impl Handler<WsRequest> for GsbServices {
+//     type Result = WsResult;
+
+//     fn handle(&mut self, msg: WsRequest, ctx: &mut Self::Context) -> Self::Result {
+//         todo!()
+//     }
+// }
+
+// impl Actor for GsbServices {
+//     type Context = Context<Self>;
+    
+// }
 
 impl GsbServices {
     pub fn bind(&mut self, components: HashSet<&str>, path: &str) -> Result<(), GsbApiError> {
@@ -54,7 +202,7 @@ impl GsbServices {
     ) -> Result<(), GsbApiError> {
         let senders_map = senders_map.clone();
         let request_dst = request_dst.clone();
-        let addr = format!("{path}/{component}");
+        let addr = path.to_string();
         let component = component.to_string();
         let rpc = move |addr: &str, path: &str, msg: &[u8]| {
             let component = component.to_string();
@@ -98,6 +246,8 @@ impl GsbServices {
         };
         log::info!("Binding service: {addr}");
         let _ = ya_service_bus::untyped::subscribe(&addr, rpc, ());
+        // let _ = ya_service_bus::typed::bind_with_caller(addr, f)
+        // ya_service_bus::actix_rpc::bind_raw(addr, actor)
         Ok(())
     }
 
