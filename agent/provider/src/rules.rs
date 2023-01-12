@@ -227,12 +227,12 @@ impl RulesManager {
 
             match cfg.outbound.audited_payload.default.mode {
                 Mode::All => {
-                    log::trace!("Autited-Payload rule set to all");
+                    log::trace!("Audited-Payload rule set to all");
                     CheckRulesResult::Accept
                 }
                 Mode::Whitelist => {
                     if demand.whitelist_matching(&self.whitelist.matchers) {
-                        log::trace!("Autited-Payload whitelist matched");
+                        log::trace!("Audited-Payload whitelist matched");
                         CheckRulesResult::Accept
                     } else {
                         CheckRulesResult::Reject("Audited-Payload whitelist doesn't match".into())

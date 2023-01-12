@@ -67,7 +67,7 @@ impl GlobalsManager {
 
 #[derive(Clone, Debug, Default)]
 pub struct AgentNegotiatorsConfig {
-    pub rules_config: RulesManager,
+    pub rules_manager: RulesManager,
 }
 
 pub struct ProviderAgent {
@@ -138,7 +138,7 @@ impl ProviderAgent {
         let cert_dir = config.cert_dir_path()?;
         // let keystore = load_keystore(&cert_dir)?;
 
-        let rulestore = RulesManager::load_or_create(
+        let rules_manager = RulesManager::load_or_create(
             &config.rules_file,
             &config.domain_whitelist_file,
             &cert_dir,
@@ -167,17 +167,11 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        // let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore.clone())?;
-        // let rulestore_monitor = spawn_rulestore_monitor(rulestore.clone())?;
-        // let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
-        // domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
-
         let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
-            rulestore.spawn_file_monitors()?;
+            rules_manager.spawn_file_monitors()?;
 
-        let agent_negotiators_cfg = AgentNegotiatorsConfig {
-            rules_config: rulestore,
-        };
+        let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
+
         let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();

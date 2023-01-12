@@ -18,7 +18,7 @@ use crate::rules::RulesManager;
 
 pub struct ManifestSignature {
     enabled: bool,
-    rulestore: RulesManager,
+    rules_manager: RulesManager,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -46,7 +46,7 @@ impl NegotiatorComponent for ManifestSignature {
         };
 
         if demand.manifest.is_outbound_requested() {
-            match self.rulestore.check_outbound_rules(demand) {
+            match self.rules_manager.check_outbound_rules(demand) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
             }
@@ -96,7 +96,7 @@ impl ManifestSignature {
 
         ManifestSignature {
             enabled,
-            rulestore: agent_negotiators_cfg.rules_config,
+            rules_manager: agent_negotiators_cfg.rules_manager,
         }
     }
 }
@@ -209,7 +209,7 @@ mod tests {
         ManifestSignature::new(
             &PolicyConfig::from_iter(arguments),
             AgentNegotiatorsConfig {
-                rules_config: Default::default(),
+                rules_manager: Default::default(),
             },
         )
     }
