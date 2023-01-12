@@ -13,9 +13,8 @@ use serde_json::json;
 use test_case::test_case;
 use ya_agreement_utils::AgreementView;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
-use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
+use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
 use ya_provider::provider_agent::AgentNegotiatorsConfig;
@@ -274,7 +273,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     provider_certs: &[&str],
 ) {
     // Having
-    let whitelist_state = create_whitelist(whitelist);
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
     if signature_b64.is_some() {
@@ -286,20 +284,17 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         );
     }
 
-    let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
-
-    let name = test_cert_dir.join("rules.json");
-    let mut rules_file = std::fs::File::create(&name).unwrap();
+    let whitelist_file = create_whitelist_file(whitelist);
+    let rules_file_name = test_cert_dir.join("rules.json");
+    let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
     rules_file.write_all(rulestore.as_bytes()).unwrap();
 
-    let rulestore = RulesManager::load_or_create(&name).expect("Can't load RuleStore");
+    let rules_manager =
+        RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
+            .expect("Can't load RulesManager");
 
     let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig {
-        trusted_keys: keystore,
-        domain_patterns: whitelist_state,
-        rules_config: rulestore,
-    };
+    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
     let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
@@ -342,18 +337,15 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
 fn offer_should_be_rejected_when_outbound_is_disabled() {
     let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
+    let whitelist_file =
+        create_whitelist_file(r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#);
     let rules_file = test_cert_dir.join("rules.json");
-    let rules_config = RulesManager::load_or_create(&rules_file).unwrap();
-    rules_config.set_enabled(false).unwrap();
+    let rules_manager =
+        RulesManager::load_or_create(&rules_file, &whitelist_file, &test_cert_dir).unwrap();
+    rules_manager.config.set_enabled(false).unwrap();
 
     let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig {
-        trusted_keys: Keystore::load(&test_cert_dir).expect("Can load test certificates"),
-        domain_patterns: create_whitelist(
-            r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
-        ),
-        rules_config,
-    };
+    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
     let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
 
     let demand = AgreementView {
@@ -380,41 +372,6 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
             is_final: true
         }
     );
-}
-
-#[test]
-#[serial]
-fn offer_should_be_accepted_when_url_list_is_empty() {
-    let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-
-    let rules_file = test_cert_dir.join("rules.json");
-    let rules_config = RulesManager::load_or_create(&rules_file).unwrap();
-    rules_config.set_enabled(false).unwrap();
-
-    let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig {
-        trusted_keys: Keystore::load(&test_cert_dir).expect("Can load test certificates"),
-        domain_patterns: create_whitelist(
-            r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
-        ),
-        rules_config,
-    };
-    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
-
-    let demand = AgreementView {
-        json: create_demand_json(&create_comp_manifest_b64(r#"[]"#), None, None, None, None),
-        agreement_id: "id".into(),
-    };
-    let offer = AgreementView {
-        json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
-        agreement_id: "id".into(),
-    };
-
-    let result = manifest_negotiator
-        .negotiate_step(&demand, offer.clone())
-        .unwrap();
-
-    assert_eq!(result, NegotiationResult::Ready { offer });
 }
 
 fn cert_file_to_cert_b64(cert_file: &str) -> String {
@@ -517,14 +474,6 @@ fn create_manifest_signature_validating_policy_config() -> PolicyConfig {
         .policy_disable_component
         .push(Policy::ManifestScriptCompliance);
     config
-}
-
-fn create_whitelist(whitelist_json: &str) -> DomainWhitelistState {
-    let whitelist = create_whitelist_file(whitelist_json);
-    let whitelist_patterns =
-        DomainPatterns::load(&whitelist).expect("Can deserialize whitelist patterns");
-    DomainWhitelistState::try_new(whitelist_patterns)
-        .expect("Can create whitelist state from patterns")
 }
 
 fn create_whitelist_file(whitelist_json: &str) -> PathBuf {
