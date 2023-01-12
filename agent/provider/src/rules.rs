@@ -11,14 +11,16 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::Display;
+use url::Url;
 use ya_manifest_utils::{
-    matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
-    Keystore,
+    matching::{
+        domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
+        Matcher,
+    },
+    AppManifest, Keystore,
 };
 
-use crate::{
-    market::negotiator::builtin::manifest::DemandWithManifest, startup_config::FileMonitor,
-};
+use crate::startup_config::FileMonitor;
 
 //TODO Rafał Default is set only for unit test purposes in manifest negotiator ...
 #[derive(Clone, Debug, Default)]
@@ -192,8 +194,12 @@ impl RulesManager {
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
-    pub fn check_outbound_rules(&self, demand: DemandWithManifest) -> CheckRulesResult {
-        //TODO Rafał config config + rename Dupa
+    pub fn check_outbound_rules(
+        &self,
+        manifest: AppManifest,
+        manifest_signature: Option<ManifestSignatureProps>,
+    ) -> CheckRulesResult {
+        //TODO Rafał config config
         let cfg = self.config.config.read().unwrap();
 
         if cfg.outbound.enabled.not() {
@@ -208,7 +214,7 @@ impl RulesManager {
                 return CheckRulesResult::Accept;
             }
             Mode::Whitelist => {
-                return if demand.whitelist_matching(&self.whitelist.matchers) {
+                return if self.whitelist_matching(&manifest) {
                     log::trace!("Everyone Whitelist matched");
                     CheckRulesResult::Accept
                 } else {
@@ -218,9 +224,14 @@ impl RulesManager {
             Mode::None => log::trace!("Everyone rule is disabled"),
         }
 
-        if demand.has_signature() {
+        if let Some(manifest_signature) = manifest_signature {
             //Check audited-payload Rule
-            if let Err(e) = demand.verify_signature(&self.keystore) {
+            if let Err(e) = self.keystore.verify_signature(
+                manifest_signature.cert,
+                manifest_signature.sig,
+                manifest_signature.sig_alg,
+                manifest_signature.manifest_encoded,
+            ) {
                 return CheckRulesResult::Reject(format!(
                     "failed to verify manifest signature: {e}"
                 ));
@@ -233,7 +244,7 @@ impl RulesManager {
                     CheckRulesResult::Accept
                 }
                 Mode::Whitelist => {
-                    if demand.whitelist_matching(&self.whitelist.matchers) {
+                    if self.whitelist_matching(&manifest) {
                         log::trace!("Audited-Payload whitelist matched");
                         CheckRulesResult::Accept
                     } else {
@@ -247,6 +258,43 @@ impl RulesManager {
             CheckRulesResult::Reject("Didn't match any Rules".into())
         }
     }
+
+    fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
+        if let Some(urls) = manifest
+            .comp_manifest
+            .as_ref()
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .and_then(|out| out.urls.as_ref())
+        {
+            let matcher = self.whitelist.matchers.read().unwrap();
+            let non_whitelisted_urls: Vec<&str> = urls
+                .iter()
+                .flat_map(Url::host_str)
+                .filter(|domain| matcher.matches(domain).not())
+                .collect();
+            if non_whitelisted_urls.is_empty() {
+                log::debug!("Every URL on whitelist");
+                return true;
+            }
+            log::debug!(
+                "Whitelist. Non whitelisted URLs: {:?}",
+                non_whitelisted_urls
+            );
+            false
+        } else {
+            log::debug!("No URLs to check");
+            true
+        }
+    }
+}
+
+pub struct ManifestSignatureProps {
+    pub sig: String,
+    pub sig_alg: String,
+    pub cert: String,
+    pub manifest_encoded: String,
 }
 
 pub enum CheckRulesResult {

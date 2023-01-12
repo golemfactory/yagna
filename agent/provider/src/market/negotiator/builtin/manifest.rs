@@ -1,20 +1,15 @@
-use std::collections::HashSet;
 use std::ops::Not;
 
-use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::matching::domain::SharedDomainMatchers;
-use ya_manifest_utils::matching::Matcher;
-use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
-    DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;
 use crate::provider_agent::AgentNegotiatorsConfig;
-use crate::rules::RulesManager;
+use crate::rules::{ManifestSignatureProps, RulesManager};
 
 pub struct ManifestSignature {
     enabled: bool,
@@ -28,25 +23,49 @@ impl NegotiatorComponent for ManifestSignature {
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         if self.enabled.not() {
-            log::trace!("Manifest signature verification disabled.");
+            log::trace!("Manifest verification disabled.");
             return acceptance(offer);
         }
 
-        let demand = match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
-            Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
-                Ok(manifest) => DemandWithManifest {
-                    demand,
-                    manifest_encoded,
-                    manifest,
+        let (manifest, manifest_encoded) =
+            match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+                Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
+                    Ok(manifest) => (manifest, manifest_encoded),
+                    Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
                 },
-                Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
-            },
-            Err(Error::NoKey(_)) => return acceptance(offer),
-            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+                Err(Error::NoKey(_)) => return acceptance(offer),
+                Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+            };
+
+        let signature_props = {
+            if demand
+                .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
+                .is_ok()
+            {
+                let sig = demand.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
+                log::trace!("sig_hex: {sig}");
+                let sig_alg: String =
+                    demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
+                log::trace!("sig_alg: {sig_alg}");
+                let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+                log::trace!("cert: {cert}");
+                log::trace!("encoded_manifest: {manifest_encoded}");
+                Some(ManifestSignatureProps {
+                    sig,
+                    sig_alg,
+                    cert,
+                    manifest_encoded,
+                })
+            } else {
+                None
+            }
         };
 
-        if demand.manifest.is_outbound_requested() {
-            match self.rules_manager.check_outbound_rules(demand) {
+        if manifest.is_outbound_requested() {
+            match self
+                .rules_manager
+                .check_outbound_rules(manifest, signature_props)
+            {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
             }
@@ -99,96 +118,6 @@ impl ManifestSignature {
             rules_manager: agent_negotiators_cfg.rules_manager,
         }
     }
-}
-
-//TODO Rafał move it / not pass to rulestore
-pub struct DemandWithManifest<'demand> {
-    demand: &'demand ProposalView,
-    manifest_encoded: String,
-    manifest: AppManifest,
-}
-
-impl<'demand> DemandWithManifest<'demand> {
-    pub fn has_signature(&self) -> bool {
-        self.demand
-            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
-            .is_ok()
-    }
-
-    pub fn whitelist_matching(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
-        //TODO Rafał Refactor + why there was Inet if?
-        if let Some(urls) = self
-            .manifest
-            .comp_manifest
-            .as_ref()
-            .and_then(|comp| comp.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.as_ref())
-        {
-            let matcher = whitelist_matcher.read().unwrap();
-            let non_whitelisted_urls: Vec<&str> = urls
-                .iter()
-                .flat_map(Url::host_str)
-                .filter(|domain| matcher.matches(domain).not())
-                .collect();
-            if non_whitelisted_urls.is_empty() {
-                log::debug!("Every URL on whitelist");
-                return true;
-            }
-            log::debug!(
-                "Whitelist. Non whitelisted URLs: {:?}",
-                non_whitelisted_urls
-            );
-            return false;
-        }
-        //TODO Rafał is it right?
-        log::debug!("No URLs to check");
-        true
-    }
-
-    pub fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
-        let sig = self
-            .demand
-            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
-        log::trace!("sig_hex: {}", sig);
-        let sig_alg: String = self
-            .demand
-            .get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
-        log::trace!("sig_alg: {}", sig_alg);
-        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
-        log::trace!("cert: {}", cert);
-        log::trace!("manifest: {}", &self.manifest_encoded);
-        keystore.verify_signature(cert, sig, sig_alg, &self.manifest_encoded)
-    }
-
-    pub fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
-        let mut required = required_permissions(&self.manifest.features());
-        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
-
-        if self
-            .demand
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
-            .is_ok()
-        {
-            // Verification of certificate permissions defined in demand is NYI.
-            // To make Provider accept Demand containig Certificates Permissions it is required to
-            // add Certificate with "unverified-permissions-chain" permission into the keystore.
-            required.push(CertPermissions::UnverifiedPermissionsChain);
-        }
-
-        keystore.verify_permissions(&cert, required)
-    }
-}
-
-fn required_permissions(features: &HashSet<Feature>) -> Vec<CertPermissions> {
-    features
-        .iter()
-        .filter_map(|feature| match feature {
-            Feature::Inet => Some(CertPermissions::OutboundManifest),
-            _ => None,
-        })
-        .collect()
 }
 
 fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
