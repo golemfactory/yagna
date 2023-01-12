@@ -1,4 +1,5 @@
 use std::{
+    convert::TryFrom,
     fs::OpenOptions,
     io::BufReader,
     ops::Not,
@@ -11,11 +12,13 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::Display;
 use ya_manifest_utils::{
-    matching::domain::{DomainPatterns, DomainWhitelistState},
+    matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
     Keystore,
 };
 
-use crate::market::negotiator::builtin::manifest::DemandWithManifest;
+use crate::{
+    market::negotiator::builtin::manifest::DemandWithManifest, startup_config::FileMonitor,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
@@ -65,6 +68,53 @@ impl RuleStore {
 
             Ok(store)
         }
+    }
+
+    pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
+        let rules = self.clone();
+        let path = self.rules_file.clone();
+        let handler = move |p: PathBuf| match rules.reload() {
+            Ok(()) => {
+                log::info!("rulestore updated from {}", p.display());
+            }
+            Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+        };
+        let rulestore_monitor = FileMonitor::spawn(path, FileMonitor::on_modified(handler))?;
+
+        let cert_dir = self.cert_dir.clone();
+        let keystore = self.keystore.clone();
+        let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+            Ok(()) => {
+                log::info!("Trusted keystore updated from {}", p.display());
+            }
+            Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
+        };
+        let keystore_monitor =
+            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?;
+
+        let state = self.whitelist.clone();
+        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
+            Ok(patterns) => {
+                match DomainsMatcher::try_from(&patterns) {
+                    Ok(matcher) => {
+                        *state.matchers.write().unwrap() = matcher;
+                        *state.patterns.lock().unwrap() = patterns;
+                    }
+                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
+                };
+            }
+            Err(e) => log::warn!(
+                "Error updating whitelist configuration from {:?}: {:?}",
+                p,
+                e
+            ),
+        };
+        let whitelist_monitor = FileMonitor::spawn(
+            self.whitelist_file.clone(),
+            FileMonitor::on_modified(handler),
+        )?;
+
+        Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
     fn save(&self) -> Result<()> {
