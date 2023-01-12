@@ -37,7 +37,7 @@ impl NegotiatorComponent for ManifestSignature {
                 Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
             };
 
-        let signature_props = {
+        let manifest_sig_props = {
             if demand
                 .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
                 .is_ok()
@@ -64,7 +64,7 @@ impl NegotiatorComponent for ManifestSignature {
         if manifest.is_outbound_requested() {
             match self
                 .rules_manager
-                .check_outbound_rules(manifest, signature_props)
+                .check_outbound_rules(manifest, manifest_sig_props)
             {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),

@@ -197,7 +197,7 @@ impl RulesManager {
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
-        manifest_signature: Option<ManifestSignatureProps>,
+        manifest_sig_props: Option<ManifestSignatureProps>,
     ) -> CheckRulesResult {
         //TODO Rafał config config
         let cfg = self.config.config.read().unwrap();
@@ -224,13 +224,13 @@ impl RulesManager {
             Mode::None => log::trace!("Everyone rule is disabled"),
         }
 
-        if let Some(manifest_signature) = manifest_signature {
+        if let Some(manifest_sig_props) = manifest_sig_props {
             //Check audited-payload Rule
             if let Err(e) = self.keystore.verify_signature(
-                manifest_signature.cert,
-                manifest_signature.sig,
-                manifest_signature.sig_alg,
-                manifest_signature.manifest_encoded,
+                manifest_sig_props.cert,
+                manifest_sig_props.sig,
+                manifest_sig_props.sig_alg,
+                manifest_sig_props.manifest_encoded,
             ) {
                 return CheckRulesResult::Reject(format!(
                     "failed to verify manifest signature: {e}"
