@@ -27,7 +27,7 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::rules::RuleStore;
+use crate::rules::RulesManager;
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
@@ -67,7 +67,7 @@ impl GlobalsManager {
 
 #[derive(Clone, Debug, Default)]
 pub struct AgentNegotiatorsConfig {
-    pub rules_config: RuleStore,
+    pub rules_config: RulesManager,
 }
 
 pub struct ProviderAgent {
@@ -138,7 +138,7 @@ impl ProviderAgent {
         let cert_dir = config.cert_dir_path()?;
         // let keystore = load_keystore(&cert_dir)?;
 
-        let rulestore = RuleStore::load_or_create(
+        let rulestore = RulesManager::load_or_create(
             &config.rules_file,
             &config.domain_whitelist_file,
             &cert_dir,

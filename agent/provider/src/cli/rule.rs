@@ -4,7 +4,7 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::rules::CertRule;
 use crate::{
-    rules::{Mode, RuleStore},
+    rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
 };
 
@@ -49,7 +49,7 @@ impl RuleCommand {
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let rules =
-        RuleStore::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
+        RulesManager::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
 
     match set_rule {
         SetRule::Outbound(outbound) => match outbound {
@@ -67,7 +67,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 fn list(config: ProviderConfig) -> Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let rules =
-        RuleStore::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
+        RulesManager::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
     let table = RulesTable::from(rules.clone());
 
     if config.json {
@@ -136,8 +136,8 @@ impl RulesTable {
     }
 }
 
-impl From<RuleStore> for RulesTable {
-    fn from(rules: RuleStore) -> Self {
+impl From<RulesManager> for RulesTable {
+    fn from(rules: RulesManager) -> Self {
         let mut table = RulesTable::new();
         let outbound = rules.config.config.read().unwrap().outbound.clone();
 

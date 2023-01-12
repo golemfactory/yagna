@@ -19,7 +19,7 @@ use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
 use ya_provider::provider_agent::AgentNegotiatorsConfig;
-use ya_provider::rules::RuleStore;
+use ya_provider::rules::RulesManager;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -292,7 +292,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     let mut rules_file = std::fs::File::create(&name).unwrap();
     rules_file.write_all(rulestore.as_bytes()).unwrap();
 
-    let rulestore = RuleStore::load_or_create(&name).expect("Can't load RuleStore");
+    let rulestore = RulesManager::load_or_create(&name).expect("Can't load RuleStore");
 
     let config = create_manifest_signature_validating_policy_config();
     let negotiator_cfg = AgentNegotiatorsConfig {
@@ -343,7 +343,7 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
     let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
     let rules_file = test_cert_dir.join("rules.json");
-    let rules_config = RuleStore::load_or_create(&rules_file).unwrap();
+    let rules_config = RulesManager::load_or_create(&rules_file).unwrap();
     rules_config.set_enabled(false).unwrap();
 
     let config = create_manifest_signature_validating_policy_config();
@@ -388,7 +388,7 @@ fn offer_should_be_accepted_when_url_list_is_empty() {
     let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
     let rules_file = test_cert_dir.join("rules.json");
-    let rules_config = RuleStore::load_or_create(&rules_file).unwrap();
+    let rules_config = RulesManager::load_or_create(&rules_file).unwrap();
     rules_config.set_enabled(false).unwrap();
 
     let config = create_manifest_signature_validating_policy_config();

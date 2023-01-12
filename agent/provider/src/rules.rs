@@ -22,23 +22,24 @@ use crate::{
 
 //TODO Rafał Default is set only for unit test purposes in manifest negotiator ...
 #[derive(Clone, Debug, Default)]
-pub struct RuleStore {
+pub struct RulesManager {
     pub rules_file: PathBuf,
-    pub whitelist_file: PathBuf,
-    pub cert_dir: PathBuf,
-    pub config: Dupa,
+    pub config: Rulestore,
+    whitelist_file: PathBuf,
+    cert_dir: PathBuf,
     //TODO Rafał Move files into keystore and whiteliststate
     keystore: Keystore,
     whitelist: DomainWhitelistState,
 }
 
+//TODO Rafał Rename all variables inside project from rulestore to rulesmanager
 #[derive(Clone, Debug, Default)]
-pub struct Dupa {
+pub struct Rulestore {
     pub rules_file: PathBuf,
     pub config: Arc<RwLock<RulesConfig>>,
 }
 
-impl Dupa {
+impl Rulestore {
     pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
@@ -122,7 +123,7 @@ impl Dupa {
     }
 }
 
-impl RuleStore {
+impl RulesManager {
     pub fn load_or_create(
         rules_file: &Path,
         whitelist_file: &Path,
@@ -132,7 +133,7 @@ impl RuleStore {
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;
 
-        let config = Dupa::load_or_create(rules_file)?;
+        let config = Rulestore::load_or_create(rules_file)?;
 
         Ok(Self {
             rules_file: rules_file.to_path_buf(),

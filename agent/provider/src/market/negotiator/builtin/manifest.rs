@@ -14,11 +14,11 @@ use ya_manifest_utils::{
 
 use crate::market::negotiator::*;
 use crate::provider_agent::AgentNegotiatorsConfig;
-use crate::rules::RuleStore;
+use crate::rules::RulesManager;
 
 pub struct ManifestSignature {
     enabled: bool,
-    rulestore: RuleStore,
+    rulestore: RulesManager,
 }
 
 impl NegotiatorComponent for ManifestSignature {
