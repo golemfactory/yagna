@@ -28,46 +28,7 @@ struct Signature<'a> {
     certificate: Option<&'a str>,
 }
 
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
-    r#"[]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
-    None; // error msg
-    "Manifest accepted because its urls list is empty"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
-    r#"{"patterns": [] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
-    Some("outbound is disabled"); // error msg
-    "Manifest with outbound is not accepted because outbound is disabled"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
-    None; // error msg
-    "Manifest without signature accepted because everyone is set to all"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
-    Some("Didn't match any Rules"); // error msg
-    "Manifest rejected because domain NOT whitelisted"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    None; // error msg
-    "Manifest with valid signature accepted because domain whitelisted"
-)]
+//below to be redesigned
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
@@ -109,11 +70,143 @@ fn manifest_negotiator_test(
     error_msg: Option<&str>,
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
-
     let signature_b64 = signature.private_key_file.map(|signing_key| {
         MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
     });
+    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature.signature,
+        cert_b64,
+        None,
+        error_msg,
+        &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
+    )
+}
+
+#[test_case(
+    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    None; // error msg
+    "Manifest accepted because its urls list is empty"
+)]
+#[serial]
+fn manifest_negotiator_test_manifest_without_urls(
+    rulestore: &str,
+    whitelist: &str,
+    error_msg: Option<&str>,
+) {
+    // compManifest.net.inet.out.urls is empty, therefore outbound is not needed
+    let urls = "[]";
+
+    // signature does not matter here
+    let signature = Signature {
+        private_key_file: None,
+        signature: None,
+        certificate: None,
+    };
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    let signature_b64 = signature.private_key_file.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
+    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature.signature,
+        cert_b64,
+        None,
+        error_msg,
+        &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
+    )
+}
+
+#[test_case(
+    r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"patterns": [] }"#, // data_dir/domain_whitelist.json
+    Some("outbound is disabled"); // error msg
+    "Manifest with outbound is not accepted because outbound is disabled"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    None; // error msg
+    "Manifest without signature accepted because everyone is set to all"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    Some("Didn't match any Rules"); // error msg
+    "Manifest rejected because domain NOT whitelisted"
+)]
+#[serial]
+fn manifest_negotiator_test_manifest_with_urls(
+    rulestore: &str,
+    whitelist: &str,
+    error_msg: Option<&str>,
+) {
+    // compManifest.net.inet.out.urls is not empty, therefore outbound is required
+    let urls = r#"["https://domain.com"]"#;
+
+    // signature does not matter here
+    let signature = Signature {
+        private_key_file: None,
+        signature: None,
+        certificate: None,
+    };
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    let signature_b64 = signature.private_key_file.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
+    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature.signature,
+        cert_b64,
+        None,
+        error_msg,
+        &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
+    )
+}
+
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Manifest with valid signature accepted because domain is whitelisted"
+)]
+#[serial]
+fn manifest_negotiator_test_with_valid_signature(
+    rulestore: &str,
+    whitelist: &str,
+    urls: &str,
+    error_msg: Option<&str>,
+) {
+    // valid signature
+    let signature = Signature {
+        private_key_file: Some("foo_req.key.pem"),
+        signature: Some("sha256"),
+        certificate: Some("foo_req.cert.pem"),
+    };
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    let signature_b64 = signature.private_key_file.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
@@ -150,7 +243,6 @@ fn manifest_negotiator_test_with_invalid_signature(
         signature: Some("sha256"),
         certificate: Some("foo_req.cert.pem"),
     };
-
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
