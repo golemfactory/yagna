@@ -183,13 +183,14 @@ impl RulesManager {
                 .collect();
             if non_whitelisted_urls.is_empty() {
                 log::debug!("Every URL on whitelist");
-                return true;
+                true
+            } else {
+                log::debug!(
+                    "Whitelist. Non whitelisted URLs: {:?}",
+                    non_whitelisted_urls
+                );
+                false
             }
-            log::debug!(
-                "Whitelist. Non whitelisted URLs: {:?}",
-                non_whitelisted_urls
-            );
-            false
         } else {
             log::debug!("No URLs to check");
             true
