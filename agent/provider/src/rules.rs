@@ -210,7 +210,7 @@ pub enum CheckRulesResult {
 
 #[derive(Clone, Debug)]
 pub struct Rulestore {
-    pub rules_file: PathBuf,
+    pub path: PathBuf,
     pub config: Arc<RwLock<RulesConfig>>,
 }
 
@@ -222,7 +222,7 @@ impl Rulestore {
 
             Ok(Self {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
-                rules_file: rules_file.to_path_buf(),
+                path: rules_file.to_path_buf(),
             })
         } else {
             log::debug!("Creating default Rules configuration");
@@ -230,7 +230,7 @@ impl Rulestore {
 
             let store = Self {
                 config: Arc::new(RwLock::new(config)),
-                rules_file: rules_file.to_path_buf(),
+                path: rules_file.to_path_buf(),
             };
             store.save()?;
 
@@ -239,16 +239,16 @@ impl Rulestore {
     }
 
     fn save(&self) -> Result<()> {
-        log::debug!("Saving RuleStore to: {}", self.rules_file.display());
+        log::debug!("Saving RuleStore to: {}", self.path.display());
         Ok(std::fs::write(
-            &self.rules_file,
+            &self.path,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?,
         )?)
     }
 
     pub fn reload(&self) -> Result<()> {
-        log::debug!("Reloading RuleStore from: {}", self.rules_file.display());
-        let new_rule_store = Self::load_or_create(&self.rules_file)?;
+        log::debug!("Reloading RuleStore from: {}", self.path.display());
+        let new_rule_store = Self::load_or_create(&self.path)?;
 
         self.replace(new_rule_store);
 
