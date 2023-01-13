@@ -32,96 +32,6 @@ pub struct RulesManager {
     whitelist: DomainWhitelistState,
 }
 
-#[derive(Clone, Debug)]
-pub struct Rulestore {
-    pub rules_file: PathBuf,
-    pub config: Arc<RwLock<RulesConfig>>,
-}
-
-impl Rulestore {
-    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
-        if rules_file.exists() {
-            log::debug!("Loading rule from: {}", rules_file.display());
-            let file = OpenOptions::new().read(true).open(rules_file)?;
-
-            Ok(Self {
-                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
-                rules_file: rules_file.to_path_buf(),
-            })
-        } else {
-            log::debug!("Creating default Rules configuration");
-            let config = Default::default();
-
-            let store = Self {
-                config: Arc::new(RwLock::new(config)),
-                rules_file: rules_file.to_path_buf(),
-            };
-            store.save()?;
-
-            Ok(store)
-        }
-    }
-
-    fn save(&self) -> Result<()> {
-        log::debug!("Saving RuleStore to: {}", self.rules_file.display());
-        Ok(std::fs::write(
-            &self.rules_file,
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?,
-        )?)
-    }
-
-    pub fn reload(&self) -> Result<()> {
-        log::debug!("Reloading RuleStore from: {}", self.rules_file.display());
-        let new_rule_store = Self::load_or_create(&self.rules_file)?;
-
-        self.replace(new_rule_store);
-
-        Ok(())
-    }
-
-    fn replace(&self, other: Self) {
-        let store = std::mem::take(&mut (*other.config.write().unwrap()));
-
-        *self.config.write().unwrap() = store;
-    }
-
-    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
-        log::debug!("Setting outbound enabled: {enabled}");
-        self.config.write().unwrap().outbound.enabled = enabled;
-
-        self.save()
-    }
-
-    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound everyone mode: {mode}");
-        self.config.write().unwrap().outbound.everyone = mode;
-
-        self.save()
-    }
-
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {mode}");
-        self.config
-            .write()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode = mode;
-
-        self.save()
-    }
-
-    pub fn print(&self) -> Result<()> {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?
-        );
-
-        Ok(())
-    }
-}
-
 impl RulesManager {
     pub fn load_or_create(
         rules_file: &Path,
@@ -296,6 +206,96 @@ pub struct ManifestSignatureProps {
 pub enum CheckRulesResult {
     Accept,
     Reject(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct Rulestore {
+    pub rules_file: PathBuf,
+    pub config: Arc<RwLock<RulesConfig>>,
+}
+
+impl Rulestore {
+    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
+        if rules_file.exists() {
+            log::debug!("Loading rule from: {}", rules_file.display());
+            let file = OpenOptions::new().read(true).open(rules_file)?;
+
+            Ok(Self {
+                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                rules_file: rules_file.to_path_buf(),
+            })
+        } else {
+            log::debug!("Creating default Rules configuration");
+            let config = Default::default();
+
+            let store = Self {
+                config: Arc::new(RwLock::new(config)),
+                rules_file: rules_file.to_path_buf(),
+            };
+            store.save()?;
+
+            Ok(store)
+        }
+    }
+
+    fn save(&self) -> Result<()> {
+        log::debug!("Saving RuleStore to: {}", self.rules_file.display());
+        Ok(std::fs::write(
+            &self.rules_file,
+            serde_json::to_string_pretty(&*self.config.read().unwrap())?,
+        )?)
+    }
+
+    pub fn reload(&self) -> Result<()> {
+        log::debug!("Reloading RuleStore from: {}", self.rules_file.display());
+        let new_rule_store = Self::load_or_create(&self.rules_file)?;
+
+        self.replace(new_rule_store);
+
+        Ok(())
+    }
+
+    fn replace(&self, other: Self) {
+        let store = std::mem::take(&mut (*other.config.write().unwrap()));
+
+        *self.config.write().unwrap() = store;
+    }
+
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        log::debug!("Setting outbound enabled: {enabled}");
+        self.config.write().unwrap().outbound.enabled = enabled;
+
+        self.save()
+    }
+
+    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound everyone mode: {mode}");
+        self.config.write().unwrap().outbound.everyone = mode;
+
+        self.save()
+    }
+
+    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound audited_payload default mode: {mode}");
+        self.config
+            .write()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode = mode;
+
+        self.save()
+    }
+
+    pub fn print(&self) -> Result<()> {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&*self.config.read().unwrap())?
+        );
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
