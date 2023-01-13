@@ -26,7 +26,7 @@ use crate::startup_config::FileMonitor;
 #[derive(Clone, Debug, Default)]
 pub struct RulesManager {
     pub rules_file: PathBuf,
-    pub config: Rulestore,
+    pub rulestore: Rulestore,
     whitelist_file: PathBuf,
     cert_dir: PathBuf,
     //TODO Rafał Move files into keystore and whiteliststate
@@ -140,7 +140,7 @@ impl RulesManager {
             rules_file: rules_file.to_path_buf(),
             whitelist_file: whitelist_file.to_path_buf(),
             cert_dir: cert_dir.to_path_buf(),
-            config,
+            rulestore: config,
             keystore,
             whitelist,
         })
@@ -148,7 +148,7 @@ impl RulesManager {
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let path = self.rules_file.clone();
-        let rulestore = self.config.clone();
+        let rulestore = self.rulestore.clone();
         let handler = move |p: PathBuf| match rulestore.reload() {
             Ok(()) => {
                 log::info!("rulestore updated from {}", p.display());
@@ -198,8 +198,7 @@ impl RulesManager {
         manifest: AppManifest,
         manifest_sig_props: Option<ManifestSignatureProps>,
     ) -> CheckRulesResult {
-        //TODO Rafał config config
-        let cfg = self.config.config.read().unwrap();
+        let cfg = self.rulestore.config.read().unwrap();
 
         if cfg.outbound.enabled.not() {
             log::trace!("Outbound is disabled.");

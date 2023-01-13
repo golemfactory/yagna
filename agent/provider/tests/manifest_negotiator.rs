@@ -342,7 +342,7 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
     let rules_file = test_cert_dir.join("rules.json");
     let rules_manager =
         RulesManager::load_or_create(&rules_file, &whitelist_file, &test_cert_dir).unwrap();
-    rules_manager.config.set_enabled(false).unwrap();
+    rules_manager.rulestore.set_enabled(false).unwrap();
 
     let config = create_manifest_signature_validating_policy_config();
     let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
