@@ -81,6 +81,8 @@ impl RulesManager {
                     Ok(matcher) => {
                         *state.matchers.write().unwrap() = matcher;
                         *state.patterns.lock().unwrap() = patterns;
+
+                        log::info!("Whitelist updated from {}", p.display());
                     }
                     Err(err) => log::error!("Failed to update domain whitelist: {err}"),
                 };
