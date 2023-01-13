@@ -38,6 +38,7 @@ impl RulesManager {
         cert_dir: &Path,
     ) -> Result<Self> {
         let keystore = Keystore::load(cert_dir)?;
+
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;
 
@@ -104,7 +105,7 @@ impl RulesManager {
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
-        manifest_sig_props: Option<ManifestSignatureProps>,
+        manifest_sig: Option<ManifestSignatureProps>,
     ) -> CheckRulesResult {
         let cfg = self.rulestore.config.read().unwrap();
 
@@ -130,13 +131,13 @@ impl RulesManager {
             Mode::None => log::trace!("Everyone rule is disabled"),
         }
 
-        if let Some(manifest_sig_props) = manifest_sig_props {
+        if let Some(props) = manifest_sig {
             //Check audited-payload Rule
             if let Err(e) = self.keystore.verify_signature(
-                manifest_sig_props.cert,
-                manifest_sig_props.sig,
-                manifest_sig_props.sig_alg,
-                manifest_sig_props.manifest_encoded,
+                props.cert,
+                props.sig,
+                props.sig_alg,
+                props.manifest_encoded,
             ) {
                 return CheckRulesResult::Reject(format!(
                     "failed to verify manifest signature: {e}"
