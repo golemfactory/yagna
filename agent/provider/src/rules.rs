@@ -41,12 +41,12 @@ impl RulesManager {
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;
 
-        let config = Rulestore::load_or_create(rules_file)?;
+        let rulestore = Rulestore::load_or_create(rules_file)?;
 
         Ok(Self {
             whitelist_file: whitelist_file.to_path_buf(),
             cert_dir: cert_dir.to_path_buf(),
-            rulestore: config,
+            rulestore,
             keystore,
             whitelist,
         })
