@@ -22,19 +22,17 @@ use ya_manifest_utils::{
 
 use crate::startup_config::FileMonitor;
 
-//TODO Rafał Default is set only for unit test purposes in manifest negotiator ...
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RulesManager {
     pub rules_file: PathBuf,
     pub rulestore: Rulestore,
     whitelist_file: PathBuf,
     cert_dir: PathBuf,
-    //TODO Rafał Move files into keystore and whiteliststate
     keystore: Keystore,
     whitelist: DomainWhitelistState,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Rulestore {
     pub rules_file: PathBuf,
     pub config: Arc<RwLock<RulesConfig>>,

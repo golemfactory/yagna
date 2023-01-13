@@ -135,34 +135,49 @@ fn acceptance(offer: ProposalView) -> anyhow::Result<NegotiationResult> {
 mod tests {
     use super::*;
     use structopt::StructOpt;
+    use tempdir::TempDir;
 
-    fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
+    fn build_policy<S: AsRef<str>>(args: S) -> (ManifestSignature, TempDir) {
+        let tempdir = TempDir::new("test_dir").unwrap();
+        let rules_file = tempdir.path().join("rules.json");
+        let whitelist_file = tempdir.path().join("whitelist.json");
+        let cert_dir = tempdir.path().join("cert_dir");
+
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        ManifestSignature::new(
-            &PolicyConfig::from_iter(arguments),
-            AgentNegotiatorsConfig {
-                rules_manager: Default::default(),
-            },
+
+        (
+            ManifestSignature::new(
+                &PolicyConfig::from_iter(arguments),
+                AgentNegotiatorsConfig {
+                    rules_manager: RulesManager::load_or_create(
+                        &rules_file,
+                        &whitelist_file,
+                        &cert_dir,
+                    )
+                    .unwrap(),
+                },
+            ),
+            tempdir,
         )
     }
 
     #[test]
     fn parse_signature_policy() {
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-disable-component all \
             --policy-trust-property property=value1,value2",
         );
         assert!(!policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property property=value1,value2",
         );
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}",
@@ -170,7 +185,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
@@ -179,7 +194,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
@@ -187,26 +202,26 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(&format!(
+        let (policy, _tmpdir) = build_policy(&format!(
             "TEST \
             --policy-trust-property {}",
             CAPABILITIES_PROPERTY
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-trust-property property=value1,value2",
         );
         assert!(policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-trust-property property",
         );
         assert!(policy.enabled);
 
-        let policy = build_policy("TEST");
+        let (policy, _tmpdir) = build_policy("TEST");
         assert!(policy.enabled);
     }
 }

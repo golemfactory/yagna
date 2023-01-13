@@ -65,7 +65,7 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AgentNegotiatorsConfig {
     pub rules_manager: RulesManager,
 }
