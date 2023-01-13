@@ -136,7 +136,6 @@ impl ProviderAgent {
             .unwrap_or_else(|| app_name.to_string());
 
         let cert_dir = config.cert_dir_path()?;
-        // let keystore = load_keystore(&cert_dir)?;
 
         let rules_manager = RulesManager::load_or_create(
             &config.rules_file,
