@@ -47,9 +47,11 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let rules =
-        RulesManager::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
 
     match set_rule {
         SetRule::Outbound(outbound) => match outbound {
@@ -65,9 +67,11 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 }
 
 fn list(config: ProviderConfig) -> Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let rules =
-        RulesManager::load_or_create(&config.rules_file, &config.domain_whitelist_file, &cert_dir)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
     let table = RulesTable::from(rules.clone());
 
     if config.json {
