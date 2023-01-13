@@ -39,12 +39,19 @@ pub struct Create {
     pub name: String,
     pub role: String,
     pub identity: NodeId,
+    pub allow_origins: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Get {
     pub key: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetByName {
+    pub name: String,
 }
 
 impl Get {
@@ -86,6 +93,7 @@ pub struct AppKey {
     pub role: String,
     pub identity: NodeId,
     pub created_date: NaiveDateTime,
+    pub allow_origins: Vec<String>,
 }
 
 impl RpcMessage for Create {
@@ -96,6 +104,12 @@ impl RpcMessage for Create {
 
 impl RpcMessage for Get {
     const ID: &'static str = "Get";
+    type Item = AppKey;
+    type Error = Error;
+}
+
+impl RpcMessage for GetByName {
+    const ID: &'static str = "GetByName";
     type Item = AppKey;
     type Error = Error;
 }
@@ -126,14 +140,15 @@ impl RpcMessage for Subscribe {
 
 pub mod event {
     use super::Error;
+    use crate::appkey::AppKey;
     use serde::{Deserialize, Serialize};
-    use ya_client_model::NodeId;
     use ya_service_bus::RpcMessage;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub enum Event {
-        NewKey { identity: NodeId },
+        NewKey(AppKey),
+        DroppedKey(AppKey),
     }
 
     impl RpcMessage for Event {

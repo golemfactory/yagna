@@ -63,7 +63,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         future::ok(id)
     });
 
-    let create_tx = tx;
+    let create_tx = tx.clone();
     // Create a new application key entry
     let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
@@ -84,17 +84,27 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                 }
                 Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
-                    .create(key.clone(), create.name, create.role, create.identity)
+                    .create(
+                        key.clone(),
+                        create.name,
+                        create.role,
+                        create.identity,
+                        create.allow_origins,
+                    )
                     .await
                     .map_err(model::Error::internal)
                     .map(|_| key),
                 Err(e) => Err(model::Error::internal(e)),
             }?;
 
+            let (appkey, role) = db
+                .as_dao::<AppKeyDao>()
+                .get(result.clone())
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
             let _ = create_tx
-                .send(model::event::Event::NewKey {
-                    identity: create.identity,
-                })
+                .send(model::event::Event::NewKey(appkey.to_core_model(role)))
                 .await;
             Ok(result)
         }
@@ -134,6 +144,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     role: model::DEFAULT_ROLE.to_string(),
                     identity: node_id,
                     created_date: start_datetime,
+                    allow_origins: vec![],
                 })
             } else {
                 let (appkey, role) = match db
@@ -174,14 +185,22 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                 };
 
-                Ok(model::AppKey {
-                    name: appkey.name,
-                    key: appkey.key,
-                    role: role.name,
-                    identity: appkey.identity_id,
-                    created_date: appkey.created_date,
-                })
+                Ok(appkey.to_core_model(role))
             }
+        }
+    });
+
+    let db_ = db.clone();
+    let _ = bus::bind(model::BUS_ID, move |get: model::GetByName| {
+        let db = db_.clone();
+        async move {
+            let (appkey, role) = db
+                .as_dao::<AppKeyDao>()
+                .get_for_name(get.name)
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
+            Ok(appkey.to_core_model(role))
         }
     });
 
@@ -199,27 +218,33 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             let keys = result
                 .0
                 .into_iter()
-                .map(|(app_key, role)| model::AppKey {
-                    name: app_key.name,
-                    key: app_key.key,
-                    role: role.name,
-                    identity: app_key.identity_id,
-                    created_date: app_key.created_date,
-                })
+                .map(|(app_key, role)| app_key.to_core_model(role))
                 .collect();
 
             Ok((keys, result.1))
         }
     });
 
+    let create_tx = tx;
     let dbx = db.clone();
     let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
         let db = dbx.clone();
+        let mut create_tx = create_tx.clone();
         async move {
+            let (appkey, role) = db
+                .as_dao::<AppKeyDao>()
+                .get_for_name(rm.name.clone())
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
             db.as_dao::<AppKeyDao>()
                 .remove(rm.name, rm.identity)
                 .await
                 .map_err(Into::<model::Error>::into)?;
+
+            let _ = create_tx
+                .send(model::event::Event::DroppedKey(appkey.to_core_model(role)))
+                .await;
             Ok(())
         }
     });

@@ -132,7 +132,6 @@ members = [
     "core/payment-driver/erc20",
     "core/persistence",
     "core/serv-api",
-    "core/serv-api/cache",
     "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
@@ -181,7 +180,6 @@ ya-vpn = { path = "core/vpn" }
 ya-core-model = { path = "core/model" }
 ya-persistence = { path = "core/persistence" }
 ya-service-api = { path = "core/serv-api" }
-ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
@@ -198,8 +196,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
