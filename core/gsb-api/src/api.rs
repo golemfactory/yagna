@@ -15,7 +15,7 @@ use ya_service_api_web::middleware::Identity;
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
 
 pub fn web_scope() -> Scope {
-    let services = AServices {};
+    let services = AServices::default();
     let services = services.start();
     actix_web::web::scope(crate::GSB_API_PATH)
         // .app_data(Data::new(crate::services::SERVICES.clone()))
