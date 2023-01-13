@@ -1,6 +1,7 @@
 mod api;
 mod services;
 
+use actix::prelude::*;
 use actix::{dev::{MessageResponse, Mailbox}, Actor, Handler, StreamHandler, MailboxError, Addr};
 use actix_http::{
     ws::{CloseCode, CloseReason, ProtocolError},
@@ -95,40 +96,38 @@ impl ResponseError for GsbApiError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Message, Serialize, Deserialize, Debug)]
+#[rtype(result = "Result<(), anyhow::Error>")]
 struct WsRequest {
     id: String,
     component: String,
     msg: Vec<u8>,
 }
 
-impl actix::Message for WsRequest {
-    type Result = WsResult;
-}
-
-#[derive(Debug)]
-struct WsResponse {
+#[derive(Message, Debug)]
+#[rtype(result = "Result<(), anyhow::Error>")]
+pub(crate) struct WsResponse {
     id: String,
     msg: Vec<u8>,
 }
 
-type WsResult = Result<WsResponse, anyhow::Error>;
+pub(crate) type WsResult = Result<WsResponse, anyhow::Error>;
 
-impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
-    fn handle(
-        self,
-        ctx: &mut <WsMessagesHandler as Actor>::Context,
-        tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
-    ) {
-        match self {
-            Ok(()) => {}
-            Err(err) => ctx.close(Some(CloseReason {
-                code: CloseCode::Error,
-                description: Some(err.to_string()),
-            })),
-        }
-    }
-}
+// impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
+//     fn handle(
+//         self,
+//         ctx: &mut <WsMessagesHandler as Actor>::Context,
+//         tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
+//     ) {
+//         match self {
+//             Ok(()) => {}
+//             Err(err) => ctx.close(Some(CloseReason {
+//                 code: CloseCode::Error,
+//                 description: Some(err.to_string()),
+//             })),
+//         }
+//     }
+// }
 
 pub(crate) struct WsMessagesHandler {
     // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
@@ -145,6 +144,7 @@ impl WsMessagesHandler {
                 let msg = msg.to_vec();
                 let response = WsResponse { id, msg };
                 log::info!("WsResponse: {} len: {}", response.id, response.msg.len());
+                let _ = self.service.send(response);
                 // let mut responders = self.responders.write().unwrap();
                 // match responders.remove(&response.id) {
                 //     Some(responder) => {
@@ -169,7 +169,7 @@ impl Actor for WsMessagesHandler {
 }
 
 impl Handler<WsRequest> for WsMessagesHandler {
-    type Result = Result<(), WsApiError>;
+    type Result = <WsRequest as Message>::Result;
 
     fn handle(&mut self, msg: WsRequest, ctx: &mut Self::Context) -> Self::Result {
         let msg = flexbuffers::to_vec(&msg)
@@ -179,12 +179,6 @@ impl Handler<WsRequest> for WsMessagesHandler {
     }
 }
 
-// impl Handler<WsRequest> for WsMessagesHandler {
-//     fn handle(&mut self, msg: WsResponse, ctx: &mut Self::Context) -> Self::Result {
-//         todo!()
-//     }
-// }
-
 impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessagesHandler {
     fn handle(
         &mut self,
@@ -193,13 +187,13 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     ) {
         match item {
             Ok(msg) => match msg {
-                ws::Message::Text(msg) => {
-                    log::info!("Text (len {})", msg.len());
-                    self.handle(msg.into_bytes());
-                }
                 ws::Message::Binary(msg) => {
                     log::info!("Binary (len {})", msg.len());
                     self.handle(msg);
+                }
+                ws::Message::Text(msg) => {
+                    log::info!("Text (len {})", msg.len());
+                    self.handle(msg.into_bytes());
                 }
                 ws::Message::Continuation(msg) => {
                     todo!("NYI Continuation: {:?}", msg);
