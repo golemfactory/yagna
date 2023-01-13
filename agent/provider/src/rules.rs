@@ -203,6 +203,7 @@ impl RulesManager {
 
         if cfg.outbound.enabled.not() {
             log::trace!("Outbound is disabled.");
+
             return CheckRulesResult::Reject("outbound is disabled".into());
         }
 
@@ -213,11 +214,10 @@ impl RulesManager {
                 return CheckRulesResult::Accept;
             }
             Mode::Whitelist => {
-                return if self.whitelist_matching(&manifest) {
+                if self.whitelist_matching(&manifest) {
                     log::trace!("Everyone Whitelist matched");
-                    CheckRulesResult::Accept
-                } else {
-                    CheckRulesResult::Reject("Everyone Whitelist does not match".into())
+
+                    return CheckRulesResult::Accept;
                 }
             }
             Mode::None => log::trace!("Everyone rule is disabled"),
