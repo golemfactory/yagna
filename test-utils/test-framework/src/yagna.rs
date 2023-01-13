@@ -114,14 +114,15 @@ impl YagnaMock {
     }
 
     pub(crate) async fn tear_down(&self, timeout: std::time::Duration) -> anyhow::Result<()> {
-        if let Some(process) = {
+        let process = {
             self.process
                 .lock()
                 .map_err(|e| anyhow!("{e}"))?
                 .as_ref()
                 .map(|tracker| tracker.child.clone())
-        } {
-            if let Err(_) = process.terminate(timeout).await {
+        };
+        if let Some(process) = process {
+            if process.terminate(timeout).await.is_err() {
                 process.kill();
             }
         }
@@ -210,17 +211,23 @@ mod tracker {
 
 #[cfg(not(unix))]
 mod tracker {
-    use tokio::process::Command;
+    use anyhow::Context;
+    use std::path::Path;
+    use std::process::Command;
 
-    pub struct Tracker {}
+    pub struct YagnaTracker {}
 
-    impl Tracker {
-        pub fn new(_command: &mut Command) -> anyhow::Result<Self> {
-            Ok(Tracker {})
+    impl YagnaTracker {
+        pub fn new(command: &mut Command, data_dir: &Path) -> anyhow::Result<Self> {
+            anyhow::bail!("Tracker implemented only for unix systems")
         }
 
-        pub async fn wait_for_start(&mut self) -> anyhow::Result<()> {
-            crate::utils::wait_for_yagna().await
+        pub async fn start(&mut self) -> anyhow::Result<()> {
+            anyhow::bail!("Tracker implemented only for unix systems")
+        }
+
+        pub async fn wait_for_start_signal(&mut self) -> anyhow::Result<()> {
+            anyhow::bail!("Tracker implemented only for unix systems")
         }
     }
 }

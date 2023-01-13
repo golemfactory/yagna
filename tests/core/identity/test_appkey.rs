@@ -15,17 +15,13 @@ async fn test_appkey_removal(framework: YagnaFramework) -> anyhow::Result<()> {
         .assert()
         .success();
 
-    assert!(yagna
-        .appkey_list_json()?
-        .iter()
-        .find(|appkey| {
-            let found = appkey
-                .get("name")
-                .and_then(|name| name.as_str())
-                .and_then(|name| Some(name == "test-appkey"));
-            found.unwrap_or(false)
-        })
-        .is_some());
+    assert!(yagna.appkey_list_json()?.iter().any(|appkey| {
+        let found = appkey
+            .get("name")
+            .and_then(|name| name.as_str())
+            .map(|name| name == "test-appkey");
+        found.unwrap_or(false)
+    }));
 
     yagna
         .command()
@@ -35,17 +31,13 @@ async fn test_appkey_removal(framework: YagnaFramework) -> anyhow::Result<()> {
         .assert()
         .success();
 
-    assert!(yagna
-        .appkey_list_json()?
-        .iter()
-        .find(|appkey| {
-            let found = appkey
-                .get("name")
-                .and_then(|name| name.as_str())
-                .and_then(|name| Some(name == "test-appkey"));
-            found.unwrap_or(false)
-        })
-        .is_none());
+    assert!(!yagna.appkey_list_json()?.iter().any(|appkey| {
+        let found = appkey
+            .get("name")
+            .and_then(|name| name.as_str())
+            .map(|name| name == "test-appkey");
+        found.unwrap_or(false)
+    }));
 
     Ok(())
 }

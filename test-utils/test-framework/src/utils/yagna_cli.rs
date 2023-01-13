@@ -15,8 +15,9 @@ impl YagnaCli for YagnaMock {
             .arg("--json")
             .output()?;
         let result: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-        Ok(result.as_array().cloned().ok_or(anyhow!(
-            "`yagna app-key list --json` output is not a json array."
-        ))?)
+        result
+            .as_array()
+            .cloned()
+            .ok_or_else(|| anyhow!("`yagna app-key list --json` output is not a json array."))
     }
 }

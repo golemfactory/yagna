@@ -103,7 +103,7 @@ impl YagnaFramework {
                 set
             });
 
-        for result in futures.join_next().await {
+        while let Some(result) = futures.join_next().await {
             match result {
                 Err(e) => log::error!("Error waiting for yagna shutdown: {e}"),
                 Ok(Err(e)) => log::error!("Error waiting for yagna shutdown: {e}"),

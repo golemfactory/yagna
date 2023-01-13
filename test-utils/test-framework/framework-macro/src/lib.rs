@@ -4,7 +4,7 @@ use syn::{parse, ItemFn};
 
 #[proc_macro_attribute]
 pub fn framework_test(attr: TokenStream, input: TokenStream) -> TokenStream {
-    let function = parse::<ItemFn>(input.clone()).unwrap();
+    let function = parse::<ItemFn>(input).unwrap();
 
     if attr.into_iter().count() > 0 {
         panic!("`framework_test` macro doesn't support wrapping other macros");
