@@ -22,7 +22,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite 0.2.9",
  "smallvec",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
 ]
 
@@ -39,7 +39,7 @@ dependencies = [
  "log",
  "memchr",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
 ]
 
@@ -150,7 +150,7 @@ checksum = "7ea16c295198e958ef31930a6ef37d0fb64e9ca3b6116e6b93a8bdae96ee1000"
 dependencies = [
  "actix-macros",
  "futures-core",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -167,7 +167,7 @@ dependencies = [
  "mio 0.8.5",
  "num_cpus",
  "socket2 0.4.7",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tracing",
 ]
 
@@ -267,7 +267,7 @@ dependencies = [
  "bytestring",
  "futures-core",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -543,7 +543,7 @@ dependencies = [
  "futures-io",
  "memchr",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "xz2",
 ]
 
@@ -637,7 +637,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -2473,7 +2473,7 @@ dependencies = [
  "structopt",
  "tempdir",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "url",
  "ya-compile-time-utils",
  "ya-core-model",
@@ -2556,7 +2556,7 @@ dependencies = [
  "structopt",
  "strum 0.24.1",
  "strum_macros 0.24.3",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "url",
  "ya-client",
  "ya-compile-time-utils",
@@ -2637,7 +2637,7 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "tracing",
 ]
@@ -2867,7 +2867,7 @@ dependencies = [
  "itoa 1.0.4",
  "pin-project-lite 0.2.9",
  "socket2 0.4.7",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tower-service",
  "tracing",
  "want",
@@ -2913,7 +2913,7 @@ dependencies = [
  "bytes 1.3.0",
  "hyper 0.14.23",
  "native-tls",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-native-tls",
 ]
 
@@ -5246,7 +5246,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-native-tls",
  "tower-service",
  "trust-dns-resolver 0.22.0",
@@ -6537,9 +6537,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
+checksum = "38a54aca0c15d014013256222ba0ebed095673f89345dd79119d912eb561b7a8"
 dependencies = [
  "autocfg 1.1.0",
  "bytes 1.3.0",
@@ -6562,7 +6562,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cf347e8ae1d1ffd16c8aed569172a71bd81098a001d0f4964d476c0097aba4a"
 dependencies = [
  "byteorder",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -6575,7 +6575,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite 0.2.9",
  "tokio 0.2.25",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
 ]
 
@@ -6608,7 +6608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -6620,7 +6620,7 @@ dependencies = [
  "futures-util",
  "openssl",
  "openssl-sys",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -6629,7 +6629,7 @@ version = "0.2.0"
 dependencies = [
  "libc",
  "nix 0.22.3",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -6640,7 +6640,7 @@ checksum = "d660770404473ccd7bc9f8b28494a811bc18542b915c0855c51e8f419d5223ce"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
 ]
 
@@ -6654,7 +6654,7 @@ dependencies = [
  "futures-core",
  "libc",
  "redox_syscall 0.2.16",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "xattr",
 ]
@@ -6695,7 +6695,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -6708,7 +6708,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project-lite 0.2.9",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tracing",
 ]
 
@@ -6835,7 +6835,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tinyvec",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "url",
 ]
 
@@ -6859,7 +6859,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tinyvec",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tracing",
  "url",
 ]
@@ -6880,7 +6880,7 @@ dependencies = [
  "resolv-conf",
  "smallvec",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-openssl",
  "trust-dns-proto 0.21.2",
 ]
@@ -6900,7 +6900,7 @@ dependencies = [
  "resolv-conf",
  "smallvec",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tracing",
  "trust-dns-proto 0.22.0",
 ]
@@ -7309,7 +7309,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "tiny-keccak 2.0.2",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.6.10",
  "url",
  "web3-async-native-tls",
@@ -7323,7 +7323,7 @@ checksum = "1f6d8d1636b2627fe63518d5a9b38a569405d9c9bc665c43c9c341de57227ebb"
 dependencies = [
  "native-tls",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "url",
 ]
 
@@ -7564,7 +7564,7 @@ dependencies = [
  "shlex 0.1.1",
  "structopt",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "uuid",
  "ya-client-model",
@@ -7692,7 +7692,7 @@ dependencies = [
  "log",
  "maplit",
  "serde_json",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "uuid",
  "ya-client-model",
  "ya-core-model",
@@ -7732,7 +7732,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "uuid",
  "web3 0.16.0",
  "ya-client-model",
@@ -7783,7 +7783,7 @@ dependencies = [
  "structopt",
  "tempdir",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
@@ -7850,7 +7850,7 @@ dependencies = [
  "sha2 0.9.9",
  "structopt",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "uuid",
  "ya-client-model",
  "ya-core-model",
@@ -7945,7 +7945,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "uuid",
  "ya-agreement-utils",
  "ya-client",
@@ -7995,7 +7995,7 @@ dependencies = [
  "metrics-runtime",
  "percent-encoding",
  "structopt",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "url",
  "ya-core-model",
  "ya-service-api",
@@ -8027,7 +8027,7 @@ dependencies = [
  "strum 0.24.1",
  "test-case",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
@@ -8072,7 +8072,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "uint 0.7.1",
  "uuid",
  "ya-agreement-utils",
@@ -8114,7 +8114,7 @@ dependencies = [
  "r2d2",
  "sha3 0.9.1",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
@@ -8138,7 +8138,7 @@ dependencies = [
  "tempdir",
  "test-case",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "ya-client-model",
  "ya-core-model",
  "ya-service-api",
@@ -8194,7 +8194,7 @@ dependencies = [
  "tempdir",
  "test-case",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "url",
  "walkdir",
@@ -8229,7 +8229,7 @@ dependencies = [
  "humantime 2.1.0",
  "log",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "url",
  "ya-relay-core",
@@ -8259,7 +8259,7 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.9.1",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "url",
  "uuid",
@@ -8282,7 +8282,7 @@ dependencies = [
  "prost-build 0.10.4",
  "rand 0.8.5",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "ya-relay-util",
 ]
@@ -8302,7 +8302,7 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "ya-relay-util",
  "ya-smoltcp",
@@ -8331,7 +8331,7 @@ dependencies = [
  "prost-build 0.10.4",
  "serde",
  "serde_json",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "url",
 ]
@@ -8346,7 +8346,7 @@ dependencies = [
  "prost 0.10.4",
  "prost-build 0.7.0",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "url",
 ]
@@ -8371,7 +8371,7 @@ dependencies = [
  "pin-project 1.0.12",
  "prost 0.10.4",
  "structopt",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
@@ -8476,7 +8476,7 @@ dependencies = [
  "semver 0.11.0",
  "serde",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-util 0.7.4",
  "url",
  "uuid",
@@ -8544,7 +8544,7 @@ dependencies = [
  "structopt",
  "tempdir",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-tar",
  "tokio-util 0.7.4",
  "url",
@@ -8566,7 +8566,7 @@ dependencies = [
  "chrono",
  "futures 0.3.25",
  "log",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -8586,7 +8586,7 @@ name = "ya-utils-futures"
 version = "0.2.0"
 dependencies = [
  "futures 0.3.25",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -8627,7 +8627,7 @@ dependencies = [
  "libc",
  "nix 0.22.3",
  "shared_child",
- "tokio 1.23.0",
+ "tokio 1.23.1",
 ]
 
 [[package]]
@@ -8653,7 +8653,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "ya-client",
  "ya-compile-time-utils",
  "ya-core-model",
@@ -8686,7 +8686,7 @@ dependencies = [
  "sha3 0.8.2",
  "structopt",
  "thiserror",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "url",
  "uuid",
@@ -8728,7 +8728,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tiny-keccak 1.5.0",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-compat-02",
  "uuid",
  "ya-client-model",
@@ -8761,7 +8761,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
@@ -8831,7 +8831,7 @@ dependencies = [
  "flate2",
  "thiserror",
  "time 0.1.45",
- "tokio 1.23.0",
+ "tokio 1.23.1",
  "tokio-byteorder",
 ]
 
