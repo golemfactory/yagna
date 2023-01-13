@@ -24,12 +24,11 @@ use crate::startup_config::FileMonitor;
 
 #[derive(Clone, Debug)]
 pub struct RulesManager {
-    pub rules_file: PathBuf,
     pub rulestore: Rulestore,
+    whitelist: DomainWhitelistState,
+    keystore: Keystore,
     whitelist_file: PathBuf,
     cert_dir: PathBuf,
-    keystore: Keystore,
-    whitelist: DomainWhitelistState,
 }
 
 impl RulesManager {
@@ -45,7 +44,6 @@ impl RulesManager {
         let config = Rulestore::load_or_create(rules_file)?;
 
         Ok(Self {
-            rules_file: rules_file.to_path_buf(),
             whitelist_file: whitelist_file.to_path_buf(),
             cert_dir: cert_dir.to_path_buf(),
             rulestore: config,
@@ -55,7 +53,7 @@ impl RulesManager {
     }
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
-        let path = self.rules_file.clone();
+        let rules_file = self.rulestore.path.clone();
         let rulestore = self.rulestore.clone();
         let handler = move |p: PathBuf| match rulestore.reload() {
             Ok(()) => {
@@ -63,7 +61,7 @@ impl RulesManager {
             }
             Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
         };
-        let rulestore_monitor = FileMonitor::spawn(path, FileMonitor::on_modified(handler))?;
+        let rulestore_monitor = FileMonitor::spawn(rules_file, FileMonitor::on_modified(handler))?;
 
         let cert_dir = self.cert_dir.clone();
         let keystore = self.keystore.clone();
