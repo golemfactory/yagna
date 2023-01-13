@@ -53,50 +53,50 @@ impl RulesManager {
     }
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
-        let rules_file = self.rulestore.path.clone();
-        let rulestore = self.rulestore.clone();
-        let handler = move |p: PathBuf| match rulestore.reload() {
-            Ok(()) => {
-                log::info!("rulestore updated from {}", p.display());
-            }
-            Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+        let rulestore_monitor = {
+            let rulestore = self.rulestore.clone();
+            let handler = move |p: PathBuf| match rulestore.reload() {
+                Ok(()) => {
+                    log::info!("rulestore updated from {}", p.display());
+                }
+                Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+            };
+            FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))?
         };
-        let rulestore_monitor = FileMonitor::spawn(rules_file, FileMonitor::on_modified(handler))?;
 
-        let cert_dir = self.cert_dir.clone();
-        let keystore = self.keystore.clone();
-        let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
-            Ok(()) => {
-                log::info!("Trusted keystore updated from {}", p.display());
-            }
-            Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
+        let keystore_monitor = {
+            let cert_dir = self.cert_dir.clone();
+            let keystore = self.keystore.clone();
+            let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+                Ok(()) => {
+                    log::info!("Trusted keystore updated from {}", p.display());
+                }
+                Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
+            };
+            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?
         };
-        let keystore_monitor =
-            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?;
 
-        let state = self.whitelist.clone();
-        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
-            Ok(patterns) => {
-                match DomainsMatcher::try_from(&patterns) {
-                    Ok(matcher) => {
-                        *state.matchers.write().unwrap() = matcher;
-                        *state.patterns.lock().unwrap() = patterns;
+        let whitelist_monitor = {
+            let state = self.whitelist.clone();
+            let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
+                Ok(patterns) => {
+                    match DomainsMatcher::try_from(&patterns) {
+                        Ok(matcher) => {
+                            *state.matchers.write().unwrap() = matcher;
+                            *state.patterns.lock().unwrap() = patterns;
 
-                        log::info!("Whitelist updated from {}", p.display());
-                    }
-                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
-                };
-            }
-            Err(e) => log::warn!(
-                "Error updating whitelist configuration from {:?}: {:?}",
-                p,
-                e
-            ),
+                            log::info!("Whitelist updated from {}", p.display());
+                        }
+                        Err(e) => log::error!("Failed to update domain whitelist: {e}"),
+                    };
+                }
+                Err(e) => log::warn!("Error updating whitelist from {}: {e}", p.display()),
+            };
+            FileMonitor::spawn(
+                self.whitelist_file.clone(),
+                FileMonitor::on_modified(handler),
+            )?
         };
-        let whitelist_monitor = FileMonitor::spawn(
-            self.whitelist_file.clone(),
-            FileMonitor::on_modified(handler),
-        )?;
 
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
