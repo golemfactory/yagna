@@ -30,7 +30,7 @@ struct Signature<'a> {
 
 //below to be redesigned
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Signature { private_key_file: None, signature: None, certificate: None},
@@ -38,7 +38,7 @@ struct Signature<'a> {
     "Manifest without signature accepted because domain whitelisted (regex pattern)"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Signature { private_key_file: None, signature: None, certificate: None},
@@ -46,7 +46,7 @@ struct Signature<'a> {
     "Manifest without signature rejected because ONE of domains NOT whitelisted"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("dummy_inter.cert.pem") }, // signature with untrusted cert
@@ -54,7 +54,7 @@ struct Signature<'a> {
     "Manifest rejected because of invalid certificate even when urls domains are whitelisted"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Signature { private_key_file: Some("foo_inter.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")}, // signature with private key file not matching cert
@@ -90,7 +90,7 @@ fn manifest_negotiator_test(
 }
 
 #[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
     None; // error msg
     "Manifest accepted because its urls list is empty"
@@ -131,19 +131,19 @@ fn manifest_negotiator_test_manifest_without_urls(
 }
 
 #[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{"patterns": [] }"#, // data_dir/domain_whitelist.json
     Some("outbound is disabled"); // error msg
     "Manifest with outbound is not accepted because outbound is disabled"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
     None; // error msg
     "Manifest without signature accepted because everyone is set to all"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     Some("Didn't match any Rules"); // error msg
     "Manifest rejected because domain NOT whitelisted"
@@ -184,55 +184,55 @@ fn manifest_negotiator_test_manifest_with_urls(
 }
 
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because everyone is set to all even if audited-payload set to none"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because everyone whitelist is matching even if audited-payload set to none"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Some("Audited-Payload rule is disabled"); // error msg
     "Rejected because everyone-whitelist is mismatching and audited-payload set to none"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because audited-payload all even if everyone-whitelist is mismatching"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Some("Audited-Payload whitelist doesn't match"); // error msg
     "Rejected because everyone and audited-payload whitelist are mismatching"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Some("Audited-Payload rule is disabled"); // error msg
     "Rejected because everyone and audited-payload set to none"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because audited-payload set to all"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Some("Audited-Payload whitelist doesn't match"); // error msg
     "Rejected because audited-payload whitelist doesn't match"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because domain is whitelisted when audited-payload set to whitelist"
@@ -272,31 +272,31 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because everyone is set to all"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because everyone whitelist is matching"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
     Some("failed to verify manifest signature: Invalid signature"); // error msg
     "Rejected because everyone whitelist mismatched"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("failed to verify manifest signature: Invalid signature"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("failed to verify manifest signature: Invalid signature"); // error msg
     "Rejected because everyone is not set to all even if audited-payload whitelist is matching"
@@ -333,7 +333,7 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
 }
 
 #[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
     None; // error msg
     "Manifest accepted because no payload"
@@ -451,7 +451,7 @@ fn test_manifest_negotiator_certs_permissions(
     provider_certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
 ) {
-    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#;
+    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#;
 
     let urls = r#"["https://domain.com"]"#;
 
@@ -519,7 +519,7 @@ fn test_manifest_negotiator_certs_permissions(
 )]
 #[serial]
 fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Option<&str>) {
-    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#;
+    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
 
     // signature does not matter here
     let signature = Signature {
