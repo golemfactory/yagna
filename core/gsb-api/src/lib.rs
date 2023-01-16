@@ -135,7 +135,7 @@ pub(crate) struct WsMessagesHandler {
 }
 
 impl WsMessagesHandler {
-    fn handle(&mut self, msg: bytes::Bytes) {
+    async fn handle(&mut self, msg: bytes::Bytes) -> Result<(), GsbApiError> {
         match Reader::get_root(&*msg) {
             Ok(buffer) => {
                 let response = buffer.as_map();
@@ -144,21 +144,11 @@ impl WsMessagesHandler {
                 let msg = msg.to_vec();
                 let response = WsResponse { id, msg };
                 log::info!("WsResponse: {} len: {}", response.id, response.msg.len());
-                let _ = self.service.send(response);
-                // let mut responders = self.responders.write().unwrap();
-                // match responders.remove(&response.id) {
-                //     Some(responder) => {
-                //         if let Err(err) = responder.send(Ok(response)) {
-                //             log::error!("Failed to handle msg");
-                //         }
-                //     }
-                //     None => {
-                //         log::error!("No matching response id");
-                //     }
-                // }
+                let _ = self.service.send(response).await??;
+                Ok(())
             }
             Err(err) => {
-                log::error!("Failed to deserialize msg: {}", err);
+               Err(GsbApiError::InternalError(format!("Failed to deserialize msg: {}", err)))
             }
         }
     }

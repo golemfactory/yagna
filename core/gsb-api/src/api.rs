@@ -15,11 +15,8 @@ use ya_service_api_web::middleware::Identity;
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
 
 pub fn web_scope() -> Scope {
-    let services = AServices::default();
-    let services = services.start();
     actix_web::web::scope(crate::GSB_API_PATH)
-        // .app_data(Data::new(crate::services::SERVICES.clone()))
-        .app_data(Data::new(services))
+        .app_data(Data::new(crate::services::SERVICES.clone()))
         .service(post_services)
         .service(delete_services)
         .service(get_service_messages)
@@ -39,8 +36,8 @@ async fn post_services(
         let listen_on = listen.on.clone();
         // let mut services = services.lock()?;
         // let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
-        let bind = ABind { components: components.clone(), addr: listen_on.clone() };
-        services.send(bind).await?;
+        let bind = ABind { components: components.clone(), addr_prefix: listen_on.clone() };
+        let _ = services.send(bind).await?;
         let listen_on_encoded = base64::encode(&listen_on);
         let services = ServicesBody {
             listen: Some(ServicesListenBody {

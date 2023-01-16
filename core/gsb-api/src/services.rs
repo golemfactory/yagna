@@ -1,11 +1,10 @@
-
-use actix::prelude::*;
-use async_trait::async_trait;
 use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse, WsResult};
 use actix::prelude::*;
-use actix::{Actor, Addr, Context, Handler, Recipient, Message};
+use actix::prelude::*;
+use actix::{Actor, Addr, Context, Handler, Message, Recipient};
+use async_trait::async_trait;
 // use actix_web::Handler;
-use futures::channel::oneshot::{self, Canceled, Sender, Receiver};
+use futures::channel::oneshot::{self, Canceled, Receiver, Sender};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::pin::Pin;
@@ -22,6 +21,10 @@ use ya_service_bus::{
     untyped::{Fn4Handler, Fn4HandlerExt, RawHandler},
     RpcMessage, RpcRawCall,
 };
+
+lazy_static! {
+    pub(crate) static ref SERVICES: Addr<AServices> = AServices::default().start();
+}
 
 trait GsbCaller {
     fn call<'MSG, REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(
@@ -41,18 +44,18 @@ impl Actor for AServices {
     type Context = Context<Self>;
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
 pub(crate) struct ABind {
     pub components: Vec<String>,
-    pub addr: String,
+    pub addr_prefix: String,
 }
 
 impl Handler<ABind> for AServices {
     type Result = <ABind as Message>::Result;
 
     fn handle(&mut self, msg: ABind, ctx: &mut Self::Context) -> Self::Result {
-        let addr = msg.addr.clone();
+        let addr = msg.addr_prefix.clone();
         if self.services.contains_key(&addr) {
             anyhow::bail!("Service bound on address: {addr}");
         }
@@ -62,10 +65,10 @@ impl Handler<ABind> for AServices {
     }
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<(), ya_service_bus::Error>")]
 pub(crate) struct AUnbind {
-    pub addr: String
+    pub addr: String,
 }
 
 impl Handler<AUnbind> for AServices {
@@ -76,9 +79,8 @@ impl Handler<AUnbind> for AServices {
     }
 }
 
-
-#[derive(Message)]
-#[rtype(result = "Result<Addr<AService>, ya_service_bus::Error>")]
+#[derive(Message, Debug)]
+#[rtype(result = "Result<Addr<AService>, anyhow::Error>")]
 pub(crate) struct AFind {
     pub addr: String,
 }
@@ -87,11 +89,14 @@ impl Handler<AFind> for AServices {
     type Result = <AFind as Message>::Result;
 
     fn handle(&mut self, msg: AFind, ctx: &mut Self::Context) -> Self::Result {
-        todo!()
+        if let Some(service) = self.services.get(&msg.addr) {
+            return Ok(service.clone());
+        }
+        anyhow::bail!("No service for: {:?}", msg)
     }
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
 pub(crate) struct AWsBind {
     pub ws: Addr<WsMessagesHandler>,
@@ -107,15 +112,37 @@ impl Handler<AWsBind> for AServices {
 }
 
 pub(crate) struct AService {
-    addr: String,
-    components: Vec<String>,
+    addr_prefix: String,
+    addresses: HashSet<String>,
     msg_handler: Box<dyn MessagesHandler>,
 }
 
+impl AService {
+    fn addr_prefix_to_component(addr: &str) -> String {
+        addr.chars()
+            .rev()
+            .take_while(|ch| ch != &'/')
+            .collect::<Vec<char>>()
+            .iter()
+            .rev()
+            .collect()
+    }
+}
+
 impl From<ABind> for AService {
-    fn from(value: ABind) -> Self {
-        let msg_handler = BufferingHandler {};
-        AService { addr: value.addr, components: value.components, msg_handler: Box::new(msg_handler) }
+    fn from(bind: ABind) -> Self {
+        let msg_handler = Box::new(BufferingHandler {});
+        // convert to error and return it when e.g. components empty
+        let addr_prefix = bind.addr_prefix;
+        let mut addresses = HashSet::new();
+        for component in bind.components {
+            addresses.insert(format!("{addr_prefix}/{component}"));
+        }
+        AService {
+            addr_prefix,
+            addresses,
+            msg_handler: msg_handler,
+        }
     }
 }
 
@@ -123,7 +150,7 @@ impl Actor for AService {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        _ = ya_service_bus::actix_rpc::bind_raw(&self.addr, ctx.address().recipient());
+        _ = ya_service_bus::actix_rpc::bind_raw(&self.addr_prefix, ctx.address().recipient());
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
@@ -135,24 +162,37 @@ impl Handler<RpcRawCall> for AService {
     type Result = ResponseFuture<Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
-        let id = uuid::Uuid::new_v4().to_string();
         let addr = msg.addr;
+        if !self.addresses.contains(&addr) {
+            //TODO use futures::ready! or sth
+            return Box::pin(async move {
+                Err(ya_service_bus::Error::GsbBadRequest(format!(
+                    "No supported msg type for addr: {}",
+                    addr
+                )))
+            });
+        }
+        let id = uuid::Uuid::new_v4().to_string();
         log::debug!("Msg addr: {addr}, id: {id}");
-        //TODO how to get component name (from addr?)?
-        let component = "GetMetadata".to_string();
-        let msg = WsRequest {component, id, msg: msg.body };
+        let component = AService::addr_prefix_to_component(&addr);
+        let msg = WsRequest {
+            component,
+            id,
+            msg: msg.body,
+        };
         let msg_handling_future = self.msg_handler.handle_request(msg);
         Box::pin(async {
             //TODO define some error types
-            let receiver = msg_handling_future.await
+            let receiver = msg_handling_future
+                .await
                 .map_err(|err| ya_service_bus::Error::GsbFailure(err.to_string()))?;
-            let raw_msg = receiver.await
+            let raw_msg = receiver
+                .await
                 .map_err(|err| ya_service_bus::Error::GsbFailure(err.to_string()))?
                 .map_err(|err| ya_service_bus::Error::GsbFailure(err.to_string()))?;
             Ok(raw_msg.msg)
         })
     }
-
 }
 
 impl Handler<WsResponse> for AService {
@@ -164,7 +204,7 @@ impl Handler<WsResponse> for AService {
     }
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
 pub(crate) struct Listen {
     pub listener: Addr<WsMessagesHandler>,
@@ -176,22 +216,27 @@ impl Handler<Listen> for AService {
     fn handle(&mut self, msg: Listen, ctx: &mut Self::Context) -> Self::Result {
         let ws_handler = msg.listener;
         self.msg_handler = Box::new(SendingHandler::new(ws_handler));
-        todo!()
+        //TODO should fail if it already has SendingHandler
+        Ok(())
     }
 }
 
 trait MessagesHandler {
-    fn handle_request(&mut self, msg: WsRequest) -> Pin<Box<dyn Future<Output=Result<Receiver<WsResult>, anyhow::Error>>>>;
+    fn handle_request(
+        &mut self,
+        msg: WsRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<WsResult>, anyhow::Error>>>>;
 
     fn handle_response(&mut self, msg: WsResult) -> Result<(), anyhow::Error>;
 }
 
-struct BufferingHandler {
-
-}
+struct BufferingHandler {}
 
 impl MessagesHandler for BufferingHandler {
-    fn handle_request(&mut self, msg: WsRequest) ->  Pin<Box<dyn Future<Output=Result<Receiver<WsResult>, anyhow::Error>>>> {
+    fn handle_request(
+        &mut self,
+        msg: WsRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<WsResult>, anyhow::Error>>>> {
         todo!("Should buffer pending requests")
     }
 
@@ -202,17 +247,23 @@ impl MessagesHandler for BufferingHandler {
 
 struct SendingHandler {
     pending_senders: HashMap<String, Sender<WsResult>>,
-    ws_handler: Addr<WsMessagesHandler>
+    ws_handler: Addr<WsMessagesHandler>,
 }
 
 impl SendingHandler {
     fn new(ws_handler: Addr<WsMessagesHandler>) -> Self {
-        SendingHandler { pending_senders: HashMap::new(), ws_handler }
+        SendingHandler {
+            pending_senders: HashMap::new(),
+            ws_handler,
+        }
     }
 }
 
 impl MessagesHandler for SendingHandler {
-    fn handle_request(&mut self, msg: WsRequest) -> Pin<Box<dyn Future<Output=Result<Receiver<WsResult>, anyhow::Error>>>> {
+    fn handle_request(
+        &mut self,
+        msg: WsRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<WsResult>, anyhow::Error>>>> {
         let id = msg.id.clone();
         let ws_handler = self.ws_handler.clone();
         let (sender, receiver) = oneshot::channel();
@@ -227,9 +278,8 @@ impl MessagesHandler for SendingHandler {
     fn handle_response(&mut self, msg: WsResult) -> Result<(), anyhow::Error> {
         let msg = msg
             // .map_err(|err| /* no idea */)
-            .map_err(|err| anyhow::anyhow!(err))
-            ?;
-        
+            .map_err(|err| anyhow::anyhow!(err))?;
+
         match self.pending_senders.remove(&msg.id) {
             Some(sender) => {
                 //TODO how to handle errors
@@ -241,10 +291,7 @@ impl MessagesHandler for SendingHandler {
         }
         Ok(())
     }
-
-    
 }
-
 
 // pub struct ARequest {
 
@@ -263,7 +310,7 @@ impl MessagesHandler for SendingHandler {
 // }
 
 ///
-/// 
+///
 
 #[derive(Default)]
 pub(crate) struct GsbServices {
@@ -281,7 +328,7 @@ pub(crate) struct GsbServices {
 
 // impl Actor for GsbServices {
 //     type Context = Context<Self>;
-    
+
 // }
 
 impl GsbServices {
