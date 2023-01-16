@@ -28,20 +28,13 @@ struct Signature<'a> {
     certificate: Option<&'a str>,
 }
 
-#[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
-    None; // error msg
-    "Manifest accepted because its urls list is empty"
-)]
+#[test]
 #[serial]
-fn manifest_negotiator_test_manifest_without_urls(
-    rulestore: &str,
-    whitelist: &str,
-    error_msg: Option<&str>,
-) {
+fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
     // compManifest.net.inet.out.urls is empty, therefore outbound is not needed
     let urls = "[]";
+    let whitelist = r#"{ "patterns": [] }"#;
+    let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
 
     // signature does not matter here
     let signature = Signature {
@@ -63,7 +56,7 @@ fn manifest_negotiator_test_manifest_without_urls(
         signature.algorithm,
         cert_b64,
         None,
-        error_msg,
+        None,
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
     )
