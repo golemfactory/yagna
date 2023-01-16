@@ -580,61 +580,6 @@ struct Payload<'a> {
     cert_permissions_b64: Option<&'a str>,
 }
 
-// fn create_demand_json(
-//     comp_manifest_b64: &str,
-//     signature_b64: Option<String>,
-//     signature_alg_b64: Option<&str>,
-//     cert_b64: Option<String>,
-//     cert_permissions_b64: Option<&str>,
-// ) -> serde_json::Value {
-//     let mut payload = HashMap::new();
-//     payload.insert("@tag", json!(comp_manifest_b64));
-//     if signature_b64.is_some() && signature_alg_b64.is_some() {
-//         payload.insert(
-//             "sig",
-//             json!({
-//                 "@tag": signature_b64.unwrap(),
-//                 "algorithm": signature_alg_b64.unwrap().to_string()
-//             }),
-//         );
-//     } else if signature_b64.is_some() {
-//         payload.insert("sig", json!(signature_b64.unwrap()));
-//     } else if signature_alg_b64.is_some() {
-//         payload.insert(
-//             "sig",
-//             json!({ "algorithm": signature_alg_b64.unwrap().to_string() }),
-//         );
-//     }
-//
-//     if cert_b64.is_some() && cert_permissions_b64.is_some() {
-//         payload.insert(
-//             "cert",
-//             json!({
-//                 "@tag": cert_b64.unwrap(),
-//                 "permissions": cert_permissions_b64.unwrap().to_string()
-//             }),
-//         );
-//     } else if let Some(cert_b64) = cert_b64 {
-//         payload.insert("cert", json!(cert_b64));
-//     }
-//
-//     // let mut payload = manifest.to_string();
-//     let manifest = json!({
-//         "golem": {
-//             "srv": {
-//                 "comp": {
-//                     "payload": payload
-//                 }
-//             }
-//         },
-//     });
-//     println!(
-//         "Tested demand:\n{}",
-//         serde_json::to_string_pretty(&manifest).unwrap()
-//     );
-//     manifest
-// }
-
 fn create_demand_json(payload: Option<Payload>) -> Value {
     match payload {
         Some(p) => {
