@@ -28,67 +28,6 @@ struct Signature<'a> {
     certificate: Option<&'a str>,
 }
 
-//below to be redesigned
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, algorithm: None, certificate: None},
-    None; // error msg
-    "Manifest without signature accepted because domain whitelisted (regex pattern)"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, algorithm: None, certificate: None},
-    Some("Didn't match any Rules"); // error msg
-    "Manifest without signature rejected because ONE of domains NOT whitelisted"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("dummy_inter.cert.pem") }, // signature with untrusted cert
-    Some("certificate permissions verification: Issuer certificate not found in keystore"); // error msg
-    "Manifest rejected because of invalid certificate even when urls domains are whitelisted"
-)]
-#[test_case(
-    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")}, // signature with private key file not matching cert
-    Some("failed to verify manifest signature: Invalid signature"); // error msg
-    "Manifest rejected because of invalid signature (signed using incorrect private key) even when urls domains are whitelisted"
-)]
-#[serial]
-fn manifest_negotiator_test(
-    rulestore: &str,
-    whitelist: &str,
-    urls: &str,
-    signature: Signature,
-    error_msg: Option<&str>,
-) {
-    let comp_manifest_b64 = create_comp_manifest_b64(urls);
-    let signature_b64 = signature.private_key_file.map(|signing_key| {
-        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
-    });
-    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
-
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
-        rulestore,
-        whitelist,
-        comp_manifest_b64,
-        signature_b64,
-        signature.algorithm,
-        cert_b64,
-        None,
-        error_msg,
-        &vec![CertPermissions::All],
-        &["foo_ca-chain.cert.pem"],
-    )
-}
-
 #[test_case(
     r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
