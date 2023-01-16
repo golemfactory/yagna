@@ -75,10 +75,22 @@ fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
     "Manifest without signature accepted because everyone is set to all"
 )]
 #[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
+    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because everyone is set to none"
+)]
+#[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     Some("Didn't match any Rules"); // error msg
     "Manifest rejected because domain NOT whitelisted"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    None; // error msg
+    "Accepted because everyone whitelist matched"
 )]
 #[serial]
 fn manifest_negotiator_test_manifest_with_urls(
