@@ -187,7 +187,13 @@ fn manifest_negotiator_test_manifest_with_urls(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
-    "Accepted because everyone is set to all"
+    "Accepted because everyone is set to all even if audited-payload set to none"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because everyone whitelist is matching even if audited-payload set to none"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#, // rulestore config
