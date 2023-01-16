@@ -64,42 +64,42 @@ fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
 
 #[test_case(
     r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{"patterns": [] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#,
     Some("outbound is disabled"); // error msg
     "Manifest with outbound is not accepted because outbound is disabled"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#,
     None; // error msg
     "Manifest without signature accepted because everyone is set to all"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#,
     Some("Didn't match any Rules"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://non-whitelisted.com"]"#,
     Some("Didn't match any Rules"); // error msg
     "Manifest rejected because domain NOT whitelisted"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#,
     None; // error msg
     "Accepted because everyone whitelist matched"
 )]
 #[serial]
 fn manifest_negotiator_test_manifest_with_urls(
     rulestore: &str,
-    whitelist: &str,
+    urls: &str,
     error_msg: Option<&str>,
 ) {
     // compManifest.net.inet.out.urls is not empty, therefore outbound is required
-    let urls = r#"["https://domain.com"]"#;
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#;
 
     // signature does not matter here
     let signature = Signature {
