@@ -24,7 +24,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
 
 struct Signature<'a> {
     private_key_file: Option<&'a str>,
-    signature: Option<&'a str>,
+    algorithm: Option<&'a str>,
     certificate: Option<&'a str>,
 }
 
@@ -33,7 +33,7 @@ struct Signature<'a> {
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
+    Signature { private_key_file: None, algorithm: None, certificate: None},
     None; // error msg
     "Manifest without signature accepted because domain whitelisted (regex pattern)"
 )]
@@ -41,7 +41,7 @@ struct Signature<'a> {
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: None, signature: None, certificate: None},
+    Signature { private_key_file: None, algorithm: None, certificate: None},
     Some("Didn't match any Rules"); // error msg
     "Manifest without signature rejected because ONE of domains NOT whitelisted"
 )]
@@ -49,7 +49,7 @@ struct Signature<'a> {
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("dummy_inter.cert.pem") }, // signature with untrusted cert
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("dummy_inter.cert.pem") }, // signature with untrusted cert
     Some("certificate permissions verification: Issuer certificate not found in keystore"); // error msg
     "Manifest rejected because of invalid certificate even when urls domains are whitelisted"
 )]
@@ -57,7 +57,7 @@ struct Signature<'a> {
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Signature { private_key_file: Some("foo_inter.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")}, // signature with private key file not matching cert
+    Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")}, // signature with private key file not matching cert
     Some("failed to verify manifest signature: Invalid signature"); // error msg
     "Manifest rejected because of invalid signature (signed using incorrect private key) even when urls domains are whitelisted"
 )]
@@ -80,7 +80,7 @@ fn manifest_negotiator_test(
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
@@ -107,7 +107,7 @@ fn manifest_negotiator_test_manifest_without_urls(
     // signature does not matter here
     let signature = Signature {
         private_key_file: None,
-        signature: None,
+        algorithm: None,
         certificate: None,
     };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
@@ -121,7 +121,7 @@ fn manifest_negotiator_test_manifest_without_urls(
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
@@ -160,7 +160,7 @@ fn manifest_negotiator_test_manifest_with_urls(
     // signature does not matter here
     let signature = Signature {
         private_key_file: None,
-        signature: None,
+        algorithm: None,
         certificate: None,
     };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
@@ -174,7 +174,7 @@ fn manifest_negotiator_test_manifest_with_urls(
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
@@ -246,7 +246,7 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     // valid signature
     let signature = Signature {
         private_key_file: Some("foo_req.key.pem"),
-        signature: Some("sha256"),
+        algorithm: Some("sha256"),
         certificate: Some("foo_req.cert.pem"),
     };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
@@ -262,7 +262,7 @@ fn manifest_negotiator_test_with_valid_payload_signature(
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
@@ -310,7 +310,7 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     // invalid signature
     let signature = Signature {
         private_key_file: Some("broken_signature"),
-        signature: Some("sha256"),
+        algorithm: Some("sha256"),
         certificate: Some("foo_req.cert.pem"),
     };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
@@ -323,7 +323,7 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
         whitelist,
         comp_manifest_b64,
         signature.private_key_file.map(|sig| sig.to_string()),
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
@@ -380,49 +380,49 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
 }
 
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     None;
     "Manifest accepted, because permissions are sufficient"
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::All],
     None;
     "Manifest accepted, when permissions are set to `All`"
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because certificate has no permissions"
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_inter.key.pem"), signature: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
+    Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest], // certs_permissions
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because parent certificate has no permissions"
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
     None;
     "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
     "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
 )]
 #[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
+    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::All],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
@@ -452,7 +452,7 @@ fn test_manifest_negotiator_certs_permissions(
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         cert_permissions_b64,
         error_msg,
@@ -492,7 +492,7 @@ fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Op
     // signature does not matter here
     let signature = Signature {
         private_key_file: None,
-        signature: None,
+        algorithm: None,
         certificate: None,
     };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
@@ -506,7 +506,7 @@ fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Op
         whitelist,
         comp_manifest_b64,
         signature_b64,
-        signature.signature,
+        signature.algorithm,
         cert_b64,
         None,
         error_msg,
