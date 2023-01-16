@@ -380,63 +380,49 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
 }
 
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     None;
     "Manifest accepted, because permissions are sufficient"
 )]
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::All],
     None;
     "Manifest accepted, when permissions are set to `All`"
 )]
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because certificate has no permissions"
 )]
 #[test_case(
-    Some("foo_inter.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_inter.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_inter.key.pem"), signature: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest], // certs_permissions
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because parent certificate has no permissions"
 )]
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
     None;
     "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
 )]
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
     "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
 )]
 #[test_case(
-    Some("foo_req.key.pem"), // private key file
-    Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"), // cert
+    Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::All],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
@@ -444,9 +430,7 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
 )]
 #[serial]
 fn test_manifest_negotiator_certs_permissions(
-    signing_key: Option<&str>,
-    signature_alg: Option<&str>,
-    cert: Option<&str>,
+    signature: Signature,
     cert_permissions_b64: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
@@ -455,12 +439,6 @@ fn test_manifest_negotiator_certs_permissions(
 
     let urls = r#"["https://domain.com"]"#;
 
-    // valid signature
-    let signature = Signature {
-        private_key_file: signing_key,
-        signature: signature_alg,
-        certificate: cert,
-    };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
     let signature_b64 = signature.private_key_file.map(|signing_key| {
         MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
@@ -481,16 +459,6 @@ fn test_manifest_negotiator_certs_permissions(
         provider_certs_permissions,
         &["foo_ca-chain.cert.pem"],
     )
-    // manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
-    //     offer,
-    //     signing_key,
-    //     signature_alg,
-    //     cert,
-    //     cert_permissions_b64,
-    //     provider_certs_permissions,
-    //     &["foo_ca-chain.cert.pem"],
-    //     error_msg,
-    // )
 }
 
 #[test_case(
