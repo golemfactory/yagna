@@ -50,7 +50,7 @@ struct Signature<'a> {
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Signature { private_key_file: Some("foo_req.key.pem"), signature: Some("sha256"), certificate: Some("dummy_inter.cert.pem") }, // signature with untrusted cert
-    Some("failed to verify manifest signature: Invalid certificate"); // error msg
+    Some("certificate permissions verification: Issuer certificate not found in keystore"); // error msg
     "Manifest rejected because of invalid certificate even when urls domains are whitelisted"
 )]
 #[test_case(
@@ -377,6 +377,120 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
     } else {
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
+}
+
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest],
+    None;
+    "Manifest accepted, because permissions are sufficient"
+)]
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
+    &vec![CertPermissions::All],
+    None;
+    "Manifest accepted, when permissions are set to `All`"
+)]
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
+    &vec![],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    "Manifest rejected, because certificate has no permissions"
+)]
+#[test_case(
+    Some("foo_inter.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_inter.cert.pem"), // cert
+    None, // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest], // certs_permissions
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    "Manifest rejected, because parent certificate has no permissions"
+)]
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
+    None;
+    "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
+)]
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
+    "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
+)]
+#[test_case(
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::All],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
+    "Manifest rejected, even when permissions are set to `All` because `unverified-permissions-chain` permission is also required when Demand comes with its permissions"
+)]
+#[serial]
+fn test_manifest_negotiator_certs_permissions(
+    signing_key: Option<&str>,
+    signature_alg: Option<&str>,
+    cert: Option<&str>,
+    cert_permissions_b64: Option<&str>,
+    provider_certs_permissions: &Vec<CertPermissions>,
+    error_msg: Option<&str>,
+) {
+    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": "default setting"}}}}"#;
+
+    let urls = r#"["https://domain.com"]"#;
+
+    // valid signature
+    let signature = Signature {
+        private_key_file: signing_key,
+        signature: signature_alg,
+        certificate: cert,
+    };
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    let signature_b64 = signature.private_key_file.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
+    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
+
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#;
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature.signature,
+        cert_b64,
+        cert_permissions_b64,
+        error_msg,
+        provider_certs_permissions,
+        &["foo_ca-chain.cert.pem"],
+    )
+    // manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
+    //     offer,
+    //     signing_key,
+    //     signature_alg,
+    //     cert,
+    //     cert_permissions_b64,
+    //     provider_certs_permissions,
+    //     &["foo_ca-chain.cert.pem"],
+    //     error_msg,
+    // )
 }
 
 #[test_case(
