@@ -379,6 +379,60 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
     }
 }
 
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because domain is whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because domain is whitelisted (regex)"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "a.com", "type": "strict" }, { "domain": "b.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://c.com"]"#, // compManifest.net.inet.out.urls
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because domain not whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "a.com", "type": "strict" }, { "domain": "b.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://a.com", "https://c.com"]"#, // compManifest.net.inet.out.urls
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because one of domains not whitelisted"
+)]
+#[serial]
+fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Option<&str>) {
+    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": "default setting"}}}}"#;
+
+    // signature does not matter here
+    let signature = Signature {
+        private_key_file: None,
+        signature: None,
+        certificate: None,
+    };
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    let signature_b64 = signature.private_key_file.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
+    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature.signature,
+        cert_b64,
+        None,
+        error_msg,
+        &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     rulestore: &str,
