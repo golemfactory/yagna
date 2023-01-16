@@ -211,22 +211,21 @@ mod tracker {
 
 #[cfg(not(unix))]
 mod tracker {
-    use anyhow::Context;
     use std::path::Path;
     use std::process::Command;
 
-    pub struct YagnaTracker {}
+    use ya_utils_process::ProcessHandle;
+
+    pub struct YagnaTracker {
+        pub child: ProcessHandle,
+    }
 
     impl YagnaTracker {
-        pub fn new(command: &mut Command, data_dir: &Path) -> anyhow::Result<Self> {
+        pub fn new(_command: &mut Command, _data_dir: &Path) -> anyhow::Result<Self> {
             anyhow::bail!("Tracker implemented only for unix systems")
         }
 
         pub async fn start(&mut self) -> anyhow::Result<()> {
-            anyhow::bail!("Tracker implemented only for unix systems")
-        }
-
-        pub async fn wait_for_start_signal(&mut self) -> anyhow::Result<()> {
             anyhow::bail!("Tracker implemented only for unix systems")
         }
     }
