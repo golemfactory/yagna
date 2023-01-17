@@ -62,7 +62,7 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let demand_permissions = demand
+        let demand_permissions_present = demand
             .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
             .is_ok();
 
@@ -70,7 +70,7 @@ impl NegotiatorComponent for ManifestSignature {
             match self.rules_manager.check_outbound_rules(
                 manifest,
                 manifest_sig,
-                demand_permissions,
+                demand_permissions_present,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),

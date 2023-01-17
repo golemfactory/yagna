@@ -107,7 +107,7 @@ impl RulesManager {
         &self,
         manifest: AppManifest,
         manifest_sig: Option<ManifestSignatureProps>,
-        demand_permissions: bool,
+        demand_permissions_present: bool,
     ) -> CheckRulesResult {
         let cfg = self.rulestore.config.read().unwrap();
 
@@ -135,7 +135,7 @@ impl RulesManager {
 
         if let Some(props) = manifest_sig {
             //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            if let Err(e) = self.verify_permissions(&props.cert, demand_permissions) {
+            if let Err(e) = self.verify_permissions(&props.cert, demand_permissions_present) {
                 return CheckRulesResult::Reject(format!(
                     "certificate permissions verification: {e}"
                 ));
@@ -205,10 +205,10 @@ impl RulesManager {
         }
     }
 
-    fn verify_permissions(&self, cert: &str, demand_permissions: bool) -> Result<()> {
+    fn verify_permissions(&self, cert: &str, demand_permissions_present: bool) -> Result<()> {
         let mut required = vec![CertPermissions::OutboundManifest];
 
-        if demand_permissions {
+        if demand_permissions_present {
             required.push(CertPermissions::UnverifiedPermissionsChain);
         }
 
