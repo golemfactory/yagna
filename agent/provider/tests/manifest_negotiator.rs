@@ -66,13 +66,13 @@ fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
     r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#,
     Some("outbound is disabled"); // error msg
-    "Manifest with outbound is not accepted because outbound is disabled"
+    "Rejected because outbound is disabled"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#,
     None; // error msg
-    "Manifest without signature accepted because everyone is set to all"
+    "Accepted because everyone is set to all"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
@@ -84,7 +84,7 @@ fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#,
     Some("Didn't match any Rules"); // error msg
-    "Manifest rejected because domain NOT whitelisted"
+    "Rejected because domain NOT whitelisted"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
@@ -276,15 +276,14 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     )
 }
 
-#[test_case(
-    r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
-    None; // error msg
-    "Manifest accepted because no payload"
-)]
+#[test]
 #[serial]
-fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_msg: Option<&str>) {
-    // Having
+fn manifest_negotiator_test_accepted_because_of_no_payload() {
+    let payload = None;
+
+    let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
+    let whitelist = r#"{ "patterns": [] }"#;
+
     let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
     let whitelist_file = create_whitelist_file(whitelist);
@@ -301,7 +300,7 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
     let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
-    let demand = create_demand_json(None);
+    let demand = create_demand_json(payload);
     let demand = create_demand(demand);
     let offer = create_offer();
 
@@ -310,17 +309,8 @@ fn manifest_negotiator_test_no_payload(rulestore: &str, whitelist: &str, error_m
 
     // Then
     let negotiation_result = negotiation_result.expect("Negotiator had not failed");
-    if let Some(message) = error_msg {
-        assert_eq!(
-            negotiation_result,
-            NegotiationResult::Reject {
-                message: message.to_string(),
-                is_final: true
-            }
-        );
-    } else {
-        assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
-    }
+
+    assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
 }
 
 #[test_case(
