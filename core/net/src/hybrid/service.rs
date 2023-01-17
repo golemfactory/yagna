@@ -22,7 +22,6 @@ use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
 use ya_core_model::{identity, net, NodeId};
-use ya_packet_trace::packet_trace_maybe;
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::proto::Payload;
@@ -36,6 +35,9 @@ use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
 use ya_utils_networking::resolver;
+
+#[allow(unused_imports)]
+use ya_packet_trace::{packet_trace_maybe, try_extract_from_ip_frame};
 
 use crate::bcast::BCastService;
 use crate::config::Config;
@@ -475,16 +477,9 @@ fn forward_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    #[cfg(feature = "packet-trace-enable")]
-    let to_trace = if msg[12..14] == [0x08, 0x00] && msg.len() > 55 {
-        Some(&msg[54..])
-    } else {
-        None
-    };
-
-    packet_trace_maybe!("net::forward_bus_to_net", { to_trace });
-
-    eprintln!("forward_bus_to_net {:02x?}", msg);
+    packet_trace_maybe!("net::forward_bus_to_net", {
+        try_extract_from_ip_frame(msg)
+    });
 
     let (tx, rx) = mpsc::channel(1);
     let msg = match codec::encode_request(
@@ -548,14 +543,9 @@ fn push_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    #[cfg(feature = "packet-trace-enable")]
-    let to_trace = if msg[12..14] == [0x08, 0x00] && msg.len() > 55 {
-        Some(&msg[54..])
-    } else {
-        None
-    };
-
-    packet_trace_maybe!("net::forward_bus_to_net", { to_trace });
+    packet_trace_maybe!("net::forward_bus_to_net", {
+        try_extract_from_ip_frame(msg)
+    });
 
     let msg = match codec::encode_request(
         caller_id,

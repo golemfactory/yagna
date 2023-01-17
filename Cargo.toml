@@ -18,7 +18,12 @@ zksync-driver = ['ya-zksync-driver']
 tos = []
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
-packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable"]
+packet-trace-enable = [
+    "ya-vpn/packet-trace-enable",
+    "ya-file-logging/packet-trace-enable",
+    "ya-net/packet-trace-enable",
+    "ya-service-bus/packet-trace-enable"
+]
 
 [[bin]]
 name = "yagna"
@@ -230,10 +235,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4a932a62d48c72dabf59020e85c523d3ff0be7d4"}
-#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4a932a62d48c72dabf59020e85c523d3ff0be7d4"}
-#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4a932a62d48c72dabf59020e85c523d3ff0be7d4"}
-#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4a932a62d48c72dabf59020e85c523d3ff0be7d4"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4f34f06d2b4354662d170fea0c1243b8705ef151"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4f34f06d2b4354662d170fea0c1243b8705ef151"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4f34f06d2b4354662d170fea0c1243b8705ef151"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "4f34f06d2b4354662d170fea0c1243b8705ef151"}
 
 #ya-service-bus = { path = "../ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }

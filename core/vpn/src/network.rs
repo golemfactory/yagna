@@ -12,7 +12,8 @@ use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpo
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
-use ya_packet_trace::{packet_trace, packet_trace_maybe};
+#[allow(unused_imports)]
+use ya_packet_trace::{packet_trace, packet_trace_maybe, try_extract_from_ip_frame};
 use ya_utils_networking::vpn::socket::TCP_CONN_TIMEOUT;
 use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_route, tap_iface};
 
@@ -590,14 +591,9 @@ impl Handler<Egress> for Vpn {
         let frame = msg.event.payload.into_vec();
 
         #[cfg(feature = "packet-trace-enable")]
-        // Only trace IP frames
-        let to_trace = if frame[12..14] == [0x08, 0x00] && frame.len() > 55 {
-            Some(frame[54..].to_owned())
-        } else {
-            None
-        };
+        let payload = try_extract_from_ip_frame(&frame);
 
-        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::1", { &to_trace });
+        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::1", { &payload });
 
         log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
 
@@ -611,7 +607,7 @@ impl Handler<Egress> for Vpn {
                         Err(e) => Err(Error::Other(e.to_string())),
                     })
                     .map(move |r| {
-                        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &to_trace });
+                        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &payload });
 
                         r
                     });

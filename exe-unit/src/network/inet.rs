@@ -28,7 +28,8 @@ use net::ya_smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
-use ya_packet_trace::packet_trace_maybe;
+#[allow(unused_imports)]
+use ya_packet_trace::{packet_trace_maybe, try_extract_from_ip_frame};
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::ntoh;
@@ -239,7 +240,7 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
         router.handle(&packet).await;
 
         packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
-            (packet[12..14] == [0x08, 0x00] && packet.len() > 55).then(|| &packet[54..])
+            &try_extract_from_ip_frame(&packet)
         });
 
         log::trace!("[inet] runtime -> inet packet {:?}", packet);
@@ -270,7 +271,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
             }
             IngressEvent::Packet { payload, desc, .. } => {
                 packet_trace_maybe!("exe-unit::inet_ingress_handler", {
-                    (payload[12..14] == [0x08, 0x00] && payload.len() > 55).then(|| &payload[54..])
+                    &try_extract_from_ip_frame(&payload)
                 });
 
                 let key = (&desc).proxy_key().unwrap();

@@ -6,7 +6,6 @@ use futures::{future, FutureExt};
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
-use ya_packet_trace::packet_trace_maybe;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
@@ -14,6 +13,9 @@ use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
 use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
+
+#[allow(unused_imports)]
+use ya_packet_trace::{packet_trace_maybe, try_extract_from_ip_frame};
 
 use crate::acl::Acl;
 use crate::error::Error;
@@ -278,7 +280,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         };
 
         packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
-            (packet[12..14] == [0x08, 0x00] && packet.len() > 55).then(|| &packet[54..])
+            try_extract_from_ip_frame(&packet)
         });
 
         match EtherFrame::try_from(packet) {
@@ -319,8 +321,7 @@ impl Handler<RpcRawCall> for Vpn {
         };
 
         packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
-            (packet.data[12..14] == [0x08, 0x00] && packet.data.len() > 55)
-                .then(|| &packet.data[54..])
+            &try_extract_from_ip_frame(&packet.data)
         });
 
         self.handle_packet(packet, ctx)
@@ -334,8 +335,7 @@ impl Handler<Packet> for Vpn {
 
     fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
         packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
-            (packet.data[12..14] == [0x08, 0x00] && packet.data.len() > 55)
-                .then(|| &packet.data[..])
+            &try_extract_from_ip_frame(&packet.data)
         });
 
         self.handle_packet(packet, ctx)

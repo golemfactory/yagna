@@ -189,7 +189,7 @@ async fn send_script(
 fn init_packet_trace() -> anyhow::Result<()> {
     use ya_packet_trace::{set_write_target, WriteTarget};
 
-    let write = std::fs::File::create("/home/kamil/exe-unit.trace")?;
+    let write = std::fs::File::create("./exe-unit.trace")?;
     set_write_target(WriteTarget::Write(Box::new(write)));
 
     Ok(())
