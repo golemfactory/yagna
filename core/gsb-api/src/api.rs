@@ -1,15 +1,12 @@
-use crate::services::{GsbServices, AService, AServices, ABind, AUnbind, AFind, Listen};
+use crate::services::{ABind, AFind, AServices, AUnbind, Listen};
 use crate::{GsbApiError, WsMessagesHandler};
-use actix::dev::MessageResponse;
-use actix::{Actor, Addr};
-use actix_http::ws::Codec;
+use actix::Addr;
 use actix_http::StatusCode;
 use actix_web::web::Data;
 use actix_web::Scope;
 use actix_web::{web, HttpRequest, Responder, Result};
 use actix_web_actors::ws::{self};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
 use ya_service_api_web::middleware::Identity;
 
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
@@ -36,7 +33,10 @@ async fn post_services(
         let listen_on = listen.on.clone();
         // let mut services = services.lock()?;
         // let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
-        let bind = ABind { components: components.clone(), addr_prefix: listen_on.clone() };
+        let bind = ABind {
+            components: components.clone(),
+            addr_prefix: listen_on.clone(),
+        };
         let _ = services.send(bind).await?;
         let listen_on_encoded = base64::encode(&listen_on);
         let services = ServicesBody {
@@ -60,11 +60,13 @@ async fn delete_services(
     path: web::Path<ServicesPath>,
     _id: Identity,
     services: Data<Addr<AServices>>,
-) ->  Result<impl Responder, GsbApiError> {
+) -> Result<impl Responder, GsbApiError> {
     log::debug!("DELETE /services/{}", path.key);
     //TODO some prefix/sufix
-    let unbind = AUnbind { addr: path.key.to_string() };
-    let x = services.send(unbind).await??;
+    let unbind = AUnbind {
+        addr: path.key.to_string(),
+    };
+    let _x = services.send(unbind).await??;
     Ok(web::Json(()))
 }
 
@@ -73,23 +75,22 @@ async fn get_service_messages(
     path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
-    // services: Data<Arc<Mutex<GsbServices>>>,
     services: Data<Addr<AServices>>,
 ) -> Result<impl Responder, GsbApiError> {
-    // let mut services = services.lock()?;
     //TODO handle decode error
     let key = base64::decode(&path.key).unwrap();
     let key = String::from_utf8_lossy(&key);
-    // let responders = services.ws_responses_dst(&key);
-    // let responders = responders.clone();
-    let service = services.send(AFind { addr: key.to_string() }).await??;
-    let handler = WsMessagesHandler { service:  service.clone() };
+    let service = services
+        .send(AFind {
+            addr: key.to_string(),
+        })
+        .await??;
+    let handler = WsMessagesHandler {
+        service: service.clone(),
+    };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    // let ws_request_dst = services.ws_request_dst(&key);
     service.send(Listen { listener: addr }).await??;
-    // let mut ws_request_dst = ws_request_dst.write().unwrap();
-    // *ws_request_dst = Some(addr);
-    Ok(resp) 
+    Ok(resp)
 }
 
 #[derive(Deserialize)]
