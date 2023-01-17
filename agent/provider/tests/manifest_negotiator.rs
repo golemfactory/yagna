@@ -30,9 +30,10 @@ struct Signature<'a> {
 
 #[test]
 #[serial]
-fn manifest_negotiator_test_accept_because_outbound_is_not_requested() {
+fn manifest_negotiator_test_accepted_because_outbound_is_not_requested() {
     // compManifest.net.inet.out.urls is empty, therefore outbound is not needed
     let urls = "[]";
+
     let whitelist = r#"{ "patterns": [] }"#;
     let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
 
