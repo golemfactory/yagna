@@ -52,10 +52,10 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7.0"
+ya-client = "0.7"
 ya-client-model = "0.5"
 
-gftp = { version = "0.3.1", optional = true } # just to enable gftp build for cargo-deb
+gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
@@ -80,37 +80,81 @@ tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
 
 [package.metadata.deb]
-name="golem-requestor"
+name = "golem-requestor"
 assets = [
-    ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/gftp", "usr/bin/", "755"],
-    ["README.md", "usr/share/doc/yagna/", "644"],
-    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+    [
+        "target/release/yagna",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/gftp",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "README.md",
+        "usr/share/doc/yagna/",
+        "644",
+    ],
+    [
+        "core/serv/README.md",
+        "usr/share/doc/yagna/service.md",
+        "644",
+    ],
 ]
-conflicts="ya-provider"
-features=["static-openssl"]
-maintainer-scripts="debian/core"
-depends="libgcc1, libc6 (>= 2.23)"
-extended-description="""The Next Golem Milestone.
+conflicts = "ya-provider"
+features = ["static-openssl"]
+maintainer-scripts = "debian/core"
+depends = "libgcc1, libc6 (>= 2.23)"
+extended-description = """The Next Golem Milestone.
 
 An open platform and marketplace for distributed computations.
 """
 
 
 [package.metadata.deb.variants.provider]
-name="golem-provider"
-replaces="golem-requestor"
-maintainer-scripts="debian/provider"
-features=["static-openssl"]
-depends="libgcc1, libc6 (>= 2.23)"
+name = "golem-provider"
+replaces = "golem-requestor"
+maintainer-scripts = "debian/provider"
+features = ["static-openssl"]
+depends = "libgcc1, libc6 (>= 2.23)"
 assets = [
-    ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/ya-provider", "usr/bin/", "755"],
-    ["target/release/gftp", "usr/bin/", "755"],
-    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
-    ["README.md", "usr/share/doc/yagna/", "644"],
-    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
-    ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
+    [
+        "target/release/yagna",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/ya-provider",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/gftp",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/exe-unit",
+        "usr/lib/yagna/plugins/",
+        "755",
+    ],
+    [
+        "README.md",
+        "usr/share/doc/yagna/",
+        "644",
+    ],
+    [
+        "core/serv/README.md",
+        "usr/share/doc/yagna/service.md",
+        "644",
+    ],
+    [
+        "agent/provider/readme.md",
+        "usr/share/doc/yagna/run-provider.md",
+        "644",
+    ],
 ]
 
 
@@ -157,7 +201,7 @@ members = [
     "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
-    "core/metrics"
+    "core/metrics",
 ]
 
 [patch.crates-io]
@@ -209,15 +253,15 @@ ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
-ya-utils-actix = { path = "utils/actix_utils"}
-ya-utils-cli = { path = "utils/cli"}
+ya-utils-actix = { path = "utils/actix_utils" }
+ya-utils-cli = { path = "utils/cli" }
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking" }
 ya-utils-path = { path = "utils/path" }
-ya-utils-process = { path = "utils/process"}
-ya-diesel-utils = { path = "utils/diesel-utils"}
+ya-utils-process = { path = "utils/process" }
+ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
-ya-provider = { path = "agent/provider"}
+ya-provider = { path = "agent/provider" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
