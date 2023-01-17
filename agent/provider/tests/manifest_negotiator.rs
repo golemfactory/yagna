@@ -579,29 +579,26 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
         |p| {
             let mut payload = HashMap::new();
             payload.insert("@tag", json!(p.comp_manifest_b64));
-            if p.signature_b64.is_some() && p.signature_alg_b64.is_some() {
+            if let (Some(sig), Some(alg)) = (&p.signature_b64, p.signature_alg_b64) {
                 payload.insert(
                     "sig",
                     json!({
-                        "@tag": p.signature_b64.unwrap(),
-                        "algorithm": p.signature_alg_b64.unwrap().to_string()
+                        "@tag": sig.to_string(),
+                        "algorithm": alg.to_string()
                     }),
                 );
-            } else if p.signature_b64.is_some() {
-                payload.insert("sig", json!(p.signature_b64.unwrap()));
-            } else if p.signature_alg_b64.is_some() {
-                payload.insert(
-                    "sig",
-                    json!({ "algorithm": p.signature_alg_b64.unwrap().to_string() }),
-                );
+            } else if let Some(sig) = p.signature_b64 {
+                payload.insert("sig", json!(sig));
+            } else if let Some(alg) = p.signature_alg_b64 {
+                payload.insert("sig", json!({ "algorithm": alg.to_string() }));
             }
 
-            if p.cert_b64.is_some() && p.cert_permissions_b64.is_some() {
+            if let (Some(cert), Some(permissions)) = (&p.cert_b64, p.cert_permissions_b64) {
                 payload.insert(
                     "cert",
                     json!({
-                        "@tag": p.cert_b64.unwrap(),
-                        "permissions": p.cert_permissions_b64.unwrap().to_string()
+                        "@tag": cert.to_string(),
+                        "permissions": permissions.to_string()
                     }),
                 );
             } else if let Some(cert_b64) = p.cert_b64 {
