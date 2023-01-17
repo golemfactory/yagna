@@ -304,10 +304,7 @@ fn manifest_negotiator_test_accepted_because_of_no_payload() {
     let demand = create_demand(demand);
     let offer = create_offer();
 
-    // When
     let negotiation_result = manifest_negotiator.negotiate_step(&demand, offer.clone());
-
-    // Then
     let negotiation_result = negotiation_result.expect("Negotiator had not failed");
 
     assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
