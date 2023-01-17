@@ -63,6 +63,40 @@ fn manifest_negotiator_test_accepted_because_outbound_is_not_requested() {
     )
 }
 
+#[test]
+#[serial]
+fn manifest_negotiator_test_accepted_because_of_no_payload() {
+    let payload = None;
+
+    let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
+    let whitelist = r#"{ "patterns": [] }"#;
+
+    let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+
+    let whitelist_file = create_whitelist_file(whitelist);
+    let rules_file_name = test_cert_dir.join("rules.json");
+    let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
+    rules_file.write_all(rulestore.as_bytes()).unwrap();
+
+    let rules_manager =
+        RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
+            .expect("Can't load RulesManager");
+
+    let config = create_manifest_signature_validating_policy_config();
+    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
+    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
+    // Current implementation does not verify content of certificate permissions incoming in demand.
+
+    let demand = create_demand_json(payload);
+    let demand = create_demand(demand);
+    let offer = create_offer();
+
+    let negotiation_result = manifest_negotiator.negotiate_step(&demand, offer.clone());
+    let negotiation_result = negotiation_result.expect("Negotiator had not failed");
+
+    assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
+}
+
 #[test_case(
     r#"{"outbound": {"enabled": false, "everyone": "all", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#,
@@ -275,40 +309,6 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
     )
-}
-
-#[test]
-#[serial]
-fn manifest_negotiator_test_accepted_because_of_no_payload() {
-    let payload = None;
-
-    let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
-    let whitelist = r#"{ "patterns": [] }"#;
-
-    let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-
-    let whitelist_file = create_whitelist_file(whitelist);
-    let rules_file_name = test_cert_dir.join("rules.json");
-    let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
-    rules_file.write_all(rulestore.as_bytes()).unwrap();
-
-    let rules_manager =
-        RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
-            .expect("Can't load RulesManager");
-
-    let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
-    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
-    // Current implementation does not verify content of certificate permissions incoming in demand.
-
-    let demand = create_demand_json(payload);
-    let demand = create_demand(demand);
-    let offer = create_offer();
-
-    let negotiation_result = manifest_negotiator.negotiate_step(&demand, offer.clone());
-    let negotiation_result = negotiation_result.expect("Negotiator had not failed");
-
-    assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
 }
 
 #[test_case(
