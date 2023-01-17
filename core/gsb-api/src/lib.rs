@@ -2,23 +2,20 @@ mod api;
 mod services;
 
 use actix::prelude::*;
-use actix::{dev::{MessageResponse, Mailbox}, Actor, Handler, StreamHandler, MailboxError, Addr};
+use actix::{dev::MessageResponse, Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
-    ws::{CloseCode, CloseReason, ProtocolError},
+    ws::{CloseReason, ProtocolError},
     StatusCode,
 };
 use actix_web::ResponseError;
 use actix_web_actors::ws;
-use bytes::Bytes;
+
 use flexbuffers::Reader;
-use futures::channel::oneshot::Sender;
+
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use services::{GsbServices, AService};
-use std::{
-    collections::HashMap,
-    sync::{Arc, MutexGuard, PoisonError, RwLock},
-};
+use serde_json::json;
+use services::AService;
+
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
 
@@ -57,12 +54,6 @@ impl From<ya_service_bus::Error> for GsbApiError {
 impl From<MailboxError> for GsbApiError {
     fn from(value: MailboxError) -> Self {
         GsbApiError::InternalError(format!("Actix error: {value}"))
-    }
-}
-
-impl From<PoisonError<MutexGuard<'_, GsbServices>>> for GsbApiError {
-    fn from(value: PoisonError<MutexGuard<'_, GsbServices>>) -> Self {
-        GsbApiError::InternalError(format!("Internal error: {value}"))
     }
 }
 
@@ -107,27 +98,15 @@ struct WsRequest {
 #[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
 pub(crate) struct WsResponse {
-    id: String,
-    msg: Vec<u8>,
+    pub id: String,
+    pub response: WsResponseMsg,
 }
 
-pub(crate) type WsResult = Result<WsResponse, anyhow::Error>;
-
-// impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
-//     fn handle(
-//         self,
-//         ctx: &mut <WsMessagesHandler as Actor>::Context,
-//         tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
-//     ) {
-//         match self {
-//             Ok(()) => {}
-//             Err(err) => ctx.close(Some(CloseReason {
-//                 code: CloseCode::Error,
-//                 description: Some(err.to_string()),
-//             })),
-//         }
-//     }
-// }
+#[derive(Debug)]
+pub(crate) enum WsResponseMsg {
+    Message(Vec<u8>),
+    Error(GsbApiError),
+}
 
 pub(crate) struct WsMessagesHandler {
     // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
@@ -135,20 +114,34 @@ pub(crate) struct WsMessagesHandler {
 }
 
 impl WsMessagesHandler {
-    async fn handle(&mut self, msg: bytes::Bytes) -> Result<(), GsbApiError> {
+    async fn handle(service: Addr<AService>, msg: bytes::Bytes) {
         match Reader::get_root(&*msg) {
             Ok(buffer) => {
                 let response = buffer.as_map();
                 //TODO handle errors
                 let id = response.index("id").unwrap().as_str().to_string();
-                let msg = msg.to_vec();
-                let response = WsResponse { id, msg };
-                log::info!("WsResponse: {} len: {}", response.id, response.msg.len());
-                let _ = self.service.send(response).await??;
-                Ok(())
+                let msg = response.index("payload").unwrap().as_blob().0.to_vec();
+                let response = WsResponse {
+                    id,
+                    response: WsResponseMsg::Message(msg),
+                };
+                log::info!("WsResponse: {}", response.id);
+                match service.send(response).await {
+                    Ok(res) => {
+                        if let Err(err) = res {
+                            log::error!("Failed to handle WS msg: {err}");
+                            //TODO error response?
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Internal error: {err}");
+                        //TODO error response?
+                    }
+                }
             }
             Err(err) => {
-               Err(GsbApiError::InternalError(format!("Failed to deserialize msg: {}", err)))
+                //TODO shutdown service connections?
+                log::error!("WS response error: {err}");
             }
         }
     }
@@ -161,8 +154,9 @@ impl Actor for WsMessagesHandler {
 impl Handler<WsRequest> for WsMessagesHandler {
     type Result = <WsRequest as Message>::Result;
 
-    fn handle(&mut self, msg: WsRequest, ctx: &mut Self::Context) -> Self::Result {
-        let msg = flexbuffers::to_vec(&msg)
+    fn handle(&mut self, request: WsRequest, ctx: &mut Self::Context) -> Self::Result {
+        log::info!("WS request (id: {}, component: {})", request.id, request.component);
+        let msg = flexbuffers::to_vec(&request)
             .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?;
         ctx.binary(msg);
         Ok(())
@@ -179,11 +173,16 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             Ok(msg) => match msg {
                 ws::Message::Binary(msg) => {
                     log::info!("Binary (len {})", msg.len());
-                    self.handle(msg);
+                    let service = self.service.clone();
+                    ctx.spawn(actix::fut::wrap_future(Self::handle(service, msg)));
                 }
                 ws::Message::Text(msg) => {
                     log::info!("Text (len {})", msg.len());
-                    self.handle(msg.into_bytes());
+                    let service = self.service.clone();
+                    ctx.spawn(actix::fut::wrap_future(Self::handle(
+                        service,
+                        msg.into_bytes(),
+                    )));
                 }
                 ws::Message::Continuation(msg) => {
                     todo!("NYI Continuation: {:?}", msg);
