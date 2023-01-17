@@ -568,8 +568,15 @@ struct Payload<'a> {
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
-    match payload {
-        Some(p) => {
+    let manifest = payload.map_or(
+        json!({
+            "golem": {
+                "srv": {
+                    "comp":{}
+                }
+            },
+        }),
+        |p| {
             let mut payload = HashMap::new();
             payload.insert("@tag", json!(p.comp_manifest_b64));
             if p.signature_b64.is_some() && p.signature_alg_b64.is_some() {
@@ -601,7 +608,7 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                 payload.insert("cert", json!(cert_b64));
             }
 
-            let manifest = json!({
+            json!({
                 "golem": {
                     "srv": {
                         "comp": {
@@ -609,28 +616,16 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         }
                     }
                 },
-            });
-            println!(
-                "Tested demand:\n{}",
-                serde_json::to_string_pretty(&manifest).unwrap()
-            );
-            manifest
-        }
-        _ => {
-            let manifest = json!({
-                "golem": {
-                    "srv": {
-                        "comp":{}
-                    }
-                },
-            });
-            println!(
-                "Tested demand:\n{}",
-                serde_json::to_string_pretty(&manifest).unwrap()
-            );
-            manifest
-        }
-    }
+            })
+        },
+    );
+
+    println!(
+        "Tested demand:\n{}",
+        serde_json::to_string_pretty(&manifest).unwrap()
+    );
+
+    manifest
 }
 
 fn create_manifest_signature_validating_policy_config() -> PolicyConfig {
