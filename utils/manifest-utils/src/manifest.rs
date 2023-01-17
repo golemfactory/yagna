@@ -111,6 +111,21 @@ impl AppManifest {
             })
     }
 
+    pub fn is_outbound_requested(&self) -> bool {
+        if let Some(urls) = self
+            .comp_manifest
+            .as_ref()
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .and_then(|out| out.urls.as_ref())
+        {
+            !urls.is_empty()
+        } else {
+            false
+        }
+    }
+
     pub fn features(&self) -> HashSet<Feature> {
         let mut features = HashSet::new();
 
