@@ -9,6 +9,7 @@ default = []
 service = []
 # Temporary to make goth integration tests work
 central-net = []
+packet-trace-enable = ["ya-packet-trace/enable"]
 
 [dependencies]
 ya-client-model = "0.5"
@@ -24,6 +25,7 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-bus = "0.6.1"
 ya-utils-networking = "0.2"
+ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = "0.13"
 actix-web = "4"

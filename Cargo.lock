@@ -8018,6 +8018,7 @@ dependencies = [
  "url",
  "ya-client-model",
  "ya-core-model",
+ "ya-packet-trace",
  "ya-relay-client",
  "ya-sb-proto",
  "ya-sb-router",
