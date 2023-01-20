@@ -420,31 +420,49 @@ mod nested_flexbuffer {
 
 
 
-
-    // fn to_pushable
+    #[test]
+    fn test_complex() {       
+        let top = ComplexMsg {
+            content: vec![1, 2, u16::MAX],
+            id: "meh".to_string(),
+            payload: Payload { file_size: 123123 },
+            nested: DefaultMsg { id: "my_id".to_string(), payload: Payload { file_size: 3456456 }, },
+            other: i32::MAX,
+        };
+        let nested = &top.nested;
+        let nested_name = "nested";
+        test_cloning(&top, nested, nested_name)
+    }
 
     #[test]
-    fn test_cloning() {
-        let test_msg = DefaultMsg::default();
-        // let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
+    fn test_default() {
+        let top = DefaultMsg::default();
+        let nested = &top.payload;
+        let nested_name = "payload";
+        test_cloning(&top, nested, nested_name)
+    }
+
+    fn test_cloning<TOP: Serialize + DeserializeOwned + PartialEq + Debug, NESTED: Serialize + DeserializeOwned + PartialEq + Debug>(
+        top: &TOP, nested: &NESTED, nested_name: &str
+    ) {
         let mut s = flexbuffers::FlexbufferSerializer::new();
-        test_msg.serialize(&mut s).unwrap();
+        top.serialize(&mut s).unwrap();
         let r = flexbuffers::Reader::get_root(s.view()).unwrap();
         let r_m = r.as_map();
-        let r_m_p = r_m.index("payload").unwrap();
+        let r_m_p = r_m.index(nested_name).unwrap();
         let r_m_p_m = r_m_p.as_map();
 
         let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
-        let mut builder_map = builder.start_map();
+        let builder_map = builder.start_map();
         let _ = clone_map(builder_map, &r_m_p_m).unwrap();
 
         println!("Copy: {:?}", builder.view());
 
         let r = Reader::get_root(builder.view()).unwrap();
 
-        let cloned_payload = Payload::deserialize(r).unwrap();
+        let cloned_payload = NESTED::deserialize(r).unwrap();
 
-        assert_eq!(test_msg.payload, cloned_payload);
+        assert_eq!(nested, &cloned_payload);
     }
 
     // struct CustomSerializerMsg {
@@ -495,6 +513,7 @@ mod nested_flexbuffer {
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
     struct ComplexMsg {
+        content: Vec<u16>,
         id: String,
         payload: Payload,
         nested: DefaultMsg,
