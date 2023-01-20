@@ -328,15 +328,124 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 }
 
+
 #[cfg(test)]
 mod nested_flexbuffer {
     use std::{collections::{HashMap, BTreeSet}, fmt::Debug};
 
     use bytes::Bytes;
-    use flexbuffers::{Buffer, Reader, FlexBufferType, BitWidth, BuilderOptions, Builder};
+    use flexbuffers::{Buffer, Reader, FlexBufferType, BitWidth, BuilderOptions, Builder, MapBuilder, MapReader, VectorBuilder, VectorReader};
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
     use serde_json::Value;
     use ya_core_model::gftp::GftpChunk;
+
+
+    fn clone_map(mut b: MapBuilder, m_r: &MapReader<&[u8]>) -> Result<(), flexbuffers::ReaderError> {
+        for key in m_r.iter_keys() {
+            let v = m_r.index(key)?;
+            match v.flexbuffer_type() {
+                FlexBufferType::Null => b.push(key, ()),
+                FlexBufferType::Int => b.push(key, v.as_i64()),
+                FlexBufferType::UInt => b.push(key, v.as_u64()),
+                FlexBufferType::Float => b.push(key, v.as_i64()),
+                FlexBufferType::Bool => b.push(key, v.as_f64()),
+                FlexBufferType::Key => b.push(key, v.as_str()),
+                FlexBufferType::String => b.push(key, v.as_str()),
+                FlexBufferType::IndirectInt => b.push(key, v.as_i64()),
+                FlexBufferType::IndirectUInt => b.push(key, v.as_u64()),
+                FlexBufferType::IndirectFloat => b.push(key, v.as_f64()),
+                FlexBufferType::Map => clone_map(b.start_map(key), &v.as_map())?,
+                FlexBufferType::Vector => clone_vector(b.start_vector(key), v.as_vector(), None)?,
+                FlexBufferType::VectorInt => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::UInt))?,
+                FlexBufferType::VectorFloat => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorKey => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Key))?,
+                FlexBufferType::VectorString => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::String))?,
+                FlexBufferType::VectorBool => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Bool))?,
+                FlexBufferType::VectorInt2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::UInt))?,
+                FlexBufferType::VectorFloat2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorInt3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorFloat3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorInt4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorFloat4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::Blob => b.push(key, v.as_blob()),
+            }
+        }
+        b.end_map();
+        Ok(())
+    }
+
+    fn clone_vector(mut b: VectorBuilder, v_r: VectorReader<&[u8]>, t: Option<FlexBufferType>) ->  Result<(), flexbuffers::ReaderError> {
+        for v in v_r.iter() {
+            let typ = t.unwrap_or(v.flexbuffer_type());
+            //TODO remove duplication
+            match typ {
+                FlexBufferType::Null => b.push(()),
+                FlexBufferType::Int => b.push(v.as_i64()),
+                FlexBufferType::UInt => b.push(v.as_u64()),
+                FlexBufferType::Float => b.push(v.as_i64()),
+                FlexBufferType::Bool => b.push(v.as_f64()),
+                FlexBufferType::Key => b.push(v.as_str()),
+                FlexBufferType::String => b.push(v.as_str()),
+                FlexBufferType::IndirectInt => b.push(v.as_i64()),
+                FlexBufferType::IndirectUInt => b.push(v.as_u64()),
+                FlexBufferType::IndirectFloat => b.push(v.as_f64()),
+                FlexBufferType::Map => clone_map(b.start_map(), &v.as_map())?,
+                FlexBufferType::Vector => clone_vector(b.start_vector(), v.as_vector(), None)?,
+                FlexBufferType::VectorInt => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::UInt))?,
+                FlexBufferType::VectorFloat => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorKey => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Key))?,
+                FlexBufferType::VectorString => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::String))?,
+                FlexBufferType::VectorBool => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Bool))?,
+                FlexBufferType::VectorInt2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::UInt))?,
+                FlexBufferType::VectorFloat2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorInt3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorFloat3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::VectorInt4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorUInt4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
+                FlexBufferType::VectorFloat4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
+                FlexBufferType::Blob => b.push(v.as_blob()),
+            }
+        }
+        b.end_vector();
+        Ok(())
+    }
+
+
+
+
+
+    // fn to_pushable
+
+    #[test]
+    fn test_cloning() {
+        let test_msg = DefaultMsg::default();
+        // let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
+        let mut s = flexbuffers::FlexbufferSerializer::new();
+        test_msg.serialize(&mut s).unwrap();
+        let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+        let r_m = r.as_map();
+        let r_m_p = r_m.index("payload").unwrap();
+        let r_m_p_m = r_m_p.as_map();
+
+        let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+        let mut builder_map = builder.start_map();
+        let _ = clone_map(builder_map, &r_m_p_m).unwrap();
+
+        println!("Copy: {:?}", builder.view());
+
+        let r = Reader::get_root(builder.view()).unwrap();
+
+        let cloned_payload = Payload::deserialize(r).unwrap();
+
+        assert_eq!(test_msg.payload, cloned_payload);
+    }
 
     // struct CustomSerializerMsg {
     //     id: String,
@@ -450,7 +559,7 @@ mod nested_flexbuffer {
 
 
     
-    fn find_payload_alt2<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
+    fn find_payload_alt<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
         let mut s = flexbuffers::FlexbufferSerializer::new();
         msg.serialize(&mut s).unwrap();
 
