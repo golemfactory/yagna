@@ -15,7 +15,7 @@ use actix_web::ResponseError;
 use actix_web_actors::ws;
 
 use bytes::{Buf, Bytes};
-use flexbuffers::{Reader, BuilderOptions, MapReader, MapBuilder};
+use flexbuffers::{BuilderOptions, MapBuilder, MapReader, Reader};
 
 use lazy_static::__Deref;
 use serde::{Deserialize, Serialize};
@@ -131,7 +131,6 @@ pub(crate) struct WsMessagesHandler {
     service: Addr<AService>,
 }
 
-
 #[derive(Default)]
 struct MyBuffer {
     pub b: Bytes,
@@ -186,24 +185,44 @@ impl WsMessagesHandler {
         match Reader::get_root(&*msg) {
             Ok(buffer) => {
                 // buffer.get_s
-                log::info!("Buffer: isAligned: {}: bitw: {:?}, buf: {:?}", buffer.is_aligned(), buffer.bitwidth(), buffer.buffer());
+                log::info!(
+                    "Buffer: isAligned: {}: bitw: {:?}, buf: {:?}",
+                    buffer.is_aligned(),
+                    buffer.bitwidth(),
+                    buffer.buffer()
+                );
                 let response = buffer.as_map();
                 //TODO handle errors
                 let id_r = response.index("id").unwrap();
                 let id = id_r.as_str().to_string();
-                log::info!("ID: {id}: isAligned: {}: bitw: {:?}, buf: {:?}", id_r.is_aligned(), id_r.bitwidth(), id_r.buffer());
+                log::info!(
+                    "ID: {id}: isAligned: {}: bitw: {:?}, buf: {:?}",
+                    id_r.is_aligned(),
+                    id_r.bitwidth(),
+                    id_r.buffer()
+                );
                 let payload_index = response.index("payload").unwrap();
-                log::info!("Payload: isAligned: {}:  bitw: {:?}, buf: {:?}", payload_index.is_aligned(), payload_index.bitwidth(), payload_index.buffer());
-                
+                log::info!(
+                    "Payload: isAligned: {}:  bitw: {:?}, buf: {:?}",
+                    payload_index.is_aligned(),
+                    payload_index.bitwidth(),
+                    payload_index.buffer()
+                );
+
                 let payload_map = payload_index.as_map();
                 let payload_fileSize = payload_map.index("fileSize").unwrap();
-                log::info!("Payload fileSize: isAligned: {}:  bitw: {:?}, buf: {:?}", id_r.is_aligned(), payload_fileSize.bitwidth(), payload_fileSize.buffer());
+                log::info!(
+                    "Payload fileSize: isAligned: {}:  bitw: {:?}, buf: {:?}",
+                    id_r.is_aligned(),
+                    payload_fileSize.bitwidth(),
+                    payload_fileSize.buffer()
+                );
 
                 // let iter = payload_map.iter_values()
 
                 let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
 
-                let mut builder_map= builder.start_map();
+                let mut builder_map = builder.start_map();
                 // for x in payload_map.iter_keys() {
                 //     let f=  payload_map.index(x).unwrap();
                 //     builder_map.push(x, f.buffer());
@@ -211,19 +230,16 @@ impl WsMessagesHandler {
                 builder_map.end_map();
                 let payload = builder.view();
 
-
                 let mut b = flexbuffers::Builder::new(BuilderOptions::empty());
                 let mut map_b = b.start_map();
                 map_b.push("Ok", payload);
                 map_b.end_map();
                 let payload = b.view();
 
-                
                 let response = WsResponse {
                     id,
                     response: WsResponseMsg::Message(payload.to_vec()),
                 };
-
 
                 log::info!("WsResponse: {}", response.id);
                 match service.send(response).await {
@@ -255,7 +271,11 @@ impl Handler<WsRequest> for WsMessagesHandler {
     type Result = <WsRequest as Message>::Result;
 
     fn handle(&mut self, request: WsRequest, ctx: &mut Self::Context) -> Self::Result {
-        log::info!("WS request (id: {}, component: {})", request.id, request.component);
+        log::info!(
+            "WS request (id: {}, component: {})",
+            request.id,
+            request.component
+        );
         let msg = flexbuffers::to_vec(&request)
             .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?;
         ctx.binary(msg);
@@ -308,37 +328,199 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 }
 
-
 #[cfg(test)]
 mod nested_flexbuffer {
-    use serde::{Serialize, Deserialize};
+    use std::{collections::{HashMap, BTreeSet}, fmt::Debug};
 
-    #[derive(Serialize, Deserialize, Debug, Default)]
-    struct NestedMsg {
-        file_size: i64,
+    use bytes::Bytes;
+    use flexbuffers::{Buffer, Reader, FlexBufferType, BitWidth, BuilderOptions, Builder};
+    use serde::{de::DeserializeOwned, Deserialize, Serialize};
+    use serde_json::Value;
+    use ya_core_model::gftp::GftpChunk;
+
+    // struct CustomSerializerMsg {
+    //     id: String,
+    //     payload: Vec<u8>,
+    // }
+
+    // impl<'de> Deserialize<'de> for CustomSerializerMsg {
+    //     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    //     where
+    //         D: serde::Deserializer<'de>,
+    //     {
+    //         deserializer.deserialize_any(CustomVisitor {});
+    //         todo!("fail")
+    //     }
+    // }
+
+    // struct CustomVisitor {}
+
+    // impl Visitor<'_> for CustomVisitor {
+    //     type Value = CustomSerializerMsg;
+
+    //     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    //         formatter.write_str("a custom key")
+    //     }
+        
+    // }
+
+    // #[test]
+    // fn test_serde() {
+    //     let m = Msg::default();
+    //     let mut s = flexbuffers::FlexbufferSerializer::new();
+    //     let _ = m.serialize(&mut s).unwrap();
+    //     let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+    //     let x = CustomSerializerMsg::deserialize(r).unwrap();
+    // }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+    struct Payload {
+        file_size: i64
     }
 
-    #[derive(Serialize, Deserialize, Debug, Default)]
-    struct Msg {
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+    struct DefaultMsg {
         id: String,
-        payload: NestedMsg,
+        payload: Payload,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+    struct ComplexMsg {
+        id: String,
+        payload: Payload,
+        nested: DefaultMsg,
+        other: i32,
     }
 
     #[test]
     fn test() {
-        let m = Msg::default();
+        let m = DefaultMsg::default();
+        find_payload(m);
+    }
+
+    #[test]
+    fn test2() {
+        let m = ComplexMsg::default();
+        find_payload(m);
+    }
+
+    // fn find_payload<'de, MSG: Serialize + Deserialize<'de> + PartialEq + Debug>(msg: MSG) {
+    fn find_payload<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
         let mut s = flexbuffers::FlexbufferSerializer::new();
-        m.serialize(&mut s).unwrap();
-    
+        msg.serialize(&mut s).unwrap();
+
         let r = flexbuffers::Reader::get_root(s.view()).unwrap();
         let r_m = r.as_map();
-        let mut key_addresses = Vec::new();
+        let addr = r.address();
+        let mut key_addresses = HashMap::new();
+        let mut addresses = BTreeSet::new();
         for key in r_m.iter_keys() {
             let key_r = r_m.index(key).unwrap();
             let address = key_r.address();
-            key_addresses.push((key, address));
+            let typ = key_r.flexbuffer_type();
+            let width = key_r.bitwidth();
+            key_addresses.insert(key, (address, typ, width));
+            addresses.insert(address);
+        }
+        let (payload_begin, payload_type, payload_bitwidth) = key_addresses.get("payload").unwrap();
+
+        println!("Addresses: {:?}", addresses);
+        addresses.split_off(payload_begin);
+        let payload_end = addresses.pop_last().unwrap_or(0);
+
+        let payload_buf = r.buffer().slice(payload_end..*payload_begin).unwrap().to_vec();
+        let mut payload_buf = payload_buf.to_vec();
+
+        payload_buf.extend([(*payload_type as u8) << 2 | *payload_bitwidth as u8]);
+        payload_buf.extend([payload_bitwidth.n_bytes() as u8]);
+        
+        let root = Reader::get_root(&*payload_buf).unwrap();
+
+        //]
+        let test_msg = Payload::default();
+        let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
+        println!("Manual: len: {}, {:?}", payload_buf.len(), payload_buf);
+        println!("Auto:   len: {},  {:?}", test_msg_buf.len(), test_msg_buf);
+        //
+
+        let deserialized_msg = T::deserialize(root).unwrap();
+        assert_eq!(msg, deserialized_msg);
+        
+    }
+
+
+    
+    fn find_payload_alt2<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
+        let mut s = flexbuffers::FlexbufferSerializer::new();
+        msg.serialize(&mut s).unwrap();
+
+        let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+        let r_m = r.as_map();
+        let addr = r.address();
+        let mut key_addresses = HashMap::new();
+        let mut addresses = BTreeSet::new();
+        for key in r_m.iter_keys() {
+            let key_r = r_m.index(key).unwrap();
+
+            let key_r_m = key_r.as_map();
+
+            let address = key_r.address();
+            let typ = key_r.flexbuffer_type();
+            let width = key_r.bitwidth();
+            key_addresses.insert(key, (address, typ, width));
+            addresses.insert(address);
+        }
+        let (payload_begin, payload_type, payload_bitwidth) = key_addresses.get("payload").unwrap();
+
+        println!("Addresses: {:?}", addresses);
+        addresses.split_off(payload_begin);
+        let payload_end = addresses.pop_last().unwrap_or(0);
+
+        let payload_buf = r.buffer().slice(payload_end..*payload_begin).unwrap().to_vec();
+        let mut payload_buf = payload_buf.to_vec();
+
+        payload_buf.extend([(*payload_type as u8) << 2 | *payload_bitwidth as u8]);
+        payload_buf.extend([payload_bitwidth.n_bytes() as u8]);
+        
+        let root = Reader::get_root(&*payload_buf).unwrap();
+
+        //
+
+        let test_msg = Payload::default();
+        let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
+        println!("Manual: len: {}, {:?}", payload_buf.len(), payload_buf);
+        println!("Auto:   len: {},  {:?}", test_msg_buf.len(), test_msg_buf);
+        //
+
+        let deserialized_msg = T::deserialize(root).unwrap();
+        assert_eq!(msg, deserialized_msg);
+        
+    }
+
+
+    #[derive(Serialize, Deserialize, Debug, Default)]
+    struct SerdeMsg {
+        id: String,
+        payload: serde_json::Value,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Default)]
+    struct OrigMsg {
+        id: String,
+        payload: GftpChunk,
+    }
+
+    #[test]
+    fn serde_test() {
+        let chunk = ya_core_model::gftp::GftpChunk {
+            offset: 10,
+            content: vec![1,2,3,4]
         };
-        //TODO build flexbuffer for "payload"
-        let s = r.get_str().unwrap();
+        let orig_msg = OrigMsg { id: "xxx".to_string(), payload: chunk };
+        println!("Orig: {:?}", orig_msg);
+        let ser = flexbuffers::to_vec(orig_msg).unwrap();
+
+        let des: SerdeMsg = flexbuffers::from_slice(&ser).unwrap();
+        println!("Serd: {:?}", des);
     }
 }
