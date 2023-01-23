@@ -7,13 +7,14 @@ pub fn framework_test(attr: TokenStream, input: TokenStream) -> TokenStream {
     let function = parse::<ItemFn>(input).unwrap();
 
     if attr.into_iter().count() > 0 {
-        panic!("`framework_test` macro doesn't support wrapping other macros");
+        panic!("`framework_test` macro doesn't take any parameters");
     }
 
     validate_function(&function);
 
     let name = function.sig.ident;
     let code = function.block;
+    let attributes = function.attrs;
 
     let internal_name = format_ident!("_{}_", name);
     let test_name = name.to_string();
@@ -21,6 +22,7 @@ pub fn framework_test(attr: TokenStream, input: TokenStream) -> TokenStream {
     let tokens = quote! {
         #[serial_test::serial]
         #[test]
+        #(#attributes)*
         fn #name () {
             async fn #internal_name (framework: YagnaFramework) -> anyhow::Result<()> {
                 #code
