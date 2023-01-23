@@ -60,18 +60,23 @@ impl RulesManager {
     }
 
     pub fn remove_rules_for_non_existing_certs(&self) -> Result<()> {
-        let keystore_certs = self.keystore.certs_ids()?;
-
-        let mut cfg = self.rulestore.config.write().unwrap();
-
         let mut deleted_partner_rules = vec![];
 
-        cfg.outbound.partner.retain(|cert_id, _| {
-            keystore_certs
-                .contains(cert_id)
-                .then(|| deleted_partner_rules.push(cert_id.clone()))
-                .is_some()
-        });
+        let keystore_certs = self.keystore.certs_ids()?;
+
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .partner
+            .retain(|cert_id, _| {
+                keystore_certs
+                    .contains(cert_id)
+                    .not()
+                    .then(|| deleted_partner_rules.push(cert_id.clone()))
+                    .is_none()
+            });
 
         if deleted_partner_rules.is_empty().not() {
             log::warn!("Because Keystore didn't have appriopriate certs, following Partner rules were removed: {:?}", deleted_partner_rules);
@@ -86,19 +91,22 @@ impl RulesManager {
         let keystore_certs = self.keystore.certs_ids()?;
 
         if keystore_certs.contains(&cert_id) {
-            let mut cfg = self.rulestore.config.write().unwrap();
-
-            cfg.outbound.partner.insert(
-                cert_id.clone(),
-                CertRule {
-                    mode: mode.clone(),
-                    description: "TODO".into(),
-                },
-            );
-
+            self.rulestore
+                .config
+                .write()
+                .unwrap()
+                .outbound
+                .partner
+                .insert(
+                    cert_id.clone(),
+                    CertRule {
+                        mode: mode.clone(),
+                        description: "TODO".into(),
+                    },
+                );
             log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
 
-            Ok(())
+            self.rulestore.save()
         } else {
             Err(anyhow!(
                 "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
