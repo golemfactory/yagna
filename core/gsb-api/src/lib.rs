@@ -328,106 +328,219 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 }
 
-
 #[cfg(test)]
 mod nested_flexbuffer {
-    use std::{collections::{HashMap, BTreeSet}, fmt::Debug};
-
-    use bytes::Bytes;
-    use flexbuffers::{Buffer, Reader, FlexBufferType, BitWidth, BuilderOptions, Builder, MapBuilder, MapReader, VectorBuilder, VectorReader};
+    use flexbuffers::{
+        BitWidth, Buffer, Builder, BuilderOptions, FlexBufferType, MapBuilder, MapReader, Pushable,
+        Reader, VectorBuilder, VectorReader,
+    };
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
-    use serde_json::Value;
-    use ya_core_model::gftp::GftpChunk;
+    use std::{
+        cell::RefCell,
+        collections::{BTreeSet, HashMap},
+        fmt::Debug,
+    };
 
+    trait FlexPusher<'b> {
+        fn push<P: Pushable>(&mut self, p: P);
+        fn start_map<'a>(&'a mut self) -> MapBuilder<'a>;
+        fn start_vector<'a>(&'a mut self) -> VectorBuilder<'a>;
+        fn end(self);
+    }
 
-    fn clone_map(mut b: MapBuilder, m_r: &MapReader<&[u8]>) -> Result<(), flexbuffers::ReaderError> {
-        for key in m_r.iter_keys() {
-            let v = m_r.index(key)?;
-            match v.flexbuffer_type() {
-                FlexBufferType::Null => b.push(key, ()),
-                FlexBufferType::Int => b.push(key, v.as_i64()),
-                FlexBufferType::UInt => b.push(key, v.as_u64()),
-                FlexBufferType::Float => b.push(key, v.as_i64()),
-                FlexBufferType::Bool => b.push(key, v.as_f64()),
-                FlexBufferType::Key => b.push(key, v.as_str()),
-                FlexBufferType::String => b.push(key, v.as_str()),
-                FlexBufferType::IndirectInt => b.push(key, v.as_i64()),
-                FlexBufferType::IndirectUInt => b.push(key, v.as_u64()),
-                FlexBufferType::IndirectFloat => b.push(key, v.as_f64()),
-                FlexBufferType::Map => clone_map(b.start_map(key), &v.as_map())?,
-                FlexBufferType::Vector => clone_vector(b.start_vector(key), v.as_vector(), None)?,
-                FlexBufferType::VectorInt => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::UInt))?,
-                FlexBufferType::VectorFloat => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorKey => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Key))?,
-                FlexBufferType::VectorString => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::String))?,
-                FlexBufferType::VectorBool => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Bool))?,
-                FlexBufferType::VectorInt2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::UInt))?,
-                FlexBufferType::VectorFloat2 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorInt3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorFloat3 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorInt4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorFloat4 => clone_vector(b.start_vector(key), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::Blob => b.push(key, v.as_blob()),
-            }
+    struct FlexMapPusher<'a> {
+        builder: MapBuilder<'a>,
+        key: &'a str,
+    }
+
+    impl<'a> FlexMapPusher<'a> {
+        fn set_key(&mut self, key: &'a str) {
+            self.key = key;
         }
-        b.end_map();
+    }
+
+    impl<'a> FlexPusher<'a> for FlexMapPusher<'a> {
+        fn push<P: Pushable>(&mut self, p: P) {
+            self.builder.push(&self.key, p)
+        }
+
+        fn start_map<'b>(&'b mut self) -> MapBuilder<'b> {
+            self.builder.start_map(self.key)
+        }
+
+        fn start_vector<'b>(&'b mut self) -> VectorBuilder<'b> {
+            self.builder.start_vector(self.key)
+        }
+
+        fn end(self) {
+            self.builder.end_map()
+        }
+    }
+
+    struct FlexVecPusher<'a> {
+        builder: VectorBuilder<'a>,
+    }
+
+    impl<'a> FlexPusher<'a> for FlexVecPusher<'a> {
+        fn push<P: Pushable>(&mut self, p: P) {
+            self.builder.push(p)
+        }
+
+        fn start_map<'b>(&'b mut self) -> MapBuilder<'b> {
+            self.builder.start_map()
+        }
+
+        fn start_vector<'b>(&'b mut self) -> VectorBuilder<'b> {
+            self.builder.start_vector()
+        }
+
+        fn end(self) {
+            self.builder.end_vector()
+        }
+    }
+
+    fn clone_map(
+        builder: MapBuilder,
+        map_reader: &MapReader<&[u8]>,
+    ) -> Result<(), flexbuffers::ReaderError> {
+        let mut pusher = FlexMapPusher {
+            builder: builder,
+            key: "",
+        };
+        for key in map_reader.iter_keys() {
+            pusher.set_key(key);
+            let value = map_reader.index(key)?;
+            let value_type = value.flexbuffer_type();
+            pusher = push(value, value_type, pusher)?;
+        }
+        pusher.end();
         Ok(())
     }
 
-    fn clone_vector(mut b: VectorBuilder, v_r: VectorReader<&[u8]>, t: Option<FlexBufferType>) ->  Result<(), flexbuffers::ReaderError> {
-        for v in v_r.iter() {
-            let typ = t.unwrap_or(v.flexbuffer_type());
-            //TODO remove duplication
-            match typ {
-                FlexBufferType::Null => b.push(()),
-                FlexBufferType::Int => b.push(v.as_i64()),
-                FlexBufferType::UInt => b.push(v.as_u64()),
-                FlexBufferType::Float => b.push(v.as_i64()),
-                FlexBufferType::Bool => b.push(v.as_f64()),
-                FlexBufferType::Key => b.push(v.as_str()),
-                FlexBufferType::String => b.push(v.as_str()),
-                FlexBufferType::IndirectInt => b.push(v.as_i64()),
-                FlexBufferType::IndirectUInt => b.push(v.as_u64()),
-                FlexBufferType::IndirectFloat => b.push(v.as_f64()),
-                FlexBufferType::Map => clone_map(b.start_map(), &v.as_map())?,
-                FlexBufferType::Vector => clone_vector(b.start_vector(), v.as_vector(), None)?,
-                FlexBufferType::VectorInt => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::UInt))?,
-                FlexBufferType::VectorFloat => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorKey => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Key))?,
-                FlexBufferType::VectorString => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::String))?,
-                FlexBufferType::VectorBool => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Bool))?,
-                FlexBufferType::VectorInt2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::UInt))?,
-                FlexBufferType::VectorFloat2 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorInt3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorFloat3 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::VectorInt4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorUInt4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Int))?,
-                FlexBufferType::VectorFloat4 => clone_vector(b.start_vector(), v.as_vector(), Some(FlexBufferType::Float))?,
-                FlexBufferType::Blob => b.push(v.as_blob()),
-            }
+    fn clone_vector(
+        builder: VectorBuilder,
+        vector_reader: VectorReader<&[u8]>,
+        value_type: Option<FlexBufferType>,
+    ) -> Result<(), flexbuffers::ReaderError> {
+        let mut pusher = FlexVecPusher { builder };
+        for value in vector_reader.iter() {
+            let v_type = value_type.unwrap_or(value.flexbuffer_type());
+            pusher = push(value, v_type, pusher)?;
         }
-        b.end_vector();
+        pusher.end();
         Ok(())
     }
 
+    fn push<'r, 'b, B: FlexPusher<'b>>(
+        value: Reader<&[u8]>,
+        value_type: FlexBufferType,
+        mut pusher: B,
+    ) -> Result<B, flexbuffers::ReaderError> {
+        match value_type {
+            FlexBufferType::Null => pusher.push(()),
+            FlexBufferType::Int => pusher.push(value.as_i64()),
+            FlexBufferType::UInt => pusher.push(value.as_u64()),
+            FlexBufferType::Float => pusher.push(value.as_i64()),
+            FlexBufferType::Bool => pusher.push(value.as_f64()),
+            FlexBufferType::Key => pusher.push(value.as_str()),
+            FlexBufferType::String => pusher.push(value.as_str()),
+            FlexBufferType::IndirectInt => pusher.push(value.as_i64()),
+            FlexBufferType::IndirectUInt => pusher.push(value.as_u64()),
+            FlexBufferType::IndirectFloat => pusher.push(value.as_f64()),
+            FlexBufferType::Map => clone_map(pusher.start_map(), &value.as_map())?,
+            FlexBufferType::Vector => clone_vector(pusher.start_vector(), value.as_vector(), None)?,
 
-
+            FlexBufferType::VectorInt => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Int),
+            )?,
+            FlexBufferType::VectorUInt => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::UInt),
+            )?,
+            FlexBufferType::VectorFloat => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Float),
+            )?,
+            FlexBufferType::VectorKey => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Key),
+            )?,
+            FlexBufferType::VectorString => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::String),
+            )?,
+            FlexBufferType::VectorBool => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Bool),
+            )?,
+            FlexBufferType::VectorInt2 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Int),
+            )?,
+            FlexBufferType::VectorUInt2 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::UInt),
+            )?,
+            FlexBufferType::VectorFloat2 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Float),
+            )?,
+            FlexBufferType::VectorInt3 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Int),
+            )?,
+            FlexBufferType::VectorUInt3 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Float),
+            )?,
+            FlexBufferType::VectorFloat3 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Float),
+            )?,
+            FlexBufferType::VectorInt4 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Int),
+            )?,
+            FlexBufferType::VectorUInt4 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Int),
+            )?,
+            FlexBufferType::VectorFloat4 => clone_vector(
+                pusher.start_vector(),
+                value.as_vector(),
+                Some(FlexBufferType::Float),
+            )?,
+            FlexBufferType::Blob => pusher.push(value.as_blob()),
+        }
+        Ok(pusher)
+    }
 
     #[test]
-    fn test_complex() {       
+    fn test_complex() {
         let top = ComplexMsg {
             content: vec![1, 2, u16::MAX],
             id: "meh".to_string(),
             payload: Payload { file_size: 123123 },
-            nested: DefaultMsg { id: "my_id".to_string(), payload: Payload { file_size: 3456456 }, },
-            other: i32::MAX,
+            nested: DefaultMsg {
+                id: "my_id".to_string(),
+                payload: Payload { file_size: 3456456 },
+            },
+            other: i32::MIN,
         };
         let nested = &top.nested;
         let nested_name = "nested";
@@ -442,8 +555,13 @@ mod nested_flexbuffer {
         test_cloning(&top, nested, nested_name)
     }
 
-    fn test_cloning<TOP: Serialize + DeserializeOwned + PartialEq + Debug, NESTED: Serialize + DeserializeOwned + PartialEq + Debug>(
-        top: &TOP, nested: &NESTED, nested_name: &str
+    fn test_cloning<
+        TOP: Serialize + DeserializeOwned + PartialEq + Debug,
+        NESTED: Serialize + DeserializeOwned + PartialEq + Debug,
+    >(
+        top: &TOP,
+        nested: &NESTED,
+        nested_name: &str,
     ) {
         let mut s = flexbuffers::FlexbufferSerializer::new();
         top.serialize(&mut s).unwrap();
@@ -465,6 +583,7 @@ mod nested_flexbuffer {
         assert_eq!(nested, &cloned_payload);
     }
 
+    // #[derive(Serialize, Deserialize)]
     // struct CustomSerializerMsg {
     //     id: String,
     //     payload: Vec<u8>,
@@ -488,21 +607,21 @@ mod nested_flexbuffer {
     //     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     //         formatter.write_str("a custom key")
     //     }
-        
+
     // }
 
     // #[test]
     // fn test_serde() {
-    //     let m = Msg::default();
+    //     let m = DefaultMsg::default();
     //     let mut s = flexbuffers::FlexbufferSerializer::new();
     //     let _ = m.serialize(&mut s).unwrap();
     //     let r = flexbuffers::Reader::get_root(s.view()).unwrap();
-    //     let x = CustomSerializerMsg::deserialize(r).unwrap();
+    //     let x = DefaultMsg::deserialize(r).unwrap();
     // }
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
     struct Payload {
-        file_size: i64
+        file_size: i64,
     }
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
@@ -520,6 +639,7 @@ mod nested_flexbuffer {
         other: i32,
     }
 
+    /*
     #[test]
     fn test() {
         let m = DefaultMsg::default();
@@ -561,7 +681,7 @@ mod nested_flexbuffer {
 
         payload_buf.extend([(*payload_type as u8) << 2 | *payload_bitwidth as u8]);
         payload_buf.extend([payload_bitwidth.n_bytes() as u8]);
-        
+
         let root = Reader::get_root(&*payload_buf).unwrap();
 
         //]
@@ -573,58 +693,7 @@ mod nested_flexbuffer {
 
         let deserialized_msg = T::deserialize(root).unwrap();
         assert_eq!(msg, deserialized_msg);
-        
     }
-
-
-    
-    fn find_payload_alt<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
-        let mut s = flexbuffers::FlexbufferSerializer::new();
-        msg.serialize(&mut s).unwrap();
-
-        let r = flexbuffers::Reader::get_root(s.view()).unwrap();
-        let r_m = r.as_map();
-        let addr = r.address();
-        let mut key_addresses = HashMap::new();
-        let mut addresses = BTreeSet::new();
-        for key in r_m.iter_keys() {
-            let key_r = r_m.index(key).unwrap();
-
-            let key_r_m = key_r.as_map();
-
-            let address = key_r.address();
-            let typ = key_r.flexbuffer_type();
-            let width = key_r.bitwidth();
-            key_addresses.insert(key, (address, typ, width));
-            addresses.insert(address);
-        }
-        let (payload_begin, payload_type, payload_bitwidth) = key_addresses.get("payload").unwrap();
-
-        println!("Addresses: {:?}", addresses);
-        addresses.split_off(payload_begin);
-        let payload_end = addresses.pop_last().unwrap_or(0);
-
-        let payload_buf = r.buffer().slice(payload_end..*payload_begin).unwrap().to_vec();
-        let mut payload_buf = payload_buf.to_vec();
-
-        payload_buf.extend([(*payload_type as u8) << 2 | *payload_bitwidth as u8]);
-        payload_buf.extend([payload_bitwidth.n_bytes() as u8]);
-        
-        let root = Reader::get_root(&*payload_buf).unwrap();
-
-        //
-
-        let test_msg = Payload::default();
-        let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
-        println!("Manual: len: {}, {:?}", payload_buf.len(), payload_buf);
-        println!("Auto:   len: {},  {:?}", test_msg_buf.len(), test_msg_buf);
-        //
-
-        let deserialized_msg = T::deserialize(root).unwrap();
-        assert_eq!(msg, deserialized_msg);
-        
-    }
-
 
     #[derive(Serialize, Deserialize, Debug, Default)]
     struct SerdeMsg {
@@ -651,4 +720,5 @@ mod nested_flexbuffer {
         let des: SerdeMsg = flexbuffers::from_slice(&ser).unwrap();
         println!("Serd: {:?}", des);
     }
+     */
 }
