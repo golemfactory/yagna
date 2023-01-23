@@ -31,7 +31,13 @@ pub enum SetOutboundRule {
     },
     AuditedPayload {
         #[structopt(long)]
-        certificate: Option<String>,
+        cert_id: Option<String>,
+        #[structopt(subcommand)]
+        mode: Mode,
+    },
+    Partner {
+        #[structopt(long)]
+        cert_id: String,
         #[structopt(subcommand)]
         mode: Mode,
     },
@@ -58,10 +64,12 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             SetOutboundRule::Disable => rules.rulestore.set_enabled(false),
             SetOutboundRule::Enable => rules.rulestore.set_enabled(true),
             SetOutboundRule::Everyone { mode } => rules.rulestore.set_everyone_mode(mode),
-            SetOutboundRule::AuditedPayload { certificate, mode } => match certificate {
+            SetOutboundRule::AuditedPayload { cert_id, mode } => match cert_id {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
                 None => rules.rulestore.set_default_audited_payload_mode(mode),
             },
+            //TODO Rafał Tests for UI
+            SetOutboundRule::Partner { cert_id, mode } => rules.set_partner_mode(cert_id, mode),
         },
     }
 }

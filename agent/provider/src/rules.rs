@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     convert::TryFrom,
     fs::OpenOptions,
     io::BufReader,
@@ -7,7 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::Display;
@@ -54,8 +55,33 @@ impl RulesManager {
         })
     }
 
+    pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+        let keystore_certs = self.keystore.certs_ids()?;
+
+        if keystore_certs.contains(&cert_id) {
+            let mut cfg = self.rulestore.config.write().unwrap();
+
+            cfg.outbound.partner.insert(
+                cert_id.clone(),
+                CertRule {
+                    mode: mode.clone(),
+                    description: "TODO".into(),
+                },
+            );
+
+            log::trace!("Added Partner rule for {cert_id} with mode: {mode}");
+
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Setting Partner mode {mode} failed: No {cert_id} found in keystore"
+            ))
+        }
+    }
+
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
+            //TODO Rafał Cross check with keystore if config is good
             let rulestore = self.rulestore.clone();
             let handler = move |p: PathBuf| match rulestore.reload() {
                 Ok(()) => {
@@ -67,6 +93,7 @@ impl RulesManager {
         };
 
         let keystore_monitor = {
+            //TODO Rafał When deleting sth from keystore, delete also rules for that cert id
             let cert_dir = self.cert_dir.clone();
             let keystore = self.keystore.clone();
             let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
@@ -335,6 +362,7 @@ impl Default for RulesConfig {
                         description: "Default setting".into(),
                     },
                 },
+                partner: HashMap::new(),
             },
         }
     }
@@ -346,6 +374,7 @@ pub struct OutboundConfig {
     pub enabled: bool,
     pub everyone: Mode,
     pub audited_payload: CertRules,
+    pub partner: HashMap<String, CertRule>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
