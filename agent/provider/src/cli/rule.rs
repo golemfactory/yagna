@@ -128,6 +128,7 @@ impl RulesTable {
         let row = serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]};
         self.table.values.push(row);
     }
+    //TODO Rafał Add partners!
 
     fn add(&mut self, rule: CertRule) {
         let row = serde_json::json! {[ "Audited payload", rule.mode, "", rule.description ]};
