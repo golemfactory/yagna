@@ -46,13 +46,31 @@ impl RulesManager {
 
         let rulestore = Rulestore::load_or_create(rules_file)?;
 
-        Ok(Self {
+        let manager = Self {
             whitelist_file: whitelist_file.to_path_buf(),
             cert_dir: cert_dir.to_path_buf(),
             rulestore,
             keystore,
             whitelist,
-        })
+        };
+
+        manager.remove_rules_for_non_existing_certs()?;
+
+        Ok(manager)
+    }
+
+    pub fn remove_rules_for_non_existing_certs(&self) -> Result<()> {
+        let keystore_certs = self.keystore.certs_ids()?;
+
+        let mut cfg = self.rulestore.config.write().unwrap();
+
+        cfg.outbound
+            .partner
+            .retain(|cert_id, _| 
+                keystore_certs.contains(cert_id).then(|| {log::warn!("Deleting Partner Rule for cert_id: {cert_id} because keystore has no such cert")}).is_some()
+            );
+
+        self.rulestore.save() //TODO Rafał Save or not?
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
@@ -81,11 +99,13 @@ impl RulesManager {
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
-            //TODO Rafał Cross check with keystore if config is good
-            let rulestore = self.rulestore.clone();
-            let handler = move |p: PathBuf| match rulestore.reload() {
+            let manager = self.clone();
+            let handler = move |p: PathBuf| match manager.rulestore.reload() {
                 Ok(()) => {
-                    log::info!("rulestore updated from {}", p.display());
+                    match manager.remove_rules_for_non_existing_certs() {
+                        Ok(()) => log::info!("rulestore updated from {}", p.display()),
+                        Err(e) => log::warn!("Error removing unnecessary rules from {}: {e}", p.display()),
+                    }
                 }
                 Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
             };
@@ -93,12 +113,15 @@ impl RulesManager {
         };
 
         let keystore_monitor = {
-            //TODO Rafał When deleting sth from keystore, delete also rules for that cert id
             let cert_dir = self.cert_dir.clone();
-            let keystore = self.keystore.clone();
-            let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+            let manager = self.clone();
+            let handler = move |p: PathBuf| match manager.keystore.reload(&cert_dir) {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
+                        match manager.remove_rules_for_non_existing_certs() {
+                            Ok(()) => log::info!("Trusted keystore updated from {}", p.display()),
+                            Err(e) => log::warn!("Error removing unnecessary rules from {}: {e}", p.display()),
+                    }
                 }
                 Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
             };
