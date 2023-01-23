@@ -417,6 +417,7 @@ pub struct OutboundConfig {
     pub enabled: bool,
     pub everyone: Mode,
     pub audited_payload: CertRules,
+    #[serde(default)]
     pub partner: HashMap<String, CertRule>,
 }
 
