@@ -4,7 +4,7 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::rules::CertRule;
 use crate::{
-    rules::{Mode, RuleStore},
+    rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
 };
 
@@ -47,27 +47,35 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let rules = RuleStore::load_or_create(&config.rules_file)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
 
     match set_rule {
         SetRule::Outbound(outbound) => match outbound {
-            SetOutboundRule::Disable => rules.set_enabled(false),
-            SetOutboundRule::Enable => rules.set_enabled(true),
-            SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
+            SetOutboundRule::Disable => rules.rulestore.set_enabled(false),
+            SetOutboundRule::Enable => rules.rulestore.set_enabled(true),
+            SetOutboundRule::Everyone { mode } => rules.rulestore.set_everyone_mode(mode),
             SetOutboundRule::AuditedPayload { certificate, mode } => match certificate {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-                None => rules.set_default_audited_payload_mode(mode),
+                None => rules.rulestore.set_default_audited_payload_mode(mode),
             },
         },
     }
 }
 
 fn list(config: ProviderConfig) -> Result<()> {
-    let rules = RuleStore::load_or_create(&config.rules_file)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
     let table = RulesTable::from(rules.clone());
 
     if config.json {
-        rules.print()?
+        rules.rulestore.print()?
     } else {
         table.print()?
     };
@@ -132,10 +140,10 @@ impl RulesTable {
     }
 }
 
-impl From<RuleStore> for RulesTable {
-    fn from(rules: RuleStore) -> Self {
+impl From<RulesManager> for RulesTable {
+    fn from(rules: RulesManager) -> Self {
         let mut table = RulesTable::new();
-        let outbound = rules.config.read().unwrap().outbound.clone();
+        let outbound = rules.rulestore.config.read().unwrap().outbound.clone();
 
         table.with_header(outbound.enabled);
         table.add_everyone(outbound.everyone);
