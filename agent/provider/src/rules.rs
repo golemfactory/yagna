@@ -88,6 +88,7 @@ impl RulesManager {
         }
     }
 
+    //TODO Rafał Remove rulestore completely?
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let keystore_certs = self.keystore.certs_ids()?;
 
@@ -102,7 +103,7 @@ impl RulesManager {
                     cert_id.clone(),
                     CertRule {
                         mode: mode.clone(),
-                        description: "TODO".into(),
+                        description: "TODO".into(), //TODO Rafał make description from cert?
                     },
                 );
             log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
