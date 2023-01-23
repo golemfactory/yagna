@@ -69,12 +69,12 @@ impl RulesManager {
                 },
             );
 
-            log::trace!("Added Partner rule for {cert_id} with mode: {mode}");
+            log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
 
             Ok(())
         } else {
             Err(anyhow!(
-                "Setting Partner mode {mode} failed: No {cert_id} found in keystore"
+                "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
             ))
         }
     }
