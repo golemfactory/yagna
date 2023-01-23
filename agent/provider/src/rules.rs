@@ -60,6 +60,7 @@ impl RulesManager {
     }
 
     pub fn remove_rules_for_non_existing_certs(&self) -> Result<()> {
+        //TODO Rafał Refactor
         let mut deleted_partner_rules = vec![];
 
         let keystore_certs = self.keystore.certs_ids()?;
