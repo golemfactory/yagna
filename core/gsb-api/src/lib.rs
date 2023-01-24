@@ -179,25 +179,23 @@ impl WsMessagesHandler {
                 match response.flexbuffer_type() {
                     flexbuffers::FlexBufferType::Map => {
                         let response = response.as_map();
-                        let id = response.index("id").unwrap();
+                        let id = response.index("id").unwrap(); //TODO handle it
                         let id = id.as_str().to_string();
-                        let payload = response.index("payload").unwrap();
+                        let payload = response.index("payload").unwrap(); //TODO handle it
                         let payload = payload.as_map();
-                        
-                        let mut payload_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-                        let payload_map_builder = payload_builder.start_map();
-                        nested_flexbuffer::clone_map(payload_map_builder, &payload).unwrap();
-                        
-                        let mut top_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-                        let mut top_map_builder = top_builder.start_map();
-                        top_map_builder.push("Ok", payload_builder.view());
-                        top_map_builder.end_map();
-                        
+
+                        let mut response_builder =
+                            flexbuffers::Builder::new(BuilderOptions::empty());
+                        let mut ok_payload_map_builder = response_builder.start_map();
+                        let payload_map_builder = ok_payload_map_builder.start_map("Ok"); //TODO on Err put here Error+msg
+                        nested_flexbuffer::clone_map(payload_map_builder, &payload).unwrap(); //TODO handle it
+                        ok_payload_map_builder.end_map();
+
                         let response = WsResponse {
                             id,
-                            response: WsResponseMsg::Message(top_builder.view().to_vec()),
+                            response: WsResponseMsg::Message(response_builder.view().to_vec()),
                         };
-                        
+
                         log::info!("WsResponse: {}", response.id);
                         match service.send(response).await {
                             Ok(res) => {
@@ -211,72 +209,11 @@ impl WsMessagesHandler {
                                 //TODO error response?
                             }
                         }
-                    },
+                    }
                     _ => {
                         todo!()
                     }
                 }
-                // let id_r = response.index("id").unwrap();
-                // let id = id_r.as_str().to_string();
-                // log::info!(
-                //     "ID: {id}: isAligned: {}: bitw: {:?}, buf: {:?}",
-                //     id_r.is_aligned(),
-                //     id_r.bitwidth(),
-                //     id_r.buffer()
-                // );
-                // let payload_index = response.index("payload").unwrap();
-                // log::info!(
-                //     "Payload: isAligned: {}:  bitw: {:?}, buf: {:?}",
-                //     payload_index.is_aligned(),
-                //     payload_index.bitwidth(),
-                //     payload_index.buffer()
-                // );
-
-                // let payload_map = payload_index.as_map();
-                // let payload_fileSize = payload_map.index("fileSize").unwrap();
-                // log::info!(
-                //     "Payload fileSize: isAligned: {}:  bitw: {:?}, buf: {:?}",
-                //     id_r.is_aligned(),
-                //     payload_fileSize.bitwidth(),
-                //     payload_fileSize.buffer()
-                // );
-
-                // // let iter = payload_map.iter_values()
-
-                // let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
-
-                // let builder_map = builder.start_map();
-                // // for x in payload_map.iter_keys() {
-                // //     let f=  payload_map.index(x).unwrap();
-                // //     builder_map.push(x, f.buffer());
-                // // }
-                // builder_map.end_map();
-                // let payload = builder.view();
-
-                // let mut b = flexbuffers::Builder::new(BuilderOptions::empty());
-                // let mut map_b = b.start_map();
-                // map_b.push("Ok", payload);
-                // map_b.end_map();
-                // let payload = b.view();
-
-                // let response = WsResponse {
-                //     id,
-                //     response: WsResponseMsg::Message(payload.to_vec()),
-                // };
-
-                // log::info!("WsResponse: {}", response.id);
-                // match service.send(response).await {
-                //     Ok(res) => {
-                //         if let Err(err) = res {
-                //             log::error!("Failed to handle WS msg: {err}");
-                //             //TODO error response?
-                //         }
-                //     }
-                //     Err(err) => {
-                //         log::error!("Internal error: {err}");
-                //         //TODO error response?
-                //     }
-                // }
             }
             Err(err) => {
                 //TODO shutdown service connections?
@@ -352,10 +289,8 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
 }
 
 mod nested_flexbuffer {
-    use flexbuffers::{
-        FlexBufferType, MapBuilder, MapReader, Pushable, Reader, VectorBuilder,
-    };
-    
+    use flexbuffers::{FlexBufferType, MapBuilder, MapReader, Pushable, Reader, VectorBuilder};
+
     trait FlexPusher<'b> {
         fn push<P: Pushable>(&mut self, p: P);
         fn start_map<'a>(&'a mut self) -> MapBuilder<'a>;
@@ -414,7 +349,7 @@ mod nested_flexbuffer {
         }
     }
 
-    pub (crate) fn clone_map(
+    pub(crate) fn clone_map(
         builder: MapBuilder,
         map_reader: &MapReader<&[u8]>,
     ) -> Result<(), flexbuffers::ReaderError> {
@@ -505,16 +440,18 @@ mod nested_flexbuffer {
     mod nested_flexbuffer_tests {
         use std::fmt::Debug;
 
-        use flexbuffers::{Reader, BuilderOptions};
+        use flexbuffers::{BuilderOptions, Reader};
         use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
         use crate::nested_flexbuffer::clone_map;
 
-
         #[test]
         fn test_deserialization() {
-            let payload = Payload { file_size: 11 };            
-            let signed_msg = DefaultMsg { id: "123123".to_string(), payload };
+            let payload = Payload { file_size: 11 };
+            let signed_msg = DefaultMsg {
+                id: "123123".to_string(),
+                payload,
+            };
             let mut s = flexbuffers::FlexbufferSerializer::new();
             signed_msg.serialize(&mut s).unwrap();
 
@@ -524,31 +461,23 @@ mod nested_flexbuffer {
             let r_m = r_m.as_map();
 
             let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
-            let builder_map = builder.start_map();
+            let mut top_builder_map = builder.start_map();
+            let builder_map = top_builder_map.start_map("Ok");
             clone_map(builder_map, &r_m).unwrap();
+            top_builder_map.end_map();
 
-            let r = Reader::get_root(builder.view()).unwrap();
-            let payload = Payload::deserialize(r).unwrap();
-            assert_eq!(11, payload.file_size);
-
-            //
-            
-            let mut test_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-            let mut test_map_builder = test_builder.start_map();
-            test_map_builder.push("Ok", builder.view());
-            test_map_builder.end_map();
-
-            //
-
-            let test_payload = ya_service_bus::serialization::from_slice::<Result<Payload,()>>(test_builder.view()).unwrap().unwrap();
-            assert_eq!(payload, test_payload);
+            let test_payload =
+                ya_service_bus::serialization::from_slice::<Result<Payload, ()>>(builder.view())
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(Payload { file_size: 11 }, test_payload);
         }
 
         #[test]
         fn test_json() {
             let json_payload: serde_json::Value = serde_json::json!({
-                    "file_size": 11
-                });
+                "file_size": 11
+            });
             let mut s = flexbuffers::FlexbufferSerializer::new();
             json_payload.serialize(&mut s).unwrap();
             let r = flexbuffers::Reader::get_root(s.view()).unwrap();
@@ -564,11 +493,13 @@ mod nested_flexbuffer {
             assert_eq!(11, payload.file_size);
         }
 
-        
         #[test]
         fn test_signed_unsigned() {
-            let signed_payload = SignedPayload { file_size: 11 };            
-            let signed_msg = SignedDefaultMsg { id: "123123".to_string(), payload: signed_payload };
+            let signed_payload = SignedPayload { file_size: 11 };
+            let signed_msg = SignedDefaultMsg {
+                id: "123123".to_string(),
+                payload: signed_payload,
+            };
             let mut s = flexbuffers::FlexbufferSerializer::new();
             signed_msg.serialize(&mut s).unwrap();
 
@@ -643,7 +574,7 @@ mod nested_flexbuffer {
         struct Payload {
             file_size: u64,
         }
-        
+
         #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
         struct SignedPayload {
             file_size: i64,
