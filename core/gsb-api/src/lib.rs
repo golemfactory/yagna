@@ -16,6 +16,7 @@ use serde_json::json;
 use services::AService;
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
+use ya_service_bus::serialization;
 
 pub const GSB_API_PATH: &str = "/gsb-api/v1";
 
@@ -172,10 +173,6 @@ impl core::ops::Deref for MyBuffer {
 }
 
 impl WsMessagesHandler {
-    // fn to_response(msg: bytes::Bytes) -> Result<WsResponseMsg, anyhow::Error> {
-    //     let buffer = Reader::get_root(&*msg)?;
-    // }
-
     async fn handle(service: Addr<AService>, buffer: bytes::Bytes) {
         match Reader::get_root(&*buffer) {
             Ok(response) => {
@@ -188,7 +185,7 @@ impl WsMessagesHandler {
                         let payload = payload.as_map();
                         
                         let mut payload_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-                        let mut payload_map_builder = payload_builder.start_map();
+                        let payload_map_builder = payload_builder.start_map();
                         nested_flexbuffer::clone_map(payload_map_builder, &payload).unwrap();
                         
                         let mut top_builder = flexbuffers::Builder::new(BuilderOptions::empty());
@@ -513,6 +510,82 @@ mod nested_flexbuffer {
 
         use crate::nested_flexbuffer::clone_map;
 
+
+        #[test]
+        fn test_deserialization() {
+            let payload = Payload { file_size: 11 };            
+            let signed_msg = DefaultMsg { id: "123123".to_string(), payload };
+            let mut s = flexbuffers::FlexbufferSerializer::new();
+            signed_msg.serialize(&mut s).unwrap();
+
+            let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+            let r_m = r.as_map();
+            let r_m = r_m.index("payload").unwrap();
+            let r_m = r_m.as_map();
+
+            let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+            let builder_map = builder.start_map();
+            clone_map(builder_map, &r_m).unwrap();
+
+            let r = Reader::get_root(builder.view()).unwrap();
+            let payload = Payload::deserialize(r).unwrap();
+            assert_eq!(11, payload.file_size);
+
+            //
+            
+            let mut test_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+            let mut test_map_builder = test_builder.start_map();
+            test_map_builder.push("Ok", builder.view());
+            test_map_builder.end_map();
+
+            //
+
+            let test_payload = ya_service_bus::serialization::from_slice::<Result<Payload,()>>(test_builder.view()).unwrap().unwrap();
+            assert_eq!(payload, test_payload);
+        }
+
+        #[test]
+        fn test_json() {
+            let json_payload: serde_json::Value = serde_json::json!({
+                    "file_size": 11
+                });
+            let mut s = flexbuffers::FlexbufferSerializer::new();
+            json_payload.serialize(&mut s).unwrap();
+            let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+            let r_m = r.as_map();
+
+            let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+            let builder_map = builder.start_map();
+            clone_map(builder_map, &r_m).unwrap();
+
+            let r = Reader::get_root(builder.view()).unwrap();
+            let payload = Payload::deserialize(r).unwrap();
+
+            assert_eq!(11, payload.file_size);
+        }
+
+        
+        #[test]
+        fn test_signed_unsigned() {
+            let signed_payload = SignedPayload { file_size: 11 };            
+            let signed_msg = SignedDefaultMsg { id: "123123".to_string(), payload: signed_payload };
+            let mut s = flexbuffers::FlexbufferSerializer::new();
+            signed_msg.serialize(&mut s).unwrap();
+
+            let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+            let r_m = r.as_map();
+            let r_m = r_m.index("payload").unwrap();
+            let r_m = r_m.as_map();
+
+            let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+            let builder_map = builder.start_map();
+            clone_map(builder_map, &r_m).unwrap();
+
+            let r = Reader::get_root(builder.view()).unwrap();
+            let payload = Payload::deserialize(r).unwrap();
+            assert_eq!(11, payload.file_size);
+        }
+
         #[test]
         fn test_complex() {
             let top = ComplexMsg {
@@ -568,7 +641,18 @@ mod nested_flexbuffer {
 
         #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
         struct Payload {
+            file_size: u64,
+        }
+        
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+        struct SignedPayload {
             file_size: i64,
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+        struct SignedDefaultMsg {
+            id: String,
+            payload: SignedPayload,
         }
 
         #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
