@@ -1,10 +1,6 @@
 mod api;
 mod services;
 
-use std::convert::TryFrom;
-use std::ops::DerefMut;
-use std::str::Utf8Error;
-
 use actix::prelude::*;
 use actix::{dev::MessageResponse, Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
@@ -13,15 +9,11 @@ use actix_http::{
 };
 use actix_web::ResponseError;
 use actix_web_actors::ws;
-
 use bytes::{Buf, Bytes};
-use flexbuffers::{BuilderOptions, MapBuilder, MapReader, Reader};
-
-use lazy_static::__Deref;
+use flexbuffers::{BuilderOptions, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use services::AService;
-
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
 
@@ -180,80 +172,114 @@ impl core::ops::Deref for MyBuffer {
 }
 
 impl WsMessagesHandler {
-    async fn handle(service: Addr<AService>, msg: bytes::Bytes) {
-        // let buf = MyBuffer { b: msg };
-        match Reader::get_root(&*msg) {
-            Ok(buffer) => {
-                // buffer.get_s
-                log::info!(
-                    "Buffer: isAligned: {}: bitw: {:?}, buf: {:?}",
-                    buffer.is_aligned(),
-                    buffer.bitwidth(),
-                    buffer.buffer()
-                );
-                let response = buffer.as_map();
-                //TODO handle errors
-                let id_r = response.index("id").unwrap();
-                let id = id_r.as_str().to_string();
-                log::info!(
-                    "ID: {id}: isAligned: {}: bitw: {:?}, buf: {:?}",
-                    id_r.is_aligned(),
-                    id_r.bitwidth(),
-                    id_r.buffer()
-                );
-                let payload_index = response.index("payload").unwrap();
-                log::info!(
-                    "Payload: isAligned: {}:  bitw: {:?}, buf: {:?}",
-                    payload_index.is_aligned(),
-                    payload_index.bitwidth(),
-                    payload_index.buffer()
-                );
+    // fn to_response(msg: bytes::Bytes) -> Result<WsResponseMsg, anyhow::Error> {
+    //     let buffer = Reader::get_root(&*msg)?;
+    // }
 
-                let payload_map = payload_index.as_map();
-                let payload_fileSize = payload_map.index("fileSize").unwrap();
-                log::info!(
-                    "Payload fileSize: isAligned: {}:  bitw: {:?}, buf: {:?}",
-                    id_r.is_aligned(),
-                    payload_fileSize.bitwidth(),
-                    payload_fileSize.buffer()
-                );
-
-                // let iter = payload_map.iter_values()
-
-                let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
-
-                let mut builder_map = builder.start_map();
-                // for x in payload_map.iter_keys() {
-                //     let f=  payload_map.index(x).unwrap();
-                //     builder_map.push(x, f.buffer());
-                // }
-                builder_map.end_map();
-                let payload = builder.view();
-
-                let mut b = flexbuffers::Builder::new(BuilderOptions::empty());
-                let mut map_b = b.start_map();
-                map_b.push("Ok", payload);
-                map_b.end_map();
-                let payload = b.view();
-
-                let response = WsResponse {
-                    id,
-                    response: WsResponseMsg::Message(payload.to_vec()),
-                };
-
-                log::info!("WsResponse: {}", response.id);
-                match service.send(response).await {
-                    Ok(res) => {
-                        if let Err(err) = res {
-                            log::error!("Failed to handle WS msg: {err}");
-                            //TODO error response?
+    async fn handle(service: Addr<AService>, buffer: bytes::Bytes) {
+        match Reader::get_root(&*buffer) {
+            Ok(response) => {
+                match response.flexbuffer_type() {
+                    flexbuffers::FlexBufferType::Map => {
+                        let response = response.as_map();
+                        let id = response.index("id").unwrap();
+                        let id = id.as_str().to_string();
+                        let payload = response.index("payload").unwrap();
+                        let payload = payload.as_map();
+                        
+                        let mut payload_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+                        let mut payload_map_builder = payload_builder.start_map();
+                        nested_flexbuffer::clone_map(payload_map_builder, &payload).unwrap();
+                        
+                        let mut top_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+                        let mut top_map_builder = top_builder.start_map();
+                        top_map_builder.push("Ok", payload_builder.view());
+                        top_map_builder.end_map();
+                        
+                        let response = WsResponse {
+                            id,
+                            response: WsResponseMsg::Message(top_builder.view().to_vec()),
+                        };
+                        
+                        log::info!("WsResponse: {}", response.id);
+                        match service.send(response).await {
+                            Ok(res) => {
+                                if let Err(err) = res {
+                                    log::error!("Failed to handle WS msg: {err}");
+                                    //TODO error response?
+                                }
+                            }
+                            Err(err) => {
+                                log::error!("Internal error: {err}");
+                                //TODO error response?
+                            }
                         }
-                    }
-                    Err(err) => {
-                        log::error!("Internal error: {err}");
-                        //TODO error response?
+                    },
+                    _ => {
+                        todo!()
                     }
                 }
+                // let id_r = response.index("id").unwrap();
+                // let id = id_r.as_str().to_string();
+                // log::info!(
+                //     "ID: {id}: isAligned: {}: bitw: {:?}, buf: {:?}",
+                //     id_r.is_aligned(),
+                //     id_r.bitwidth(),
+                //     id_r.buffer()
+                // );
+                // let payload_index = response.index("payload").unwrap();
+                // log::info!(
+                //     "Payload: isAligned: {}:  bitw: {:?}, buf: {:?}",
+                //     payload_index.is_aligned(),
+                //     payload_index.bitwidth(),
+                //     payload_index.buffer()
+                // );
+
+                // let payload_map = payload_index.as_map();
+                // let payload_fileSize = payload_map.index("fileSize").unwrap();
+                // log::info!(
+                //     "Payload fileSize: isAligned: {}:  bitw: {:?}, buf: {:?}",
+                //     id_r.is_aligned(),
+                //     payload_fileSize.bitwidth(),
+                //     payload_fileSize.buffer()
+                // );
+
+                // // let iter = payload_map.iter_values()
+
+                // let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+
+                // let builder_map = builder.start_map();
+                // // for x in payload_map.iter_keys() {
+                // //     let f=  payload_map.index(x).unwrap();
+                // //     builder_map.push(x, f.buffer());
+                // // }
+                // builder_map.end_map();
+                // let payload = builder.view();
+
+                // let mut b = flexbuffers::Builder::new(BuilderOptions::empty());
+                // let mut map_b = b.start_map();
+                // map_b.push("Ok", payload);
+                // map_b.end_map();
+                // let payload = b.view();
+
+                // let response = WsResponse {
+                //     id,
+                //     response: WsResponseMsg::Message(payload.to_vec()),
+                // };
+
+                // log::info!("WsResponse: {}", response.id);
+                // match service.send(response).await {
+                //     Ok(res) => {
+                //         if let Err(err) = res {
+                //             log::error!("Failed to handle WS msg: {err}");
+                //             //TODO error response?
+                //         }
+                //     }
+                //     Err(err) => {
+                //         log::error!("Internal error: {err}");
+                //         //TODO error response?
+                //     }
+                // }
             }
             Err(err) => {
                 //TODO shutdown service connections?
@@ -328,19 +354,11 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 }
 
-#[cfg(test)]
 mod nested_flexbuffer {
     use flexbuffers::{
-        BitWidth, Buffer, Builder, BuilderOptions, FlexBufferType, MapBuilder, MapReader, Pushable,
-        Reader, VectorBuilder, VectorReader,
+        FlexBufferType, MapBuilder, MapReader, Pushable, Reader, VectorBuilder,
     };
-    use serde::{de::DeserializeOwned, Deserialize, Serialize};
-    use std::{
-        cell::RefCell,
-        collections::{BTreeSet, HashMap},
-        fmt::Debug,
-    };
-
+    
     trait FlexPusher<'b> {
         fn push<P: Pushable>(&mut self, p: P);
         fn start_map<'a>(&'a mut self) -> MapBuilder<'a>;
@@ -399,7 +417,7 @@ mod nested_flexbuffer {
         }
     }
 
-    fn clone_map(
+    pub (crate) fn clone_map(
         builder: MapBuilder,
         map_reader: &MapReader<&[u8]>,
     ) -> Result<(), flexbuffers::ReaderError> {
@@ -417,11 +435,28 @@ mod nested_flexbuffer {
         Ok(())
     }
 
-    fn clone_vector(
-        builder: VectorBuilder,
-        vector_reader: VectorReader<&[u8]>,
+    fn clone_vec<'a, P: FlexPusher<'a>>(
+        flex_pusher: &mut P,
+        reader: Reader<&[u8]>,
+        value_type: FlexBufferType,
+    ) -> Result<(), flexbuffers::ReaderError> {
+        clone_vec_optional_type(flex_pusher, reader, Some(value_type))
+    }
+
+    fn clone_vec_untyped<'a, P: FlexPusher<'a>>(
+        flex_pusher: &mut P,
+        reader: Reader<&[u8]>,
+    ) -> Result<(), flexbuffers::ReaderError> {
+        clone_vec_optional_type(flex_pusher, reader, None)
+    }
+
+    fn clone_vec_optional_type<'a, P: FlexPusher<'a>>(
+        flex_pusher: &mut P,
+        reader: Reader<&[u8]>,
         value_type: Option<FlexBufferType>,
     ) -> Result<(), flexbuffers::ReaderError> {
+        let builder = flex_pusher.start_vector();
+        let vector_reader = reader.get_vector()?;
         let mut pusher = FlexVecPusher { builder };
         for value in vector_reader.iter() {
             let v_type = value_type.unwrap_or(value.flexbuffer_type());
@@ -438,287 +473,117 @@ mod nested_flexbuffer {
     ) -> Result<B, flexbuffers::ReaderError> {
         match value_type {
             FlexBufferType::Null => pusher.push(()),
-            FlexBufferType::Int => pusher.push(value.as_i64()),
-            FlexBufferType::UInt => pusher.push(value.as_u64()),
-            FlexBufferType::Float => pusher.push(value.as_i64()),
-            FlexBufferType::Bool => pusher.push(value.as_f64()),
-            FlexBufferType::Key => pusher.push(value.as_str()),
-            FlexBufferType::String => pusher.push(value.as_str()),
-            FlexBufferType::IndirectInt => pusher.push(value.as_i64()),
-            FlexBufferType::IndirectUInt => pusher.push(value.as_u64()),
-            FlexBufferType::IndirectFloat => pusher.push(value.as_f64()),
-            FlexBufferType::Map => clone_map(pusher.start_map(), &value.as_map())?,
-            FlexBufferType::Vector => clone_vector(pusher.start_vector(), value.as_vector(), None)?,
-
-            FlexBufferType::VectorInt => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Int),
-            )?,
-            FlexBufferType::VectorUInt => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::UInt),
-            )?,
-            FlexBufferType::VectorFloat => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Float),
-            )?,
-            FlexBufferType::VectorKey => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Key),
-            )?,
-            FlexBufferType::VectorString => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::String),
-            )?,
-            FlexBufferType::VectorBool => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Bool),
-            )?,
-            FlexBufferType::VectorInt2 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Int),
-            )?,
-            FlexBufferType::VectorUInt2 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::UInt),
-            )?,
-            FlexBufferType::VectorFloat2 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Float),
-            )?,
-            FlexBufferType::VectorInt3 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Int),
-            )?,
-            FlexBufferType::VectorUInt3 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Float),
-            )?,
-            FlexBufferType::VectorFloat3 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Float),
-            )?,
-            FlexBufferType::VectorInt4 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Int),
-            )?,
-            FlexBufferType::VectorUInt4 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Int),
-            )?,
-            FlexBufferType::VectorFloat4 => clone_vector(
-                pusher.start_vector(),
-                value.as_vector(),
-                Some(FlexBufferType::Float),
-            )?,
-            FlexBufferType::Blob => pusher.push(value.as_blob()),
+            FlexBufferType::Int => pusher.push(value.get_i64()?),
+            FlexBufferType::UInt => pusher.push(value.get_u64()?),
+            FlexBufferType::Float => pusher.push(value.get_f64()?),
+            FlexBufferType::Bool => pusher.push(value.get_bool()?),
+            FlexBufferType::Key => pusher.push(value.get_key()?),
+            FlexBufferType::String => pusher.push(value.get_str()?),
+            FlexBufferType::IndirectInt => pusher.push(value.get_i64()?),
+            FlexBufferType::IndirectUInt => pusher.push(value.get_u64()?),
+            FlexBufferType::IndirectFloat => pusher.push(value.get_f64()?),
+            FlexBufferType::Map => clone_map(pusher.start_map(), &value.get_map()?)?,
+            FlexBufferType::Vector => clone_vec_untyped(&mut pusher, value)?,
+            FlexBufferType::VectorInt => clone_vec(&mut pusher, value, FlexBufferType::Int)?,
+            FlexBufferType::VectorUInt => clone_vec(&mut pusher, value, FlexBufferType::UInt)?,
+            FlexBufferType::VectorFloat => clone_vec(&mut pusher, value, FlexBufferType::Float)?,
+            FlexBufferType::VectorKey => clone_vec(&mut pusher, value, FlexBufferType::Key)?,
+            FlexBufferType::VectorString => clone_vec(&mut pusher, value, FlexBufferType::String)?,
+            FlexBufferType::VectorBool => clone_vec(&mut pusher, value, FlexBufferType::Bool)?,
+            FlexBufferType::VectorInt2 => clone_vec(&mut pusher, value, FlexBufferType::Int)?,
+            FlexBufferType::VectorUInt2 => clone_vec(&mut pusher, value, FlexBufferType::UInt)?,
+            FlexBufferType::VectorFloat2 => clone_vec(&mut pusher, value, FlexBufferType::Float)?,
+            FlexBufferType::VectorInt3 => clone_vec(&mut pusher, value, FlexBufferType::Int)?,
+            FlexBufferType::VectorUInt3 => clone_vec(&mut pusher, value, FlexBufferType::UInt)?,
+            FlexBufferType::VectorFloat3 => clone_vec(&mut pusher, value, FlexBufferType::Float)?,
+            FlexBufferType::VectorInt4 => clone_vec(&mut pusher, value, FlexBufferType::Int)?,
+            FlexBufferType::VectorUInt4 => clone_vec(&mut pusher, value, FlexBufferType::UInt)?,
+            FlexBufferType::VectorFloat4 => clone_vec(&mut pusher, value, FlexBufferType::Float)?,
+            FlexBufferType::Blob => pusher.push(value.get_blob()?),
         }
         Ok(pusher)
     }
 
-    #[test]
-    fn test_complex() {
-        let top = ComplexMsg {
-            content: vec![1, 2, u16::MAX],
-            id: "meh".to_string(),
-            payload: Payload { file_size: 123123 },
-            nested: DefaultMsg {
-                id: "my_id".to_string(),
-                payload: Payload { file_size: 3456456 },
-            },
-            other: i32::MIN,
-        };
-        let nested = &top.nested;
-        let nested_name = "nested";
-        test_cloning(&top, nested, nested_name)
-    }
+    #[cfg(test)]
+    mod nested_flexbuffer_tests {
+        use std::fmt::Debug;
 
-    #[test]
-    fn test_default() {
-        let top = DefaultMsg::default();
-        let nested = &top.payload;
-        let nested_name = "payload";
-        test_cloning(&top, nested, nested_name)
-    }
+        use flexbuffers::{Reader, BuilderOptions};
+        use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-    fn test_cloning<
-        TOP: Serialize + DeserializeOwned + PartialEq + Debug,
-        NESTED: Serialize + DeserializeOwned + PartialEq + Debug,
-    >(
-        top: &TOP,
-        nested: &NESTED,
-        nested_name: &str,
-    ) {
-        let mut s = flexbuffers::FlexbufferSerializer::new();
-        top.serialize(&mut s).unwrap();
-        let r = flexbuffers::Reader::get_root(s.view()).unwrap();
-        let r_m = r.as_map();
-        let r_m_p = r_m.index(nested_name).unwrap();
-        let r_m_p_m = r_m_p.as_map();
+        use crate::nested_flexbuffer::clone_map;
 
-        let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
-        let builder_map = builder.start_map();
-        let _ = clone_map(builder_map, &r_m_p_m).unwrap();
-
-        println!("Copy: {:?}", builder.view());
-
-        let r = Reader::get_root(builder.view()).unwrap();
-
-        let cloned_payload = NESTED::deserialize(r).unwrap();
-
-        assert_eq!(nested, &cloned_payload);
-    }
-
-    // #[derive(Serialize, Deserialize)]
-    // struct CustomSerializerMsg {
-    //     id: String,
-    //     payload: Vec<u8>,
-    // }
-
-    // impl<'de> Deserialize<'de> for CustomSerializerMsg {
-    //     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    //     where
-    //         D: serde::Deserializer<'de>,
-    //     {
-    //         deserializer.deserialize_any(CustomVisitor {});
-    //         todo!("fail")
-    //     }
-    // }
-
-    // struct CustomVisitor {}
-
-    // impl Visitor<'_> for CustomVisitor {
-    //     type Value = CustomSerializerMsg;
-
-    //     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-    //         formatter.write_str("a custom key")
-    //     }
-
-    // }
-
-    // #[test]
-    // fn test_serde() {
-    //     let m = DefaultMsg::default();
-    //     let mut s = flexbuffers::FlexbufferSerializer::new();
-    //     let _ = m.serialize(&mut s).unwrap();
-    //     let r = flexbuffers::Reader::get_root(s.view()).unwrap();
-    //     let x = DefaultMsg::deserialize(r).unwrap();
-    // }
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
-    struct Payload {
-        file_size: i64,
-    }
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
-    struct DefaultMsg {
-        id: String,
-        payload: Payload,
-    }
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
-    struct ComplexMsg {
-        content: Vec<u16>,
-        id: String,
-        payload: Payload,
-        nested: DefaultMsg,
-        other: i32,
-    }
-
-    /*
-    #[test]
-    fn test() {
-        let m = DefaultMsg::default();
-        find_payload(m);
-    }
-
-    #[test]
-    fn test2() {
-        let m = ComplexMsg::default();
-        find_payload(m);
-    }
-
-    // fn find_payload<'de, MSG: Serialize + Deserialize<'de> + PartialEq + Debug>(msg: MSG) {
-    fn find_payload<T: Serialize + DeserializeOwned + PartialEq + Default + Debug>(msg: T) {
-        let mut s = flexbuffers::FlexbufferSerializer::new();
-        msg.serialize(&mut s).unwrap();
-
-        let r = flexbuffers::Reader::get_root(s.view()).unwrap();
-        let r_m = r.as_map();
-        let addr = r.address();
-        let mut key_addresses = HashMap::new();
-        let mut addresses = BTreeSet::new();
-        for key in r_m.iter_keys() {
-            let key_r = r_m.index(key).unwrap();
-            let address = key_r.address();
-            let typ = key_r.flexbuffer_type();
-            let width = key_r.bitwidth();
-            key_addresses.insert(key, (address, typ, width));
-            addresses.insert(address);
+        #[test]
+        fn test_complex() {
+            let top = ComplexMsg {
+                content: vec![1, 2, u16::MAX],
+                id: "meh".to_string(),
+                payload: Payload { file_size: 123123 },
+                nested: DefaultMsg {
+                    id: "my_id".to_string(),
+                    payload: Payload { file_size: 3456456 },
+                },
+                other: i32::MIN,
+            };
+            let nested = &top.nested;
+            let nested_name = "nested";
+            test_cloning(&top, nested, nested_name)
         }
-        let (payload_begin, payload_type, payload_bitwidth) = key_addresses.get("payload").unwrap();
 
-        println!("Addresses: {:?}", addresses);
-        addresses.split_off(payload_begin);
-        let payload_end = addresses.pop_last().unwrap_or(0);
+        #[test]
+        fn test_default() {
+            let top = DefaultMsg::default();
+            let nested = &top.payload;
+            let nested_name = "payload";
+            test_cloning(&top, nested, nested_name)
+        }
 
-        let payload_buf = r.buffer().slice(payload_end..*payload_begin).unwrap().to_vec();
-        let mut payload_buf = payload_buf.to_vec();
+        fn test_cloning<
+            TOP: Serialize + DeserializeOwned + PartialEq + Debug,
+            NESTED: Serialize + DeserializeOwned + PartialEq + Debug,
+        >(
+            top: &TOP,
+            nested: &NESTED,
+            nested_name: &str,
+        ) {
+            let mut s = flexbuffers::FlexbufferSerializer::new();
+            top.serialize(&mut s).unwrap();
+            let r = flexbuffers::Reader::get_root(s.view()).unwrap();
+            let r_m = r.as_map();
+            let r_m_p = r_m.index(nested_name).unwrap();
+            let r_m_p_m = r_m_p.as_map();
 
-        payload_buf.extend([(*payload_type as u8) << 2 | *payload_bitwidth as u8]);
-        payload_buf.extend([payload_bitwidth.n_bytes() as u8]);
+            let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
+            let builder_map = builder.start_map();
+            let _ = clone_map(builder_map, &r_m_p_m).unwrap();
 
-        let root = Reader::get_root(&*payload_buf).unwrap();
+            println!("Copy: {:?}", builder.view());
 
-        //]
-        let test_msg = Payload::default();
-        let test_msg_buf = flexbuffers::to_vec(test_msg).unwrap();
-        println!("Manual: len: {}, {:?}", payload_buf.len(), payload_buf);
-        println!("Auto:   len: {},  {:?}", test_msg_buf.len(), test_msg_buf);
-        //
+            let r = Reader::get_root(builder.view()).unwrap();
 
-        let deserialized_msg = T::deserialize(root).unwrap();
-        assert_eq!(msg, deserialized_msg);
+            let cloned_payload = NESTED::deserialize(r).unwrap();
+
+            assert_eq!(nested, &cloned_payload);
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+        struct Payload {
+            file_size: i64,
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+        struct DefaultMsg {
+            id: String,
+            payload: Payload,
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+        struct ComplexMsg {
+            content: Vec<u16>,
+            id: String,
+            payload: Payload,
+            nested: DefaultMsg,
+            other: i32,
+        }
     }
-
-    #[derive(Serialize, Deserialize, Debug, Default)]
-    struct SerdeMsg {
-        id: String,
-        payload: serde_json::Value,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, Default)]
-    struct OrigMsg {
-        id: String,
-        payload: GftpChunk,
-    }
-
-    #[test]
-    fn serde_test() {
-        let chunk = ya_core_model::gftp::GftpChunk {
-            offset: 10,
-            content: vec![1,2,3,4]
-        };
-        let orig_msg = OrigMsg { id: "xxx".to_string(), payload: chunk };
-        println!("Orig: {:?}", orig_msg);
-        let ser = flexbuffers::to_vec(orig_msg).unwrap();
-
-        let des: SerdeMsg = flexbuffers::from_slice(&ser).unwrap();
-        println!("Serd: {:?}", des);
-    }
-     */
 }

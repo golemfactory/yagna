@@ -2,8 +2,8 @@ use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use anyhow::anyhow;
-use futures::FutureExt;
 use futures::channel::oneshot::{self, Receiver, Sender};
+
 use lazy_static::lazy_static;
 use std::pin::Pin;
 use std::{
@@ -201,7 +201,7 @@ impl Handler<RpcRawCall> for AService {
                 crate::WsResponseMsg::Message(gsb_msg) => {
                     // let gsb_msg = ya_service_bus::serialization::to_vec(&gsb_msg).unwrap();
                     Ok(gsb_msg)
-                },
+                }
                 crate::WsResponseMsg::Error(err) => {
                     log::error!("Sending error GSB response: {err}");
                     match err {
