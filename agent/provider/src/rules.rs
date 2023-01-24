@@ -54,12 +54,12 @@ impl RulesManager {
             whitelist,
         };
 
-        manager.remove_rules_for_non_existing_certs()?;
+        manager.remove_dangling_rules()?;
 
         Ok(manager)
     }
 
-    pub fn remove_rules_for_non_existing_certs(&self) -> Result<()> {
+    pub fn remove_dangling_rules(&self) -> Result<()> {
         //TODO Rafał Refactor
         let mut deleted_partner_rules = vec![];
 
@@ -123,7 +123,7 @@ impl RulesManager {
                 Ok(()) => {
                     log::info!("rulestore updated from {}", p.display());
 
-                    if let Err(e) = manager.remove_rules_for_non_existing_certs() {
+                    if let Err(e) = manager.remove_dangling_rules() {
                         log::warn!("Error removing unnecessary rules: {e}");
                     }
                 }
@@ -139,7 +139,7 @@ impl RulesManager {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
 
-                    if let Err(e) = manager.remove_rules_for_non_existing_certs() {
+                    if let Err(e) = manager.remove_dangling_rules() {
                         log::warn!("Error removing unnecessary rules: {e}");
                     }
                 }
