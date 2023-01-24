@@ -127,10 +127,14 @@ impl RulesTable {
         let row = serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]};
         self.table.values.push(row);
     }
-    //TODO Rafał Add partners!
 
-    fn add(&mut self, rule: CertRule) {
+    fn add_audited_payload(&mut self, rule: CertRule) {
         let row = serde_json::json! {[ "Audited payload", rule.mode, "", rule.description ]};
+        self.table.values.push(row);
+    }
+
+    fn add_partner(&mut self, cert_id: &str, rule: &CertRule) {
+        let row = serde_json::json! {[ "Partner", rule.mode, cert_id, rule.description ]};
         self.table.values.push(row);
     }
 
@@ -155,7 +159,11 @@ impl From<RulesManager> for RulesTable {
 
         table.with_header(outbound.enabled);
         table.add_everyone(outbound.everyone);
-        table.add(outbound.audited_payload.default);
+        table.add_audited_payload(outbound.audited_payload.default);
+
+        for (cert_id, rule) in outbound.partner.iter() {
+            table.add_partner(cert_id, rule);
+        }
 
         table
     }
