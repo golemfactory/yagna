@@ -103,7 +103,7 @@ impl RulesManager {
                     cert_id.clone(),
                     CertRule {
                         mode: mode.clone(),
-                        description: "TODO".into(), //TODO Rafał make description from cert?
+                        description: "".into(),
                     },
                 );
             log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");

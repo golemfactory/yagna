@@ -170,7 +170,6 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     let result = list_rules_command(data_dir.path());
 
     assert_eq!(&result["outbound"][rule][&cert_id]["mode"], mode);
-    assert_eq!(&result["outbound"][rule][&cert_id]["description"], "TODO");
 }
 
 fn list_rules_command(data_dir: &Path) -> serde_json::Value {
