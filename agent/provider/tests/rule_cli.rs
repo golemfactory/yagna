@@ -172,6 +172,35 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     assert_eq!(&result["outbound"][rule][&cert_id]["mode"], mode);
 }
 
+#[test]
+#[serial_test::serial]
+fn removing_cert_should_also_remove_its_rule() {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    let rule = "partner";
+
+    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir);
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("--cert-id")
+        .arg(&cert_id)
+        .arg("all")
+        .assert()
+        .success();
+
+    remove_certificate_from_keystore(data_dir.path(), &cert_id);
+
+    let result = list_rules_command(data_dir.path());
+
+    assert_eq!(result["outbound"][rule][&cert_id], serde_json::Value::Null);
+}
+
 fn list_rules_command(data_dir: &Path) -> serde_json::Value {
     let output = Command::cargo_bin("ya-provider")
         .unwrap()
@@ -183,6 +212,17 @@ fn list_rules_command(data_dir: &Path) -> serde_json::Value {
         .unwrap();
 
     serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn remove_certificate_from_keystore(data_dir: &Path, cert_id: &str) {
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.to_str().unwrap())
+        .arg("keystore")
+        .arg("remove")
+        .arg(cert_id)
+        .assert()
+        .success();
 }
 
 fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> String {
