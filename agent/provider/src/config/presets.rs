@@ -21,8 +21,7 @@ pub struct PresetV0 {
 #[serde(rename_all = "kebab-case")]
 pub struct Presets {
     pub active: Vec<String>,
-    // It's important that all values are sorted, so that ansible script can easily detect changes.
-    // In case of doubt, please contact DevOps.
+    // It's important that all values are sorted, so that other tools can easily detect changes.
     pub presets: BTreeMap<String, Preset>,
 }
 
