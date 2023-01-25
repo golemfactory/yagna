@@ -16,7 +16,6 @@ use serde_json::json;
 use services::AService;
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
-use ya_service_bus::serialization;
 
 pub const GSB_API_PATH: &str = "/gsb-api/v1";
 
@@ -91,7 +90,7 @@ impl ResponseError for GsbApiError {
 struct WsRequest {
     id: String,
     component: String,
-    msg: Vec<u8>,
+    payload: Vec<u8>,
 }
 
 #[derive(Deserialize)]
@@ -236,9 +235,17 @@ impl Handler<WsRequest> for WsMessagesHandler {
             request.id,
             request.component
         );
-        let msg = flexbuffers::to_vec(&request)
-            .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?;
-        ctx.binary(msg);
+        let mut request_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+        let mut request_map_builder = request_builder.start_map();
+        request_map_builder.push("id", &*request.id);
+        request_map_builder.push("component", &*request.component);
+        let payload_map_builder = request_map_builder.start_map("payload");
+
+        let payload = Reader::get_root(&*request.payload).unwrap(); //TODO handle error
+        let payload_map = payload.as_map(); //TODO check type before as_map
+        nested_flexbuffer::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
+        request_map_builder.end_map();
+        ctx.binary(request_builder.view().to_vec());
         Ok(())
     }
 }

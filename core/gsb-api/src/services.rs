@@ -3,7 +3,6 @@ use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use anyhow::anyhow;
 use futures::channel::oneshot::{self, Receiver, Sender};
-
 use lazy_static::lazy_static;
 use std::pin::Pin;
 use std::{
@@ -156,13 +155,6 @@ impl Handler<RpcRawCall> for AService {
         let addr = msg.addr;
         log::info!("Incoming GSB RAW call (addr: {addr})");
 
-        // return Box::pin(async move {
-        //     Err(ya_service_bus::Error::GsbBadRequest(format!(
-        //         "No supported msg type for addr: {}",
-        //         addr
-        //     )))
-        // });
-
         if !self.addresses.contains(&addr) {
             //TODO use futures::ready! or sth
             return Box::pin(async move {
@@ -178,7 +170,7 @@ impl Handler<RpcRawCall> for AService {
         let msg = WsRequest {
             component,
             id,
-            msg: msg.body,
+            payload: msg.body,
         };
         let msg_handling_future = self.msg_handler.handle_request(msg);
         Box::pin(async {
@@ -198,10 +190,7 @@ impl Handler<RpcRawCall> for AService {
             };
             log::info!("Sending GSB response: {ws_response:?}");
             match ws_response.response {
-                crate::WsResponseMsg::Message(gsb_msg) => {
-                    // let gsb_msg = ya_service_bus::serialization::to_vec(&gsb_msg).unwrap();
-                    Ok(gsb_msg)
-                }
+                crate::WsResponseMsg::Message(gsb_msg) => Ok(gsb_msg),
                 crate::WsResponseMsg::Error(err) => {
                     log::error!("Sending error GSB response: {err}");
                     match err {
