@@ -41,6 +41,7 @@ where
         caller: String,
         address: String,
         data: Vec<u8>,
+        _no_reply: bool,
     ) -> Self::Reply {
         (self.call_handler)(request_id, caller, address, data)
     }

@@ -48,7 +48,7 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .balances
         .get(&token)
         .map(|x| x.0.clone())
-        .unwrap_or(BigUint::zero());
+        .unwrap_or_else(BigUint::zero);
     let balance = utils::big_uint_to_big_dec(balance_com);
     log::debug!(
         "account_balance. address={}, network={}, balance={}",
@@ -63,8 +63,8 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let mode = msg.mode();
     let address = msg.address().clone();
-    let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(GenericError::new)?;
 
     if mode.contains(AccountMode::SEND) {
         let wallet = get_wallet(&address, network).await?;
@@ -87,8 +87,8 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
 }
 
 pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
-    let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(GenericError::new)?;
     let wallet = get_wallet(&msg.sender(), network).await?;
 
     let token = get_network_token(network, None);
@@ -117,15 +117,15 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
         Some(false) => Err(GenericError::new(
             tx_info
                 .fail_reason
-                .unwrap_or("Unknown failure reason".to_string()),
+                .unwrap_or_else(|| "Unknown failure reason".to_string()),
         )),
         None => Err(GenericError::new("Transaction time-outed")),
     }
 }
 
 pub async fn enter(msg: Enter) -> Result<String, GenericError> {
-    let network = msg.network.unwrap_or(DEFAULT_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let network = msg.network.unwrap_or_else(|| DEFAULT_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(GenericError::new)?;
     let wallet = get_wallet(&msg.address, network).await?;
 
     let tx_hash = deposit(wallet, network, msg.amount).await?;
@@ -135,7 +135,7 @@ pub async fn enter(msg: Enter) -> Result<String, GenericError> {
 
 pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let token = get_network_token(network, None);
-    let wallet = get_wallet(&address, network).await?;
+    let wallet = get_wallet(address, network).await?;
     let tx_fee = wallet
         .provider
         .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
@@ -278,18 +278,15 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 }
 
 fn get_provider(network: Network) -> RpcProvider {
-    let zk_network = get_zk_network(network);
-    let provider: RpcProvider =
-        RpcProvider::from_addr_and_network(get_rpc_addr(network), zk_network);
-    provider.clone()
+    RpcProvider::from_addr_and_network(get_rpc_addr(network), get_zk_network(network))
 }
 
 fn get_rpc_addr(network: Network) -> String {
     match network {
         Network::Mainnet => env::var("ZKSYNC_MAINNET_RPC_ADDRESS")
-            .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
+            .unwrap_or_else(|_| "https://api.zksync.golem.network/jsrpc".to_string()),
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
-            .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
+            .unwrap_or_else(|_| "https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
         Network::Goerli => panic!("Goerli not supported on zksync"),
         Network::Polygon => panic!("Polygon not supported on zksync"),
         Network::Mumbai => panic!("Mumbai not supported on zksync"),
@@ -298,11 +295,10 @@ fn get_rpc_addr(network: Network) -> String {
 
 fn get_ethereum_node_addr_from_env(network: Network) -> String {
     match network {
-        Network::Mainnet => {
-            env::var("MAINNET_GETH_ADDR").unwrap_or("https://geth.golem.network:55555".to_string())
-        }
+        Network::Mainnet => env::var("MAINNET_GETH_ADDR")
+            .unwrap_or_else(|_| "https://geth.golem.network:55555".to_string()),
         Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
-            .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+            .unwrap_or_else(|_| "http://geth.testnet.golem.network:55555".to_string()),
         Network::Goerli => panic!("Goerli not supported on zksync"),
         Network::Polygon => panic!("Polygon mainnet not supported on zksync"),
         Network::Mumbai => panic!("Polygon mumbai not supported on zksync"),
@@ -310,7 +306,8 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
 }
 
 fn get_ethereum_confirmation_timeout() -> std::time::Duration {
-    let value = std::env::var("ZKSYNC_ETH_CONFIRMATION_TIMEOUT_SECONDS").unwrap_or("60".to_owned());
+    let value = std::env::var("ZKSYNC_ETH_CONFIRMATION_TIMEOUT_SECONDS")
+        .unwrap_or_else(|_| "60".to_owned());
     std::time::Duration::from_secs(value.parse::<u64>().unwrap())
 }
 
@@ -350,8 +347,8 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
         let token = get_network_token(network, None);
-        let balance = get_balance(&wallet, &token).await?;
-        let unlock_fee = get_unlock_fee(&wallet, &token).await?;
+        let balance = get_balance(wallet, &token).await?;
+        let unlock_fee = get_unlock_fee(wallet, &token).await?;
         if unlock_fee > balance {
             return Err(GenericError::new("Not enough balance to unlock account"));
         }
@@ -379,7 +376,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
         log::debug!("tx_info = {:?}", tx_info);
         match tx_info.success {
             Some(true) => log::info!("Wallet successfully unlocked. address = {}", wallet.signer.address),
-            Some(false) => return Err(GenericError::new(format!("Failed to unlock wallet. reason={}", tx_info.fail_reason.unwrap_or("Unknown reason".to_string())))),
+            Some(false) => return Err(GenericError::new(format!("Failed to unlock wallet. reason={}", tx_info.fail_reason.unwrap_or_else(|| "Unknown reason".to_string())))),
             None => return Err(GenericError::new(format!("Unknown result from zksync unlock, please check your wallet on zkscan and try again. {:?}", tx_info))),
         }
     }
@@ -522,7 +519,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     let mut ethereum = wallet
         .ethereum(get_ethereum_node_addr_from_env(network))
         .await
-        .map_err(|err| GenericError::new(err))?;
+        .map_err(GenericError::new)?;
     ethereum.set_confirmation_timeout(get_ethereum_confirmation_timeout());
 
     if !ethereum
@@ -533,22 +530,19 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
         let tx = ethereum
             .limited_approve_erc20_token_deposits(token.as_str(), amount)
             .await
-            .map_err(|err| GenericError::new(err))?;
+            .map_err(GenericError::new)?;
         info!(
             "Approve erc20 token for ZkSync deposit. Tx: https://rinkeby.etherscan.io/tx/{:#x}",
             tx
         );
 
-        ethereum
-            .wait_for_tx(tx)
-            .await
-            .map_err(|err| GenericError::new(err))?;
+        ethereum.wait_for_tx(tx).await.map_err(GenericError::new)?;
     }
 
     let deposit_tx_hash = ethereum
         .deposit(token.as_str(), amount, address)
         .await
-        .map_err(|err| GenericError::new(err))?;
+        .map_err(GenericError::new)?;
     info!(
         "Check out deposit transaction at https://rinkeby.etherscan.io/tx/{:#x}",
         deposit_tx_hash

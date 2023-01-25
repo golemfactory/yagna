@@ -9,6 +9,7 @@ use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
+use crate::provider_agent::AgentNegotiatorsConfig;
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
@@ -78,12 +79,18 @@ pub struct NegotiatorsConfig {
 pub fn create_negotiator(
     market: Addr<ProviderMarket>,
     config: &MarketConfig,
+    agent_negotiators_cfg: &AgentNegotiatorsConfig,
 ) -> Arc<NegotiatorAddr> {
     let negotiator = match &config.negotiator_type[..] {
         "Composite" => NegotiatorAddr::from(
-            CompositeNegotiator::new(market, &config.negotiator_config.composite_config).unwrap(),
+            CompositeNegotiator::new(
+                market,
+                &config.negotiator_config.composite_config,
+                agent_negotiators_cfg.clone(),
+            )
+            .unwrap(),
         ),
-        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::new()),
+        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::default()),
         _ => Default::default(),
     };
     Arc::new(negotiator)
@@ -91,6 +98,6 @@ pub fn create_negotiator(
 
 impl Default for NegotiatorAddr {
     fn default() -> Self {
-        NegotiatorAddr::from(AcceptAllNegotiator::new())
+        NegotiatorAddr::from(AcceptAllNegotiator::default())
     }
 }

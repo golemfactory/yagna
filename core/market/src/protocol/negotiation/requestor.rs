@@ -137,21 +137,19 @@ impl NegotiationApi {
         &self,
         agreement: &Agreement,
     ) -> Result<(), ProposeAgreementError> {
-        let requestor_id = agreement.requestor_id.clone();
-        let provider_id = agreement.provider_id.clone();
         let id = agreement.id.clone();
         let msg = AgreementReceived {
             agreement_id: agreement.id.clone(),
-            valid_to: agreement.valid_to.clone(),
-            creation_ts: agreement.creation_ts.clone(),
+            valid_to: agreement.valid_to,
+            creation_ts: agreement.creation_ts,
             proposal_id: agreement.offer_proposal_id.clone(),
             signature: agreement
                 .proposed_signature
                 .clone()
-                .ok_or(ProposeAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| ProposeAgreementError::NotSigned(id.clone()))?,
         };
-        net::from(requestor_id)
-            .to(provider_id)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .map_err(|e| GsbAgreementError(e.to_string(), id))
@@ -160,18 +158,16 @@ impl NegotiationApi {
     }
 
     pub async fn commit_agreement(agreement: &Agreement) -> Result<(), CommitAgreementError> {
-        let requestor_id = agreement.requestor_id.clone();
-        let provider_id = agreement.provider_id.clone();
         let id = agreement.id.clone();
         let msg = AgreementCommitted {
             agreement_id: agreement.id.clone(),
             signature: agreement
                 .committed_signature
                 .clone()
-                .ok_or(CommitAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| CommitAgreementError::NotSigned(id.clone()))?,
         };
-        net::from(requestor_id)
-            .to(provider_id)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .map_err(|e| GsbAgreementError(e.to_string(), id))
@@ -290,25 +286,25 @@ impl NegotiationApi {
 
         ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_received(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_rejected(caller, msg)
             });
 
         ServiceBinder::new(&requestor::agreement_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementApproved| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_approved(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementRejected| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_rejected(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_terminated(caller, msg)
             });
         Ok(())

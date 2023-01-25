@@ -12,7 +12,7 @@ use ya_diesel_utils::DbTextField;
 const RANDOM_PREFIX_LEN: usize = 32;
 const HASH_SUFFIX_LEN: usize = 64;
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum SubscriptionParseError {
     #[error("Subscription id [{0}] has invalid format.")]
     InvalidFormat(String),
@@ -26,7 +26,7 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
@@ -108,7 +108,7 @@ impl FromStr for SubscriptionId {
         if !elements
             .iter()
             .map(|slice| slice.chars().all(|character| character.is_ascii_hexdigit()))
-            .all(|result| result == true)
+            .all(|result| result)
         {
             Err(SubscriptionParseError::NotHexadecimal(s.to_string()))?;
         }
@@ -233,8 +233,14 @@ mod tests {
         let properties = "{}";
         let constraints = "()";
         let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
-        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
-        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        let creation_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(18, 53, 1)
+            .unwrap();
+        let expiration_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(20, 19, 17)
+            .unwrap();
         let good_subscription_id = SubscriptionId::generate_id(
             properties,
             constraints,
@@ -260,8 +266,14 @@ mod tests {
         let properties = "{}";
         let constraints = "()";
         let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
-        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
-        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        let creation_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(18, 53, 1)
+            .unwrap();
+        let expiration_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(20, 19, 17)
+            .unwrap();
         assert_eq!(
             bad_subscription_id.validate(
                 properties,

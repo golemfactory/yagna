@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
 use std::ops::Not;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
 use futures::future::LocalBoxFuture;
@@ -21,8 +21,6 @@ use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
 
-static DEFAULT_FEATURES: [Feature; 1] = [Feature::Vpn];
-
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("script validation error: {0}")]
@@ -31,35 +29,31 @@ pub enum ValidationError {
     Url(String),
 }
 
+#[derive(Default, Clone)]
 pub struct ManifestContext {
     pub manifest: Arc<Option<AppManifest>>,
     pub policy: Arc<PolicyConfig>,
     features: HashSet<Feature>,
-    validators: ValidatorMap,
-}
-
-impl Default for ManifestContext {
-    fn default() -> Self {
-        Self {
-            manifest: Default::default(),
-            policy: Default::default(),
-            features: HashSet::from(DEFAULT_FEATURES),
-            validators: Default::default(),
-        }
-    }
+    validators: Arc<RwLock<ValidatorMap>>,
 }
 
 impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
-        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
-        let features = Self::build_features(&manifest);
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
+        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
+        let features = {
+            let mut features = Self::build_default_features(agreement);
+            if let Some(ref manifest) = manifest {
+                features.extend(manifest.features().into_iter());
+            }
+            features
+        };
 
         Ok(Self {
             manifest: Arc::new(manifest),
             policy: Arc::new(policy),
             features,
-            validators: Default::default(),
+            validators: Arc::new(RwLock::new(Default::default())),
         })
     }
 
@@ -106,11 +100,13 @@ impl ManifestContext {
     }
 
     pub fn add_validators(&mut self, iter: impl IntoIterator<Item = (Validator, Box<dyn Any>)>) {
-        self.validators.extend(iter.into_iter());
+        self.validators.write().unwrap().extend(iter.into_iter());
     }
 
     pub fn validator<T: ManifestValidator + 'static>(&self) -> Option<T> {
         self.validators
+            .read()
+            .unwrap()
             .get(&<T as ManifestValidator>::VALIDATOR)
             .and_then(|c| {
                 let validator_ref: &dyn Any = &**c;
@@ -118,11 +114,21 @@ impl ManifestContext {
             })
     }
 
-    fn build_features(manifest: &Option<AppManifest>) -> HashSet<Feature> {
-        let mut features = HashSet::from(DEFAULT_FEATURES);
-        if let Some(ref manifest) = manifest {
-            features.extend(manifest.features());
+    fn build_default_features(agreement: &AgreementView) -> HashSet<Feature> {
+        const CAPABILITIES: &str = "offer.properties.golem.runtime.capabilities";
+
+        let mut features = HashSet::default();
+        let cap_vpn = Feature::Vpn.to_string().to_lowercase();
+
+        if let Ok(capabilities) = agreement.get_property::<Vec<String>>(CAPABILITIES) {
+            if capabilities
+                .iter()
+                .any(|c| c.trim().to_lowercase() == cap_vpn)
+            {
+                features.insert(Feature::Vpn);
+            }
         }
+
         features
     }
 }
@@ -134,7 +140,7 @@ impl std::fmt::Debug for ManifestContext {
             "ManifestContext {{ manifest: {:?}, policy: {:?}, validators: {:?} }}",
             self.manifest,
             self.policy,
-            self.validators.keys().collect::<Vec<_>>()
+            self.validators.read().unwrap().keys().collect::<Vec<_>>()
         )
     }
 }
@@ -439,20 +445,13 @@ impl UrlValidator {
         (Protocol::Udp, Ipv4Addr::new(149, 112, 112, 112), 53),
     ];
 
-    pub fn validate(
-        &self,
-        protocol: Protocol,
-        ip: IpAddr,
-        port: u16,
-    ) -> Result<(), ValidationError> {
-        if self.inner.contains(&(protocol, ip, port)) {
-            Ok(())
-        } else {
-            Err(ValidationError::Url(format!(
-                "address not allowed: {}:{} ({})",
-                ip, port, protocol
-            )))
-        }
+    pub fn validate(&self, proto: Protocol, ip: IpAddr, port: u16) -> Result<(), ValidationError> {
+        self.inner
+            .contains(&(proto, ip, port))
+            .then_some(())
+            .ok_or_else(|| {
+                ValidationError::Url(format!("address not allowed: {}:{} ({})", ip, port, proto))
+            })
     }
 }
 

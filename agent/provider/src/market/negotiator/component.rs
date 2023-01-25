@@ -9,7 +9,7 @@ use crate::market::negotiator::AgreementResult;
 pub type ProposalView = AgreementView;
 
 /// Result returned by `NegotiatorComponent` during Proposals evaluation.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum NegotiationResult {
     /// `NegotiatorComponent` fully negotiated his part of Proposal,
     /// and it can be turned into valid Agreement. Provider will send
@@ -59,17 +59,12 @@ pub trait NegotiatorComponent {
     fn on_agreement_approved(&mut self, agreement_id: &str) -> anyhow::Result<()>;
 }
 
+#[derive(Default)]
 pub struct NegotiatorsPack {
     components: HashMap<String, Box<dyn NegotiatorComponent>>,
 }
 
 impl NegotiatorsPack {
-    pub fn new() -> NegotiatorsPack {
-        NegotiatorsPack {
-            components: HashMap::new(),
-        }
-    }
-
     pub fn add_component(
         mut self,
         name: &str,

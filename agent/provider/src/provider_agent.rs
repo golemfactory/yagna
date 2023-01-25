@@ -14,7 +14,7 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_manifest_utils::{manifest, Feature, Keystore};
+use ya_manifest_utils::{manifest, Feature};
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
@@ -27,9 +27,8 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{
-    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
-};
+use crate::rules::RulesManager;
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
@@ -66,6 +65,11 @@ impl GlobalsManager {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct AgentNegotiatorsConfig {
+    pub rules_manager: RulesManager,
+}
+
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -76,7 +80,9 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
+    rulestore_monitor: FileMonitor,
     keystore_monitor: FileMonitor,
+    whitelist_monitor: FileMonitor,
     net_api: NetApi,
 }
 
@@ -85,11 +91,7 @@ impl ProviderAgent {
         let data_dir = config.data_dir.get_or_create()?;
 
         //log_dir is the same as data_dir by default, but can be changed using --log-dir option
-        let log_dir = if let Some(log_dir) = &config.log_dir {
-            log_dir.get_or_create()?
-        } else {
-            data_dir.clone()
-        };
+        let log_dir = config.log_dir_path()?;
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
@@ -133,26 +135,17 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let keystore_path = data_dir.join(&config.trusted_keys_file);
-        let keystore = match Keystore::load(&keystore_path) {
-            Ok(store) => {
-                log::info!("Trusted key store loaded from {}", keystore_path.display());
-                store
-            }
-            Err(err) => {
-                log::info!("Using a new keystore: {}", err);
-                Default::default()
-            }
-        };
+        let cert_dir = config.cert_dir_path()?;
+
+        let rules_manager = RulesManager::load_or_create(
+            &config.rules_file,
+            &config.domain_whitelist_file,
+            &cert_dir,
+        )?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
-        args.market
-            .negotiator_config
-            .composite_config
-            .policy_config
-            .trusted_keys = Some(keystore.clone());
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -166,15 +159,19 @@ impl ProviderAgent {
             };
             log::info!("Using payment network: {}", net_color.paint(&n));
         }
+
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(&config.trusted_keys_file, keystore)?;
+        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
+            rules_manager.spawn_file_monitors()?;
 
-        let market = ProviderMarket::new(api.market, args.market).start();
+        let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
+
+        let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =
@@ -191,7 +188,9 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
+            rulestore_monitor,
             keystore_monitor,
+            whitelist_monitor,
             net_api,
         })
     }
@@ -246,7 +245,7 @@ impl ProviderAgent {
     fn build_offer(
         node_info: NodeInfo,
         inf_node_info: InfNodeInfo,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         preset: Preset,
         mut offer: OfferTemplate,
         exeunit_desc: ExeUnitDesc,
@@ -380,7 +379,7 @@ fn get_prices(
         .get_initial_price()
         .ok_or_else(|| anyhow!("Preset [{}] is missing the initial price", preset.name))?;
     let prices = pricing_model
-        .prices(&preset)
+        .prices(preset)
         .into_iter()
         .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
             true => Some((prop, v)),
@@ -421,25 +420,6 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
         let delay = DEFAULT.checked_sub(elapsed).unwrap_or(ZERO);
         tokio::time::sleep(delay).await;
     }
-}
-
-fn spawn_keystore_monitor<P: AsRef<Path>>(
-    path: P,
-    keystore: Keystore,
-) -> Result<FileMonitor, Error> {
-    let handler = move |p: PathBuf| match Keystore::load(&p) {
-        Ok(new_keystore) => {
-            keystore.replace(new_keystore);
-            log::info!("Trusted keystore updated from {}", p.display());
-        }
-        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
-    };
-    let monitor = FileMonitor::spawn_with(
-        path,
-        FileMonitor::on_modified(handler),
-        FileMonitorConfig::silent(),
-    )?;
-    Ok(monitor)
 }
 
 impl Actor for ProviderAgent {
@@ -486,10 +466,8 @@ impl Handler<Initialize> for ProviderAgent {
                         {
                             let mut state = preset_state.lock().unwrap();
                             new_names.retain(|n| {
-                                if state.active.contains(n) {
-                                    if !updated.contains(n) {
-                                        return false;
-                                    }
+                                if state.active.contains(n) && !updated.contains(n) {
+                                    return false;
                                 }
                                 true
                             });
@@ -537,6 +515,8 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
+        self.rulestore_monitor.stop();
+        self.whitelist_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -661,15 +641,18 @@ mod tests {
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
 
-        let mut preset: Preset = Default::default();
-        preset.pricing_model = "linear".to_string();
-        preset.usage_coeffs =
-            std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]);
+        let preset = Preset {
+            pricing_model: "linear".to_string(),
+            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            ..Default::default()
+        };
 
-        let mut offer_template: OfferTemplate = Default::default();
-        offer_template.properties = serde_json::json!({
-            "golem.com.usage.vector": ["test_coefficient"]
-        });
+        let offer_template = OfferTemplate {
+            properties: serde_json::json!({
+                "golem.com.usage.vector": ["test_coefficient"]
+            }),
+            ..Default::default()
+        };
 
         let exeunit_desc = ExeUnitDesc {
             name: Default::default(),

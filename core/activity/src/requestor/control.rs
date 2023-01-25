@@ -12,8 +12,8 @@ use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
     ExeScriptRequest, SgxCredentials, State,
 };
-use ya_client_model::market::Agreement;
-use ya_core_model::{activity, Role};
+use ya_client_model::market::{Agreement, Role};
+use ya_core_model::activity;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -84,16 +84,15 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id, Role::Requestor).await?;
     log::debug!("agreement: {:#?}", agreement);
 
-    let provider_id = agreement.provider_id().clone();
     let msg = activity::Create {
-        provider_id,
+        provider_id: *agreement.provider_id(),
         agreement_id: agreement_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
         requestor_pub_key: body.pub_key()?,
     };
 
     let create_resp = net::from(id.identity)
-        .to(provider_id)
+        .to(*agreement.provider_id())
         .service(activity::BUS_ID)
         .send(msg)
         .timeout(timeout_margin(query.timeout))
@@ -101,7 +100,7 @@ async fn create_activity(
 
     log::debug!("activity created: {}, inserting", create_resp.activity_id());
     db.as_dao::<ActivityDao>()
-        .create_if_not_exists(&create_resp.activity_id(), agreement_id)
+        .create_if_not_exists(create_resp.activity_id(), agreement_id)
         .await?;
 
     let create_result = CreateActivityResult {
@@ -136,7 +135,7 @@ async fn destroy_activity(
     let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
     agreement_provider_service(&id, &agreement)?
         .send(msg)
@@ -183,11 +182,11 @@ async fn exec(
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
         exe_script: commands,
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
 
     ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(timeout_margin(query.timeout))
@@ -233,8 +232,8 @@ async fn await_results(
     };
 
     let results = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
-        .service(&activity::exeunit::bus_id(&path.activity_id))
+        .to(*agreement.provider_id())
+        .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(timeout_margin(query.timeout))
         .await???;
@@ -254,8 +253,8 @@ fn stream_results(
 
     let seq = AtomicU64::new(0);
     let stream = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
-        .service(&activity::exeunit::bus_id(&path.activity_id))
+        .to(*agreement.provider_id())
+        .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
         .map(|item| match item {
             Ok(result) => result.map_err(Error::from),
@@ -318,7 +317,7 @@ async fn encrypted(
     };
 
     let result = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)

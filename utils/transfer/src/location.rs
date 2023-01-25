@@ -18,13 +18,13 @@ impl UrlExt for url::Url {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferHash {
     pub alg: String,
     pub val: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferUrl {
     pub hash: Option<TransferHash>,
     pub url: Url,

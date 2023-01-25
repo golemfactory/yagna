@@ -17,7 +17,7 @@ impl DummyAuth {
     }
 }
 
-impl<'s, S, B> Transform<S, ServiceRequest> for DummyAuth
+impl<S, B> Transform<S, ServiceRequest> for DummyAuth
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,

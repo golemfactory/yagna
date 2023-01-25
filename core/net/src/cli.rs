@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::Display;
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
 use humantime::format_duration;
 use structopt::*;
 
@@ -19,6 +20,11 @@ pub enum NetCommand {
     Sessions {},
     /// List virtual sockets
     Sockets {},
+    /// Find node
+    Find {
+        /// Node information to query for
+        node_id: String,
+    },
     /// Ping connected nodes
     Ping {},
 }
@@ -50,7 +56,7 @@ impl NetCommand {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
                     .send(model::Sessions {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sessions.sort_by_key(|s| s.node_id.unwrap_or_default().into_array());
 
@@ -62,6 +68,8 @@ impl NetCommand {
                         "seen".into(),
                         "time".into(),
                         "ping".into(),
+                        "in [MiB]".into(),
+                        "out [MiB]".into(),
                     ],
                     values: sessions
                         .into_iter()
@@ -77,6 +85,8 @@ impl NetCommand {
                                 format_duration(seen).to_string(),
                                 format_duration(duration).to_string(),
                                 format_duration(ping).to_string(),
+                                to_mib(s.metrics.tx_total, is_json),
+                                to_mib(s.metrics.rx_total, is_json),
                             ]}
                         })
                         .collect(),
@@ -87,7 +97,7 @@ impl NetCommand {
                 let mut sockets: Vec<model::SocketResponse> = bus::service(model::BUS_ID)
                     .send(model::Sockets {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sockets.sort_by(|l, r| match l.remote_addr.cmp(&r.remote_addr) {
                     Ordering::Equal => l.remote_port.cmp(&r.remote_port),
@@ -108,8 +118,8 @@ impl NetCommand {
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                s.protocol.to_string(),
-                                s.local_port.to_string(),
+                                s.protocol,
+                                s.local_port,
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,
@@ -121,11 +131,29 @@ impl NetCommand {
                 }
                 .into())
             }
+            NetCommand::Find { node_id } => {
+                let node: model::FindNodeResponse = bus::service(model::BUS_ID)
+                    .send(model::FindNode { node_id })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+
+                let naive = NaiveDateTime::from_timestamp_opt(node.seen.into(), 0)
+                    .expect("Failed on out-of-range number of seconds");
+                let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+                CommandOutput::object(serde_json::json!({
+                    "identities": node.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+                    "endpoints": node.endpoints.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+                    "seen": seen.to_string(),
+                    "slot": node.slot,
+                    "encryption": node.encryption,
+                }))
+            }
             NetCommand::Ping { .. } => {
                 let pings = bus::service(model::BUS_ID)
                     .send(model::GsbPing {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 Ok(ResponseTable {
                     columns: vec![

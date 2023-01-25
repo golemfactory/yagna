@@ -99,10 +99,10 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
 }
 
 pub async fn clear_stdin() -> anyhow::Result<()> {
-    let _ = crossterm::terminal::enable_raw_mode()?;
+    crossterm::terminal::enable_raw_mode()?;
     while crossterm::event::poll(Duration::from_millis(100))? {
         let _ = crossterm::event::read()?;
     }
-    let _ = crossterm::terminal::disable_raw_mode()?;
+    crossterm::terminal::disable_raw_mode()?;
     Ok(())
 }

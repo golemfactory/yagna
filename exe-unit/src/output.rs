@@ -14,9 +14,9 @@ where
     let stream = FramedRead::new(read, BytesCodec::new())
         .filter_map(|result| async { result.ok() })
         .ready_chunks(16)
-        .map(|v| v.into_iter().map(|b| b.to_vec()).flatten().collect())
+        .map(|v| v.into_iter().flat_map(|b| b.to_vec()).collect())
         .map(f)
-        .map(|evt| Ok(evt));
+        .map(Ok);
 
     if let Err(e) = stream.forward(tx).await {
         log::error!("Error forwarding output: {:?}", e);
@@ -60,18 +60,16 @@ impl CapturedOutput {
         } else {
             match self.format {
                 CaptureFormat::Bin => Some(CommandOutput::Bin(output)),
-                CaptureFormat::Str => vec_to_string(output).map(|s| CommandOutput::Str(s)),
+                CaptureFormat::Str => vec_to_string(output).map(CommandOutput::Str),
             }
         }
     }
 
     pub fn output_string(&self) -> Option<String> {
-        self.output()
-            .map(|o| match o {
-                CommandOutput::Bin(b) => vec_to_string(b),
-                CommandOutput::Str(s) => Some(s),
-            })
-            .flatten()
+        self.output().and_then(|o| match o {
+            CommandOutput::Bin(b) => vec_to_string(b),
+            CommandOutput::Str(s) => Some(s),
+        })
     }
 
     pub fn write<B: AsRef<[u8]> + ?Sized>(&mut self, bytes: &B) -> Option<CommandOutput> {
@@ -115,14 +113,14 @@ impl From<Option<CaptureMode>> for CapturedOutput {
 
                 CapturedOutput {
                     stream: false,
-                    format: format.unwrap_or_else(CaptureFormat::default),
+                    format: format.unwrap_or_default(),
                     head,
                     tail,
                 }
             }
             CaptureMode::Stream { limit, format } => CapturedOutput {
                 stream: true,
-                format: format.unwrap_or_else(CaptureFormat::default),
+                format: format.unwrap_or_default(),
                 head: match limit {
                     Some(limit) => CaptureBuffer::capped(limit),
                     None => CaptureBuffer::all(),
@@ -231,10 +229,10 @@ pub(crate) fn vec_to_string(vec: Vec<u8>) -> Option<String> {
         return None;
     }
     let string = match String::from_utf8(vec) {
-        Ok(utf8) => utf8.to_owned(),
+        Ok(utf8) => utf8,
         Err(error) => error
             .as_bytes()
-            .into_iter()
+            .iter()
             .map(|&c| c as char)
             .collect::<String>(),
     };

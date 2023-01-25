@@ -25,8 +25,13 @@ pub(crate) mod store;
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
+use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
+};
+use ya_net::bind_broadcast_with_caller;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -77,7 +82,7 @@ impl Matcher {
             discovery,
             config,
             identity: identity_api,
-            expiration_tracker: DeadlineChecker::new().start(),
+            expiration_tracker: DeadlineChecker::default().start(),
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -109,10 +114,30 @@ impl Matcher {
         tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
         tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
 
+        self.bind_neighbourhood_bcast(local_prefix).await.ok();
+
         self.bind_expiration_tracker()
             .await
             .map_err(|e| MatcherInitError::ExpirationTrackerError(e.to_string()))?;
+
         Ok(())
+    }
+
+    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> Result<(), BindBroadcastError> {
+        let bcast_address = format!("{local_prefix}/{}", NewNeighbour::TOPIC);
+        let myself = self.clone();
+        bind_broadcast_with_caller(
+            &bcast_address,
+            move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+                let myself = myself.clone();
+                async move {
+                    debug!("Received new neighbour broadcast from [{}].", &caller);
+                    cyclic::bcast_offers_once(myself.clone()).await;
+                    Ok(())
+                }
+            },
+        )
+        .await
     }
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {
@@ -122,20 +147,18 @@ impl Matcher {
             async move {
                 let id = SubscriptionId::from_str(&msg.id);
                 match (&msg.category[..], &id) {
-                    ("Offer", Ok(id)) => match store.get_offer(id).await {
-                        Err(QueryOfferError::Expired(_)) => {
+                    ("Offer", Ok(id)) => {
+                        if let Err(QueryOfferError::Expired(_)) = store.get_offer(id).await {
                             log::info!("Offer [{}] expired.", id);
                             counter!("market.offers.expired", 1)
                         }
-                        _ => (),
-                    },
+                    }
                     ("Demand", Ok(id)) => {
-                        match store.db.as_dao::<DemandDao>().demand_state(id).await {
-                            Ok(DemandState::Expired(_)) => {
-                                log::info!("Demand [{}] expired.", id);
-                                counter!("market.demands.expired", 1)
-                            }
-                            _ => (),
+                        if let Ok(DemandState::Expired(_)) =
+                            store.db.as_dao::<DemandDao>().demand_state(id).await
+                        {
+                            log::info!("Demand [{}] expired.", id);
+                            counter!("market.demands.expired", 1)
                         }
                     }
                     _ => {}
@@ -238,7 +261,7 @@ impl Matcher {
             // If re-broadcasts are disabled, fallback to lazy broadcast binding
             self.discovery.bind_gsb_broadcast().await.map_or_else(
                 |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
                 },
                 |_| (),
             );
@@ -273,16 +296,15 @@ impl Matcher {
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self.store.get_active_offer_ids(Some(our_node_ids)).await?)
+        self.store.get_active_offer_ids(Some(our_node_ids)).await
     }
 
     pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self
-            .store
+        self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
-            .await?)
+            .await
     }
 }

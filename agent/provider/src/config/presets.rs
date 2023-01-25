@@ -17,7 +17,7 @@ pub struct PresetV0 {
     pub usage_coeffs: HashMap<String, f64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Presets {
     pub active: Vec<String>,
@@ -57,7 +57,7 @@ impl Presets {
             presets
                 .presets
                 .get(name)
-                .ok_or(anyhow!("Invalid active preset: {:?}", name))
+                .ok_or_else(|| anyhow!("Invalid active preset: {:?}", name))
                 .map(|_| ())
         })?;
 
@@ -100,15 +100,6 @@ impl Presets {
             });
 
         (updated.into_iter().collect(), removed.into_iter().collect())
-    }
-}
-
-impl Default for Presets {
-    fn default() -> Self {
-        Presets {
-            active: Vec::new(),
-            presets: HashMap::new(),
-        }
     }
 }
 

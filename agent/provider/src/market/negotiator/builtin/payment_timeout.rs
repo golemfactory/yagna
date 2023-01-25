@@ -8,9 +8,9 @@ use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
 };
 
-const PAYMENT_TIMEOUT_PROPERTY_FLAT: &'static str = "golem.com.scheme.payu.payment-timeout-sec?";
-pub const PAYMENT_TIMEOUT_PROPERTY: &'static str = "/golem/com/scheme/payu/payment-timeout-sec?";
-const EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+const PAYMENT_TIMEOUT_PROPERTY_FLAT: &str = "golem.com.scheme.payu.payment-timeout-sec?";
+pub const PAYMENT_TIMEOUT_PROPERTY: &str = "/golem/com/scheme/payu/payment-timeout-sec?";
+const EXPIRATION_PROPERTY: &str = "/golem/srv/comp/expiration";
 
 /// PaymentTimeout negotiator
 pub struct PaymentTimeout {
@@ -145,7 +145,8 @@ fn read_utc_timestamp(pointer: &str, proposal: &ProposalView) -> anyhow::Result<
         Ok(val) => {
             let secs = (val / 1000) as i64;
             let nsecs = 1_000_000 * (val % 1000) as u32;
-            let naive = NaiveDateTime::from_timestamp(secs, nsecs);
+            let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
+                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?;
             Ok(DateTime::from_utc(naive, Utc))
         }
         Err(err) => Err(err.into()),

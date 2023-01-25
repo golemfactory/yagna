@@ -1,12 +1,12 @@
 use crate::error::{DbError, DbResult};
 use crate::schema::{pay_invoice_event, pay_invoice_event_read};
 use crate::utils::{json_from_str, json_to_string};
-use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
-use ya_persistence::types::Role;
+use ya_persistence::types::{AdaptTimestamp, Role, TimestampAdapter};
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice_event"]
@@ -16,7 +16,7 @@ pub struct WriteObj {
     pub owner_id: NodeId,
     pub event_type: String,
     pub details: Option<String>,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: TimestampAdapter,
 }
 
 impl WriteObj {
@@ -31,26 +31,12 @@ impl WriteObj {
             None => None,
         };
 
-        // sqlite ignores fraction part of a seconds while automaticaly updating `timestamp`. That
-        // is why we have to set it here explicitly.
-        let naive_now = Utc::now().naive_utc();
-        // yapapi uses microsecond resolution, so we decrease our resolution from nanoseconds to
-        // microseconds also, to avoid returning single event two times (read more:
-        // https://github.com/golemfactory/yagna/pull/2086 )
-        let naive_time = naive_now.time();
-        let naive_time_micros = NaiveTime::from_hms_micro(
-            naive_time.hour(),
-            naive_time.minute(),
-            naive_time.second(),
-            naive_now.timestamp_subsec_micros(),
-        );
-        let timestamp = NaiveDateTime::new(naive_now.date(), naive_time_micros);
         Ok(Self {
             invoice_id,
             owner_id,
             event_type: event_type.to_string(),
             details,
-            timestamp,
+            timestamp: Utc::now().adapt(),
         })
     }
 }

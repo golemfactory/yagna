@@ -44,11 +44,7 @@ async fn test_session_events_filtering() {
     let mut agreements = vec![];
     for proposal_id in proposals.iter() {
         let agreement_id = req_engine
-            .create_agreement(
-                req_id.clone(),
-                &proposal_id,
-                Utc::now() + Duration::hours(1),
-            )
+            .create_agreement(req_id.clone(), proposal_id, Utc::now() + Duration::hours(1))
             .await
             .unwrap();
         agreements.push(agreement_id);
@@ -64,7 +60,7 @@ async fn test_session_events_filtering() {
     let confirm_timestamp = Utc::now();
     for (agreement_id, session_id) in agreements.iter().zip(sessions.iter()) {
         req_engine
-            .confirm_agreement(req_id.clone(), &agreement_id, Some(session_id.clone()))
+            .confirm_agreement(req_id.clone(), agreement_id, Some(session_id.clone()))
             .await
             .unwrap();
     }
@@ -582,7 +578,7 @@ async fn test_common_event_flow() {
 
     // Use max_events to query one event at the time.
     let mut current_timestamp = timestamp_before;
-    for i in 0..agreements.len() {
+    for agreement in &agreements {
         let events = req_market
             .query_agreement_events(
                 &Some("r-session".to_string()),
@@ -595,7 +591,7 @@ async fn test_common_event_flow() {
             .unwrap();
 
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].agreement_id, agreements[i].into_client());
+        assert_eq!(events[0].agreement_id, agreement.into_client());
 
         match &events[0].event_type {
             AgreementEventType::AgreementApprovedEvent {} => (),
@@ -604,7 +600,7 @@ async fn test_common_event_flow() {
                 e
             ),
         }
-        current_timestamp = events[0].event_date.clone();
+        current_timestamp = events[0].event_date;
     }
 
     // We don't expect any events anymore.

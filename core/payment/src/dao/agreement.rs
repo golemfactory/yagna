@@ -95,7 +95,7 @@ pub fn increase_amount_scheduled(
     amount: &BigDecimal,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
+    assert!(amount > &BigDecimal::zero()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -155,7 +155,7 @@ pub fn increase_amount_paid(
         invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
         invoice_event::create::<()>(
             invoice_id,
-            owner_id.clone(),
+            *owner_id,
             InvoiceEventType::InvoiceSettledEvent,
             None,
             conn,
@@ -199,7 +199,7 @@ impl<'a> AgreementDao<'a> {
                 .select(dsl::id)
                 .first(conn)
                 .optional()?;
-            if let Some(_) = existing {
+            if existing.is_some() {
                 return Ok(());
             }
 

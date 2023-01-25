@@ -39,7 +39,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
             .collect();
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
@@ -144,7 +144,10 @@ fn verify_hash<S: AsRef<str>, P: AsRef<Path>>(hash: &HashOutput, path: P, file_n
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("debug".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
+    );
     env_logger::init();
 
     log::debug!("Creating directories");
@@ -172,8 +175,8 @@ async fn main() -> anyhow::Result<()> {
         },
     ];
 
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::debug!(
         "Creating a random file of size {} * {}",
@@ -279,8 +282,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive TAR.GZ) -> HTTP");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(
         &addr,
@@ -296,8 +301,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive ZIP) -> HTTP");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("zip"));
+    let args = TransferArgs {
+        format: Some(String::from("zip")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(
         &addr,
@@ -313,8 +320,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer HTTP -> container (extract TAR.GZ)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     transfer_with_args(
         &addr,
         "http://127.0.0.1:8001/input.tar.gz",
@@ -333,8 +342,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer HTTP -> container (extract ZIP)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("zip"));
+    let args = TransferArgs {
+        format: Some(String::from("zip")),
+        ..Default::default()
+    };
     transfer_with_args(
         &addr,
         "http://127.0.0.1:8001/input.zip",
@@ -353,8 +364,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive TAR.GZ) -> container (extract TAR.GZ)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(&addr, "container:/input", "container:/extract", args).await?;
     log::warn!("Transfer complete");

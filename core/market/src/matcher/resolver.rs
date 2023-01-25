@@ -79,7 +79,7 @@ impl Resolver {
                     .get_demands_before(offer.insertion_ts.unwrap())
                     .await?
                     .into_iter()
-                    .filter(|demand| matches(&offer, &demand))
+                    .filter(|demand| matches(&offer, demand))
                     .for_each(|demand| self.emit_proposal(offer.clone(), demand));
             }
             Subscription::Demand(id) => {
@@ -88,7 +88,7 @@ impl Resolver {
                     .get_offers_before(demand.insertion_ts.unwrap())
                     .await?
                     .into_iter()
-                    .filter(|offer| matches(&offer, &demand))
+                    .filter(|offer| matches(offer, &demand))
                     .for_each(|offer| self.emit_proposal(offer, demand.clone()));
             }
         }

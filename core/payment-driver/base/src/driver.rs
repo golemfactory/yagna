@@ -61,7 +61,13 @@ pub trait PaymentDriver {
     fn get_networks(&self) -> HashMap<String, Network>;
     fn recv_init_required(&self) -> bool;
 
+    /// There is no guarentee that this method will be called only once
+    /// AccountMode in Init message should be incremental i.e. :
+    ///     first init with mode: Send
+    ///     second init with mode: Recv
+    ///     should result in driver capable of both Sending & Receiving
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;
 

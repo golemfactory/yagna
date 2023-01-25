@@ -32,7 +32,7 @@ impl From<ya_persistence::executor::Error> for Error {
 
 impl From<Error> for actix_web::HttpResponse {
     fn from(err: Error) -> Self {
-        err.error_response().into()
+        err.error_response()
     }
 }
 

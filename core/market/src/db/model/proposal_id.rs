@@ -44,7 +44,7 @@ impl Owner {
 
 const HASH_SUFFIX_LEN: usize = 64;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProposalIdParseError {
     #[error("Id [{0}] has invalid format.")]
     InvalidFormat(String),
@@ -56,7 +56,7 @@ pub enum ProposalIdParseError {
     InvalidLength(String),
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[error("Proposal id [{0}] has unexpected hash [{1}].")]
 pub struct ProposalIdValidationError(ProposalId, String);
 
@@ -77,12 +77,12 @@ impl ProposalId {
     ) -> ProposalId {
         ProposalId {
             owner,
-            id: hash_proposal(&offer_id, &demand_id, &creation_ts),
+            id: hash_proposal(offer_id, demand_id, creation_ts),
         }
     }
 
     pub fn owner(&self) -> Owner {
-        self.owner.clone()
+        self.owner
     }
 
     pub fn translate(mut self, new_owner: Owner) -> Self {
@@ -101,7 +101,7 @@ impl ProposalId {
         demand_id: &SubscriptionId,
         creation_ts: &NaiveDateTime,
     ) -> Result<(), ProposalIdValidationError> {
-        let hash = hash_proposal(&offer_id, &demand_id, &creation_ts);
+        let hash = hash_proposal(offer_id, demand_id, creation_ts);
         if self.id != hash {
             return Err(ProposalIdValidationError(self.clone(), hash));
         }
@@ -167,7 +167,7 @@ impl FromStr for Owner {
             Err(ProposalIdParseError::InvalidOwner(s.to_string()))?;
         }
 
-        Ok(match s.chars().nth(0).unwrap() {
+        Ok(match s.chars().next().unwrap() {
             'P' => Owner::Provider,
             'R' => Owner::Requestor,
             _ => Err(ProposalIdParseError::InvalidOwner(s.to_string()))?,

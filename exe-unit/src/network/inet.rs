@@ -13,6 +13,7 @@ use actix::prelude::*;
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::stream::{SplitSink, SplitStream};
+use futures::stream::BoxStream;
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::RwLock;
@@ -22,29 +23,31 @@ use tokio_util::udp::UdpFramed;
 
 use net::connection::{Connection, ConnectionMeta};
 use net::interface::tap_iface;
-use net::smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::socket::SocketDesc;
+use net::ya_smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
+use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
-use ya_utils_networking::vpn::common::{ntoh, DEFAULT_MAX_FRAME_SIZE};
+use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
-use ya_utils_networking::vpn::stack::smoltcp::wire::{EthernetAddress, HardwareAddress};
-use ya_utils_networking::vpn::stack::NetworkConfig;
+use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{EthernetAddress, HardwareAddress};
+use ya_utils_networking::vpn::stack::StackConfig;
 use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
 
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
-use crate::network;
-use crate::network::{Endpoint, RxBuffer};
+use crate::network::Endpoint;
 use crate::{Error, Result};
 
-const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
-const IP6_ADDRESS: std::net::Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
+// 10.0.0.0/8 is a reserved private address space
+const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
+const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
+const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
@@ -60,6 +63,7 @@ type TransportKey = (
 );
 
 pub(crate) async fn start_inet<R: RuntimeService>(
+    mut endpoint: Endpoint,
     service: &R,
     filter: Option<UrlValidator>,
 ) -> Result<Addr<Inet>> {
@@ -70,7 +74,7 @@ pub(crate) async fn start_inet<R: RuntimeService>(
     let ip4_net = ipnet::Ipv4Net::new(IP4_ADDRESS, DEFAULT_PREFIX_LEN).unwrap();
     // let ip6_net = ipnet::Ipv6Net::new(IP6_ADDRESS, 128 - DEFAULT_PREFIX_LEN).unwrap();
 
-    let ip4_addr = ip4_net.hosts().skip(1).next().unwrap();
+    let ip4_addr = ip4_net.hosts().nth(1).unwrap();
     // let ip6_addr = ip6_net.hosts().skip(1).next().unwrap();
 
     let networks = [
@@ -98,9 +102,17 @@ pub(crate) async fn start_inet<R: RuntimeService>(
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match response.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("endpoint already connected".into())),
+    match response.endpoint {
+        Some(ep) => {
+            let cep = ContainerEndpoint::try_from(&ep)
+                .map_err(|e| Error::Other(format!("Invalid endpoint '{ep:?}': {e}")))?;
+            endpoint.connect(cep).await?
+        }
+        None => {
+            return Err(Error::Other(
+                "No VM INET network endpoint in CreateNetwork response".into(),
+            ))
+        }
     };
 
     Ok(Inet::new(endpoint, filter).start())
@@ -124,9 +136,9 @@ impl Inet {
     }
 
     fn create_network() -> net::Network {
-        let config = Rc::new(NetworkConfig {
-            max_transmission_unit: DEFAULT_MAX_FRAME_SIZE,
-            buffer_size_multiplier: 4,
+        let config = Rc::new(StackConfig {
+            max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
+            ..Default::default()
         });
 
         let ethernet_addr = loop {
@@ -157,10 +169,18 @@ impl Actor for Inet {
 
         let router = Router::new(self.network.clone(), self.proxy.clone());
 
-        let endpoint_rx = match self.endpoint.rx.take() {
-            Some(rx) => rx,
-            None => {
-                log::error!("[inet] local endpoint missing");
+        let tx = match self.endpoint.sender() {
+            Ok(tx) => tx,
+            Err(err) => {
+                log::error!("[inet] {err}");
+                ctx.stop();
+                return;
+            }
+        };
+        let rx = match self.endpoint.receiver() {
+            Ok(rx) => rx,
+            Err(err) => {
+                log::error!("[inet] {err}");
                 ctx.stop();
                 return;
             }
@@ -176,7 +196,7 @@ impl Actor for Inet {
             .egress_receiver()
             .expect("Egress receiver already taken");
 
-        inet_endpoint_egress_handler(endpoint_rx, router)
+        inet_endpoint_egress_handler(rx, router)
             .into_actor(self)
             .spawn(ctx);
 
@@ -184,7 +204,7 @@ impl Actor for Inet {
             .into_actor(self)
             .spawn(ctx);
 
-        inet_egress_handler(egress_rx, self.endpoint.tx.clone())
+        inet_egress_handler(egress_rx, tx)
             .into_actor(self)
             .spawn(ctx);
     }
@@ -208,26 +228,19 @@ impl Handler<Shutdown> for Inet {
     }
 }
 
-async fn inet_endpoint_egress_handler(
-    mut rx: Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>,
-    router: Router,
-) {
-    let mut rx_buf = RxBuffer::default();
-
+async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>>, router: Router) {
     while let Some(result) = rx.next().await {
-        let received = match result {
+        let packet = match result {
             Ok(vec) => vec,
             Err(err) => return log::debug!("[inet] runtime -> inet error: {}", err),
         };
 
-        for packet in rx_buf.process(received) {
-            router.handle(&packet).await;
+        router.handle(&packet).await;
 
-            log::debug!("[inet] runtime -> inet packet {:?}", packet);
+        log::trace!("[inet] runtime -> inet packet {:?}", packet);
 
-            router.network.receive(packet);
-            router.network.poll();
-        }
+        router.network.receive(packet);
+        router.network.poll();
     }
 }
 
@@ -254,7 +267,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
-                    log::debug!("[inet] ingress proxy: send to {:?}", desc.local);
+                    log::trace!("[inet] ingress proxy: send to {:?}", desc.local);
 
                     if let Err(e) = sender.send(Bytes::from(payload)).await {
                         log::debug!("[inet] ingress proxy: send error: {}", e);
@@ -271,15 +284,14 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
 
 async fn inet_egress_handler<E: std::fmt::Display>(
     rx: EgressReceiver,
-    mut fwd: impl Sink<Result<Vec<u8>>, Error = E> + Unpin + 'static,
+    fwd: tokio::sync::mpsc::UnboundedSender<std::result::Result<Vec<u8>, E>>,
 ) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        let mut frame = event.payload.into_vec();
-        log::debug!("[inet] egress -> runtime packet {} B", frame.len());
+        let frame = event.payload.into_vec();
+        log::trace!("[inet] egress -> runtime packet {} B", frame.len());
 
-        network::write_prefix(&mut frame);
-        if let Err(e) = fwd.send(Ok(frame)).await {
+        if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {}", e);
         }
     }
@@ -336,12 +348,12 @@ fn ip_packet_to_socket_desc(ip_packet: &IpPacket) -> Result<SocketDesc> {
 
     let (sender_port, listen_port) = match protocol {
         Protocol::Tcp => {
-            let _ = TcpPacket::peek(ip_packet.payload())?;
+            TcpPacket::peek(ip_packet.payload())?;
             let pkt = TcpPacket::packet(ip_packet.payload());
             (pkt.src_port(), pkt.dst_port())
         }
         Protocol::Udp => {
-            let _ = UdpPacket::peek(ip_packet.payload())?;
+            UdpPacket::peek(ip_packet.payload())?;
             let pkt = UdpPacket::packet(ip_packet.payload());
             (pkt.src_port(), pkt.dst_port())
         }
@@ -402,12 +414,12 @@ impl Proxy {
 
     async fn exists(&self, key: &TransportKey) -> bool {
         let state = self.state.read().await;
-        state.remotes.contains_key(&key)
+        state.remotes.contains_key(key)
     }
 
     async fn get(&self, key: &TransportKey) -> Option<TransportSender> {
         let state = self.state.read().await;
-        state.remotes.get(&key).cloned()
+        state.remotes.get(key).cloned()
     }
 
     async fn bind(&self, desc: SocketDesc) -> Result<impl Future<Output = ()> + 'static> {
@@ -484,15 +496,8 @@ impl Proxy {
                     conn
                 );
 
-                match network.send(vec, conn.clone()) {
-                    Ok(fut) => {
-                        if let Err(e) = fut.await {
-                            log::debug!("[inet] proxy conn: forward error: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        log::debug!("[inet] proxy conn: send error: {}", e);
-                    }
+                if let Err(e) = network.send(vec, conn).await {
+                    log::debug!("[inet] proxy conn: send error: {}", e);
                 };
             }
 
@@ -526,7 +531,7 @@ async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, T
         .map_err(|e| Error::Other(e.to_string()))?;
     let _ = tcp_stream.set_nodelay(true);
 
-    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE);
+    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_PACKET_SIZE);
     let (tx, rx) = stream.split();
     Ok((
         TransportSender::Tcp(Arc::new(Mutex::new(tx))),
@@ -603,10 +608,10 @@ fn bind_local_address(
 ) -> anyhow::Result<()> {
     match (*dst_addr, local_addr_ipv4, local_addr_ipv6) {
         (SocketAddr::V4(_), Some(addr), _) => {
-            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+            socket.bind(&SocketAddr::new((*addr).into(), 0).into())?;
         }
         (SocketAddr::V6(_), _, Some(addr)) => {
-            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+            socket.bind(&SocketAddr::new((*addr).into(), 0).into())?;
         }
         _ => {
             if cfg!(windows) {

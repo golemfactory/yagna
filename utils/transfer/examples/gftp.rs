@@ -32,7 +32,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
         let input: Vec<u8> = (0..chunk_size).map(|_| rng.gen_range(0..=255u8)).collect();
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
@@ -55,12 +55,15 @@ fn hash_file(path: &Path) -> HashOutput {
 
 #[actix_rt::main]
 async fn main() -> Result<(), Error> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    );
     env_logger::init();
 
     let temp_dir = TempDir::new("transfer").unwrap();
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::info!(
         "Creating a random file of size {} * {}",

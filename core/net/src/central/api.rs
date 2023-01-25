@@ -46,7 +46,7 @@ where
     // will broadcast any Message related to this Topic.
     let subscribe_msg = M::into_subscribe_msg(broadcast_address);
     {
-        let mut subscriptions = SUBSCRIPTIONS.lock().unwrap();
+        let mut subscriptions = SUBSCRIPTIONS.lock().await;
         subscriptions.insert(subscribe_msg.clone());
     }
 

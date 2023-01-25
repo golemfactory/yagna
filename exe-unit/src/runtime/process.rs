@@ -18,13 +18,14 @@ use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;
 use crate::error::Error;
-use crate::manifest::UrlValidator;
+use crate::manifest::{ManifestContext, UrlValidator};
 use crate::message::{
     CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
 };
 use crate::network::inet::start_inet;
 use crate::network::inet::Inet;
 use crate::network::vpn::{start_vpn, Vpn};
+use crate::network::Endpoint;
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
@@ -91,7 +92,7 @@ impl RuntimeProcess {
         let result = child.wait_with_output()?;
         match result.status.success() {
             true => {
-                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                let stdout = vec_to_string(result.stdout).unwrap_or_default();
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
                     Error::Other(msg)
@@ -176,6 +177,7 @@ impl RuntimeProcess {
         };
 
         let binary = self.binary.clone();
+        let work_dir = self.ctx.work_dir.clone();
 
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
@@ -186,6 +188,7 @@ impl RuntimeProcess {
 
         async move {
             let mut child = Command::new(binary)
+                .current_dir(&work_dir)
                 .args(rt_args)
                 .kill_on_drop(true)
                 .stdout(Stdio::piped())
@@ -240,28 +243,49 @@ impl RuntimeProcess {
         args: Vec<String>,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let mut rt_args = match self.args() {
-            Ok(rt_args) => rt_args,
-            Err(err) => return Box::pin(future::err(err)),
-        };
-        rt_args.arg("start").args(args);
-
-        log::info!(
-            "Executing {:?} with {:?} from path {:?}",
-            self.binary,
-            rt_args,
-            std::env::current_dir()
-        );
-
-        let mut command = Command::new(&self.binary);
-        command.args(rt_args);
-
-        let proc_ctx = self.ctx.clone();
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
 
+        let rt_ctx = self.ctx.clone();
+        let rt_binary = self.binary.clone();
+        let mut rt_args = match self.args() {
+            Ok(rt_args) => rt_args,
+            Err(err) => return Box::pin(future::err(err)),
+        };
+
         async move {
+            let vpn_endpoint = if rt_ctx.manifest.features().contains(&Feature::Vpn) {
+                let endpoint = Endpoint::default_transport().await?;
+                rt_args.arg("--vpn-endpoint");
+                rt_args.arg(endpoint.local().to_string());
+                Some(endpoint)
+            } else {
+                None
+            };
+
+            let inet_endpoint = if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                let endpoint = Endpoint::default_transport().await?;
+                rt_args.arg("--inet-endpoint");
+                rt_args.arg(endpoint.local().to_string());
+                Some(endpoint)
+            } else {
+                None
+            };
+
+            rt_args.arg("start").args(args);
+
+            log::info!(
+                "Executing {:?} with {:?} from path {:?}",
+                rt_binary,
+                rt_args,
+                std::env::current_dir()
+            );
+
+            let mut command = Command::new(&rt_binary);
+            command.current_dir(&rt_ctx.work_dir);
+            command.args(rt_args);
+
             let service = spawn(command, monitor.clone())
                 .map_err(Error::runtime)
                 .await?;
@@ -277,13 +301,20 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let net = async {
-                if proc_ctx.feature_inet {
-                    let inet = start_inet(&service_, proc_ctx.feature_inet_filter).await?;
+                if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                    let inet = start_inet(
+                        inet_endpoint.unwrap(),
+                        &service_,
+                        rt_ctx.manifest.validator::<UrlValidator>(),
+                    )
+                    .await?;
                     address.send(SetInetService(inet)).await?;
                 }
 
-                if proc_ctx.feature_vpn {
-                    if let Some(vpn) = start_vpn(acl, &service_, &deployment).await? {
+                if rt_ctx.manifest.features().contains(&Feature::Vpn) {
+                    if let Some(vpn) =
+                        start_vpn(vpn_endpoint.unwrap(), acl, &service_, &deployment).await?
+                    {
                         address.send(SetVpnService(vpn)).await?;
                     }
                 }
@@ -330,9 +361,11 @@ impl RuntimeProcess {
                 .ok_or_else(|| Error::runtime("Invalid binary name"))?;
             args.insert(0, name.to_string_lossy().to_string());
 
-            let mut run_process = RunProcess::default();
-            run_process.bin = entry_point;
-            run_process.args = args;
+            let run_process = RunProcess {
+                bin: entry_point,
+                args,
+                ..Default::default()
+            };
 
             let handle = monitor.next_process(ctx);
             if let Err(error) = service.run_process(run_process).await {
@@ -454,7 +487,7 @@ impl Handler<Shutdown> for RuntimeProcess {
         let proc = self.service.take();
         let vpn = self.vpn.take();
         let inet = self.inet.take();
-        let mut children = std::mem::replace(&mut self.children, HashSet::new());
+        let mut children = std::mem::take(&mut self.children);
 
         log::info!("Shutting down the runtime process: {:?}", msg.0);
 
@@ -482,23 +515,18 @@ struct RuntimeProcessContext {
     supervise_image: bool,
     supervise_hardware: bool,
     infrastructure: HashMap<String, f64>,
-    feature_vpn: bool,
-    feature_inet: bool,
-    feature_inet_filter: Option<UrlValidator>,
+    manifest: ManifestContext,
 }
 
 impl<'a> From<&'a ExeUnitContext> for RuntimeProcessContext {
     fn from(ctx: &'a ExeUnitContext) -> Self {
-        let manifest = &ctx.supervise.manifest;
         Self {
             work_dir: ctx.work_dir.clone(),
             runtime_args: ctx.runtime_args.clone(),
             supervise_image: ctx.supervise.image,
             supervise_hardware: ctx.supervise.hardware,
             infrastructure: ctx.agreement.infrastructure.clone(),
-            feature_vpn: manifest.features().contains(&Feature::Vpn),
-            feature_inet: manifest.features().contains(&Feature::Inet),
-            feature_inet_filter: manifest.validator::<UrlValidator>(),
+            manifest: ctx.supervise.manifest.clone(),
         }
     }
 }
@@ -535,10 +563,7 @@ struct ChildProcessGuard {
 impl ChildProcessGuard {
     fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
         addr.do_send(AddChildProcess(inner.clone()));
-        ChildProcessGuard {
-            inner,
-            addr: addr.clone(),
-        }
+        ChildProcessGuard { inner, addr }
     }
 }
 

@@ -8,9 +8,9 @@ use crate::github::check_running_release;
 use crate::service::cli::ReleaseMessage;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
-    check_running_release(&db).await?;
+    check_running_release(db).await?;
 
-    if let Err(e) = github::check_latest_release(&db).await {
+    if let Err(e) = github::check_latest_release(db).await {
         log::error!("Failed to check for new Yagna release: {}", e);
     };
 
@@ -42,7 +42,7 @@ pub(crate) async fn pinger(db: DbExecutor) -> ! {
         match release_dao.pending_release().await {
             Ok(Some(release)) => {
                 if !release.seen {
-                    log::warn!("{}", ReleaseMessage::Available(&release.into()))
+                    log::warn!("{}", ReleaseMessage::Available(&release))
                 }
             }
             Ok(None) => log::trace!("Your Yagna is up to date"),

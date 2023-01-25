@@ -36,9 +36,9 @@ async fn get_resources() -> Result<Resources> {
     let active_profile =
         move_string_out_of_json(active_profile).ok_or_else(|| anyhow!("Invalid format"))?;
 
-    Ok(profiles
+    profiles
         .remove(&active_profile)
-        .ok_or_else(|| anyhow!("Active profile not found???"))?)
+        .ok_or_else(|| anyhow!("Active profile not found???"))
 }
 
 pub async fn show_resources() -> Result<()> {
@@ -87,7 +87,7 @@ pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
     for (preset_name, prices) in presets_prices {
         println!("\n\nPricing for preset \"{}\":\n", preset_name);
         for (price_name, price_value) in prices {
-            let default: (&str, f64) = (&price_name.as_str(), 1.0);
+            let default: (&str, f64) = (price_name.as_str(), 1.0);
             let (price_desc, price_multiplier) = price_description
                 .get(&price_name.as_str())
                 .unwrap_or(&default);

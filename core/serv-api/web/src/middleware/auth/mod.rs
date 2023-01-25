@@ -3,35 +3,30 @@ pub mod ident;
 pub mod resolver;
 
 pub use crate::middleware::auth::ident::Identity;
-use crate::middleware::auth::resolver::AppKeyResolver;
+pub use crate::middleware::auth::resolver::AppKeyCache;
+
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::{Error, ErrorUnauthorized, ParseError};
 use actix_web::HttpMessage;
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
-use futures::lock::Mutex;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::task::{Context, Poll};
-use ya_service_api_cache::AutoResolveCache;
-
-pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 pub struct Auth {
-    cache: Arc<Mutex<Cache>>,
+    pub(crate) cache: AppKeyCache,
 }
 
-impl Default for Auth {
-    fn default() -> Self {
-        let cache = Arc::new(Mutex::new(Cache::default()));
+impl Auth {
+    pub fn new(cache: AppKeyCache) -> Auth {
         Auth { cache }
     }
 }
 
-impl<'s, S, B> Transform<S, ServiceRequest> for Auth
+impl<S, B> Transform<S, ServiceRequest> for Auth
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
@@ -53,7 +48,7 @@ where
 
 pub struct AuthMiddleware<S> {
     service: Rc<RefCell<S>>,
-    cache: Arc<Mutex<Cache>>,
+    cache: AppKeyCache,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
@@ -87,30 +82,21 @@ where
 
         Box::pin(async move {
             match header {
-                Some(key) => {
-                    let cached = cache.lock().await.get(&key);
-                    let resolved = match cached {
-                        Some(opt) => opt,
-                        None => cache.lock().await.resolve(&key).await,
-                    };
-
-                    match resolved {
-                        Some(app_key) => {
-                            req.extensions_mut().insert(Identity::from(app_key));
-                            let fut = { service.borrow_mut().call(req) };
-                            Ok(fut.await?)
-                        }
-                        None => {
-                            log::debug!(
-                                "{} {} Invalid application key: {}",
-                                req.method(),
-                                req.path(),
-                                key
-                            );
-                            Err(ErrorUnauthorized("Invalid application key"))
-                        }
+                Some(key) => match cache.get_appkey(&key) {
+                    Some(app_key) => {
+                        req.extensions_mut().insert(Identity::from(app_key));
+                        let fut = { service.borrow_mut().call(req) };
+                        Ok(fut.await?)
                     }
-                }
+                    None => {
+                        log::debug!(
+                            "{} {} Invalid application key: {key}",
+                            req.method(),
+                            req.path(),
+                        );
+                        Err(ErrorUnauthorized("Invalid application key"))
+                    }
+                },
                 None => {
                     log::debug!("Missing application key");
                     Err(ErrorUnauthorized("Missing application key"))
@@ -120,10 +106,10 @@ where
     }
 }
 
-fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
+pub(crate) fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
     let header = msg
         .headers()
         .get(actix_web::http::header::AUTHORIZATION)
         .ok_or(ParseError::Header)?;
-    Ok(S::parse(header).map_err(|_| ParseError::Header)?)
+    S::parse(header).map_err(|_| ParseError::Header)
 }

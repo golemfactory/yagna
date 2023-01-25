@@ -81,7 +81,7 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
         let account_msg = &config
             .account
             .map(|n| n.to_string())
-            .unwrap_or("Internal Golem wallet".into());
+            .unwrap_or_else(|| "Internal Golem wallet".into());
         let message = format!(
             "Ethereum {} wallet address (default={})",
             run_config.account.network, account_msg

@@ -155,7 +155,7 @@ fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
 pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
     let (key_file, _) = generate_new_secret(password);
 
-    Ok(serde_json::to_string(&key_file).context("serialize keyfile")?)
+    serde_json::to_string(&key_file).context("serialize keyfile")
 }
 
 #[cfg(test)]

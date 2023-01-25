@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -106,10 +108,10 @@ pub fn get_polygon_maximum_price() -> f64 {
 }
 
 pub fn get_polygon_max_gas_price_dynamic() -> f64 {
-    return std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
+    std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(1000.0f64);
+        .unwrap_or(1000.0f64)
 }
 
 pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
@@ -127,7 +129,7 @@ pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
 
 pub fn get_polygon_priority() -> PolygonPriority {
     match std::env::var("POLYGON_PRIORITY")
-        .unwrap_or("default".to_string())
+        .unwrap_or_else(|_| "default".to_string())
         .to_lowercase()
         .as_str()
     {
@@ -222,7 +224,7 @@ where
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
-    with_clients(network, |client| block_number_with(client)).await
+    with_clients(network, block_number_with).await
 }
 
 async fn block_number_with(client: Web3<Http>) -> Result<U64, ClientError> {
@@ -292,7 +294,7 @@ pub async fn sign_raw_transfer_transaction(
 ) -> Result<Vec<u8>, GenericError> {
     let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    let signature = bus::sign(node_id, eth_utils::get_tx_hash(tx, chain_id)).await?;
     Ok(signature)
 }
 
@@ -359,9 +361,9 @@ async fn prepare_raw_transaction_with(
     };
 
     let gas_limit = match network {
-        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
-        Network::Mumbai => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
-        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, U256::from),
+        Network::Mumbai => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, U256::from),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, U256::from),
     };
 
     let tx = YagnaRawTransaction {
@@ -550,7 +552,7 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
 fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
     std::env::var(env)
         .ok()
-        .unwrap_or(default.to_string())
+        .unwrap_or_else(|| default.to_string())
         .split(',')
         .map(|path| path.to_string())
         .collect()

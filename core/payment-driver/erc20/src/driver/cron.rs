@@ -50,7 +50,7 @@ lazy_static! {
 }
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
-    let network = Network::from_str(&network_key).unwrap();
+    let network = Network::from_str(network_key).unwrap();
     let txs = dao.get_unconfirmed_txs(network).await;
     //log::debug!("confirm_payments {:?}", txs);
     let current_time = Utc::now().naive_utc();
@@ -81,7 +81,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             };
 
             let mut tmp_onchain_txs_vec: Vec<&str> = vec![];
-            for str in tmp_onchain_txs.split(";") {
+            for str in tmp_onchain_txs.split(';') {
                 if str.len() > 2 {
                     //todo make proper validation of transaction hash
                     tmp_onchain_txs_vec.push(str);
@@ -119,19 +119,19 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     }
                 }
             }
-            if tx.status == TransactionStatus::ErrorSent as i32 {
-                if time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION {
-                    log::info!("Transaction not sent, retrying");
-                    log::warn!(
-                        "Transaction not found on chain for {:?}",
-                        time_elapsed_from_sent
-                    );
-                    log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
-                    dao.retry_send_transaction(&tx.tx_id, false).await;
-                }
+            if tx.status == TransactionStatus::ErrorSent as i32
+                && time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION
+            {
+                log::info!("Transaction not sent, retrying");
+                log::warn!(
+                    "Transaction not found on chain for {:?}",
+                    time_elapsed_from_sent
+                );
+                log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
+                dao.retry_send_transaction(&tx.tx_id, false).await;
             }
 
-            if tmp_onchain_txs_vec.len() == 0 {
+            if tmp_onchain_txs_vec.is_empty() {
                 continue;
             }
 
@@ -165,10 +165,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
-            let final_gas_price = match s.gas_price {
-                Some(gas_price) => Some(gas_price.to_string()),
-                None => None,
-            };
+            let final_gas_price = s.gas_price.map(|gas_price| gas_price.to_string());
 
             if !s.exists_on_chain {
                 log::info!("Transaction not found on chain");
@@ -253,13 +250,13 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         continue;
                     }
                 };
-                let details = match wallet::verify_tx(&newest_tx, network).await {
+                let details = match wallet::verify_tx(newest_tx, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from erc20, creating bespoke details. Error={}", e);
 
                         let first_payment: PaymentEntity =
-                            match dao.get_first_payment(&newest_tx).await {
+                            match dao.get_first_payment(newest_tx).await {
                                 Some(p) => p,
                                 None => continue,
                             };
@@ -271,7 +268,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         let mut details = utils::db_to_payment_details(&first_payment);
                         details.amount = payments
                             .into_iter()
-                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                             .sum::<BigDecimal>();
                         details
                     }
@@ -329,7 +326,7 @@ pub async fn process_payments_for_account(
         );
         let mut nonce = wallet::get_next_nonce(
             dao,
-            crate::erc20::utils::str_to_addr(&node_id).unwrap(),
+            crate::erc20::utils::str_to_addr(node_id).unwrap(),
             network,
         )
         .await
@@ -344,7 +341,7 @@ pub async fn process_payments_for_account(
 
         log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
         for payment in payments {
-            handle_payment(&dao, payment, &mut nonce).await;
+            handle_payment(dao, payment, &mut nonce).await;
         }
     }
     Ok(())

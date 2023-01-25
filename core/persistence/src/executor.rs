@@ -61,7 +61,7 @@ fn connection_customizer(
             let mut lock_cnt = self.0.write().unwrap();
             *lock_cnt += 1;
             log::trace!("on_acquire connection [rw:{}]", *lock_cnt);
-            Ok(conn.batch_execute(CONNECTION_INIT).map_err(|e| {
+            conn.batch_execute(CONNECTION_INIT).map_err(|e| {
                 log::error!(
                     "error: {:?}, on: {}, [lock: {}]",
                     e,
@@ -69,7 +69,7 @@ fn connection_customizer(
                     *lock_cnt
                 );
                 diesel::r2d2::Error::QueryError(e)
-            })?)
+            })
         }
 
         fn on_release(&self, _conn: SqliteConnection) {
@@ -97,7 +97,7 @@ impl DbExecutor {
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
 
         let builder = Pool::builder().connection_customizer(Box::new(connection_customizer(
-            database_url.clone(),
+            database_url,
             tx_lock.clone(),
         )));
 
@@ -124,7 +124,7 @@ impl DbExecutor {
     pub fn from_env() -> Result<Self, Error> {
         dotenv().ok();
 
-        let database_url = env::var_os("DATABASE_URL").unwrap_or("".into());
+        let database_url = env::var_os("DATABASE_URL").unwrap_or_else(|| "".into());
         Self::new(database_url.to_string_lossy())
     }
 
@@ -225,7 +225,7 @@ where
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
-        let _ = pool.tx_lock.read().unwrap();
+        let _guard = pool.tx_lock.read().unwrap();
         f(&conn)
     })
     .await
@@ -250,6 +250,7 @@ where
     do_with_rw_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
 }
 
+#[allow(clippy::let_and_return)]
 pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
     f: F,

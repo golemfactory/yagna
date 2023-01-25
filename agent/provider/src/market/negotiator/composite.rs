@@ -17,6 +17,7 @@ use crate::market::negotiator::common::{
 use crate::market::negotiator::factory::CompositeNegotiatorConfig;
 use crate::market::negotiator::{NegotiatorComponent, ProposalView};
 use crate::market::ProviderMarket;
+use crate::provider_agent::AgentNegotiatorsConfig;
 
 /// Negotiator that can limit number of running agreements.
 pub struct CompositeNegotiator {
@@ -27,8 +28,9 @@ impl CompositeNegotiator {
     pub fn new(
         _market: Addr<ProviderMarket>,
         config: &CompositeNegotiatorConfig,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
     ) -> anyhow::Result<CompositeNegotiator> {
-        let components = NegotiatorsPack::new()
+        let components = NegotiatorsPack::default()
             .add_component(
                 "LimitAgreements",
                 Box::new(MaxAgreements::new(&config.limit_agreements_config)),
@@ -47,7 +49,10 @@ impl CompositeNegotiator {
             )
             .add_component(
                 "ManifestSignature",
-                Box::new(ManifestSignature::from(config.policy_config.clone())),
+                Box::new(ManifestSignature::new(
+                    &config.policy_config.clone(),
+                    agent_negotiators_cfg,
+                )),
             );
 
         Ok(CompositeNegotiator { components })
@@ -168,7 +173,7 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
             }
             NegotiationResult::Negotiating { .. } => Ok(AgreementResponse::RejectAgreement {
                 reason: Some(reason_with_extra(
-                    format!("Negotiations aren't finished."),
+                    "Negotiations aren't finished.".to_string(),
                     serde_json::json!({ "golem.proposal.rejection.is-final": false }),
                 )),
                 is_final: false,

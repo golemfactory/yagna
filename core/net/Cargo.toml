@@ -1,6 +1,6 @@
 [package]
 name = "ya-net"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -8,24 +8,27 @@ edition = "2018"
 default = []
 service = []
 # Temporary to make goth integration tests work
-hybrid-net = []
+central-net = []
 
 [dependencies]
-ya-client-model = "0.4"
-ya-core-model = { version = "^0.7", features=["net", "identity"] }
+ya-client-model = "0.5"
+ya-core-model = { version = "^0.8", features=["net", "identity"] }
 
-# ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "11e4f7116856cad0ba66b0ec12cba753f804d439" }
+ya-relay-client = "0.5"
+#ya-relay-client = { path = "../../../ya-relay/client" }
+#ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "f1009ec013d27795a56c6493447836a851352b72" }
 
-ya-sb-proto = { version = "0.4" }
+ya-sb-proto = { version = "0.6.1" }
+ya-sb-util = { version = "0.4.1" }
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.4"
-ya-utils-networking = "0.1"
+ya-service-api-interfaces = "0.2"
+ya-service-bus = "0.6.1"
+ya-utils-networking = "0.2"
 
 actix = "0.13"
 actix-web = "4"
 anyhow = "1.0"
+chrono = "0.4"
 futures = "0.3"
 humantime = "2.1"
 lazy_static = "1.4"
@@ -46,9 +49,10 @@ prost = { version = "0.10" }
 rand = { version = "0.7"}
 
 [dev-dependencies]
-ya-sb-proto = "0.4"
-ya-sb-router = "0.4"
+ya-sb-proto = "0.6.1"
+ya-sb-router = "0.6.1"
 
 env_logger = "0.7"
 serde = "1.0"
 structopt = "0.3"
+test-case = "2"

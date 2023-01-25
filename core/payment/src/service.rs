@@ -4,7 +4,6 @@ use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -174,8 +173,9 @@ mod local {
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
-        let token = token.unwrap_or(network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
+        let token = token.unwrap_or_else(|| network_details.default_token.clone());
+        let after_timestamp = NaiveDateTime::from_timestamp_opt(after_timestamp, 0)
+            .expect("Failed on out-of-range number of seconds");
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
@@ -188,33 +188,21 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
@@ -329,7 +317,8 @@ mod local {
         _caller: String,
         msg: ReleaseAllocations,
     ) -> Result<(), GenericError> {
-        Ok(processor.lock().await.release_allocations(true).await)
+        processor.lock().await.release_allocations(true).await;
+        Ok(())
     }
 
     async fn get_drivers(
@@ -350,7 +339,8 @@ mod local {
         // It's crucial to drop the lock on processor (hence assigning the future to a variable).
         // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
         let shutdown_future = processor.lock().await.shut_down(msg.timeout);
-        Ok(shutdown_future.await)
+        shutdown_future.await;
+        Ok(())
     }
 }
 
@@ -402,7 +392,12 @@ mod public {
         );
         counter!("payment.debit_notes.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -421,7 +416,7 @@ mod public {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = agreement.requestor_id().clone();
+        let node_id = *agreement.requestor_id();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -444,8 +439,8 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
-            Err(e) => return Err(SendError::ServiceError(e.to_string())),
+            Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
+            Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
     }
 
@@ -467,7 +462,7 @@ mod public {
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
-            Ok(Some(debit_note)) => debit_note.into(),
+            Ok(Some(debit_note)) => debit_note,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
@@ -501,7 +496,7 @@ mod public {
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }
@@ -541,7 +536,12 @@ mod public {
         );
         counter!("payment.invoices.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -555,7 +555,12 @@ mod public {
         };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone(), core::Role::Requestor).await {
+            match provider::get_agreement_id(
+                activity_id.clone(),
+                ya_client_model::market::Role::Requestor,
+            )
+            .await
+            {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",
@@ -579,7 +584,7 @@ mod public {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = agreement.requestor_id().clone();
+        let node_id = *agreement.requestor_id();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -605,8 +610,8 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
-            Err(e) => return Err(SendError::ServiceError(e.to_string())),
+            Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
+            Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
     }
 
@@ -628,7 +633,7 @@ mod public {
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
-            Ok(Some(invoice)) => invoice.into(),
+            Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
@@ -662,7 +667,7 @@ mod public {
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }
@@ -691,7 +696,7 @@ mod public {
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
-            Ok(Some(invoice)) => invoice.into(),
+            Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(CancelError::ObjectNotFound),
             Err(e) => return Err(CancelError::ServiceError(e.to_string())),
         };

@@ -1,4 +1,4 @@
-use crate::startup_config::{GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
+use crate::startup_config::{CERT_DIR, GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
 use anyhow::{bail, Result};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -22,6 +22,7 @@ fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
         (HARDWARE_JSON, false),
         (PRESETS_JSON, false),
         (GLOBALS_JSON, false),
+        (CERT_DIR, false),
     ];
 
     dir.as_ref()
@@ -64,10 +65,8 @@ fn clean_dir<P: AsRef<Path>>(dir: P, min_depth: usize, lifetime: Duration, dry_r
                 }
         })
         .fold(0, |acc, path_meta| {
-            if !dry_run {
-                if let Err(_) = std::fs::remove_file(&path_meta.0) {
-                    return acc;
-                }
+            if !dry_run && std::fs::remove_file(&path_meta.0).is_err() {
+                return acc;
             }
             acc + path_meta.1.len()
         });

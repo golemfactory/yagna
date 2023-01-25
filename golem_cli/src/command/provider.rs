@@ -1,5 +1,6 @@
 use anyhow::Context;
 use serde::Deserialize;
+use std::ffi::OsStr;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -8,7 +9,7 @@ pub use ya_provider::GlobalsState as ProviderConfig;
 use crate::command::{NetworkGroup, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 
-const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasmtime", "vm"];
+const CLASSIC_RUNTIMES: &[&str] = &["wasmtime", "vm"];
 
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
@@ -62,7 +63,7 @@ impl YaProviderCommand {
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
         }
-        for n in NETWORK_GROUP_MAP[&network_group].iter() {
+        for n in NETWORK_GROUP_MAP[network_group].iter() {
             cmd.args(&["--payment-network", &n.to_string()]);
         }
 
@@ -207,9 +208,9 @@ impl YaProviderCommand {
         exeunit_name: &str,
         usage_coeffs: &UsageDef,
     ) -> anyhow::Result<()> {
-        let mut cmd = &mut self.cmd;
+        let cmd = &mut self.cmd;
         cmd.args(&["preset", "update", "--no-interactive"]);
-        preset_command(&mut cmd, name, exeunit_name, usage_coeffs);
+        preset_command(cmd, name, exeunit_name, usage_coeffs);
         cmd.arg("--").arg(name);
         self.exec_no_output()
             .await
@@ -266,23 +267,6 @@ impl YaProviderCommand {
         }
     }
 
-    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
-        let mut cmd = self.cmd;
-        let output = cmd
-            .args(args)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::inherit())
-            .stdin(Stdio::null())
-            .output()
-            .await?;
-        if output.status.success() {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
-            Ok(output.status.code().unwrap_or(0))
-        } else {
-            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
-        }
-    }
-
     pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         self.cmd.args(&["run"]).env("YAGNA_APPKEY", app_key);
 
@@ -316,6 +300,65 @@ impl YaProviderCommand {
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit())
             .spawn()?)
+    }
+
+    pub async fn add_certs<I, S>(self, certs: I) -> anyhow::Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let mut cmd = self.cmd;
+
+        let output = cmd
+            .args(&[
+                "keystore",
+                "add",
+                "-p",
+                "outbound-manifest",
+                "unverified-permissions-chain",
+                "-w",
+            ])
+            .args(certs)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .context("failed adding certificates")?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let output = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow::anyhow!("{}", output))
+        }
+    }
+
+    pub async fn extend_whitelist(
+        self,
+        whitelist_type: String,
+        entries: Vec<&str>,
+    ) -> anyhow::Result<()> {
+        let mut cmd = self.cmd;
+
+        let output = cmd
+            .args(&["whitelist", "add", "-t"])
+            .arg(whitelist_type)
+            .arg("-p")
+            .args(entries)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .context("failed adding all entries to whitelist")?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let output = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow::anyhow!("{}", output))
+        }
     }
 }
 

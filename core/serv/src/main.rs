@@ -1,6 +1,7 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
+use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -11,6 +12,7 @@ use std::{
     env,
     fmt::Debug,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -27,7 +29,7 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, Identity},
+    middleware::{auth, cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -46,10 +48,13 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 }
+
+const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -112,7 +117,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }
@@ -179,20 +184,15 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
-    }
+    fn component(&self) {}
 }
 
 impl ServiceContext {
-    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+    fn make_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
-    fn make_mixed_entry<S: 'static>(
-        path: &PathBuf,
-        name: &str,
-    ) -> Result<(TypeId, DbMixedExecutor)> {
+    fn make_mixed_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbMixedExecutor)> {
         let disk_db = DbExecutor::from_data_dir(path, name)?;
         let ram_db = DbExecutor::in_memory(name)?;
 
@@ -251,7 +251,7 @@ enum Services {
     //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
     Activity(ActivityService),
@@ -321,7 +321,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -375,14 +375,14 @@ impl ExtensionCommand {
     }
 
     fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
-        Ok(CommandOutput::object(
+        CommandOutput::object(
             extensions
                 .map(|mut ext| {
                     let name = std::mem::take(&mut ext.name);
                     (name, ext)
                 })
                 .collect::<HashMap<_, _>>(),
-        )?)
+        )
     }
 
     fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
@@ -408,6 +408,7 @@ impl ExtensionCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
@@ -442,6 +443,9 @@ struct ServiceCommandOpts {
     /// If set to empty string, then logging to files is disabled.
     #[structopt(long, env = "YAGNA_LOG_DIR")]
     log_dir: Option<PathBuf>,
+
+    #[structopt(flatten)]
+    cors: CorsConfig,
 }
 
 #[cfg(unix)]
@@ -484,13 +488,14 @@ impl ServiceCommand {
                 max_rest_timeout,
                 log_dir,
                 debug,
+                cors,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -552,11 +557,17 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
+                let cors = AppKeyCors::new(cors).await?;
+
+                tokio::task::spawn_local(async move {
+                    ya_net::hybrid::send_bcast_new_neighbour().await
+                });
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
+                        .wrap(auth::Auth::new(cors.cache()))
+                        .wrap(cors.cors())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
@@ -568,7 +579,7 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
@@ -580,6 +591,16 @@ impl ServiceCommand {
                     // });
 
                     async move { Ok(()) }
+                });
+
+                tokio::spawn(async {
+                    loop {
+                        for (fd_type, count) in ya_fd_metrics::fd_metrics() {
+                            gauge!(format!("yagna.fds.{fd_type}"), count as i64);
+                        }
+
+                        tokio::time::sleep(FD_METRICS_INTERVAL).await;
+                    }
                 });
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
@@ -620,11 +641,11 @@ https://handbook.golem.network/see-also/terms
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    stdout.write(header.as_bytes())?;
+    let _ = stdout.write(header.as_bytes())?;
     stdout.flush()?;
 
     loop {
-        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        let _ = stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
         stdout.flush()?;
 
         let mut buffer = String::new();

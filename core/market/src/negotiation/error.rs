@@ -68,8 +68,12 @@ pub enum AgreementError {
     Get(String, AgreementDaoError),
     #[error("Agreement [{0}]. Error: {1}")]
     UpdateState(AgreementId, AgreementDaoError),
+    #[error("Invalid date. {0}")]
+    InvalidDate(#[from] chrono::ParseError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
+    #[error("Invalid Agreement state. {0}")]
+    InvalidAgreementState(#[from] strum::ParseError),
     #[error(transparent)]
     Gsb(#[from] GsbAgreementError),
     #[error("Protocol error: {0}")]

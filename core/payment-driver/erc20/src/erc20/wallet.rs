@@ -21,7 +21,7 @@ use web3::types::{H160, H256, U256, U64};
 // Workspace uses
 use ya_payment_driver::{
     db::models::{Network, TransactionEntity, TxType},
-    model::{AccountMode, GenericError, Init, PaymentDetails},
+    model::{GenericError, Init, PaymentDetails},
 };
 
 // Local uses
@@ -72,24 +72,15 @@ pub async fn account_gas_balance(
 
 pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
-    let mode = msg.mode();
     let address = msg.address();
-    let network = msg.network().unwrap_or(RINKEBY_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let network = msg.network().unwrap_or_else(|| RINKEBY_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(GenericError::new)?;
 
-    if mode.contains(AccountMode::SEND) {
-        let h160_addr = str_to_addr(&address)?;
+    // Validate address and that checking balance of GLM and ETH works.
+    let h160_addr = str_to_addr(&address)?;
+    let _glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
+    let _eth_balance = ethereum::get_balance(h160_addr, network).await?;
 
-        let glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
-        if glm_balance == U256::zero() {
-            return Err(GenericError::new("Insufficient GLM"));
-        }
-
-        let eth_balance = ethereum::get_balance(h160_addr, network).await?;
-        if eth_balance == U256::zero() {
-            return Err(GenericError::new("Insufficient ETH"));
-        }
-    }
     Ok(())
 }
 

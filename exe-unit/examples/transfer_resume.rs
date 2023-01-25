@@ -156,14 +156,14 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
 async fn main() -> anyhow::Result<()> {
     env::set_var(
         "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or(
+        env::var("RUST_LOG").unwrap_or_else(|_| {
             "debug,\
             h2=info,\
             trust_dns_proto=info,\
             trust_dns_resolver=info,\
             "
-            .into(),
-        ),
+            .into()
+        }),
     );
     env_logger::init();
 

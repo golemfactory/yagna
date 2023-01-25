@@ -265,7 +265,9 @@ async fn run() -> anyhow::Result<()> {
 
     let manifest_ctx =
         ManifestContext::try_new(&agreement.inner).context("Invalid app manifest")?;
-    agreement.task_package = manifest_ctx.payload().or(agreement.task_package.take());
+    agreement.task_package = manifest_ctx
+        .payload()
+        .or_else(|| agreement.task_package.take());
 
     log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
     log::info!("User-provided payload: {:?}", agreement.task_package);
@@ -313,6 +315,12 @@ async fn run() -> anyhow::Result<()> {
 
 #[actix_rt::main]
 async fn main() {
+    let panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |e| {
+        log::error!("ExeUnit Supervisor panic: {e}");
+        panic_hook(e)
+    }));
+
     if let Err(error) = start_file_logger() {
         start_logger().expect("Failed to start logging");
         log::warn!("Using fallback logging due to an error: {:?}", error);
