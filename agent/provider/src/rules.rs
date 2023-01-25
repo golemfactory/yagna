@@ -78,12 +78,12 @@ impl RulesManager {
                     .is_none()
             });
 
-        if deleted_partner_rules.is_empty().not() {
+        if deleted_partner_rules.is_empty() {
+            Ok(())
+        } else {
             log::warn!("Because Keystore didn't have appriopriate certs, following Partner rules were removed: {:?}", deleted_partner_rules);
 
             self.rulestore.save()
-        } else {
-            Ok(())
         }
     }
 
