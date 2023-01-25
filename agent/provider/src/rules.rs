@@ -87,7 +87,6 @@ impl RulesManager {
         }
     }
 
-    //TODO Rafał Remove rulestore completely?
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let keystore_certs = self.keystore.certs_ids()?;
 
@@ -113,6 +112,34 @@ impl RulesManager {
                 "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
             ))
         }
+    }
+
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        log::debug!("Setting outbound enabled: {enabled}");
+        self.rulestore.config.write().unwrap().outbound.enabled = enabled;
+
+        self.rulestore.save()
+    }
+
+    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound everyone mode: {mode}");
+        self.rulestore.config.write().unwrap().outbound.everyone = mode;
+
+        self.rulestore.save()
+    }
+
+    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound audited_payload default mode: {mode}");
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode = mode;
+
+        self.rulestore.save()
     }
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
@@ -348,33 +375,6 @@ impl Rulestore {
         let store = std::mem::take(&mut (*other.config.write().unwrap()));
 
         *self.config.write().unwrap() = store;
-    }
-
-    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
-        log::debug!("Setting outbound enabled: {enabled}");
-        self.config.write().unwrap().outbound.enabled = enabled;
-
-        self.save()
-    }
-
-    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound everyone mode: {mode}");
-        self.config.write().unwrap().outbound.everyone = mode;
-
-        self.save()
-    }
-
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {mode}");
-        self.config
-            .write()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode = mode;
-
-        self.save()
     }
 
     pub fn print(&self) -> Result<()> {

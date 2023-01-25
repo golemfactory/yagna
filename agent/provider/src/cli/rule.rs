@@ -61,12 +61,12 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
     match set_rule {
         SetRule::Outbound(outbound) => match outbound {
-            SetOutboundRule::Disable => rules.rulestore.set_enabled(false),
-            SetOutboundRule::Enable => rules.rulestore.set_enabled(true),
-            SetOutboundRule::Everyone { mode } => rules.rulestore.set_everyone_mode(mode),
+            SetOutboundRule::Disable => rules.set_enabled(false),
+            SetOutboundRule::Enable => rules.set_enabled(true),
+            SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
             SetOutboundRule::AuditedPayload { cert_id, mode } => match cert_id {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-                None => rules.rulestore.set_default_audited_payload_mode(mode),
+                None => rules.set_default_audited_payload_mode(mode),
             },
             SetOutboundRule::Partner { cert_id, mode } => rules.set_partner_mode(cert_id, mode),
         },
