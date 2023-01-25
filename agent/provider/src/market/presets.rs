@@ -21,8 +21,7 @@ pub struct Preset {
     pub exeunit_name: String,
     pub pricing_model: String,
     pub initial_price: f64,
-    // It's important that all values are sorted, so that ansible can easily detect significant
-    // changes. In case of doubt, please ask DevOps.
+    // It's important that all values are sorted, so that other tools can easily detect changes.
     pub usage_coeffs: BTreeMap<String, f64>,
 }
 
