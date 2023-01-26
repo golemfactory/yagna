@@ -21,18 +21,14 @@ pub fn web_scope() -> Scope {
 
 #[actix_web::post("/services")]
 async fn post_services(
-    _query: web::Query<Timeout>,
     body: web::Json<ServicesBody>,
     _id: Identity,
-    // services: Data<Arc<Mutex<GsbServices>>>,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
     if let Some(listen) = &body.listen {
         let components = listen.components.clone();
         let listen_on = listen.on.clone();
-        // let mut services = services.lock()?;
-        // let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
         let bind = Bind {
             components: components.clone(),
             addr_prefix: listen_on.clone(),
@@ -98,19 +94,19 @@ pub struct ServicesPath {
     pub key: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-struct ServicesBody {
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
+pub struct ServicesBody {
     listen: Option<ServicesListenBody>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 struct ServicesListenBody {
     on: String,
     components: Vec<String>,
     links: Option<ServicesLinksBody>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 struct ServicesLinksBody {
     messages: String,
 }
@@ -124,4 +120,76 @@ pub struct Timeout {
 #[inline(always)]
 pub(crate) fn default_services_timeout() -> Option<f32> {
     Some(DEFAULT_SERVICES_TIMEOUT)
+}
+
+#[cfg(test)]
+mod tests {
+    use actix_web::{body, test, App};
+    use ya_core_model::NodeId;
+    use ya_service_api_interfaces::Provider;
+    use ya_service_api_web::middleware::auth::dummy::DummyAuth;
+
+    use crate::{GsbApiService, GSB_API_PATH};
+
+    use super::*;
+    struct TestContext;
+    impl Provider<GsbApiService, ()> for TestContext {
+        fn component(&self) -> () {
+            todo!("NYI")
+        }
+    }
+
+    #[actix_web::test]
+    async fn happy_path_test() {
+        let app = test::init_service(
+            App::new()
+                .service(GsbApiService::rest(&TestContext {}))
+                .wrap(dummy_auth()),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("{}/{}", GSB_API_PATH, "services"))
+            .set_json(ServicesBody {
+                listen: Some(ServicesListenBody {
+                    components: vec!["GetChunk".to_string()],
+                    on: "/public/gftp/123".to_string(),
+                    links: None,
+                }),
+            })
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        let http_resp = resp.response();
+        assert_eq!(http_resp.status(), StatusCode::CREATED);
+
+        let body = resp.into_body();
+        let body_bytes = body::to_bytes(body).await.unwrap();
+        let body_struct: ServicesBody = serde_json::de::from_slice(&body_bytes.to_vec()).unwrap();
+
+        assert_eq!(
+            body_struct,
+            ServicesBody {
+                listen: Some(ServicesListenBody {
+                    components: vec!["GetChunk".to_string()],
+                    on: "/public/gftp/123".to_string(),
+                    links: Some(ServicesLinksBody {
+                        messages: format!(
+                            "gsb-api/v1/services/{}",
+                            base64::encode("/public/gftp/123")
+                        )
+                    }),
+                })
+            }
+        )
+    }
+
+    fn dummy_auth() -> DummyAuth {
+        let id = Identity {
+            identity: NodeId::default(),
+            name: "dummy_node".to_string(),
+            role: "dummy".to_string(),
+        };
+        DummyAuth::new(id)
+    }
 }
