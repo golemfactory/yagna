@@ -248,7 +248,6 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let create_tx = tx;
         let db = db.clone();
-        let preconfigured_appkey = preconfigured_appkey.clone();
         let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
