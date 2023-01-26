@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use structopt::StructOpt;
 use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -123,19 +125,21 @@ impl RulesTable {
         self.header = Some(header)
     }
 
-    fn add_everyone(&mut self, outbound_everyone: Mode) {
+    fn add_everyone(&mut self, outbound_everyone: &Mode) {
         let row = serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]};
         self.table.values.push(row);
     }
 
-    fn add_audited_payload(&mut self, rule: CertRule) {
+    fn add_audited_payload(&mut self, rule: &CertRule) {
         let row = serde_json::json! {[ "Audited payload", rule.mode, "", rule.description ]};
         self.table.values.push(row);
     }
 
-    fn add_partner(&mut self, cert_id: &str, rule: &CertRule) {
-        let row = serde_json::json! {[ "Partner", rule.mode, cert_id, rule.description ]};
-        self.table.values.push(row);
+    fn add_partner(&mut self, partner: &HashMap<String, CertRule>) {
+        for (cert_id, rule) in partner.iter() {
+            let row = serde_json::json! {[ "Partner", rule.mode, cert_id, rule.description ]};
+            self.table.values.push(row);
+        }
     }
 
     pub fn print(self) -> Result<()> {
@@ -155,15 +159,12 @@ impl RulesTable {
 impl From<RulesManager> for RulesTable {
     fn from(rules: RulesManager) -> Self {
         let mut table = RulesTable::new();
-        let outbound = rules.rulestore.config.read().unwrap().outbound.clone();
+        let outbound = &rules.rulestore.config.read().unwrap().outbound;
 
         table.with_header(outbound.enabled);
-        table.add_everyone(outbound.everyone);
-        table.add_audited_payload(outbound.audited_payload.default);
-
-        for (cert_id, rule) in outbound.partner.iter() {
-            table.add_partner(cert_id, rule);
-        }
+        table.add_everyone(&outbound.everyone);
+        table.add_audited_payload(&outbound.audited_payload.default);
+        table.add_partner(&outbound.partner);
 
         table
     }
