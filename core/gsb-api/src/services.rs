@@ -13,7 +13,7 @@ use std::{
 use ya_service_bus::{RpcMessage, RpcRawCall};
 
 lazy_static! {
-    pub(crate) static ref SERVICES: Addr<AServices> = AServices::default().start();
+    pub(crate) static ref SERVICES: Addr<Services> = Services::default().start();
 }
 
 trait GsbCaller {
@@ -26,30 +26,30 @@ trait GsbCaller {
 
 ///
 #[derive(Default)]
-pub(crate) struct AServices {
-    services: HashMap<String, Addr<AService>>,
+pub(crate) struct Services {
+    services: HashMap<String, Addr<Service>>,
 }
 
-impl Actor for AServices {
+impl Actor for Services {
     type Context = Context<Self>;
 }
 
 #[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
-pub(crate) struct ABind {
+pub(crate) struct Bind {
     pub components: Vec<String>,
     pub addr_prefix: String,
 }
 
-impl Handler<ABind> for AServices {
-    type Result = <ABind as Message>::Result;
+impl Handler<Bind> for Services {
+    type Result = <Bind as Message>::Result;
 
-    fn handle(&mut self, msg: ABind, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Bind, _ctx: &mut Self::Context) -> Self::Result {
         let addr = msg.addr_prefix.clone();
         if self.services.contains_key(&addr) {
             anyhow::bail!("Service bound on address: {addr}");
         }
-        let service = AService::from(msg).start();
+        let service = Service::from(msg).start();
         self.services.insert(addr, service);
         Ok(())
     }
@@ -57,28 +57,28 @@ impl Handler<ABind> for AServices {
 
 #[derive(Message, Debug)]
 #[rtype(result = "Result<(), ya_service_bus::Error>")]
-pub(crate) struct AUnbind {
+pub(crate) struct Unbind {
     pub addr: String,
 }
 
-impl Handler<AUnbind> for AServices {
-    type Result = <AUnbind as Message>::Result;
+impl Handler<Unbind> for Services {
+    type Result = <Unbind as Message>::Result;
 
-    fn handle(&mut self, _msg: AUnbind, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Unbind, _ctx: &mut Self::Context) -> Self::Result {
         todo!()
     }
 }
 
 #[derive(Message, Debug)]
-#[rtype(result = "Result<Addr<AService>, anyhow::Error>")]
-pub(crate) struct AFind {
+#[rtype(result = "Result<Addr<Service>, anyhow::Error>")]
+pub(crate) struct Find {
     pub addr: String,
 }
 
-impl Handler<AFind> for AServices {
-    type Result = <AFind as Message>::Result;
+impl Handler<Find> for Services {
+    type Result = <Find as Message>::Result;
 
-    fn handle(&mut self, msg: AFind, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Find, _ctx: &mut Self::Context) -> Self::Result {
         if let Some(service) = self.services.get(&msg.addr) {
             return Ok(service.clone());
         }
@@ -88,26 +88,26 @@ impl Handler<AFind> for AServices {
 
 #[derive(Message, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
-pub(crate) struct AWsBind {
+pub(crate) struct WsBind {
     pub ws: Addr<WsMessagesHandler>,
     pub addr: String,
 }
 
-impl Handler<AWsBind> for AServices {
-    type Result = <AWsBind as Message>::Result;
+impl Handler<WsBind> for Services {
+    type Result = <WsBind as Message>::Result;
 
-    fn handle(&mut self, _msg: AWsBind, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: WsBind, _ctx: &mut Self::Context) -> Self::Result {
         todo!()
     }
 }
 
-pub(crate) struct AService {
+pub(crate) struct Service {
     addr_prefix: String,
     addresses: HashSet<String>,
     msg_handler: Box<dyn MessagesHandler>,
 }
 
-impl AService {
+impl Service {
     fn addr_prefix_to_component(addr: &str) -> String {
         addr.chars()
             .rev()
@@ -119,8 +119,8 @@ impl AService {
     }
 }
 
-impl From<ABind> for AService {
-    fn from(bind: ABind) -> Self {
+impl From<Bind> for Service {
+    fn from(bind: Bind) -> Self {
         let msg_handler = Box::new(BufferingHandler {});
         // convert to error and return it when e.g. components empty
         let addr_prefix = bind.addr_prefix;
@@ -128,7 +128,7 @@ impl From<ABind> for AService {
         for component in bind.components {
             addresses.insert(format!("{addr_prefix}/{component}"));
         }
-        AService {
+        Service {
             addr_prefix,
             addresses,
             msg_handler: msg_handler,
@@ -136,7 +136,7 @@ impl From<ABind> for AService {
     }
 }
 
-impl Actor for AService {
+impl Actor for Service {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -148,7 +148,7 @@ impl Actor for AService {
     }
 }
 
-impl Handler<RpcRawCall> for AService {
+impl Handler<RpcRawCall> for Service {
     type Result = ResponseFuture<Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
@@ -166,7 +166,7 @@ impl Handler<RpcRawCall> for AService {
         }
         let id = uuid::Uuid::new_v4().to_string();
         log::debug!("Msg addr: {addr}, id: {id}");
-        let component = AService::addr_prefix_to_component(&addr);
+        let component = Service::addr_prefix_to_component(&addr);
         let msg = WsRequest {
             component,
             id,
@@ -210,7 +210,7 @@ impl Handler<RpcRawCall> for AService {
     }
 }
 
-impl Handler<WsResponse> for AService {
+impl Handler<WsResponse> for Service {
     type Result = <WsResponse as Message>::Result;
 
     fn handle(&mut self, msg: WsResponse, _ctx: &mut Self::Context) -> Self::Result {
@@ -226,7 +226,7 @@ pub(crate) struct Listen {
     pub listener: Addr<WsMessagesHandler>,
 }
 
-impl Handler<Listen> for AService {
+impl Handler<Listen> for Service {
     type Result = <Listen as Message>::Result;
 
     fn handle(&mut self, msg: Listen, _ctx: &mut Self::Context) -> Self::Result {
