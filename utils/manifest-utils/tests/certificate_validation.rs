@@ -67,7 +67,7 @@ struct SignedRequest {
 }
 
 fn prepare_request(resource_cert_dir: PathBuf) -> SignedRequest {
-    let resource_dir = TEST_RESOURCES.test_resources_dir_path();
+    let resource_dir = TestResources::test_resources_dir_path();
 
     let mut cert = resource_cert_dir;
     cert.push("foo_req.cert.pem");
