@@ -67,7 +67,7 @@ pub async fn preconfigured_to_appkey_model(
         role: model::DEFAULT_ROLE.to_string(),
         identity: node_id,
         created_date,
-        allow_origins: crate::autoconf::preconfigured_appkey_cors(),
+        allow_origins: vec![],
     })
 }
 
