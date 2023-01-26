@@ -11,6 +11,7 @@ use anyhow::Context;
 // autoconfiguration
 const ENV_AUTOCONF_PK: &str = "YAGNA_AUTOCONF_ID_SECRET";
 const ENV_AUTOCONF_APP_KEY: &str = "YAGNA_AUTOCONF_APPKEY";
+const ENV_AUTOCONF_CORS: &str = "YAGNA_AUTOCONF_APPKEY_CORS";
 
 pub fn preconfigured_identity(password: Protected) -> anyhow::Result<Option<IdentityKey>> {
     let secret_hex: Vec<u8> = match env::var(ENV_AUTOCONF_PK) {
@@ -34,4 +35,12 @@ pub fn preconfigured_node_id() -> anyhow::Result<Option<NodeId>> {
 
 pub fn preconfigured_appkey() -> anyhow::Result<Option<String>> {
     Ok(env::var(ENV_AUTOCONF_APP_KEY).ok())
+}
+
+pub fn preconfigured_appkey_cors() -> Vec<String> {
+    if let Some(cors) = env::var(ENV_AUTOCONF_CORS).ok() {
+        cors.split(',').map(|s| s.to_string()).collect()
+    } else {
+        vec![]
+    }
 }
