@@ -72,7 +72,6 @@ pub async fn preconfigured_to_appkey_model(
 }
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
-    let db = db.clone();
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
     let subscription = Rc::new(RefCell::new(Subscription::default()));
@@ -91,7 +90,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let create_tx = tx.clone();
-    let preconfigured_appkey = crate::autoconf::preconfigured_appkey()?;
+    let preconfigured_appkey = crate::autoconf::preconfigured_appkey();
     let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
     let start_datetime = Utc::now().naive_utc();
 
@@ -107,9 +106,11 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             async move {
                 let dao = db.as_dao::<AppKeyDao>();
 
-                if let Some(preconfigured_appkey) = preconfigured_appkey {
+                if let Some(_preconfigured_appkey) = preconfigured_appkey {
                     if create.name == model::AUTOCONFIGURED_KEY_NAME {
-                        return Err(model::Error::internal("Preconfigured appkey already exists"));
+                        return Err(model::Error::internal(
+                            "Preconfigured appkey already exists",
+                        ));
                     }
                 }
 
@@ -194,7 +195,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                             preconfigured_appkey,
                             start_datetime,
                         )
-                            .await;
+                        .await;
                     }
                 }
 
@@ -229,11 +230,14 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     .collect();
 
                 if let Some(preconfigured_appkey) = preconfigured_appkey {
-                    keys.push(preconfigured_to_appkey_model(
-                        preconfigured_node_id,
-                        preconfigured_appkey,
-                        start_datetime,
-                    ).await?);
+                    keys.push(
+                        preconfigured_to_appkey_model(
+                            preconfigured_node_id,
+                            preconfigured_appkey,
+                            start_datetime,
+                        )
+                        .await?,
+                    );
                 }
 
                 Ok((keys.clone(), result.1))
@@ -273,7 +277,6 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 Ok(())
             }
         });
-
     }
 
     Ok(())
