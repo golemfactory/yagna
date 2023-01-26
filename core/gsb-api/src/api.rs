@@ -1,4 +1,4 @@
-use crate::services::{ABind, AFind, AServices, AUnbind, Listen};
+use crate::services::{Bind, Find, Listen, Services, Unbind};
 use crate::{GsbApiError, WsMessagesHandler};
 use actix::Addr;
 use actix_http::StatusCode;
@@ -25,7 +25,7 @@ async fn post_services(
     body: web::Json<ServicesBody>,
     _id: Identity,
     // services: Data<Arc<Mutex<GsbServices>>>,
-    services: Data<Addr<AServices>>,
+    services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
     if let Some(listen) = &body.listen {
@@ -33,7 +33,7 @@ async fn post_services(
         let listen_on = listen.on.clone();
         // let mut services = services.lock()?;
         // let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
-        let bind = ABind {
+        let bind = Bind {
             components: components.clone(),
             addr_prefix: listen_on.clone(),
         };
@@ -59,11 +59,11 @@ async fn post_services(
 async fn delete_services(
     path: web::Path<ServicesPath>,
     _id: Identity,
-    services: Data<Addr<AServices>>,
+    services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("DELETE /services/{}", path.key);
     //TODO some prefix/sufix
-    let unbind = AUnbind {
+    let unbind = Unbind {
         addr: path.key.to_string(),
     };
     let _x = services.send(unbind).await??;
@@ -75,13 +75,13 @@ async fn get_service_messages(
     path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
-    services: Data<Addr<AServices>>,
+    services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     //TODO handle decode error
     let key = base64::decode(&path.key).unwrap();
     let key = String::from_utf8_lossy(&key);
     let service = services
-        .send(AFind {
+        .send(Find {
             addr: key.to_string(),
         })
         .await??;

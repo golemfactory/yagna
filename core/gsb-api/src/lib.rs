@@ -13,7 +13,7 @@ use bytes::{Buf, Bytes};
 use flexbuffers::{BuilderOptions, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use services::AService;
+use services::Service;
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
 
@@ -26,7 +26,7 @@ impl GsbApiService {
         Ok(())
     }
 
-    pub fn rest<Context: Provider<Self, ()>>(_ctx: &Context) -> actix_web::Scope {
+    pub fn rest<Context: Provider<Self, ()>>(_: &Context) -> actix_web::Scope {
         api::web_scope()
     }
 }
@@ -120,7 +120,7 @@ struct Msg {
 
 pub(crate) struct WsMessagesHandler {
     // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
-    service: Addr<AService>,
+    service: Addr<Service>,
 }
 
 #[derive(Default)]
@@ -172,7 +172,7 @@ impl core::ops::Deref for MyBuffer {
 }
 
 impl WsMessagesHandler {
-    async fn handle(service: Addr<AService>, buffer: bytes::Bytes) {
+    async fn handle(service: Addr<Service>, buffer: bytes::Bytes) {
         match Reader::get_root(&*buffer) {
             Ok(response) => {
                 match response.flexbuffer_type() {
