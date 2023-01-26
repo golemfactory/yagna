@@ -2,7 +2,7 @@ mod api;
 mod services;
 
 use actix::prelude::*;
-use actix::{dev::MessageResponse, Actor, Addr, Handler, MailboxError, StreamHandler};
+use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
     ws::{CloseReason, ProtocolError},
     StatusCode,
