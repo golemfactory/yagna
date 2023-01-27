@@ -220,7 +220,7 @@ impl Keystore {
         Ok(())
     }
 
-    pub(crate) fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
+    pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
         let inner = self.inner.read().unwrap();
         let mut ids = HashSet::new();
         for cert in inner.store.objects() {
