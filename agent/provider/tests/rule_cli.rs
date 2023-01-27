@@ -176,6 +176,35 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     assert_eq!(&result["outbound"][rule][&cert_id]["mode"], mode);
 }
 
+#[test_case("partner", "all")]
+#[test_case("partner", "none")]
+#[test_case("partner", "whitelist")]
+#[serial_test::serial]
+fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mode: &str) {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("import-cert")
+        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
+        .arg("--mode")
+        .arg(mode)
+        .assert()
+        .success();
+
+    let result = list_rules_command(data_dir.path());
+    let added_certs = list_certs(data_dir.path());
+
+    for cert in added_certs {
+        assert_eq!(result["outbound"][rule][cert]["mode"], mode);
+    }
+}
+
 #[test]
 #[serial_test::serial]
 fn removing_cert_should_also_remove_its_rule() {
@@ -240,6 +269,10 @@ fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> Str
         .assert()
         .success();
 
+    list_certs(&data_dir)[0].clone()
+}
+
+fn list_certs(data_dir: &Path) -> Vec<String> {
     let output = Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.to_str().unwrap())
@@ -249,8 +282,12 @@ fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> Str
         .output()
         .unwrap();
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-
-    result[0]["ID"].as_str().unwrap().to_string()
+    result
+        .as_array()
+        .unwrap()
+        .into_iter()
+        .map(|v| v["ID"].as_str().unwrap().to_string())
+        .collect()
 }
 
 fn prepare_test_dir() -> TempDir {
