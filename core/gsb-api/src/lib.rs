@@ -187,7 +187,7 @@ impl WsMessagesHandler {
                             flexbuffers::Builder::new(BuilderOptions::empty());
                         let mut ok_payload_map_builder = response_builder.start_map();
                         let payload_map_builder = ok_payload_map_builder.start_map("Ok"); //TODO on Err put here Error+msg
-                        nested_flexbuffer::clone_map(payload_map_builder, &payload).unwrap(); //TODO handle it
+                        flexbuffer_util::clone_map(payload_map_builder, &payload).unwrap(); //TODO handle it
                         ok_payload_map_builder.end_map();
 
                         let response = WsResponse {
@@ -243,7 +243,7 @@ impl Handler<WsRequest> for WsMessagesHandler {
 
         let payload = Reader::get_root(&*request.payload).unwrap(); //TODO handle error
         let payload_map = payload.as_map(); //TODO check type before as_map
-        nested_flexbuffer::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
+        flexbuffer_util::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
         request_map_builder.end_map();
         ctx.binary(request_builder.view().to_vec());
         Ok(())
@@ -295,7 +295,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 }
 
-mod nested_flexbuffer {
+mod flexbuffer_util {
     use flexbuffers::{FlexBufferType, MapBuilder, MapReader, Pushable, Reader, VectorBuilder};
 
     trait FlexPusher<'b> {
@@ -375,11 +375,11 @@ mod nested_flexbuffer {
     }
 
     fn clone_vec<'a, P: FlexPusher<'a>>(
-        flex_pusher: &mut P,
+        pusher: &mut P,
         reader: Reader<&[u8]>,
         value_type: FlexBufferType,
     ) -> Result<(), flexbuffers::ReaderError> {
-        clone_vec_optional_type(flex_pusher, reader, Some(value_type))
+        clone_vec_optional_type(pusher, reader, Some(value_type))
     }
 
     fn clone_vec_untyped<'a, P: FlexPusher<'a>>(
@@ -444,13 +444,13 @@ mod nested_flexbuffer {
     }
 
     #[cfg(test)]
-    mod nested_flexbuffer_tests {
+    mod tests {
         use std::fmt::Debug;
 
         use flexbuffers::{BuilderOptions, Reader};
         use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-        use crate::nested_flexbuffer::clone_map;
+        use crate::flexbuffer_util::clone_map;
 
         #[test]
         fn test_deserialization() {
