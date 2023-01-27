@@ -27,10 +27,10 @@ use crate::startup_config::FileMonitor;
 #[derive(Clone, Debug)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
+    pub keystore: Keystore,
     whitelist: DomainWhitelistState,
-    keystore: Keystore,
-    whitelist_file: PathBuf,
     cert_dir: PathBuf,
+    whitelist_file: PathBuf,
 }
 
 impl RulesManager {

@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use structopt::StructOpt;
 use strum::VariantNames;
+use ya_manifest_utils::policy::CertPermissions;
+use ya_manifest_utils::util::cert_to_id;
+use ya_manifest_utils::{KeystoreLoadResult, KeystoreManager};
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::rules::CertRule;
@@ -81,11 +84,43 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
                 None => rules.set_default_audited_payload_mode(mode),
             },
-            _ => todo!()
-            // SetOutboundRule::Partner { mode, include_cert } => match include_cert {
-            //     IncludeCert::CertId { cert_id } => rules.set_partner_mode(cert_id, mode),
-            //     IncludeCert::ImportCert { import_cert } => todo!(),
-            // },
+            SetOutboundRule::Partner(RuleWithCert::CertId { cert_id, mode }) => {
+                rules.set_partner_mode(cert_id, mode)
+            }
+            SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
+                let keystore_manager =
+                    KeystoreManager::dupa(&config.cert_dir_path()?, rules.keystore.clone())?;
+
+                let mut permissions_manager = keystore_manager.permissions_manager();
+
+                let KeystoreLoadResult { loaded, skipped } =
+                    keystore_manager.load_certs(&vec![import_cert])?;
+
+                //TODO Rafał all to whole chain?
+                permissions_manager.set_many(
+                    &loaded.iter().chain(skipped.iter()).cloned().collect(),
+                    vec![CertPermissions::All],
+                    true,
+                );
+
+                permissions_manager
+                    .save(&config.cert_dir_path()?)
+                    .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+
+                //TODO Rafał to which cert_ids do we want to set partner mode?
+                // All, root or last?
+                for loaded_cert in loaded {
+                    let cert_id = cert_to_id(&loaded_cert)?;
+                    rules.set_partner_mode(cert_id, mode.clone())?;
+                }
+
+                for skipped_cert in skipped {
+                    let cert_id = cert_to_id(&skipped_cert)?;
+                    rules.set_partner_mode(cert_id, mode.clone())?;
+                }
+
+                Ok(())
+            }
         },
     }
 }
