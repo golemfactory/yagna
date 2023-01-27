@@ -88,6 +88,7 @@ fn rule_set_should_edit_everyone_mode(mode: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -110,6 +111,7 @@ fn rule_set_should_edit_default_modes_for_certificate_rules(rule: &str, mode: &s
         .arg("set")
         .arg("outbound")
         .arg(rule)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -136,12 +138,13 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(cert_id)
+        .arg("--mode")
         .arg("all")
         .assert()
         .stderr(format!(
-            "Error: Setting Partner mode All failed: No cert id: {cert_id} found in keystore\n"
+            "Error: Setting Partner mode all failed: No cert id: {cert_id} found in keystore\n"
         ));
 }
 
@@ -161,8 +164,9 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(&cert_id)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -188,8 +192,9 @@ fn removing_cert_should_also_remove_its_rule() {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(&cert_id)
+        .arg("--mode")
         .arg("all")
         .assert()
         .success();
