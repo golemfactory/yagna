@@ -31,3 +31,4 @@ tokio = "1"
 
 [dev-dependencies]
 ya-core-model = { version = "0.8", features = ["gftp"] }
+actix-test = "0.1"
