@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use structopt::StructOpt;
+use strum::VariantNames;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::rules::CertRule;
@@ -28,19 +30,28 @@ pub enum SetOutboundRule {
     Disable,
     Enable,
     Everyone {
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
     AuditedPayload {
         #[structopt(long)]
         cert_id: Option<String>,
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
-    Partner {
-        #[structopt(long)]
+    Partner(RuleWithCert),
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum RuleWithCert {
+    CertId {
         cert_id: String,
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
+        mode: Mode,
+    },
+    ImportCert {
+        import_cert: PathBuf,
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
 }
@@ -70,7 +81,11 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
                 None => rules.set_default_audited_payload_mode(mode),
             },
-            SetOutboundRule::Partner { cert_id, mode } => rules.set_partner_mode(cert_id, mode),
+            _ => todo!()
+            // SetOutboundRule::Partner { mode, include_cert } => match include_cert {
+            //     IncludeCert::CertId { cert_id } => rules.set_partner_mode(cert_id, mode),
+            //     IncludeCert::ImportCert { import_cert } => todo!(),
+            // },
         },
     }
 }
