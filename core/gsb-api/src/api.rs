@@ -124,7 +124,14 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::{body, test, App};
+    use actix::prelude::*;
+    use actix_http::ws::Codec;
+    use actix_test;
+    use actix_web::{body, get, test, web, App, Error, HttpRequest, HttpResponse, Responder};
+    use actix_web_actors::ws;
+    use bytes::Bytes;
+    use futures::{SinkExt, StreamExt};
+    use ya_core_model::gftp::GetMetadata;
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
@@ -141,34 +148,30 @@ mod tests {
 
     #[actix_web::test]
     async fn happy_path_test() {
-        let app = test::init_service(
+        let mut server = actix_test::start(|| {
             App::new()
                 .service(GsbApiService::rest(&TestContext {}))
-                .wrap(dummy_auth()),
-        )
-        .await;
+                .wrap(dummy_auth())
+        });
 
-        let req = test::TestRequest::post()
-            .uri(&format!("{}/{}", GSB_API_PATH, "services"))
-            .set_json(ServicesBody {
+        let mut bind_resp = server
+            .post(&format!("{}/{}", GSB_API_PATH, "services"))
+            .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
                     on: "/public/gftp/123".to_string(),
                     links: None,
                 }),
             })
-            .to_request();
+            .await
+            .unwrap();
 
-        let resp = test::call_service(&app, req).await;
-        let http_resp = resp.response();
-        assert_eq!(http_resp.status(), StatusCode::CREATED);
+        assert_eq!(bind_resp.status(), StatusCode::CREATED);
 
-        let body = resp.into_body();
-        let body_bytes = body::to_bytes(body).await.unwrap();
-        let body_struct: ServicesBody = serde_json::de::from_slice(&body_bytes.to_vec()).unwrap();
-
+        let body = bind_resp.body().await.unwrap();
+        let body: ServicesBody = serde_json::de::from_slice(&body.to_vec()).unwrap();
         assert_eq!(
-            body_struct,
+            body,
             ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
@@ -181,7 +184,18 @@ mod tests {
                     }),
                 })
             }
-        )
+        );
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let ws_frames = server.ws_at(&services_path).await.unwrap();
+
+        //TODO handle WS msgs in background
+
+        let gsb_endpoint = ya_service_bus::typed::service("/public/gftp/123");
+
+        let resp = gsb_endpoint.call(GetMetadata {}).await;
+
+        // ws_api
     }
 
     fn dummy_auth() -> DummyAuth {
