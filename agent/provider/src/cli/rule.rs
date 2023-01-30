@@ -107,7 +107,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     .save(&config.cert_dir_path()?)
                     .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
 
-                //TODO Rafał What the fuck...
                 rules.keystore.reload(&config.cert_dir_path()?)?;
 
                 //TODO Rafał to which cert_ids do we want to set partner mode?
