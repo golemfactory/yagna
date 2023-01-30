@@ -125,13 +125,13 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use actix::prelude::*;
-    use actix_http::ws::Codec;
+    use actix_http::ws::{Codec,Frame};
     use actix_test;
-    use actix_web::{body, get, test, web, App, Error, HttpRequest, HttpResponse, Responder};
+    use actix_web::App;
     use actix_web_actors::ws;
     use bytes::Bytes;
-    use futures::{SinkExt, StreamExt};
-    use ya_core_model::gftp::GetMetadata;
+    use futures::{SinkExt, TryStreamExt};
+    use ya_core_model::gftp::{GetChunk, GftpChunk};
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
@@ -146,8 +146,23 @@ mod tests {
         }
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
+    struct TestWsRequest<MSG> {
+        id: String,
+        component: String,
+        payload: MSG,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct TestWsResponse<MSG> {
+        id: String,
+        payload: MSG,
+    }
+
     #[actix_web::test]
     async fn happy_path_test() {
+        const SERVICE_ADDR: &str = "/public/gftp/123";
+
         let mut server = actix_test::start(|| {
             App::new()
                 .service(GsbApiService::rest(&TestContext {}))
@@ -159,7 +174,7 @@ mod tests {
             .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
-                    on: "/public/gftp/123".to_string(),
+                    on: SERVICE_ADDR.to_string(),
                     links: None,
                 }),
             })
@@ -175,7 +190,7 @@ mod tests {
             ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
-                    on: "/public/gftp/123".to_string(),
+                    on: SERVICE_ADDR.to_string(),
                     links: Some(ServicesLinksBody {
                         messages: format!(
                             "gsb-api/v1/services/{}",
@@ -187,15 +202,56 @@ mod tests {
         );
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
-        let ws_frames = server.ws_at(&services_path).await.unwrap();
-
-        //TODO handle WS msgs in background
+        let mut ws_frames = server.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service("/public/gftp/123");
+        
+        let (gsb_res, ws_res) = tokio::join!(
+            async {
+                gsb_endpoint.call(GetChunk {
+                    offset: u64::MIN,
+                    size: 10,
+                }).await
+            },
+            async {
+                let ws_req = ws_frames.try_next().await;
+                assert!(ws_req.is_ok());
+                let ws_req = ws_req.unwrap();
+                let ws_req = ws_req.unwrap();
+                let ws_req = match ws_req
+                {
+                    Frame::Binary(ws_req) => {
+                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                    },
+                    msg => panic!("Not expected msg: {:?}", msg)
+                };
+                let id = ws_req.id;
+                let len = ws_req.payload.size as usize;
+                let res_msg = GftpChunk {
+                    content: vec![7; len],
+                    offset: 0,
+                };
+                let ws_res = TestWsResponse{
+                    id,
+                    payload: res_msg
+                };
+                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+                ws_frames.send(ws::Message::Binary(Bytes::from(ws_res))).await
+             } 
+        ); 
 
-        let resp = gsb_endpoint.call(GetMetadata {}).await;
+        let _ = ws_res.unwrap();
+        let gsb_res = gsb_res.unwrap().unwrap();
+        assert_eq!(gsb_res.content,  vec![7; 10]);
 
-        // ws_api
+        
+        let mut delete_resp = server
+            .delete(&format!("{}/{}/{}", GSB_API_PATH, "services", base64::encode(SERVICE_ADDR)))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(delete_resp.status(), StatusCode::OK);
     }
 
     fn dummy_auth() -> DummyAuth {
