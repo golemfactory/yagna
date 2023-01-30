@@ -162,6 +162,7 @@ mod tests {
     #[actix_web::test]
     async fn happy_path_test() {
         const SERVICE_ADDR: &str = "/public/gftp/123";
+        const PAYLOAD_LEN: usize = 10;
 
         let mut server = actix_test::start(|| {
             App::new()
@@ -210,7 +211,7 @@ mod tests {
             async {
                 gsb_endpoint.call(GetChunk {
                     offset: u64::MIN,
-                    size: 10,
+                    size: PAYLOAD_LEN as u64,
                 }).await
             },
             async {
@@ -242,16 +243,71 @@ mod tests {
 
         let _ = ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
-        assert_eq!(gsb_res.content,  vec![7; 10]);
+        assert_eq!(gsb_res.content,  vec![7; PAYLOAD_LEN]);
 
         
-        let mut delete_resp = server
+        let delete_resp = server
             .delete(&format!("{}/{}/{}", GSB_API_PATH, "services", base64::encode(SERVICE_ADDR)))
             .send()
             .await
             .unwrap();
 
         assert_eq!(delete_resp.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn gsb_error_on_ws_error_test() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn api_401_error_on_unauthenticated_post_test() {
+        panic!("NYI");
+    }
+    
+    #[actix_web::test]
+    async fn api_401_error_on_unauthenticated_delete_test() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn api_404_error_on_ws_connect_to_not_existing_service() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn api_404_error_on_delete_not_existing_service_test() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn error_on_post_od_duplicated_service() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn ws_close_on_service_delete() {
+        panic!("NYI");
+    }
+
+    #[actix_web::test]
+    async fn gsb_msgs_before_ws_connect_buffering_test() {
+        panic!("NYI. Scenario: service POST, then send GSB messages, then GET ws.");
+    }
+
+    #[actix_web::test]
+    async fn gsb_msgs_after_ws_disconnect_buffering_test() {
+        panic!("NYI. Scenario: service POST, then ws GET, then ws disconnet, then send GSB messages, then GET ws");
+    }
+
+    #[actix_web::test]
+    async fn gsb_error_on_delete_test() {
+        panic!("NYI. Respond with GSB error on pending msg after API Delete of service");
+    }
+
+    #[actix_web::test]
+    async fn gsb_buffered_msgs_errors_on_delete_test() {
+        panic!("NYI. Rrespond with GSB errors on buffered msgs after API Delete of service");
     }
 
     fn dummy_auth() -> DummyAuth {
