@@ -12,7 +12,7 @@ use ya_service_api_web::middleware::Identity;
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
 
 pub fn web_scope() -> Scope {
-    actix_web::web::scope(crate::GSB_API_PATH)
+    actix_web::web::scope(&format!("/{}", crate::GSB_API_PATH))
         .app_data(Data::new(crate::services::SERVICES.clone()))
         .service(post_services)
         .service(delete_services)
@@ -28,27 +28,28 @@ async fn post_services(
     log::debug!("POST /services Body: {:?}", body);
     if let Some(listen) = &body.listen {
         let components = listen.components.clone();
-        let listen_on = listen.on.clone();
+        let on = listen.on.clone();
         let bind = Bind {
             components: components.clone(),
-            addr_prefix: listen_on.clone(),
+            addr_prefix: on.clone(),
         };
-        let _ = services.send(bind).await?;
-        let listen_on_encoded = base64::encode(&listen_on);
+        let _ = services.send(bind).await??;
+        let listen_on_encoded = base64::encode(&on);
+        let links = ServicesLinksBody {
+            messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
+        };
         let services = ServicesBody {
             listen: Some(ServicesListenBody {
-                on: listen_on,
-                components: components,
-                links: Some(ServicesLinksBody {
-                    messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
-                }),
+                on,
+                components,
+                links: Some(links),
             }),
         };
         return Ok(web::Json(services)
             .customize()
             .with_status(StatusCode::CREATED));
     }
-    Err(GsbApiError::BadRequest)
+    Err(GsbApiError::BadRequest("Missing listen field".to_string()))
 }
 
 #[actix_web::delete("/services/{key}")]
@@ -57,12 +58,10 @@ async fn delete_services(
     _id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
-    log::debug!("DELETE /services/{}", path.key);
-    //TODO some prefix/sufix
-    let unbind = Unbind {
-        addr: path.key.to_string(),
-    };
-    let _x = services.send(unbind).await??;
+    let addr = decode_addr(&path.key)?;
+    log::debug!("DELETE service: {}", addr);
+    let unbind = Unbind { addr };
+    let _ = services.send(unbind).await??;
     Ok(web::Json(()))
 }
 
@@ -73,20 +72,21 @@ async fn get_service_messages(
     stream: web::Payload,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
-    //TODO handle decode error
-    let key = base64::decode(&path.key).unwrap();
-    let key = String::from_utf8_lossy(&key);
-    let service = services
-        .send(Find {
-            addr: key.to_string(),
-        })
-        .await??;
+    let addr = decode_addr(&path.key)?;
+    let service = services.send(Find { addr }).await??;
     let handler = WsMessagesHandler {
         service: service.clone(),
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    service.send(Listen { listener: addr }).await??;
+    service.send(Listen { listener: addr }).await?;
     Ok(resp)
+}
+
+fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
+    base64::decode(addr_encoded)
+        .map_err(|err| GsbApiError::BadRequest(format!("Unable to read key. Err: {}", err)))
+        .map(String::from_utf8)?
+        .map_err(|err| GsbApiError::BadRequest(format!("Unable to parse key. Err: {}", err)))
 }
 
 #[derive(Deserialize)]
@@ -125,7 +125,7 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use actix::prelude::*;
-    use actix_http::ws::{Codec,Frame};
+    use actix_http::ws::Frame;
     use actix_test;
     use actix_web::App;
     use actix_web_actors::ws;
@@ -171,7 +171,7 @@ mod tests {
         });
 
         let mut bind_resp = server
-            .post(&format!("{}/{}", GSB_API_PATH, "services"))
+            .post(&format!("/{}/{}", GSB_API_PATH, "services"))
             .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
@@ -194,7 +194,8 @@ mod tests {
                     on: SERVICE_ADDR.to_string(),
                     links: Some(ServicesLinksBody {
                         messages: format!(
-                            "gsb-api/v1/services/{}",
+                            "{}/services/{}",
+                            GSB_API_PATH,
                             base64::encode("/public/gftp/123")
                         )
                     }),
@@ -206,25 +207,26 @@ mod tests {
         let mut ws_frames = server.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service("/public/gftp/123");
-        
+
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                gsb_endpoint.call(GetChunk {
-                    offset: u64::MIN,
-                    size: PAYLOAD_LEN as u64,
-                }).await
+                gsb_endpoint
+                    .call(GetChunk {
+                        offset: u64::MIN,
+                        size: PAYLOAD_LEN as u64,
+                    })
+                    .await
             },
             async {
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
                 let ws_req = ws_req.unwrap();
                 let ws_req = ws_req.unwrap();
-                let ws_req = match ws_req
-                {
+                let ws_req = match ws_req {
                     Frame::Binary(ws_req) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
-                    },
-                    msg => panic!("Not expected msg: {:?}", msg)
+                    }
+                    msg => panic!("Not expected msg: {:?}", msg),
                 };
                 let id = ws_req.id;
                 let len = ws_req.payload.size as usize;
@@ -232,22 +234,28 @@ mod tests {
                     content: vec![7; len],
                     offset: 0,
                 };
-                let ws_res = TestWsResponse{
+                let ws_res = TestWsResponse {
                     id,
-                    payload: res_msg
+                    payload: res_msg,
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
-                ws_frames.send(ws::Message::Binary(Bytes::from(ws_res))).await
-             } 
-        ); 
+                ws_frames
+                    .send(ws::Message::Binary(Bytes::from(ws_res)))
+                    .await
+            }
+        );
 
         let _ = ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
-        assert_eq!(gsb_res.content,  vec![7; PAYLOAD_LEN]);
+        assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        
         let delete_resp = server
-            .delete(&format!("{}/{}/{}", GSB_API_PATH, "services", base64::encode(SERVICE_ADDR)))
+            .delete(&format!(
+                "/{}/{}/{}",
+                GSB_API_PATH,
+                "services",
+                base64::encode(SERVICE_ADDR)
+            ))
             .send()
             .await
             .unwrap();
@@ -264,7 +272,7 @@ mod tests {
     async fn api_401_error_on_unauthenticated_post_test() {
         panic!("NYI");
     }
-    
+
     #[actix_web::test]
     async fn api_401_error_on_unauthenticated_delete_test() {
         panic!("NYI");
@@ -308,6 +316,11 @@ mod tests {
     #[actix_web::test]
     async fn gsb_buffered_msgs_errors_on_delete_test() {
         panic!("NYI. Rrespond with GSB errors on buffered msgs after API Delete of service");
+    }
+
+    #[actix_web::test]
+    async fn close_old_ws_connection_on_new_ws_connection() {
+        panic!()
     }
 
     fn dummy_auth() -> DummyAuth {

@@ -1,6 +1,7 @@
-use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse};
+use crate::{WsDisconnect, WsMessagesHandler, WsRequest, WsResponse};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
+use actix_http::ws::CloseReason;
 use anyhow::anyhow;
 use futures::channel::oneshot::{self, Receiver, Sender};
 use lazy_static::lazy_static;
@@ -10,6 +11,7 @@ use std::{
     future::Future,
     result::Result::{Err, Ok},
 };
+use thiserror::Error;
 use ya_service_bus::{RpcMessage, RpcRawCall};
 
 lazy_static! {
@@ -24,7 +26,6 @@ trait GsbCaller {
     ) -> dyn Future<Output = Result<RES, RES::Error>>;
 }
 
-///
 #[derive(Default)]
 pub(crate) struct Services {
     services: HashMap<String, Addr<Service>>,
@@ -34,8 +35,16 @@ impl Actor for Services {
     type Context = Context<Self>;
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum BindError {
+    #[error("Duplicated service address prefix: {0}")]
+    DuplicatedService(String),
+    #[error("Invalid service address prefix: {0}")]
+    InvalidService(String),
+}
+
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "Result<(), BindError>")]
 pub(crate) struct Bind {
     pub components: Vec<String>,
     pub addr_prefix: String,
@@ -45,9 +54,14 @@ impl Handler<Bind> for Services {
     type Result = <Bind as Message>::Result;
 
     fn handle(&mut self, msg: Bind, _ctx: &mut Self::Context) -> Self::Result {
+        if msg.addr_prefix.is_empty() {
+            return Err(BindError::InvalidService(
+                "Cannod bind service. Empty prefix.".to_string(),
+            ));
+        }
         let addr = msg.addr_prefix.clone();
         if self.services.contains_key(&addr) {
-            anyhow::bail!("Service bound on address: {addr}");
+            return Err(BindError::DuplicatedService(addr));
         }
         let service = Service::from(msg).start();
         self.services.insert(addr, service);
@@ -55,22 +69,62 @@ impl Handler<Bind> for Services {
     }
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum UnbindError {
+    #[error("Service prefix not found: {0}")]
+    ServiceNotFound(String),
+    #[error("Invalid service address prefix: {0}")]
+    InvalidService(String),
+}
+
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), ya_service_bus::Error>")]
+#[rtype(result = "Result<(), UnbindError>")]
 pub(crate) struct Unbind {
     pub addr: String,
 }
 
 impl Handler<Unbind> for Services {
-    type Result = <Unbind as Message>::Result;
+    type Result = ResponseFuture<<Unbind as Message>::Result>;
 
-    fn handle(&mut self, _msg: Unbind, _ctx: &mut Self::Context) -> Self::Result {
-        todo!()
+    fn handle(&mut self, msg: Unbind, _ctx: &mut Self::Context) -> Self::Result {
+        if msg.addr.is_empty() {
+            return Box::pin(async {
+                Err(UnbindError::InvalidService(
+                    "Cannot unbind service. Empty prefix.".to_string(),
+                ))
+            });
+        }
+        let some_service = self.services.remove(&msg.addr);
+        Box::pin(async move {
+            match some_service {
+                Some(service) => {
+                    log::debug!("Dropping service actor: {:?}", service);
+                    service
+                        .send(Disconnect {
+                            msg: "Unbinding service".to_string(),
+                        })
+                        .await;
+                    Ok(())
+                }
+                None => Err(UnbindError::ServiceNotFound(format!(
+                    "Cannot find service: {}",
+                    msg.addr
+                ))),
+            }
+        })
     }
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum FindError {
+    #[error("Empty service address")]
+    EmptyAddress,
+    #[error("Service prefix not found: {0}")]
+    ServiceNotFound(String),
+}
+
 #[derive(Message, Debug)]
-#[rtype(result = "Result<Addr<Service>, anyhow::Error>")]
+#[rtype(result = "Result<Addr<Service>, FindError>")]
 pub(crate) struct Find {
     pub addr: String,
 }
@@ -79,25 +133,13 @@ impl Handler<Find> for Services {
     type Result = <Find as Message>::Result;
 
     fn handle(&mut self, msg: Find, _ctx: &mut Self::Context) -> Self::Result {
+        if msg.addr.is_empty() {
+            return Err(FindError::EmptyAddress);
+        }
         if let Some(service) = self.services.get(&msg.addr) {
             return Ok(service.clone());
         }
-        anyhow::bail!("No service for: {:?}", msg)
-    }
-}
-
-#[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
-pub(crate) struct WsBind {
-    pub ws: Addr<WsMessagesHandler>,
-    pub addr: String,
-}
-
-impl Handler<WsBind> for Services {
-    type Result = <WsBind as Message>::Result;
-
-    fn handle(&mut self, _msg: WsBind, _ctx: &mut Self::Context) -> Self::Result {
-        todo!()
+        Err(FindError::ServiceNotFound(msg.addr))
     }
 }
 
@@ -136,6 +178,12 @@ impl From<Bind> for Service {
     }
 }
 
+#[derive(Message, Debug)]
+#[rtype(result = "Result<(), anyhow::Error>")]
+pub(crate) struct Disconnect {
+    msg: String,
+}
+
 impl Actor for Service {
     type Context = Context<Self>;
 
@@ -145,6 +193,16 @@ impl Actor for Service {
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
         // unbind here
+    }
+}
+
+impl Handler<Disconnect> for Service {
+    type Result = ResponseFuture<<Disconnect as Message>::Result>;
+
+    fn handle(&mut self, _msg: Disconnect, ctx: &mut Self::Context) -> Self::Result {
+        ctx.stop();
+        let disconnect_fut = self.msg_handler.disconnect();
+        Box::pin(async { disconnect_fut.await })
     }
 }
 
@@ -191,20 +249,7 @@ impl Handler<RpcRawCall> for Service {
             log::info!("Sending GSB response: {ws_response:?}");
             match ws_response.response {
                 crate::WsResponseMsg::Message(gsb_msg) => Ok(gsb_msg),
-                crate::WsResponseMsg::Error(err) => {
-                    log::error!("Sending error GSB response: {err}");
-                    match err {
-                        GsbApiError::BadRequest => {
-                            Err(ya_service_bus::Error::GsbBadRequest(err.to_string()))
-                        }
-                        GsbApiError::InternalError(_) => {
-                            Err(ya_service_bus::Error::GsbFailure(err.to_string()))
-                        }
-                        GsbApiError::Any(_) => {
-                            Err(ya_service_bus::Error::GsbFailure(err.to_string()))
-                        }
-                    }
-                }
+                crate::WsResponseMsg::Error(err) => Err(err),
             }
         })
     }
@@ -221,7 +266,7 @@ impl Handler<WsResponse> for Service {
 }
 
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "()")]
 pub(crate) struct Listen {
     pub listener: Addr<WsMessagesHandler>,
 }
@@ -233,7 +278,7 @@ impl Handler<Listen> for Service {
         let ws_handler = msg.listener;
         self.msg_handler = Box::new(SendingHandler::new(ws_handler));
         //TODO should fail if it already has SendingHandler
-        Ok(())
+        // Ok(())
     }
 }
 
@@ -244,6 +289,10 @@ trait MessagesHandler {
     ) -> Pin<Box<dyn Future<Output = Result<Receiver<WsResponse>, anyhow::Error>>>>;
 
     fn handle_response(&mut self, msg: WsResponse) -> Result<(), WsResponse>;
+
+    fn disconnect<'a>(
+        &mut self,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>>;
 }
 
 struct BufferingHandler {}
@@ -258,6 +307,12 @@ impl MessagesHandler for BufferingHandler {
 
     fn handle_response(&mut self, _msg: WsResponse) -> Result<(), WsResponse> {
         todo!("Probably should fail here - SendingHandler should handle responses")
+    }
+
+    fn disconnect<'a>(
+        &mut self,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>> {
+        todo!("Send error to all receivers")
     }
 }
 
@@ -299,11 +354,32 @@ impl MessagesHandler for SendingHandler {
             }
             None => Err(WsResponse {
                 id: res.id.clone(),
-                response: crate::WsResponseMsg::Error(GsbApiError::InternalError(format!(
+                response: crate::WsResponseMsg::Error(ya_service_bus::Error::GsbFailure(format!(
                     "Unable to respond to: {:?}",
                     res.id
                 ))),
             }),
         }
+    }
+
+    fn disconnect<'a>(
+        &mut self,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>> {
+        for (addr, sender) in self.pending_senders.drain() {
+            log::debug!("Closing GSB connection: {}", addr);
+            //TODO handle disconnect error
+            sender.send(WsResponse {
+                id: addr,
+                response: crate::WsResponseMsg::Error(ya_service_bus::Error::Cancelled),
+            });
+        }
+        let disconnect_fut = self.ws_handler.send(WsDisconnect(CloseReason {
+            code: actix_http::ws::CloseCode::Normal,
+            description: Some("Closing service".to_string()),
+        }));
+        Box::pin(async move {
+            disconnect_fut.await;
+            Ok(())
+        })
     }
 }

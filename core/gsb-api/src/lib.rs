@@ -7,17 +7,17 @@ use actix_http::{
     ws::{CloseReason, ProtocolError},
     StatusCode,
 };
-use actix_web::ResponseError;
+use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws;
-use bytes::{Buf, Bytes};
 use flexbuffers::{BuilderOptions, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use services::Service;
+use services::{BindError, FindError, Service, UnbindError};
 use thiserror::Error;
+use ya_client_model::ErrorMessage;
 use ya_service_api_interfaces::Provider;
 
-pub const GSB_API_PATH: &str = "/gsb-api/v1";
+pub const GSB_API_PATH: &str = "gsb-api/v1";
 
 pub struct GsbApiService;
 
@@ -32,15 +32,40 @@ impl GsbApiService {
 }
 
 #[derive(Error, Debug)]
-enum GsbApiError {
-    //TODO add msg
-    #[error("Bad request")]
-    BadRequest,
-    //TODO add msg
-    #[error("Internal error")]
+pub(crate) enum GsbApiError {
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Internal error: {0}")]
     InternalError(String),
-    #[error(transparent)]
-    Any(#[from] anyhow::Error),
+}
+
+impl From<BindError> for GsbApiError {
+    fn from(error: BindError) -> Self {
+        match error {
+            BindError::DuplicatedService(_) => Self::BadRequest(error.to_string()),
+            BindError::InvalidService(_) => Self::BadRequest(error.to_string()),
+        }
+    }
+}
+
+impl From<UnbindError> for GsbApiError {
+    fn from(error: UnbindError) -> Self {
+        match error {
+            UnbindError::ServiceNotFound(_) => Self::NotFound(error.to_string()),
+            UnbindError::InvalidService(_) => Self::BadRequest(error.to_string()),
+        }
+    }
+}
+
+impl From<FindError> for GsbApiError {
+    fn from(error: FindError) -> Self {
+        match error {
+            FindError::EmptyAddress => Self::BadRequest(error.to_string()),
+            FindError::ServiceNotFound(_) => Self::NotFound(error.to_string()),
+        }
+    }
 }
 
 impl From<ya_service_bus::Error> for GsbApiError {
@@ -57,7 +82,7 @@ impl From<MailboxError> for GsbApiError {
 
 impl From<serde_json::Error> for GsbApiError {
     fn from(value: serde_json::Error) -> Self {
-        GsbApiError::InternalError(format!("Serde error {value}"))
+        GsbApiError::InternalError(format!("Serialization error {value}"))
     }
 }
 
@@ -67,22 +92,37 @@ impl From<actix_web::Error> for GsbApiError {
     }
 }
 
+impl ResponseError for GsbApiError {
+    fn status_code(&self) -> StatusCode {
+        match *self {
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_response(&self) -> actix_web::HttpResponse<actix_http::body::BoxBody> {
+        match self {
+            GsbApiError::BadRequest(message) => {
+                HttpResponse::BadRequest().json(ErrorMessage::new(message))
+            }
+            GsbApiError::NotFound(message) => {
+                HttpResponse::NotFound().json(ErrorMessage::new(message))
+            }
+            GsbApiError::InternalError(message) => {
+                HttpResponse::InternalServerError().json(ErrorMessage::new(message))
+            }
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 enum WsApiError {
     #[error("Internal Error")]
     InternalError,
     #[error(transparent)]
     Any(#[from] anyhow::Error),
-}
-
-impl ResponseError for GsbApiError {
-    fn status_code(&self) -> StatusCode {
-        match *self {
-            Self::BadRequest => StatusCode::BAD_REQUEST,
-            Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
 }
 
 #[derive(Message, Serialize, Deserialize, Debug)]
@@ -109,7 +149,7 @@ pub(crate) struct WsResponse {
 #[derive(Debug)]
 pub(crate) enum WsResponseMsg {
     Message(Vec<u8>),
-    Error(GsbApiError),
+    Error(ya_service_bus::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -118,57 +158,13 @@ struct Msg {
     payload: serde_json::Value,
 }
 
+#[derive(Message, Debug)]
+#[rtype(result = "Result<(), anyhow::Error>")]
+struct WsDisconnect(CloseReason);
+
 pub(crate) struct WsMessagesHandler {
     // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
     service: Addr<Service>,
-}
-
-#[derive(Default)]
-struct MyBuffer {
-    pub b: Bytes,
-}
-
-impl flexbuffers::Buffer for MyBuffer {
-    type BufferString = String;
-
-    fn slice(&self, range: std::ops::Range<usize>) -> Option<Self> {
-        log::info!("Slice {:?} of {} bytes buffer", range, self.b.len());
-        if range.start > range.end || range.end > self.b.len() {
-            None
-        } else {
-            let b = self.b.slice(range);
-            Some(Self { b })
-        }
-    }
-
-    fn empty() -> Self {
-        log::info!("Default buffer");
-        Self::default()
-    }
-
-    fn buffer_str(&self) -> Result<Self::BufferString, std::str::Utf8Error> {
-        let str = std::str::from_utf8(self.b.chunk()).map(str::to_string);
-        log::info!("Buffer str {:?}", str);
-        str
-    }
-
-    fn shallow_copy(&self) -> Self {
-        log::info!("Shallow copy");
-        self.slice(0..self.len()).unwrap()
-    }
-
-    fn empty_str() -> Self::BufferString {
-        log::info!("Empty str");
-        Self::empty().buffer_str().unwrap()
-    }
-}
-
-impl core::ops::Deref for MyBuffer {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.b.deref()
-    }
 }
 
 impl WsMessagesHandler {
@@ -292,6 +288,16 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                 ),
             })),
         };
+    }
+}
+
+impl Handler<WsDisconnect> for WsMessagesHandler {
+    type Result = <WsDisconnect as actix::Message>::Result;
+
+    fn handle(&mut self, close: WsDisconnect, ctx: &mut Self::Context) -> Self::Result {
+        ctx.close(Some(close.0));
+        ctx.stop(); //TODO necessary?
+        Ok(())
     }
 }
 
