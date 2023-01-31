@@ -269,7 +269,7 @@ fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> Str
         .assert()
         .success();
 
-    list_certs(&data_dir)[0].clone()
+    list_certs(data_dir)[0].clone()
 }
 
 fn list_certs(data_dir: &Path) -> Vec<String> {
@@ -285,7 +285,7 @@ fn list_certs(data_dir: &Path) -> Vec<String> {
     result
         .as_array()
         .unwrap()
-        .into_iter()
+        .iter()
         .map(|v| v["ID"].as_str().unwrap().to_string())
         .collect()
 }
