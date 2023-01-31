@@ -20,6 +20,7 @@ fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems> {
     local_date.format(DATE_FORMAT_STR)
 }
 
+#[cfg(not(feature = "packet-trace-enable"))]
 fn log_format(
     w: &mut dyn std::io::Write,
     now: &mut DeferredNow,
@@ -33,6 +34,15 @@ fn log_format(
         record.module_path().unwrap_or("<unnamed>"),
         record.args()
     )
+}
+
+#[cfg(feature = "packet-trace-enable")]
+fn log_format(
+    w: &mut dyn std::io::Write,
+    _now: &mut DeferredNow,
+    record: &Record,
+) -> Result<(), std::io::Error> {
+    write!(w, "[packet-trace]{}", record.args(),)
 }
 
 fn log_format_color(

@@ -276,6 +276,10 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             Err(err) => return log::debug!("[vpn] error (egress): {err}"),
         };
 
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
+            ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
+
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
@@ -313,6 +317,10 @@ impl Handler<RpcRawCall> for Vpn {
             }
         };
 
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
+        });
+
         self.handle_packet(packet, ctx)
             .map(|_| Vec::new())
             .map_err(|e| ya_service_bus::Error::GsbBadRequest(e.to_string()))
@@ -323,6 +331,10 @@ impl Handler<Packet> for Vpn {
     type Result = <Packet as Message>::Result;
 
     fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
+        });
+
         self.handle_packet(packet, ctx)
     }
 }
