@@ -480,7 +480,9 @@ impl Handler<Packet> for Vpn {
                     .stack_network
                     .send(pkt.data, connection.stack_connection)
                     .map(move |res| {
-                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", { &data_trace });
+                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", {
+                            &data_trace
+                        });
                         res
                     })
                     .map_err(|e| Error::Other(e.to_string()));
@@ -611,7 +613,9 @@ impl Handler<Egress> for Vpn {
                         Err(e) => Err(Error::Other(e.to_string())),
                     })
                     .map(move |r| {
-                        ya_packet_trace::packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &payload });
+                        ya_packet_trace::packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", {
+                            &payload
+                        });
 
                         r
                     });
