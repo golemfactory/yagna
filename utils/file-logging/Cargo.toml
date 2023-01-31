@@ -10,3 +10,7 @@ chrono = "0.4"
 flexi_logger = { version = "0.17", features = ["colors", "compress"] }
 log = "0.4"
 yansi = "0.5.0"
+
+[features]
+packet-trace-enable = []
+default = []

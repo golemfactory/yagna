@@ -237,6 +237,10 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
 
         router.handle(&packet).await;
 
+        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
+
         log::trace!("[inet] runtime -> inet packet {:?}", packet);
 
         router.network.receive(packet);
@@ -264,6 +268,10 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
+                ya_packet_trace::packet_trace_maybe!("exe-unit::inet_ingress_handler", {
+                    &ya_packet_trace::try_extract_from_ip_frame(&payload)
+                });
+
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
