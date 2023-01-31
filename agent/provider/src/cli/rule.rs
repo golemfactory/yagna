@@ -88,13 +88,15 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                let keystore_manager =
-                    KeystoreManager::dupa(&config.cert_dir_path()?, rules.keystore.clone())?;
+                let keystore_manager = KeystoreManager::try_new_with_keystore(
+                    &rules.cert_dir,
+                    rules.keystore.clone(),
+                )?;
 
                 let KeystoreLoadResult { loaded, skipped } =
                     keystore_manager.load_certs(&vec![import_cert])?;
 
-                //TODO Rafał all to whole chain?
+                //TODO remove permissions completely
                 rules.keystore.permissions_manager().set_many(
                     &loaded.iter().chain(skipped.iter()).cloned().collect(),
                     vec![CertPermissions::All],
@@ -104,20 +106,13 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules
                     .keystore
                     .permissions_manager()
-                    .save(&config.cert_dir_path()?)
+                    .save(&rules.cert_dir)
                     .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
 
-                rules.keystore.reload(&config.cert_dir_path()?)?;
+                rules.keystore.reload(&rules.cert_dir)?;
 
-                //TODO Rafał to which cert_ids do we want to set partner mode?
-                // All, root or last?
-                for loaded_cert in loaded {
-                    let cert_id = cert_to_id(&loaded_cert)?;
-                    rules.set_partner_mode(cert_id, mode.clone())?;
-                }
-
-                for skipped_cert in skipped {
-                    let cert_id = cert_to_id(&skipped_cert)?;
+                for cert in loaded.into_iter().chain(skipped) {
+                    let cert_id = cert_to_id(&cert)?;
                     rules.set_partner_mode(cert_id, mode.clone())?;
                 }
 

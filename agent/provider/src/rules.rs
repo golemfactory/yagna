@@ -28,8 +28,8 @@ use crate::startup_config::FileMonitor;
 pub struct RulesManager {
     pub rulestore: Rulestore,
     pub keystore: Keystore,
+    pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
-    cert_dir: PathBuf,
     whitelist_file: PathBuf,
 }
 

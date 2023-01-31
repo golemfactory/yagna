@@ -206,7 +206,7 @@ impl KeystoreManager {
         })
     }
 
-    pub fn dupa(cert_dir: &PathBuf, keystore: Keystore) -> anyhow::Result<Self> {
+    pub fn try_new_with_keystore(cert_dir: &PathBuf, keystore: Keystore) -> anyhow::Result<Self> {
         let ids = keystore.certs_ids()?;
         let cert_dir = cert_dir.clone();
         Ok(Self {
