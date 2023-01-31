@@ -206,16 +206,6 @@ impl KeystoreManager {
         })
     }
 
-    pub fn try_new_with_keystore(cert_dir: &PathBuf, keystore: Keystore) -> anyhow::Result<Self> {
-        let ids = keystore.certs_ids()?;
-        let cert_dir = cert_dir.clone();
-        Ok(Self {
-            ids,
-            cert_dir,
-            keystore,
-        })
-    }
-
     pub fn permissions_manager(&self) -> PermissionsManager {
         self.keystore.permissions_manager()
     }
