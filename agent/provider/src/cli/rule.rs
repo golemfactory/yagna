@@ -88,21 +88,18 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                let keystore_manager = KeystoreManager::try_new_with_keystore(
-                    &rules.cert_dir,
-                    rules.keystore.clone(),
-                )?;
+                //TODO remove keystore from keystore manager
+                let keystore_manager = KeystoreManager::try_new(&rules.cert_dir)?;
 
                 let KeystoreLoadResult { loaded, skipped } =
                     keystore_manager.load_certs(&vec![import_cert])?;
 
-                //TODO remove permissions completely
+                //TODO it will be removed after backward compatibility is done
                 rules.keystore.permissions_manager().set_many(
                     &loaded.iter().chain(skipped.iter()).cloned().collect(),
                     vec![CertPermissions::All],
                     true,
                 );
-
                 rules
                     .keystore
                     .permissions_manager()
