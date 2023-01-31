@@ -1,4 +1,5 @@
-use crate::services::{Bind, Find, Listen, Services, Unbind};
+use crate::service::Listen;
+use crate::services::{Bind, Find, Services, Unbind};
 use crate::{GsbApiError, WsMessagesHandler};
 use actix::Addr;
 use actix_http::StatusCode;
