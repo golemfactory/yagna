@@ -36,9 +36,6 @@ use ya_service_bus::{
 };
 use ya_utils_networking::resolver;
 
-#[allow(unused_imports)]
-use ya_packet_trace::{packet_trace_maybe, try_extract_from_ip_frame};
-
 use crate::bcast::BCastService;
 use crate::config::Config;
 use crate::hybrid::client::{ClientActor, ClientProxy};
@@ -477,8 +474,8 @@ fn forward_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    packet_trace_maybe!("net::forward_bus_to_net", {
-        try_extract_from_ip_frame(msg)
+    ya_packet_trace::packet_trace_maybe!("net::forward_bus_to_net", {
+        ya_packet_trace::try_extract_from_ip_frame(msg)
     });
 
     let (tx, rx) = mpsc::channel(1);
@@ -543,8 +540,8 @@ fn push_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    packet_trace_maybe!("net::forward_bus_to_net", {
-        try_extract_from_ip_frame(msg)
+    ya_packet_trace::packet_trace_maybe!("net::forward_bus_to_net", {
+        ya_packet_trace::try_extract_from_ip_frame(msg)
     });
 
     let msg = match codec::encode_request(

@@ -14,9 +14,6 @@ use ya_utils_networking::vpn::network::DuoEndpoint;
 use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
 
-#[allow(unused_imports)]
-use ya_packet_trace::{packet_trace_maybe, try_extract_from_ip_frame};
-
 use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
@@ -279,8 +276,8 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             Err(err) => return log::debug!("[vpn] error (egress): {err}"),
         };
 
-        packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
-            try_extract_from_ip_frame(&packet)
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
+            ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
 
         match EtherFrame::try_from(packet) {
@@ -320,8 +317,8 @@ impl Handler<RpcRawCall> for Vpn {
             }
         };
 
-        packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
-            &try_extract_from_ip_frame(&packet.data)
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
         });
 
         self.handle_packet(packet, ctx)
@@ -334,8 +331,8 @@ impl Handler<Packet> for Vpn {
     type Result = <Packet as Message>::Result;
 
     fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
-        packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
-            &try_extract_from_ip_frame(&packet.data)
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
         });
 
         self.handle_packet(packet, ctx)

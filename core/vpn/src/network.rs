@@ -12,8 +12,6 @@ use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpo
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
-#[allow(unused_imports)]
-use ya_packet_trace::{packet_trace, packet_trace_maybe, try_extract_from_ip_frame};
 use ya_utils_networking::vpn::socket::TCP_CONN_TIMEOUT;
 use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_route, tap_iface};
 
@@ -470,16 +468,19 @@ impl Handler<Packet> for Vpn {
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         match self.connections.get(&pkt.meta.into()).cloned() {
             Some(connection) => {
+                // packet tracing is also done when the packet data is no longer available,
+                // so we have to make a temporary copy. This incurs no runtime overhead on builds
+                // without the feature packet-trace-enable.
                 #[cfg(feature = "packet-trace-enable")]
-                let data2 = pkt.data.clone();
+                let data_trace = pkt.data.clone();
 
-                packet_trace!("Vpn::Tx::Handler<Packet>::1", { &data2 });
+                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", { &data_trace });
 
                 let fut = self
                     .stack_network
                     .send(pkt.data, connection.stack_connection)
                     .map(move |res| {
-                        packet_trace!("Vpn::Tx::Handler<Packet>::2", { &data2 });
+                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", { &data_trace });
                         res
                     })
                     .map_err(|e| Error::Other(e.to_string()));
@@ -558,7 +559,7 @@ impl Handler<Ingress> for Vpn {
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
-                packet_trace!("Vpn::Tx::Handler<Ingress>", { &payload });
+                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Ingress>", { &payload });
 
                 if let Some(mut connection) = self.connections.get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
@@ -590,10 +591,13 @@ impl Handler<Egress> for Vpn {
     fn handle(&mut self, msg: Egress, _: &mut Self::Context) -> Self::Result {
         let frame = msg.event.payload.into_vec();
 
+        // packet tracing is also done when the packet data is no longer available,
+        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+        // without the feature packet-trace-enable.
         #[cfg(feature = "packet-trace-enable")]
-        let payload = try_extract_from_ip_frame(&frame);
+        let payload = ya_packet_trace::try_extract_from_ip_frame(&frame);
 
-        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::1", { &payload });
+        ya_packet_trace::packet_trace_maybe!("Vpn::Tx::Handler<Egress>::1", { &payload });
 
         log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
 
@@ -607,7 +611,7 @@ impl Handler<Egress> for Vpn {
                         Err(e) => Err(Error::Other(e.to_string())),
                     })
                     .map(move |r| {
-                        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &payload });
+                        ya_packet_trace::packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &payload });
 
                         r
                     });

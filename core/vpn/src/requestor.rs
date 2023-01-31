@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
-use ya_packet_trace::packet_trace;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
@@ -248,9 +247,13 @@ impl VpnWebSocket {
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        // packet tracing is also done when the packet data is no longer available,
+        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+        // without the feature packet-trace-enable.
         #[cfg(feature = "packet-trace-enable")]
-        let data2 = data.clone();
-        packet_trace!("VpnWebSocket::Tx::1", { &data });
+        let data_trace = data.clone();
+
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::1", { &data_trace });
 
         let vpn = self.vpn.clone();
         vpn.send(Packet {
@@ -266,7 +269,7 @@ impl VpnWebSocket {
         })
         .wait(ctx);
 
-        packet_trace!("VpnWebSocket::Tx::2", { &data2 });
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::2", { &data_trace });
     }
 }
 
@@ -284,7 +287,7 @@ impl Actor for VpnWebSocket {
         });
 
         ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
-            packet_trace!("VpnWebSocket::Rx", { &packet });
+            ya_packet_trace::packet_trace!("VpnWebSocket::Rx", { &packet });
             packet
         }));
     }
