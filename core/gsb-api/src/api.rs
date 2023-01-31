@@ -124,7 +124,6 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use actix::prelude::*;
     use actix_http::ws::Frame;
     use actix_test;
     use actix_web::App;

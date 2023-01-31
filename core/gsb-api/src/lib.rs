@@ -55,6 +55,8 @@ impl From<UnbindError> for GsbApiError {
         match error {
             UnbindError::ServiceNotFound(_) => Self::NotFound(error.to_string()),
             UnbindError::InvalidService(_) => Self::BadRequest(error.to_string()),
+            UnbindError::UnbindFailed(_) => Self::InternalError(error.to_string()),
+            
         }
     }
 }
@@ -98,7 +100,6 @@ impl ResponseError for GsbApiError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -117,26 +118,12 @@ impl ResponseError for GsbApiError {
     }
 }
 
-#[derive(Error, Debug)]
-enum WsApiError {
-    #[error("Internal Error")]
-    InternalError,
-    #[error(transparent)]
-    Any(#[from] anyhow::Error),
-}
-
 #[derive(Message, Serialize, Deserialize, Debug)]
 #[rtype(result = "Result<(), anyhow::Error>")]
 struct WsRequest {
     id: String,
     component: String,
     payload: Vec<u8>,
-}
-
-#[derive(Deserialize)]
-struct WsResponseBody {
-    pub id: String,
-    pub payload: Vec<u8>,
 }
 
 #[derive(Message, Debug)]
@@ -159,7 +146,7 @@ struct Msg {
 }
 
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "()")]
 struct WsDisconnect(CloseReason);
 
 pub(crate) struct WsMessagesHandler {
@@ -297,7 +284,6 @@ impl Handler<WsDisconnect> for WsMessagesHandler {
     fn handle(&mut self, close: WsDisconnect, ctx: &mut Self::Context) -> Self::Result {
         ctx.close(Some(close.0));
         ctx.stop(); //TODO necessary?
-        Ok(())
     }
 }
 
@@ -433,6 +419,7 @@ mod flexbuffer_util {
             FlexBufferType::VectorUInt => clone_vec(&mut pusher, value, FlexBufferType::UInt)?,
             FlexBufferType::VectorFloat => clone_vec(&mut pusher, value, FlexBufferType::Float)?,
             FlexBufferType::VectorKey => clone_vec(&mut pusher, value, FlexBufferType::Key)?,
+            #[allow(deprecated)]
             FlexBufferType::VectorString => clone_vec(&mut pusher, value, FlexBufferType::String)?,
             FlexBufferType::VectorBool => clone_vec(&mut pusher, value, FlexBufferType::Bool)?,
             FlexBufferType::VectorInt2 => clone_vec(&mut pusher, value, FlexBufferType::Int)?,

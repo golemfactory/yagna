@@ -19,7 +19,7 @@ lazy_static! {
 }
 
 trait GsbCaller {
-    fn call<'MSG, REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(
+    fn call<'msg, REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(
         self,
         path: String,
         req: REQ,
@@ -75,6 +75,20 @@ pub(crate) enum UnbindError {
     ServiceNotFound(String),
     #[error("Invalid service address prefix: {0}")]
     InvalidService(String),
+    #[error("Unbind failed: {0}")]
+    UnbindFailed(String),
+}
+
+impl From<DisconnectError> for UnbindError {
+    fn from(err: DisconnectError) -> Self {
+        UnbindError::UnbindFailed(err.to_string())
+    }
+}
+
+impl From<MailboxError> for UnbindError {
+    fn from(err: MailboxError) -> Self {
+        UnbindError::UnbindFailed(err.to_string())
+    }
 }
 
 #[derive(Message, Debug)]
@@ -99,12 +113,11 @@ impl Handler<Unbind> for Services {
             match some_service {
                 Some(service) => {
                     log::debug!("Dropping service actor: {:?}", service);
-                    service
+                    Ok(service
                         .send(Disconnect {
                             msg: "Unbinding service".to_string(),
                         })
-                        .await;
-                    Ok(())
+                        .await??)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
                     "Cannot find service: {}",
@@ -173,13 +186,21 @@ impl From<Bind> for Service {
         Service {
             addr_prefix,
             addresses,
-            msg_handler: msg_handler,
+            msg_handler,
         }
     }
 }
 
+#[derive(Error, Debug)]
+pub(crate) enum DisconnectError {
+    #[error("Failed to disconnect GSB services: {0}")]
+    FailedGSB(String),
+    #[error("Failed to disconnect GSB services: {0}")]
+    FailedWS(String),
+}
+
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "Result<(), DisconnectError>")]
 pub(crate) struct Disconnect {
     msg: String,
 }
@@ -199,10 +220,10 @@ impl Actor for Service {
 impl Handler<Disconnect> for Service {
     type Result = ResponseFuture<<Disconnect as Message>::Result>;
 
-    fn handle(&mut self, _msg: Disconnect, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Disconnect, ctx: &mut Self::Context) -> Self::Result {
         ctx.stop();
-        let disconnect_fut = self.msg_handler.disconnect();
-        Box::pin(async { disconnect_fut.await })
+        let disconnect_future = self.msg_handler.disconnect(msg);
+        Box::pin(async { disconnect_future.await })
     }
 }
 
@@ -292,7 +313,8 @@ trait MessagesHandler {
 
     fn disconnect<'a>(
         &mut self,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>>;
+        msg: Disconnect,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), DisconnectError>> + Send + 'a>>;
 }
 
 struct BufferingHandler {}
@@ -311,7 +333,8 @@ impl MessagesHandler for BufferingHandler {
 
     fn disconnect<'a>(
         &mut self,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>> {
+        _msg: Disconnect,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), DisconnectError>> + Send + 'a>> {
         todo!("Send error to all receivers")
     }
 }
@@ -364,22 +387,25 @@ impl MessagesHandler for SendingHandler {
 
     fn disconnect<'a>(
         &mut self,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'a>> {
+        msg: Disconnect,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<(), DisconnectError>> + Send + 'a>> {
         for (addr, sender) in self.pending_senders.drain() {
             log::debug!("Closing GSB connection: {}", addr);
-            //TODO handle disconnect error
-            sender.send(WsResponse {
+            let _ = sender.send(WsResponse {
                 id: addr,
-                response: crate::WsResponseMsg::Error(ya_service_bus::Error::Cancelled),
+                response: crate::WsResponseMsg::Error(ya_service_bus::Error::Closed(
+                    msg.msg.clone(),
+                )),
             });
         }
         let disconnect_fut = self.ws_handler.send(WsDisconnect(CloseReason {
             code: actix_http::ws::CloseCode::Normal,
-            description: Some("Closing service".to_string()),
+            description: Some(msg.msg.clone()),
         }));
         Box::pin(async move {
-            disconnect_fut.await;
-            Ok(())
+            disconnect_fut
+                .await
+                .map_err(|err| DisconnectError::FailedWS(err.to_string()))
         })
     }
 }
