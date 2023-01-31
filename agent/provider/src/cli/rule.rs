@@ -91,19 +91,19 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 let keystore_manager =
                     KeystoreManager::dupa(&config.cert_dir_path()?, rules.keystore.clone())?;
 
-                let mut permissions_manager = keystore_manager.permissions_manager();
-
                 let KeystoreLoadResult { loaded, skipped } =
                     keystore_manager.load_certs(&vec![import_cert])?;
 
                 //TODO Rafał all to whole chain?
-                permissions_manager.set_many(
+                rules.keystore.permissions_manager().set_many(
                     &loaded.iter().chain(skipped.iter()).cloned().collect(),
                     vec![CertPermissions::All],
                     true,
                 );
 
-                permissions_manager
+                rules
+                    .keystore
+                    .permissions_manager()
                     .save(&config.cert_dir_path()?)
                     .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
 
