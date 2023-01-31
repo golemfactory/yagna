@@ -88,7 +88,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                //TODO remove keystore from keystore manager
                 let keystore_manager = KeystoreManager::try_new(&rules.cert_dir)?;
 
                 let KeystoreLoadResult { loaded, skipped } =
