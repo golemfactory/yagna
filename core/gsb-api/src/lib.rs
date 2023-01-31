@@ -1,4 +1,5 @@
 mod api;
+mod service;
 mod services;
 
 use actix::prelude::*;
@@ -12,7 +13,8 @@ use actix_web_actors::ws;
 use flexbuffers::{BuilderOptions, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use services::{BindError, FindError, Service, UnbindError};
+use service::Service;
+use services::{BindError, FindError, UnbindError};
 use thiserror::Error;
 use ya_client_model::ErrorMessage;
 use ya_service_api_interfaces::Provider;
@@ -56,7 +58,6 @@ impl From<UnbindError> for GsbApiError {
             UnbindError::ServiceNotFound(_) => Self::NotFound(error.to_string()),
             UnbindError::InvalidService(_) => Self::BadRequest(error.to_string()),
             UnbindError::UnbindFailed(_) => Self::InternalError(error.to_string()),
-            
         }
     }
 }
