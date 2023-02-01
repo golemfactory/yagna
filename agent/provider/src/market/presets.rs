@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::path::Path;
@@ -21,7 +21,8 @@ pub struct Preset {
     pub exeunit_name: String,
     pub pricing_model: String,
     pub initial_price: f64,
-    pub usage_coeffs: HashMap<String, f64>,
+    // It's important that all values are sorted, so that other tools can easily detect changes.
+    pub usage_coeffs: BTreeMap<String, f64>,
 }
 
 impl Preset {
