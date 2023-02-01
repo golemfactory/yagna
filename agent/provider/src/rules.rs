@@ -11,7 +11,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-use strum::Display;
+use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_manifest_utils::{
     matching::{
@@ -27,10 +27,10 @@ use crate::startup_config::FileMonitor;
 #[derive(Clone, Debug)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
+    pub keystore: Keystore,
+    pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
-    keystore: Keystore,
     whitelist_file: PathBuf,
-    cert_dir: PathBuf,
 }
 
 impl RulesManager {
@@ -431,8 +431,20 @@ pub struct CertRule {
     pub description: String,
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
+#[derive(
+    StructOpt,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Display,
+    EnumString,
+    EnumVariantNames,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Mode {
     All,
     None,
