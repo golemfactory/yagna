@@ -2,6 +2,7 @@ mod api;
 mod service;
 mod services;
 
+use crate::service::Buffer;
 use actix::prelude::*;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
@@ -276,6 +277,18 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                 ),
             })),
         };
+    }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        log::debug!("WS handler finished. Disconnecting.");
+        let service = self.service.clone();
+        ctx.wait(actix::fut::wrap_future(async move {
+            let _msg = "WS disconnected".to_string();
+            if let Err(err) = service.send(Buffer).await {
+                log::error!("Failed to disconnect service. Internal error: {}", err);
+            }
+        }));
+        ctx.stop();
     }
 }
 
