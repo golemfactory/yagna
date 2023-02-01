@@ -15,7 +15,8 @@ path = "src/bin.rs"
 [features]
 default = ['compat-deployment']
 compat-deployment = []
-sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
+sgx = ['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
+packet-trace-enable = ["ya-packet-trace/enable"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.22.0"
@@ -38,6 +39,7 @@ ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = ["dns", "vpn"]}
+ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"

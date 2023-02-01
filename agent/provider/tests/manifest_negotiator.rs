@@ -37,29 +37,13 @@ fn manifest_negotiator_test_accepted_because_outbound_is_not_requested() {
     let whitelist = r#"{ "patterns": [] }"#;
     let rulestore = r#"{"outbound": {"enabled": false, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#;
 
-    // signature does not matter here
-    let signature = Signature {
-        private_key_file: None,
-        algorithm: None,
-        certificate: None,
-    };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
-    let signature_b64 = signature.private_key_file.map(|signing_key| {
-        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
-    });
-    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+    manifest_negotiator_test_encoded_manifest_without_signature(
         rulestore,
         whitelist,
         comp_manifest_b64,
-        signature_b64,
-        signature.algorithm,
-        cert_b64,
         None,
-        None,
-        &vec![CertPermissions::All],
-        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -134,31 +118,15 @@ fn manifest_negotiator_test_manifest_with_urls(
     error_msg: Option<&str>,
 ) {
     // compManifest.net.inet.out.urls is not empty, therefore outbound is required
-    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#;
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
 
-    // signature does not matter here
-    let signature = Signature {
-        private_key_file: None,
-        algorithm: None,
-        certificate: None,
-    };
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
-    let signature_b64 = signature.private_key_file.map(|signing_key| {
-        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
-    });
-    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+    manifest_negotiator_test_encoded_manifest_without_signature(
         rulestore,
         whitelist,
         comp_manifest_b64,
-        signature_b64,
-        signature.algorithm,
-        cert_b64,
-        None,
         error_msg,
-        &vec![CertPermissions::All],
-        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -234,9 +202,9 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     });
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#;
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
         rulestore,
         whitelist,
         comp_manifest_b64,
@@ -245,8 +213,6 @@ fn manifest_negotiator_test_with_valid_payload_signature(
         cert_b64,
         None,
         error_msg,
-        &vec![CertPermissions::All],
-        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -295,9 +261,9 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#;
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
         rulestore,
         whitelist,
         comp_manifest_b64,
@@ -306,8 +272,6 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
         cert_b64,
         None,
         error_msg,
-        &vec![CertPermissions::All],
-        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -377,7 +341,7 @@ fn test_manifest_negotiator_certs_permissions(
     });
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#;
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
 
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         rulestore,
@@ -394,28 +358,76 @@ fn test_manifest_negotiator_certs_permissions(
 }
 
 #[test_case(
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
     "Accepted because domain is whitelisted"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    None; // error msg
-    "Accepted because domain is whitelisted (regex)"
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://xdomain.com"]"#, // compManifest.net.inet.out.urls
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because not exact match and match type is strict - leading characters"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "a.com", "type": "strict" }, { "domain": "b.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.comx"]"#, // compManifest.net.inet.out.urls
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because not exact match and match type is strict - following characters"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://x.domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because not exact match and match type is strict - subdomain"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "a.com", "match": "strict" }, { "domain": "b.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://c.com"]"#, // compManifest.net.inet.out.urls
     Some("Didn't match any Rules"); // error msg
     "Rejected because domain not whitelisted"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "a.com", "type": "strict" }, { "domain": "b.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"{ "patterns": [{ "domain": "a.com", "match": "strict" }, { "domain": "b.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://a.com", "https://c.com"]"#, // compManifest.net.inet.out.urls
     Some("Didn't match any Rules"); // error msg
     "Rejected because one of domains not whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "do.*ain.com", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because domain is whitelisted (regex)"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com.hacked.pro"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because domain is whitelisted (open ended regex - subdomain)"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://mydomain.com"]"#,
+    None; // error msg
+    "Accepted because domain is whitelisted (open ended regex - extended domain name)"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "^.*\\.domain.com$", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://valid.domain.com"]"#,
+    None; // error msg
+    "Accepted because regex is allowing subdomains"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "^.*\\.domain.com$", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://mydomain.com"]"#,
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because domain name does not match regex"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "^.*\\.domain.com$", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com.hacked.pro"]"#,
+    Some("Didn't match any Rules"); // error msg
+    "Rejected because regex does not allow different ending"
 )]
 #[serial]
 fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Option<&str>) {
@@ -433,7 +445,7 @@ fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Op
     });
     let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
         rulestore,
         whitelist,
         comp_manifest_b64,
@@ -441,6 +453,47 @@ fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Op
         signature.algorithm,
         cert_b64,
         None,
+        error_msg,
+    )
+}
+
+fn manifest_negotiator_test_encoded_manifest_without_signature(
+    rulestore: &str,
+    whitelist: &str,
+    comp_manifest_b64: String,
+    error_msg: Option<&str>,
+) {
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        None,
+        None,
+        None,
+        None,
+        error_msg,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
+    rulestore: &str,
+    whitelist: &str,
+    comp_manifest_b64: String,
+    signature_b64: Option<String>,
+    signature_alg: Option<&str>,
+    cert_b64: Option<String>,
+    cert_permissions_b64: Option<&str>,
+    error_msg: Option<&str>,
+) {
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        rulestore,
+        whitelist,
+        comp_manifest_b64,
+        signature_b64,
+        signature_alg,
+        cert_b64,
+        cert_permissions_b64,
         error_msg,
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],

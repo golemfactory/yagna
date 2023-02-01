@@ -1,10 +1,6 @@
 name: Build binaries (x86-64) hybrid-net
 
 on:
-  push:
-    branches:
-      - master
-      - release/*
   pull_request:
     branches:
       - master

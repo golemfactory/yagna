@@ -7,6 +7,7 @@ use ya_service_bus::RpcMessage;
 pub const BUS_ID: &str = "/local/appkey";
 
 pub const DEFAULT_ROLE: &str = "manager";
+pub const AUTOCONFIGURED_KEY_NAME: &str = "autoconfigured";
 
 const DEFAULT_PAGE_SIZE: u32 = 20;
 

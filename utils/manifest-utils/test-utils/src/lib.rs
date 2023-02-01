@@ -97,7 +97,7 @@ impl TestResources {
                 fs::remove_dir_all(&resource_cert_dir).expect("Can delete test cert resources dir");
             }
             fs::create_dir_all(&resource_cert_dir).expect("Can create temp dir");
-            self.unpack_cert_resources(&resource_cert_dir);
+            Self::unpack_cert_resources(&resource_cert_dir);
         });
         let store_cert_dir = self.store_cert_dir_path();
         if store_cert_dir.exists() {
@@ -136,17 +136,17 @@ impl TestResources {
         base64::encode(signature)
     }
 
-    fn unpack_cert_resources(&self, cert_resources_dir: &PathBuf) {
-        let mut cert_archive = self.test_resources_dir_path();
+    pub fn unpack_cert_resources(cert_resources_dir: &PathBuf) {
+        let mut cert_archive = Self::test_resources_dir_path();
         cert_archive.push("certificates.tar");
         let cert_archive = File::open(cert_archive).expect("Can open cert archive file");
         let mut cert_archive = Archive::new(cert_archive);
         cert_archive
             .unpack(cert_resources_dir)
-            .expect("Can unack cert archive");
+            .expect("Can unpack cert archive");
     }
 
-    pub fn test_resources_dir_path(&self) -> PathBuf {
+    pub fn test_resources_dir_path() -> PathBuf {
         let mut test_resources = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_resources.push("resources/test");
         test_resources

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     convert::TryFrom,
     fs::OpenOptions,
     io::BufReader,
@@ -7,7 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::Display;
@@ -45,21 +46,112 @@ impl RulesManager {
 
         let rulestore = Rulestore::load_or_create(rules_file)?;
 
-        Ok(Self {
+        let manager = Self {
             whitelist_file: whitelist_file.to_path_buf(),
             cert_dir: cert_dir.to_path_buf(),
             rulestore,
             keystore,
             whitelist,
-        })
+        };
+
+        manager.remove_dangling_rules()?;
+
+        Ok(manager)
+    }
+
+    pub fn remove_dangling_rules(&self) -> Result<()> {
+        let mut deleted_partner_rules = vec![];
+
+        let keystore_certs = self.keystore.certs_ids()?;
+
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .partner
+            .retain(|cert_id, _| {
+                keystore_certs
+                    .contains(cert_id)
+                    .not()
+                    .then(|| deleted_partner_rules.push(cert_id.clone()))
+                    .is_none()
+            });
+
+        if deleted_partner_rules.is_empty() {
+            Ok(())
+        } else {
+            log::warn!("Because Keystore didn't have appriopriate certs, following Partner rules were removed: {:?}", deleted_partner_rules);
+
+            self.rulestore.save()
+        }
+    }
+
+    pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+        let keystore_certs = self.keystore.certs_ids()?;
+
+        if keystore_certs.contains(&cert_id) {
+            self.rulestore
+                .config
+                .write()
+                .unwrap()
+                .outbound
+                .partner
+                .insert(
+                    cert_id.clone(),
+                    CertRule {
+                        mode: mode.clone(),
+                        description: "".into(),
+                    },
+                );
+            log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
+
+            self.rulestore.save()
+        } else {
+            Err(anyhow!(
+                "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
+            ))
+        }
+    }
+
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        log::debug!("Setting outbound enabled: {enabled}");
+        self.rulestore.config.write().unwrap().outbound.enabled = enabled;
+
+        self.rulestore.save()
+    }
+
+    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound everyone mode: {mode}");
+        self.rulestore.config.write().unwrap().outbound.everyone = mode;
+
+        self.rulestore.save()
+    }
+
+    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound audited_payload default mode: {mode}");
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode = mode;
+
+        self.rulestore.save()
     }
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
-            let rulestore = self.rulestore.clone();
-            let handler = move |p: PathBuf| match rulestore.reload() {
+            let manager = self.clone();
+            let handler = move |p: PathBuf| match manager.rulestore.reload() {
                 Ok(()) => {
                     log::info!("rulestore updated from {}", p.display());
+
+                    if let Err(e) = manager.remove_dangling_rules() {
+                        log::warn!("Error removing unnecessary rules: {e}");
+                    }
                 }
                 Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
             };
@@ -68,10 +160,14 @@ impl RulesManager {
 
         let keystore_monitor = {
             let cert_dir = self.cert_dir.clone();
-            let keystore = self.keystore.clone();
-            let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+            let manager = self.clone();
+            let handler = move |p: PathBuf| match manager.keystore.reload(&cert_dir) {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
+
+                    if let Err(e) = manager.remove_dangling_rules() {
+                        log::warn!("Error removing unnecessary rules: {e}");
+                    }
                 }
                 Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
             };
@@ -281,33 +377,6 @@ impl Rulestore {
         *self.config.write().unwrap() = store;
     }
 
-    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
-        log::debug!("Setting outbound enabled: {enabled}");
-        self.config.write().unwrap().outbound.enabled = enabled;
-
-        self.save()
-    }
-
-    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound everyone mode: {mode}");
-        self.config.write().unwrap().outbound.everyone = mode;
-
-        self.save()
-    }
-
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {mode}");
-        self.config
-            .write()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode = mode;
-
-        self.save()
-    }
-
     pub fn print(&self) -> Result<()> {
         println!(
             "{}",
@@ -335,6 +404,7 @@ impl Default for RulesConfig {
                         description: "Default setting".into(),
                     },
                 },
+                partner: HashMap::new(),
             },
         }
     }
@@ -346,6 +416,8 @@ pub struct OutboundConfig {
     pub enabled: bool,
     pub everyone: Mode,
     pub audited_payload: CertRules,
+    #[serde(default)]
+    pub partner: HashMap<String, CertRule>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
