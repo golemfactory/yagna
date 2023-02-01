@@ -125,10 +125,13 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
+    use actix_http::Payload;
+    use actix_http::encoding::Decoder;
     use actix_http::ws::Frame;
-    use actix_test;
+    use actix_test::{self, TestServer};
     use actix_web::App;
     use actix_web_actors::ws;
+    use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
     use ya_core_model::gftp::{GetChunk, GftpChunk};
@@ -139,6 +142,7 @@ mod tests {
     use crate::{GsbApiService, GSB_API_PATH};
 
     use super::*;
+
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
         fn component(&self) -> () {
@@ -159,19 +163,19 @@ mod tests {
         payload: MSG,
     }
 
-    #[actix_web::test]
-    async fn happy_path_test() {
-        const SERVICE_ADDR: &str = "/public/gftp/123";
-        const PAYLOAD_LEN: usize = 10;
+    const SERVICE_ADDR: &str = "/public/gftp/123";
+    const PAYLOAD_LEN: usize = 10;
 
-        let mut server = actix_test::start(|| {
+    fn dummy_api() -> TestServer {
+        actix_test::start(|| {
             App::new()
                 .service(GsbApiService::rest(&TestContext {}))
                 .wrap(dummy_auth())
-        });
+        })
+    }
 
-        let mut bind_resp = server
-            .post(&format!("/{}/{}", GSB_API_PATH, "services"))
+    fn bind_get_chunk_service_req(api: &mut TestServer) -> SendClientRequest {
+        api.post(&format!("/{}/{}", GSB_API_PATH, "services"))
             .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
@@ -179,34 +183,57 @@ mod tests {
                     links: None,
                 }),
             })
-            .await
-            .unwrap();
+    }
 
+    async fn verify_bind_service_response(bind_req: SendClientRequest, components: Vec<String>, service_addr: &str) -> ServicesBody {
+        let mut bind_resp = bind_req.await.unwrap();
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
-
         let body = bind_resp.body().await.unwrap();
         let body: ServicesBody = serde_json::de::from_slice(&body.to_vec()).unwrap();
         assert_eq!(
             body,
             ServicesBody {
                 listen: Some(ServicesListenBody {
-                    components: vec!["GetChunk".to_string()],
+                    components,
                     on: SERVICE_ADDR.to_string(),
                     links: Some(ServicesLinksBody {
                         messages: format!(
                             "{}/services/{}",
                             GSB_API_PATH,
-                            base64::encode("/public/gftp/123")
+                            base64::encode(service_addr)
                         )
                     }),
                 })
             }
         );
+        return body;
+    }
+
+    async fn verify_delete_service(api: &mut TestServer, service_addr: &str) {
+        let delete_resp = api
+            .delete(&format!(
+                "/{}/{}/{}",
+                GSB_API_PATH,
+                "services",
+                base64::encode(service_addr)
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(delete_resp.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn happy_path_test() {
+        let mut api = dummy_api();
+
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let body = verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR).await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
-        let mut ws_frames = server.ws_at(&services_path).await.unwrap();
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
-        let gsb_endpoint = ya_service_bus::typed::service("/public/gftp/123");
+        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -249,18 +276,7 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        let delete_resp = server
-            .delete(&format!(
-                "/{}/{}/{}",
-                GSB_API_PATH,
-                "services",
-                base64::encode(SERVICE_ADDR)
-            ))
-            .send()
-            .await
-            .unwrap();
-
-        assert_eq!(delete_resp.status(), StatusCode::OK);
+        verify_delete_service(&mut api, SERVICE_ADDR).await;
     }
 
     #[actix_web::test]
@@ -289,7 +305,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn error_on_post_od_duplicated_service() {
+    async fn error_on_post_of_duplicated_service() {
         panic!("NYI");
     }
 
