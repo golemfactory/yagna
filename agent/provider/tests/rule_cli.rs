@@ -88,6 +88,7 @@ fn rule_set_should_edit_everyone_mode(mode: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -110,6 +111,7 @@ fn rule_set_should_edit_default_modes_for_certificate_rules(rule: &str, mode: &s
         .arg("set")
         .arg("outbound")
         .arg(rule)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -136,12 +138,13 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(cert_id)
+        .arg("--mode")
         .arg("all")
         .assert()
         .stderr(format!(
-            "Error: Setting Partner mode All failed: No cert id: {cert_id} found in keystore\n"
+            "Error: Setting Partner mode all failed: No cert id: {cert_id} found in keystore\n"
         ));
 }
 
@@ -161,8 +164,9 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(&cert_id)
+        .arg("--mode")
         .arg(mode)
         .assert()
         .success();
@@ -170,6 +174,35 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     let result = list_rules_command(data_dir.path());
 
     assert_eq!(&result["outbound"][rule][&cert_id]["mode"], mode);
+}
+
+#[test_case("partner", "all")]
+#[test_case("partner", "none")]
+#[test_case("partner", "whitelist")]
+#[serial_test::serial]
+fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mode: &str) {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("import-cert")
+        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
+        .arg("--mode")
+        .arg(mode)
+        .assert()
+        .success();
+
+    let result = list_rules_command(data_dir.path());
+    let added_certs = list_certs(data_dir.path());
+
+    for cert in added_certs {
+        assert_eq!(result["outbound"][rule][cert]["mode"], mode);
+    }
 }
 
 #[test]
@@ -188,8 +221,9 @@ fn removing_cert_should_also_remove_its_rule() {
         .arg("set")
         .arg("outbound")
         .arg(rule)
-        .arg("--cert-id")
+        .arg("cert-id")
         .arg(&cert_id)
+        .arg("--mode")
         .arg("all")
         .assert()
         .success();
@@ -235,6 +269,10 @@ fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> Str
         .assert()
         .success();
 
+    list_certs(data_dir)[0].clone()
+}
+
+fn list_certs(data_dir: &Path) -> Vec<String> {
     let output = Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.to_str().unwrap())
@@ -244,8 +282,12 @@ fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> Str
         .output()
         .unwrap();
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-
-    result[0]["ID"].as_str().unwrap().to_string()
+    result
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["ID"].as_str().unwrap().to_string())
+        .collect()
 }
 
 fn prepare_test_dir() -> TempDir {
