@@ -157,7 +157,7 @@ where
     fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
         Ok(match i32::from_sql(bytes)? {
             1 => Network::Mainnet,
-            4 => Network::Rinkeby,
+            987789 => Network::Rinkeby,
             5 => Network::Goerli,
             137 => Network::Polygon,
             80001 => Network::Mumbai,
