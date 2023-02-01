@@ -1,4 +1,4 @@
-use crate::service::Listen;
+use crate::service::Relay;
 use crate::services::{Bind, Find, Services, Unbind};
 use crate::{GsbApiError, WsMessagesHandler};
 use actix::Addr;
@@ -79,7 +79,7 @@ async fn get_service_messages(
         service: service.clone(),
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    service.send(Listen { listener: addr }).await?;
+    service.send(Relay { listener: addr }).await?;
     Ok(resp)
 }
 

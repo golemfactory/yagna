@@ -99,11 +99,8 @@ impl Handler<Unbind> for Services {
             match some_service {
                 Some(service) => {
                     log::debug!("Dropping service actor: {:?}", service);
-                    Ok(service
-                        .send(Disconnect {
-                            msg: "Unbinding service".to_string(),
-                        })
-                        .await??)
+                    let msg = "Unbinding service".to_string();
+                    Ok(service.send(Disconnect { msg }).await??)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
                     "Cannot find service: {}",
