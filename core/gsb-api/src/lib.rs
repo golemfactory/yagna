@@ -211,6 +211,14 @@ impl WsMessagesHandler {
 
 impl Actor for WsMessagesHandler {
     type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        log::debug!("WsMessagesHandler started");
+    }
+
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        log::debug!("WsMessagesHandler stopped");
+    }
 }
 
 impl Handler<WsRequest> for WsMessagesHandler {

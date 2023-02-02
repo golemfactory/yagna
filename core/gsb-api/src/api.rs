@@ -74,12 +74,14 @@ async fn get_service_messages(
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     let addr = decode_addr(&path.key)?;
+    log::debug!("GET WS service: {}", addr);
     let service = services.send(Find { addr }).await??;
     let handler = WsMessagesHandler {
         service: service.clone(),
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
     service.send(Relay { ws_handler: addr }).await?;
+    log::debug!("returning GET WS service");
     Ok(resp)
 }
 
@@ -125,6 +127,8 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::{GsbApiService, GSB_API_PATH};
     use actix_http::ws::Frame;
@@ -225,6 +229,7 @@ mod tests {
 
     #[actix_web::test]
     async fn happy_path_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
@@ -318,14 +323,77 @@ mod tests {
 
     #[actix_web::test]
     async fn gsb_msgs_before_ws_connect_buffering_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
-        let _body =
+        let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
                 .await;
 
-        panic!("NYI. Scenario: service POST, then send GSB messages, then GET ws.");
+        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+
+        let (gsb_res, ws_res) = tokio::join!(
+            async {
+                println!("GSB req");
+                let gsb_resp = gsb_endpoint
+                    .call(GetChunk {
+                        offset: u64::MIN,
+                        size: PAYLOAD_LEN as u64,
+                    })
+                    .await;
+                println!("GSB res");
+                return gsb_resp;
+            },
+            async {
+                println!("WS sleep");
+                std::thread::sleep(Duration::from_millis(100));
+
+                println!("WS connect");
+                let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+
+                println!("WS next");
+                let ws_req = ws_frames.try_next().await;
+                
+                assert!(ws_req.is_ok());
+                let ws_req = ws_req.unwrap();
+                let ws_req = ws_req.unwrap();
+                let ws_req = match ws_req {
+                    Frame::Binary(ws_req) => {
+                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                    }
+                    msg => panic!("Not expected msg: {:?}", msg),
+                };
+                let id = ws_req.id;
+                let len = ws_req.payload.size as usize;
+                let res_msg = GftpChunk {
+                    content: vec![7; len],
+                    offset: 0,
+                };
+                let ws_res = TestWsResponse {
+                    id,
+                    payload: res_msg,
+                };
+                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+                
+                println!("WS send");
+                let ws_res = ws_frames
+                    .send(ws::Message::Binary(Bytes::from(ws_res)))
+                    .await;
+                
+                println!("WS sent");
+                return ws_res;
+            }
+        );
+
+        let _ = ws_res.unwrap();
+        let gsb_res = gsb_res.unwrap().unwrap();
+        assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
+
+        verify_delete_service(&mut api, SERVICE_ADDR).await;
     }
 
     #[actix_web::test]

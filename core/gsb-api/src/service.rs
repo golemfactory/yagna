@@ -8,6 +8,7 @@ use futures::channel::oneshot::{self, Receiver, Sender};
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -233,11 +234,11 @@ impl MessagesHandling {
                 handler.borrow_mut().pending_senders.drain().collect()
             }
         };
-        let msg_handling = MessagesHandling::RELAYING(Rc::new(RefCell::new(RelayingHandler {
+        let msg_handler = MessagesHandling::RELAYING(Rc::new(RefCell::new(RelayingHandler {
             pending_senders,
             ws_handler,
         })));
-        (msg_handling, send_pending_fut)
+        (msg_handler, send_pending_fut)
     }
 
     async fn send_pending_requests(
@@ -248,22 +249,19 @@ impl MessagesHandling {
         while let Some(msg) = handler.pending_msgs.pop() {
             log::debug!("Sending buffered message: {}", msg.id);
             let id = msg.id.clone();
-            match ws_handler.send(msg).await {
-                Ok(Err(err)) => {
-                    let err = GsbError::GsbFailure(format!(
-                        "Failed to forward buffered request: {}",
-                        err
-                    ));
-                    Self::send_error_response(&mut handler.pending_senders, id, err);
-                }
-                Err(err) => {
-                    let err = GsbError::GsbFailure(format!(
-                        "Failed to forward buffered request. Internal error: {}",
-                        err
-                    ));
-                    Self::send_error_response(&mut handler.pending_senders, id, err);
-                }
-                _ => {}
+            if let Some(err) = match ws_handler.send(msg).await {
+                Ok(Err(err)) => Some(GsbError::GsbFailure(format!(
+                    "Failed to forward buffered request: {}",
+                    err
+                ))),
+                Err(err) => Some(GsbError::GsbFailure(format!(
+                    "Failed to forward buffered request. Internal error: {}",
+                    err
+                ))),
+                _ => None,
+            } {
+                log::error!("Failed to send buffered msg. Err: {}", err);
+                Self::send_error_response(&mut handler.pending_senders, id, err);
             }
         }
     }
