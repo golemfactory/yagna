@@ -396,8 +396,21 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn gsb_msgs_after_ws_disconnect_buffering_test() {
-        panic!("NYI. Scenario: service POST, then ws GET, then ws disconnet, then send GSB messages, then GET ws");
+    async fn buffering_gsb_msgs_after_ws_disconnect_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut api = dummy_api();
+
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
+        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+
+        
     }
 
     #[actix_web::test]
