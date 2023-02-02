@@ -8534,7 +8534,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=20a81b1014c0c921159b59d9abb5bde7e4709cab#20a81b1014c0c921159b59d9abb5bde7e4709cab"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8606,8 +8605,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a6697ae691e31718f517e7d1e744d26b1fee94a3ccfaa41a732ae10778742f"
 dependencies = [
  "derive_more",
  "futures 0.3.26",
