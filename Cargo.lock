@@ -8457,8 +8457,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a6697ae691e31718f517e7d1e744d26b1fee94a3ccfaa41a732ae10778742f"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ba64e5c431989b5e837b995485d3ae9da02e828b#ba64e5c431989b5e837b995485d3ae9da02e828b"
 dependencies = [
  "derive_more",
  "futures 0.3.26",
@@ -9209,3 +9208,8 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "ya-relay-client"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ba64e5c431989b5e837b995485d3ae9da02e828b#ba64e5c431989b5e837b995485d3ae9da02e828b"
