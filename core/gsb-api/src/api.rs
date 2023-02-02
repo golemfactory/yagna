@@ -1,4 +1,4 @@
-use crate::service::Relay;
+use crate::service::IntoRelay;
 use crate::services::{Bind, Find, Services, Unbind};
 use crate::{GsbApiError, WsMessagesHandler};
 use actix::Addr;
@@ -80,7 +80,7 @@ async fn get_service_messages(
         service: service.clone(),
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    service.send(Relay { ws_handler: addr }).await?;
+    service.send(IntoRelay { ws_handler: addr }).await?;
     log::debug!("returning GET WS service");
     Ok(resp)
 }
@@ -224,7 +224,7 @@ mod tests {
             .send()
             .await
             .unwrap();
-        assert_eq!(delete_resp.status(), StatusCode::OK);
+        assert_eq!(delete_resp.status(), StatusCode::OK, "Can delete service");
     }
 
     #[actix_web::test]
@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn gsb_msgs_before_ws_connect_buffering_test() {
+    async fn buffering_gsb_msgs_before_ws_connect_test() {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut api = dummy_api();
@@ -357,10 +357,9 @@ mod tests {
 
                 println!("WS next");
                 let ws_req = ws_frames.try_next().await;
-                
+
                 assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap();
-                let ws_req = ws_req.unwrap();
+                let ws_req = ws_req.unwrap().unwrap();
                 let ws_req = match ws_req {
                     Frame::Binary(ws_req) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
@@ -378,12 +377,12 @@ mod tests {
                     payload: res_msg,
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
-                
+
                 println!("WS send");
                 let ws_res = ws_frames
                     .send(ws::Message::Binary(Bytes::from(ws_res)))
                     .await;
-                
+
                 println!("WS sent");
                 return ws_res;
             }
