@@ -22,6 +22,7 @@ use ya_manifest_utils::{
     AppManifest, Keystore,
 };
 
+use crate::golem_certificate::verify_golem_certificate;
 use crate::startup_config::FileMonitor;
 
 #[derive(Clone, Debug)]
@@ -265,6 +266,8 @@ impl RulesManager {
                 Mode::None => CheckRulesResult::Reject("Audited-Payload rule is disabled".into()),
             }
         } else {
+            let _ = verify_golem_certificate("all");
+            let _ = verify_golem_certificate("outbound-urls|http://golem.network|https://www.microsoft.com");
             //Check partner Rule
             CheckRulesResult::Reject("Didn't match any Rules".into())
         }
