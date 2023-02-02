@@ -7816,6 +7816,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "anyhow",
+ "awc",
  "base64 0.13.1",
  "bytes 1.3.0",
  "flexbuffers",

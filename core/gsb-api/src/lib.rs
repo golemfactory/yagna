@@ -34,6 +34,8 @@ impl GsbApiService {
     }
 }
 
+pub(crate) type GsbError = ya_service_bus::Error;
+
 #[derive(Error, Debug)]
 pub(crate) enum GsbApiError {
     #[error("Bad request: {0}")]
@@ -72,8 +74,8 @@ impl From<FindError> for GsbApiError {
     }
 }
 
-impl From<ya_service_bus::Error> for GsbApiError {
-    fn from(value: ya_service_bus::Error) -> Self {
+impl From<GsbError> for GsbApiError {
+    fn from(value: GsbError) -> Self {
         GsbApiError::InternalError(format!("GSB error: {value}"))
     }
 }
@@ -138,7 +140,7 @@ pub(crate) struct WsResponse {
 #[derive(Debug)]
 pub(crate) enum WsResponseMsg {
     Message(Vec<u8>),
-    Error(ya_service_bus::Error),
+    Error(GsbError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

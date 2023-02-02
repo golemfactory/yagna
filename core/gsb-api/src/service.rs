@@ -1,5 +1,5 @@
 use crate::services::Bind;
-use crate::{WsDisconnect, WsMessagesHandler, WsRequest, WsResponse};
+use crate::{GsbError, WsDisconnect, WsMessagesHandler, WsRequest, WsResponse, WsResponseMsg};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use actix_http::ws::CloseReason;
@@ -86,7 +86,7 @@ impl Handler<Disconnect> for Service {
 }
 
 impl Handler<RpcRawCall> for Service {
-    type Result = ResponseFuture<Result<Vec<u8>, ya_service_bus::Error>>;
+    type Result = ResponseFuture<Result<Vec<u8>, GsbError>>;
 
     fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
         let addr = msg.addr;
@@ -95,7 +95,7 @@ impl Handler<RpcRawCall> for Service {
         if !self.addresses.contains(&addr) {
             //TODO use futures::ready! or sth
             return Box::pin(async move {
-                Err(ya_service_bus::Error::GsbBadRequest(format!(
+                Err(GsbError::GsbBadRequest(format!(
                     "No supported msg type for addr: {}",
                     addr
                 )))
@@ -115,14 +115,14 @@ impl Handler<RpcRawCall> for Service {
                 Ok(receiver) => receiver,
                 Err(err) => {
                     log::error!("Sending error (runtime) GSB response: {err}");
-                    return Err(ya_service_bus::Error::GsbFailure(err.to_string()));
+                    return Err(GsbError::GsbFailure(err.to_string()));
                 }
             };
             let ws_response = match receiver.await {
                 Ok(ws_response) => ws_response,
                 Err(err) => {
                     log::error!("Sending error (internal) GSB response: {err}");
-                    return Err(ya_service_bus::Error::GsbFailure(err.to_string()));
+                    return Err(GsbError::GsbFailure(err.to_string()));
                 }
             };
             log::info!("Sending GSB response: {ws_response:?}");
@@ -148,15 +148,19 @@ impl Handler<WsResponse> for Service {
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub(crate) struct Relay {
-    pub listener: Addr<WsMessagesHandler>,
+    pub ws_handler: Addr<WsMessagesHandler>,
 }
 
 impl Handler<Relay> for Service {
-    type Result = <Relay as Message>::Result;
+    type Result = ResponseFuture<<Relay as Message>::Result>;
 
     fn handle(&mut self, msg: Relay, _ctx: &mut Self::Context) -> Self::Result {
-        let ws_handler = msg.listener;
-        self.msg_handler = self.msg_handler.into_relaying(ws_handler);
+        let (msg_handler, send_pending_fut) = self.msg_handler.into_relaying(msg.ws_handler);
+        self.msg_handler = msg_handler;
+        match send_pending_fut {
+            Some(fut) => return Box::pin(fut),
+            None => return Box::pin(async {}),
+        }
     }
 }
 
@@ -193,6 +197,7 @@ enum MessagesHandling {
 }
 
 impl MessagesHandling {
+    /// Returns GSB messages handler that buffers them.
     fn into_buffering(&mut self) -> Self {
         match self {
             MessagesHandling::RELAYING(handler) => {
@@ -208,7 +213,12 @@ impl MessagesHandling {
         }
     }
 
-    fn into_relaying(&mut self, ws_handler: Addr<WsMessagesHandler>) -> Self {
+    /// Returns GSB messages handler that relays them to given WS messages handler AND optional future to send buffered messages
+    fn into_relaying(
+        &mut self,
+        ws_handler: Addr<WsMessagesHandler>,
+    ) -> (Self, Option<Pin<Box<impl Future<Output = ()>>>>) {
+        let mut send_pending_fut = None;
         let pending_senders = match self {
             MessagesHandling::RELAYING(handler) => {
                 let mut handler = handler.borrow_mut();
@@ -216,13 +226,63 @@ impl MessagesHandling {
                 handler.pending_senders.drain().collect()
             }
             MessagesHandling::BUFFERING(handler) => {
+                send_pending_fut = Some(Box::pin(Self::send_pending_requests(
+                    handler.clone(),
+                    ws_handler.clone(),
+                )));
                 handler.borrow_mut().pending_senders.drain().collect()
             }
         };
-        MessagesHandling::RELAYING(Rc::new(RefCell::new(RelayingHandler {
+        let msg_handling = MessagesHandling::RELAYING(Rc::new(RefCell::new(RelayingHandler {
             pending_senders,
             ws_handler,
-        })))
+        })));
+        (msg_handling, send_pending_fut)
+    }
+
+    async fn send_pending_requests(
+        handler: Rc<RefCell<BufferingHandler>>,
+        ws_handler: Addr<WsMessagesHandler>,
+    ) {
+        let mut handler = handler.borrow_mut();
+        while let Some(msg) = handler.pending_msgs.pop() {
+            log::debug!("Sending buffered message: {}", msg.id);
+            let id = msg.id.clone();
+            match ws_handler.send(msg).await {
+                Ok(Err(err)) => {
+                    let err = GsbError::GsbFailure(format!(
+                        "Failed to forward buffered request: {}",
+                        err
+                    ));
+                    Self::send_error_response(&mut handler.pending_senders, id, err);
+                }
+                Err(err) => {
+                    let err = GsbError::GsbFailure(format!(
+                        "Failed to forward buffered request. Internal error: {}",
+                        err
+                    ));
+                    Self::send_error_response(&mut handler.pending_senders, id, err);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn send_error_response(
+        senders: &mut HashMap<String, Sender<WsResponse>>,
+        id: String,
+        err: GsbError,
+    ) {
+        match senders.remove(&id) {
+            Some(sender) => {
+                let response = WsResponseMsg::Error(err);
+                let response = WsResponse { id, response };
+                if let Err(err) = sender.send(response) {
+                    log::error!("Failed to send error WS response. Err: {:?}", err);
+                }
+            }
+            None => log::error!("Failed to send err: {}. Could not find msg id: {}", err, id),
+        }
     }
 }
 
@@ -277,7 +337,7 @@ impl MessagesHandler for BufferingHandler {
     fn handle_response(&mut self, msg: WsResponse) -> Result<(), WsResponse> {
         log::error!("WsResponse should never be send to BufferingHandler");
         let id = msg.id;
-        let response_error = ya_service_bus::Error::GsbFailure("Unexpected response".to_string());
+        let response_error = GsbError::GsbFailure("Unexpected response".to_string());
         let response = crate::WsResponseMsg::Error(response_error);
         Err(WsResponse { id, response })
     }
@@ -338,7 +398,7 @@ impl MessagesHandler for RelayingHandler {
             }
             None => Err(WsResponse {
                 id: res.id.clone(),
-                response: crate::WsResponseMsg::Error(ya_service_bus::Error::GsbFailure(format!(
+                response: crate::WsResponseMsg::Error(GsbError::GsbFailure(format!(
                     "Unable to respond to: {:?}",
                     res.id
                 ))),
@@ -355,9 +415,7 @@ impl MessagesHandler for RelayingHandler {
             log::debug!("Closing GSB connection: {}", addr);
             let _ = sender.send(WsResponse {
                 id: addr,
-                response: crate::WsResponseMsg::Error(ya_service_bus::Error::Closed(
-                    disconnect_msg.msg.clone(),
-                )),
+                response: crate::WsResponseMsg::Error(GsbError::Closed(disconnect_msg.msg.clone())),
             });
         }
         let disconnect_fut = self.ws_handler.send(WsDisconnect(CloseReason {

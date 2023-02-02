@@ -79,7 +79,7 @@ async fn get_service_messages(
         service: service.clone(),
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    service.send(Relay { listener: addr }).await?;
+    service.send(Relay { ws_handler: addr }).await?;
     Ok(resp)
 }
 
@@ -125,8 +125,8 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use actix_http::Payload;
-    use actix_http::encoding::Decoder;
+    use super::*;
+    use crate::{GsbApiService, GSB_API_PATH};
     use actix_http::ws::Frame;
     use actix_test::{self, TestServer};
     use actix_web::App;
@@ -138,10 +138,6 @@ mod tests {
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
-
-    use crate::{GsbApiService, GSB_API_PATH};
-
-    use super::*;
 
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
@@ -185,7 +181,11 @@ mod tests {
             })
     }
 
-    async fn verify_bind_service_response(bind_req: SendClientRequest, components: Vec<String>, service_addr: &str) -> ServicesBody {
+    async fn verify_bind_service_response(
+        bind_req: SendClientRequest,
+        components: Vec<String>,
+        service_addr: &str,
+    ) -> ServicesBody {
         let mut bind_resp = bind_req.await.unwrap();
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
         let body = bind_resp.body().await.unwrap();
@@ -228,7 +228,9 @@ mod tests {
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
-        let body = verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR).await;
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -316,6 +318,13 @@ mod tests {
 
     #[actix_web::test]
     async fn gsb_msgs_before_ws_connect_buffering_test() {
+        let mut api = dummy_api();
+
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let _body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
         panic!("NYI. Scenario: service POST, then send GSB messages, then GET ws.");
     }
 
