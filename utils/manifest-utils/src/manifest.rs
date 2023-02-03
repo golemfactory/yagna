@@ -111,19 +111,15 @@ impl AppManifest {
             })
     }
 
-    pub fn is_outbound_requested(&self) -> bool {
-        if let Some(urls) = self
-            .comp_manifest
+    pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
+        self.comp_manifest
             .as_ref()
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
             .and_then(|out| out.urls.as_ref())
-        {
-            !urls.is_empty()
-        } else {
-            false
-        }
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn features(&self) -> HashSet<Feature> {

@@ -287,21 +287,12 @@ impl RulesManager {
             for perm in verified_cert.permissions {
                 match perm {
                     GolemPermission::ManifestOutbound(permitted_urls) => {
-                        //TODO Rafał refactor manifest to get list of outbound urls
-                        if let Some(requested_urls) = manifest
-                            .comp_manifest
-                            .as_ref()
-                            .and_then(|comp| comp.net.as_ref())
-                            .and_then(|net| net.inet.as_ref())
-                            .and_then(|inet| inet.out.as_ref())
-                            .and_then(|out| out.urls.as_ref())
-                        {
-                            for requested_url in requested_urls {
-                                if permitted_urls.contains(requested_url).not() {
-                                    return Err(anyhow!(
-                                        "Partner rule forbidden url requested: {requested_url}"
-                                    ));
-                                }
+                        let requested_urls = manifest.get_outbound_requested_urls();
+                        for requested_url in requested_urls {
+                            if permitted_urls.contains(&requested_url).not() {
+                                return Err(anyhow!(
+                                    "Partner rule forbidden url requested: {requested_url}"
+                                ));
                             }
                         }
                     }
@@ -374,33 +365,22 @@ impl RulesManager {
     }
 
     fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
-        if let Some(urls) = manifest
-            .comp_manifest
-            .as_ref()
-            .and_then(|comp| comp.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.as_ref())
-        {
-            let matcher = self.whitelist.matchers.read().unwrap();
-            let non_whitelisted_urls: Vec<&str> = urls
-                .iter()
-                .flat_map(Url::host_str)
-                .filter(|domain| matcher.matches(domain).not())
-                .collect();
-            if non_whitelisted_urls.is_empty() {
-                log::debug!("Every URL on whitelist");
-                true
-            } else {
-                log::debug!(
-                    "Whitelist. Non whitelisted URLs: {:?}",
-                    non_whitelisted_urls
-                );
-                false
-            }
-        } else {
-            log::debug!("No URLs to check");
+        let urls = manifest.get_outbound_requested_urls();
+        let matcher = self.whitelist.matchers.read().unwrap();
+        let non_whitelisted_urls: Vec<&str> = urls
+            .iter()
+            .flat_map(Url::host_str)
+            .filter(|domain| matcher.matches(domain).not())
+            .collect();
+        if non_whitelisted_urls.is_empty() {
+            log::debug!("Every URL on whitelist");
             true
+        } else {
+            log::debug!(
+                "Whitelist. Non whitelisted URLs: {:?}",
+                non_whitelisted_urls
+            );
+            false
         }
     }
 
