@@ -127,8 +127,6 @@ pub(crate) fn default_services_timeout() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use crate::{GsbApiService, GSB_API_PATH};
     use actix_http::ws::{CloseCode, CloseReason, Frame};
@@ -138,6 +136,8 @@ mod tests {
     use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
+    use serde_json;
+    use std::time::Duration;
     use ya_core_model::gftp::{GetChunk, GftpChunk};
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn happy_path_test() {
+    async fn ok_payload_test() {
         let _ = env_logger::builder().is_test(true).try_init();
         let mut api = dummy_api();
 
@@ -282,6 +282,67 @@ mod tests {
         let _ = ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
+
+        verify_delete_service(&mut api, SERVICE_ADDR).await;
+    }
+
+    #[actix_web::test]
+    async fn error_payload_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut api = dummy_api();
+
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+
+        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        const TEST_ERROR_MESSAGE: &str = "test error msg";
+        let (gsb_res, ws_res) = tokio::join!(
+            async {
+                gsb_endpoint
+                    .call(GetChunk {
+                        offset: u64::MIN,
+                        size: PAYLOAD_LEN as u64,
+                    })
+                    .await
+            },
+            async {
+                let ws_req = ws_frames.try_next().await;
+                assert!(ws_req.is_ok());
+                let ws_req = ws_req.unwrap();
+                let ws_req = ws_req.unwrap();
+                let ws_req = match ws_req {
+                    Frame::Binary(ws_req) => {
+                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                    }
+                    msg => panic!("Not expected msg: {:?}", msg),
+                };
+                let id = ws_req.id;
+                let ws_res = serde_json::json!({
+                    "id": id,
+                    "error": {
+                    "InternalError": TEST_ERROR_MESSAGE
+                    }
+                });
+                // let res_msg = serde_j
+                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+                ws_frames
+                    .send(ws::Message::Binary(Bytes::from(ws_res)))
+                    .await
+            }
+        );
+
+        let _ = ws_res.unwrap();
+        let gsb_res = gsb_res.unwrap();
+        assert!(gsb_res.is_err());
+        let gsb_res = gsb_res.err().unwrap();
+        let _expected_err =
+            ya_core_model::gftp::Error::InternalError(TEST_ERROR_MESSAGE.to_string());
+        assert!(matches!(gsb_res, _expected_err));
 
         verify_delete_service(&mut api, SERVICE_ADDR).await;
     }
@@ -502,8 +563,7 @@ mod tests {
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         println!("WS closing connection");
-        ws_frames
-            .close().await.unwrap();
+        ws_frames.close().await.unwrap();
 
         std::thread::sleep(Duration::from_millis(100));
 

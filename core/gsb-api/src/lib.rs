@@ -2,7 +2,7 @@ mod api;
 mod service;
 mod services;
 
-use crate::service::{Disconnect, StartBuffering};
+use crate::service::StartBuffering;
 use actix::prelude::*;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
@@ -11,7 +11,7 @@ use actix_http::{
 };
 use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws;
-use flexbuffers::{BuilderOptions, FlexBufferType, MapReader, Reader};
+use flexbuffers::{BuilderOptions, MapReader, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use service::Service;
@@ -167,7 +167,7 @@ impl WsMessagesHandler {
                 return;
             }
         };
-        let response = match flexbuffer_util::as_not_empty_map(&response) {
+        let response = match flexbuffer_util::as_map(&response, false) {
             Ok(response) => response,
             Err(err) => {
                 //TODO shutdown WS connections?
@@ -177,23 +177,20 @@ impl WsMessagesHandler {
         };
         let id = match flexbuffer_util::read_string(&response, "id") {
             Ok(id) => id,
-            Err(err) => {
+            Err(_err) => {
                 todo!();
                 return;
             }
         };
-    
-        if let Ok(payload) = flexbuffer_util::read_not_empty_map(&response, "payload")
-        {
+
+        if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", false) {
             match Self::build_response("Ok", id, payload) {
                 Ok(response) => {
                     log::debug!("WsResponse payload: {}", response.id);
                     match service.send(response).await {
                         Ok(res) => {
                             if let Err(err) = res {
-                                log::error!(
-                                    "Failed to handle WS error payload: {err}"
-                                );
+                                log::error!("Failed to handle WS error payload: {err}");
                                 //TODO error response?
                             }
                         }
@@ -203,22 +200,18 @@ impl WsMessagesHandler {
                         }
                     }
                 }
-                Err(err) => {
+                Err(_err) => {
                     //TODO failed to build response
                 }
             }
-        } else if let Ok(error_payload) =
-            flexbuffer_util::read_not_empty_map(&response, "error")
-        {
+        } else if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", true) {
             match Self::build_response("Err", id, error_payload) {
                 Ok(response) => {
                     log::debug!("WsResponse error payload: {}", response.id);
                     match service.send(response).await {
                         Ok(res) => {
                             if let Err(err) = res {
-                                log::error!(
-                                    "Failed to handle WS error payload: {err}"
-                                );
+                                log::error!("Failed to handle WS error payload: {err}");
                                 //TODO error response?
                             }
                         }
@@ -228,13 +221,15 @@ impl WsMessagesHandler {
                         }
                     }
                 }
-                Err(err) => {
+                Err(_err) => {
                     // TODO failed to build error WS response
                 }
             }
         } else {
             // TODO return error to WS and GSB
-            log::error!("Invalid WS response format. Missing both 'payload' and 'error' fields. Id: {id}.");
+            log::error!(
+                "Invalid WS response format. Missing both 'payload' and 'error' fields. Id: {id}."
+            );
             return;
         }
     }
@@ -428,23 +423,23 @@ mod flexbuffer_util {
         }
     }
 
-    pub(crate) fn read_string(reader: &MapReader<&[u8]>, key: &str) -> Result<String, anyhow::Error> {
+    pub(crate) fn read_string(
+        reader: &MapReader<&[u8]>,
+        key: &str,
+    ) -> Result<String, anyhow::Error> {
         match reader.index(key) {
-            Ok(field) => {
-                match field.get_str() {
-                    Ok(txt) => Ok(txt.to_string()),
-                    Err(err) => anyhow::bail!("Failed to read string field: {}. Err: {}", key, err),
-                }
+            Ok(field) => match field.get_str() {
+                Ok(txt) => Ok(txt.to_string()),
+                Err(err) => anyhow::bail!("Failed to read string field: {}. Err: {}", key, err),
             },
             Err(err) => anyhow::bail!("Failed to read field: {}. Err: {}", key, err),
         }
     }
 
-    pub(crate) fn as_not_empty_map<'a>(reader: &Reader<&'a [u8]>) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
-        as_map(reader, false)
-    }
-
-    pub(crate) fn as_map<'a>(reader: &Reader<&'a [u8]>, allow_empty: bool)  -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+    pub(crate) fn as_map<'a>(
+        reader: &Reader<&'a [u8]>,
+        allow_empty: bool,
+    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
         match reader.get_map() {
             Ok(map) => {
                 if allow_empty || map.len() > 0 {
@@ -454,13 +449,6 @@ mod flexbuffer_util {
             }
             Err(err) => anyhow::bail!("Failed to read map. Err: {}", err),
         }
-    }
-
-    pub(crate) fn read_not_empty_map<'a>(
-        reader: &MapReader<&'a [u8]>,
-        key: &str,
-    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
-        read_map(reader, key, false)
     }
 
     pub(crate) fn read_map<'a>(
@@ -564,12 +552,10 @@ mod flexbuffer_util {
 
     #[cfg(test)]
     mod tests {
-        use std::fmt::Debug;
-
+        use crate::flexbuffer_util::clone_map;
         use flexbuffers::{BuilderOptions, Reader};
         use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-        use crate::flexbuffer_util::clone_map;
+        use std::fmt::Debug;
 
         #[test]
         fn test_deserialization() {
