@@ -11,7 +11,7 @@ use actix_http::{
 };
 use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws;
-use flexbuffers::{BuilderOptions, Reader};
+use flexbuffers::{BuilderOptions, FlexBufferType, MapReader, Reader};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use service::Service;
@@ -154,57 +154,109 @@ struct Msg {
 struct WsDisconnect(CloseReason);
 
 pub(crate) struct WsMessagesHandler {
-    // pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
     service: Addr<Service>,
 }
 
 impl WsMessagesHandler {
     async fn handle(service: Addr<Service>, buffer: bytes::Bytes) {
-        match Reader::get_root(&*buffer) {
-            Ok(response) => {
-                match response.flexbuffer_type() {
-                    flexbuffers::FlexBufferType::Map => {
-                        let response = response.as_map();
-                        let id = response.index("id").unwrap(); //TODO handle it
-                        let id = id.as_str().to_string();
-                        let payload = response.index("payload").unwrap(); //TODO handle it
-                        let payload = payload.as_map();
-
-                        let mut response_builder =
-                            flexbuffers::Builder::new(BuilderOptions::empty());
-                        let mut ok_payload_map_builder = response_builder.start_map();
-                        let payload_map_builder = ok_payload_map_builder.start_map("Ok"); //TODO on Err put here Error+msg
-                        flexbuffer_util::clone_map(payload_map_builder, &payload).unwrap(); //TODO handle it
-                        ok_payload_map_builder.end_map();
-
-                        let response = WsResponse {
-                            id,
-                            response: WsResponseMsg::Message(response_builder.view().to_vec()),
-                        };
-
-                        log::info!("WsResponse: {}", response.id);
-                        match service.send(response).await {
-                            Ok(res) => {
-                                if let Err(err) = res {
-                                    log::error!("Failed to handle WS msg: {err}");
-                                    //TODO error response?
-                                }
-                            }
-                            Err(err) => {
-                                log::error!("Internal error: {err}");
+        let response = match Reader::get_root(&*buffer) {
+            Ok(response) => response,
+            Err(err) => {
+                //TODO shutdown WS connections?
+                log::error!("Failed to read WS response root: {err}");
+                return;
+            }
+        };
+        let response = match flexbuffer_util::as_not_empty_map(&response) {
+            Ok(response) => response,
+            Err(err) => {
+                //TODO shutdown WS connections?
+                log::error!("Failed to read WS response root map: {err}");
+                return;
+            }
+        };
+        let id = match flexbuffer_util::read_string(&response, "id") {
+            Ok(id) => id,
+            Err(err) => {
+                todo!();
+                return;
+            }
+        };
+    
+        if let Ok(payload) = flexbuffer_util::read_not_empty_map(&response, "payload")
+        {
+            match Self::build_response("Ok", id, payload) {
+                Ok(response) => {
+                    log::debug!("WsResponse payload: {}", response.id);
+                    match service.send(response).await {
+                        Ok(res) => {
+                            if let Err(err) = res {
+                                log::error!(
+                                    "Failed to handle WS error payload: {err}"
+                                );
                                 //TODO error response?
                             }
                         }
-                    }
-                    _ => {
-                        todo!()
+                        Err(err) => {
+                            log::error!("Internal error while handling Ws error payload: {err}");
+                            //TODO error response?
+                        }
                     }
                 }
+                Err(err) => {
+                    //TODO failed to build response
+                }
             }
-            Err(err) => {
-                //TODO shutdown service connections?
-                log::error!("WS response error: {err}");
+        } else if let Ok(error_payload) =
+            flexbuffer_util::read_not_empty_map(&response, "error")
+        {
+            match Self::build_response("Err", id, error_payload) {
+                Ok(response) => {
+                    log::debug!("WsResponse error payload: {}", response.id);
+                    match service.send(response).await {
+                        Ok(res) => {
+                            if let Err(err) = res {
+                                log::error!(
+                                    "Failed to handle WS error payload: {err}"
+                                );
+                                //TODO error response?
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Internal error while handling Ws error payload: {err}");
+                            //TODO error response?
+                        }
+                    }
+                }
+                Err(err) => {
+                    // TODO failed to build error WS response
+                }
             }
+        } else {
+            // TODO return error to WS and GSB
+            log::error!("Invalid WS response format. Missing both 'payload' and 'error' fields. Id: {id}.");
+            return;
+        }
+    }
+
+    fn build_response(
+        response_key: &str,
+        id: String,
+        payload: MapReader<&[u8]>,
+    ) -> Result<WsResponse, anyhow::Error> {
+        let mut response_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+        let mut response_map_builder = response_builder.start_map();
+        let response_map_field_builder = response_map_builder.start_map(response_key);
+        match flexbuffer_util::clone_map(response_map_field_builder, &payload) {
+            Ok(_) => {
+                response_map_builder.end_map();
+                let response = WsResponse {
+                    id,
+                    response: WsResponseMsg::Message(response_builder.view().to_vec()),
+                };
+                return Ok(response);
+            }
+            Err(err) => anyhow::bail!(err),
         }
     }
 }
@@ -266,7 +318,9 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                         msg.into_bytes(),
                     )));
                 }
-                ws::Message::Continuation(_) => log::warn!("Continuation handling is not implemented."),
+                ws::Message::Continuation(_) => {
+                    log::warn!("Continuation handling is not implemented.")
+                }
                 ws::Message::Close(msg) => {
                     log::debug!("WS Close: {:?}", msg);
                     let disconnect_fut = self.service.send(StartBuffering);
@@ -275,7 +329,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                             log::error!("Failed to start buffering after WS Close. Err: {}", error);
                         }
                     }));
-                },
+                }
                 ws::Message::Ping(_) => log::warn!("Ping handling is not implemented."),
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
@@ -371,6 +425,52 @@ mod flexbuffer_util {
 
         fn end(self) {
             self.builder.end_vector()
+        }
+    }
+
+    pub(crate) fn read_string(reader: &MapReader<&[u8]>, key: &str) -> Result<String, anyhow::Error> {
+        match reader.index(key) {
+            Ok(field) => {
+                match field.get_str() {
+                    Ok(txt) => Ok(txt.to_string()),
+                    Err(err) => anyhow::bail!("Failed to read string field: {}. Err: {}", key, err),
+                }
+            },
+            Err(err) => anyhow::bail!("Failed to read field: {}. Err: {}", key, err),
+        }
+    }
+
+    pub(crate) fn as_not_empty_map<'a>(reader: &Reader<&'a [u8]>) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+        as_map(reader, false)
+    }
+
+    pub(crate) fn as_map<'a>(reader: &Reader<&'a [u8]>, allow_empty: bool)  -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+        match reader.get_map() {
+            Ok(map) => {
+                if allow_empty || map.len() > 0 {
+                    return Ok(map);
+                }
+                anyhow::bail!("Empty map");
+            }
+            Err(err) => anyhow::bail!("Failed to read map. Err: {}", err),
+        }
+    }
+
+    pub(crate) fn read_not_empty_map<'a>(
+        reader: &MapReader<&'a [u8]>,
+        key: &str,
+    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+        read_map(reader, key, false)
+    }
+
+    pub(crate) fn read_map<'a>(
+        reader: &MapReader<&'a [u8]>,
+        key: &str,
+        allow_empty: bool,
+    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+        match reader.index(key) {
+            Ok(reader) => as_map(&reader, allow_empty),
+            Err(err) => anyhow::bail!("Failed to find response field: {}. Err: {}", key, err),
         }
     }
 
