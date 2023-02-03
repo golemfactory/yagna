@@ -147,14 +147,14 @@ impl Handler<WsResponse> for Service {
 /// Message making message handler to relay messages.
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
-pub(crate) struct IntoRelay {
+pub(crate) struct StartRelaying {
     pub ws_handler: Addr<WsMessagesHandler>,
 }
 
-impl Handler<IntoRelay> for Service {
-    type Result = <IntoRelay as Message>::Result;
+impl Handler<StartRelaying> for Service {
+    type Result = <StartRelaying as Message>::Result;
 
-    fn handle(&mut self, msg: IntoRelay, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: StartRelaying, ctx: &mut Self::Context) -> Self::Result {
         // _ctx.sp
         let msg_handler = self.msg_handler.into_relaying(msg.ws_handler, ctx);
         self.msg_handler = msg_handler;
@@ -164,12 +164,12 @@ impl Handler<IntoRelay> for Service {
 /// Message making message handler to buffer messages.
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
-pub(crate) struct IntoBuffer;
+pub(crate) struct StartBuffering;
 
-impl Handler<IntoBuffer> for Service {
-    type Result = <IntoBuffer as Message>::Result;
+impl Handler<StartBuffering> for Service {
+    type Result = <StartBuffering as Message>::Result;
 
-    fn handle(&mut self, _: IntoBuffer, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: StartBuffering, ctx: &mut Self::Context) -> Self::Result {
         self.msg_handler = self.msg_handler.into_buffering(ctx);
     }
 }

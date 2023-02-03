@@ -2,7 +2,7 @@ mod api;
 mod service;
 mod services;
 
-use crate::service::{Disconnect, IntoBuffer};
+use crate::service::{Disconnect, StartBuffering};
 use actix::prelude::*;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
@@ -254,34 +254,28 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
         match item {
             Ok(msg) => match msg {
                 ws::Message::Binary(msg) => {
-                    log::debug!("Binary (len {})", msg.len());
+                    log::debug!("WS Binary (len {})", msg.len());
                     let service = self.service.clone();
                     ctx.spawn(actix::fut::wrap_future(Self::handle(service, msg)));
                 }
                 ws::Message::Text(msg) => {
-                    log::debug!("Text (len {})", msg.len());
+                    log::debug!("WS Text (len {})", msg.len());
                     let service = self.service.clone();
                     ctx.spawn(actix::fut::wrap_future(Self::handle(
                         service,
                         msg.into_bytes(),
                     )));
                 }
-                ws::Message::Continuation(_) => {
-                    log::warn!("Continuation handling is not implemented.")
-                }
+                ws::Message::Continuation(_) => log::warn!("Continuation handling is not implemented."),
                 ws::Message::Close(msg) => {
-                    log::debug!("Close: {:?}", msg);
-                    let msg = msg
-                        .map(|reason| reason.description)
-                        .flatten()
-                        .unwrap_or("Disconnecting".to_string());
-                    let disconnect_fut = self.service.send(Disconnect { msg });
+                    log::debug!("WS Close: {:?}", msg);
+                    let disconnect_fut = self.service.send(StartBuffering);
                     ctx.spawn(actix::fut::wrap_future(async {
                         if let Err(error) = disconnect_fut.await {
-                            log::error!("Failed to disconnect after WS Close. Err: {}", error);
+                            log::error!("Failed to start buffering after WS Close. Err: {}", error);
                         }
                     }));
-                }
+                },
                 ws::Message::Ping(_) => log::warn!("Ping handling is not implemented."),
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
@@ -299,15 +293,14 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        log::debug!("WS handler finished. Disconnecting.");
+        log::debug!("WS handler finished. Start Buffering.");
         let service = self.service.clone();
         ctx.wait(actix::fut::wrap_future(async move {
             let _msg = "WS disconnected".to_string();
-            if let Err(err) = service.send(IntoBuffer).await {
+            if let Err(err) = service.send(StartBuffering).await {
                 log::error!("Failed to disconnect service. Internal error: {}", err);
             }
         }));
-        ctx.stop();
     }
 }
 
