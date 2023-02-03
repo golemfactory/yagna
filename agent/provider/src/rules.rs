@@ -272,7 +272,7 @@ impl RulesManager {
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
             let verified_cert = verify_golem_certificate(&cert)
-                .map_err(|_| anyhow!("Partner rule cert verification failed"))?;
+                .map_err(|e| anyhow!("Partner rule cert verification failed: {:?}", e))?;
 
             let cert_id = verified_cert.root_certificate_id.hash;
 
