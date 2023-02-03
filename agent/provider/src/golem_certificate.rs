@@ -1,3 +1,5 @@
+use url::Url;
+
 pub struct GolemCertificate {
     pub node_id: String,
     pub permissions: Vec<GolemPermission>,
@@ -30,12 +32,13 @@ pub enum VerificationError {
     Expired(CertificateId),
     InvalidSignature(CertificateId),
     PermissionsDoNotMatch(CertificateId), // the signer does not have all the required permissions
+    UrlParseError(Vec<String>),
 }
 
 pub enum GolemPermission {
     All,
     ManifestOutboundUnrestricted,
-    ManifestOutbound(Vec<String>),
+    ManifestOutbound(Vec<Url>),
 }
 
 pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, VerificationError> {
@@ -48,8 +51,12 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
         c if c.starts_with("outbound-urls") => {
             let mut parts = c.split('|');
             let id = parts.next().unwrap();
-            let urls = parts.map(|s| s.to_string()).collect::<Vec<String>>();
-            Ok(GolemCertificate::new(id, GolemPermission::ManifestOutbound(urls)))
+            let (urls, errors): (Vec<_>, Vec<_>) = parts.map(|s| Url::parse(s).map_err(|_| s.to_string())).partition(Result::is_ok);
+            if errors.len() > 0 {
+                Err(VerificationError::UrlParseError(errors.into_iter().map(Result::unwrap_err).collect()))
+            } else {
+                Ok(GolemCertificate::new(id, GolemPermission::ManifestOutbound(urls.into_iter().map(Result::unwrap).collect())))
+            }
         },
         _ => Err(VerificationError::InvalidData),
     }
