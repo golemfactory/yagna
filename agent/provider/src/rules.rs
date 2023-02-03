@@ -295,7 +295,7 @@ impl RulesManager {
         if rules_checks.iter().any(|check| check.is_ok()) {
             CheckRulesResult::Accept
         } else {
-            CheckRulesResult::Reject(format!("Rejected because: {reject_msg}"))
+            CheckRulesResult::Reject(format!("Rejected because:\n{reject_msg}"))
         }
     }
 
@@ -341,11 +341,11 @@ impl RulesManager {
     }
 }
 
-fn extract_rejected_message(rules_checks: &Vec<Result<()>>) -> String {
+fn extract_rejected_message(rules_checks: &[Result<()>]) -> String {
     rules_checks
         .iter()
         .filter_map(|c| c.as_ref().err())
-        .fold(String::new(), |s, c| s + &c.to_string() + "; ")
+        .fold(String::new(), |s, c| s + &c.to_string() + "\n")
 }
 
 pub struct ManifestSignatureProps {
