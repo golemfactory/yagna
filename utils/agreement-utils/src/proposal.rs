@@ -3,6 +3,7 @@ use ya_client_model::market::{NewProposal, Proposal};
 use ya_client_model::NodeId;
 
 use crate::agreement::{expand, flatten, try_from_path, TypedPointer};
+use crate::template::property_to_pointer_paths;
 use crate::{Error, OfferTemplate};
 
 use chrono::{DateTime, Utc};
@@ -42,8 +43,11 @@ impl ProposalView {
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace('.', "/"));
-        self.pointer_typed(pointer.as_str())
+        let pointers = property_to_pointer_paths(property);
+        match self.pointer_typed(&pointers.path_w_tag) {
+            Err(Error::NoKey(_)) => self.pointer_typed(&pointers.path),
+            result => result,
+        }
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {

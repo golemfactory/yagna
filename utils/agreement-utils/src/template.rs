@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-use crate::agreement::flatten;
+use crate::agreement::{flatten, PROPERTY_TAG};
 use crate::Error;
 
 /// TODO: Could we use Constraints instead of String?? This would require parsing string.
@@ -96,4 +96,17 @@ pub fn patch(a: &mut Value, b: Value) {
         }
         (a, b) => *a = b,
     }
+}
+
+pub struct PointerPaths {
+    /// Pointer path
+    pub path: String,
+    /// Pointer path ending with `PROPERTY_TAG`
+    pub path_w_tag: String,
+}
+
+pub fn property_to_pointer_paths(property: &str) -> PointerPaths {
+    let path = format!("/{}", property.replace('.', "/"));
+    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
+    PointerPaths { path, path_w_tag }
 }
