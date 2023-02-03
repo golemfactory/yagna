@@ -1,9 +1,0 @@
-[package]
-name = "ya-service-api-cache"
-version = "0.1.0"
-authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
-
-[dependencies]
-futures = "0.3"
-log = "0.4"

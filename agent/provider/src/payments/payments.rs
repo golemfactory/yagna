@@ -199,7 +199,7 @@ impl Payments {
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
             break_agreement_signal: SignalSlot::<BreakAgreement>::default(),
-            invoice_signal: SignalSlot::<InvoiceNotification>::new(),
+            invoice_signal: SignalSlot::<InvoiceNotification>::default(),
         }
     }
 
@@ -221,9 +221,8 @@ impl Payments {
             Err(error) => {
                 //TODO: What should we do? Maybe terminate agreement?
                 log::error!(
-                    "Failed to create payment model for agreement [{}]. Error: {}",
-                    &msg.agreement.id,
-                    error
+                    "Failed to create payment model for agreement [{}]. Error: {error}",
+                    &msg.agreement.id
                 );
                 Err(error)
             }

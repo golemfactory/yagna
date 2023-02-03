@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
-use ya_manifest_utils::Keystore;
-
 use crate::startup_config::DEFAULT_PLUGINS_DIR;
 
 lazy_static::lazy_static! {
@@ -22,8 +20,6 @@ pub struct MarketConfig {
     pub session_id: String,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
-    #[structopt(skip)]
-    pub keystore: Keystore,
     /// Relative to Provider DataDir
     #[structopt(long, env, default_value = "negotiations")]
     pub negotiators_workdir: String,

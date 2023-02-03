@@ -198,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
 
     let agreement = Agreement {
         inner: AgreementView {
-            agreement_id: String::new(),
+            id: String::new(),
             json: Value::Null,
         },
         task_package: Some(format!(

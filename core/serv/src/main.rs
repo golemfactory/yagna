@@ -29,7 +29,7 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, Identity},
+    middleware::{auth, cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -48,6 +48,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -442,6 +443,9 @@ struct ServiceCommandOpts {
     /// If set to empty string, then logging to files is disabled.
     #[structopt(long, env = "YAGNA_LOG_DIR")]
     log_dir: Option<PathBuf>,
+
+    #[structopt(flatten)]
+    cors: CorsConfig,
 }
 
 #[cfg(unix)]
@@ -484,6 +488,7 @@ impl ServiceCommand {
                 max_rest_timeout,
                 log_dir,
                 debug,
+                cors,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
@@ -552,11 +557,17 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
+                let cors = AppKeyCors::new(cors).await?;
+
+                tokio::task::spawn_local(async move {
+                    ya_net::hybrid::send_bcast_new_neighbour().await
+                });
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
+                        .wrap(auth::Auth::new(cors.cache()))
+                        .wrap(cors.cors())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);

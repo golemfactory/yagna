@@ -2,12 +2,12 @@ use anyhow::{anyhow, Result};
 use bigdecimal::{BigDecimal, FromPrimitive};
 use serde_json::json;
 
-use ya_agreement_utils::ComInfo;
 use ya_client::model::{payment::Account, NodeId};
 use ya_core_model::payment::local::NetworkName;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::Preset;
+use crate::typed_props::ComInfo;
 
 #[derive(Clone, Debug)]
 pub struct AccountView {

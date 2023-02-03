@@ -96,7 +96,7 @@ pub struct DomainPattern {
 
 impl DomainPattern {
     fn default_domain_match() -> ArgMatch {
-        ArgMatch::Regex
+        ArgMatch::Strict
     }
 }
 

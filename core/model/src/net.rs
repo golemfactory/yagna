@@ -251,6 +251,14 @@ pub mod local {
         pub udp_ping: Duration,
         pub is_p2p: bool,
     }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct NewNeighbour;
+
+    impl BroadcastMessage for NewNeighbour {
+        const TOPIC: &'static str = "new-neighbour";
+    }
 }
 
 /// For documentation check local::GsbPing

@@ -18,7 +18,9 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
-use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
+};
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
@@ -27,6 +29,7 @@ use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::untyped::{Fn4HandlerExt, Fn4StreamHandlerExt};
 use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
@@ -39,6 +42,8 @@ use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::codec::encode_message;
 use crate::hybrid::crypto::IdentityCryptoProvider;
+use crate::service::NET_TYPE;
+use crate::{bind_broadcast_with_caller, broadcast, NetType};
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
@@ -95,7 +100,14 @@ impl Net {
 
     pub async fn shutdown() -> anyhow::Result<()> {
         if let Ok(client) = Self::client().await {
-            let _ = client.shutdown().await;
+            if client
+                .shutdown()
+                .timeout(Some(std::time::Duration::from_secs(30)))
+                .await
+                .is_err()
+            {
+                log::info!("NET shutdown due to timeout.");
+            }
         }
         if let Some(sender) = { SHUTDOWN_TX.write().await.take() } {
             let _ = sender.send(());
@@ -194,6 +206,7 @@ pub async fn start_network(
 
     bind_broadcast_handlers(broadcast_size);
     bind_identity_event_handler(crypto).await;
+    bind_neighbourhood_bcast().await?;
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
@@ -461,6 +474,10 @@ fn forward_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
+    ya_packet_trace::packet_trace_maybe!("net::forward_bus_to_net", {
+        ya_packet_trace::try_extract_from_ip_frame(msg)
+    });
+
     let (tx, rx) = mpsc::channel(1);
     let msg = match codec::encode_request(
         caller_id,
@@ -522,6 +539,10 @@ fn push_bus_to_net(
     let address = address.to_string();
     let state = state.clone();
     let request_id = gen_id().to_string();
+
+    ya_packet_trace::packet_trace_maybe!("net::forward_bus_to_net", {
+        ya_packet_trace::try_extract_from_ip_frame(msg)
+    });
 
     let msg = match codec::encode_request(
         caller_id,
@@ -1114,6 +1135,33 @@ fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
+}
+
+async fn bind_neighbourhood_bcast() -> anyhow::Result<(), BindBroadcastError> {
+    let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
+    bind_broadcast_with_caller(
+        &bcast_address,
+        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| async move {
+            if let Ok(client) = Net::client().await {
+                client.invalidate_neighbourhood_cache().await.ok();
+            }
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+pub async fn send_bcast_new_neighbour() {
+    let node_id = crate::service::identities().await.unwrap().0;
+
+    let net_type = { *NET_TYPE.read().unwrap() };
+    if net_type == NetType::Hybrid {
+        log::debug!("Broadcasting new neighbour");
+        if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
+            log::error!("Error broadcasting new neighbour: {e}");
+        }
+    }
 }
 
 #[cfg(test)]

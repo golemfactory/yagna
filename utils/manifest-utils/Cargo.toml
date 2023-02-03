@@ -20,7 +20,7 @@ bench = false
 schema = ["schemars"]
 
 [dependencies]
-ya-agreement-utils = "0.4"
+ya-agreement-utils = "0.4.1"
 ya-utils-path = "0.1"
 
 regex = "1.5"

@@ -1,8 +1,14 @@
 use ya_client_model::market::Agreement;
+use ya_client_model::NodeId;
 
+pub use crate::proposal::ProposalView;
+pub use crate::template::OfferTemplate;
+
+use crate::proposal::remove_property_impl;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Error as FormatError, Formatter};
 use std::path::PathBuf;
@@ -11,14 +17,18 @@ pub const PROPERTY_TAG: &str = "@tag";
 const DEFAULT_FORMAT: &str = "json";
 
 // TODO: Consider different structure:
-//  - 2 fields for parsed properties (demand, offer)
+//  - 2 fields for parsed properties (demand, offer) as ProposalView
 //  - other fields for agreement remain typed.
-// TODO: Move to ya-client to make it available for third party developers.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+// TODO: For compatibility reasons this structure has very similar functions
+//  as ProposalView, but as long as we don't merge them, we need to keep them.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgreementView {
     pub json: Value,
-    pub agreement_id: String,
+    pub id: String,
 }
+
+pub type OfferView = ProposalView;
+pub type DemandView = ProposalView;
 
 impl AgreementView {
     pub fn pointer(&self, pointer: &str) -> Option<&Value> {
@@ -31,6 +41,7 @@ impl AgreementView {
 
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
         let value = self
+            .json
             .pointer(pointer)
             .ok_or_else(|| Error::NoKey(pointer.to_string()))?
             .clone();
@@ -56,96 +67,32 @@ impl AgreementView {
         Ok(map)
     }
 
-    pub fn constraints(&self, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
-        self.pointer("/demand/constraints")
-            .and_then(|v| v.as_str())
-            .and_then(|s| parse_constraints(s, reg_expr, group))
-    }
-
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointers = property_to_pointer_paths(property);
-        match self.pointer_typed(&pointers.path_w_tag) {
-            Err(Error::NoKey(_)) => self.pointer_typed(&pointers.path),
-            result => result,
-        }
+        let pointer = format!("/{}", property.replace('.', "/"));
+        self.pointer_typed(pointer.as_str())
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
+
         // Path should start with '/', so we must omit first element, which will be empty.
         remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
             Error::NoKey(_) => Error::NoKey(pointer.to_string()),
             _ => e,
         })
     }
-}
 
-struct PointerPaths {
-    /// Pointer path
-    path: String,
-    /// Pointer path ending with `PROPERTY_TAG`
-    path_w_tag: String,
-}
-
-fn property_to_pointer_paths(property: &str) -> PointerPaths {
-    let path = format!("/{}", property.replace('.', "/"));
-    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
-    PointerPaths { path, path_w_tag }
-}
-
-pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
-    let re = regex::Regex::new(reg_expr).unwrap();
-    re.captures(input)
-        .and_then(|cap| cap.get(group))
-        .map(|mat| {
-            mat.as_str()
-                .split(',')
-                .map(|s| s.trim().to_lowercase())
-                .collect::<HashSet<_>>()
-        })
-}
-
-fn remove_property_impl(value: &mut serde_json::Value, path: &[&str]) -> Result<(), Error> {
-    assert_ne!(path.len(), 0);
-    if path.len() == 1 {
-        remove_value(value, path[0])?;
-        Ok(())
-    } else {
-        let nested_value = value
-            .pointer_mut(&["/", path[0]].concat())
-            .ok_or_else(|| Error::NoKey(path[0].to_string()))?;
-        remove_property_impl(nested_value, &path[1..])?;
-
-        // Check if nested_value contains anything else.
-        // We remove this key if Value was empty.
-        match nested_value {
-            Value::Array(array) => {
-                if array.is_empty() {
-                    remove_value(value, path[0]).ok();
-                }
-            }
-            Value::Object(object) => {
-                if object.is_empty() {
-                    remove_value(value, path[0]).ok();
-                }
-            }
-            _ => (),
-        };
-        Ok(())
+    pub fn requestor_id(&self) -> Result<NodeId, Error> {
+        self.pointer_typed("/demand/requestorId")
     }
-}
 
-fn remove_value(value: &mut Value, name: &str) -> Result<Value, Error> {
-    Ok(match value {
-        Value::Array(array) => array.remove(
-            name.parse::<usize>()
-                .map_err(|_| Error::InvalidValue(name.to_string()))?,
-        ),
-        Value::Object(object) => object
-            .remove(name)
-            .ok_or_else(|| Error::InvalidValue(name.to_string()))?,
-        _ => Err(Error::InvalidValue(name.to_string()))?,
-    })
+    pub fn provider_id(&self) -> Result<NodeId, Error> {
+        self.pointer_typed("/offer/providerId")
+    }
+
+    pub fn creation_timestamp(&self) -> Result<DateTime<Utc>, Error> {
+        self.pointer_typed("/timestamp")
+    }
 }
 
 impl TryFrom<Value> for AgreementView {
@@ -159,7 +106,7 @@ impl TryFrom<Value> for AgreementView {
 
         Ok(AgreementView {
             json: value,
-            agreement_id,
+            id: agreement_id,
         })
     }
 }
@@ -195,66 +142,6 @@ impl std::fmt::Display for AgreementView {
         match serde_json::to_string_pretty(&agreement) {
             Ok(json) => write!(f, "{}", json),
             Err(_) => write!(f, "{}", self.json),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct OfferTemplate {
-    pub properties: Value,
-    pub constraints: String,
-}
-
-impl Default for OfferTemplate {
-    fn default() -> Self {
-        OfferTemplate {
-            properties: Value::Object(Map::new()),
-            constraints: String::new(),
-        }
-    }
-}
-
-impl std::fmt::Display for OfferTemplate {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
-        let mut template = self.clone();
-        template.properties = flatten_value(template.properties);
-
-        // Display not pretty version as fallback.
-        match serde_json::to_string_pretty(&template) {
-            Ok(json) => write!(f, "{}", json),
-            Err(_) => write!(f, "{}", template),
-        }
-    }
-}
-
-impl OfferTemplate {
-    pub fn new(properties: Value) -> Self {
-        OfferTemplate {
-            properties: Value::Object(flatten(properties)),
-            constraints: String::new(),
-        }
-    }
-
-    pub fn patch(mut self, template: Self) -> Self {
-        patch(&mut self.properties, template.properties);
-        self.add_constraints(template.constraints);
-        self
-    }
-
-    pub fn property(&self, property: &str) -> Option<&Value> {
-        self.properties.as_object().unwrap().get(property)
-    }
-
-    pub fn set_property(&mut self, key: impl ToString, value: Value) {
-        let properties = self.properties.as_object_mut().unwrap();
-        properties.insert(key.to_string(), value);
-    }
-
-    pub fn add_constraints(&mut self, constraints: String) {
-        if self.constraints.is_empty() {
-            self.constraints = constraints;
-        } else {
-            self.constraints = format!("(& {} {})", self.constraints, constraints);
         }
     }
 }
@@ -322,6 +209,7 @@ pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
         None => DEFAULT_FORMAT,
     };
 
+    eprintln!("Parsing agreement at {}", path.display());
     match ext.to_lowercase().as_str() {
         "json" => try_from_json(&contents),
         "yaml" => try_from_yaml(&contents),
@@ -410,10 +298,6 @@ pub fn flatten(value: Value) -> Map<String, Value> {
     map
 }
 
-pub fn flatten_value(value: Value) -> serde_json::Value {
-    serde_json::Value::Object(flatten(value))
-}
-
 fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) {
     match value {
         Value::Object(m) => {
@@ -435,22 +319,15 @@ fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) 
     }
 }
 
-pub fn patch(a: &mut Value, b: Value) {
-    match (a, b) {
-        (a @ &mut Value::Object(_), Value::Object(b)) => {
-            let a = a.as_object_mut().unwrap();
-            for (k, v) in b {
-                patch(a.entry(k).or_insert(Value::Null), v);
-            }
-        }
-        (a, b) => *a = b,
-    }
+pub fn flatten_value(value: Value) -> serde_json::Value {
+    serde_json::Value::Object(flatten(value))
 }
 
 #[cfg(test)]
 mod tests {
     use super::TypedPointer;
     use super::*;
+    use crate::template::patch;
 
     const YAML: &str = r#"
 properties:
@@ -801,7 +678,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            agreement_id: Default::default(),
+            id: Default::default(),
         };
         view.remove_property("/properties/golem/srv/caps/multi-activity")
             .unwrap();
@@ -830,7 +707,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            agreement_id: Default::default(),
+            id: Default::default(),
         };
         view.remove_property("/properties/golem/activity/caps/transfer/protocol/1")
             .unwrap();
@@ -856,7 +733,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            agreement_id: Default::default(),
+            id: Default::default(),
         };
         view.remove_property("/properties/golem/inf").unwrap();
 

@@ -15,7 +15,8 @@ path = "src/bin.rs"
 [features]
 default = ['compat-deployment']
 compat-deployment = []
-sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
+sgx = ['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
+packet-trace-enable = ["ya-packet-trace/enable"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.22.0"
@@ -28,16 +29,17 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = { version = "0.4" }
+ya-agreement-utils = "0.4.1"
 ya-manifest-utils = { version = "0.2" }
 ya-client-model = "0.5"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.8", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.6", path = "runtime-api", features = ["server"] }
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = ["dns", "vpn"]}
+ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"
@@ -77,7 +79,7 @@ yansi = "0.5.0"
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.6", path = "runtime-api", features = ["codec", "server"] }
-ya-sb-router = "0.6"
+ya-sb-router = "0.6.1"
 
 actix-files = "0.6"
 actix-web = "4"

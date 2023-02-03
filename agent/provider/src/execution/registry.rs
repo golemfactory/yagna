@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 
-use ya_agreement_utils::OfferBuilder;
+use crate::typed_props::OfferBuilder;
 
 use super::exeunit_instance::ExeUnitInstance;
 

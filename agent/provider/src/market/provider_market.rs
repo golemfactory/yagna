@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
-use ya_agreement_utils::{AgreementView, OfferDefinition};
+use ya_agreement_utils::AgreementView;
 use ya_client::market::MarketProviderApi;
 use ya_client::model::market::agreement_event::{AgreementEventType, AgreementTerminator};
 use ya_client::model::market::proposal::State;
@@ -42,8 +42,10 @@ use crate::market::negotiator::builtin::manifest::policy_from_env;
 use crate::market::negotiator::builtin::*;
 use crate::market::termination_reason::{GolemReason, ProviderAgreementResult};
 use crate::payments::{InvoiceNotification, ProviderInvoiceEvent};
+use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
+use crate::typed_props::OfferDefinition;
 
 // =========================================== //
 // Public exposed messages
@@ -125,6 +127,7 @@ pub struct ProviderMarket {
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
+    agent_negotiators_cfg: Arc<AgentNegotiatorsConfig>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<NewAgreement>,
@@ -200,6 +203,7 @@ impl ProviderMarket {
         api: MarketProviderApi,
         data_dir: &Path,
         config: MarketConfig,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
     ) -> Result<ProviderMarket> {
         let negotiator_config = load_negotiators_config(data_dir, config.create_negotiators_config)
             .map_err(|e| {
@@ -219,11 +223,12 @@ impl ProviderMarket {
         )?;
 
         Ok(ProviderMarket {
-            api: Arc::new(api),
             negotiator,
+            api: Arc::new(api),
             config: Arc::new(config),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
+            agent_negotiators_cfg: Arc::new(agent_negotiators_cfg),
             agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
@@ -420,17 +425,16 @@ async fn process_agreement(
         subscription.preset.name,
     );
 
-    let agreement = AgreementView::try_from(agreement)
-        .map_err(|e| anyhow!("Invalid agreement. Error: {}", e))?;
+    let agreement =
+        AgreementView::try_from(agreement).map_err(|e| anyhow!("Invalid agreement. Error: {e}"))?;
 
     ctx.negotiator
         .react_to_agreement(&subscription.id, &agreement)
         .await
         .map_err(|e| {
             anyhow!(
-                "Negotiator error while processing agreement [{}]. Error: {}",
-                agreement.id,
-                e
+                "Negotiator error while processing agreement [{}]. Error: {e}",
+                agreement.id
             )
         })
 }
@@ -1082,20 +1086,6 @@ impl Handler<InvoiceNotification> for ProviderMarket {
                 .post_agreement_event(&msg.agreement_id, event)
                 .await
                 .log_err_msg("Negotiators failed to handle Post Agreement event.")
-        }
-        .boxed_local()
-    }
-}
-
-impl Handler<UpdateKeystore> for ProviderMarket {
-    type Result = ResponseFuture<Result<serde_json::Value, Error>>;
-
-    fn handle(&mut self, msg: UpdateKeystore, _ctx: &mut Context<Self>) -> Self::Result {
-        let negotiator = self.negotiator.clone();
-        async move {
-            negotiator
-                .control_event("ManifestSignature", serde_json::to_value(msg)?)
-                .await
         }
         .boxed_local()
     }
