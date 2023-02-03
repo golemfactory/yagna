@@ -220,7 +220,7 @@ impl RulesManager {
         }
     }
 
-    fn check_audited_manifest_rule(
+    fn check_audited_payload_rule(
         &self,
         manifest: &AppManifest,
         manifest_sig: Option<ManifestSignatureProps>,
@@ -285,7 +285,7 @@ impl RulesManager {
 
         let rules_checks = vec![
             self.check_everyone_rule(&manifest),
-            self.check_audited_manifest_rule(&manifest, manifest_sig, demand_permissions_present),
+            self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
         ];
 
         let reject_msg = extract_rejected_message(&rules_checks);
