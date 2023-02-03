@@ -260,9 +260,54 @@ impl RulesManager {
                 Mode::None => Err(anyhow!("Audited-Payload rule is disabled")),
             }
         } else {
-            Err(anyhow!(
-                "Audited-Payload rule must require manifest signature"
-            ))
+            Err(anyhow!("Audited-Payload rule requires manifest signature"))
+        }
+    }
+
+    fn check_partner_rule(
+        &self,
+        manifest: &AppManifest,
+        partner_cert: Option<String>,
+    ) -> Result<()> {
+        if let Some(cert) = partner_cert {
+            let verified_cert = verify_golem_certificate(&cert)
+                .map_err(|_| anyhow!("Partner rule cert verification failed"))?;
+
+            let cert_id = verified_cert.root_certificate_id.hash;
+            //TODO check node id
+            //TODO check permissions
+
+            if let Some(rule) = self
+                .rulestore
+                .config
+                .read()
+                .unwrap()
+                .outbound
+                .partner
+                .get(&cert_id)
+            {
+                match rule.mode {
+                    Mode::All => {
+                        log::trace!("Partner rule set to all");
+
+                        Ok(())
+                    }
+                    Mode::Whitelist => {
+                        if self.whitelist_matching(manifest) {
+                            log::trace!("Partner Whitelist matched");
+
+                            Ok(())
+                        } else {
+                            Err(anyhow!("Partner rule didn't match whitelist"))
+                        }
+                    }
+                    Mode::None => Err(anyhow!("Partner rule is disabled")),
+                }
+            } else {
+                Err(anyhow!("Partner rule isn't set for cert_id: {cert_id}"))
+            }
+        } else {
+            Err(anyhow!("Partner rule requires partner certificate"))
         }
     }
 
@@ -277,11 +322,6 @@ impl RulesManager {
 
             return CheckRulesResult::Reject("outbound is disabled".into());
         }
-
-        let _ = verify_golem_certificate("all");
-        let _ = verify_golem_certificate(
-            "outbound-urls|http://golem.network|https://www.microsoft.com",
-        );
 
         let rules_checks = vec![
             self.check_everyone_rule(&manifest),
