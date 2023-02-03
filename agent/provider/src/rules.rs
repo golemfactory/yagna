@@ -297,10 +297,7 @@ impl RulesManager {
                             .and_then(|out| out.urls.as_ref())
                         {
                             for requested_url in requested_urls {
-                                if permitted_urls
-                                    .contains(&requested_url.as_str().to_string())
-                                    .not()
-                                {
+                                if permitted_urls.contains(&requested_url).not() {
                                     return Err(anyhow!(
                                         "Partner rule forbidden url requested: {requested_url}"
                                     ));
