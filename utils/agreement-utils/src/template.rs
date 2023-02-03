@@ -61,10 +61,10 @@ impl OfferTemplate {
         let value = self
             .properties
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?
             .clone();
-        Ok(<T as Deserialize>::deserialize(value)
-            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
+        <T as Deserialize>::deserialize(value)
+            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))
     }
 
     pub fn properties_at<'a, T: Deserialize<'a>>(
@@ -73,7 +73,7 @@ impl OfferTemplate {
     ) -> Result<HashMap<String, T>, Error> {
         let value = self
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?;
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?;
 
         let map = flatten(value.clone())
             .into_iter()

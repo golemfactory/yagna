@@ -68,19 +68,18 @@ impl AgreementView {
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace(".", "/"));
+        let pointer = format!("/{}", property.replace('.', "/"));
         self.pointer_typed(pointer.as_str())
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
-        Ok(
-            // Path should start with '/', so we must omit first element, which will be empty.
-            remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
-                Error::NoKey(_) => Error::NoKey(pointer.to_string()),
-                _ => e,
-            })?,
-        )
+
+        // Path should start with '/', so we must omit first element, which will be empty.
+        remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
+            Error::NoKey(_) => Error::NoKey(pointer.to_string()),
+            _ => e,
+        })
     }
 
     pub fn requestor_id(&self) -> Result<NodeId, Error> {
@@ -128,7 +127,7 @@ impl TryFrom<&Agreement> for AgreementView {
     }
 }
 
-impl<'a> std::fmt::Display for AgreementView {
+impl std::fmt::Display for AgreementView {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
         let mut agreement = self.json.clone();
 
@@ -286,7 +285,7 @@ fn merge_obj(a: &mut Value, b: Value) {
             Value::Null => (),
             _ => {
                 let a = a.as_object_mut().unwrap();
-                a.insert(PROPERTY_TAG.to_string(), b.clone());
+                a.insert(PROPERTY_TAG.to_string(), b);
             }
         },
         (a, b) => *a = b,

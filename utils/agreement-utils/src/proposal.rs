@@ -42,21 +42,18 @@ impl ProposalView {
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace(".", "/"));
+        let pointer = format!("/{}", property.replace('.', "/"));
         self.pointer_typed(pointer.as_str())
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
-        Ok(
-            // Path should start with '/', so we must omit first element, which will be empty.
-            remove_property_impl(&mut self.content.properties, &path[1..]).map_err(
-                |e| match e {
-                    Error::NoKey(_) => Error::NoKey(pointer.to_string()),
-                    _ => e,
-                },
-            )?,
-        )
+
+        // Path should start with '/', so we must omit first element, which will be empty.
+        remove_property_impl(&mut self.content.properties, &path[1..]).map_err(|e| match e {
+            Error::NoKey(_) => Error::NoKey(pointer.to_string()),
+            _ => e,
+        })
     }
 }
 
@@ -71,7 +68,7 @@ pub(crate) fn remove_property_impl(
     } else {
         let nested_value = value
             .pointer_mut(&["/", path[0]].concat())
-            .ok_or(Error::NoKey(path[0].to_string()))?;
+            .ok_or_else(|| Error::NoKey(path[0].to_string()))?;
         remove_property_impl(nested_value, &path[1..])?;
 
         // Check if nested_value contains anything else.
@@ -101,7 +98,7 @@ pub(crate) fn remove_value(value: &mut Value, name: &str) -> Result<Value, Error
         ),
         Value::Object(object) => object
             .remove(name)
-            .ok_or(Error::InvalidValue(name.to_string()))?,
+            .ok_or_else(|| Error::InvalidValue(name.to_string()))?,
         _ => Err(Error::InvalidValue(name.to_string()))?,
     })
 }
@@ -137,7 +134,7 @@ impl TryFrom<Value> for ProposalView {
                 value
                     .pointer("/state")
                     .cloned()
-                    .ok_or(Error::NoKey(format!("state")))?,
+                    .ok_or_else(|| Error::NoKey("state".to_string()))?,
             )
             .map_err(|e| Error::InvalidValue(format!("Can't deserialize State. {}", e)))?,
             timestamp: value
