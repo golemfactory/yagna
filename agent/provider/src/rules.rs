@@ -22,7 +22,7 @@ use ya_manifest_utils::{
     AppManifest, Keystore,
 };
 
-use crate::golem_certificate::verify_golem_certificate;
+use crate::golem_certificate::{verify_golem_certificate, GolemPermission};
 use crate::startup_config::FileMonitor;
 
 #[derive(Clone, Debug)]
@@ -268,15 +268,52 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         partner_cert: Option<String>,
+        node_id: String,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
             let verified_cert = verify_golem_certificate(&cert)
                 .map_err(|_| anyhow!("Partner rule cert verification failed"))?;
 
             let cert_id = verified_cert.root_certificate_id.hash;
-            //TODO check node id
-            //TODO check permissions
 
+            if node_id != verified_cert.node_id {
+                return Err(anyhow!(
+                    "Partner rule nodes mismatch. requestor node_id: {} but cert node_id: {}",
+                    node_id,
+                    verified_cert.node_id
+                ));
+            }
+
+            for perm in verified_cert.permissions {
+                match perm {
+                    GolemPermission::ManifestOutbound(permitted_urls) => {
+                        //TODO Rafał refactor manifest to get list of outbound urls
+                        if let Some(requested_urls) = manifest
+                            .comp_manifest
+                            .as_ref()
+                            .and_then(|comp| comp.net.as_ref())
+                            .and_then(|net| net.inet.as_ref())
+                            .and_then(|inet| inet.out.as_ref())
+                            .and_then(|out| out.urls.as_ref())
+                        {
+                            for requested_url in requested_urls {
+                                if permitted_urls
+                                    .contains(&requested_url.as_str().to_string())
+                                    .not()
+                                {
+                                    return Err(anyhow!(
+                                        "Partner rule forbidden url requested: {requested_url}"
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    GolemPermission::ManifestOutboundUnrestricted => {}
+                    GolemPermission::All => {}
+                }
+            }
+
+            //TODO Rafał Maybe check also if cert_id is present in keystore?
             if let Some(rule) = self
                 .rulestore
                 .config
