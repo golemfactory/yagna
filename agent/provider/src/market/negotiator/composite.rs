@@ -1,10 +1,12 @@
 use actix::{Actor, Addr, Context, Handler};
 use anyhow::anyhow;
 use serde_json::Value;
+use std::convert::TryFrom;
 
 use ya_agreement_utils::agreement::{expand, flatten_value};
-use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::model::market::NewOffer;
+use ya_client_model::market::proposal::State;
 
 use super::builtin::{
     DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
@@ -76,17 +78,19 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         // them from initial Offer.
         let constraints = msg.prev_proposal.constraints;
 
-        let proposal = ProposalView {
-            id: msg.demand.proposal_id,
-            json: expand(msg.demand.properties),
-        };
-
-        let offer_proposal = ProposalView {
-            json: expand(msg.prev_proposal.properties),
+        let their = ProposalView::try_from(&msg.demand)?;
+        let template = ProposalView {
+            content: OfferTemplate {
+                properties: expand(msg.prev_proposal.properties),
+                constraints: constraints.clone(),
+            },
             id: msg.prev_proposal.proposal_id,
+            issuer: msg.prev_proposal.issuer_id,
+            state: msg.prev_proposal.state,
+            timestamp: msg.prev_proposal.timestamp,
         };
 
-        let result = self.components.negotiate_step(&proposal, offer_proposal)?;
+        let result = self.components.negotiate_step(&their, template)?;
         match result {
             NegotiationResult::Reject { message, is_final } => {
                 Ok(ProposalResponse::RejectProposal {
@@ -99,7 +103,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
             }
             NegotiationResult::Ready { offer } | NegotiationResult::Negotiating { offer } => {
                 let offer = NewOffer {
-                    properties: flatten_value(offer.json),
+                    properties: flatten_value(offer.content.properties),
                     constraints,
                 };
                 Ok(ProposalResponse::CounterProposal { offer })
@@ -112,7 +116,6 @@ pub fn to_proposal_views(
     mut agreement: AgreementView,
 ) -> anyhow::Result<(ProposalView, ProposalView)> {
     // Dispatch Agreement into separate Demand-Offer Proposal pair.
-    // TODO: We should get ProposalId here, but Agreement doen't store it anywhere.
     let offer_id = agreement.pointer_typed("/offer/offerId")?;
     let demand_id = agreement.pointer_typed("/demand/demandId")?;
     let offer_proposal = agreement
@@ -128,15 +131,26 @@ pub fn to_proposal_views(
         .unwrap_or(Value::Null);
 
     let offer_proposal = ProposalView {
-        json: offer_proposal,
+        content: OfferTemplate {
+            properties: offer_proposal,
+            constraints: agreement.pointer_typed("/offer/constraints")?,
+        },
         id: offer_id,
+        issuer: agreement.pointer_typed("/offer/providerId")?,
+        state: State::Accepted,
+        timestamp: agreement.creation_timestamp()?,
     };
 
     let demand_proposal = ProposalView {
-        json: demand_proposal,
+        content: OfferTemplate {
+            properties: demand_proposal,
+            constraints: agreement.pointer_typed("/demand/constraints")?,
+        },
         id: demand_id,
+        issuer: agreement.pointer_typed("/demand/requestorId")?,
+        state: State::Accepted,
+        timestamp: agreement.creation_timestamp()?,
     };
-
     Ok((demand_proposal, offer_proposal))
 }
 

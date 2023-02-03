@@ -7,7 +7,7 @@ use crate::Error;
 
 /// TODO: Could we use Constraints instead of String?? This would require parsing string.
 ///  It is complicated, but we could use code from resolver to do this.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct OfferTemplate {
     pub properties: Value,
     pub constraints: String,

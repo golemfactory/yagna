@@ -2,11 +2,9 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use ya_agreement_utils::{AgreementView, OfferDefinition};
+pub use ya_agreement_utils::{OfferDefinition, ProposalView};
 
 use crate::market::negotiator::AgreementResult;
-
-pub type ProposalView = AgreementView;
 
 /// Result returned by `NegotiatorComponent` during Proposals evaluation.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

@@ -95,6 +95,19 @@ impl AgreementView {
     }
 }
 
+struct PointerPaths {
+    /// Pointer path
+    path: String,
+    /// Pointer path ending with `PROPERTY_TAG`
+    path_w_tag: String,
+}
+
+fn property_to_pointer_paths(property: &str) -> PointerPaths {
+    let path = format!("/{}", property.replace('.', "/"));
+    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
+    PointerPaths { path, path_w_tag }
+}
+
 impl TryFrom<Value> for AgreementView {
     type Error = Error;
 

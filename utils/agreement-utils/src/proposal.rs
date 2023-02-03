@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProposalView {
     pub content: OfferTemplate,
     pub id: String,
