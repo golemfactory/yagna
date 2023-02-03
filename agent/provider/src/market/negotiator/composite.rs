@@ -77,13 +77,13 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         let constraints = msg.prev_proposal.constraints;
 
         let proposal = ProposalView {
-            agreement_id: msg.demand.proposal_id,
+            id: msg.demand.proposal_id,
             json: expand(msg.demand.properties),
         };
 
         let offer_proposal = ProposalView {
             json: expand(msg.prev_proposal.properties),
-            agreement_id: msg.prev_proposal.proposal_id,
+            id: msg.prev_proposal.proposal_id,
         };
 
         let result = self.components.negotiate_step(&proposal, offer_proposal)?;
@@ -129,12 +129,12 @@ pub fn to_proposal_views(
 
     let offer_proposal = ProposalView {
         json: offer_proposal,
-        agreement_id: offer_id,
+        id: offer_id,
     };
 
     let demand_proposal = ProposalView {
         json: demand_proposal,
-        agreement_id: demand_id,
+        id: demand_id,
     };
 
     Ok((demand_proposal, offer_proposal))
@@ -144,7 +144,7 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
     type Result = anyhow::Result<AgreementResponse>;
 
     fn handle(&mut self, msg: ReactToAgreement, _: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         let (demand_proposal, offer_proposal) = to_proposal_views(msg.agreement).map_err(|e| {
             anyhow!(
                 "Negotiator failed to extract Proposals from Agreement. {}",

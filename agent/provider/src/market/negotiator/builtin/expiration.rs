@@ -110,7 +110,7 @@ impl NegotiatorComponent for LimitExpiration {
         if too_soon || too_late {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
-                demand.agreement_id
+                demand.id
             );
 
             return Ok(NegotiationResult::Reject {

@@ -88,9 +88,8 @@ impl NegotiatorComponent for NegotiatorsPack {
                 NegotiationResult::Ready { offer } => offer,
                 NegotiationResult::Negotiating { offer } => {
                     log::info!(
-                        "Negotiator component '{}' is still negotiating Proposal [{}].",
-                        name,
-                        demand.agreement_id
+                        "Negotiator component '{name}' is still negotiating Proposal [{}].",
+                        demand.id
                     );
                     all_ready = false;
                     offer

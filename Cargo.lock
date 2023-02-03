@@ -7509,10 +7509,11 @@ name = "ya-agreement-utils"
 version = "0.4.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "regex",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.16",
  "shlex 1.1.0",
  "tempdir",
  "thiserror",
