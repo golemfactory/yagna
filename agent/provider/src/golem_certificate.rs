@@ -66,7 +66,7 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
             let (urls, errors): (Vec<_>, Vec<_>) = parts
                 .map(|s| Url::parse(s).map_err(|_| s.to_string()))
                 .partition(Result::is_ok);
-            if errors.len() > 0 {
+            if !errors.is_empty() {
                 Err(VerificationError::UrlParseError(
                     errors.into_iter().map(Result::unwrap_err).collect(),
                 ))
