@@ -141,10 +141,10 @@ mod tests {
     use crate::{GsbApiService, GSB_API_PATH};
     use actix_http::ws::{CloseCode, CloseReason, Frame};
     use actix_test::{self, TestServer};
-    use actix_web::App;
+    use actix_web::{App, http};
     use actix_web_actors::ws;
-    use awc::error::WsClientError;
-    use awc::SendClientRequest;
+    use awc::error::{WsClientError, SendRequestError};
+    use awc::{SendClientRequest, ClientResponse};
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
     use serde_json;
@@ -434,8 +434,13 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn error_on_post_of_duplicated_service() {
-        panic!("NYI");
+    async fn error_on_post_of_duplicated_service_address() {
+        let mut api = dummy_api();
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+        let second_bind_response = bind_get_chunk_service_req(&mut api).await.unwrap();
+        assert_eq!(second_bind_response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_web::test]
