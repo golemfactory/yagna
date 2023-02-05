@@ -87,9 +87,19 @@ async fn get_service_messages(
 
 fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
     base64::decode(addr_encoded)
-        .map_err(|err| GsbApiError::BadRequest(format!("Unable to read key. Err: {}", err)))
+        .map_err(|err| {
+            GsbApiError::BadRequest(format!(
+                "Service address should be encoded in base64. Unable to decode. Err: {}",
+                err
+            ))
+        })
         .map(String::from_utf8)?
-        .map_err(|err| GsbApiError::BadRequest(format!("Unable to parse key. Err: {}", err)))
+        .map_err(|err| {
+            GsbApiError::BadRequest(format!(
+                "Service address should be a string. Unable to parse address. Err: {}",
+                err
+            ))
+        })
 }
 
 #[derive(Deserialize)]
@@ -133,6 +143,7 @@ mod tests {
     use actix_test::{self, TestServer};
     use actix_web::App;
     use actix_web_actors::ws;
+    use awc::error::WsClientError;
     use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
@@ -142,6 +153,12 @@ mod tests {
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
+
+    #[cfg(test)]
+    #[ctor::ctor]
+    fn init() {
+        env_logger::builder().is_test(true).init();
+    }
 
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
@@ -229,7 +246,6 @@ mod tests {
 
     #[actix_web::test]
     async fn ok_payload_test() {
-        let _ = env_logger::builder().is_test(true).try_init();
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
@@ -288,7 +304,6 @@ mod tests {
 
     #[actix_web::test]
     async fn error_payload_test() {
-        let _ = env_logger::builder().is_test(true).try_init();
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
@@ -303,12 +318,11 @@ mod tests {
         const TEST_ERROR_MESSAGE: &str = "test error msg";
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                gsb_endpoint
-                    .call(GetChunk {
-                        offset: u64::MIN,
-                        size: PAYLOAD_LEN as u64,
-                    })
-                    .await
+                let msg = GetChunk {
+                    offset: u64::MIN,
+                    size: PAYLOAD_LEN as u64,
+                };
+                gsb_endpoint.call(msg).await
             },
             async {
                 let ws_req = ws_frames.try_next().await;
@@ -328,7 +342,6 @@ mod tests {
                     "InternalError": TEST_ERROR_MESSAGE
                     }
                 });
-                // let res_msg = serde_j
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
                 ws_frames
                     .send(ws::Message::Binary(Bytes::from(ws_res)))
@@ -339,37 +352,85 @@ mod tests {
         let _ = ws_res.unwrap();
         let gsb_res = gsb_res.unwrap();
         assert!(gsb_res.is_err());
-        let gsb_res = gsb_res.err().unwrap();
-        let _expected_err =
+        let gsb_err = gsb_res.err().unwrap();
+        let expected_err =
             ya_core_model::gftp::Error::InternalError(TEST_ERROR_MESSAGE.to_string());
-        assert!(matches!(gsb_res, _expected_err));
+        match gsb_err {
+            _expected_err => {}
+            other => panic!("Expected {:?} but got {:?}", expected_err, other),
+        }
 
         verify_delete_service(&mut api, SERVICE_ADDR).await;
     }
 
     #[actix_web::test]
     async fn gsb_error_on_ws_error_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
         panic!("NYI");
     }
 
     #[actix_web::test]
-    async fn api_401_error_on_unauthenticated_post_test() {
-        panic!("NYI");
-    }
-
-    #[actix_web::test]
-    async fn api_401_error_on_unauthenticated_delete_test() {
-        panic!("NYI");
+    async fn api_404_error_on_delete_of_not_existing_service_test() {
+        let api = dummy_api();
+        let delete_resp = api
+            .delete(&format!(
+                "/{}/{}/{}",
+                GSB_API_PATH,
+                "services",
+                base64::encode("no_such_service")
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            delete_resp.status(),
+            StatusCode::NOT_FOUND,
+            "Delete of not existing service results with 404"
+        );
     }
 
     #[actix_web::test]
     async fn api_404_error_on_ws_connect_to_not_existing_service() {
-        panic!("NYI");
+        let mut api = dummy_api();
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
+        let _services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = format!("/services/{}", base64::encode("no_such_service_address"));
+        let ws_frames = api.ws_at(&services_path).await;
+        let expected_err = WsClientError::InvalidResponseStatus(StatusCode::NOT_FOUND);
+        if let Some(err) = ws_frames.err() {
+            match err {
+                WsClientError::InvalidResponseStatus(StatusCode::NOT_FOUND) => {}
+                other => panic!("Expected {:?}, got {:?}", expected_err, other),
+            }
+        } else {
+            panic!("Expected 404 error");
+        }
     }
 
     #[actix_web::test]
-    async fn api_404_error_on_delete_not_existing_service_test() {
-        panic!("NYI");
+    async fn api_400_error_on_ws_connect_to_incorrectly_encoded_service_address() {
+        let mut api = dummy_api();
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = format!("{}_broken_base64", services_path);
+        let ws_frames = api.ws_at(&services_path).await;
+        let expected_err = WsClientError::InvalidResponseStatus(StatusCode::NOT_FOUND);
+        if let Some(err) = ws_frames.err() {
+            match err {
+                WsClientError::InvalidResponseStatus(StatusCode::BAD_REQUEST) => {}
+                other => panic!("Expected {:?}, got {:?}", expected_err, other),
+            }
+        } else {
+            panic!("Expected 404 error");
+        }
     }
 
     #[actix_web::test]
@@ -384,8 +445,6 @@ mod tests {
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_before_ws_connect_test() {
-        let _ = env_logger::builder().is_test(true).try_init();
-
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
@@ -458,8 +517,6 @@ mod tests {
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_after_ws_close_msg_and_reconnect_test() {
-        let _ = env_logger::builder().is_test(true).try_init();
-
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
@@ -546,8 +603,6 @@ mod tests {
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_after_ws_disconnect_and_reconnect_test() {
-        let _ = env_logger::builder().is_test(true).try_init();
-
         let mut api = dummy_api();
 
         let bind_req = bind_get_chunk_service_req(&mut api);
