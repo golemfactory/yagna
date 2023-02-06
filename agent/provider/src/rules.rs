@@ -346,6 +346,7 @@ impl RulesManager {
         requestor_id: Option<String>,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
+        partner_cert: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.config.read().unwrap().outbound.enabled.not() {
             log::trace!("Outbound is disabled.");

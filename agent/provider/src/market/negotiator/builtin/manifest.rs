@@ -62,11 +62,14 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
+        let requestor_id = demand.get_property("issuerId").ok();
+        let partner_cert = demand
+            .get_property::<String>("golem.srv.comp.partnerCert")
+            .ok();
+
         let demand_permissions_present = demand
             .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
             .is_ok();
-
-        let requestor_id = demand.get_property("issuerId").ok();
 
         if manifest.get_outbound_requested_urls().is_empty().not() {
             match self.rules_manager.check_outbound_rules(
@@ -74,6 +77,7 @@ impl NegotiatorComponent for ManifestSignature {
                 requestor_id,
                 manifest_sig,
                 demand_permissions_present,
+                partner_cert,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
