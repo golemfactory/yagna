@@ -333,7 +333,7 @@ impl RulesManager {
                     Mode::None => Err(anyhow!("Partner rule is disabled")),
                 }
             } else {
-                Err(anyhow!("Partner rule isn't set for cert_id: {cert_id}"))
+                Err(anyhow!("Partner rule: cert_id: {cert_id} is not trusted"))
             }
         } else {
             Err(anyhow!("Partner rule requires partner certificate"))
