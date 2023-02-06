@@ -674,7 +674,11 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::debug!("Offer created: {}", offer.display());
+            log::info!(
+                "Offer for preset: {} = {}",
+                msg.preset.name,
+                offer.display()
+            );
 
             log::info!("Subscribing to events... [{}]", msg.preset.name);
 

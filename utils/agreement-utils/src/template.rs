@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::fmt::Formatter;
 
-use crate::agreement::{flatten, PROPERTY_TAG};
+use crate::agreement::{flatten, flatten_value, PROPERTY_TAG};
 use crate::Error;
 
 /// TODO: Could we use Constraints instead of String?? This would require parsing string.
 ///  It is complicated, but we could use code from resolver to do this.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct OfferTemplate {
     pub properties: Value,
     pub constraints: String,
@@ -109,4 +110,34 @@ pub fn property_to_pointer_paths(property: &str) -> PointerPaths {
     let path = format!("/{}", property.replace('.', "/"));
     let path_w_tag = format!("{path}/{PROPERTY_TAG}");
     PointerPaths { path, path_w_tag }
+}
+
+impl<'a> std::fmt::Display for OfferTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let template = OfferTemplate {
+            properties: flatten_value(self.clone().properties),
+            constraints: self.constraints.clone(),
+        };
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string_pretty(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "{:?}", template),
+        }
+    }
+}
+
+impl std::fmt::Debug for OfferTemplate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let template = OfferTemplate {
+            properties: flatten_value(self.clone().properties),
+            constraints: self.constraints.clone(),
+        };
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "(serialization error)"),
+        }
+    }
 }
