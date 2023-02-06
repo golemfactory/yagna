@@ -300,8 +300,7 @@ impl RulesManager {
                             }
                         }
                     }
-                    GolemPermission::ManifestOutboundUnrestricted => {}
-                    GolemPermission::All => {}
+                    GolemPermission::ManifestOutboundUnrestricted | GolemPermission::All => {}
                 }
             }
 
