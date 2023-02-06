@@ -81,7 +81,6 @@ async fn get_service_messages(
     };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
     service.send(StartRelaying { ws_handler: addr }).await?;
-    log::debug!("returning GET WS service");
     Ok(resp)
 }
 
@@ -149,11 +148,14 @@ mod tests {
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
     use serde_json;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
     use ya_core_model::gftp::{GetChunk, GftpChunk};
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
+
+    static SERVICE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     #[cfg(test)]
     #[ctor::ctor]
@@ -527,7 +529,7 @@ mod tests {
             },
             async {
                 println!("WS sleep");
-                std::thread::sleep(Duration::from_millis(100));
+                tokio::time::sleep(Duration::from_millis(100)).await;
 
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -597,10 +599,10 @@ mod tests {
             .await
             .unwrap();
 
-        std::thread::sleep(Duration::from_millis(100));
-
         let (gsb_res, ws_res) = tokio::join!(
             async {
+                println!("GSB Waiting for disconnect");
+                tokio::time::sleep(Duration::from_millis(50)).await;
                 println!("GSB req");
                 let gsb_resp = gsb_endpoint
                     .call(GetChunk {
@@ -612,10 +614,10 @@ mod tests {
                 return gsb_resp;
             },
             async {
-                println!("WS sleep");
-                std::thread::sleep(Duration::from_millis(100));
+                println!("Waiting for disconnect and GSB");
+                tokio::time::sleep(Duration::from_millis(100)).await;
 
-                println!("WS connect");
+                println!("WS reconnect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
                 println!("WS next");
@@ -677,10 +679,10 @@ mod tests {
         println!("WS closing connection");
         ws_frames.close().await.unwrap();
 
-        std::thread::sleep(Duration::from_millis(100));
-
         let (gsb_res, ws_res) = tokio::join!(
             async {
+                println!("GSB Waiting for disconnect");
+                tokio::time::sleep(Duration::from_millis(50)).await;
                 println!("GSB req");
                 let gsb_resp = gsb_endpoint
                     .call(GetChunk {
@@ -692,8 +694,8 @@ mod tests {
                 return gsb_resp;
             },
             async {
-                println!("WS sleep");
-                std::thread::sleep(Duration::from_millis(100));
+                println!("Waiting for disconnect and GSB");
+                tokio::time::sleep(Duration::from_millis(100)).await;
 
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -740,7 +742,37 @@ mod tests {
 
     #[actix_web::test]
     async fn gsb_error_on_delete_test() {
-        // panic!("NYI. Respond with GSB error on pending msg after API Delete of service");
+        let mut api = dummy_api();
+
+        let bind_req = bind_get_chunk_service_req(&mut api);
+        let _ =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+                .await;
+
+        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+
+        let (gsb_res, _) = tokio::join!(
+            async {
+                println!("GSB req");
+                let gsb_resp = gsb_endpoint
+                    .call(GetChunk {
+                        offset: u64::MIN,
+                        size: PAYLOAD_LEN as u64,
+                    })
+                    .await;
+                println!("GSB res");
+                return gsb_resp;
+            },
+            async {
+                println!("Delete service");
+                verify_delete_service(&mut api, SERVICE_ADDR).await;
+            }
+        );
+
+        let gsb_res = gsb_res;
+        assert!(gsb_res.is_err());
+        println!("Result: {:?}", gsb_res);
+
     }
 
     #[actix_web::test]

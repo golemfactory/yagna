@@ -1,4 +1,4 @@
-use crate::service::{Disconnect, DisconnectError, Service};
+use crate::service::{DropMessages, DisconnectError, Service};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use lazy_static::lazy_static;
@@ -100,7 +100,7 @@ impl Handler<Unbind> for Services {
                 Some(service) => {
                     log::debug!("Dropping service actor: {:?}", service);
                     let msg = "Unbinding service".to_string();
-                    Ok(service.send(Disconnect { msg }).await?)
+                    Ok(service.send(DropMessages { msg }).await?)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
                     "Cannot find service: {}",
