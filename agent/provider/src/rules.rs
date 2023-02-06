@@ -357,6 +357,7 @@ impl RulesManager {
         let rules_checks = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
+            self.check_partner_rule(&manifest, partner_cert, requestor_id),
         ];
 
         let reject_msg = extract_rejected_message(&rules_checks);
