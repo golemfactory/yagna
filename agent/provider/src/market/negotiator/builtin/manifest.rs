@@ -66,9 +66,12 @@ impl NegotiatorComponent for ManifestSignature {
             .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
             .is_ok();
 
+        let requestor_id = demand.get_property("issuerId").ok();
+
         if manifest.get_outbound_requested_urls().is_empty().not() {
             match self.rules_manager.check_outbound_rules(
                 manifest,
+                requestor_id,
                 manifest_sig,
                 demand_permissions_present,
             ) {

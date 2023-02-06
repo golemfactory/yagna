@@ -268,7 +268,7 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         partner_cert: Option<String>,
-        node_id: String,
+        requestor_id: Option<String>,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
             let verified_cert = verify_golem_certificate(&cert)
@@ -276,10 +276,14 @@ impl RulesManager {
 
             let cert_id = verified_cert.root_certificate_id.hash;
 
-            if node_id != verified_cert.node_id {
+            let requestor_id = requestor_id.ok_or_else(|| {
+                anyhow!("Partner rule cannot be used without requestor_id provided")
+            })?;
+
+            if requestor_id != verified_cert.node_id {
                 return Err(anyhow!(
                     "Partner rule nodes mismatch. requestor node_id: {} but cert node_id: {}",
-                    node_id,
+                    requestor_id,
                     verified_cert.node_id
                 ));
             }
@@ -339,6 +343,7 @@ impl RulesManager {
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
+        requestor_id: Option<String>,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
     ) -> CheckRulesResult {
