@@ -2,7 +2,7 @@ mod api;
 mod service;
 mod services;
 
-use crate::service::StartBuffering;
+use crate::service::{Disconnect, StartBuffering};
 use actix::prelude::*;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::{
@@ -10,8 +10,9 @@ use actix_http::{
     StatusCode,
 };
 use actix_web::{HttpResponse, ResponseError};
-use actix_web_actors::ws;
+use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use service::Service;
@@ -177,8 +178,9 @@ impl WsMessagesHandler {
         };
         let id = match flexbuffer_util::read_string(&response, "id") {
             Ok(id) => id,
-            Err(_err) => {
-                todo!();
+            Err(err) => {
+                //TODO: shutdown WS connection?
+                log::error!("Failed to read WS response id: {err}");
                 return;
             }
         };
@@ -232,6 +234,81 @@ impl WsMessagesHandler {
             );
             return;
         }
+    }
+
+    fn handle_close(
+        &self,
+        close_reason: Option<CloseReason>,
+        ctx: &mut WebsocketContext<WsMessagesHandler>,
+    ) {
+        log::debug!("WS Close. Reason: {close_reason:?}");
+        let service_msg_fut = match close_reason {
+            None => self.service.send(StartBuffering).boxed(),
+            Some(close_reason) => match Self::create_disconnect_msg(close_reason) {
+                Some(msg) => self.service.send(msg).boxed(),
+                None => self.service.send(StartBuffering).boxed(),
+            },
+        };
+        ctx.spawn(actix::fut::wrap_future(async {
+            if let Err(error) = service_msg_fut.await {
+                log::error!("Failed to send msg. Err: {}", error);
+            }
+        }));
+    }
+
+    fn create_disconnect_msg(close_reason: CloseReason) -> Option<Disconnect> {
+        match close_reason.code {
+            ws::CloseCode::Normal => Some(
+                close_reason
+                    .description
+                    .map_or("Normal".to_string(), |r| format!("Normal: {r}")),
+            ),
+            ws::CloseCode::Away => Some(
+                close_reason
+                    .description
+                    .map_or("Away".to_string(), |r| format!("Away: {r}")),
+            ),
+            ws::CloseCode::Protocol => None,
+            ws::CloseCode::Unsupported => Some(
+                close_reason
+                    .description
+                    .map_or("Unsupported".to_string(), |r| format!("Unsupported: {r}")),
+            ),
+            ws::CloseCode::Abnormal => None,
+            ws::CloseCode::Invalid => Some(
+                close_reason
+                    .description
+                    .map_or("Invalid".to_string(), |r| format!("Invalid: {r}")),
+            ),
+            ws::CloseCode::Policy => Some(
+                close_reason
+                    .description
+                    .map_or("Policy".to_string(), |r| format!("Policy: {r}")),
+            ),
+            ws::CloseCode::Size => Some(
+                close_reason
+                    .description
+                    .map_or("Size".to_string(), |r| format!("Size: {r}")),
+            ),
+            ws::CloseCode::Extension => Some(
+                close_reason
+                    .description
+                    .map_or("Extension".to_string(), |r| format!("Extension: {r}")),
+            ),
+            ws::CloseCode::Error => Some(
+                close_reason
+                    .description
+                    .map_or("Error".to_string(), |r| format!("Error: {r}")),
+            ),
+            ws::CloseCode::Restart => None,
+            ws::CloseCode::Again => None,
+            _other => Some(
+                close_reason
+                    .description
+                    .map_or("Other".to_string(), |r| format!("Other: {r}")),
+            ),
+        }
+        .map(|msg| Disconnect { msg })
     }
 
     fn build_response(
@@ -316,15 +393,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                 ws::Message::Continuation(_) => {
                     log::warn!("Continuation handling is not implemented.")
                 }
-                ws::Message::Close(msg) => {
-                    log::debug!("WS Close: {:?}", msg);
-                    let disconnect_fut = self.service.send(StartBuffering);
-                    ctx.spawn(actix::fut::wrap_future(async {
-                        if let Err(error) = disconnect_fut.await {
-                            log::error!("Failed to start buffering after WS Close. Err: {}", error);
-                        }
-                    }));
-                }
+                ws::Message::Close(close_reason) => self.handle_close(close_reason, ctx),
                 ws::Message::Ping(_) => log::warn!("Ping handling is not implemented."),
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
@@ -358,7 +427,7 @@ impl Handler<WsDisconnect> for WsMessagesHandler {
 
     fn handle(&mut self, close: WsDisconnect, ctx: &mut Self::Context) -> Self::Result {
         ctx.close(Some(close.0));
-        ctx.stop(); //TODO necessary?
+        ctx.stop();
     }
 }
 

@@ -78,8 +78,7 @@ pub(crate) struct Disconnect {
 impl Handler<Disconnect> for Service {
     type Result = ResponseFuture<<Disconnect as Message>::Result>;
 
-    fn handle(&mut self, msg: Disconnect, ctx: &mut Self::Context) -> Self::Result {
-        ctx.stop();
+    fn handle(&mut self, msg: Disconnect, _ctx: &mut Self::Context) -> Self::Result {
         let disconnect_future = self.msg_handler.disconnect(msg);
         Box::pin(async { disconnect_future.await })
     }
