@@ -288,6 +288,12 @@ impl RulesManager {
                 ));
             }
 
+            if verified_cert.permissions.is_empty() {
+                return Err(anyhow!(
+                    "Partner rule: requestor doesn't have any permissions",
+                ));
+            }
+
             for perm in verified_cert.permissions {
                 match perm {
                     GolemPermission::ManifestOutbound(permitted_urls) => {
