@@ -85,6 +85,13 @@ impl OfferTemplate {
             .collect();
         Ok(map)
     }
+
+    pub fn flatten(&self) -> OfferTemplate {
+        OfferTemplate {
+            properties: flatten_value(self.clone().properties),
+            constraints: self.constraints.clone(),
+        }
+    }
 }
 
 pub fn patch(a: &mut Value, b: Value) {
@@ -112,12 +119,9 @@ pub fn property_to_pointer_paths(property: &str) -> PointerPaths {
     PointerPaths { path, path_w_tag }
 }
 
-impl<'a> std::fmt::Display for OfferTemplate {
+impl std::fmt::Display for OfferTemplate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let template = OfferTemplate {
-            properties: flatten_value(self.clone().properties),
-            constraints: self.constraints.clone(),
-        };
+        let template = self.flatten();
 
         // Display not pretty version as fallback.
         match serde_json::to_string_pretty(&template) {
@@ -129,10 +133,7 @@ impl<'a> std::fmt::Display for OfferTemplate {
 
 impl std::fmt::Debug for OfferTemplate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let template = OfferTemplate {
-            properties: flatten_value(self.clone().properties),
-            constraints: self.constraints.clone(),
-        };
+        let template = self.flatten();
 
         // Display not pretty version as fallback.
         match serde_json::to_string(&template) {
