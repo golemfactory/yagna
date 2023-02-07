@@ -16,7 +16,7 @@ use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use service::Service;
-use services::{BindError, FindError, UnbindError};
+use services::{BindError, FindError, Services, UnbindError};
 use thiserror::Error;
 use ya_client_model::ErrorMessage;
 use ya_service_api_interfaces::Provider;
@@ -30,8 +30,15 @@ impl GsbApiService {
         Ok(())
     }
 
-    pub fn rest<Context: Provider<Self, ()>>(_: &Context) -> actix_web::Scope {
-        api::web_scope()
+    pub fn rest<Context: Provider<Self, ()>>(ctx: &Context) -> actix_web::Scope {
+        Self::rest_internal(ctx, crate::services::SERVICES.clone())
+    }
+
+    pub(crate) fn rest_internal<Context: Provider<Self, ()>>(
+        _: &Context,
+        services: Addr<Services>,
+    ) -> actix_web::Scope {
+        api::web_scope(services)
     }
 }
 
@@ -400,12 +407,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             },
             Err(cause) => ctx.close(Some(CloseReason {
                 code: ws::CloseCode::Error,
-                description: Some(
-                    json!({
-                        "cause": cause.to_string()
-                    })
-                    .to_string(),
-                ),
+                description: Some(format!("ProtocolError: {}", cause)),
             })),
         };
     }

@@ -10,11 +10,9 @@ use actix_web_actors::ws::{self};
 use serde::{Deserialize, Serialize};
 use ya_service_api_web::middleware::Identity;
 
-pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
-
-pub fn web_scope() -> Scope {
+pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
     actix_web::web::scope(&format!("/{}", crate::GSB_API_PATH))
-        .app_data(Data::new(crate::services::SERVICES.clone()))
+        .app_data(Data::new(services))
         .service(post_services)
         .service(delete_services)
         .service(get_service_messages)
@@ -34,7 +32,9 @@ async fn post_services(
             components: components.clone(),
             addr_prefix: on.clone(),
         };
-        let _ = services.send(bind).await??;
+        let response = services.send(bind).await;
+        log::debug!("Service bind result: {:?}", response);
+        response??;
         let listen_on_encoded = base64::encode(&on);
         let links = ServicesLinksBody {
             messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
@@ -62,7 +62,9 @@ async fn delete_services(
     let addr = decode_addr(&path.key)?;
     log::debug!("DELETE service: {}", addr);
     let unbind = Unbind { addr };
-    let _ = services.send(unbind).await??;
+    let response = services.send(unbind).await;
+    log::debug!("Service delete result: {:?}", response);
+    response??;
     Ok(web::Json(()))
 }
 
@@ -123,32 +125,21 @@ struct ServicesLinksBody {
     messages: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-pub struct Timeout {
-    #[serde(rename = "timeout", default = "default_services_timeout")]
-    pub timeout: Option<f32>,
-}
-
-#[inline(always)]
-pub(crate) fn default_services_timeout() -> Option<f32> {
-    Some(DEFAULT_SERVICES_TIMEOUT)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{GsbApiService, GSB_API_PATH};
 
-    use actix_http::ws::{CloseCode, CloseReason, Frame};
+    use actix::Actor;
+    use actix_http::ws::{self, CloseCode, CloseReason, Frame};
     use actix_test::{self, TestServer};
     use actix_web::App;
-    use actix_web_actors::ws;
     use awc::error::WsClientError;
     use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, TryStreamExt};
     use serde_json;
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use ya_core_model::gftp::{GetChunk, GftpChunk};
     use ya_core_model::NodeId;
@@ -189,20 +180,36 @@ mod tests {
     fn dummy_api() -> TestServer {
         actix_test::start(|| {
             App::new()
-                .service(GsbApiService::rest(&TestContext {}))
+                .service(GsbApiService::rest_internal(
+                    &TestContext {},
+                    Services::default().start(),
+                ))
                 .wrap(dummy_auth())
         })
     }
 
-    fn bind_get_chunk_service_req(api: &mut TestServer) -> SendClientRequest {
-        api.post(&format!("/{}/{}", GSB_API_PATH, "services"))
+    /// Returns POST service request and service address.
+    fn bind_get_chunk_service_req_w_address(
+        api: &mut TestServer,
+        service_address: String,
+    ) -> (SendClientRequest, String) {
+        let service_req = api
+            .post(&format!("/{}/{}", GSB_API_PATH, "services"))
             .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
-                    on: SERVICE_ADDR.to_string(),
+                    on: service_address.clone(),
                     links: None,
                 }),
-            })
+            });
+        (service_req, service_address)
+    }
+
+    /// Returns POST service request and service address.
+    fn bind_get_chunk_service_req(api: &mut TestServer) -> (SendClientRequest, String) {
+        let service_number = SERVICE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let service_address = format!("{}_{}", SERVICE_ADDR, service_number);
+        bind_get_chunk_service_req_w_address(api, service_address)
     }
 
     async fn verify_bind_service_response(
@@ -211,6 +218,7 @@ mod tests {
         service_addr: &str,
     ) -> ServicesBody {
         let mut bind_resp = bind_req.await.unwrap();
+        log::debug!("Bind service response: {:?}", bind_resp);
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
         let body = bind_resp.body().await.unwrap();
         let body: ServicesBody = serde_json::de::from_slice(&body.to_vec()).unwrap();
@@ -219,7 +227,7 @@ mod tests {
             ServicesBody {
                 listen: Some(ServicesListenBody {
                     components,
-                    on: SERVICE_ADDR.to_string(),
+                    on: service_addr.to_string(),
                     links: Some(ServicesLinksBody {
                         messages: format!(
                             "{}/services/{}",
@@ -256,15 +264,15 @@ mod tests {
     async fn ok_payload_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(service_addr.clone());
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -307,22 +315,22 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
     async fn error_payload_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
         const TEST_ERROR_MESSAGE: &str = "test error msg";
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -368,24 +376,25 @@ mod tests {
             other => panic!("Expected {:?} but got {:?}", expected_err, other),
         }
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
     async fn gsb_error_on_ws_error_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
         let (gsb_res, ws_res) = tokio::join!(
             async {
+                // tokio::time::sleep(Duration::from_millis(100)).await;
                 gsb_endpoint
                     .call(GetChunk {
                         offset: u64::MIN,
@@ -394,6 +403,7 @@ mod tests {
                     .await
             },
             async {
+                // tokio::time::sleep(Duration::from_millis()).await;
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
                 let ws_error = ws::Message::Close(Some(CloseReason {
@@ -415,7 +425,7 @@ mod tests {
             ),
         }
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
@@ -441,9 +451,9 @@ mod tests {
     #[actix_web::test]
     async fn api_404_error_on_ws_connect_to_not_existing_service() {
         let mut api = dummy_api();
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
         let _services_path = body.listen.unwrap().links.unwrap().messages;
@@ -463,9 +473,9 @@ mod tests {
     #[actix_web::test]
     async fn api_400_error_on_ws_connect_to_incorrectly_encoded_service_address() {
         let mut api = dummy_api();
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
@@ -491,27 +501,29 @@ mod tests {
     #[actix_web::test]
     async fn error_on_post_of_duplicated_service_address() {
         let mut api = dummy_api();
-        let bind_req = bind_get_chunk_service_req(&mut api);
-        verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR).await;
-        let second_bind_response = bind_get_chunk_service_req(&mut api).await.unwrap();
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
+        let _ = verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+            .await;
+        let second_bind_response = bind_get_chunk_service_req_w_address(&mut api, service_addr)
+            .0
+            .await
+            .unwrap();
         assert_eq!(second_bind_response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_web::test]
-    async fn ws_close_on_service_delete() {
-        // panic!("NYI");
-    }
+    async fn ws_close_on_service_delete() {}
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_before_ws_connect_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
 
@@ -571,19 +583,19 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_after_ws_close_msg_and_reconnect_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
 
@@ -657,19 +669,19 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_after_ws_disconnect_and_reconnect_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
         let body =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
 
@@ -737,19 +749,18 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        verify_delete_service(&mut api, SERVICE_ADDR).await;
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
     async fn gsb_error_on_delete_test() {
         let mut api = dummy_api();
 
-        let bind_req = bind_get_chunk_service_req(&mut api);
-        let _ =
-            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], SERVICE_ADDR)
-                .await;
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
+        let _ = verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+            .await;
 
-        let gsb_endpoint = ya_service_bus::typed::service(SERVICE_ADDR);
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
         let (gsb_res, _) = tokio::join!(
             async {
@@ -765,14 +776,13 @@ mod tests {
             },
             async {
                 println!("Delete service");
-                verify_delete_service(&mut api, SERVICE_ADDR).await;
+                verify_delete_service(&mut api, &service_addr).await;
             }
         );
 
         let gsb_res = gsb_res;
         assert!(gsb_res.is_err());
         println!("Result: {:?}", gsb_res);
-
     }
 
     #[actix_web::test]
@@ -781,9 +791,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn close_old_ws_connection_on_new_ws_connection() {
-        // panic!()
-    }
+    async fn close_old_ws_connection_on_new_ws_connection() {}
 
     fn dummy_auth() -> DummyAuth {
         let id = Identity {

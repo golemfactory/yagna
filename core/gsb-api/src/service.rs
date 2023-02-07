@@ -76,20 +76,11 @@ pub(crate) struct DropMessages {
 }
 
 impl Handler<DropMessages> for Service {
-    // type Result = ResponseFuture<<DropMessages as Message>::Result>;
-    type Result = ResponseActFuture<Self, <DropMessages as Message>::Result>;
+    type Result = ResponseFuture<<DropMessages as Message>::Result>;
 
     fn handle(&mut self, msg: DropMessages, _: &mut Self::Context) -> Self::Result {
         let disconnect_future = self.msg_handler.disconnect(msg);
-        // Box::pin(async { disconnect_future.await })
-        Box::pin(
-            async { disconnect_future.await }
-                .into_actor(self)
-                .map(|_, _, ctx| {
-                    log::debug!("Closing service actor");
-                    ctx.stop();
-                }),
-        )
+        Box::pin(async { disconnect_future.await })
     }
 }
 

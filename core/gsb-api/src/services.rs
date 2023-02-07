@@ -50,6 +50,7 @@ impl Handler<Bind> for Services {
             return Err(BindError::DuplicatedService(addr));
         }
         let service = Service::from(msg).start();
+        log::debug!("Created service: {:?}", service);
         self.services.insert(addr, service);
         Ok(())
     }
@@ -98,8 +99,8 @@ impl Handler<Unbind> for Services {
         Box::pin(async move {
             match some_service {
                 Some(service) => {
-                    log::debug!("Dropping service actor: {:?}", service);
-                    let msg = "Unbinding service".to_string();
+                    log::debug!("Disconnecting service: {}", msg.addr);
+                    let msg = "Disconnecting service".to_string();
                     Ok(service.send(DropMessages { msg }).await?)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
