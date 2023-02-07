@@ -359,6 +359,7 @@ impl RulesManager {
             self.check_partner_rule(&manifest, partner_cert, requestor_id),
         ];
 
+        //TODO Rafał partition?
         let reject_msg = extract_rejected_message(&rules_checks);
 
         log::info!("Following rules didn't match: {reject_msg}");
