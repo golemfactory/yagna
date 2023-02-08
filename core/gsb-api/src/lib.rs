@@ -14,7 +14,6 @@ use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use service::Service;
 use services::{BindError, FindError, Services, UnbindError};
 use thiserror::Error;
@@ -151,6 +150,40 @@ pub(crate) enum WsResponseMsg {
     Error(GsbError),
 }
 
+impl WsResponseMsg {
+    /// Close reason description
+    fn desc(reason: &CloseReason, reason_name: &str) -> String {
+        reason
+            .description
+            .clone()
+            .map_or(reason_name.to_string(), |desc| {
+                format!("{}: {}", reason_name, desc)
+            })
+    }
+}
+
+impl From<&DropMessages> for WsResponseMsg {
+    fn from(value: &DropMessages) -> Self {
+        let reason = &value.error;
+        let error = match reason.code {
+            ws::CloseCode::Normal => GsbError::Closed(Self::desc(reason, "Normal")),
+            ws::CloseCode::Away => GsbError::Closed(Self::desc(reason, "Away")),
+            ws::CloseCode::Protocol => GsbError::Closed(Self::desc(reason, "Protocol")),
+            ws::CloseCode::Unsupported => GsbError::Closed(Self::desc(reason, "Unsupported")),
+            ws::CloseCode::Abnormal => GsbError::Closed(Self::desc(reason, "Abnormal")),
+            ws::CloseCode::Invalid => GsbError::Closed(Self::desc(reason, "Invalid")),
+            ws::CloseCode::Policy => GsbError::Closed(Self::desc(reason, "Policy")),
+            ws::CloseCode::Size => GsbError::Closed(Self::desc(reason, "Size")),
+            ws::CloseCode::Extension => GsbError::Closed(Self::desc(reason, "Extension")),
+            ws::CloseCode::Error => GsbError::Closed(Self::desc(reason, "Error")),
+            ws::CloseCode::Restart => GsbError::Closed(Self::desc(reason, "Restart")),
+            ws::CloseCode::Again => GsbError::Closed(Self::desc(reason, "Again")),
+            _ => GsbError::Closed(Self::desc(reason, "Other")),
+        };
+        WsResponseMsg::Error(error)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Msg {
     id: String,
@@ -249,73 +282,27 @@ impl WsMessagesHandler {
         ctx: &mut WebsocketContext<WsMessagesHandler>,
     ) {
         log::debug!("WS Close. Reason: {close_reason:?}");
-        let service_msg_fut = match close_reason {
-            None => self.service.send(StartBuffering).boxed(),
-            Some(close_reason) => match Self::create_drop_message(close_reason) {
-                Some(msg) => self.service.send(msg).boxed(),
-                None => self.service.send(StartBuffering).boxed(),
+        let drop_messages = match close_reason {
+            Some(close_reason) => DropMessages {
+                error: close_reason,
+            },
+            None => DropMessages {
+                error: CloseReason {
+                    code: ws::CloseCode::Normal,
+                    description: Some("Closing".to_string()),
+                },
             },
         };
+        let drop_messages_fut = self.service.send(drop_messages).boxed();
+        let start_buffering_fut = self.service.send(StartBuffering).boxed();
         ctx.wait(actix::fut::wrap_future(async {
-            if let Err(error) = service_msg_fut.await {
-                log::error!("Failed to send msg. Err: {}", error);
+            if let Err(error) = drop_messages_fut.await {
+                log::error!("Failed to send DropMessages. Err: {}", error);
+            }
+            if let Err(error) = start_buffering_fut.await {
+                log::error!("Failed to send StartBuffering. Err: {}", error);
             }
         }));
-    }
-
-    fn create_drop_message(close_reason: CloseReason) -> Option<DropMessages> {
-        match close_reason.code {
-            ws::CloseCode::Normal => Some(
-                close_reason
-                    .description
-                    .map_or("Normal".to_string(), |r| format!("Normal: {r}")),
-            ),
-            ws::CloseCode::Away => Some(
-                close_reason
-                    .description
-                    .map_or("Away".to_string(), |r| format!("Away: {r}")),
-            ),
-            ws::CloseCode::Protocol => None,
-            ws::CloseCode::Unsupported => Some(
-                close_reason
-                    .description
-                    .map_or("Unsupported".to_string(), |r| format!("Unsupported: {r}")),
-            ),
-            ws::CloseCode::Abnormal => None,
-            ws::CloseCode::Invalid => Some(
-                close_reason
-                    .description
-                    .map_or("Invalid".to_string(), |r| format!("Invalid: {r}")),
-            ),
-            ws::CloseCode::Policy => Some(
-                close_reason
-                    .description
-                    .map_or("Policy".to_string(), |r| format!("Policy: {r}")),
-            ),
-            ws::CloseCode::Size => Some(
-                close_reason
-                    .description
-                    .map_or("Size".to_string(), |r| format!("Size: {r}")),
-            ),
-            ws::CloseCode::Extension => Some(
-                close_reason
-                    .description
-                    .map_or("Extension".to_string(), |r| format!("Extension: {r}")),
-            ),
-            ws::CloseCode::Error => Some(
-                close_reason
-                    .description
-                    .map_or("Error".to_string(), |r| format!("Error: {r}")),
-            ),
-            ws::CloseCode::Restart => None,
-            ws::CloseCode::Again => None,
-            _other => Some(
-                close_reason
-                    .description
-                    .map_or("Other".to_string(), |r| format!("Other: {r}")),
-            ),
-        }
-        .map(|msg| DropMessages { msg })
     }
 
     fn build_response(

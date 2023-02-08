@@ -128,7 +128,7 @@ struct ServicesLinksBody {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GsbApiService, GSB_API_PATH};
+    use crate::{GsbApiService, GsbError, GSB_API_PATH};
 
     use actix::Actor;
     use actix_http::ws::{self, CloseCode, CloseReason, Frame};
@@ -137,6 +137,7 @@ mod tests {
     use awc::error::WsClientError;
     use awc::SendClientRequest;
     use bytes::Bytes;
+    
     use futures::{SinkExt, TryStreamExt};
     use serde_json;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -186,6 +187,15 @@ mod tests {
                 ))
                 .wrap(dummy_auth())
         })
+    }
+
+    fn dummy_auth() -> DummyAuth {
+        let id = Identity {
+            identity: NodeId::default(),
+            name: "dummy_node".to_string(),
+            role: "dummy".to_string(),
+        };
+        DummyAuth::new(id)
     }
 
     /// Returns POST service request and service address.
@@ -394,7 +404,6 @@ mod tests {
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                // tokio::time::sleep(Duration::from_millis(100)).await;
                 gsb_endpoint
                     .call(GetChunk {
                         offset: u64::MIN,
@@ -403,7 +412,6 @@ mod tests {
                     .await
             },
             async {
-                // tokio::time::sleep(Duration::from_millis()).await;
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
                 let ws_error = ws::Message::Close(Some(CloseReason {
@@ -541,7 +549,7 @@ mod tests {
             },
             async {
                 println!("WS sleep");
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
 
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -613,8 +621,7 @@ mod tests {
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                println!("GSB Waiting for disconnect");
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
                 println!("GSB req");
                 let gsb_resp = gsb_endpoint
                     .call(GetChunk {
@@ -626,8 +633,7 @@ mod tests {
                 return gsb_resp;
             },
             async {
-                println!("Waiting for disconnect and GSB");
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(20)).await;
 
                 println!("WS reconnect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -691,10 +697,11 @@ mod tests {
         println!("WS closing connection");
         ws_frames.close().await.unwrap();
 
+        println!("GSB Waiting for disconnect");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                println!("GSB Waiting for disconnect");
-                tokio::time::sleep(Duration::from_millis(50)).await;
                 println!("GSB req");
                 let gsb_resp = gsb_endpoint
                     .call(GetChunk {
@@ -707,7 +714,7 @@ mod tests {
             },
             async {
                 println!("Waiting for disconnect and GSB");
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
 
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -753,14 +760,23 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn gsb_error_on_delete_test() {
+    async fn gsb_buffered_msgs_errors_on_delete_test() {
         let mut api = dummy_api();
 
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
-        let _ = verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
-            .await;
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+                .await;
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+
+        println!("WS connect");
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+
+        println!("WS closing connection");
+        ws_frames.close().await.unwrap();
 
         let (gsb_res, _) = tokio::join!(
             async {
@@ -780,25 +796,100 @@ mod tests {
             }
         );
 
-        let gsb_res = gsb_res;
-        assert!(gsb_res.is_err());
-        println!("Result: {:?}", gsb_res);
+        match gsb_res {
+            Err(GsbError::Closed(msg)) => {
+                assert!(msg.starts_with("Normal: Unbinding service: /public/gftp/123"))
+            }
+            _ => panic!("Expected GsbError::Closed"),
+        }
     }
 
     #[actix_web::test]
-    async fn gsb_buffered_msgs_errors_on_delete_test() {
-        // panic!("NYI. Rrespond with GSB errors on buffered msgs after API Delete of service");
-    }
+    async fn close_old_ws_connection_on_new_ws_connection() {
+        let mut api = dummy_api();
 
-    #[actix_web::test]
-    async fn close_old_ws_connection_on_new_ws_connection() {}
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+                .await;
 
-    fn dummy_auth() -> DummyAuth {
-        let id = Identity {
-            identity: NodeId::default(),
-            name: "dummy_node".to_string(),
-            role: "dummy".to_string(),
+        let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
+
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+
+        println!("WS 0 connect");
+        let mut ws_frames_0 = api.ws_at(&services_path).await.unwrap();
+
+        println!("WS 1 connect");
+        let mut ws_frames_1 = api.ws_at(&services_path).await.unwrap();
+
+        let (gsb_res, (ws_req_0, ws_res_1)) = tokio::join!(
+            async {
+                gsb_endpoint
+                    .call(GetChunk {
+                        offset: u64::MIN,
+                        size: PAYLOAD_LEN as u64,
+                    })
+                    .await
+            },
+            async {
+                println!("WS 0 next");
+                let ws_req_0 = ws_frames_0.try_next().await;
+
+                println!("WS 1 next");
+                let ws_req = ws_frames_1.try_next().await;
+
+                assert!(ws_req.is_ok());
+                let ws_req = ws_req.unwrap().unwrap();
+                let ws_req = match ws_req {
+                    Frame::Binary(ws_req) => {
+                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                    }
+                    msg => panic!("Not expected msg: {:?}", msg),
+                };
+                let id = ws_req.id;
+                let len = ws_req.payload.size as usize;
+                let res_msg = GftpChunk {
+                    content: vec![7; len],
+                    offset: 0,
+                };
+                let ws_res = TestWsResponse {
+                    id,
+                    payload: res_msg,
+                };
+                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+
+                println!("WS 1 send");
+                let ws_res = ws_frames_1
+                    .send(ws::Message::Binary(Bytes::from(ws_res)))
+                    .await;
+
+                println!("WS 1 sent");
+                (ws_req_0, ws_res)
+            }
+        );
+
+        println!("gsb_res: {:?}", gsb_res);
+        println!("ws_req_0: {:?}", ws_req_0);
+        println!("ws_res_1: {:?}", ws_res_1);
+
+        let gsb_res = gsb_res.unwrap().unwrap();
+        assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
+
+        let expected_close_reason = CloseReason {
+            code: ws::CloseCode::Normal,
+            description: Some("New WS connection. Disconnecting".to_string()),
         };
-        DummyAuth::new(id)
+        match ws_req_0 {
+            Ok(Some(Frame::Close(Some(close_reason)))) => {
+                assert_eq!(close_reason, expected_close_reason)
+            }
+            _other => panic!(
+                "Unexpected response of disconnected WS. Expected: {:?}",
+                expected_close_reason
+            ),
+        }
+
+        assert!(ws_res_1.is_ok());
     }
 }

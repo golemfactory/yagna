@@ -1,6 +1,8 @@
-use crate::service::{DropMessages, DisconnectError, Service};
+use crate::service::{DisconnectError, DropMessages, Service};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
+use actix_http::ws::CloseReason;
+use actix_web_actors::ws;
 use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
@@ -99,9 +101,12 @@ impl Handler<Unbind> for Services {
         Box::pin(async move {
             match some_service {
                 Some(service) => {
-                    log::debug!("Disconnecting service: {}", msg.addr);
-                    let msg = "Disconnecting service".to_string();
-                    Ok(service.send(DropMessages { msg }).await?)
+                    log::debug!("Unbinding service: {}", msg.addr);
+                    let error = CloseReason {
+                        code: ws::CloseCode::Normal,
+                        description: Some(format!("Unbinding service: {}", msg.addr)),
+                    };
+                    Ok(service.send(DropMessages { error }).await?)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
                     "Cannot find service: {}",

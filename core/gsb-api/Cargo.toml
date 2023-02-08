@@ -20,7 +20,7 @@ actix-http = "3"
 anyhow = "1"
 log = "0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["default"] }
+serde_json = { version = "1.0", features = ["default", "raw_value"] }
 lazy_static = "1"
 thiserror = "1"
 uuid = { version = "1.2.2", features = ["v4"] }
@@ -31,8 +31,8 @@ bytes = "1"
 tokio = "1"
 
 [dev-dependencies]
-ya-core-model = { version = "0.8", features = ["gftp"] }
 actix-test = "0.1"
 awc = "3"
 env_logger = "0.10"
 ctor = "0.1"
+ya-core-model = { version = "0.8", features = ["gftp"] }
