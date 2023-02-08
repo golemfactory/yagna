@@ -388,7 +388,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                     log::warn!("Continuation handling is not implemented.")
                 }
                 ws::Message::Close(close_reason) => self.handle_close(close_reason, ctx),
-                ws::Message::Ping(_) => log::warn!("Ping handling is not implemented."),
+                ws::Message::Ping(message) => ctx.pong(&message),
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
             },
