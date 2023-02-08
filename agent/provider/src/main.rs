@@ -42,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Config(config_cmd) => config_cmd.run(config),
         Commands::Preset(presets_cmd) => presets_cmd.run(config),
+        Commands::PreInstall(preinstall_cmd) => preinstall_cmd.run(config),
         Commands::Profile(profile_cmd) => profile_cmd.run(config),
         Commands::ExeUnit(exe_unit_cmd) => exe_unit_cmd.run(config),
         Commands::Keystore(keystore_cmd) => keystore_cmd.run(config),
