@@ -157,7 +157,7 @@ impl WsResponseMsg {
             .description
             .clone()
             .map_or(reason_name.to_string(), |desc| {
-                format!("{}: {}", reason_name, desc)
+                format!("{reason_name}: {desc}")
             })
     }
 }
@@ -320,7 +320,7 @@ impl WsMessagesHandler {
                     id,
                     response: WsResponseMsg::Message(response_builder.view().to_vec()),
                 };
-                return Ok(response);
+                Ok(response)
             }
             Err(err) => anyhow::bail!(err),
         }
@@ -394,7 +394,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             },
             Err(cause) => ctx.close(Some(CloseReason {
                 code: ws::CloseCode::Error,
-                description: Some(format!("ProtocolError: {}", cause)),
+                description: Some(format!("ProtocolError: {cause}")),
             })),
         };
     }
@@ -424,8 +424,8 @@ mod flexbuffer_util {
 
     trait FlexPusher<'b> {
         fn push<P: Pushable>(&mut self, p: P);
-        fn start_map<'a>(&'a mut self) -> MapBuilder<'a>;
-        fn start_vector<'a>(&'a mut self) -> VectorBuilder<'a>;
+        fn start_map(&mut self) -> MapBuilder<'_>;
+        fn start_vector(&mut self) -> VectorBuilder<'_>;
         fn end(self);
     }
 
@@ -442,14 +442,14 @@ mod flexbuffer_util {
 
     impl<'a> FlexPusher<'a> for FlexMapPusher<'a> {
         fn push<P: Pushable>(&mut self, p: P) {
-            self.builder.push(&self.key, p)
+            self.builder.push(self.key, p)
         }
 
-        fn start_map<'b>(&'b mut self) -> MapBuilder<'b> {
+        fn start_map(&mut self) -> MapBuilder<'_> {
             self.builder.start_map(self.key)
         }
 
-        fn start_vector<'b>(&'b mut self) -> VectorBuilder<'b> {
+        fn start_vector(&mut self) -> VectorBuilder<'_> {
             self.builder.start_vector(self.key)
         }
 
@@ -467,11 +467,11 @@ mod flexbuffer_util {
             self.builder.push(p)
         }
 
-        fn start_map<'b>(&'b mut self) -> MapBuilder<'b> {
+        fn start_map(&mut self) -> MapBuilder<'_> {
             self.builder.start_map()
         }
 
-        fn start_vector<'b>(&'b mut self) -> VectorBuilder<'b> {
+        fn start_vector(&mut self) -> VectorBuilder<'_> {
             self.builder.start_vector()
         }
 
@@ -499,7 +499,7 @@ mod flexbuffer_util {
     ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
         match reader.get_map() {
             Ok(map) => {
-                if allow_empty || map.len() > 0 {
+                if allow_empty || !map.is_empty() {
                     return Ok(map);
                 }
                 anyhow::bail!("Empty map");
@@ -523,10 +523,7 @@ mod flexbuffer_util {
         builder: MapBuilder,
         map_reader: &MapReader<&[u8]>,
     ) -> Result<(), flexbuffers::ReaderError> {
-        let mut pusher = FlexMapPusher {
-            builder: builder,
-            key: "",
-        };
+        let mut pusher = FlexMapPusher { builder, key: "" };
         for key in map_reader.iter_keys() {
             pusher.set_key(key);
             let value = map_reader.index(key)?;
@@ -728,7 +725,7 @@ mod flexbuffer_util {
 
             let mut builder = flexbuffers::Builder::new(BuilderOptions::empty());
             let builder_map = builder.start_map();
-            let _ = clone_map(builder_map, &r_m_p_m).unwrap();
+            clone_map(builder_map, &r_m_p_m).unwrap();
 
             println!("Copy: {:?}", builder.view());
 

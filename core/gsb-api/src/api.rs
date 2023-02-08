@@ -90,15 +90,13 @@ fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
     base64::decode(addr_encoded)
         .map_err(|err| {
             GsbApiError::BadRequest(format!(
-                "Service address should be encoded in base64. Unable to decode. Err: {}",
-                err
+                "Service address should be encoded in base64. Unable to decode. Err: {err}"
             ))
         })
         .map(String::from_utf8)?
         .map_err(|err| {
             GsbApiError::BadRequest(format!(
-                "Service address should be a string. Unable to parse address. Err: {}",
-                err
+                "Service address should be a string. Unable to parse address. Err: {err}"
             ))
         })
 }
@@ -137,9 +135,9 @@ mod tests {
     use awc::error::WsClientError;
     use awc::SendClientRequest;
     use bytes::Bytes;
-    
+
     use futures::{SinkExt, TryStreamExt};
-    use serde_json;
+
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use ya_core_model::gftp::{GetChunk, GftpChunk};
@@ -157,7 +155,7 @@ mod tests {
 
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
-        fn component(&self) -> () {
+        fn component(&self) {
             todo!("NYI")
         }
     }
@@ -204,7 +202,7 @@ mod tests {
         service_address: String,
     ) -> (SendClientRequest, String) {
         let service_req = api
-            .post(&format!("/{}/{}", GSB_API_PATH, "services"))
+            .post(format!("/{}/{}", GSB_API_PATH, "services"))
             .send_json(&ServicesBody {
                 listen: Some(ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
@@ -218,7 +216,7 @@ mod tests {
     /// Returns POST service request and service address.
     fn bind_get_chunk_service_req(api: &mut TestServer) -> (SendClientRequest, String) {
         let service_number = SERVICE_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let service_address = format!("{}_{}", SERVICE_ADDR, service_number);
+        let service_address = format!("{SERVICE_ADDR}_{service_number}");
         bind_get_chunk_service_req_w_address(api, service_address)
     }
 
@@ -231,7 +229,7 @@ mod tests {
         log::debug!("Bind service response: {:?}", bind_resp);
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
         let body = bind_resp.body().await.unwrap();
-        let body: ServicesBody = serde_json::de::from_slice(&body.to_vec()).unwrap();
+        let body: ServicesBody = serde_json::de::from_slice(&body).unwrap();
         assert_eq!(
             body,
             ServicesBody {
@@ -248,7 +246,7 @@ mod tests {
                 })
             }
         );
-        return body;
+        body
     }
 
     async fn verify_delete_service(api: &mut TestServer, service_addr: &str) {
@@ -265,8 +263,7 @@ mod tests {
         assert_eq!(
             delete_resp.status(),
             StatusCode::OK,
-            "Can delete service, but got {:?}",
-            delete_resp
+            "Can delete service, but got {delete_resp:?}"
         );
     }
 
@@ -321,7 +318,7 @@ mod tests {
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
@@ -375,7 +372,7 @@ mod tests {
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let gsb_res = gsb_res.unwrap();
         assert!(gsb_res.is_err());
         let gsb_err = gsb_res.err().unwrap();
@@ -422,7 +419,7 @@ mod tests {
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let expected_gsb_err_msg = "Normal: test error".to_string();
         match gsb_res {
             Err(ya_service_bus::Error::Closed(msg)) => assert_eq!(msg, expected_gsb_err_msg),
@@ -487,7 +484,7 @@ mod tests {
                 .await;
 
         let services_path = body.listen.unwrap().links.unwrap().messages;
-        let services_path = format!("{}_broken_base64", services_path);
+        let services_path = format!("{services_path}_broken_base64");
         let ws_frames = api.ws_at(&services_path).await;
         let expected_err_code = StatusCode::BAD_REQUEST;
         if let Some(err) = ws_frames.err() {
@@ -545,7 +542,7 @@ mod tests {
                     })
                     .await;
                 println!("GSB res");
-                return gsb_resp;
+                gsb_resp
             },
             async {
                 println!("WS sleep");
@@ -583,11 +580,11 @@ mod tests {
                     .await;
 
                 println!("WS sent");
-                return ws_res;
+                ws_res
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
@@ -630,7 +627,7 @@ mod tests {
                     })
                     .await;
                 println!("GSB res");
-                return gsb_resp;
+                gsb_resp
             },
             async {
                 tokio::time::sleep(Duration::from_millis(20)).await;
@@ -667,11 +664,11 @@ mod tests {
                     .await;
 
                 println!("WS sent");
-                return ws_res;
+                ws_res
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
@@ -710,7 +707,7 @@ mod tests {
                     })
                     .await;
                 println!("GSB res");
-                return gsb_resp;
+                gsb_resp
             },
             async {
                 println!("Waiting for disconnect and GSB");
@@ -748,11 +745,11 @@ mod tests {
                     .await;
 
                 println!("WS sent");
-                return ws_res;
+                ws_res
             }
         );
 
-        let _ = ws_res.unwrap();
+        ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
@@ -788,7 +785,7 @@ mod tests {
                     })
                     .await;
                 println!("GSB res");
-                return gsb_resp;
+                gsb_resp
             },
             async {
                 println!("Delete service");
@@ -869,9 +866,9 @@ mod tests {
             }
         );
 
-        println!("gsb_res: {:?}", gsb_res);
-        println!("ws_req_0: {:?}", ws_req_0);
-        println!("ws_res_1: {:?}", ws_res_1);
+        println!("gsb_res: {gsb_res:?}");
+        println!("ws_req_0: {ws_req_0:?}");
+        println!("ws_res_1: {ws_res_1:?}");
 
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);

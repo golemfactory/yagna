@@ -38,7 +38,7 @@ impl Service {
 
 impl From<Bind> for Service {
     fn from(bind: Bind) -> Self {
-        let msg_handler = MessagesHandling::BUFFERING(Rc::default());
+        let msg_handler = MessagesHandling::Buffering(Rc::default());
         // convert to error and return it when e.g. components empty
         let addr_prefix = bind.addr_prefix;
         let mut addresses = HashSet::new();
@@ -95,8 +95,7 @@ impl Handler<RpcRawCall> for Service {
             //TODO use futures::ready! or sth
             return Box::pin(async move {
                 Err(GsbError::GsbBadRequest(format!(
-                    "No supported msg type for addr: {}",
-                    addr
+                    "No supported msg type for addr: {addr}"
                 )))
             });
         }
@@ -139,7 +138,7 @@ impl Handler<WsResponse> for Service {
     fn handle(&mut self, msg: WsResponse, _ctx: &mut Self::Context) -> Self::Result {
         self.msg_handler
             .handle_response(msg)
-            .map_err(|err| anyhow!(format!("Failed to handle response: {:?}", err)))
+            .map_err(|err| anyhow!(format!("Failed to handle response: {err:?}")))
     }
 }
 
@@ -155,7 +154,7 @@ impl Handler<StartRelaying> for Service {
 
     fn handle(&mut self, msg: StartRelaying, ctx: &mut Self::Context) -> Self::Result {
         // _ctx.sp
-        let msg_handler = self.msg_handler.into_relaying(msg.ws_handler, ctx);
+        let msg_handler = self.msg_handler.start_relaying(msg.ws_handler, ctx);
         self.msg_handler = msg_handler;
     }
 }
@@ -169,7 +168,7 @@ impl Handler<StartBuffering> for Service {
     type Result = <StartBuffering as Message>::Result;
 
     fn handle(&mut self, _: StartBuffering, ctx: &mut Self::Context) -> Self::Result {
-        self.msg_handler = self.msg_handler.into_buffering(ctx);
+        self.msg_handler = self.msg_handler.start_buffering(ctx);
     }
 }
 
@@ -201,16 +200,16 @@ trait MessagesHandler {
 }
 
 enum MessagesHandling {
-    RELAYING(Rc<RefCell<RelayingHandler>>),
-    BUFFERING(Rc<RefCell<BufferingHandler>>),
+    Relaying(Rc<RefCell<RelayingHandler>>),
+    Buffering(Rc<RefCell<BufferingHandler>>),
 }
 
 impl MessagesHandling {
     /// Returns GSB messages handler that buffers them.
-    fn into_buffering(&mut self, ctx: &mut <Service as Actor>::Context) -> Self {
+    fn start_buffering(&mut self, ctx: &mut <Service as Actor>::Context) -> Self {
         log::debug!("Start buffering messages");
         match self {
-            MessagesHandling::RELAYING(handler) => {
+            MessagesHandling::Relaying(handler) => {
                 let mut handler = handler.borrow_mut();
                 let disconnect_fut = RelayingHandler::disconnect_ws(
                     handler.ws_handler.clone(),
@@ -219,24 +218,24 @@ impl MessagesHandling {
                 ctx.spawn(actix::fut::wrap_future(disconnect_fut));
                 let pending_senders = handler.pending_senders.drain().collect();
                 let pending_msgs = Default::default();
-                MessagesHandling::BUFFERING(Rc::new(RefCell::new(BufferingHandler {
+                MessagesHandling::Buffering(Rc::new(RefCell::new(BufferingHandler {
                     pending_senders,
                     pending_msgs,
                 })))
             }
-            MessagesHandling::BUFFERING(handler) => MessagesHandling::BUFFERING(handler.clone()),
+            MessagesHandling::Buffering(handler) => MessagesHandling::Buffering(handler.clone()),
         }
     }
 
     /// Returns GSB messages handler that relays them to given WS messages handler AND optional future to send buffered messages
-    fn into_relaying(
+    fn start_relaying(
         &mut self,
         ws_handler: Addr<WsMessagesHandler>,
         ctx: &mut <Service as Actor>::Context,
     ) -> Self {
         log::debug!("Start relaying messages");
         let handler = match self {
-            MessagesHandling::RELAYING(handler) => {
+            MessagesHandling::Relaying(handler) => {
                 let mut handler = handler.borrow_mut();
                 let disconnect_fut = RelayingHandler::disconnect_ws(
                     handler.ws_handler.clone(),
@@ -249,7 +248,7 @@ impl MessagesHandling {
                     ws_handler,
                 }))
             }
-            MessagesHandling::BUFFERING(handler) => {
+            MessagesHandling::Buffering(handler) => {
                 let mut handler = handler.borrow_mut();
                 let pending_senders = handler.pending_senders.drain().collect();
                 let pending_msgs = handler.pending_msgs.drain(..).collect();
@@ -260,13 +259,13 @@ impl MessagesHandling {
                 ctx.spawn(actix::fut::wrap_future(Self::send_pending_requests(
                     pending_msgs,
                     // handler.clone(),
-                    ws_handler.clone(),
+                    ws_handler,
                     ctx.address(),
                 )));
                 handler
             }
         };
-        Self::RELAYING(handler)
+        Self::Relaying(handler)
     }
 
     async fn send_pending_requests(
@@ -279,12 +278,10 @@ impl MessagesHandling {
             let id = msg.id.clone();
             if let Some(error) = match ws_handler.send(msg).await {
                 Ok(Err(error)) => Some(GsbError::GsbFailure(format!(
-                    "Failed to forward buffered request: {}",
-                    error
+                    "Failed to forward buffered request: {error}"
                 ))),
                 Err(error) => Some(GsbError::GsbFailure(format!(
-                    "Failed to forward buffered request. Internal error: {}",
-                    error
+                    "Failed to forward buffered request. Internal error: {error}"
                 ))),
                 _ => None,
             } {
@@ -304,21 +301,21 @@ impl MessagesHandling {
     }
 }
 
-impl<'a> MessagesHandler for MessagesHandling {
+impl MessagesHandler for MessagesHandling {
     fn handle_request(
         &mut self,
         msg: WsRequest,
     ) -> Pin<Box<dyn Future<Output = Result<Receiver<WsResponse>, anyhow::Error>>>> {
         match self {
-            MessagesHandling::RELAYING(handler) => handler.borrow_mut().handle_request(msg),
-            MessagesHandling::BUFFERING(handler) => handler.borrow_mut().handle_request(msg),
+            MessagesHandling::Relaying(handler) => handler.borrow_mut().handle_request(msg),
+            MessagesHandling::Buffering(handler) => handler.borrow_mut().handle_request(msg),
         }
     }
 
     fn handle_response(&mut self, msg: WsResponse) -> Result<(), WsResponse> {
         match self {
-            MessagesHandling::RELAYING(handler) => handler.borrow_mut().handle_response(msg),
-            MessagesHandling::BUFFERING(handler) => handler.borrow_mut().handle_response(msg),
+            MessagesHandling::Relaying(handler) => handler.borrow_mut().handle_response(msg),
+            MessagesHandling::Buffering(handler) => handler.borrow_mut().handle_response(msg),
         }
     }
 
@@ -327,8 +324,8 @@ impl<'a> MessagesHandler for MessagesHandling {
         msg: DropMessages,
     ) -> Pin<Box<dyn std::future::Future<Output = ()> + Send + 'fut>> {
         match self {
-            MessagesHandling::RELAYING(handler) => handler.borrow_mut().disconnect(msg),
-            MessagesHandling::BUFFERING(handler) => handler.borrow_mut().disconnect(msg),
+            MessagesHandling::Relaying(handler) => handler.borrow_mut().disconnect(msg),
+            MessagesHandling::Buffering(handler) => handler.borrow_mut().disconnect(msg),
         }
     }
 }
