@@ -62,7 +62,8 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let requestor_id = demand.get_property("issuerId").ok();
+        let requestor_id = demand.issuer.to_string();
+        //TODO Rafał extract property properly
         let partner_cert = demand.get_property::<String>("golem.node.identity").ok();
 
         let demand_permissions_present = demand

@@ -243,14 +243,10 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         partner_cert: Option<String>,
-        requestor_id: Option<String>,
+        requestor_id: String,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
             let verified_cert = self.keystore.verify_golem_certificate(&cert)?;
-
-            let requestor_id = requestor_id.ok_or_else(|| {
-                anyhow!("Partner rule cannot be used without requestor_id provided")
-            })?;
 
             if requestor_id != verified_cert.node_id {
                 return Err(anyhow!(
@@ -333,7 +329,7 @@ impl RulesManager {
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
-        requestor_id: Option<String>,
+        requestor_id: String,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
         partner_cert: Option<String>,
