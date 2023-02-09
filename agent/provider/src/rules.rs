@@ -14,6 +14,7 @@ use structopt::StructOpt;
 use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_manifest_utils::{
+    golem_certificate::GolemPermission,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
@@ -22,7 +23,6 @@ use ya_manifest_utils::{
     AppManifest, Keystore,
 };
 
-use crate::golem_certificate::{verify_golem_certificate, GolemPermission};
 use crate::startup_config::FileMonitor;
 
 #[derive(Clone, Debug)]
@@ -271,8 +271,7 @@ impl RulesManager {
         requestor_id: Option<String>,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
-            let verified_cert = verify_golem_certificate(&cert)
-                .map_err(|e| anyhow!("Partner rule cert verification failed: {:?}", e))?;
+            let verified_cert = self.keystore.verify_golem_certificate(&cert)?;
 
             let requestor_id = requestor_id.ok_or_else(|| {
                 anyhow!("Partner rule cannot be used without requestor_id provided")

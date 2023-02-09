@@ -4,7 +4,6 @@ pub mod dir;
 pub mod display;
 pub mod events;
 pub mod execution;
-pub mod golem_certificate;
 pub mod hardware;
 mod interval;
 pub mod market;

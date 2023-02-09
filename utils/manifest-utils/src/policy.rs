@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
+use crate::golem_certificate::{verify_golem_certificate, GolemCertificate};
 use crate::util::{cert_to_id, format_permissions, CertBasicDataVisitor, X509Visitor};
 
 pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -218,6 +219,11 @@ impl Keystore {
             return Err(anyhow::anyhow!("Invalid signature"));
         }
         Ok(())
+    }
+
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
+        verify_golem_certificate(&cert)
+            .map_err(|e| anyhow!("verification of golem certificate failed: {:?}", e))
     }
 
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
