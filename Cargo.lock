@@ -7831,6 +7831,7 @@ dependencies = [
  "thiserror",
  "url",
  "ya-agreement-utils",
+ "ya-client-model",
  "ya-manifest-test-utils",
  "ya-utils-path",
 ]

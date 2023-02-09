@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
+use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
     matching::{
@@ -243,7 +244,7 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         partner_cert: Option<String>,
-        requestor_id: String,
+        requestor_id: NodeId,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
             let verified_cert = self.keystore.verify_golem_certificate(&cert)?;
@@ -313,7 +314,7 @@ impl RulesManager {
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
-        requestor_id: String,
+        requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
         partner_cert: Option<String>,

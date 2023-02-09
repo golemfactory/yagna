@@ -62,7 +62,6 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let requestor_id = demand.issuer.to_string();
         //TODO Rafał extract property properly
         let partner_cert = demand.get_property::<String>("golem.node.identity").ok();
 
@@ -73,7 +72,7 @@ impl NegotiatorComponent for ManifestSignature {
         if manifest.get_outbound_requested_urls().is_empty().not() {
             match self.rules_manager.check_outbound_rules(
                 manifest,
-                requestor_id,
+                demand.issuer,
                 manifest_sig,
                 demand_permissions_present,
                 partner_cert,

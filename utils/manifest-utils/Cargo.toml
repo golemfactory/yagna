@@ -22,6 +22,7 @@ schema = ["schemars"]
 [dependencies]
 ya-agreement-utils = "0.4.1"
 ya-utils-path = "0.1"
+ya-client-model = "0.5"
 
 regex = "1.5"
 serde = "1.0"
@@ -35,13 +36,17 @@ hex = { version = "0.4" }
 itertools = "0.10"
 semver = { version = "1.0", features = ["serde"] }
 snailquote = { version = "0.3" }
-structopt = { version =  "0.3" }
+structopt = { version = "0.3" }
 strum = { version = "0.24", features = ["derive"] }
-url = {version = "2.2", features = ["serde"] }
+url = { version = "2.2", features = ["serde"] }
 openssl = { version = "0.10", features = ["vendored"] }
 md-5 = "0.10"
 log = "0.4"
-schemars = { version="0.8", features = ["preserve_order", "chrono", "url"], optional = true }
+schemars = { version = "0.8", features = [
+    "preserve_order",
+    "chrono",
+    "url",
+], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

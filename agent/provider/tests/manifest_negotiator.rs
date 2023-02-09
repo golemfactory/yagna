@@ -219,6 +219,62 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because partner rule set to all"
+)]
+#[test_case(
+    r#""all": { "mode": "whitelist", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because partner rule matched whitelist"
+)]
+#[test_case(
+    r#""all": { "mode": "whitelist", "description": ""}"#,
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("Partner rule didn't match whitelist"); // error msg
+    "Rejected because partner rule mismatched whitelist"
+)]
+#[test_case(
+    r#""all": { "mode": "none", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("Partner rule is disabled"); // error msg
+    "Rejected because partner rule is disabled"
+)]
+#[serial]
+fn manifest_negotiator_test_with_valid_node_data(
+    partner_rule: &str,
+    urls: &str,
+    error_msg: Option<&str>,
+) {
+    let rulestore = format!(
+        r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "all", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
+        partner_rule
+    );
+
+    let valid_node_data = Some("all".into());
+
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        &rulestore,
+        whitelist,
+        comp_manifest_b64,
+        None,
+        None,
+        None,
+        None,
+        error_msg,
+        &vec![],
+        &[],
+        valid_node_data,
+    )
+}
+
+#[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
@@ -356,6 +412,7 @@ fn test_manifest_negotiator_certs_permissions(
         error_msg,
         provider_certs_permissions,
         &["foo_ca-chain.cert.pem"],
+        None,
     )
 }
 
@@ -499,6 +556,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         error_msg,
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
+        None,
     )
 }
 
@@ -514,6 +572,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     error_msg: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
+    node_data: Option<String>,
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
@@ -547,6 +606,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         signature_alg_b64: signature_alg,
         cert_b64,
         cert_permissions_b64,
+        node_data,
     }));
     let demand = create_demand(demand);
     let offer = create_offer();
@@ -573,6 +633,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
 }
+
 fn create_demand(demand: Value) -> ProposalView {
     ProposalView {
         content: OfferTemplate {
@@ -638,6 +699,7 @@ struct Payload<'a> {
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&'a str>,
+    node_data: Option<String>,
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
@@ -684,6 +746,9 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         "comp": {
                             "payload": payload
                         }
+                    },
+                    "node": {
+                        "identity": p.node_data
                     }
                 },
             })

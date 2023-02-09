@@ -1,7 +1,8 @@
 use url::Url;
+use ya_client_model::NodeId;
 
 pub struct GolemCertificate {
-    pub node_id: String,
+    pub node_id: NodeId,
     pub permissions: Vec<GolemPermission>,
     pub cert_ids_chain: Vec<CertificateId>,
 }
@@ -9,7 +10,7 @@ pub struct GolemCertificate {
 impl GolemCertificate {
     fn new(id: &str, permission: GolemPermission) -> Self {
         Self {
-            node_id: id.to_string(),
+            node_id: Default::default(),
             permissions: vec![permission],
             cert_ids_chain: vec![CertificateId::new(id)],
         }
@@ -26,7 +27,7 @@ impl CertificateId {
     fn new(id: &str) -> Self {
         Self {
             public_key: format!("key {}", id),
-            hash: format!("hash {}", id),
+            hash: format!("{id}"),
         }
     }
 }
