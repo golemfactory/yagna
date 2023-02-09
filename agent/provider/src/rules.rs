@@ -256,27 +256,11 @@ impl RulesManager {
                 ));
             }
 
-            if verified_cert.permissions.is_empty() {
-                return Err(anyhow!(
-                    "Partner rule: requestor doesn't have any permissions",
-                ));
-            }
-
-            for perm in verified_cert.permissions {
-                match perm {
-                    GolemPermission::ManifestOutbound(permitted_urls) => {
-                        let requested_urls = manifest.get_outbound_requested_urls();
-                        for requested_url in requested_urls {
-                            if permitted_urls.contains(&requested_url).not() {
-                                return Err(anyhow!(
-                                    "Partner rule forbidden url requested: {requested_url}"
-                                ));
-                            }
-                        }
-                    }
-                    GolemPermission::ManifestOutboundUnrestricted | GolemPermission::All => {}
-                }
-            }
+            self::verify_golem_permissions(
+                &verified_cert.permissions,
+                &manifest.get_outbound_requested_urls(),
+            )
+            .map_err(|e| anyhow!("Partner {e}"))?;
 
             let cert_ids = verified_cert
                 .cert_ids_chain
@@ -387,6 +371,31 @@ impl RulesManager {
 
         self.keystore.verify_permissions(cert, required)
     }
+}
+
+fn verify_golem_permissions(
+    cert_permissions: &[GolemPermission],
+    requested_urls: &[Url],
+) -> Result<()> {
+    if cert_permissions.is_empty() {
+        return Err(anyhow!("requestor doesn't have any permissions"));
+    }
+
+    for perm in cert_permissions {
+        match perm {
+            GolemPermission::ManifestOutbound(permitted_urls) => {
+                for requested_url in requested_urls {
+                    if permitted_urls.contains(&requested_url).not() {
+                        return Err(anyhow!(
+                            "Partner rule forbidden url requested: {requested_url}"
+                        ));
+                    }
+                }
+            }
+            GolemPermission::ManifestOutboundUnrestricted | GolemPermission::All => {}
+        }
+    }
+    Ok(())
 }
 
 fn extract_rejected_message(rules_checks: &[Result<()>]) -> String {
