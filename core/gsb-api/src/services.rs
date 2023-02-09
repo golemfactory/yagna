@@ -106,7 +106,7 @@ impl Handler<Unbind> for Services {
                         code: ws::CloseCode::Normal,
                         description: Some(format!("Unbinding service: {}", msg.addr)),
                     };
-                    Ok(service.send(DropMessages { error }).await?)
+                    Ok(service.send(DropMessages { reason: error }).await?)
                 }
                 None => Err(UnbindError::ServiceNotFound(format!(
                     "Cannot find service: {}",

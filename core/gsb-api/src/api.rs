@@ -127,7 +127,6 @@ struct ServicesLinksBody {
 mod tests {
     use super::*;
     use crate::{GsbApiService, GsbError, GSB_API_PATH};
-
     use actix::Actor;
     use actix_http::ws::{self, CloseCode, CloseReason, Frame};
     use actix_test::{self, TestServer};
@@ -135,11 +134,11 @@ mod tests {
     use awc::error::WsClientError;
     use awc::SendClientRequest;
     use bytes::Bytes;
-
-    use futures::{SinkExt, TryStreamExt};
-
+    use futures::{SinkExt, StreamExt, TryStreamExt};
+    use serde_json::Value;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+    use test_case::test_case;
     use ya_core_model::gftp::{GetChunk, GftpChunk};
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
@@ -384,6 +383,45 @@ mod tests {
         }
 
         verify_delete_service(&mut api, &service_addr).await;
+    }
+
+    #[test_case(r#"{}"#, Frame::Close(Some(CloseReason { 
+        code: CloseCode::Policy,
+        description: Some("Failed to read response. Err: Missing root map. Err: Empty map".to_string()) })); 
+        "Close when empty"
+    )]
+    //TODO Why None here
+    #[test_case(r#"{ "not_id": "nope" }"#, Frame::Close(None);
+        "Close when no id")]
+    #[test_case(r#"{ "id": "some", "not_payload": { "some": "value" } }"#, Frame::Close(Some(CloseReason { 
+        code: CloseCode::Policy,
+        description: Some("Failed to read response. Err: Missing 'payload' and 'error' fields. Id: some.".to_string()) })); 
+        "Close when no payload or error fields")]
+    #[test_case(r#"{ "id": "some", "error": {} }"#, Frame::Close(Some(CloseReason { 
+        code: CloseCode::Policy,
+        description: Some("Failed to read response. Err: Missing 'payload' and 'error' fields. Id: some.".to_string()) })); 
+        "Close when error empty (error needs at least top level error name field)"
+    )]
+    #[actix_web::test]
+    async fn ws_close_on_invalid_response(msg: &str, expected_frame: Frame) {
+        let mut api = dummy_api();
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+                .await;
+        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+        println!("MSG: {}", msg);
+        let ws_res: Value = serde_json::de::from_str(msg).unwrap();
+        let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+        let ws_res = ws_frames
+            .send(ws::Message::Binary(Bytes::from(ws_res)))
+            .await;
+        assert!(ws_res.is_ok());
+        match ws_frames.next().await {
+            Some(Ok(frame)) => assert_eq!(frame, expected_frame),
+            err => panic!("Expected Close frame. Got: {:?}", err),
+        }
     }
 
     #[actix_web::test]
@@ -797,7 +835,7 @@ mod tests {
             Err(GsbError::Closed(msg)) => {
                 assert!(msg.starts_with("Normal: Unbinding service: /public/gftp/123"))
             }
-            _ => panic!("Expected GsbError::Closed"),
+            _ => panic!("Expected GsbError::Closed, got: {:?}", gsb_res),
         }
     }
 

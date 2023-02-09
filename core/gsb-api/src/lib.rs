@@ -5,6 +5,7 @@ mod services;
 use crate::service::{DropMessages, StartBuffering};
 use actix::prelude::*;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
+use actix_http::ws::CloseCode;
 use actix_http::{
     ws::{CloseReason, ProtocolError},
     StatusCode,
@@ -12,7 +13,6 @@ use actix_http::{
 use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
-// use futures::FutureExt;
 use actix::ActorFutureExt;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,6 @@ use ya_client_model::ErrorMessage;
 use ya_service_api_interfaces::Provider;
 
 pub const GSB_API_PATH: &str = "gsb-api/v1";
-
 pub struct GsbApiService;
 
 impl GsbApiService {
@@ -189,7 +188,7 @@ impl WsResponseMsg {
 
 impl From<&DropMessages> for WsResponseMsg {
     fn from(value: &DropMessages) -> Self {
-        let reason = &value.error;
+        let reason = &value.reason;
         let error = match reason.code {
             ws::CloseCode::Normal => GsbError::Closed(Self::desc(reason, "Normal")),
             ws::CloseCode::Away => GsbError::Closed(Self::desc(reason, "Away")),
@@ -230,20 +229,17 @@ impl WsMessagesHandler {
                 self.service
                     .send(ws_response)
                     .into_actor(self)
-                    .map(|res, _, ctx| {
+                    .map(|res, handler, ctx| {
                         if let Err(err) = res {
-                            let description =
-                                Some(format!("Failed to send response. Err: {}", err));
-                            let code = ws::CloseCode::Error;
-                            ctx.close(Some(CloseReason { code, description }))
+                            let desc = format!("Failed to send response. Err: {}", err);
+                            handler.close(ctx, CloseCode::Error, &desc)
                         }
                     })
                     .wait(ctx);
             }
             Err(err) => {
-                let code = ws::CloseCode::Invalid;
-                let description = Some(format!("Failed to read response. Err: {}", err));
-                ctx.close(Some(CloseReason { code, description }));
+                let desc = format!("Failed to read response. Err: {}", err);
+                self.close(ctx, CloseCode::Policy, &desc)
             }
         }
     }
@@ -255,33 +251,31 @@ impl WsMessagesHandler {
             .map_err(|err| format!("Missing root map. Err: {}", err))?;
         let id = flexbuffer_util::read_string(&response, "id")
             .map_err(|err| format!("Missing response id. Err: {}", err))?;
-        if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", false) {
-            WsResponse::try_new("Ok", &id, payload)
-                .map_err(|err| format!("Failed to read payload. Id: {}. Err: {}", id, err))
-        } else if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", true) {
+        if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", false) {
             WsResponse::try_new("Err", &id, error_payload)
                 .map_err(|err| format!("Failed to read error payload. Id: {}. Err: {}", id, err))
+        } else if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", true) {
+            WsResponse::try_new("Ok", &id, payload)
+                .map_err(|err| format!("Failed to read payload. Id: {}. Err: {}", id, err))
         } else {
             Err(format!("Missing 'payload' and 'error' fields. Id: {}.", id))
         }
     }
 
-    fn handle_close(
+    fn start_buffering(
         &self,
-        close_reason: Option<CloseReason>,
+        reason: Option<CloseReason>,
         ctx: &mut WebsocketContext<WsMessagesHandler>,
     ) {
-        log::debug!("WS Close. Reason: {close_reason:?}");
-        let drop_messages = match close_reason {
-            Some(close_reason) => DropMessages {
-                error: close_reason,
-            },
-            None => DropMessages {
-                error: CloseReason {
-                    code: ws::CloseCode::Normal,
-                    description: Some("Closing".to_string()),
-                },
-            },
+        log::debug!("WS Close. Reason: {reason:?}");
+        let drop_messages = match reason {
+            Some(reason) => DropMessages { reason },
+            None => {
+                let code = CloseCode::Normal;
+                let description = Some("Closing".to_string());
+                let reason = CloseReason { code, description };
+                DropMessages { reason }
+            }
         };
         let drop_messages_fut = self.service.send(drop_messages).boxed();
         let start_buffering_fut = self.service.send(StartBuffering).boxed();
@@ -293,6 +287,14 @@ impl WsMessagesHandler {
                 log::error!("Failed to send StartBuffering. Err: {}", error);
             }
         }));
+    }
+
+    fn close(&self, ctx: &mut WebsocketContext<WsMessagesHandler>, code: CloseCode, desc: &str) {
+        let description = Some(desc.to_string());
+        let reason = Some(CloseReason { code, description });
+        self.start_buffering(reason.clone(), ctx);
+        log::warn!("Closing WS handler: {}", desc);
+        ctx.close(reason);
     }
 }
 
@@ -344,11 +346,13 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                     log::debug!("WS Binary (len {})", msg.len());
                     self.handle(msg, ctx);
                 }
-                ws::Message::Text(_) => log::warn!("Text msg not supported."),
-                ws::Message::Continuation(_) => {
-                    log::warn!("Continuation msg not supported.")
+                ws::Message::Text(_) => {
+                    self.close(ctx, CloseCode::Unsupported, "Text msg unsupported.")
                 }
-                ws::Message::Close(close_reason) => self.handle_close(close_reason, ctx),
+                ws::Message::Continuation(_) => {
+                    self.close(ctx, CloseCode::Unsupported, "Continuation msg unsupported.")
+                }
+                ws::Message::Close(close_reason) => self.start_buffering(close_reason, ctx),
                 ws::Message::Ping(message) => ctx.pong(&message),
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
@@ -362,13 +366,16 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
 
     fn finished(&mut self, ctx: &mut Self::Context) {
         log::debug!("WS handler finished.");
-        let service = self.service.clone();
-        ctx.wait(actix::fut::wrap_future(async move {
-            let _msg = "WS disconnected".to_string();
-            if let Err(err) = service.send(StartBuffering).await {
-                log::error!("Failed to disconnect service. Internal error: {}", err);
-            }
-        }));
+        self.service
+            .send(StartBuffering)
+            .into_actor(self)
+            .map(|res, _, _ctx| {
+                if let Err(err) = res {
+                    log::error!("Failed to start buffering GSB messages. Err: {}", err);
+                };
+                // ctx.stop();
+            })
+            .wait(ctx);
     }
 }
 

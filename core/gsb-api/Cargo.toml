@@ -36,3 +36,4 @@ awc = "3"
 env_logger = "0.10"
 ctor = "0.1"
 ya-core-model = { version = "0.8", features = ["gftp"] }
+test-case = "2"

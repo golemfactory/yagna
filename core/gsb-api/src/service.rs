@@ -15,7 +15,6 @@ use std::{
 };
 use thiserror::Error;
 use ya_service_bus::RpcRawCall;
-
 pub(crate) struct Service {
     /// Service prefix
     addr_prefix: String,
@@ -72,7 +71,7 @@ pub(crate) enum DisconnectError {
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub(crate) struct DropMessages {
-    pub(crate) error: CloseReason,
+    pub(crate) reason: CloseReason,
 }
 
 impl Handler<DropMessages> for Service {
@@ -432,7 +431,7 @@ impl MessagesHandler for RelayingHandler {
     ) -> Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Self::drop_messages(&mut self.pending_senders, &drop_messages);
         log::debug!("Disconnecting WS response handler");
-        let disconnect_fut = self.ws_handler.send(WsDisconnect(drop_messages.error));
+        let disconnect_fut = self.ws_handler.send(WsDisconnect(drop_messages.reason));
         Box::pin(async move {
             if let Err(err) = disconnect_fut.await {
                 log::warn!("Failed to disconnect from WS. Err: {}.", err);
