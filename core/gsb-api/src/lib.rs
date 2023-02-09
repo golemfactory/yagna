@@ -12,6 +12,8 @@ use actix_http::{
 use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
+// use futures::FutureExt;
+use actix::ActorFutureExt;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use service::Service;
@@ -144,6 +146,29 @@ pub(crate) struct WsResponse {
     pub response: WsResponseMsg,
 }
 
+impl WsResponse {
+    pub(crate) fn try_new(
+        response_key: &str,
+        id: &str,
+        payload: MapReader<&[u8]>,
+    ) -> Result<WsResponse, String> {
+        let mut response_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+        let mut response_map_builder = response_builder.start_map();
+        let response_map_field_builder = response_map_builder.start_map(response_key);
+        match flexbuffer_util::clone_map(response_map_field_builder, &payload) {
+            Ok(_) => {
+                response_map_builder.end_map();
+                let response = WsResponse {
+                    id: id.to_string(),
+                    response: WsResponseMsg::Message(response_builder.view().to_vec()),
+                };
+                Ok(response)
+            }
+            Err(err) => Err(format!("Failed to read response payload. Err: {}", err)),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum WsResponseMsg {
     Message(Vec<u8>),
@@ -199,80 +224,45 @@ pub(crate) struct WsMessagesHandler {
 }
 
 impl WsMessagesHandler {
-    async fn handle(service: Addr<Service>, buffer: bytes::Bytes) {
-        let response = match Reader::get_root(&*buffer) {
-            Ok(response) => response,
-            Err(err) => {
-                //TODO shutdown WS connections?
-                log::error!("Failed to read WS response root: {err}");
-                return;
+    pub fn handle(&mut self, buffer: bytes::Bytes, ctx: &mut WebsocketContext<WsMessagesHandler>) {
+        match self.read_response(buffer) {
+            Ok(ws_response) => {
+                self.service
+                    .send(ws_response)
+                    .into_actor(self)
+                    .map(|res, _, ctx| {
+                        if let Err(err) = res {
+                            let description =
+                                Some(format!("Failed to send response. Err: {}", err));
+                            let code = ws::CloseCode::Error;
+                            ctx.close(Some(CloseReason { code, description }))
+                        }
+                    })
+                    .wait(ctx);
             }
-        };
-        let response = match flexbuffer_util::as_map(&response, false) {
-            Ok(response) => response,
             Err(err) => {
-                //TODO shutdown WS connections?
-                log::error!("Failed to read WS response root map: {err}");
-                return;
+                let code = ws::CloseCode::Invalid;
+                let description = Some(format!("Failed to read response. Err: {}", err));
+                ctx.close(Some(CloseReason { code, description }));
             }
-        };
-        let id = match flexbuffer_util::read_string(&response, "id") {
-            Ok(id) => id,
-            Err(err) => {
-                //TODO: shutdown WS connection?
-                log::error!("Failed to read WS response id: {err}");
-                return;
-            }
-        };
+        }
+    }
 
+    pub fn read_response(&mut self, buffer: bytes::Bytes) -> Result<WsResponse, String> {
+        let response =
+            Reader::get_root(&*buffer).map_err(|err| format!("Missing root. Err: {}", err))?;
+        let response = flexbuffer_util::as_map(&response, false)
+            .map_err(|err| format!("Missing root map. Err: {}", err))?;
+        let id = flexbuffer_util::read_string(&response, "id")
+            .map_err(|err| format!("Missing response id. Err: {}", err))?;
         if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", false) {
-            match Self::build_response("Ok", id, payload) {
-                Ok(response) => {
-                    log::debug!("WsResponse payload: {}", response.id);
-                    match service.send(response).await {
-                        Ok(res) => {
-                            if let Err(err) = res {
-                                log::error!("Failed to handle WS error payload: {err}");
-                                //TODO error response?
-                            }
-                        }
-                        Err(err) => {
-                            log::error!("Internal error while handling Ws error payload: {err}");
-                            //TODO error response?
-                        }
-                    }
-                }
-                Err(_err) => {
-                    //TODO failed to build response
-                }
-            }
+            WsResponse::try_new("Ok", &id, payload)
+                .map_err(|err| format!("Failed to read payload. Id: {}. Err: {}", id, err))
         } else if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", true) {
-            match Self::build_response("Err", id, error_payload) {
-                Ok(response) => {
-                    log::debug!("WsResponse error payload: {}", response.id);
-                    match service.send(response).await {
-                        Ok(res) => {
-                            if let Err(err) = res {
-                                log::error!("Failed to handle WS error payload: {err}");
-                                //TODO error response?
-                            }
-                        }
-                        Err(err) => {
-                            log::error!("Internal error while handling Ws error payload: {err}");
-                            //TODO error response?
-                        }
-                    }
-                }
-                Err(_err) => {
-                    // TODO failed to build error WS response
-                }
-            }
+            WsResponse::try_new("Err", &id, error_payload)
+                .map_err(|err| format!("Failed to read error payload. Id: {}. Err: {}", id, err))
         } else {
-            // TODO return error to WS and GSB
-            log::error!(
-                "Invalid WS response format. Missing both 'payload' and 'error' fields. Id: {id}."
-            );
-            return;
+            Err(format!("Missing 'payload' and 'error' fields. Id: {}.", id))
         }
     }
 
@@ -303,27 +293,6 @@ impl WsMessagesHandler {
                 log::error!("Failed to send StartBuffering. Err: {}", error);
             }
         }));
-    }
-
-    fn build_response(
-        response_key: &str,
-        id: String,
-        payload: MapReader<&[u8]>,
-    ) -> Result<WsResponse, anyhow::Error> {
-        let mut response_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-        let mut response_map_builder = response_builder.start_map();
-        let response_map_field_builder = response_map_builder.start_map(response_key);
-        match flexbuffer_util::clone_map(response_map_field_builder, &payload) {
-            Ok(_) => {
-                response_map_builder.end_map();
-                let response = WsResponse {
-                    id,
-                    response: WsResponseMsg::Message(response_builder.view().to_vec()),
-                };
-                Ok(response)
-            }
-            Err(err) => anyhow::bail!(err),
-        }
     }
 }
 
@@ -373,19 +342,11 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             Ok(msg) => match msg {
                 ws::Message::Binary(msg) => {
                     log::debug!("WS Binary (len {})", msg.len());
-                    let service = self.service.clone();
-                    ctx.wait(actix::fut::wrap_future(Self::handle(service, msg)));
+                    self.handle(msg, ctx);
                 }
-                ws::Message::Text(msg) => {
-                    log::debug!("WS Text (len {})", msg.len());
-                    let service = self.service.clone();
-                    ctx.wait(actix::fut::wrap_future(Self::handle(
-                        service,
-                        msg.into_bytes(),
-                    )));
-                }
+                ws::Message::Text(_) => log::warn!("Text msg not supported."),
                 ws::Message::Continuation(_) => {
-                    log::warn!("Continuation handling is not implemented.")
+                    log::warn!("Continuation msg not supported.")
                 }
                 ws::Message::Close(close_reason) => self.handle_close(close_reason, ctx),
                 ws::Message::Ping(message) => ctx.pong(&message),
