@@ -111,6 +111,7 @@ impl AppManifest {
             })
     }
 
+    /// Returns empty vector if there is no outbound requested
     pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
         self.comp_manifest
             .as_ref()
