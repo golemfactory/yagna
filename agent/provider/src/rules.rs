@@ -294,6 +294,7 @@ impl RulesManager {
                 ));
             }
 
+            //TODO Rafał This check has a bug
             for perm in verified_cert.permissions {
                 match perm {
                     GolemPermission::ManifestOutbound(permitted_urls) => {
@@ -310,7 +311,6 @@ impl RulesManager {
                 }
             }
 
-            //TODO Rafał Maybe check also if cert_id is present in keystore?
             if let Some(rule) = self
                 .rulestore
                 .config
