@@ -201,23 +201,10 @@ impl RulesManager {
     }
 
     fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
-        match self.rulestore.config.read().unwrap().outbound.everyone {
-            Mode::All => {
-                log::trace!("Everyone is allowed for outbound");
+        let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
 
-                Ok(())
-            }
-            Mode::Whitelist => {
-                if self.whitelist_matching(manifest) {
-                    log::trace!("Everyone Whitelist matched");
-
-                    Ok(())
-                } else {
-                    Err(anyhow!("Everyone rule didn't match whitelist"))
-                }
-            }
-            Mode::None => Err(anyhow!("Everyone rule is disabled")),
-        }
+        self.check_mode(mode, manifest)
+            .map_err(|e| anyhow!("Everyone {e}"))
     }
 
     fn check_audited_payload_rule(
@@ -235,7 +222,7 @@ impl RulesManager {
                 .verify_signature(props.cert, props.sig, props.sig_alg, props.manifest_encoded)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            match self
+            let mode = &self
                 .rulestore
                 .config
                 .read()
@@ -243,22 +230,10 @@ impl RulesManager {
                 .outbound
                 .audited_payload
                 .default
-                .mode
-            {
-                Mode::All => {
-                    log::trace!("Audited-Payload rule set to all");
-                    Ok(())
-                }
-                Mode::Whitelist => {
-                    if self.whitelist_matching(manifest) {
-                        log::trace!("Audited-Payload whitelist matched");
-                        Ok(())
-                    } else {
-                        Err(anyhow!("Audited-Payload rule didn't match whitelist"))
-                    }
-                }
-                Mode::None => Err(anyhow!("Audited-Payload rule is disabled")),
-            }
+                .mode;
+
+            self.check_mode(mode, manifest)
+                .map_err(|e| anyhow!("Audited-Payload {e}"))
         } else {
             Err(anyhow!("Audited-Payload rule requires manifest signature"))
         }
@@ -323,26 +298,9 @@ impl RulesManager {
                     .partner
                     .get(cert_id)
                 {
-                    //TODO Rafał Extract to fn
-                    match rule.mode {
-                        Mode::All => {
-                            log::trace!("Partner rule set to all");
-
-                            return Ok(());
-                        }
-                        Mode::Whitelist => {
-                            if self.whitelist_matching(manifest) {
-                                log::trace!("Partner Whitelist matched");
-
-                                return Ok(());
-                            } else {
-                                return Err(anyhow!("Partner rule didn't match whitelist"));
-                            }
-                        }
-                        Mode::None => {
-                            return Err(anyhow!("Partner rule is disabled"));
-                        }
-                    }
+                    return self
+                        .check_mode(&rule.mode, manifest)
+                        .map_err(|e| anyhow!("Partner {e}"));
                 }
             }
             Err(anyhow!(
@@ -351,6 +309,24 @@ impl RulesManager {
             ))
         } else {
             Err(anyhow!("Partner rule requires partner certificate"))
+        }
+    }
+
+    fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
+        log::trace!("Checking mode: {mode}");
+
+        match mode {
+            Mode::All => Ok(()),
+            Mode::Whitelist => {
+                if self.whitelist_matching(manifest) {
+                    log::trace!("Whitelist matched");
+
+                    Ok(())
+                } else {
+                    Err(anyhow!("rule didn't match whitelist"))
+                }
+            }
+            Mode::None => Err(anyhow!("rule is disabled")),
         }
     }
 
