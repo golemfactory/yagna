@@ -8,10 +8,10 @@ pub struct GolemCertificate {
 }
 
 impl GolemCertificate {
-    fn new(id: &str, permission: GolemPermission) -> Self {
+    fn new(id: &str, permissions: Vec<GolemPermission>) -> Self {
         Self {
             node_id: Default::default(),
-            permissions: vec![permission],
+            permissions,
             cert_ids_chain: vec![CertificateId::new(id)],
         }
     }
@@ -49,10 +49,13 @@ pub enum GolemPermission {
 
 pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, VerificationError> {
     match certificate {
-        "all" => Ok(GolemCertificate::new(certificate, GolemPermission::All)),
+        "all" => Ok(GolemCertificate::new(
+            certificate,
+            vec![GolemPermission::All],
+        )),
         "outbound" => Ok(GolemCertificate::new(
             certificate,
-            GolemPermission::ManifestOutboundUnrestricted,
+            vec![GolemPermission::ManifestOutboundUnrestricted],
         )),
         "expired" => Err(VerificationError::Expired(CertificateId::new(certificate))),
         "invalid-signature" => Err(VerificationError::InvalidSignature(CertificateId::new(
@@ -61,6 +64,7 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
         "invalid-permissions" => Err(VerificationError::PermissionsDoNotMatch(
             CertificateId::new(certificate),
         )),
+        "no-permissions" => Ok(GolemCertificate::new(certificate, vec![])),
         c if c.starts_with("outbound-urls") => {
             let mut parts = c.split('|');
             let id = parts.next().unwrap();
@@ -74,9 +78,9 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
             } else {
                 Ok(GolemCertificate::new(
                     id,
-                    GolemPermission::ManifestOutbound(
+                    vec![GolemPermission::ManifestOutbound(
                         urls.into_iter().map(Result::unwrap).collect(),
-                    ),
+                    )],
                 ))
             }
         }

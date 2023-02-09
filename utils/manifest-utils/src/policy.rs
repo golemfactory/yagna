@@ -242,6 +242,7 @@ impl Keystore {
         ids.insert("expired".into());
         ids.insert("invalid-signature".into());
         ids.insert("outbound-urls".into());
+        ids.insert("no-permissions".into());
 
         Ok(ids)
     }

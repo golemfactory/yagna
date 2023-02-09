@@ -223,7 +223,21 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("all"),
     None; // error msg
-    "Accepted because partner rule set to all"
+    "Accepted because permission is all"
+)]
+#[test_case(
+    r#""outbound-urls": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|https://domain.com"),
+    None;
+    "Accepted as requested domain is in the permitted ones in cert"
+)]
+#[test_case(
+    r#""outbound": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound"),
+    None;
+    "Accepted as permission is outobound unrestricted"
 )]
 #[test_case(
     r#""all": { "mode": "whitelist", "description": ""}"#,
@@ -254,35 +268,35 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     "Rejected because partner rule requires node data"
 )]
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""invalid-data": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-data"),
     Some("Partner verification of golem certificate failed: InvalidData"); // error msg
     "Rejected because node data is invalid"
 )]
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""expired": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("expired"),
     Some("Partner verification of golem certificate failed: Expired"); // error msg
     "Rejected because certificate expired"
 )]
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""invalid-signature": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-signature"),
     Some("Partner verification of golem certificate failed: InvalidSignature"); // error msg
     "Rejected because certificate has invalid signature"
 )]
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""invalid-permissions": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-permissions"),
     Some("Partner verification of golem certificate failed: PermissionsDoNotMatch"); // error msg
     "Rejected because certificate has invalid permissions"
 )]
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""outbound-urls": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("outbound-urls|invalid-url"),
     Some("Partner verification of golem certificate failed: UrlParseError"); // error msg
@@ -294,6 +308,20 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     Some("all"),
     Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
     "Rejected because certificate chain is not trusted"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|https://permitted.com"),
+    Some("Partner Partner rule forbidden url requested"); // error msg
+    "Rejected because certificate does not permit different url"
+)]
+#[test_case(
+    r#""no-permissions": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("no-permissions"),
+    Some("Partner requestor doesn't have any permissions"); // error msg
+    "Rejected because certificate does not have any permissions"
 )]
 #[serial]
 fn manifest_negotiator_test_with_valid_node_data(
