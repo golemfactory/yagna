@@ -274,8 +274,6 @@ impl RulesManager {
             let verified_cert = verify_golem_certificate(&cert)
                 .map_err(|e| anyhow!("Partner rule cert verification failed: {:?}", e))?;
 
-            let cert_id = verified_cert.root_certificate_id.hash;
-
             let requestor_id = requestor_id.ok_or_else(|| {
                 anyhow!("Partner rule cannot be used without requestor_id provided")
             })?;
@@ -294,7 +292,6 @@ impl RulesManager {
                 ));
             }
 
-            //TODO Rafał This check has a bug
             for perm in verified_cert.permissions {
                 match perm {
                     GolemPermission::ManifestOutbound(permitted_urls) => {
@@ -311,35 +308,48 @@ impl RulesManager {
                 }
             }
 
-            if let Some(rule) = self
-                .rulestore
-                .config
-                .read()
-                .unwrap()
-                .outbound
-                .partner
-                .get(&cert_id)
-            {
-                match rule.mode {
-                    Mode::All => {
-                        log::trace!("Partner rule set to all");
+            let cert_ids = verified_cert
+                .cert_ids_chain
+                .iter()
+                .map(|i| i.hash.clone())
+                .collect::<Vec<_>>();
 
-                        Ok(())
-                    }
-                    Mode::Whitelist => {
-                        if self.whitelist_matching(manifest) {
-                            log::trace!("Partner Whitelist matched");
+            for cert_id in cert_ids.iter() {
+                if let Some(rule) = self
+                    .rulestore
+                    .config
+                    .read()
+                    .unwrap()
+                    .outbound
+                    .partner
+                    .get(cert_id)
+                {
+                    //TODO Rafał Extract to fn
+                    match rule.mode {
+                        Mode::All => {
+                            log::trace!("Partner rule set to all");
 
-                            Ok(())
-                        } else {
-                            Err(anyhow!("Partner rule didn't match whitelist"))
+                            return Ok(());
+                        }
+                        Mode::Whitelist => {
+                            if self.whitelist_matching(manifest) {
+                                log::trace!("Partner Whitelist matched");
+
+                                return Ok(());
+                            } else {
+                                return Err(anyhow!("Partner rule didn't match whitelist"));
+                            }
+                        }
+                        Mode::None => {
+                            return Err(anyhow!("Partner rule is disabled"));
                         }
                     }
-                    Mode::None => Err(anyhow!("Partner rule is disabled")),
                 }
-            } else {
-                Err(anyhow!("Partner rule: cert_id: {cert_id} is not trusted"))
             }
+            Err(anyhow!(
+                "Partner rule: whole chain of cert_ids: {:?} is not trusted",
+                cert_ids
+            ))
         } else {
             Err(anyhow!("Partner rule requires partner certificate"))
         }

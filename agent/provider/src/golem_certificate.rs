@@ -3,7 +3,7 @@ use url::Url;
 pub struct GolemCertificate {
     pub node_id: String,
     pub permissions: Vec<GolemPermission>,
-    pub root_certificate_id: CertificateId,
+    pub cert_ids_chain: Vec<CertificateId>,
 }
 
 impl GolemCertificate {
@@ -11,7 +11,7 @@ impl GolemCertificate {
         Self {
             node_id: id.to_string(),
             permissions: vec![permission],
-            root_certificate_id: CertificateId::new(id),
+            cert_ids_chain: vec![CertificateId::new(id)],
         }
     }
 }
@@ -25,8 +25,8 @@ pub struct CertificateId {
 impl CertificateId {
     fn new(id: &str) -> Self {
         Self {
-            public_key: format!("root key {}", id),
-            hash: format!("root hash {}", id),
+            public_key: format!("key {}", id),
+            hash: format!("hash {}", id),
         }
     }
 }
