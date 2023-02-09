@@ -288,7 +288,7 @@ impl RulesManager {
                 }
             }
             Err(anyhow!(
-                "Partner rule: whole chain of cert_ids: {:?} is not trusted",
+                "Partner rule whole chain of cert_ids is not trusted: {:?}",
                 cert_ids
             ))
         } else {

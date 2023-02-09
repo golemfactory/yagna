@@ -288,6 +288,13 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     Some("Partner verification of golem certificate failed: UrlParseError"); // error msg
     "Rejected because certificate has invalid urls inside"
 )]
+#[test_case(
+    r#""different-trusted-cert": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
+    "Rejected because certificate chain is not trusted"
+)]
 #[serial]
 fn manifest_negotiator_test_with_valid_node_data(
     partner_rule: &str,
