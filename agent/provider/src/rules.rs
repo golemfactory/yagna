@@ -247,7 +247,10 @@ impl RulesManager {
         requestor_id: NodeId,
     ) -> Result<()> {
         if let Some(cert) = partner_cert {
-            let verified_cert = self.keystore.verify_golem_certificate(&cert)?;
+            let verified_cert = self
+                .keystore
+                .verify_golem_certificate(&cert)
+                .map_err(|e| anyhow!("Partner {e}"))?;
 
             if requestor_id != verified_cert.node_id {
                 return Err(anyhow!(

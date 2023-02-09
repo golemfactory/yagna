@@ -221,39 +221,84 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 #[test_case(
     r#""all": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
     None; // error msg
     "Accepted because partner rule set to all"
 )]
 #[test_case(
     r#""all": { "mode": "whitelist", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
     None; // error msg
     "Accepted because partner rule matched whitelist"
 )]
 #[test_case(
     r#""all": { "mode": "whitelist", "description": ""}"#,
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
     Some("Partner rule didn't match whitelist"); // error msg
     "Rejected because partner rule mismatched whitelist"
 )]
 #[test_case(
     r#""all": { "mode": "none", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
     Some("Partner rule is disabled"); // error msg
     "Rejected because partner rule is disabled"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None,
+    Some("Partner rule requires partner certificate"); // error msg
+    "Rejected because partner rule requires node data"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-data"),
+    Some("Partner verification of golem certificate failed: InvalidData"); // error msg
+    "Rejected because node data is invalid"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("expired"),
+    Some("Partner verification of golem certificate failed: Expired"); // error msg
+    "Rejected because certificate expired"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-signature"),
+    Some("Partner verification of golem certificate failed: InvalidSignature"); // error msg
+    "Rejected because certificate has invalid signature"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-permissions"),
+    Some("Partner verification of golem certificate failed: PermissionsDoNotMatch"); // error msg
+    "Rejected because certificate has invalid permissions"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|invalid-url"),
+    Some("Partner verification of golem certificate failed: UrlParseError"); // error msg
+    "Rejected because certificate has invalid urls inside"
 )]
 #[serial]
 fn manifest_negotiator_test_with_valid_node_data(
     partner_rule: &str,
     urls: &str,
+    node_data: Option<&str>,
     error_msg: Option<&str>,
 ) {
     let rulestore = format!(
         r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "all", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
         partner_rule
     );
-
-    let valid_node_data = Some("all".into());
 
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
@@ -270,7 +315,7 @@ fn manifest_negotiator_test_with_valid_node_data(
         error_msg,
         &vec![],
         &[],
-        valid_node_data,
+        node_data.map(|n| n.to_string()),
     )
 }
 
