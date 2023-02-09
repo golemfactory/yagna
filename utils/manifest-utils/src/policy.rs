@@ -235,6 +235,14 @@ impl Keystore {
                 ids.insert(id);
             }
         }
+
+        //TODO it will be deleted when keystore will handle golem certs properly
+        ids.insert("all".into());
+        ids.insert("outbound".into());
+        ids.insert("expired".into());
+        ids.insert("invalid-signature".into());
+        ids.insert("outbound-urls".into());
+
         Ok(ids)
     }
 
