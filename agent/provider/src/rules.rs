@@ -243,57 +243,56 @@ impl RulesManager {
     fn check_partner_rule(
         &self,
         manifest: &AppManifest,
-        partner_cert: Option<String>,
+        node_identity: Option<String>,
         requestor_id: NodeId,
     ) -> Result<()> {
-        if let Some(cert) = partner_cert {
-            let verified_cert = self
-                .keystore
-                .verify_golem_certificate(&cert)
-                .map_err(|e| anyhow!("Partner {e}"))?;
+        let node_identity =
+            node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
 
-            if requestor_id != verified_cert.node_id {
-                return Err(anyhow!(
-                    "Partner rule nodes mismatch. requestor node_id: {} but cert node_id: {}",
-                    requestor_id,
-                    verified_cert.node_id
-                ));
-            }
-
-            self::verify_golem_permissions(
-                &verified_cert.permissions,
-                &manifest.get_outbound_requested_urls(),
-            )
+        let verified_cert = self
+            .keystore
+            .verify_golem_certificate(&node_identity)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
-            let cert_ids = verified_cert
-                .cert_ids_chain
-                .iter()
-                .map(|i| i.hash.clone())
-                .collect::<Vec<_>>();
-
-            for cert_id in cert_ids.iter() {
-                if let Some(rule) = self
-                    .rulestore
-                    .config
-                    .read()
-                    .unwrap()
-                    .outbound
-                    .partner
-                    .get(cert_id)
-                {
-                    return self
-                        .check_mode(&rule.mode, manifest)
-                        .map_err(|e| anyhow!("Partner {e}"));
-                }
-            }
-            Err(anyhow!(
-                "Partner rule whole chain of cert_ids is not trusted: {:?}",
-                cert_ids
-            ))
-        } else {
-            Err(anyhow!("Partner rule requires partner certificate"))
+        if requestor_id != verified_cert.node_id {
+            return Err(anyhow!(
+                "Partner rule nodes mismatch. requestor node_id: {} but cert node_id: {}",
+                requestor_id,
+                verified_cert.node_id
+            ));
         }
+
+        self::verify_golem_permissions(
+            &verified_cert.permissions,
+            &manifest.get_outbound_requested_urls(),
+        )
+        .map_err(|e| anyhow!("Partner {e}"))?;
+
+        let cert_ids = verified_cert
+            .cert_ids_chain
+            .iter()
+            .map(|i| i.hash.clone())
+            .collect::<Vec<_>>();
+
+        for cert_id in cert_ids.iter() {
+            if let Some(rule) = self
+                .rulestore
+                .config
+                .read()
+                .unwrap()
+                .outbound
+                .partner
+                .get(cert_id)
+            {
+                return self
+                    .check_mode(&rule.mode, manifest)
+                    .map_err(|e| anyhow!("Partner {e}"));
+            }
+        }
+        Err(anyhow!(
+            "Partner rule whole chain of cert_ids is not trusted: {:?}",
+            cert_ids
+        ))
     }
 
     fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
@@ -320,7 +319,7 @@ impl RulesManager {
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
-        partner_cert: Option<String>,
+        node_identity: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.config.read().unwrap().outbound.enabled.not() {
             log::trace!("Outbound is disabled.");
@@ -331,7 +330,7 @@ impl RulesManager {
         let rules_checks = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
-            self.check_partner_rule(&manifest, partner_cert, requestor_id),
+            self.check_partner_rule(&manifest, node_identity, requestor_id),
         ];
 
         //TODO Rafał partition?
