@@ -323,6 +323,13 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     Some("Partner requestor doesn't have any permissions"); // error msg
     "Rejected because certificate does not have any permissions"
 )]
+#[test_case(
+    r#""non-default-node-id": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("non-default-node-id"),
+    Some("Partner rule nodes mismatch"); // error msg
+    "Rejected because requestor node id doesn't match with node_json id"
+)]
 #[serial]
 fn manifest_negotiator_test_with_node_identity(
     partner_rule: &str,

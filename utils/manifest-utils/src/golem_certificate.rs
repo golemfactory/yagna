@@ -57,6 +57,13 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
             certificate,
             vec![GolemPermission::ManifestOutboundUnrestricted],
         )),
+        "non-default-node-id" => Ok(GolemCertificate {
+            node_id: "0xbabe000000000000000000000000000000000000"
+                .parse::<NodeId>()
+                .unwrap(),
+            permissions: vec![GolemPermission::All],
+            cert_ids_chain: vec![CertificateId::new(certificate)],
+        }),
         "expired" => Err(VerificationError::Expired(CertificateId::new(certificate))),
         "invalid-signature" => Err(VerificationError::InvalidSignature(CertificateId::new(
             certificate,
