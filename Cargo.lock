@@ -8108,6 +8108,7 @@ dependencies = [
  "futures-util",
  "hex",
  "humantime 2.1.0",
+ "itertools 0.10.5",
  "lazy_static",
  "libc",
  "log",

@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumString, EnumVariantNames};
@@ -327,18 +328,19 @@ impl RulesManager {
             return CheckRulesResult::Reject("outbound is disabled".into());
         }
 
-        let rules_checks = vec![
+        let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
             self.check_partner_rule(&manifest, node_identity, requestor_id),
-        ];
+        ]
+        .into_iter()
+        .partition_result();
 
-        //TODO Rafał partition?
-        let reject_msg = extract_rejected_message(&rules_checks);
+        let reject_msg = extract_rejected_message(rejects);
 
         log::info!("Following rules didn't match: {reject_msg}");
 
-        if rules_checks.iter().any(|check| check.is_ok()) {
+        if accepts.is_empty().not() {
             CheckRulesResult::Accept
         } else {
             CheckRulesResult::Reject(format!("Rejected because:\n{reject_msg}"))
@@ -401,10 +403,9 @@ fn verify_golem_permissions(
     Ok(())
 }
 
-fn extract_rejected_message(rules_checks: &[Result<()>]) -> String {
+fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
     rules_checks
         .iter()
-        .filter_map(|c| c.as_ref().err())
         .fold(String::new(), |s, c| s + &c.to_string() + "\n")
 }
 
