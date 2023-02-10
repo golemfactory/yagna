@@ -709,7 +709,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
                 assert!(is_final);
                 if !message.contains(expected_error) {
                     panic!(
-                        "Negotiations error message:\n{}\ndoesn't contain expected message:\n{}",
+                        "Negotiations error message: \n {} \n doesn't contain expected message: \n {}",
                         message, expected_error
                     );
                 }
