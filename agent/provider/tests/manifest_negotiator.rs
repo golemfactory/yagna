@@ -324,10 +324,10 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     "Rejected because certificate does not have any permissions"
 )]
 #[serial]
-fn manifest_negotiator_test_with_valid_node_data(
+fn manifest_negotiator_test_with_node_identity(
     partner_rule: &str,
     urls: &str,
-    node_data: Option<&str>,
+    node_identity: Option<&str>,
     error_msg: Option<&str>,
 ) {
     let rulestore = format!(
@@ -350,7 +350,7 @@ fn manifest_negotiator_test_with_valid_node_data(
         error_msg,
         &vec![],
         &[],
-        node_data.map(|n| n.to_string()),
+        node_identity.map(|n| n.to_string()),
     )
 }
 
@@ -652,7 +652,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     error_msg: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
-    node_data: Option<String>,
+    node_identity: Option<String>,
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
@@ -686,7 +686,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         signature_alg_b64: signature_alg,
         cert_b64,
         cert_permissions_b64,
-        node_data,
+        node_identity,
     }));
     let demand = create_demand(demand);
     let offer = create_offer();
@@ -779,7 +779,7 @@ struct Payload<'a> {
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&'a str>,
-    node_data: Option<String>,
+    node_identity: Option<String>,
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
@@ -828,7 +828,7 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         }
                     },
                     "node": {
-                        "identity": p.node_data
+                        "identity": p.node_identity
                     }
                 },
             })
