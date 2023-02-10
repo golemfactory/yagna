@@ -80,7 +80,8 @@ impl From<StatePair> for SetState {
     }
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug, Message, derive_more::Display)]
+#[display(fmt = "Command: {:?} (batch = {}[{}])", command, batch_id, idx)]
 #[rtype(result = "Result<i32>")]
 pub struct ExecuteCommand {
     pub batch_id: String,
