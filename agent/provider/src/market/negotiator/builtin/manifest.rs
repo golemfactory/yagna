@@ -4,8 +4,8 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
     decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_PROPERTY,
-    DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY,
+    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;
@@ -62,8 +62,9 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        //TODO Rafał extract property properly
-        let partner_cert = demand.get_property::<String>("golem.node.identity").ok();
+        let partner_cert = demand
+            .get_property::<String>(DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY)
+            .ok();
 
         let demand_permissions_present = demand
             .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
