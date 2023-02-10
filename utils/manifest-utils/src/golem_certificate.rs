@@ -27,7 +27,7 @@ impl CertificateId {
     fn new(id: &str) -> Self {
         Self {
             public_key: format!("key {}", id),
-            hash: format!("{id}"),
+            hash: id.to_string(),
         }
     }
 }

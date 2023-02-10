@@ -389,7 +389,7 @@ fn verify_golem_permissions(
         match perm {
             GolemPermission::ManifestOutbound(permitted_urls) => {
                 for requested_url in requested_urls {
-                    if permitted_urls.contains(&requested_url).not() {
+                    if permitted_urls.contains(requested_url).not() {
                         return Err(anyhow!(
                             "Partner rule forbidden url requested: {requested_url}"
                         ));
