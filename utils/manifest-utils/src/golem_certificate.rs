@@ -48,8 +48,8 @@ pub enum VerificationError {
 
 pub enum GolemPermission {
     All,
-    ManifestOutboundUnrestricted,
-    ManifestOutbound(Vec<Url>),
+    OutboundUnrestricted,
+    Outbound(Vec<Url>),
 }
 
 pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, VerificationError> {
@@ -60,7 +60,7 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
         )),
         "outbound" => Ok(GolemCertificate::new(
             certificate,
-            vec![GolemPermission::ManifestOutboundUnrestricted],
+            vec![GolemPermission::OutboundUnrestricted],
         )),
         "non-default-node-id" => Ok(GolemCertificate {
             node_id: "0xbabe000000000000000000000000000000000000"
@@ -90,7 +90,7 @@ pub fn verify_golem_certificate(certificate: &str) -> Result<GolemCertificate, V
             } else {
                 Ok(GolemCertificate::new(
                     id,
-                    vec![GolemPermission::ManifestOutbound(
+                    vec![GolemPermission::Outbound(
                         urls.into_iter().map(Result::unwrap).collect(),
                     )],
                 ))

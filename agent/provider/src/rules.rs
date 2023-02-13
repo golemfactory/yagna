@@ -392,7 +392,7 @@ fn verify_golem_permissions(
 
     for perm in cert_permissions {
         match perm {
-            GolemPermission::ManifestOutbound(permitted_urls) => {
+            GolemPermission::Outbound(permitted_urls) => {
                 for requested_url in requested_urls {
                     if permitted_urls.contains(requested_url).not() {
                         return Err(anyhow!(
@@ -401,7 +401,7 @@ fn verify_golem_permissions(
                     }
                 }
             }
-            GolemPermission::ManifestOutboundUnrestricted | GolemPermission::All => {}
+            GolemPermission::OutboundUnrestricted | GolemPermission::All => {}
         }
     }
     Ok(())
