@@ -347,7 +347,7 @@ impl RulesManager {
         if accepts.is_empty().not() {
             CheckRulesResult::Accept
         } else {
-            CheckRulesResult::Reject(format!("Rejected because:\n{reject_msg}"))
+            CheckRulesResult::Reject(format!("Outbound rejected because: {reject_msg}"))
         }
     }
 
@@ -410,7 +410,7 @@ fn verify_golem_permissions(
 fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
     rules_checks
         .iter()
-        .fold(String::new(), |s, c| s + &c.to_string() + "\n")
+        .fold(String::new(), |s, c| s + &c.to_string() + " ; ")
 }
 
 pub struct ManifestSignatureProps {
