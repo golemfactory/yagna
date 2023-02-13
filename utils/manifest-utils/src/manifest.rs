@@ -124,6 +124,10 @@ impl AppManifest {
             .unwrap_or_default()
     }
 
+    pub fn is_outbound_requested(&self) -> bool {
+        self.get_outbound_requested_urls().is_empty().not()
+    }
+
     pub fn features(&self) -> HashSet<Feature> {
         let mut features = HashSet::new();
 
