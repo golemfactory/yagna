@@ -237,7 +237,7 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("outbound"),
     None;
-    "Accepted as permission is outobound unrestricted"
+    "Accepted as permission is outbound unrestricted"
 )]
 #[test_case(
     r#""all": { "mode": "whitelist", "description": ""}"#,
