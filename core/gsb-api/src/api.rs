@@ -1,7 +1,8 @@
-use crate::service::StartRelaying;
+use crate::service::{StartBuffering};
 use crate::services::{Bind, Find, Services, Unbind};
-use crate::{GsbApiError, WsMessagesHandler};
+use crate::{GsbApiError, WsDisconnect, WsMessagesHandler};
 use actix::Addr;
+use actix_http::ws::{CloseCode, CloseReason};
 use actix_http::StatusCode;
 use actix_web::web::Data;
 use actix_web::Scope;
@@ -78,11 +79,16 @@ async fn get_service_messages(
     let addr = decode_addr(&path.key)?;
     log::debug!("GET WS service: {}", addr);
     let service = services.send(Find { addr }).await??;
-    let handler = WsMessagesHandler {
-        service: service.clone(),
-    };
-    let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    service.send(StartRelaying { ws_handler: addr }).await?;
+    if let Some(ws_handler) = service.send(StartBuffering).await? {
+        let description = Some("Closing old WS connection on new WS connection".to_string());
+        let code = CloseCode::Policy;
+        let ws_disconnect = WsDisconnect(CloseReason { code, description });
+        ws_handler.send(ws_disconnect).await?;
+    } else {
+        log::debug!("No old WS connection");
+    }
+    let handler = WsMessagesHandler { service };
+    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
     Ok(resp)
 }
 
@@ -411,7 +417,7 @@ mod tests {
                 .await;
         let services_path = body.listen.unwrap().links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
-        println!("MSG: {}", msg);
+        println!("MSG: {msg}");
         let ws_res: Value = serde_json::de::from_str(msg).unwrap();
         let ws_res = flexbuffers::to_vec(ws_res).unwrap();
         let ws_res = ws_frames
@@ -912,8 +918,8 @@ mod tests {
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
         let expected_close_reason = CloseReason {
-            code: ws::CloseCode::Normal,
-            description: Some("New WS connection. Disconnecting".to_string()),
+            code: ws::CloseCode::Policy,
+            description: Some("Closing old WS connection on new WS connection".to_string()),
         };
         match ws_req_0 {
             Ok(Some(Frame::Close(Some(close_reason)))) => {

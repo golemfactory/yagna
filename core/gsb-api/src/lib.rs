@@ -2,8 +2,9 @@ mod api;
 mod service;
 mod services;
 
-use crate::service::{DropMessages, StartBuffering};
+use crate::service::{DropMessages, StartBuffering, StartRelaying};
 use actix::prelude::*;
+use actix::ActorFutureExt;
 use actix::{Actor, Addr, Handler, MailboxError, StreamHandler};
 use actix_http::ws::CloseCode;
 use actix_http::{
@@ -13,7 +14,6 @@ use actix_http::{
 use actix_web::{HttpResponse, ResponseError};
 use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
-use actix::ActorFutureExt;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use service::Service;
@@ -163,7 +163,7 @@ impl WsResponse {
                 };
                 Ok(response)
             }
-            Err(err) => Err(format!("Failed to read response payload. Err: {}", err)),
+            Err(err) => Err(format!("Failed to read response payload. Err: {err}")),
         }
     }
 }
@@ -228,17 +228,18 @@ impl WsMessagesHandler {
             Ok(ws_response) => {
                 self.service
                     .send(ws_response)
+                    .boxed()
                     .into_actor(self)
                     .map(|res, handler, ctx| {
                         if let Err(err) = res {
-                            let desc = format!("Failed to send response. Err: {}", err);
+                            let desc = format!("Failed to send response. Err: {err}");
                             handler.close(ctx, CloseCode::Error, &desc)
                         }
                     })
                     .wait(ctx);
             }
             Err(err) => {
-                let desc = format!("Failed to read response. Err: {}", err);
+                let desc = format!("Failed to read response. Err: {err}");
                 self.close(ctx, CloseCode::Policy, &desc)
             }
         }
@@ -246,19 +247,19 @@ impl WsMessagesHandler {
 
     pub fn read_response(&mut self, buffer: bytes::Bytes) -> Result<WsResponse, String> {
         let response =
-            Reader::get_root(&*buffer).map_err(|err| format!("Missing root. Err: {}", err))?;
+            Reader::get_root(&*buffer).map_err(|err| format!("Missing root. Err: {err}"))?;
         let response = flexbuffer_util::as_map(&response, false)
-            .map_err(|err| format!("Missing root map. Err: {}", err))?;
+            .map_err(|err| format!("Missing root map. Err: {err}"))?;
         let id = flexbuffer_util::read_string(&response, "id")
-            .map_err(|err| format!("Missing response id. Err: {}", err))?;
+            .map_err(|err| format!("Missing response id. Err: {err}"))?;
         if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", false) {
             WsResponse::try_new("Err", &id, error_payload)
-                .map_err(|err| format!("Failed to read error payload. Id: {}. Err: {}", id, err))
+                .map_err(|err| format!("Failed to read error payload. Id: {id}. Err: {err}"))
         } else if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", true) {
             WsResponse::try_new("Ok", &id, payload)
-                .map_err(|err| format!("Failed to read payload. Id: {}. Err: {}", id, err))
+                .map_err(|err| format!("Failed to read payload. Id: {id}. Err: {err}"))
         } else {
-            Err(format!("Missing 'payload' and 'error' fields. Id: {}.", id))
+            Err(format!("Missing 'payload' and 'error' fields. Id: {id}."))
         }
     }
 
@@ -364,18 +365,34 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
         };
     }
 
-    fn finished(&mut self, ctx: &mut Self::Context) {
-        log::debug!("WS handler finished.");
+    fn started(&mut self, ctx: &mut Self::Context) {
+        log::debug!("WS handler started.");
         self.service
-            .send(StartBuffering)
+            .send(StartRelaying {
+                ws_handler: ctx.address(),
+            })
             .into_actor(self)
             .map(|res, _, _ctx| {
                 if let Err(err) = res {
                     log::error!("Failed to start buffering GSB messages. Err: {}", err);
                 };
-                // ctx.stop();
             })
-            .wait(ctx);
+            .spawn(ctx);
+    }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        log::debug!("WS handler finished.");
+        self.service
+            .send(StartBuffering)
+            .into_actor(self)
+            .map(|res, _, ctx| {
+                if let Err(err) = res {
+                    log::error!("Failed to start buffering GSB messages. Err: {}", err);
+                };
+                log::debug!("Stopping WS handler actor.");
+                ctx.stop();
+            })
+            .spawn(ctx);
     }
 }
 
@@ -383,6 +400,7 @@ impl Handler<WsDisconnect> for WsMessagesHandler {
     type Result = <WsDisconnect as actix::Message>::Result;
 
     fn handle(&mut self, close: WsDisconnect, ctx: &mut Self::Context) -> Self::Result {
+        log::debug!("Stopping WsMessagesHandler. Close reason: {:?}", close.0);
         ctx.close(Some(close.0));
     }
 }

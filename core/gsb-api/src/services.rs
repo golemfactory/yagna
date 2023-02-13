@@ -1,4 +1,4 @@
-use crate::service::{DisconnectError, DropMessages, Service};
+use crate::service::{DropMessages, Service};
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use actix_http::ws::CloseReason;
@@ -66,12 +66,6 @@ pub(crate) enum UnbindError {
     InvalidService(String),
     #[error("Unbind failed: {0}")]
     UnbindFailed(String),
-}
-
-impl From<DisconnectError> for UnbindError {
-    fn from(err: DisconnectError) -> Self {
-        UnbindError::UnbindFailed(err.to_string())
-    }
 }
 
 impl From<MailboxError> for UnbindError {
