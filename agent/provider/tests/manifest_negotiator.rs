@@ -271,35 +271,35 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     r#""invalid-data": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-data"),
-    Some("Partner verification of golem certificate failed: InvalidData"); // error msg
+    Some("Partner verification of golem certificate failed: Invalid data"); // error msg
     "Rejected because node data is invalid"
 )]
 #[test_case(
     r#""expired": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("expired"),
-    Some("Partner verification of golem certificate failed: Expired"); // error msg
+    Some("Partner verification of golem certificate failed: Certificate is expired"); // error msg
     "Rejected because certificate expired"
 )]
 #[test_case(
     r#""invalid-signature": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-signature"),
-    Some("Partner verification of golem certificate failed: InvalidSignature"); // error msg
+    Some("Partner verification of golem certificate failed: Certificate has invalid signature"); // error msg
     "Rejected because certificate has invalid signature"
 )]
 #[test_case(
     r#""invalid-permissions": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("invalid-permissions"),
-    Some("Partner verification of golem certificate failed: PermissionsDoNotMatch"); // error msg
+    Some("Partner verification of golem certificate failed: Certificate does not have all required permissions"); // error msg
     "Rejected because certificate has invalid permissions"
 )]
 #[test_case(
     r#""outbound-urls": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     Some("outbound-urls|invalid-url"),
-    Some("Partner verification of golem certificate failed: UrlParseError"); // error msg
+    Some("Partner verification of golem certificate failed: Url parse error"); // error msg
     "Rejected because certificate has invalid urls inside"
 )]
 #[test_case(

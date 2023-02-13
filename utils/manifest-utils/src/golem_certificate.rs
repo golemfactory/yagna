@@ -26,18 +26,23 @@ pub struct CertificateId {
 impl CertificateId {
     fn new(id: &str) -> Self {
         Self {
-            public_key: format!("key {}", id),
+            public_key: id.to_string(),
             hash: id.to_string(),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum VerificationError {
+    #[error("Invalid data")]
     InvalidData,
+    #[error("Certificate is expired: '{}' ", .0.hash)]
     Expired(CertificateId),
+    #[error("Certificate has invalid signature: '{}'", .0.hash)]
     InvalidSignature(CertificateId),
-    PermissionsDoNotMatch(CertificateId), // the signer does not have all the required permissions
+    #[error("Certificate does not have all required permissions: '{}'", .0.hash)]
+    PermissionsDoNotMatch(CertificateId),
+    #[error("Url parse error {0:?}")]
     UrlParseError(Vec<String>),
 }
 

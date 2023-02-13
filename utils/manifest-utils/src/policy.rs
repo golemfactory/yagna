@@ -223,7 +223,7 @@ impl Keystore {
 
     pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
         verify_golem_certificate(cert)
-            .map_err(|e| anyhow!("verification of golem certificate failed: {:?}", e))
+            .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
