@@ -544,7 +544,7 @@ mod flexbuffer_util {
         let vector_reader = reader.get_vector()?;
         let mut pusher = FlexVecPusher { builder };
         for value in vector_reader.iter() {
-            let v_type = value_type.unwrap_or(value.flexbuffer_type());
+            let v_type = value_type.unwrap_or_else(|| value.flexbuffer_type());
             pusher = push(value, v_type, pusher)?;
         }
         pusher.end();
