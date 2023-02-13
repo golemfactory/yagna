@@ -216,12 +216,17 @@ impl RulesManager {
         demand_permissions_present: bool,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            self.verify_permissions(&props.cert, demand_permissions_present)
+            self.keystore
+                .verify_signature(
+                    props.cert.clone(),
+                    props.sig,
+                    props.sig_alg,
+                    props.manifest_encoded,
+                )
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            self.keystore
-                .verify_signature(props.cert, props.sig, props.sig_alg, props.manifest_encoded)
+            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+            self.verify_permissions(&props.cert, demand_permissions_present)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
             let mode = &self
