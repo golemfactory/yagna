@@ -359,8 +359,8 @@ impl RulesManager {
             .flat_map(Url::host_str)
             .filter(|domain| matcher.matches(domain).not())
             .collect();
+
         if non_whitelisted_urls.is_empty() {
-            log::debug!("Every URL on whitelist");
             true
         } else {
             log::debug!(
