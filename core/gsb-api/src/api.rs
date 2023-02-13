@@ -1,4 +1,4 @@
-use crate::service::{StartBuffering};
+use crate::service::StartBuffering;
 use crate::services::{Bind, Find, Services, Unbind};
 use crate::{GsbApiError, WsDisconnect, WsMessagesHandler};
 use actix::Addr;
