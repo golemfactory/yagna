@@ -327,7 +327,7 @@ impl RulesManager {
         node_identity: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.config.read().unwrap().outbound.enabled.not() {
-            log::trace!("Outbound is disabled.");
+            log::trace!("Checking rules: outbound is disabled.");
 
             return CheckRulesResult::Reject("outbound is disabled".into());
         }
