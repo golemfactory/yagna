@@ -141,7 +141,7 @@ dependencies = [
  "serde_urlencoded",
  "slab",
  "socket2 0.4.7",
- "tokio 1.24.1",
+ "tokio 1.24.2",
 ]
 
 [[package]]
@@ -227,7 +227,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.24.1",
+ "tokio 1.24.2",
 ]
 
 [[package]]
@@ -7842,7 +7842,7 @@ dependencies = [
  "serde_json",
  "test-case",
  "thiserror",
- "tokio 1.24.1",
+ "tokio 1.24.2",
  "uuid 1.2.2",
  "ya-client-model",
  "ya-core-model",
