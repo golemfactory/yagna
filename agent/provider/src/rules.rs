@@ -262,8 +262,7 @@ impl RulesManager {
 
         if requestor_id != verified_cert.node_id {
             return Err(anyhow!(
-                "Partner rule nodes mismatch. requestor node_id: {} but cert node_id: {}",
-                requestor_id,
+                "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
                 verified_cert.node_id
             ));
         }
