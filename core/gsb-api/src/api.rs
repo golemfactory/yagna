@@ -329,10 +329,8 @@ mod tests {
             async {
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap();
-                let ws_req = ws_req.unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -549,11 +547,11 @@ mod tests {
         verify_delete_service(&mut api, &service_addr).await;
 
         println!("WS next");
-        let ws_msg = ws_frames.try_next().await.unwrap().unwrap();
+        let ws_msg = ws_frames.try_next().await;
         let expected_code = CloseCode::Normal;
         let expected_msg_prefix = "Unbinding service: /public/gftp/123";
         match ws_msg {
-            Frame::Close(Some(msg)) => {
+            Ok(Some(Frame::Close(Some(msg)))) => {
                 assert_eq!(expected_code, msg.code);
                 assert!(msg.description.unwrap().starts_with(expected_msg_prefix));
             }
@@ -600,22 +598,20 @@ mod tests {
                 let ws_req = ws_frames.try_next().await;
 
                 assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap().unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
                 };
                 let id = ws_req.id;
                 let len = ws_req.payload.size as usize;
-                let res_msg = GftpChunk {
-                    content: vec![7; len],
-                    offset: 0,
-                };
                 let ws_res = TestWsResponse {
                     id,
-                    payload: res_msg,
+                    payload: GftpChunk {
+                        content: vec![7; len],
+                        offset: 0,
+                    },
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
 
@@ -684,22 +680,20 @@ mod tests {
                 let ws_req = ws_frames.try_next().await;
 
                 assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap().unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
                 };
                 let id = ws_req.id;
                 let len = ws_req.payload.size as usize;
-                let res_msg = GftpChunk {
-                    content: vec![7; len],
-                    offset: 0,
-                };
                 let ws_res = TestWsResponse {
                     id,
-                    payload: res_msg,
+                    payload: GftpChunk {
+                        content: vec![7; len],
+                        offset: 0,
+                    },
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
 
@@ -764,23 +758,20 @@ mod tests {
                 println!("WS next");
                 let ws_req = ws_frames.try_next().await;
 
-                assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap().unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
                 };
                 let id = ws_req.id;
                 let len = ws_req.payload.size as usize;
-                let res_msg = GftpChunk {
-                    content: vec![7; len],
-                    offset: 0,
-                };
                 let ws_res = TestWsResponse {
                     id,
-                    payload: res_msg,
+                    payload: GftpChunk {
+                        content: vec![7; len],
+                        offset: 0,
+                    },
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
 
@@ -886,10 +877,8 @@ mod tests {
                 println!("WS 1 next");
                 let ws_req = ws_frames_1.try_next().await;
 
-                assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap().unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
