@@ -225,7 +225,7 @@ impl Handler<WsRequest> for WsMessagesHandler {
     type Result = <WsRequest as Message>::Result;
 
     fn handle(&mut self, request: WsRequest, ctx: &mut Self::Context) -> Self::Result {
-        log::info!(
+        log::debug!(
             "WS request (id: {}, component: {})",
             request.id,
             request.component

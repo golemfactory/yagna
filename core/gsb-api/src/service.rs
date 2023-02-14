@@ -93,7 +93,7 @@ impl Handler<RpcRawCall> for Service {
             });
         }
         let id = uuid::Uuid::new_v4().to_string();
-        log::debug!("Msg addr: {addr}, id: {id}");
+        log::debug!("GSB RAW call msg id: {id}");
         let component = Service::addr_prefix_to_component(&addr);
         let msg = WsRequest {
             component,
@@ -116,7 +116,7 @@ impl Handler<RpcRawCall> for Service {
                     return Err(GsbError::GsbFailure(err.to_string()));
                 }
             };
-            log::info!("Sending GSB response: {ws_response:?}");
+            log::debug!("Sending GSB RAW call response: (id: {})", ws_response.id);
             match ws_response.response {
                 crate::WsResponseMsg::Message(gsb_msg) => Ok(gsb_msg),
                 crate::WsResponseMsg::Error(err) => Err(err),
@@ -410,7 +410,7 @@ impl MessagesHandler for RelayingHandler {
         log::debug!("Relaying handler response (id: {})", res.id);
         match self.pending_senders.remove(&res.id) {
             Some(sender) => {
-                log::info!("Sending response: {res:?}");
+                log::debug!("Sending response: {res:?}");
                 sender.send(res)
             }
             None => Err(WsResponse {
