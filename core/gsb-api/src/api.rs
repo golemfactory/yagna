@@ -26,32 +26,30 @@ async fn post_services(
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
-    if let Some(listen) = &body.listen {
-        let components = listen.components.clone();
-        let on = listen.on.clone();
-        let bind = Bind {
-            components: components.clone(),
-            addr_prefix: on.clone(),
-        };
-        let response = services.send(bind).await;
-        log::debug!("Service bind result: {:?}", response);
-        response??;
-        let listen_on_encoded = base64::encode(&on);
-        let links = ServicesLinksBody {
-            messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
-        };
-        let services = ServicesBody {
-            listen: Some(ServicesListenBody {
-                on,
-                components,
-                links: Some(links),
-            }),
-        };
-        return Ok(web::Json(services)
-            .customize()
-            .with_status(StatusCode::CREATED));
-    }
-    Err(GsbApiError::BadRequest("Missing listen field".to_string()))
+    let listen = &body.listen;
+    let components = listen.components.clone();
+    let on = listen.on.clone();
+    let bind = Bind {
+        components: components.clone(),
+        addr_prefix: on.clone(),
+    };
+    let response = services.send(bind).await;
+    log::debug!("Service bind result: {:?}", response);
+    response??;
+    let listen_on_encoded = base64::encode(&on);
+    let links = ServicesLinksBody {
+        messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
+    };
+    let services = ServicesBody {
+        listen: ServicesListenBody {
+            on,
+            components,
+            links: Some(links),
+        },
+    };
+    return Ok(web::Json(services)
+        .customize()
+        .with_status(StatusCode::CREATED));
 }
 
 #[actix_web::delete("/services/{key}")]
@@ -114,7 +112,7 @@ pub struct ServicesPath {
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct ServicesBody {
-    listen: Option<ServicesListenBody>,
+    listen: ServicesListenBody,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -209,11 +207,11 @@ mod tests {
         let service_req = api
             .post(format!("/{}/{}", GSB_API_PATH, "services"))
             .send_json(&ServicesBody {
-                listen: Some(ServicesListenBody {
+                listen: ServicesListenBody {
                     components: vec!["GetChunk".to_string()],
                     on: service_address.clone(),
                     links: None,
-                }),
+                },
             });
         (service_req, service_address)
     }
@@ -238,7 +236,7 @@ mod tests {
         assert_eq!(
             body,
             ServicesBody {
-                listen: Some(ServicesListenBody {
+                listen: ServicesListenBody {
                     components,
                     on: service_addr.to_string(),
                     links: Some(ServicesLinksBody {
@@ -248,7 +246,7 @@ mod tests {
                             base64::encode(service_addr)
                         )
                     }),
-                })
+                }
             }
         );
         body
@@ -281,7 +279,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(service_addr.clone());
@@ -339,7 +337,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
@@ -415,7 +413,7 @@ mod tests {
         let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("MSG: {msg}");
         let ws_res: Value = serde_json::de::from_str(msg).unwrap();
@@ -439,7 +437,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
@@ -505,7 +503,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let _services_path = body.listen.unwrap().links.unwrap().messages;
+        let _services_path = body.listen.links.unwrap().messages;
         let services_path = format!("/services/{}", base64::encode("no_such_service_address"));
         let ws_frames = api.ws_at(&services_path).await;
         let expected_err = WsClientError::InvalidResponseStatus(StatusCode::NOT_FOUND);
@@ -527,7 +525,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
         let services_path = format!("{services_path}_broken_base64");
         let ws_frames = api.ws_at(&services_path).await;
         let expected_err_code = StatusCode::BAD_REQUEST;
@@ -574,7 +572,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -646,7 +644,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -730,7 +728,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -811,7 +809,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -856,7 +854,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.unwrap().links.unwrap().messages;
+        let services_path = body.listen.links.unwrap().messages;
 
         println!("WS 0 connect");
         let mut ws_frames_0 = api.ws_at(&services_path).await.unwrap();
