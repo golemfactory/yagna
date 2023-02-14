@@ -283,15 +283,12 @@ mod tests {
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
                 };
-                let id = ws_req.id;
-                let len = ws_req.payload.size as usize;
-                let res_msg = GftpChunk {
-                    content: vec![7; len],
-                    offset: 0,
-                };
                 let ws_res = TestWsResponse {
-                    id,
-                    payload: res_msg,
+                    id: ws_req.id,
+                    payload: GftpChunk {
+                        content: vec![7; ws_req.payload.size as usize],
+                        offset: 0,
+                    },
                 };
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
                 ws_frames
