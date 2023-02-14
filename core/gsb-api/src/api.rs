@@ -49,9 +49,9 @@ async fn post_services(
             links,
         },
     };
-    return Ok(web::Json(service)
+    Ok(web::Json(service)
         .customize()
-        .with_status(StatusCode::CREATED));
+        .with_status(StatusCode::CREATED))
 }
 
 #[actix_web::delete("/services/{address}")]
