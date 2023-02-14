@@ -139,7 +139,7 @@ mod tests {
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
         fn component(&self) {
-            todo!("NYI")
+            panic!("GSB API service does not use it.")
         }
     }
 
