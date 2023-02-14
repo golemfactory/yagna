@@ -1,6 +1,7 @@
+use crate::model::{ServiceRequest, ServiceLinks, ServiceResponse, ServiceListenResponse, ServicePath, GsbApiError};
 use crate::service::StartBuffering;
 use crate::services::{Bind, Find, Services, Unbind};
-use crate::{GsbApiError, WsDisconnect, WsMessagesHandler};
+use crate::{WsDisconnect, WsMessagesHandler};
 use actix::Addr;
 use actix_http::ws::{CloseCode, CloseReason};
 use actix_http::StatusCode;
@@ -8,7 +9,6 @@ use actix_web::web::Data;
 use actix_web::Scope;
 use actix_web::{web, HttpRequest, Responder, Result};
 use actix_web_actors::ws::{self};
-use serde::{Deserialize, Serialize};
 use ya_service_api_web::middleware::Identity;
 
 pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
@@ -21,7 +21,7 @@ pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
 
 #[actix_web::post("/services")]
 async fn post_services(
-    body: web::Json<ServicesBody>,
+    body: web::Json<ServiceRequest>,
     _id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
@@ -37,28 +37,28 @@ async fn post_services(
     log::debug!("Service bind result: {:?}", response);
     response??;
     let listen_on_encoded = base64::encode(&on);
-    let links = ServicesLinksBody {
+    let links = ServiceLinks {
         messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
     };
-    let services = ServicesBody {
-        listen: ServicesListenBody {
+    let service = ServiceResponse {
+        listen: ServiceListenResponse {
             on,
             components,
-            links: Some(links),
+            links,
         },
     };
-    return Ok(web::Json(services)
+    return Ok(web::Json(service)
         .customize()
         .with_status(StatusCode::CREATED));
 }
 
-#[actix_web::delete("/services/{key}")]
+#[actix_web::delete("/services/{address}")]
 async fn delete_services(
-    path: web::Path<ServicesPath>,
+    path: web::Path<ServicePath>,
     _id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
-    let addr = decode_addr(&path.key)?;
+    let addr = decode_addr(&path.address)?;
     log::debug!("DELETE service: {}", addr);
     let unbind = Unbind { addr };
     let response = services.send(unbind).await;
@@ -67,14 +67,14 @@ async fn delete_services(
     Ok(web::Json(()))
 }
 
-#[actix_web::get("/services/{key}")]
+#[actix_web::get("/services/{address}")]
 async fn get_service_messages(
-    path: web::Path<ServicesPath>,
+    path: web::Path<ServicePath>,
     req: HttpRequest,
     stream: web::Payload,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
-    let addr = decode_addr(&path.key)?;
+    let addr = decode_addr(&path.address)?;
     log::debug!("GET WS service: {}", addr);
     let service = services.send(Find { addr }).await??;
     if let Some(ws_handler) = service.send(StartBuffering).await? {
@@ -105,31 +105,10 @@ fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
         })
 }
 
-#[derive(Deserialize)]
-pub struct ServicesPath {
-    pub key: String,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub struct ServicesBody {
-    listen: ServicesListenBody,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-struct ServicesListenBody {
-    on: String,
-    components: Vec<String>,
-    links: Option<ServicesLinksBody>,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-struct ServicesLinksBody {
-    messages: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::ServiceListenRequest;
     use crate::{GsbApiService, GsbError, GSB_API_PATH};
     use actix::Actor;
     use actix_http::ws::{self, CloseCode, CloseReason, Frame};
@@ -139,6 +118,7 @@ mod tests {
     use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, StreamExt, TryStreamExt};
+    use serde::{Serialize, Deserialize};
     use serde_json::Value;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -206,12 +186,11 @@ mod tests {
     ) -> (SendClientRequest, String) {
         let service_req = api
             .post(format!("/{}/{}", GSB_API_PATH, "services"))
-            .send_json(&ServicesBody {
-                listen: ServicesListenBody {
+            .send_json(&ServiceRequest {
+                listen: ServiceListenRequest {
                     components: vec!["GetChunk".to_string()],
                     on: service_address.clone(),
-                    links: None,
-                },
+                }
             });
         (service_req, service_address)
     }
@@ -227,25 +206,25 @@ mod tests {
         bind_req: SendClientRequest,
         components: Vec<String>,
         service_addr: &str,
-    ) -> ServicesBody {
+    ) -> ServiceResponse {
         let mut bind_resp = bind_req.await.unwrap();
         log::debug!("Bind service response: {:?}", bind_resp);
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
         let body = bind_resp.body().await.unwrap();
-        let body: ServicesBody = serde_json::de::from_slice(&body).unwrap();
+        let body: ServiceResponse = serde_json::de::from_slice(&body).unwrap();
         assert_eq!(
             body,
-            ServicesBody {
-                listen: ServicesListenBody {
+            ServiceResponse {
+                listen: ServiceListenResponse {
                     components,
                     on: service_addr.to_string(),
-                    links: Some(ServicesLinksBody {
+                    links: ServiceLinks {
                         messages: format!(
                             "{}/services/{}",
                             GSB_API_PATH,
                             base64::encode(service_addr)
                         )
-                    }),
+                    },
                 }
             }
         );
@@ -279,7 +258,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(service_addr.clone());
@@ -337,7 +316,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
@@ -413,7 +392,7 @@ mod tests {
         let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("MSG: {msg}");
         let ws_res: Value = serde_json::de::from_str(msg).unwrap();
@@ -437,7 +416,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
@@ -503,7 +482,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let _services_path = body.listen.links.unwrap().messages;
+        let _services_path = body.listen.links.messages;
         let services_path = format!("/services/{}", base64::encode("no_such_service_address"));
         let ws_frames = api.ws_at(&services_path).await;
         let expected_err = WsClientError::InvalidResponseStatus(StatusCode::NOT_FOUND);
@@ -525,7 +504,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
         let services_path = format!("{services_path}_broken_base64");
         let ws_frames = api.ws_at(&services_path).await;
         let expected_err_code = StatusCode::BAD_REQUEST;
@@ -572,7 +551,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -644,7 +623,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -728,7 +707,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
@@ -809,13 +788,16 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
 
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         println!("WS closing connection");
         ws_frames.close().await.unwrap();
+
+        println!("Waiting for closing WS API");
+        tokio::time::sleep(Duration::from_millis(10)).await;
 
         let (gsb_res, _) = tokio::join!(
             async {
@@ -830,6 +812,8 @@ mod tests {
                 gsb_resp
             },
             async {
+                println!("Waiting for GSB request");
+                tokio::time::sleep(Duration::from_millis(10)).await;
                 println!("Delete service");
                 verify_delete_service(&mut api, &service_addr).await;
             }
@@ -854,7 +838,7 @@ mod tests {
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
 
-        let services_path = body.listen.links.unwrap().messages;
+        let services_path = body.listen.links.messages;
 
         println!("WS 0 connect");
         let mut ws_frames_0 = api.ws_at(&services_path).await.unwrap();
