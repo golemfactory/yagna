@@ -52,7 +52,7 @@ impl Handler<Bind> for Services {
             return Err(BindError::DuplicatedService(addr));
         }
         let service = Service::from(msg).start();
-        log::debug!("Created service: {:?}", service);
+        log::debug!("Created new service (addr: {})", addr);
         self.services.insert(addr, service);
         Ok(())
     }

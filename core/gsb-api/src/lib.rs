@@ -623,8 +623,6 @@ mod flexbuffer_util {
             let builder_map = builder.start_map();
             clone_map(builder_map, &r_m_p_m).unwrap();
 
-            println!("Copy: {:?}", builder.view());
-
             let r = Reader::get_root(builder.view()).unwrap();
 
             let cloned_payload = NESTED::deserialize(r).unwrap();

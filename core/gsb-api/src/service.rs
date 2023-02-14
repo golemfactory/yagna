@@ -131,7 +131,7 @@ impl Handler<WsResponse> for Service {
     fn handle(&mut self, msg: WsResponse, _ctx: &mut Self::Context) -> Self::Result {
         self.msg_handler
             .handle_response(msg)
-            .map_err(|err| anyhow!(format!("Failed to handle response: {err:?}")))
+            .map_err(|err| anyhow!(format!("Failed to handle response. Err: {err:?}")))
     }
 }
 
@@ -410,13 +410,13 @@ impl MessagesHandler for RelayingHandler {
         log::debug!("Relaying handler response (id: {})", res.id);
         match self.pending_senders.remove(&res.id) {
             Some(sender) => {
-                log::debug!("Sending response: {res:?}");
+                log::debug!("Sending response (id: {})", res.id);
                 sender.send(res)
             }
             None => Err(WsResponse {
                 id: res.id.clone(),
                 response: crate::WsResponseMsg::Error(GsbError::GsbFailure(format!(
-                    "Unable to respond to: {:?}",
+                    "Unable to respond to (id: {})",
                     res.id
                 ))),
             }),
