@@ -295,11 +295,7 @@ impl MessagesHandling {
                     response: WsResponseMsg::Error(error),
                 };
                 if let Err(error) = service.send(response).await {
-                    log::error!(
-                        "Failed to send GSB error msg for id: {}. Err: {}",
-                        id,
-                        error
-                    );
+                    log::error!("Failed to send GSB error msg for id: {id}. Err: {error}");
                 }
             }
         }

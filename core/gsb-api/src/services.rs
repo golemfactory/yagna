@@ -44,7 +44,7 @@ impl Handler<Bind> for Services {
     fn handle(&mut self, msg: Bind, _ctx: &mut Self::Context) -> Self::Result {
         if msg.addr_prefix.is_empty() {
             return Err(BindError::InvalidService(
-                "Cannod bind service. Empty prefix.".to_string(),
+                "Cannot bind service. Empty prefix.".to_string(),
             ));
         }
         let addr = msg.addr_prefix.clone();
