@@ -1,4 +1,6 @@
-use crate::model::{ServiceRequest, ServiceLinks, ServiceResponse, ServiceListenResponse, ServicePath, GsbApiError};
+use crate::model::{
+    GsbApiError, ServiceLinks, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
+};
 use crate::service::StartBuffering;
 use crate::services::{Bind, Find, Services, Unbind};
 use crate::{WsDisconnect, WsMessagesHandler};
@@ -118,7 +120,7 @@ mod tests {
     use awc::SendClientRequest;
     use bytes::Bytes;
     use futures::{SinkExt, StreamExt, TryStreamExt};
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -190,7 +192,7 @@ mod tests {
                 listen: ServiceListenRequest {
                     components: vec!["GetChunk".to_string()],
                     on: service_address.clone(),
-                }
+                },
             });
         (service_req, service_address)
     }
@@ -538,7 +540,34 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn ws_close_on_service_delete() {}
+    async fn ws_close_on_service_delete() {
+        let mut api = dummy_api();
+
+        let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
+        let body =
+            verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
+                .await;
+
+        let services_path = body.listen.links.messages;
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+
+        verify_delete_service(&mut api, &service_addr).await;
+
+        println!("WS next");
+        let ws_msg = ws_frames.try_next().await.unwrap().unwrap();
+        let expected_code = CloseCode::Normal;
+        let expected_msg_prefix = "Unbinding service: /public/gftp/123";
+        match ws_msg {
+            Frame::Close(Some(msg)) => {
+                assert_eq!(expected_code, msg.code);
+                assert!(msg.description.unwrap().starts_with(expected_msg_prefix));
+            }
+            other => panic!(
+                "Expected Close msg with code: {:?} and msg starting with: {}. Instead got: {:?}",
+                expected_code, expected_msg_prefix, other
+            ),
+        }
+    }
 
     #[actix_web::test]
     async fn buffering_gsb_msgs_before_ws_connect_test() {
