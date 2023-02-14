@@ -277,10 +277,8 @@ mod tests {
             async {
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
-                let ws_req = ws_req.unwrap();
-                let ws_req = ws_req.unwrap();
                 let ws_req = match ws_req {
-                    Frame::Binary(ws_req) => {
+                    Ok(Some(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
