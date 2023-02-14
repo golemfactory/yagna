@@ -1,22 +1,25 @@
+use crate::{
+    services::{BindError, FindError, UnbindError},
+    GsbError,
+};
 use actix::MailboxError;
 use actix_http::StatusCode;
-use actix_web::{ResponseError, HttpResponse};
+use actix_web::{HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use ya_client_model::ErrorMessage;
-use crate::{services::{FindError, BindError, UnbindError}, GsbError};
 
 #[derive(Deserialize)]
-pub(crate)  struct ServicePath {
+pub(crate) struct ServicePath {
     pub address: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub(crate)  struct ServiceRequest {
+pub(crate) struct ServiceRequest {
     pub(crate) listen: ServiceListenRequest,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub(crate)  struct ServiceResponse {
+pub(crate) struct ServiceResponse {
     pub(crate) listen: ServiceListenResponse,
 }
 
@@ -37,7 +40,6 @@ pub(crate) struct ServiceListenResponse {
 pub(crate) struct ServiceLinks {
     pub(crate) messages: String,
 }
-
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum GsbApiError {

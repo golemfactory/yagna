@@ -8,15 +8,13 @@ use actix::prelude::*;
 use actix::ActorFutureExt;
 use actix::{Actor, Addr, Handler, StreamHandler};
 use actix_http::ws::CloseCode;
-use actix_http::{
-    ws::{CloseReason, ProtocolError},
-};
+use actix_http::ws::{CloseReason, ProtocolError};
 use actix_web_actors::ws::{self, WebsocketContext};
 use flexbuffers::{BuilderOptions, MapReader, Reader};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use service::Service;
-use services::{Services};
+use services::Services;
 use ya_service_api_interfaces::Provider;
 
 pub const GSB_API_PATH: &str = "gsb-api/v1";
