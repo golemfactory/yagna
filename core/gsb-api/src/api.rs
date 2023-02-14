@@ -80,7 +80,7 @@ async fn get_service_messages(
     log::debug!("GET WS service: {}", addr);
     let service = services.send(Find { addr }).await??;
     if let Some(ws_handler) = service.send(StartBuffering).await? {
-        let description = Some("Closing old WS connection on new WS connection".to_string());
+        let description = Some("Closing old WS connection in favour of new WS connection".to_string());
         let code = CloseCode::Policy;
         let ws_disconnect = WsDisconnect(CloseReason { code, description });
         ws_handler.send(ws_disconnect).await?;
@@ -837,7 +837,7 @@ mod tests {
         assert!(matches!(ws_req_0, Ok(Some(Frame::Close(Some(CloseReason {
             code: ws::CloseCode::Policy,
             description: Some(msg)
-        })))) if msg.eq("Closing old WS connection on new WS connection") ));
+        })))) if msg.eq("Closing old WS connection in favour of new WS connection") ));
 
         assert!(ws_res_1.is_ok());
     }
