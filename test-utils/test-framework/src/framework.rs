@@ -77,8 +77,8 @@ impl YagnaFramework {
 
         YagnaFramework {
             inner: Arc::new(Mutex::new(YagnaNetworkImpl { nodes: vec![] })),
-            test_dir: test_dir.into(),
-            test_name: test_name.into(),
+            test_dir,
+            test_name,
         }
     }
 
