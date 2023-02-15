@@ -110,7 +110,7 @@ impl NegotiatorComponent for LimitExpiration {
         if too_soon || too_late {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
-                demand.agreement_id
+                demand.id
             );
 
             return Ok(NegotiationResult::Reject {
@@ -202,8 +202,10 @@ impl NegotiatorComponent for LimitExpiration {
 #[cfg(test)]
 mod test_expiration_negotiator {
     use super::*;
+
     use ya_agreement_utils::agreement::expand;
     use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate, ServiceInfo};
+    use ya_client_model::market::proposal::State;
 
     fn expiration_config() -> AgreementExpirationNegotiatorConfig {
         AgreementExpirationNegotiatorConfig {
@@ -216,8 +218,14 @@ mod test_expiration_negotiator {
 
     fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
         ProposalView {
-            agreement_id: "2332850934yer".to_string(),
-            json: expand(value),
+            content: OfferTemplate {
+                properties: expand(value),
+                constraints: "()".to_string(),
+            },
+            id: "2332850934yer".to_string(),
+            issuer: Default::default(),
+            state: State::Initial,
+            timestamp: Utc::now(),
         }
     }
 
@@ -236,9 +244,16 @@ mod test_expiration_negotiator {
 
     impl ToProposal for OfferDefinition {
         fn to_proposal(self) -> ProposalView {
+            let template = self.into_template();
             ProposalView {
-                agreement_id: "sagdshgdfgd".to_string(),
-                json: expand(self.into_json()),
+                content: OfferTemplate {
+                    properties: expand(template.properties),
+                    constraints: template.constraints,
+                },
+                id: "sagdshgdfgd".to_string(),
+                issuer: Default::default(),
+                state: State::Initial,
+                timestamp: Utc::now(),
             }
         }
     }

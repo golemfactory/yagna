@@ -4,7 +4,7 @@ use ansi_term::{Colour, Style};
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use futures::prelude::*;
-use prettytable::{cell, format, row, Table};
+use prettytable::{format, row, Table};
 use strum::VariantNames;
 
 use ya_core_model::payment::local::{NetworkName, StatusResult};

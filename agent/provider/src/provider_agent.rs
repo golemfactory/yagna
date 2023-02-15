@@ -643,7 +643,7 @@ mod tests {
 
         let preset = Preset {
             pricing_model: "linear".to_string(),
-            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            usage_coeffs: std::collections::BTreeMap::from([("test_coefficient".to_string(), 1.0)]),
             ..Default::default()
         };
 

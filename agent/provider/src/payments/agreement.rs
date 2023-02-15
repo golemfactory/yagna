@@ -88,14 +88,14 @@ impl AgreementPayment {
         if let Some(deadline) = &accept_timeout {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
-                &agreement.agreement_id,
+                &agreement.id,
                 deadline.display()
             );
         }
         if let Some(deadline) = &payment_timeout {
             log::info!(
                 "Requestor is expected to pay DebitNotes for Agreement [{}] in {}",
-                &agreement.agreement_id,
+                &agreement.id,
                 deadline.display()
             );
         }
@@ -104,7 +104,7 @@ impl AgreementPayment {
         let (sender, receiver) = watch::channel(0);
 
         Ok(AgreementPayment {
-            agreement_id: agreement.agreement_id.clone(),
+            agreement_id: agreement.id.clone(),
             approved_ts,
             activities: HashMap::new(),
             payment_model,

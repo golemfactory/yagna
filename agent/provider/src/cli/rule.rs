@@ -1,7 +1,12 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use structopt::StructOpt;
+use strum::VariantNames;
+use ya_manifest_utils::policy::CertPermissions;
+use ya_manifest_utils::util::cert_to_id;
+use ya_manifest_utils::{KeystoreLoadResult, KeystoreManager};
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::rules::CertRule;
@@ -28,19 +33,28 @@ pub enum SetOutboundRule {
     Disable,
     Enable,
     Everyone {
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
     AuditedPayload {
         #[structopt(long)]
         cert_id: Option<String>,
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
-    Partner {
-        #[structopt(long)]
+    Partner(RuleWithCert),
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum RuleWithCert {
+    CertId {
         cert_id: String,
-        #[structopt(subcommand)]
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
+        mode: Mode,
+    },
+    ImportCert {
+        import_cert: PathBuf,
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
 }
@@ -70,7 +84,36 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
                 None => rules.set_default_audited_payload_mode(mode),
             },
-            SetOutboundRule::Partner { cert_id, mode } => rules.set_partner_mode(cert_id, mode),
+            SetOutboundRule::Partner(RuleWithCert::CertId { cert_id, mode }) => {
+                rules.set_partner_mode(cert_id, mode)
+            }
+            SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
+                let keystore_manager = KeystoreManager::try_new(&rules.cert_dir)?;
+
+                let KeystoreLoadResult { loaded, skipped } =
+                    keystore_manager.load_certs(&vec![import_cert])?;
+
+                //TODO it will be removed after backward compatibility is done
+                rules.keystore.permissions_manager().set_many(
+                    &loaded.iter().chain(skipped.iter()).cloned().collect(),
+                    vec![CertPermissions::All],
+                    true,
+                );
+                rules
+                    .keystore
+                    .permissions_manager()
+                    .save(&rules.cert_dir)
+                    .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+
+                rules.keystore.reload(&rules.cert_dir)?;
+
+                for cert in loaded.into_iter().chain(skipped) {
+                    let cert_id = cert_to_id(&cert)?;
+                    rules.set_partner_mode(cert_id, mode.clone())?;
+                }
+
+                Ok(())
+            }
         },
     }
 }

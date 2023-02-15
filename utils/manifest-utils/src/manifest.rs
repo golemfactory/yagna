@@ -24,6 +24,7 @@ pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
 pub const DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY: &str =
     "golem.srv.comp.payload.cert.permissions";
+pub const DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY: &str = "golem.node.identity";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
@@ -111,19 +112,20 @@ impl AppManifest {
             })
     }
 
-    pub fn is_outbound_requested(&self) -> bool {
-        if let Some(urls) = self
-            .comp_manifest
+    /// Returns empty vector if there is no outbound requested
+    pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
+        self.comp_manifest
             .as_ref()
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
             .and_then(|out| out.urls.as_ref())
-        {
-            !urls.is_empty()
-        } else {
-            false
-        }
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn is_outbound_requested(&self) -> bool {
+        self.get_outbound_requested_urls().is_empty().not()
     }
 
     pub fn features(&self) -> HashSet<Feature> {

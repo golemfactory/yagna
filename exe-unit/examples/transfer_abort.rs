@@ -159,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
 
     let agreement = Agreement {
         inner: AgreementView {
-            agreement_id: String::new(),
+            id: String::new(),
             json: serde_json::Value::Null,
         },
         task_package: None,

@@ -51,7 +51,7 @@ fn multi_activity_from(agreement: &AgreementView) -> Result<bool> {
 impl TaskInfo {
     pub fn from(agreement: &AgreementView) -> Result<TaskInfo> {
         Ok(TaskInfo {
-            agreement_id: agreement.agreement_id.clone(),
+            agreement_id: agreement.id.clone(),
             expiration: agreement_expiration_from(agreement)?,
             multi_activity: multi_activity_from(agreement)?,
             idle_agreement_timeout: Duration::from_secs(90),

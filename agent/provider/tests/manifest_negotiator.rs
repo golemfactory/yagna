@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use test_case::test_case;
-use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::agreement::expand;
+use ya_agreement_utils::{OfferTemplate, ProposalView};
+use ya_client_model::market::proposal::State;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Policy, PolicyConfig};
@@ -96,13 +98,13 @@ fn manifest_negotiator_test_accepted_because_of_no_payload() {
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#,
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule is disabled"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "none", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#,
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because domain NOT whitelisted"
 )]
 #[test_case(
@@ -157,7 +159,7 @@ fn manifest_negotiator_test_manifest_with_urls(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Audited-Payload whitelist doesn't match"); // error msg
+    Some("Audited-Payload rule didn't match whitelist"); // error msg
     "Rejected because everyone and audited-payload whitelist are mismatching"
 )]
 #[test_case(
@@ -175,7 +177,7 @@ fn manifest_negotiator_test_manifest_with_urls(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Audited-Payload whitelist doesn't match"); // error msg
+    Some("Audited-Payload rule didn't match whitelist"); // error msg
     "Rejected because audited-payload whitelist doesn't match"
 )]
 #[test_case(
@@ -217,6 +219,149 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    None; // error msg
+    "Accepted because permission is all"
+)]
+#[test_case(
+    r#""outbound-urls": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|https://domain.com"),
+    None;
+    "Accepted as requested domain is in the permitted ones in cert"
+)]
+#[test_case(
+    r#""outbound": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound"),
+    None;
+    "Accepted as permission is outbound unrestricted"
+)]
+#[test_case(
+    r#""all": { "mode": "whitelist", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    None; // error msg
+    "Accepted because partner rule matched whitelist"
+)]
+#[test_case(
+    r#""all": { "mode": "whitelist", "description": ""}"#,
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    Some("Partner rule didn't match whitelist"); // error msg
+    "Rejected because partner rule mismatched whitelist"
+)]
+#[test_case(
+    r#""all": { "mode": "none", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    Some("Partner rule is disabled"); // error msg
+    "Rejected because partner rule is disabled"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None,
+    Some("Partner rule requires partner certificate"); // error msg
+    "Rejected because partner rule requires node data"
+)]
+#[test_case(
+    r#""invalid-data": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-data"),
+    Some("Partner verification of golem certificate failed: Invalid data"); // error msg
+    "Rejected because node data is invalid"
+)]
+#[test_case(
+    r#""expired": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("expired"),
+    Some("Partner verification of golem certificate failed: Certificate is expired"); // error msg
+    "Rejected because certificate expired"
+)]
+#[test_case(
+    r#""invalid-signature": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-signature"),
+    Some("Partner verification of golem certificate failed: Certificate has invalid signature"); // error msg
+    "Rejected because certificate has invalid signature"
+)]
+#[test_case(
+    r#""invalid-permissions": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("invalid-permissions"),
+    Some("Partner verification of golem certificate failed: Certificate does not have all required permissions"); // error msg
+    "Rejected because certificate has invalid permissions"
+)]
+#[test_case(
+    r#""outbound-urls": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|invalid-url"),
+    Some("Partner verification of golem certificate failed: Url parse error"); // error msg
+    "Rejected because certificate has invalid urls inside"
+)]
+#[test_case(
+    r#""different-trusted-cert": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("all"),
+    Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
+    "Rejected because certificate chain is not trusted"
+)]
+#[test_case(
+    r#""all": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("outbound-urls|https://permitted.com"),
+    Some("Partner Partner rule forbidden url requested"); // error msg
+    "Rejected because certificate does not permit different url"
+)]
+#[test_case(
+    r#""no-permissions": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("no-permissions"),
+    Some("Partner requestor doesn't have any permissions"); // error msg
+    "Rejected because certificate does not have any permissions"
+)]
+#[test_case(
+    r#""non-default-node-id": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    Some("non-default-node-id"),
+    Some("Partner rule nodes mismatch"); // error msg
+    "Rejected because requestor node id doesn't match with node_json id"
+)]
+#[serial]
+fn manifest_negotiator_test_with_node_identity(
+    partner_rule: &str,
+    urls: &str,
+    node_identity: Option<&str>,
+    error_msg: Option<&str>,
+) {
+    let rulestore = format!(
+        r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "all", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
+        partner_rule
+    );
+
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        &rulestore,
+        whitelist,
+        comp_manifest_b64,
+        None,
+        None,
+        None,
+        None,
+        error_msg,
+        &vec![],
+        &[],
+        node_identity.map(|n| n.to_string()),
+    )
+}
+
+#[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg
@@ -231,19 +376,19 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("failed to verify manifest signature: Invalid signature"); // error msg
+    Some("Audited-Payload rule: Invalid signature"); // error msg
     "Rejected because everyone whitelist mismatched"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("failed to verify manifest signature: Invalid signature"); // error msg
+    Some("Audited-Payload rule: Invalid signature"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("failed to verify manifest signature: Invalid signature"); // error msg
+    Some("Audited-Payload rule: Invalid signature"); // error msg
     "Rejected because everyone is not set to all even if audited-payload whitelist is matching"
 )]
 #[serial]
@@ -293,14 +438,14 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     None, // cert_permissions_b64
     &vec![],
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because certificate has no permissions"
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
     None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest], // certs_permissions
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because parent certificate has no permissions"
 )]
 #[test_case(
@@ -314,14 +459,14 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
+    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
     "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
     Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::All],
-    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
+    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
     "Manifest rejected, even when permissions are set to `All` because `unverified-permissions-chain` permission is also required when Demand comes with its permissions"
 )]
 #[serial]
@@ -354,6 +499,7 @@ fn test_manifest_negotiator_certs_permissions(
         error_msg,
         provider_certs_permissions,
         &["foo_ca-chain.cert.pem"],
+        None,
     )
 }
 
@@ -366,31 +512,31 @@ fn test_manifest_negotiator_certs_permissions(
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://xdomain.com"]"#, // compManifest.net.inet.out.urls
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because not exact match and match type is strict - leading characters"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.comx"]"#, // compManifest.net.inet.out.urls
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because not exact match and match type is strict - following characters"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://x.domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because not exact match and match type is strict - subdomain"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "a.com", "match": "strict" }, { "domain": "b.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://c.com"]"#, // compManifest.net.inet.out.urls
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because domain not whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "a.com", "match": "strict" }, { "domain": "b.com", "match": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://a.com", "https://c.com"]"#, // compManifest.net.inet.out.urls
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because one of domains not whitelisted"
 )]
 #[test_case(
@@ -420,13 +566,13 @@ fn test_manifest_negotiator_certs_permissions(
 #[test_case(
     r#"{ "patterns": [{ "domain": "^.*\\.domain.com$", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://mydomain.com"]"#,
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because domain name does not match regex"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "^.*\\.domain.com$", "match": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com.hacked.pro"]"#,
-    Some("Didn't match any Rules"); // error msg
+    Some("Everyone rule didn't match whitelist"); // error msg
     "Rejected because regex does not allow different ending"
 )]
 #[serial]
@@ -497,6 +643,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         error_msg,
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
+        None,
     )
 }
 
@@ -512,6 +659,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     error_msg: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
+    node_identity: Option<String>,
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
@@ -545,6 +693,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         signature_alg_b64: signature_alg,
         cert_b64,
         cert_permissions_b64,
+        node_identity,
     }));
     let demand = create_demand(demand);
     let offer = create_offer();
@@ -554,29 +703,47 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
 
     // Then
     let negotiation_result = negotiation_result.expect("Negotiator had not failed");
-    if let Some(message) = error_msg {
-        assert_eq!(
-            negotiation_result,
-            NegotiationResult::Reject {
-                message: message.to_string(),
-                is_final: true
+    if let Some(expected_error) = error_msg {
+        match negotiation_result {
+            NegotiationResult::Reject { message, is_final } => {
+                assert!(is_final);
+                if !message.contains(expected_error) {
+                    panic!(
+                        "Negotiations error message: \n {} \n doesn't contain expected message: \n {}",
+                        message, expected_error
+                    );
+                }
             }
-        );
+            _ => panic!("Expected negotiations rejected"),
+        }
     } else {
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
 }
-fn create_demand(demand: Value) -> AgreementView {
-    AgreementView {
-        json: demand,
-        agreement_id: "id".to_string(),
+
+fn create_demand(demand: Value) -> ProposalView {
+    ProposalView {
+        content: OfferTemplate {
+            properties: expand(demand),
+            constraints: "()".to_string(),
+        },
+        id: "id".to_string(),
+        issuer: Default::default(),
+        state: State::Initial,
+        timestamp: Default::default(),
     }
 }
 
-fn create_offer() -> AgreementView {
-    AgreementView {
-        json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
-        agreement_id: "id".to_string(),
+fn create_offer() -> ProposalView {
+    ProposalView {
+        content: OfferTemplate {
+            properties: expand(serde_json::from_str(r#"{ "any": "thing" }"#).unwrap()),
+            constraints: "()".to_string(),
+        },
+        id: "id".to_string(),
+        issuer: Default::default(),
+        state: State::Initial,
+        timestamp: Default::default(),
     }
 }
 
@@ -619,6 +786,7 @@ struct Payload<'a> {
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&'a str>,
+    node_identity: Option<String>,
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
@@ -665,6 +833,9 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         "comp": {
                             "payload": payload
                         }
+                    },
+                    "node": {
+                        "identity": p.node_identity
                     }
                 },
             })
