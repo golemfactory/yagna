@@ -9,10 +9,13 @@ use crate::YagnaMock;
 pub use macros::prepare_test_dir;
 pub use ya_framework_macro::framework_test;
 
+/// `YagnaFramework` provides API for managing test yagna instances
+/// and is responsible for cleaning up resources after the test is finished.
 #[derive(Clone)]
 pub struct YagnaFramework {
     inner: Arc<Mutex<YagnaNetworkImpl>>,
     test_dir: PathBuf,
+    #[allow(dead_code)]
     test_name: String,
 }
 
@@ -40,12 +43,7 @@ pub mod macros {
 pub fn prepare_test_dir_(dir: &str) -> PathBuf {
     let test_dir = PathBuf::from(&dir);
 
-    #[allow(unused_must_use)]
-    {
-        std::fs::remove_dir_all(&test_dir); // ignores error if does not exist
-        std::fs::create_dir_all(&test_dir);
-    }
-
+    let _ = std::fs::create_dir_all(&test_dir);
     test_dir
 }
 
@@ -70,7 +68,13 @@ where
 }
 
 impl YagnaFramework {
-    pub fn new(test_dir: impl Into<PathBuf>, test_name: impl Into<String>) -> YagnaFramework {
+    pub fn new(tests_dir: impl Into<PathBuf>, test_name: impl Into<String>) -> YagnaFramework {
+        let test_name = test_name.into();
+        let test_dir = tests_dir.into().join(&test_name);
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+        let _ = std::fs::create_dir_all(&test_dir);
+
         YagnaFramework {
             inner: Arc::new(Mutex::new(YagnaNetworkImpl { nodes: vec![] })),
             test_dir: test_dir.into(),
@@ -79,7 +83,7 @@ impl YagnaFramework {
     }
 
     pub fn new_node(&self, name: impl ToString) -> YagnaMock {
-        let yagna_dir = self.test_dir.join(&self.test_name).join(name.to_string());
+        let yagna_dir = self.test_dir.join(name.to_string());
         let yagna = YagnaMock::new(&yagna_dir);
         {
             self.inner.lock().unwrap().nodes.push(yagna.clone());

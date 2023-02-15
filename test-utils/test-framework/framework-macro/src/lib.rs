@@ -51,7 +51,8 @@ fn validate_function(function: &ItemFn) {
     }
 
     if let Some(_param) = function.sig.inputs.first() {
-        // TODO: Argument should be `YagnaFramework`
+        // TODO: Macro expects only one argument of type`YagnaFramework`.
+        //       We should check this prerequisite here.
     } else {
         panic!("Procedural macro implementation error.");
     }
