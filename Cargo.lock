@@ -7935,6 +7935,7 @@ dependencies = [
  "thiserror",
  "url",
  "ya-agreement-utils",
+ "ya-client-model",
  "ya-manifest-test-utils",
  "ya-utils-path",
 ]
@@ -8211,6 +8212,7 @@ dependencies = [
  "futures-util",
  "hex",
  "humantime 2.1.0",
+ "itertools 0.10.5",
  "lazy_static",
  "libc",
  "log",
