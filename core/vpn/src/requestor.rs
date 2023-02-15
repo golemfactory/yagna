@@ -208,6 +208,7 @@ async fn connect_tcp(
     stream: web::Payload,
     identity: Identity,
 ) -> Result<HttpResponse> {
+    log::warn!("connect_tcp called {:?}", path);
     let path = path.into_inner();
     let vpn = {
         let supervisor = vpn_sup.lock().await;
