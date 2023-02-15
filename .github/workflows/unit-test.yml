@@ -1,10 +1,9 @@
 name: Unit Tests
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - release/*
+      - goth-new-version
 
 env:
   rust_stable: 1.64.0
