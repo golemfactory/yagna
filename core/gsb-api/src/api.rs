@@ -276,10 +276,9 @@ mod tests {
                     .await
             },
             async {
-                let ws_req = ws_frames.try_next().await;
-                assert!(ws_req.is_ok());
+                let ws_req = ws_frames.next().await;
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Unexpected msg: {:?}", msg),
@@ -328,10 +327,9 @@ mod tests {
                 gsb_endpoint.call(msg).await
             },
             async {
-                let ws_req = ws_frames.try_next().await;
-                assert!(ws_req.is_ok());
+                let ws_req = ws_frames.next().await;
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -516,11 +514,11 @@ mod tests {
         verify_delete_service(&mut api, &service_addr).await;
 
         println!("WS next");
-        let ws_msg = ws_frames.try_next().await;
+        let ws_msg = ws_frames.next().await;
         let expected_msg_prefix = "Unbinding service: /public/gftp/123";
         assert!(matches!(
                 ws_msg, 
-                Ok(Some(Frame::Close(Some(CloseReason {
+                Some(Ok(Frame::Close(Some(CloseReason {
                     code: CloseCode::Normal,
                     description: Some(description)
                 })))) if description.starts_with(expected_msg_prefix)));
@@ -550,16 +548,13 @@ mod tests {
                 gsb_resp
             },
             async {
-                println!("WS sleep");
-                tokio::time::sleep(Duration::from_millis(10)).await;
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
-                let ws_req = ws_frames.try_next().await;
+                let ws_req = ws_frames.next().await;
 
-                assert!(ws_req.is_ok());
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -626,15 +621,12 @@ mod tests {
                 gsb_resp
             },
             async {
-                tokio::time::sleep(Duration::from_millis(20)).await;
-                println!("WS reconnect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
-                let ws_req = ws_frames.try_next().await;
+                let ws_req = ws_frames.next().await;
 
-                assert!(ws_req.is_ok());
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -701,9 +693,9 @@ mod tests {
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
-                let ws_req = ws_frames.try_next().await;
+                let ws_req = ws_frames.next().await;
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -802,11 +794,11 @@ mod tests {
             },
             async {
                 println!("WS 0 next");
-                let ws_req_0 = ws_frames_0.try_next().await;
+                let ws_req_0 = ws_frames_0.next().await;
                 println!("WS 1 next");
-                let ws_req = ws_frames_1.try_next().await;
+                let ws_req = ws_frames_1.next().await;
                 let ws_req = match ws_req {
-                    Ok(Some(Frame::Binary(ws_req))) => {
+                    Some(Ok(Frame::Binary(ws_req))) => {
                         flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
                     }
                     msg => panic!("Not expected msg: {:?}", msg),
@@ -835,7 +827,7 @@ mod tests {
         let gsb_res = gsb_res.unwrap().unwrap();
         assert_eq!(gsb_res.content, vec![7; PAYLOAD_LEN]);
 
-        assert!(matches!(ws_req_0, Ok(Some(Frame::Close(Some(CloseReason {
+        assert!(matches!(ws_req_0, Some(Ok(Frame::Close(Some(CloseReason {
             code: ws::CloseCode::Policy,
             description: Some(msg)
         })))) if msg.eq("Closing old WS connection in favour of new WS connection") ));
