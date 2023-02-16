@@ -2,11 +2,9 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use ya_agreement_utils::{AgreementView, OfferDefinition};
+pub use ya_agreement_utils::{OfferDefinition, ProposalView};
 
 use crate::market::negotiator::AgreementResult;
-
-pub type ProposalView = AgreementView;
 
 /// Result returned by `NegotiatorComponent` during Proposals evaluation.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -88,9 +86,8 @@ impl NegotiatorComponent for NegotiatorsPack {
                 NegotiationResult::Ready { offer } => offer,
                 NegotiationResult::Negotiating { offer } => {
                     log::info!(
-                        "Negotiator component '{}' is still negotiating Proposal [{}].",
-                        name,
-                        demand.agreement_id
+                        "Negotiator component '{name}' is still negotiating Proposal [{}].",
+                        demand.id
                     );
                     all_ready = false;
                     offer

@@ -1,0 +1,51 @@
+name: System Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+env:
+  rust_stable: 1.64.0
+
+jobs:
+  build:
+    name: System Tests
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt, clippy
+
+      - name: Check lockfile
+        uses: actions-rs/cargo@v1
+        with:
+          command: tree
+          args: --locked
+
+      - name: Install openssl ( Windows only )
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install openssl:x64-windows openssl:x64-windows-static
+          vcpkg list
+          vcpkg integrate install
+
+      - name: System tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --test '*' --features framework-test

@@ -9,11 +9,14 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-use strum::Display;
+use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
+use ya_client_model::NodeId;
 use ya_manifest_utils::{
+    golem_certificate::GolemPermission,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
@@ -27,10 +30,10 @@ use crate::startup_config::FileMonitor;
 #[derive(Clone, Debug)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
+    pub keystore: Keystore,
+    pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
-    keystore: Keystore,
     whitelist_file: PathBuf,
-    cert_dir: PathBuf,
 }
 
 impl RulesManager {
@@ -199,105 +202,172 @@ impl RulesManager {
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
+    fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
+        let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
+
+        self.check_mode(mode, manifest)
+            .map_err(|e| anyhow!("Everyone {e}"))
+    }
+
+    fn check_audited_payload_rule(
+        &self,
+        manifest: &AppManifest,
+        manifest_sig: Option<ManifestSignatureProps>,
+        demand_permissions_present: bool,
+    ) -> Result<()> {
+        if let Some(props) = manifest_sig {
+            self.keystore
+                .verify_signature(
+                    props.cert.clone(),
+                    props.sig,
+                    props.sig_alg,
+                    props.manifest_encoded,
+                )
+                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
+
+            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+            self.verify_permissions(&props.cert, demand_permissions_present)
+                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
+
+            let mode = &self
+                .rulestore
+                .config
+                .read()
+                .unwrap()
+                .outbound
+                .audited_payload
+                .default
+                .mode;
+
+            self.check_mode(mode, manifest)
+                .map_err(|e| anyhow!("Audited-Payload {e}"))
+        } else {
+            Err(anyhow!("Audited-Payload rule requires manifest signature"))
+        }
+    }
+
+    fn check_partner_rule(
+        &self,
+        manifest: &AppManifest,
+        node_identity: Option<String>,
+        requestor_id: NodeId,
+    ) -> Result<()> {
+        let node_identity =
+            node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
+
+        let verified_cert = self
+            .keystore
+            .verify_golem_certificate(&node_identity)
+            .map_err(|e| anyhow!("Partner {e}"))?;
+
+        if requestor_id != verified_cert.node_id {
+            return Err(anyhow!(
+                "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
+                verified_cert.node_id
+            ));
+        }
+
+        self::verify_golem_permissions(
+            &verified_cert.permissions,
+            &manifest.get_outbound_requested_urls(),
+        )
+        .map_err(|e| anyhow!("Partner {e}"))?;
+
+        let cert_ids = verified_cert
+            .cert_ids_chain
+            .iter()
+            .map(|i| i.hash.clone())
+            .collect::<Vec<_>>();
+
+        for cert_id in cert_ids.iter() {
+            if let Some(rule) = self
+                .rulestore
+                .config
+                .read()
+                .unwrap()
+                .outbound
+                .partner
+                .get(cert_id)
+            {
+                return self
+                    .check_mode(&rule.mode, manifest)
+                    .map_err(|e| anyhow!("Partner {e}"));
+            }
+        }
+        Err(anyhow!(
+            "Partner rule whole chain of cert_ids is not trusted: {:?}",
+            cert_ids
+        ))
+    }
+
+    fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
+        log::trace!("Checking mode: {mode}");
+
+        match mode {
+            Mode::All => Ok(()),
+            Mode::Whitelist => {
+                if self.whitelist_matching(manifest) {
+                    log::trace!("Whitelist matched");
+
+                    Ok(())
+                } else {
+                    Err(anyhow!("rule didn't match whitelist"))
+                }
+            }
+            Mode::None => Err(anyhow!("rule is disabled")),
+        }
+    }
+
     pub fn check_outbound_rules(
         &self,
         manifest: AppManifest,
+        requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
         demand_permissions_present: bool,
+        node_identity: Option<String>,
     ) -> CheckRulesResult {
-        let cfg = self.rulestore.config.read().unwrap();
-
-        if cfg.outbound.enabled.not() {
-            log::trace!("Outbound is disabled.");
+        if self.rulestore.is_outbound_disabled() {
+            log::trace!("Checking rules: outbound is disabled.");
 
             return CheckRulesResult::Reject("outbound is disabled".into());
         }
 
-        match cfg.outbound.everyone {
-            Mode::All => {
-                log::trace!("Everyone is allowed for outbound");
+        let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
+            self.check_everyone_rule(&manifest),
+            self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
+            self.check_partner_rule(&manifest, node_identity, requestor_id),
+        ]
+        .into_iter()
+        .partition_result();
 
-                return CheckRulesResult::Accept;
-            }
-            Mode::Whitelist => {
-                if self.whitelist_matching(&manifest) {
-                    log::trace!("Everyone Whitelist matched");
+        let reject_msg = extract_rejected_message(rejects);
 
-                    return CheckRulesResult::Accept;
-                }
-            }
-            Mode::None => log::trace!("Everyone rule is disabled"),
-        }
+        log::info!("Following rules didn't match: {reject_msg}");
 
-        if let Some(props) = manifest_sig {
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            if let Err(e) = self.verify_permissions(&props.cert, demand_permissions_present) {
-                return CheckRulesResult::Reject(format!(
-                    "certificate permissions verification: {e}"
-                ));
-            }
-
-            //Check audited-payload Rule
-            if let Err(e) = self.keystore.verify_signature(
-                props.cert,
-                props.sig,
-                props.sig_alg,
-                props.manifest_encoded,
-            ) {
-                return CheckRulesResult::Reject(format!(
-                    "failed to verify manifest signature: {e}"
-                ));
-            }
-
-            match cfg.outbound.audited_payload.default.mode {
-                Mode::All => {
-                    log::trace!("Audited-Payload rule set to all");
-                    CheckRulesResult::Accept
-                }
-                Mode::Whitelist => {
-                    if self.whitelist_matching(&manifest) {
-                        log::trace!("Audited-Payload whitelist matched");
-                        CheckRulesResult::Accept
-                    } else {
-                        CheckRulesResult::Reject("Audited-Payload whitelist doesn't match".into())
-                    }
-                }
-                Mode::None => CheckRulesResult::Reject("Audited-Payload rule is disabled".into()),
-            }
+        if accepts.is_empty().not() {
+            CheckRulesResult::Accept
         } else {
-            //Check partner Rule
-            CheckRulesResult::Reject("Didn't match any Rules".into())
+            CheckRulesResult::Reject(format!("Outbound rejected because: {reject_msg}"))
         }
     }
 
     fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
-        if let Some(urls) = manifest
-            .comp_manifest
-            .as_ref()
-            .and_then(|comp| comp.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.as_ref())
-        {
-            let matcher = self.whitelist.matchers.read().unwrap();
-            let non_whitelisted_urls: Vec<&str> = urls
-                .iter()
-                .flat_map(Url::host_str)
-                .filter(|domain| matcher.matches(domain).not())
-                .collect();
-            if non_whitelisted_urls.is_empty() {
-                log::debug!("Every URL on whitelist");
-                true
-            } else {
-                log::debug!(
-                    "Whitelist. Non whitelisted URLs: {:?}",
-                    non_whitelisted_urls
-                );
-                false
-            }
-        } else {
-            log::debug!("No URLs to check");
+        let urls = manifest.get_outbound_requested_urls();
+        let matcher = self.whitelist.matchers.read().unwrap();
+        let non_whitelisted_urls: Vec<&str> = urls
+            .iter()
+            .flat_map(Url::host_str)
+            .filter(|domain| matcher.matches(domain).not())
+            .collect();
+
+        if non_whitelisted_urls.is_empty() {
             true
+        } else {
+            log::debug!(
+                "Whitelist. Non whitelisted URLs: {:?}",
+                non_whitelisted_urls
+            );
+            false
         }
     }
 
@@ -310,6 +380,37 @@ impl RulesManager {
 
         self.keystore.verify_permissions(cert, required)
     }
+}
+
+fn verify_golem_permissions(
+    cert_permissions: &[GolemPermission],
+    requested_urls: &[Url],
+) -> Result<()> {
+    if cert_permissions.is_empty() {
+        return Err(anyhow!("requestor doesn't have any permissions"));
+    }
+
+    for perm in cert_permissions {
+        match perm {
+            GolemPermission::Outbound(permitted_urls) => {
+                for requested_url in requested_urls {
+                    if permitted_urls.contains(requested_url).not() {
+                        return Err(anyhow!(
+                            "Partner rule forbidden url requested: {requested_url}"
+                        ));
+                    }
+                }
+            }
+            GolemPermission::OutboundUnrestricted | GolemPermission::All => {}
+        }
+    }
+    Ok(())
+}
+
+fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
+    rules_checks
+        .iter()
+        .fold(String::new(), |s, c| s + &c.to_string() + " ; ")
 }
 
 pub struct ManifestSignatureProps {
@@ -385,6 +486,10 @@ impl Rulestore {
 
         Ok(())
     }
+
+    pub fn is_outbound_disabled(&self) -> bool {
+        self.config.read().unwrap().outbound.enabled.not()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -431,8 +536,20 @@ pub struct CertRule {
     pub description: String,
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
+#[derive(
+    StructOpt,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Display,
+    EnumString,
+    EnumVariantNames,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Mode {
     All,
     None,
