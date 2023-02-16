@@ -123,6 +123,7 @@ mod tests {
     use futures::{SinkExt, StreamExt, TryStreamExt};
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
+    use serial_test::serial;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use test_case::test_case;
@@ -253,6 +254,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn ok_payload_test() {
         let mut api = dummy_api();
 
@@ -276,6 +278,8 @@ mod tests {
                     .await
             },
             async {
+                println!("WS sleep");
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 let ws_req = ws_frames.next().await;
                 let ws_req = match ws_req {
                     Some(Ok(Frame::Binary(ws_req))) => {
@@ -305,6 +309,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn error_payload_test() {
         let mut api = dummy_api();
 
@@ -327,6 +332,8 @@ mod tests {
                 gsb_endpoint.call(msg).await
             },
             async {
+                println!("WS sleep");
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 let ws_req = ws_frames.next().await;
                 let ws_req = match ws_req {
                     Some(Ok(Frame::Binary(ws_req))) => {
@@ -375,6 +382,7 @@ mod tests {
         "Close when error empty (error needs at least top level error name field)"
     )]
     #[actix_web::test]
+    #[serial]
     async fn ws_close_on_invalid_response(msg: &str, expected_frame: Frame) {
         let mut api = dummy_api();
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -394,6 +402,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn gsb_error_on_ws_error_test() {
         let mut api = dummy_api();
 
@@ -414,6 +423,8 @@ mod tests {
                     .await
             },
             async {
+                println!("WS sleep");
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 let ws_req = ws_frames.try_next().await;
                 assert!(ws_req.is_ok());
                 let ws_error = ws::Message::Close(Some(CloseReason {
@@ -432,6 +443,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn api_404_error_on_delete_of_not_existing_service_test() {
         let api = dummy_api();
         let delete_resp = api
@@ -452,6 +464,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn api_404_error_on_ws_connect_to_not_existing_service() {
         let mut api = dummy_api();
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -469,6 +482,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn api_400_error_on_ws_connect_to_incorrectly_encoded_service_address() {
         let mut api = dummy_api();
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -488,6 +502,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn error_on_post_of_duplicated_service_address() {
         let mut api = dummy_api();
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -501,6 +516,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn ws_close_on_service_delete() {
         let mut api = dummy_api();
 
@@ -525,6 +541,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn buffering_gsb_msgs_before_ws_connect_test() {
         let mut api = dummy_api();
 
@@ -548,6 +565,8 @@ mod tests {
                 gsb_resp
             },
             async {
+                println!("WS sleep");
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
@@ -587,6 +606,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn buffering_gsb_msgs_after_ws_close_msg_and_reconnect_test() {
         let mut api = dummy_api();
 
@@ -609,7 +629,7 @@ mod tests {
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 println!("GSB req");
                 let gsb_resp = gsb_endpoint
                     .call(GetChunk {
@@ -621,6 +641,8 @@ mod tests {
                 gsb_resp
             },
             async {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                println!("WS reconnect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
                 let ws_req = ws_frames.next().await;
@@ -659,6 +681,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn buffering_gsb_msgs_after_ws_disconnect_and_reconnect_test() {
         let mut api = dummy_api();
 
@@ -673,7 +696,7 @@ mod tests {
         println!("WS closing connection");
         ws_frames.close().await.unwrap();
         println!("GSB Waiting for disconnect");
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -689,7 +712,7 @@ mod tests {
             },
             async {
                 println!("Waiting for disconnect and GSB");
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 println!("WS connect");
                 let mut ws_frames = api.ws_at(&services_path).await.unwrap();
                 println!("WS next");
@@ -728,6 +751,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn gsb_buffered_msgs_errors_on_delete_test() {
         let mut api = dummy_api();
 
@@ -742,7 +766,7 @@ mod tests {
         println!("WS closing connection");
         ws_frames.close().await.unwrap();
         println!("Waiting for closing WS API");
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let (gsb_res, _) = tokio::join!(
             async {
@@ -758,7 +782,7 @@ mod tests {
             },
             async {
                 println!("Waiting for GSB request");
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 println!("Delete service");
                 verify_delete_service(&mut api, &service_addr).await;
             }
@@ -769,6 +793,7 @@ mod tests {
     }
 
     #[actix_web::test]
+    #[serial]
     async fn close_old_ws_connection_on_new_ws_connection() {
         let mut api = dummy_api();
 

@@ -5952,6 +5952,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "538c30747ae860d6fb88330addbbd3e0ddbe46d662d032855596d8a8ca260611"
+dependencies = [
+ "dashmap 5.4.0",
+ "futures 0.3.26",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "serial_test_derive 1.0.0",
+]
+
+[[package]]
 name = "serial_test_derive"
 version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
@@ -5968,6 +5982,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b6f5d1c3087fb119617cff2966fe3808a80e5eb59a8c1601d5994d66f4346a5"
 dependencies = [
  "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "079a83df15f85d89a68d64ae1238f142f172b1fa915d0d76b26a7cba1b659a69"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn",
@@ -6435,7 +6460,29 @@ version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21d6cf5a7dffb3f9dceec8e6b8ca528d9bd71d36c9f074defb548ce161f598c0"
 dependencies = [
- "test-case-macros",
+ "test-case-macros 2.2.2",
+]
+
+[[package]]
+name = "test-case"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "679b019fb241da62cc449b33b224d19ebe1c6767b495569765115dd7f7f9fba4"
+dependencies = [
+ "test-case-macros 3.0.0",
+]
+
+[[package]]
+name = "test-case-core"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72dc21b5887f4032c4656502d085dc28f2afbb686f25f216472bb0526f4b1b88"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -6449,6 +6496,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "test-case-macros"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3786898e0be151a96f730fd529b0e8a10f5990fa2a7ea14e37ca27613c05190"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "test-case-core",
 ]
 
 [[package]]
@@ -7891,7 +7951,7 @@ dependencies = [
  "actix-web-actors",
  "anyhow",
  "awc",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bytes 1.4.0",
  "ctor",
  "env_logger 0.10.0",
@@ -7901,7 +7961,8 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "test-case",
+ "serial_test 1.0.0",
+ "test-case 3.0.0",
  "thiserror",
  "tokio 1.25.0",
  "uuid 1.2.2",
@@ -7992,7 +8053,7 @@ dependencies = [
  "strum 0.24.1",
  "tar",
  "tempfile",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "url",
  "ya-agreement-utils",
@@ -8119,7 +8180,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "strum 0.24.1",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "tokio-stream",
@@ -8241,7 +8302,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tempdir",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "ya-client-model",
@@ -8298,7 +8359,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "sys-info",
  "tempdir",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "tokio-stream",
