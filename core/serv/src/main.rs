@@ -18,6 +18,7 @@ use structopt::{clap, StructOpt};
 use url::Url;
 use ya_activity::service::Activity as ActivityService;
 use ya_file_logging::start_logger;
+use ya_gsb_api::GsbApiService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
@@ -259,6 +260,8 @@ enum Services {
     Payment(PaymentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
+    #[enable(gsb, rest)]
+    GsbApi(GsbApiService),
 }
 
 #[cfg(not(any(

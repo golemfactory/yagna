@@ -122,6 +122,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-http-test"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dff10f950882f80a9dc29fb5325db8f66a0692a7c9be3bf547f79e955b699b76"
+dependencies = [
+ "actix-codec",
+ "actix-rt",
+ "actix-server",
+ "actix-service",
+ "actix-tls",
+ "actix-utils",
+ "awc",
+ "bytes 1.4.0",
+ "futures-core",
+ "http",
+ "log",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "slab",
+ "socket2 0.4.7",
+ "tokio 1.25.0",
+]
+
+[[package]]
 name = "actix-macros"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -182,6 +207,29 @@ dependencies = [
  "futures-core",
  "paste",
  "pin-project-lite 0.2.9",
+]
+
+[[package]]
+name = "actix-test"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "546b075f2ee13e081a040b60b95a08f0eceaac6bc759309026611234dc80abfe"
+dependencies = [
+ "actix-codec",
+ "actix-http",
+ "actix-http-test",
+ "actix-rt",
+ "actix-service",
+ "actix-utils",
+ "actix-web",
+ "awc",
+ "futures-core",
+ "futures-util",
+ "log",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "tokio 1.25.0",
 ]
 
 [[package]]
@@ -1594,7 +1642,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6ee87af31d84ef885378aebca32be3d682b0e0dc119d5b4860a2c5bb5046730"
 dependencies = [
  "serde",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1854,6 +1902,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
 dependencies = [
  "log",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+dependencies = [
+ "humantime 2.1.0",
+ "is-terminal",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -5742,7 +5803,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -5891,6 +5952,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "538c30747ae860d6fb88330addbbd3e0ddbe46d662d032855596d8a8ca260611"
+dependencies = [
+ "dashmap 5.4.0",
+ "futures 0.3.26",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "serial_test_derive 1.0.0",
+]
+
+[[package]]
 name = "serial_test_derive"
 version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
@@ -5907,6 +5982,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b6f5d1c3087fb119617cff2966fe3808a80e5eb59a8c1601d5994d66f4346a5"
 dependencies = [
  "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "079a83df15f85d89a68d64ae1238f142f172b1fa915d0d76b26a7cba1b659a69"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn",
@@ -6374,7 +6460,29 @@ version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21d6cf5a7dffb3f9dceec8e6b8ca528d9bd71d36c9f074defb548ce161f598c0"
 dependencies = [
- "test-case-macros",
+ "test-case-macros 2.2.2",
+]
+
+[[package]]
+name = "test-case"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "679b019fb241da62cc449b33b224d19ebe1c6767b495569765115dd7f7f9fba4"
+dependencies = [
+ "test-case-macros 3.0.0",
+]
+
+[[package]]
+name = "test-case-core"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72dc21b5887f4032c4656502d085dc28f2afbb686f25f216472bb0526f4b1b88"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -6388,6 +6496,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "test-case-macros"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3786898e0be151a96f730fd529b0e8a10f5990fa2a7ea14e37ca27613c05190"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "test-case-core",
 ]
 
 [[package]]
@@ -7054,6 +7175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "422ee0de9031b5b948b97a8fc04e3aa35230001a722ddd27943e0be31564ce4c"
+dependencies = [
+ "getrandom 0.2.8",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7544,7 +7674,7 @@ dependencies = [
  "thiserror",
  "tokio 1.25.0",
  "tokio-stream",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-net",
@@ -7672,7 +7802,7 @@ dependencies = [
  "maplit",
  "serde_json",
  "tokio 1.25.0",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
@@ -7712,7 +7842,7 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 1.25.0",
- "uuid",
+ "uuid 0.8.2",
  "web3 0.16.0",
  "ya-client-model",
  "ya-payment-driver",
@@ -7811,6 +7941,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-gsb-api"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-http",
+ "actix-test",
+ "actix-web",
+ "actix-web-actors",
+ "anyhow",
+ "awc",
+ "base64 0.21.0",
+ "bytes 1.4.0",
+ "ctor",
+ "env_logger 0.10.0",
+ "flexbuffers",
+ "futures 0.3.26",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_json",
+ "serial_test 1.0.0",
+ "test-case 3.0.0",
+ "thiserror",
+ "tokio 1.25.0",
+ "uuid 1.2.2",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.3.0"
 dependencies = [
@@ -7840,7 +8005,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 1.25.0",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
@@ -7888,7 +8053,7 @@ dependencies = [
  "strum 0.24.1",
  "tar",
  "tempfile",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "url",
  "ya-agreement-utils",
@@ -7936,7 +8101,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "thiserror",
  "tokio 1.25.0",
- "uuid",
+ "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
@@ -8015,7 +8180,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "strum 0.24.1",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "tokio-stream",
@@ -8075,7 +8240,7 @@ dependencies = [
  "thiserror",
  "tokio 1.25.0",
  "uint 0.7.1",
- "uuid",
+ "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
  "ya-client-model",
@@ -8137,7 +8302,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tempdir",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "ya-client-model",
@@ -8194,7 +8359,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "sys-info",
  "tempdir",
- "test-case",
+ "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
  "tokio-stream",
@@ -8264,7 +8429,7 @@ dependencies = [
  "tokio 1.25.0",
  "tokio-util 0.7.7",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-relay-proto",
  "ya-relay-stack",
@@ -8375,7 +8540,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.7",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-sb-proto",
  "ya-sb-util",
 ]
@@ -8477,7 +8642,7 @@ dependencies = [
  "tokio 1.25.0",
  "tokio-util 0.7.7",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-packet-trace",
  "ya-sb-proto",
  "ya-sb-util",
@@ -8707,7 +8872,7 @@ dependencies = [
  "tokio 1.25.0",
  "tokio-stream",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-client",
  "ya-client-model",
  "ya-core-model",
@@ -8749,7 +8914,7 @@ dependencies = [
  "tiny-keccak 1.5.0",
  "tokio 1.25.0",
  "tokio-compat-02",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
@@ -8793,6 +8958,7 @@ dependencies = [
  "ya-erc20-driver",
  "ya-fd-metrics",
  "ya-file-logging",
+ "ya-gsb-api",
  "ya-identity",
  "ya-market",
  "ya-metrics",
