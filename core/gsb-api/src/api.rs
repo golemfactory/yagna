@@ -11,6 +11,7 @@ use actix_web::web::Data;
 use actix_web::Scope;
 use actix_web::{web, HttpRequest, Responder, Result};
 use actix_web_actors::ws::{self};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64, Engine as _};
 use ya_service_api_web::middleware::Identity;
 
 pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
@@ -38,7 +39,7 @@ async fn post_services(
     let response = services.send(bind).await;
     log::debug!("Service bind result: {:?}", response);
     response??;
-    let listen_on_encoded = base64::encode(&on);
+    let listen_on_encoded = BASE64.encode(&on);
     let links = ServiceLinks {
         messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
     };
@@ -94,7 +95,8 @@ async fn get_service_messages(
 }
 
 fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
-    base64::decode(addr_encoded)
+    BASE64
+        .decode(addr_encoded)
         .map_err(|err| {
             GsbApiError::BadRequest(format!(
                 "Service address should be encoded in base64. Unable to decode. Err: {err}"
@@ -226,7 +228,7 @@ mod tests {
                         messages: format!(
                             "{}/services/{}",
                             GSB_API_PATH,
-                            base64::encode(service_addr)
+                            BASE64.encode(service_addr)
                         )
                     },
                 }
@@ -241,7 +243,7 @@ mod tests {
                 "/{}/{}/{}",
                 GSB_API_PATH,
                 "services",
-                base64::encode(service_addr)
+                BASE64.encode(service_addr)
             ))
             .send()
             .await
@@ -451,7 +453,7 @@ mod tests {
                 "/{}/{}/{}",
                 GSB_API_PATH,
                 "services",
-                base64::encode("no_such_service")
+                BASE64.encode("no_such_service")
             ))
             .send()
             .await
@@ -473,7 +475,7 @@ mod tests {
                 .await;
 
         let _services_path = body.listen.links.messages;
-        let services_path = format!("/services/{}", base64::encode("no_such_service_address"));
+        let services_path = format!("/services/{}", BASE64.encode("no_such_service_address"));
         let ws_frames = api.ws_at(&services_path).await;
         assert!(matches!(
             ws_frames.err(),
@@ -533,7 +535,7 @@ mod tests {
         let ws_msg = ws_frames.next().await;
         let expected_msg_prefix = "Unbinding service: /public/gftp/123";
         assert!(matches!(
-                ws_msg, 
+                ws_msg,
                 Some(Ok(Frame::Close(Some(CloseReason {
                     code: CloseCode::Normal,
                     description: Some(description)
