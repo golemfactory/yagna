@@ -9,11 +9,10 @@ use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use tar::Archive;
 
+use ya_manifest_utils::keystore::x509::{KeystoreLoadResult, KeystoreRemoveResult};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::{
-    util::{self, CertBasicData, CertBasicDataVisitor},
-    KeystoreLoadResult, KeystoreRemoveResult,
-};
+use ya_manifest_utils::util::{CertBasicData, CertBasicDataVisitor};
+use ya_manifest_utils::KeystoreManager;
 
 static INIT: Once = Once::new();
 
@@ -33,7 +32,7 @@ pub fn load_certificates_from_dir(
         })
         .collect();
     let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
+        KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
     let mut permissions = keystore_manager.permissions_manager();
 
     let certs = keystore_manager
@@ -51,7 +50,7 @@ pub fn load_certificates_from_dir(
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
     let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
+        KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
     keystore_manager
         .remove_certs(&slice_to_set(cert_ids))
         .expect("Can load certificates")

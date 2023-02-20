@@ -1,17 +1,17 @@
+use crate::cli::println_conditional;
+use crate::startup_config::ProviderConfig;
 use anyhow::anyhow;
 use std::collections::HashSet;
 use std::path::PathBuf;
-
 use structopt::StructOpt;
 use strum::VariantNames;
-
+use ya_manifest_utils::keystore::x509::{
+    visit_certificates, KeystoreLoadResult, KeystoreRemoveResult,
+};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
-use ya_manifest_utils::KeystoreLoadResult;
+use ya_manifest_utils::KeystoreManager;
 use ya_utils_cli::{CommandOutput, ResponseTable};
-
-use crate::cli::println_conditional;
-use crate::startup_config::ProviderConfig;
 
 /// Manage trusted keys
 ///
@@ -76,14 +76,14 @@ impl KeystoreConfig {
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let table = CertTable::new();
-    let table = util::visit_certificates(&cert_dir, table)?;
+    let table = visit_certificates(&cert_dir, table)?;
     table.print(&config)?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let keystore_manager = KeystoreManager::try_new(&cert_dir)?;
     let mut permissions_manager = keystore_manager.permissions_manager();
 
     let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
@@ -114,17 +114,17 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let keystore_manager = KeystoreManager::try_new(&cert_dir)?;
     let mut permissions_manager = keystore_manager.permissions_manager();
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
-        util::KeystoreRemoveResult::NothingToRemove => {
+        KeystoreRemoveResult::NothingToRemove => {
             println_conditional(&config, "No matching certificates to remove.");
             if config.json {
                 print_cert_list(&config, Vec::new())?;
             }
         }
-        util::KeystoreRemoveResult::Removed { removed } => {
+        KeystoreRemoveResult::Removed { removed } => {
             permissions_manager.set_many(&removed, vec![], true);
 
             println!("Removed certificates:");

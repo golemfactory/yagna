@@ -1,3 +1,7 @@
+use crate::startup_config::FileMonitor;
+use anyhow::{anyhow, Result};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     convert::TryFrom,
@@ -7,30 +11,25 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
-
-use anyhow::{anyhow, Result};
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
+    keystore::x509::X509Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
     policy::CertPermissions,
-    AppManifest, Keystore,
+    AppManifest,
 };
-
-use crate::startup_config::FileMonitor;
 
 #[derive(Clone, Debug)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
-    pub keystore: Keystore,
+    pub keystore: X509Keystore,
     pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
     whitelist_file: PathBuf,
@@ -42,7 +41,7 @@ impl RulesManager {
         whitelist_file: &Path,
         cert_dir: &Path,
     ) -> Result<Self> {
-        let keystore = Keystore::load(cert_dir)?;
+        let keystore = X509Keystore::load(cert_dir)?;
 
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;

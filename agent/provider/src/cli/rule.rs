@@ -1,19 +1,17 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-
-use anyhow::{anyhow, Result};
-use structopt::StructOpt;
-use strum::VariantNames;
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::cert_to_id;
-use ya_manifest_utils::{KeystoreLoadResult, KeystoreManager};
-use ya_utils_cli::{CommandOutput, ResponseTable};
-
 use crate::rules::CertRule;
 use crate::{
     rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
 };
+use anyhow::{anyhow, Result};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use structopt::StructOpt;
+use strum::VariantNames;
+use ya_manifest_utils::keystore::x509::{cert_to_id, KeystoreLoadResult};
+use ya_manifest_utils::policy::CertPermissions;
+use ya_manifest_utils::KeystoreManager;
+use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RuleCommand {

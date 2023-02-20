@@ -1,6 +1,5 @@
 use utils::*;
-
-use ya_manifest_utils::Keystore;
+use ya_manifest_utils::keystore::x509::X509Keystore;
 
 #[test]
 fn accept_not_expired_certificate() {
@@ -22,7 +21,7 @@ fn accept_not_expired_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
@@ -61,7 +60,7 @@ fn not_accept_expired_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
@@ -100,7 +99,7 @@ fn not_accept_not_ready_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
