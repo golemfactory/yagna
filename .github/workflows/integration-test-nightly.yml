@@ -56,7 +56,7 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10.10"
+          python-version: "3.10.0"
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v8
