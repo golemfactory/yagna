@@ -263,7 +263,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                     desc.protocol,
                     desc.remote,
                 );
-                let _ = proxy.unbind(desc, None).await;
+                let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
                 let key = (&desc).proxy_key().unwrap();
@@ -513,14 +513,14 @@ impl Proxy {
                 };
             }
 
-            let _ = proxy.unbind(desc, Some(handle)).await;
+            let _ = proxy.disconnect(handle).await;
             log::debug!("[inet] proxy conn closed: {:?}", desc);
         }
         .right_future())
     }
 
-    async fn unbind(&self, desc: SocketDesc, socket: Option<SocketHandle>) -> Result<()> {
-        log::debug!("[inet] proxy unbind: {desc:?}, handle: [{socket:?}]");
+    async fn unbind(&self, desc: SocketDesc) -> Result<()> {
+        log::debug!("[inet] proxy unbind: {desc:?}");
 
         let meta = ConnectionMeta::try_from(desc)?;
         let key = (&meta).proxy_key()?;
@@ -528,13 +528,17 @@ impl Proxy {
         if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
             let _ = conn.close().await;
         }
-
-        if let Some(socket) = socket {
-            let network = { self.state.read().await.network.clone() };
-            network.stack.disconnect(socket).await?;
-        }
-
         Ok(())
+    }
+
+    /// Disconnect inside smoltcp stack, but don't clear our structures.
+    /// It will be done later in unbind function, after stack will send
+    /// IngressEvent::Disconnected event.
+    async fn disconnect(&self, socket: SocketHandle) -> Result<()> {
+        log::debug!("[inet] proxy socket disconnect: {socket}");
+
+        let network = { self.state.read().await.network.clone() };
+        Ok(network.stack.disconnect(socket).await?)
     }
 }
 
