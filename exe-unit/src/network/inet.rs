@@ -32,6 +32,7 @@ use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
+use ya_utils_networking::vpn::stack::ya_smoltcp::iface::SocketHandle;
 use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{EthernetAddress, HardwareAddress};
 use ya_utils_networking::vpn::stack::StackConfig;
 use ya_utils_networking::vpn::{
@@ -54,6 +55,7 @@ type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
 type UdpSender = Arc<Mutex<SplitSink<UdpFramed<BytesCodec>, (Bytes, SocketAddr)>>>;
 type TcpReceiver = SplitStream<Framed<TcpStream, BytesCodec>>;
 type UdpReceiver = SplitStream<UdpFramed<BytesCodec>>;
+
 type TransportKey = (
     Option<Protocol>,
     Box<[u8]>, // local address bytes
@@ -235,7 +237,7 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
     while let Some(result) = rx.next().await {
         let packet = match result {
             Ok(vec) => vec,
-            Err(err) => return log::debug!("[inet] runtime -> inet error: {}", err),
+            Err(err) => return log::debug!("[inet] runtime -> inet error: {err}"),
         };
 
         // If we failed during handling packet, we should save the error for later.
@@ -290,7 +292,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                     desc.protocol,
                     desc.remote,
                 );
-                let _ = proxy.unbind(desc).await;
+                let _ = proxy.unbind(desc, None).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
                 ya_packet_trace::packet_trace_maybe!("exe-unit::inet_ingress_handler", {
@@ -335,7 +337,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
         if let Err(e) = fwd.send(Ok(frame)) {
-            log::debug!("[inet] egress -> runtime error: {}", e);
+            log::debug!("[inet] egress -> runtime error: {e}");
         }
     }
 
@@ -384,16 +386,18 @@ impl Router {
         };
 
         match ip_packet_to_socket_desc(&ip_packet) {
-            Ok(desc) => match self.proxy.bind(desc).await {
-                Ok(handler) => {
-                    tokio::task::spawn_local(handler);
-                    return Ok(());
+            Ok(desc) => {
+                return match self.proxy.bind(desc).await {
+                    Ok(handler) => {
+                        tokio::task::spawn_local(handler);
+                        Ok(())
+                    }
+                    Err(err) => {
+                        log::debug!("[inet] router: connection error: {err}");
+                        Err(err)
+                    }
                 }
-                Err(err) => {
-                    log::debug!("[inet] router: connection error: {err}");
-                    return Err(err);
-                }
-            },
+            }
             Err(error) => match error {
                 Error::Net(NetError::ProtocolNotSupported(_)) => {}
                 error => log::debug!("[inet] router: {error}"),
@@ -520,9 +524,7 @@ impl Proxy {
             match state.network.get_bound(desc.protocol, desc.local) {
                 Some(handle) => (state.network.clone(), handle),
                 None => {
-                    log::debug!("[inet] bind to {:?}", desc);
-
-                    print_sockets(&state.network);
+                    log::debug!("[inet] bind to {desc:?}");
 
                     let ip_cidr = IpCidr::new(meta.local.addr, 0);
                     state.network.stack.add_address(ip_cidr);
@@ -537,8 +539,10 @@ impl Proxy {
 
         if self.exists(&key).await {
             return Ok(async move {
+                let handle = get_handle(&network, &meta);
+
                 log::debug!(
-                    "[inet] proxy conn: already connected to {} ({}) from {}",
+                    "[inet] proxy conn: already connected to {} ({}) from {}, handle: {handle:?}",
                     meta.local,
                     meta.protocol,
                     meta.remote
@@ -547,7 +551,9 @@ impl Proxy {
             .left_future());
         }
 
-        log::debug!("[inet] connect to {:?}", desc);
+        print_sockets(&network);
+
+        log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
 
         let (ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
@@ -579,32 +585,39 @@ impl Proxy {
                     }
                 };
 
+                let handle = get_handle(&network, &conn.meta);
+
                 log::debug!(
-                    "[inet] proxy conn: forward received bytes ({} B) to {:?}",
-                    vec.len(),
-                    conn
+                    "[inet] proxy conn: forward received bytes ({} B) to {conn:?}, {handle:?}",
+                    vec.len()
                 );
 
+                // After packet will processed in network stack,
+                // it will be received in `inet_egress_handler` function.
                 if let Err(e) = network.send(vec, conn).await {
                     log::debug!("[inet] proxy conn: send error: {}", e);
                 };
             }
 
-            let _ = proxy.unbind(desc).await;
+            let _ = proxy.unbind(desc, Some(handle)).await;
             log::debug!("[inet] proxy conn closed: {:?}", desc);
         }
         .right_future())
     }
 
-    async fn unbind(&self, desc: SocketDesc) -> Result<()> {
-        log::debug!("[inet] proxy unbind: {:?}", desc);
+    async fn unbind(&self, desc: SocketDesc, socket: Option<SocketHandle>) -> Result<()> {
+        log::debug!("[inet] proxy unbind: {desc:?}, handle: [{socket:?}]");
 
         let meta = ConnectionMeta::try_from(desc)?;
         let key = (&meta).proxy_key()?;
-        let mut inner = self.state.write().await;
 
-        if let Some(mut conn) = inner.remotes.remove(&key) {
+        if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
             let _ = conn.close().await;
+        }
+
+        if let Some(socket) = socket {
+            let network = { self.state.read().await.network.clone() };
+            network.stack.disconnect(socket).await?;
         }
 
         Ok(())
@@ -646,9 +659,17 @@ fn print_sockets(network: &net::Network) {
         log::trace!("[inet] socket: {socket:?}");
     }
     log::trace!("[inet] existing bindings:");
-    for binding in network.bindings.borrow_mut().iter() {
-        log::trace!("[inet] bound socket: {:?}", binding);
+    for (handle, meta) in network.handles.borrow_mut().iter() {
+        log::trace!("[inet] bound socket: {handle:?} {meta:?}");
     }
+}
+
+fn get_handle(network: &net::Network, meta: &ConnectionMeta) -> Option<SocketHandle> {
+    network
+        .connections
+        .borrow()
+        .get(&meta)
+        .map(|conn| conn.handle.clone())
 }
 
 async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
