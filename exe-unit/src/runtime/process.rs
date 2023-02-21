@@ -275,7 +275,7 @@ impl RuntimeProcess {
             let inet_endpoint = if rt_ctx.manifest.features().contains(&Feature::Inet) {
                 log::trace!("Creating Outbound transport endpoint for ExeUnit Runtime");
 
-                let endpoint = Endpoint::tcp().await?;
+                let endpoint = Endpoint::default_transport().await?;
                 rt_args.arg("--inet-endpoint");
                 rt_args.arg(endpoint.local().to_string());
                 Some(endpoint)
