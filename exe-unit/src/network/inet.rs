@@ -601,10 +601,10 @@ impl Proxy {
         .right_future())
     }
 
-    async fn unbind(&self, desc: SocketDesc) -> Result<()> {
-        log::debug!("[inet] proxy unbind: {desc:?}");
+    async fn unbind(&self, meta: ConnectionMeta) -> Result<()> {
+        log::debug!("[inet] proxy unbind: {meta:?}");
 
-        let meta = ConnectionMeta::try_from(desc)?;
+        //let meta = ConnectionMeta::try_from(desc)?;
         let key = (&meta).proxy_key()?;
 
         if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
