@@ -9,8 +9,7 @@ use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use tar::Archive;
 
-use ya_manifest_utils::keystore::x509_keystore::{KeystoreLoadResult, KeystoreRemoveResult};
-use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveResponse, RemoveParams};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::CertDataVisitor;
 use ya_manifest_utils::CompositeKeystore;
@@ -45,9 +44,12 @@ pub fn load_certificates_from_dir(
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> RemoveResponse {
-    let mut keystore = CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
+    let mut keystore =
+        CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
     keystore
-        .remove(RemoveParams { ids: slice_to_set(cert_ids) })
+        .remove(RemoveParams {
+            ids: slice_to_set(cert_ids),
+        })
         .expect("Can load certificates")
 }
 

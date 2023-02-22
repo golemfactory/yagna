@@ -7,7 +7,7 @@ use crate::policy::CertPermissions;
 
 use self::{
     golem_keystore::GolemCertAddParams,
-    x509_keystore::{KeystoreRemoveResult, PermissionsManager, X509AddParams, X509KeystoreManager},
+    x509_keystore::{X509AddParams, X509KeystoreManager},
 };
 use std::{
     collections::{BTreeMap, HashSet},
@@ -61,8 +61,8 @@ pub struct CertData {
 
 #[derive(Default)]
 pub struct AddResponse {
-    added: Vec<CertData>,
-    skipped: Vec<CertData>,
+    pub added: Vec<CertData>,
+    pub skipped: Vec<CertData>,
 }
 
 pub trait CommonRemoveParams {
@@ -82,7 +82,6 @@ impl CommonRemoveParams for RemoveParams {
 #[derive(Default)]
 pub struct RemoveResponse {
     pub removed: Vec<CertData>,
-    pub skipped: Vec<CertData>,
 }
 
 trait Keystore {
@@ -122,15 +121,13 @@ impl CompositeKeystore {
             .map(|keystore| keystore.remove(&remove))
             .fold_ok(RemoveResponse::default(), |mut acc, mut res| {
                 acc.removed.append(&mut res.removed);
-                acc.skipped.append(&mut res.skipped);
                 acc
             })?;
         Ok(response)
     }
 
-    fn list(&self) -> Vec<CertData> {
-        self
-            .keystores
+    pub fn list(&self) -> Vec<CertData> {
+        self.keystores
             .iter()
             .map(|keystore| keystore.list())
             .flatten()

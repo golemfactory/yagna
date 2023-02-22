@@ -1,12 +1,8 @@
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
-use anyhow::anyhow;
-use std::collections::HashSet;
-use std::ops::Rem;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::keystore::x509_keystore::{visit_certificates, KeystoreRemoveResult};
 use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::{self, CertDataVisitor};
@@ -75,7 +71,9 @@ To find certificate id use `keystore list` command.")]
 
 impl Into<RemoveParams> for Remove {
     fn into(self) -> RemoveParams {
-        RemoveParams { ids: self.ids.into_iter().collect() }
+        RemoveParams {
+            ids: self.ids.into_iter().collect(),
+        }
     }
 }
 
@@ -92,14 +90,15 @@ impl KeystoreConfig {
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let table = CertTable::new();
-    let table = visit_certificates(&cert_dir, table)?;
-    table.print(&config)?;
+    let keystore = CompositeKeystore::try_new(&cert_dir)?;
+    let certs_data = keystore.list();
+    print_cert_list(&config, certs_data)?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore = CompositeKeystore::try_new(&cert_dir)?;
+    let mut keystore = CompositeKeystore::try_new(&cert_dir)?;
     let AddResponse { added, skipped } = keystore.add(add.into())?;
 
     if !added.is_empty() {
@@ -118,7 +117,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore_manager = CompositeKeystore::try_new(&cert_dir)?;
     // let mut permissions_manager = keystore_manager.permissions_manager();
-    let RemoveResponse { removed, skipped } = keystore_manager.remove(remove.into())?;
+    let RemoveResponse { removed } = keystore_manager.remove(remove.into())?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {

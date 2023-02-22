@@ -1,9 +1,11 @@
 use crate::{
     golem_certificate::{verify_golem_certificate, GolemCertificate},
     policy::CertPermissions,
-    util::{format_permissions, str_to_short_hash, CertDataVisitor}, CompositeKeystore,
+    util::{format_permissions, str_to_short_hash, CertDataVisitor},
+    CompositeKeystore,
 };
 use anyhow::{anyhow, bail};
+use itertools::Itertools;
 use openssl::{
     hash::MessageDigest,
     nid::Nid,
@@ -24,7 +26,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::{AddParams, AddResponse, CertData, CommonAddParams, Keystore};
+use super::{
+    AddParams, AddResponse, CertData, CommonAddParams, Keystore, RemoveParams, RemoveResponse,
+};
 
 pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
 pub(super) trait X509AddParams {
@@ -109,54 +113,6 @@ impl X509KeystoreManager {
         })
     }
 
-    pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
-        if ids.difference(&self.ids).eq(ids) {
-            return Ok(KeystoreRemoveResult::NothingToRemove);
-        }
-        let mut removed = HashMap::new();
-
-        let cert_dir_entries: Vec<Result<DirEntry, std::io::Error>> =
-            std::fs::read_dir(self.cert_dir.clone())?.collect();
-        for dir_entry in cert_dir_entries {
-            let cert_file = dir_entry?;
-            let cert_file = cert_file.path();
-            let certs = parse_cert_file(&cert_file)?;
-            if certs.is_empty() {
-                // No certificates in parsed file.
-                continue;
-            }
-            let mut ids_cert = certs.into_iter().fold(HashMap::new(), |mut certs, cert| {
-                if let Ok(id) = cert_to_id(&cert) {
-                    certs.insert(id, cert);
-                }
-                certs
-            });
-            let mut split_and_skip = false;
-            for id in ids.iter() {
-                if let Some(cert) = ids_cert.remove(id) {
-                    removed.insert(id, cert);
-                    split_and_skip = true;
-                }
-            }
-            if split_and_skip {
-                let file_stem = get_file_stem(&cert_file).expect("Cannot get file name stem");
-                let dot_extension = get_file_extension(&cert_file)
-                    .map_or_else(|| String::from(""), |ex| format!(".{ex}"));
-                for (id, cert) in ids_cert {
-                    let cert = cert.to_pem()?;
-                    let mut file_path = self.cert_dir.clone();
-                    let filename = format!("{file_stem}.{id}{dot_extension}");
-                    file_path.push(filename);
-                    fs::write(file_path, cert)?;
-                }
-                fs::remove_file(cert_file)?;
-            }
-        }
-
-        let removed: Vec<X509> = removed.into_values().collect();
-        Ok(KeystoreRemoveResult::Removed { removed })
-    }
-
     /// Loads keychain file to `cert-dir`
     fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
         let file_name = get_file_name(cert_path)
@@ -207,7 +163,7 @@ impl X509KeystoreManager {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn add(&mut self, add: &super::AddParams) -> anyhow::Result<AddResponse> {
+    fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let res = self.add_certs(add)?;
         let permissions_manager = self.keystore.permissions_manager();
 
@@ -230,10 +186,63 @@ impl Keystore for X509KeystoreManager {
         })
     }
 
-    fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
-        Ok(Default::default())
+    fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
+        let ids = &remove.ids;
+        if ids.difference(&self.ids).eq(ids) {
+            return Ok(RemoveResponse::default());
+        }
+        let mut removed = HashMap::new();
+
+        let cert_dir_entries: Vec<Result<DirEntry, std::io::Error>> =
+            std::fs::read_dir(self.cert_dir.clone())?.collect();
+        for dir_entry in cert_dir_entries {
+            let cert_file = dir_entry?;
+            let cert_file = cert_file.path();
+            let certs = parse_cert_file(&cert_file)?;
+            if certs.is_empty() {
+                // No certificates in parsed file.
+                continue;
+            }
+            let mut ids_cert = certs.into_iter().fold(HashMap::new(), |mut certs, cert| {
+                if let Ok(id) = cert_to_id(&cert) {
+                    certs.insert(id, cert);
+                }
+                certs
+            });
+            let mut split_and_skip = false;
+            for id in ids.iter() {
+                if let Some(cert) = ids_cert.remove(id) {
+                    removed.insert(id, cert);
+                    split_and_skip = true;
+                }
+            }
+            if split_and_skip {
+                let file_stem = get_file_stem(&cert_file).expect("Cannot get file name stem");
+                let dot_extension = get_file_extension(&cert_file)
+                    .map_or_else(|| String::from(""), |ex| format!(".{ex}"));
+                for (id, cert) in ids_cert {
+                    let cert = cert.to_pem()?;
+                    let mut file_path = self.cert_dir.clone();
+                    let filename = format!("{file_stem}.{id}{dot_extension}");
+                    file_path.push(filename);
+                    fs::write(file_path, cert)?;
+                }
+                fs::remove_file(cert_file)?;
+            }
+        }
+
+        let permissions_manager = self.permissions_manager();
+        permissions_manager
+            .save(&self.cert_dir)
+            .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+
+        let removed: Vec<CertData> = removed
+            .into_values()
+            .map(|cert| CertData::create(&cert, &permissions_manager))
+            .try_collect()?;
+        Ok(RemoveResponse { removed })
     }
-    
+
     fn list(&self) -> Vec<CertData> {
         Default::default()
     }
@@ -359,16 +368,16 @@ impl X509Keystore {
         Ok(ids)
     }
 
-    pub(crate) fn visit_certs<T: CertDataVisitor>(
-        &self,
-        visitor: &mut X509Visitor<T>,
-    ) -> anyhow::Result<()> {
-        let inner = self.inner.read().unwrap();
-        for cert in inner.store.objects().iter().flat_map(X509ObjectRef::x509) {
-            visitor.accept(cert, &inner.permissions)?;
-        }
-        Ok(())
-    }
+    // pub(crate) fn visit_certs<T: CertDataVisitor>(
+    //     &self,
+    //     visitor: &mut X509Visitor<T>,
+    // ) -> anyhow::Result<()> {
+    //     let inner = self.inner.read().unwrap();
+    //     for cert in inner.store.objects().iter().flat_map(X509ObjectRef::x509) {
+    //         visitor.accept(cert, &inner.permissions)?;
+    //     }
+    //     Ok(())
+    // }
 
     fn load_file(store: &mut X509StoreBuilder, cert: &PathBuf) -> anyhow::Result<()> {
         for cert in parse_cert_file(cert)? {
@@ -526,29 +535,29 @@ pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     Ok(str_to_short_hash(&txt))
 }
 
-pub fn visit_certificates<T: CertDataVisitor>(cert_dir: &PathBuf, visitor: T) -> anyhow::Result<T> {
-    let keystore = CompositeKeystore::try_new(cert_dir)?;
-    // keystore.list()
-    // let mut visitor = X509Visitor { visitor };
-    keystore.visit_certs(&mut visitor)?;
-    Ok(visitor.visitor)
-}
+// pub fn visit_certificates<T: CertDataVisitor>(cert_dir: &PathBuf, visitor: T) -> anyhow::Result<T> {
+//     let keystore = CompositeKeystore::try_new(cert_dir)?;
+//     // keystore.list()
+//     // let mut visitor = X509Visitor { visitor };
+//     keystore.visit_certs(&mut visitor)?;
+//     Ok(visitor.visitor)
+// }
 
-pub(crate) struct X509Visitor<T: CertDataVisitor> {
-    visitor: T,
-}
+// pub(crate) struct X509Visitor<T: CertDataVisitor> {
+//     visitor: T,
+// }
 
-impl<T: CertDataVisitor> X509Visitor<T> {
-    pub(crate) fn accept(
-        &mut self,
-        cert: &X509Ref,
-        permissions: &PermissionsManager,
-    ) -> anyhow::Result<()> {
-        let cert_data = CertData::create(cert, permissions)?;
-        self.visitor.accept(cert_data);
-        Ok(())
-    }
-}
+// impl<T: CertDataVisitor> X509Visitor<T> {
+//     pub(crate) fn accept(
+//         &mut self,
+//         cert: &X509Ref,
+//         permissions: &PermissionsManager,
+//     ) -> anyhow::Result<()> {
+//         let cert_data = CertData::create(cert, permissions)?;
+//         self.visitor.accept(cert_data);
+//         Ok(())
+//     }
+// }
 
 impl TryFrom<&X509Ref> for CertData {
     type Error = anyhow::Error;
@@ -602,11 +611,6 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
         return None;
     }
     Some(entries)
-}
-
-pub enum KeystoreRemoveResult {
-    NothingToRemove,
-    Removed { removed: Vec<X509> },
 }
 
 #[derive(Clone, Default)]

@@ -1,12 +1,12 @@
 #[macro_use]
 extern crate serial_test;
 
-use std::fs;
+use std::{collections::HashSet, fs, iter::FromIterator};
 
 use test_case::test_case;
 
 use ya_manifest_test_utils::*;
-use ya_manifest_utils::{keystore::x509_keystore::visit_certificates, policy::CertPermissions};
+use ya_manifest_utils::{policy::CertPermissions, CompositeKeystore};
 
 static TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -80,9 +80,18 @@ fn certificate_store_test(
     remove_certificates(&test_cert_dir, ids_to_remove);
     let mut visitor = TestCertDataVisitor::new(expected_ids);
     // When
-    visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
+    let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
+    let loaded_ids = keystore
+        .list()
+        .into_iter()
+        .map(|c| c.id)
+        .collect::<HashSet<String>>();
     // Then
-    visitor.test();
+    let expected_ids = expected_ids
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect::<HashSet<String>>();
+    assert_eq!(expected_ids, loaded_ids);
     let certs = TEST_RESOURCES.loaded_cert_files();
     assert_eq!(certs, slice_to_set(expected_files));
 }
@@ -112,11 +121,17 @@ fn certificate_name_collision_test() {
         &[colliding_name, &format!("copy/{colliding_name}")],
         &vec![CertPermissions::All],
     );
-    let mut visitor = TestCertDataVisitor::new(&["4e0df976", "0e136cb3"]);
+
+    let mut expected_ids: HashSet<String> = HashSet::from(["4e0df976".into(), "0e136cb3".into()]);
     // When
-    visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
+    let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
+    let loaded_ids = keystore
+        .list()
+        .into_iter()
+        .map(|c| c.id)
+        .collect::<HashSet<String>>();
     // Then
-    visitor.test();
+    assert_eq!(expected_ids, loaded_ids);
     let certs = TEST_RESOURCES.loaded_cert_files();
     assert_eq!(
         certs,
