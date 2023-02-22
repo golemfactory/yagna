@@ -5,12 +5,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::keystore::x509::{
-    visit_certificates, KeystoreLoadResult, KeystoreRemoveResult,
-};
+use ya_manifest_utils::keystore::x509_keystore::{visit_certificates, KeystoreRemoveResult};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
-use ya_manifest_utils::KeystoreManager;
+use ya_manifest_utils::util::{self, CertDataVisitor};
+use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
@@ -54,6 +53,16 @@ pub struct Add {
     whole_chain: bool,
 }
 
+impl Into<AddParams> for Add {
+    fn into(self) -> AddParams {
+        AddParams {
+            certs: self.certs,
+            permissions: self.permissions,
+            whole_chain: self.whole_chain,
+        }
+    }
+}
+
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
@@ -83,41 +92,27 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = KeystoreManager::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
+    let keystore = CompositeKeystore::try_new(&cert_dir)?;
+    let AddResponse { added, skipped } = keystore.add(add.into())?;
 
-    let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
-
-    permissions_manager.set_many(
-        &loaded.iter().chain(skipped.iter()).cloned().collect(),
-        add.permissions,
-        add.whole_chain,
-    );
-
-    if !loaded.is_empty() {
+    if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
-        let certs_data = util::to_cert_data(&loaded, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+        print_cert_list(&config, added)?;
     }
 
     if !skipped.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        let certs_data = util::to_cert_data(&skipped, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+        print_cert_list(&config, skipped)?;
     }
-
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = KeystoreManager::try_new(&cert_dir)?;
+    let keystore_manager = CompositeKeystore::try_new(&cert_dir)?;
     let mut permissions_manager = keystore_manager.permissions_manager();
     let ids: HashSet<String> = remove.ids.into_iter().collect();
-    match keystore_manager.remove_certs(&ids)? {
+    match keystore_manager.remove(&ids)? {
         KeystoreRemoveResult::NothingToRemove => {
             println_conditional(&config, "No matching certificates to remove.");
             if config.json {
@@ -139,10 +134,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_cert_list(
-    config: &ProviderConfig,
-    certs_data: Vec<util::CertBasicData>,
-) -> anyhow::Result<()> {
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertData>) -> anyhow::Result<()> {
     let mut table = CertTable::new();
     for data in certs_data {
         table.add(data);
@@ -174,14 +166,14 @@ impl CertTable {
         Ok(())
     }
 
-    pub fn add(&mut self, data: CertBasicData) {
+    pub fn add(&mut self, data: CertData) {
         let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
         self.table.values.push(row)
     }
 }
 
-impl CertBasicDataVisitor for CertTable {
-    fn accept(&mut self, data: CertBasicData) {
+impl CertDataVisitor for CertTable {
+    fn accept(&mut self, data: CertData) {
         self.add(data)
     }
 }

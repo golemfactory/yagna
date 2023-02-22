@@ -1,5 +1,5 @@
 use utils::*;
-use ya_manifest_utils::keystore::x509::X509Keystore;
+use ya_manifest_utils::keystore::x509_keystore::X509Keystore;
 
 #[test]
 fn accept_not_expired_certificate() {

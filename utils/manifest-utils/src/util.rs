@@ -6,7 +6,8 @@ use md5::{Digest, Md5};
 
 use openssl::x509::{X509Ref, X509};
 
-use crate::keystore::x509::PermissionsManager;
+use crate::keystore::x509_keystore::PermissionsManager;
+use crate::keystore::CertData;
 use crate::policy::CertPermissions;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -26,34 +27,6 @@ pub enum DecodingError {
     BlobJsonString(#[from] snailquote::UnescapeError),
 }
 
-pub fn to_cert_data(
-    certs: &Vec<X509>,
-    permissions: &PermissionsManager,
-) -> anyhow::Result<Vec<CertBasicData>> {
-    let mut certs_data = Vec::new();
-    for cert in certs {
-        let data = CertBasicData::create(cert.as_ref(), permissions)?;
-        certs_data.push(data);
-    }
-    Ok(certs_data)
-}
-
-pub struct CertBasicData {
-    pub id: String,
-    pub not_after: String,
-    pub subject: BTreeMap<String, String>,
-    pub permissions: String,
-}
-
-impl CertBasicData {
-    pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
-        let mut data = CertBasicData::try_from(cert)?;
-        let permissions = permissions.get(cert);
-        data.permissions = format_permissions(&permissions);
-        Ok(data)
-    }
-}
-
 pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
     if permissions.is_empty() {
         "none".to_string()
@@ -62,8 +35,8 @@ pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
     }
 }
 
-pub trait CertBasicDataVisitor {
-    fn accept(&mut self, cert_data: CertBasicData);
+pub trait CertDataVisitor {
+    fn accept(&mut self, cert_data: CertData);
 }
 
 /// Calculates Md5 of `txt` and returns first 8 characters.

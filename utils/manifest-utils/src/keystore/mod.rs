@@ -1,55 +1,124 @@
-pub mod x509;
+pub mod golem_keystore;
+pub mod x509_keystore;
 
-use self::x509::{
-    KeystoreLoadResult, KeystoreRemoveResult, PermissionsManager, X509KeystoreManager,
+use itertools::Itertools;
+
+use crate::policy::CertPermissions;
+
+use self::{
+    golem_keystore::GolemCertAddParams,
+    x509_keystore::{KeystoreRemoveResult, PermissionsManager, X509AddParams, X509KeystoreManager},
 };
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 
-trait Keystore {
-    fn load();
-    fn delete(&mut self);
-    fn list(&self);
+trait CommonAddParams {
+    fn certs(&self) -> &Vec<PathBuf>;
 }
 
-struct CompositeKeystore {}
+pub struct AddParams {
+    pub permissions: Vec<CertPermissions>,
+    pub certs: Vec<PathBuf>,
+    pub whole_chain: bool,
+}
 
-impl Keystore for CompositeKeystore {
-    fn load() {
-        todo!()
+impl AddParams {
+    pub fn new(certs: Vec<PathBuf>) -> Self {
+        let permissions = vec![CertPermissions::All];
+        let whole_chain = true;
+        Self {
+            permissions,
+            certs,
+            whole_chain,
+        }
+    }
+}
+
+impl CommonAddParams for AddParams {
+    fn certs(&self) -> &Vec<PathBuf> {
+        &self.certs
+    }
+}
+
+impl X509AddParams for AddParams {
+    fn permissions(&self) -> &Vec<crate::policy::CertPermissions> {
+        &self.permissions
     }
 
-    fn delete(&mut self) {
+    fn whole_chain(&self) -> bool {
+        self.whole_chain
+    }
+}
+
+pub struct CertData {
+    pub id: String,
+    pub not_after: String,
+    pub subject: BTreeMap<String, String>,
+    pub permissions: String,
+}
+
+#[derive(Default)]
+pub struct AddResponse {
+    added: Vec<CertData>,
+    skipped: Vec<CertData>,
+}
+
+pub trait CommonRemoveParams {
+    fn id(&self) -> &HashSet<String>;
+}
+
+pub struct RemoveParams {
+    pub ids: HashSet<String>,
+}
+
+impl CommonRemoveParams for RemoveParams {
+    fn id(&self) -> &HashSet<String> {
+        &self.ids
+    }
+}
+
+#[derive(Default)]
+struct RemoveResponse {
+    removed: Vec<CertData>,
+    skipped: Vec<CertData>,
+}
+
+trait Keystore {
+    fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
+    fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
+}
+
+pub struct CompositeKeystore {
+    keystores: Vec<Box<dyn Keystore>>,
+}
+
+impl CompositeKeystore {
+    pub fn try_new(cert_dir: &PathBuf) -> anyhow::Result<Self> {
+        let x509_keystore_manager = X509KeystoreManager::try_load(cert_dir)?;
+        let keystores: Vec<Box<dyn Keystore>> = vec![Box::new(x509_keystore_manager)];
+        Ok(Self { keystores })
+    }
+
+    pub fn add(&mut self, add: AddParams) -> anyhow::Result<AddResponse> {
+        let response = self
+            .keystores
+            .iter_mut()
+            .map(|keystore| keystore.add(&add))
+            .fold_ok(AddResponse::default(), |mut acc, mut res| {
+                acc.added.append(&mut res.added);
+                acc.skipped.append(&mut res.skipped);
+                acc
+            })?;
+        Ok(response)
+    }
+
+    pub fn remove(&mut self) {
         todo!()
     }
 
     fn list(&self) {
         todo!()
-    }
-}
-
-pub struct KeystoreManager {
-    x509_keystore_manager: X509KeystoreManager,
-}
-
-impl KeystoreManager {
-    pub fn try_new(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        let x509_keystore_manager = X509KeystoreManager::try_new(cert_dir)?;
-        Ok(Self {
-            x509_keystore_manager,
-        })
-    }
-
-    /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
-    /// Certificates already existing in `cert-dir` are skipped.
-    pub fn load_certs(self, cert_paths: &Vec<PathBuf>) -> anyhow::Result<KeystoreLoadResult> {
-        self.x509_keystore_manager.load_certs(cert_paths)
-    }
-
-    pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
-        self.x509_keystore_manager.remove_certs(ids)
-    }
-
-    pub fn permissions_manager(&self) -> PermissionsManager {
-        self.x509_keystore_manager.permissions_manager()
     }
 }

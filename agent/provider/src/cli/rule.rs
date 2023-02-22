@@ -8,9 +8,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::keystore::x509::{cert_to_id, KeystoreLoadResult};
+use ya_manifest_utils::keystore::{AddParams, AddResponse};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::KeystoreManager;
+use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -86,17 +86,14 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                let keystore_manager = KeystoreManager::try_new(&rules.cert_dir)?;
+                let keystore = CompositeKeystore::try_new(&rules.cert_dir)?;
 
-                let KeystoreLoadResult { loaded, skipped } =
-                    keystore_manager.load_certs(&vec![import_cert])?;
+                let AddResponse { added, skipped } = keystore.add(AddParams {
+                    certs: vec![import_cert],
+                    permissions: vec![CertPermissions::All],
+                    whole_chain: true,
+                })?;
 
-                //TODO it will be removed after backward compatibility is done
-                rules.keystore.permissions_manager().set_many(
-                    &loaded.iter().chain(skipped.iter()).cloned().collect(),
-                    vec![CertPermissions::All],
-                    true,
-                );
                 rules
                     .keystore
                     .permissions_manager()
@@ -105,9 +102,8 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
                 rules.keystore.reload(&rules.cert_dir)?;
 
-                for cert in loaded.into_iter().chain(skipped) {
-                    let cert_id = cert_to_id(&cert)?;
-                    rules.set_partner_mode(cert_id, mode.clone())?;
+                for cert in added.into_iter().chain(skipped) {
+                    rules.set_partner_mode(cert.id, mode.clone())?;
                 }
 
                 Ok(())

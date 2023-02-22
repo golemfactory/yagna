@@ -9,10 +9,11 @@ use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use tar::Archive;
 
-use ya_manifest_utils::keystore::x509::{KeystoreLoadResult, KeystoreRemoveResult};
+use ya_manifest_utils::keystore::x509_keystore::{KeystoreLoadResult, KeystoreRemoveResult};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::{CertBasicData, CertBasicDataVisitor};
-use ya_manifest_utils::KeystoreManager;
+use ya_manifest_utils::util::CertDataVisitor;
+use ya_manifest_utils::CompositeKeystore;
 
 static INIT: Once = Once::new();
 
@@ -21,9 +22,9 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
-    certs_permissions: &Vec<CertPermissions>,
-) -> KeystoreLoadResult {
-    let cert_paths: Vec<PathBuf> = certfile_names
+    cert_permissions: &Vec<CertPermissions>,
+) -> AddResponse {
+    let certs: Vec<PathBuf> = certfile_names
         .iter()
         .map(|certfile_name| {
             let mut cert_path = resource_cert_dir.clone();
@@ -31,27 +32,21 @@ pub fn load_certificates_from_dir(
             cert_path
         })
         .collect();
-    let keystore_manager =
-        KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    let mut permissions = keystore_manager.permissions_manager();
+    let mut keystore =
+        CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
 
-    let certs = keystore_manager
-        .load_certs(&cert_paths)
-        .expect("Can load certificates");
-
-    permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
-    permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
-    permissions
-        .save(test_cert_dir)
-        .expect("Should be able to save permissions file.");
-
+    let add_params = AddParams {
+        certs,
+        permissions: cert_permissions.clone(),
+        whole_chain: false,
+    };
+    let certs = keystore.add(add_params).expect("Can load certificates");
     certs
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
-    let keystore_manager =
-        KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    keystore_manager
+    let keystore = CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
+    keystore
         .remove_certs(&slice_to_set(cert_ids))
         .expect("Can load certificates")
 }
@@ -77,8 +72,8 @@ impl TestCertDataVisitor {
     }
 }
 
-impl CertBasicDataVisitor for TestCertDataVisitor {
-    fn accept(&mut self, cert_data: CertBasicData) {
+impl CertDataVisitor for TestCertDataVisitor {
+    fn accept(&mut self, cert_data: CertData) {
         self.actual.insert(cert_data.id);
     }
 }

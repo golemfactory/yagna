@@ -6,7 +6,7 @@ use std::fs;
 use test_case::test_case;
 
 use ya_manifest_test_utils::*;
-use ya_manifest_utils::{keystore::x509::visit_certificates, policy::CertPermissions};
+use ya_manifest_utils::{keystore::x509_keystore::visit_certificates, policy::CertPermissions};
 
 static TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
