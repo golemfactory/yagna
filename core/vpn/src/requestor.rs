@@ -228,6 +228,35 @@ async fn connect_tcp(
     )?)
 }
 
+/// Initiates a new UDP connection via WebSockets to the destination address.
+#[actix_web::get("/net/{net_id}/udp/{ip}/{port}")]
+async fn connect_udp(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathConnect>,
+    req: HttpRequest,
+    stream: web::Payload,
+    identity: Identity,
+) -> Result<HttpResponse> {
+    log::warn!("connect_tcp called {:?}", path);
+    let path = path.into_inner();
+    let vpn = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_network(&identity.identity, &path.net_id)?
+    };
+    let conn = vpn
+        .send(Connect {
+            protocol: Protocol::Udp,
+            address: path.ip.to_string(),
+            port: path.port,
+        })
+        .await??;
+    Ok(ws::start(
+        VpnWebSocket::new(path.net_id, conn),
+        &req,
+        stream,
+    )?)
+}
+
 pub struct VpnWebSocket {
     network_id: String,
     heartbeat: Instant,
