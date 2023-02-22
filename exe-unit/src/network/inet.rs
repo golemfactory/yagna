@@ -5,13 +5,15 @@ use std::iter::FromIterator;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
 use bytes::{Bytes, BytesMut};
+use futures::future::{AbortHandle, Abortable};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::stream::BoxStream;
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
@@ -33,7 +35,9 @@ use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
 use ya_utils_networking::vpn::stack::ya_smoltcp::iface::SocketHandle;
-use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{EthernetAddress, HardwareAddress};
+use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{
+    EthernetAddress, HardwareAddress, Ipv4Address, Ipv6Address,
+};
 use ya_utils_networking::vpn::stack::StackConfig;
 use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
@@ -56,7 +60,8 @@ type UdpSender = Arc<Mutex<SplitSink<UdpFramed<BytesCodec>, (Bytes, SocketAddr)>
 type TcpReceiver = SplitStream<Framed<TcpStream, BytesCodec>>;
 type UdpReceiver = SplitStream<UdpFramed<BytesCodec>>;
 
-type TransportKey = (
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
+struct TransportKey(
     Option<Protocol>,
     Box<[u8]>, // local address bytes
     Option<u16>,
@@ -298,6 +303,8 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
+                    proxy.update_seen(&key).await;
+
                     log::trace!(
                         "[inet] ingress proxy: send to {:?} ({} B), from: {:?}",
                         desc.local,
@@ -458,9 +465,15 @@ struct Proxy {
     filter: Option<UrlValidator>,
 }
 
+struct ConnectionState {
+    sender: TransportSender,
+    last_seen: AtomicU64,
+    abort: AbortHandle,
+}
+
 struct ProxyState {
     network: net::Network,
-    remotes: HashMap<TransportKey, TransportSender>,
+    remotes: HashMap<TransportKey, ConnectionState>,
 }
 
 impl Proxy {
@@ -482,7 +495,41 @@ impl Proxy {
 
     async fn get(&self, key: &TransportKey) -> Option<TransportSender> {
         let state = self.state.read().await;
-        state.remotes.get(key).cloned()
+        state.remotes.get(key).map(|state| state.sender.clone())
+    }
+
+    async fn update_seen(&self, key: &TransportKey) -> bool {
+        let state = self.state.read().await;
+        state
+            .remotes
+            .get(key)
+            .map(|state| state.update_seen())
+            .is_some()
+    }
+
+    async fn drop_unused_connections(&self, sockets_limit: usize) -> usize {
+        let udps = {
+            let state = self.state.read().await;
+            let mut udps = state
+                .remotes
+                .iter()
+                .filter(|(key, _conn)| key.0 == Some(Protocol::Udp))
+                .collect::<Vec<_>>();
+            let to_remove = udps.len().saturating_sub(sockets_limit);
+
+            udps.sort_by_key(|element| element.1.last_seen.load(Ordering::Relaxed));
+
+            udps[0..to_remove]
+                .iter()
+                .map(|(key, _)| (*key).clone())
+                .collect::<Vec<_>>()
+        };
+
+        for key in &udps {
+            self.unbind(key.as_socket_desc()).await.ok();
+        }
+
+        udps.len()
     }
 
     async fn bind(
@@ -547,6 +594,8 @@ impl Proxy {
             .left_future());
         }
 
+        self.drop_unused_connections(10).await;
+
         print_sockets(&network);
 
         log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
@@ -561,7 +610,7 @@ impl Proxy {
                 .map_err(|e| ProxyingError::routeable(conn, e.into()))?;
         }
 
-        let (tx, mut rx) = match meta.protocol {
+        let (tx, rx) = match meta.protocol {
             Protocol::Tcp => inet_tcp_proxy(ip, port).await,
             Protocol::Udp => inet_udp_proxy(ip, port).await,
             other => return Err(NetError::ProtocolNotSupported(other.to_string()).into()),
@@ -569,10 +618,13 @@ impl Proxy {
         .map_err(|e| ProxyingError::routeable(conn, e))?;
 
         let mut state = self.state.write().await;
-        state.remotes.insert(key, tx);
+        let (conn_state, mut rx) = ConnectionState::new(tx, rx);
+        state.remotes.insert(key.clone(), conn_state);
 
         Ok(async move {
             while let Some(bytes) = rx.next().await {
+                proxy.update_seen(&key).await;
+
                 let vec = match bytes {
                     Ok(bytes) => Vec::from_iter(bytes.into_iter()),
                     Err(err) => {
@@ -601,14 +653,16 @@ impl Proxy {
         .right_future())
     }
 
-    async fn unbind(&self, meta: ConnectionMeta) -> Result<()> {
-        log::debug!("[inet] proxy unbind: {meta:?}");
+    async fn unbind(&self, desc: SocketDesc) -> Result<()> {
+        log::debug!("[inet] proxy unbind: {desc:?}");
 
-        //let meta = ConnectionMeta::try_from(desc)?;
+        let meta = ConnectionMeta::try_from(desc)?;
         let key = (&meta).proxy_key()?;
 
         if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
-            let _ = conn.close().await;
+            log::trace!("Closing channel for: {desc:?}");
+            let _ = conn.sender.close().await;
+            conn.abort.abort();
         }
         Ok(())
     }
@@ -621,6 +675,36 @@ impl Proxy {
 
         let network = { self.state.read().await.network.clone() };
         Ok(network.stack.disconnect(socket).await?)
+    }
+}
+
+impl ConnectionState {
+    fn new<T>(sender: TransportSender, rx: impl Stream<Item = T>) -> (Self, impl Stream<Item = T>) {
+        let (abort, abort_registration) = AbortHandle::new_pair();
+        let stream = Abortable::new(rx, abort_registration);
+
+        (
+            ConnectionState {
+                sender,
+                abort,
+                last_seen: AtomicU64::new(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or(Duration::from_secs(0))
+                        .as_secs(),
+                ),
+            },
+            stream,
+        )
+    }
+
+    fn update_seen(&self) {
+        if let Ok(now) = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|time| time.as_secs())
+        {
+            self.last_seen.store(now, Ordering::Relaxed);
+        }
     }
 }
 
@@ -902,13 +986,13 @@ trait TransportKeyExt {
         Self: Sized,
     {
         let key = self.proxy_key()?;
-        Ok((key.0, key.3, key.4, key.1, key.2))
+        Ok(TransportKey(key.0, key.3, key.4, key.1, key.2))
     }
 }
 
 impl<'a> TransportKeyExt for &'a ConnectionMeta {
     fn proxy_key(self) -> Result<TransportKey> {
-        Ok((
+        Ok(TransportKey(
             Some(self.protocol),
             self.local.addr.as_bytes().into(),
             Some(self.local.port),
@@ -923,13 +1007,39 @@ impl<'a> TransportKeyExt for &'a SocketDesc {
         let local = self.local.ip_endpoint()?;
         let remote = self.remote.ip_endpoint()?;
 
-        Ok((
+        Ok(TransportKey(
             Some(self.protocol),
             local.addr.as_bytes().into(),
             Some(local.port),
             remote.addr.as_bytes().into(),
             Some(remote.port),
         ))
+    }
+}
+
+impl TransportKey {
+    pub fn as_socket_desc(&self) -> SocketDesc {
+        let local = SocketEndpoint::Ip(IpEndpoint::new(
+            match self.1.as_ref().len() {
+                4 => IpAddress::Ipv4(Ipv4Address::from_bytes(self.1.as_ref())),
+                _ => IpAddress::Ipv6(Ipv6Address::from_bytes(self.1.as_ref())),
+            },
+            self.2.unwrap_or(0),
+        ));
+
+        let remote = SocketEndpoint::Ip(IpEndpoint::new(
+            match self.3.as_ref().len() {
+                4 => IpAddress::Ipv4(Ipv4Address::from_bytes(self.3.as_ref())),
+                _ => IpAddress::Ipv6(Ipv6Address::from_bytes(self.3.as_ref())),
+            },
+            self.4.unwrap_or(0),
+        ));
+
+        SocketDesc {
+            protocol: self.0.unwrap_or(Protocol::None),
+            local,
+            remote,
+        }
     }
 }
 
