@@ -1,10 +1,9 @@
 use crate::{
     golem_certificate::{verify_golem_certificate, GolemCertificate},
     policy::CertPermissions,
-    util::{format_permissions, str_to_short_hash, CertDataVisitor},
+    util::{format_permissions, str_to_short_hash, CertDataVisitor}, CompositeKeystore,
 };
 use anyhow::{anyhow, bail};
-use itertools::Itertools;
 use openssl::{
     hash::MessageDigest,
     nid::Nid,
@@ -232,7 +231,11 @@ impl Keystore for X509KeystoreManager {
     }
 
     fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
-        todo!()
+        Ok(Default::default())
+    }
+    
+    fn list(&self) -> Vec<CertData> {
+        Default::default()
     }
 }
 
@@ -524,8 +527,9 @@ pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
 }
 
 pub fn visit_certificates<T: CertDataVisitor>(cert_dir: &PathBuf, visitor: T) -> anyhow::Result<T> {
-    let keystore = X509Keystore::load(cert_dir)?;
-    let mut visitor = X509Visitor { visitor };
+    let keystore = CompositeKeystore::try_new(cert_dir)?;
+    // keystore.list()
+    // let mut visitor = X509Visitor { visitor };
     keystore.visit_certs(&mut visitor)?;
     Ok(visitor.visitor)
 }

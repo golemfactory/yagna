@@ -86,7 +86,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                let keystore = CompositeKeystore::try_new(&rules.cert_dir)?;
+                let mut keystore = CompositeKeystore::try_new(&rules.cert_dir)?;
 
                 let AddResponse { added, skipped } = keystore.add(AddParams {
                     certs: vec![import_cert],

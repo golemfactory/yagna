@@ -80,14 +80,15 @@ impl CommonRemoveParams for RemoveParams {
 }
 
 #[derive(Default)]
-struct RemoveResponse {
-    removed: Vec<CertData>,
-    skipped: Vec<CertData>,
+pub struct RemoveResponse {
+    pub removed: Vec<CertData>,
+    pub skipped: Vec<CertData>,
 }
 
 trait Keystore {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
+    fn list(&self) -> Vec<CertData>;
 }
 
 pub struct CompositeKeystore {
@@ -114,11 +115,25 @@ impl CompositeKeystore {
         Ok(response)
     }
 
-    pub fn remove(&mut self) {
-        todo!()
+    pub fn remove(&mut self, remove: RemoveParams) -> anyhow::Result<RemoveResponse> {
+        let response = self
+            .keystores
+            .iter_mut()
+            .map(|keystore| keystore.remove(&remove))
+            .fold_ok(RemoveResponse::default(), |mut acc, mut res| {
+                acc.removed.append(&mut res.removed);
+                acc.skipped.append(&mut res.skipped);
+                acc
+            })?;
+        Ok(response)
     }
 
-    fn list(&self) {
-        todo!()
+    fn list(&self) -> Vec<CertData> {
+        self
+            .keystores
+            .iter()
+            .map(|keystore| keystore.list())
+            .flatten()
+            .collect()
     }
 }

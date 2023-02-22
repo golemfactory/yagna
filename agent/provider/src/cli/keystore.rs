@@ -2,11 +2,12 @@ use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 use anyhow::anyhow;
 use std::collections::HashSet;
+use std::ops::Rem;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::x509_keystore::{visit_certificates, KeystoreRemoveResult};
-use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::{self, CertDataVisitor};
 use ya_manifest_utils::CompositeKeystore;
@@ -72,6 +73,12 @@ To find certificate id use `keystore list` command.")]
     ids: Vec<String>,
 }
 
+impl Into<RemoveParams> for Remove {
+    fn into(self) -> RemoveParams {
+        RemoveParams { ids: self.ids.into_iter().collect() }
+    }
+}
+
 impl KeystoreConfig {
     pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
         match self {
@@ -109,28 +116,23 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = CompositeKeystore::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
-    let ids: HashSet<String> = remove.ids.into_iter().collect();
-    match keystore_manager.remove(&ids)? {
-        KeystoreRemoveResult::NothingToRemove => {
-            println_conditional(&config, "No matching certificates to remove.");
-            if config.json {
-                print_cert_list(&config, Vec::new())?;
-            }
+    let mut keystore_manager = CompositeKeystore::try_new(&cert_dir)?;
+    // let mut permissions_manager = keystore_manager.permissions_manager();
+    let RemoveResponse { removed, skipped } = keystore_manager.remove(remove.into())?;
+    if removed.is_empty() {
+        println_conditional(&config, "No matching certificates to remove.");
+        if config.json {
+            print_cert_list(&config, Vec::new())?;
         }
-        KeystoreRemoveResult::Removed { removed } => {
-            permissions_manager.set_many(&removed, vec![], true);
+    } else {
+        // permissions_manager.set_many(&removed, vec![], true);
+        println!("Removed certificates:");
+        print_cert_list(&config, removed)?;
+    }
 
-            println!("Removed certificates:");
-            let certs_data = util::to_cert_data(&removed, &permissions_manager)?;
-            print_cert_list(&config, certs_data)?;
-        }
-    };
-
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+    // permissions_manager
+    //     .save(&cert_dir)
+    //     .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 

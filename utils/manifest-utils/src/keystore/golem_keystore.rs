@@ -12,4 +12,8 @@ impl Keystore for GolemKeystore {
     fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
         Ok(Default::default())
     }
+
+    fn list(&self) -> Vec<super::CertData> {
+        Default::default()
+    }
 }
