@@ -598,7 +598,7 @@ impl Proxy {
             .left_future());
         }
 
-        self.drop_unused_connections(10).await;
+        self.drop_unused_connections(200).await;
 
         print_sockets(&network);
 
