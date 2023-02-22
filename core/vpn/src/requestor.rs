@@ -51,6 +51,7 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
         .service(add_node)
         .service(remove_node)
         .service(connect_tcp)
+        .service(connect_udp)
 }
 
 /// Retrieves existing virtual private networks.
