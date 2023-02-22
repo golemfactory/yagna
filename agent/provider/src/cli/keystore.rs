@@ -5,7 +5,6 @@ use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::{self, CertDataVisitor};
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
@@ -89,7 +88,6 @@ impl KeystoreConfig {
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let table = CertTable::new();
     let keystore = CompositeKeystore::try_new(&cert_dir)?;
     let certs_data = keystore.list();
     print_cert_list(&config, certs_data)?;
@@ -170,11 +168,5 @@ impl CertTable {
     pub fn add(&mut self, data: CertData) {
         let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
         self.table.values.push(row)
-    }
-}
-
-impl CertDataVisitor for CertTable {
-    fn accept(&mut self, data: CertData) {
-        self.add(data)
     }
 }

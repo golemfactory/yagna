@@ -1,13 +1,5 @@
 use itertools::Itertools;
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
-
 use md5::{Digest, Md5};
-
-use openssl::x509::{X509Ref, X509};
-
-use crate::keystore::x509_keystore::PermissionsManager;
-use crate::keystore::CertData;
 use crate::policy::CertPermissions;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -33,10 +25,6 @@ pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
     } else {
         format!("{}", permissions.iter().format("|"))
     }
-}
-
-pub trait CertDataVisitor {
-    fn accept(&mut self, cert_data: CertData);
 }
 
 /// Calculates Md5 of `txt` and returns first 8 characters.

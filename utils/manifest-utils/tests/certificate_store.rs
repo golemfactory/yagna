@@ -1,10 +1,8 @@
 #[macro_use]
 extern crate serial_test;
 
-use std::{collections::HashSet, fs, iter::FromIterator};
-
+use std::{collections::HashSet, fs};
 use test_case::test_case;
-
 use ya_manifest_test_utils::*;
 use ya_manifest_utils::{policy::CertPermissions, CompositeKeystore};
 
@@ -78,7 +76,6 @@ fn certificate_store_test(
         &vec![CertPermissions::All],
     );
     remove_certificates(&test_cert_dir, ids_to_remove);
-    let mut visitor = TestCertDataVisitor::new(expected_ids);
     // When
     let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
     let loaded_ids = keystore
@@ -122,7 +119,7 @@ fn certificate_name_collision_test() {
         &vec![CertPermissions::All],
     );
 
-    let mut expected_ids: HashSet<String> = HashSet::from(["4e0df976".into(), "0e136cb3".into()]);
+    let expected_ids: HashSet<String> = HashSet::from(["4e0df976".into(), "0e136cb3".into()]);
     // When
     let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
     let loaded_ids = keystore

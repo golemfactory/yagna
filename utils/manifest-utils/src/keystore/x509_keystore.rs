@@ -1,8 +1,7 @@
 use crate::{
     golem_certificate::{verify_golem_certificate, GolemCertificate},
     policy::CertPermissions,
-    util::{format_permissions, str_to_short_hash, CertDataVisitor},
-    CompositeKeystore,
+    util::{format_permissions, str_to_short_hash},
 };
 use anyhow::{anyhow, bail};
 use itertools::Itertools;
@@ -13,7 +12,7 @@ use openssl::{
     sign::Verifier,
     x509::{
         store::{X509Store, X509StoreBuilder},
-        X509ObjectRef, X509Ref, X509StoreContext, X509VerifyResult, X509,
+        X509Ref, X509StoreContext, X509VerifyResult, X509,
     },
 };
 use std::{
@@ -368,17 +367,6 @@ impl X509Keystore {
         Ok(ids)
     }
 
-    // pub(crate) fn visit_certs<T: CertDataVisitor>(
-    //     &self,
-    //     visitor: &mut X509Visitor<T>,
-    // ) -> anyhow::Result<()> {
-    //     let inner = self.inner.read().unwrap();
-    //     for cert in inner.store.objects().iter().flat_map(X509ObjectRef::x509) {
-    //         visitor.accept(cert, &inner.permissions)?;
-    //     }
-    //     Ok(())
-    // }
-
     fn load_file(store: &mut X509StoreBuilder, cert: &PathBuf) -> anyhow::Result<()> {
         for cert in parse_cert_file(cert)? {
             store.add_cert(cert)?
@@ -534,30 +522,6 @@ pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
     Ok(str_to_short_hash(&txt))
 }
-
-// pub fn visit_certificates<T: CertDataVisitor>(cert_dir: &PathBuf, visitor: T) -> anyhow::Result<T> {
-//     let keystore = CompositeKeystore::try_new(cert_dir)?;
-//     // keystore.list()
-//     // let mut visitor = X509Visitor { visitor };
-//     keystore.visit_certs(&mut visitor)?;
-//     Ok(visitor.visitor)
-// }
-
-// pub(crate) struct X509Visitor<T: CertDataVisitor> {
-//     visitor: T,
-// }
-
-// impl<T: CertDataVisitor> X509Visitor<T> {
-//     pub(crate) fn accept(
-//         &mut self,
-//         cert: &X509Ref,
-//         permissions: &PermissionsManager,
-//     ) -> anyhow::Result<()> {
-//         let cert_data = CertData::create(cert, permissions)?;
-//         self.visitor.accept(cert_data);
-//         Ok(())
-//     }
-// }
 
 impl TryFrom<&X509Ref> for CertData {
     type Error = anyhow::Error;

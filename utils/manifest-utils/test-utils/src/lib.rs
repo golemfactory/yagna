@@ -1,17 +1,14 @@
-use std::fs::{self, File};
-use std::str;
-use std::sync::Once;
-use std::{collections::HashSet, path::PathBuf};
-
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
+use std::fs::{self, File};
+use std::str;
+use std::sync::Once;
+use std::{collections::HashSet, path::PathBuf};
 use tar::Archive;
-
-use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::CertDataVisitor;
 use ya_manifest_utils::CompositeKeystore;
 
 static INIT: Once = Once::new();
@@ -51,33 +48,6 @@ pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> Remove
             ids: slice_to_set(cert_ids),
         })
         .expect("Can load certificates")
-}
-
-#[derive(Default)]
-pub struct TestCertDataVisitor {
-    expected: HashSet<String>,
-    actual: HashSet<String>,
-}
-
-impl TestCertDataVisitor {
-    #[allow(dead_code)]
-    pub fn new(expected: &[&str]) -> Self {
-        Self {
-            expected: expected.iter().map(|s| s.to_string()).collect(),
-            ..Default::default()
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn test(&self) {
-        assert_eq!(self.expected, self.actual)
-    }
-}
-
-impl CertDataVisitor for TestCertDataVisitor {
-    fn accept(&mut self, cert_data: CertData) {
-        self.actual.insert(cert_data.id);
-    }
 }
 
 pub struct TestResources {

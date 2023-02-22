@@ -1,14 +1,9 @@
 pub mod golem_keystore;
 pub mod x509_keystore;
 
-use itertools::Itertools;
-
+use self::x509_keystore::{X509AddParams, X509KeystoreManager};
 use crate::policy::CertPermissions;
-
-use self::{
-    golem_keystore::GolemCertAddParams,
-    x509_keystore::{X509AddParams, X509KeystoreManager},
-};
+use itertools::Itertools;
 use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,

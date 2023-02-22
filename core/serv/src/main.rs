@@ -625,7 +625,7 @@ impl ServiceCommand {
                         graceful: opts.gracefully,
                     })
                     .await?;
-                CommandOutput::object(&result)
+                CommandOutput::object(result)
             }
         }
     }
