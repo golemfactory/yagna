@@ -356,7 +356,7 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     println!("Src: {:?}, Dst: {:?}", src, dst);
 
     let udp_data = ip_packet.payload();
-    let udp_data_len = udp_data.len();
+    let _udp_data_len = udp_data.len();
 
     let udp_packet = match UdpPacket::peek(udp_data) {
         Ok(_) => UdpPacket::packet(udp_data),
@@ -371,15 +371,14 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
 
     match std::str::from_utf8(content) {
         Ok(content_str) => println!("Content (string): {content_str:?}"),
-        Err(e) => println!("Content (binary): {:?}", content),
+        Err(_e) => println!("Content (binary): {:?}", content),
     };
 
     let mut reversed = frame.clone();
     reversed[IpV4Field::SRC_ADDR].copy_from_slice(&dst);
     reversed[IpV4Field::DST_ADDR].copy_from_slice(&src);
 
-    let payload_offset = ip_packet.payload_off();
-    let mut reversed_udp_data = &mut reversed[ip_packet.payload_off()..];
+    let reversed_udp_data = &mut reversed[ip_packet.payload_off()..];
 
     reversed_udp_data[UdpField::SRC_PORT].copy_from_slice(&udp_data[UdpField::DST_PORT]);
     reversed_udp_data[UdpField::DST_PORT].copy_from_slice(&udp_data[UdpField::SRC_PORT]);
@@ -390,18 +389,14 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
 async fn connect_raw(
-    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    _vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathConnect>,
     req: HttpRequest,
     stream: web::Payload,
-    identity: Identity,
+    _identity: Identity,
 ) -> Result<HttpResponse> {
     log::warn!("Connect raw called {:?}", path);
     let path = path.into_inner();
-    let vpn = {
-        let supervisor = vpn_sup.lock().await;
-        supervisor.get_network(&identity.identity, &path.net_id)?
-    };
 
     Ok(ws::start(VpnRawSocket::new(path.net_id), &req, stream)?)
 }
