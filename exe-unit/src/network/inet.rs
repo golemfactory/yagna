@@ -245,10 +245,6 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             Err(err) => return log::debug!("[inet] runtime -> inet error: {err}"),
         };
 
-        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
-            &ya_packet_trace::try_extract_from_ip_frame(&packet)
-        });
-
         // If we failed during handling packet, we should save the error for later.
         // First connection must be established in network stack, so we can close it.
         let result = router.handle(&packet).await;
@@ -257,6 +253,10 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             .map(|desc| format!("{desc:?}"))
             .unwrap_or("error".to_string());
         log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
+
+        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
 
         router.network.receive(packet);
         router.network.poll();
@@ -739,12 +739,17 @@ impl From<ya_utils_networking::vpn::Error> for ProxyingError {
 
 fn print_sockets(network: &net::Network) {
     log::trace!("[inet] existing sockets:");
-    for (socket, _) in network.sockets() {
-        log::trace!("[inet] socket: {socket:?}");
+    for (handle, meta) in network.sockets_meta() {
+        log::trace!("[inet] socket: {handle} {meta:?}");
     }
-    log::trace!("[inet] existing bindings:");
+    log::trace!("[inet] existing connections:");
     for (handle, meta) in network.handles().iter() {
-        log::trace!("[inet] bound socket: {handle:?} {meta:?}");
+        log::trace!("[inet] connection: {handle} {meta:?}");
+    }
+
+    log::trace!("[inet] listening sockets:");
+    for handle in network.bindings().iter() {
+        log::trace!("[inet] listening socket: {handle}");
     }
 }
 
