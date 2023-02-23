@@ -5,18 +5,20 @@ use crate::network::VpnSupervisor;
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
+use anyhow::bail;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::bail;
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
-use ya_utils_networking::vpn::{Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket};
+use ya_utils_networking::vpn::{
+    Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket,
+};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -230,8 +232,6 @@ async fn connect_tcp(
     )?)
 }
 
-
-
 pub struct VpnWebSocket {
     network_id: String,
     heartbeat: Instant,
@@ -369,12 +369,10 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
 
     let content = &udp_data[UdpField::PAYLOAD];
 
-    match std::str::from_utf8(content)
-    {
+    match std::str::from_utf8(content) {
         Ok(content_str) => println!("Content (string): {content_str:?}"),
         Err(e) => println!("Content (binary): {:?}", content),
     };
-
 
     let mut reversed = frame.clone();
     reversed[IpV4Field::SRC_ADDR].copy_from_slice(&dst);
@@ -386,10 +384,8 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     reversed_udp_data[UdpField::SRC_PORT].copy_from_slice(&udp_data[UdpField::DST_PORT]);
     reversed_udp_data[UdpField::DST_PORT].copy_from_slice(&udp_data[UdpField::SRC_PORT]);
 
-
     Ok(reversed)
 }
-
 
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
@@ -407,11 +403,7 @@ async fn connect_raw(
         supervisor.get_network(&identity.identity, &path.net_id)?
     };
 
-    Ok(ws::start(
-        VpnRawSocket::new(path.net_id),
-        &req,
-        stream,
-    )?)
+    Ok(ws::start(VpnRawSocket::new(path.net_id), &req, stream)?)
 }
 
 pub struct VpnRawSocket {
@@ -433,7 +425,6 @@ impl VpnRawSocket {
         // without the feature packet-trace-enable.
 
         let data_reversed = reverse_udp(&data).unwrap_or(Vec::new());
-
 
         ctx.binary(data_reversed);
 
