@@ -12,7 +12,7 @@ use openssl::{
     sign::Verifier,
     x509::{
         store::{X509Store, X509StoreBuilder},
-        X509Ref, X509StoreContext, X509VerifyResult, X509,
+        X509ObjectRef, X509Ref, X509StoreContext, X509VerifyResult, X509,
     },
 };
 use std::{
@@ -73,6 +73,7 @@ impl X509KeystoreManager {
     fn add_certs<ADD: X509AddParams + CommonAddParams>(
         &self,
         add: &ADD,
+        permissions_manager: &mut PermissionsManager,
     ) -> anyhow::Result<KeystoreLoadResult> {
         let mut added = HashMap::new();
         let mut skipped = HashMap::new();
@@ -100,7 +101,7 @@ impl X509KeystoreManager {
             }
         }
 
-        self.permissions_manager().set_many(
+        permissions_manager.set_many(
             &added.values().chain(skipped.values()).cloned().collect(),
             add.permissions(),
             add.whole_chain(),
@@ -163,8 +164,8 @@ impl X509KeystoreManager {
 
 impl Keystore for X509KeystoreManager {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
-        let res = self.add_certs(add)?;
-        let permissions_manager = self.keystore.permissions_manager();
+        let mut permissions_manager = self.keystore.permissions_manager();
+        let res = self.add_certs(add, &mut permissions_manager)?;
 
         permissions_manager
             .save(&self.cert_dir)
@@ -243,7 +244,7 @@ impl Keystore for X509KeystoreManager {
     }
 
     fn list(&self) -> Vec<CertData> {
-        Default::default()
+        self.keystore.list()
     }
 }
 
@@ -319,6 +320,24 @@ impl X509Keystore {
         *inner = store;
     }
 
+    fn list(&self) -> Vec<CertData> {
+        let inner = self.inner.read().unwrap();
+        inner
+            .store
+            .objects()
+            .iter()
+            .flat_map(X509ObjectRef::x509)
+            .map(CertData::try_from)
+            .flat_map(|cert| match cert {
+                Ok(cert) => Some(cert),
+                Err(err) => {
+                    log::debug!("Failed to read X509 cert. Err: {}", err);
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Decodes byte64 `sig`, verifies `cert`and reads its pub key,
     /// prepares digest using `sig_alg`, verifies `data` using `sig` and pub key.
     pub fn verify_signature(
@@ -355,14 +374,6 @@ impl X509Keystore {
                 ids.insert(id);
             }
         }
-
-        //TODO it will be deleted when X509Keystore will handle golem certs properly
-        ids.insert("all".into());
-        ids.insert("outbound".into());
-        ids.insert("expired".into());
-        ids.insert("invalid-signature".into());
-        ids.insert("outbound-urls".into());
-        ids.insert("no-permissions".into());
 
         Ok(ids)
     }

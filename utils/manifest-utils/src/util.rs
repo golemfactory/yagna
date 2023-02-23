@@ -1,6 +1,6 @@
+use crate::policy::CertPermissions;
 use itertools::Itertools;
 use md5::{Digest, Md5};
-use crate::policy::CertPermissions;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
 pub fn decode_data<S: AsRef<str>>(input: S) -> Result<Vec<u8>, DecodingError> {
