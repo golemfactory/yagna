@@ -11,11 +11,12 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use anyhow::bail;
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
-use ya_utils_networking::vpn::{Error as VpnError, Protocol};
+use ya_utils_networking::vpn::{Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -338,6 +339,58 @@ impl Handler<Shutdown> for VpnWebSocket {
     }
 }
 
+// only for echo server
+fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    let ip_packet = match IpPacket::peek(frame) {
+        Ok(_) => IpPacket::packet(frame),
+        _ => bail!("Error peeking IP packet"),
+    };
+
+    if ip_packet.protocol() != Protocol::Udp as u8 {
+        bail!("Expected UDP protocol")
+    }
+
+    let src = ip_packet.src_address();
+    let dst = ip_packet.dst_address();
+
+    println!("Src: {:?}, Dst: {:?}", src, dst);
+
+    let udp_data = ip_packet.payload();
+    let udp_data_len = udp_data.len();
+
+    let udp_packet = match UdpPacket::peek(udp_data) {
+        Ok(_) => UdpPacket::packet(udp_data),
+        _ => bail!("Error peeking UDP packet"),
+    };
+
+    let src_port = udp_packet.src_port();
+    let dst_port = udp_packet.dst_port();
+    println!("Src port: {:?}, Dst port: {:?}", src_port, dst_port);
+
+    let content = &udp_data[UdpField::PAYLOAD];
+
+    match std::str::from_utf8(content)
+    {
+        Ok(content_str) => println!("Content (string): {content_str:?}"),
+        Err(e) => println!("Content (binary): {:?}", content),
+    };
+
+
+    let mut reversed = frame.clone();
+    reversed[IpV4Field::SRC_ADDR].copy_from_slice(&dst);
+    reversed[IpV4Field::DST_ADDR].copy_from_slice(&src);
+
+    let payload_offset = ip_packet.payload_off();
+    let mut reversed_udp_data = &mut reversed[ip_packet.payload_off()..];
+
+    reversed_udp_data[UdpField::SRC_PORT].copy_from_slice(&udp_data[UdpField::DST_PORT]);
+    reversed_udp_data[UdpField::DST_PORT].copy_from_slice(&udp_data[UdpField::SRC_PORT]);
+
+
+    Ok(reversed)
+}
+
+
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
 async fn connect_raw(
@@ -353,15 +406,9 @@ async fn connect_raw(
         let supervisor = vpn_sup.lock().await;
         supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    let conn = vpn
-        .send(Connect {
-            protocol: Protocol::None,
-            address: path.ip.to_string(),
-            port: path.port,
-        })
-        .await??;
+
     Ok(ws::start(
-        VpnRawSocket::new(path.net_id, conn),
+        VpnRawSocket::new(path.net_id),
         &req,
         stream,
     )?)
@@ -370,19 +417,13 @@ async fn connect_raw(
 pub struct VpnRawSocket {
     network_id: String,
     heartbeat: Instant,
-    vpn: Recipient<Packet>,
-    vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
-    meta: ConnectionMeta,
 }
 
 impl VpnRawSocket {
-    pub fn new(network_id: String, conn: UserConnection) -> Self {
+    pub fn new(network_id: String) -> Self {
         VpnRawSocket {
             network_id,
             heartbeat: Instant::now(),
-            vpn: conn.vpn,
-            vpn_rx: Some(conn.rx),
-            meta: conn.stack_connection.meta,
         }
     }
 
@@ -390,23 +431,11 @@ impl VpnRawSocket {
         // packet tracing is also done when the packet data is no longer available,
         // so we have to make a temporary copy. This incurs no runtime overhead on builds
         // without the feature packet-trace-enable.
-        let data_trace = data.clone();
 
-        log::warn!("VpnRawSocket {data_trace:?}");
+        let data_reversed = reverse_udp(&data).unwrap_or(Vec::new());
 
-        let vpn = self.vpn.clone();
-        vpn.send(Packet {
-            data,
-            meta: self.meta,
-        })
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                if result.is_err() {
-                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
-                }
-            })
-            .wait(ctx);
+
+        ctx.binary(data_reversed);
 
         //log::warn!("VpnRawSocket::Tx::2", { &data_trace });
     }
@@ -424,11 +453,6 @@ impl Actor for VpnRawSocket {
                 ctx.ping(b"");
             }
         });
-
-        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
-            ya_packet_trace::packet_trace!("VpnRawSocket::Rx", { &packet });
-            packet
-        }));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -436,11 +460,11 @@ impl Actor for VpnRawSocket {
     }
 }
 
-impl StreamHandler<Vec<u8>> for VpnRawSocket {
+/*impl StreamHandler<Vec<u8>> for VpnRawSocket {
     fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
         ctx.binary(data)
     }
-}
+}*/
 
 impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
