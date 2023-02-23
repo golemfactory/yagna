@@ -5,6 +5,7 @@ use crate::network::VpnSupervisor;
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
+use anyhow::bail;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::StreamExt;
@@ -15,7 +16,9 @@ use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
-use ya_utils_networking::vpn::{Error as VpnError, Protocol};
+use ya_utils_networking::vpn::{
+    Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket,
+};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -51,6 +54,7 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
         .service(add_node)
         .service(remove_node)
         .service(connect_tcp)
+        .service(connect_raw)
 }
 
 /// Retrieves existing virtual private networks.
@@ -208,6 +212,7 @@ async fn connect_tcp(
     stream: web::Payload,
     identity: Identity,
 ) -> Result<HttpResponse> {
+    log::warn!("connect_tcp called {:?}", path);
     let path = path.into_inner();
     let vpn = {
         let supervisor = vpn_sup.lock().await;
@@ -325,6 +330,150 @@ impl StreamHandler<WsResult<ws::Message>> for VpnWebSocket {
 }
 
 impl Handler<Shutdown> for VpnWebSocket {
+    type Result = <Shutdown as Message>::Result;
+
+    fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
+        ctx.stop();
+        Ok(())
+    }
+}
+
+// only for echo server
+fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    let ip_packet = match IpPacket::peek(frame) {
+        Ok(_) => IpPacket::packet(frame),
+        _ => bail!("Error peeking IP packet"),
+    };
+
+    if ip_packet.protocol() != Protocol::Udp as u8 {
+        bail!("Expected UDP protocol")
+    }
+
+    let src = ip_packet.src_address();
+    let dst = ip_packet.dst_address();
+
+    println!("Src: {:?}, Dst: {:?}", src, dst);
+
+    let udp_data = ip_packet.payload();
+    let _udp_data_len = udp_data.len();
+
+    let udp_packet = match UdpPacket::peek(udp_data) {
+        Ok(_) => UdpPacket::packet(udp_data),
+        _ => bail!("Error peeking UDP packet"),
+    };
+
+    let src_port = udp_packet.src_port();
+    let dst_port = udp_packet.dst_port();
+    println!("Src port: {:?}, Dst port: {:?}", src_port, dst_port);
+
+    let content = &udp_data[UdpField::PAYLOAD];
+
+    match std::str::from_utf8(content) {
+        Ok(content_str) => println!("Content (string): {content_str:?}"),
+        Err(_e) => println!("Content (binary): {:?}", content),
+    };
+
+    let mut reversed = frame.clone();
+    reversed[IpV4Field::SRC_ADDR].copy_from_slice(&dst);
+    reversed[IpV4Field::DST_ADDR].copy_from_slice(&src);
+
+    let reversed_udp_data = &mut reversed[ip_packet.payload_off()..];
+
+    reversed_udp_data[UdpField::SRC_PORT].copy_from_slice(&udp_data[UdpField::DST_PORT]);
+    reversed_udp_data[UdpField::DST_PORT].copy_from_slice(&udp_data[UdpField::SRC_PORT]);
+
+    Ok(reversed)
+}
+
+/// Initiates a new RAW connection via WebSockets to the destination address.
+#[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
+async fn connect_raw(
+    _vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathConnect>,
+    req: HttpRequest,
+    stream: web::Payload,
+    _identity: Identity,
+) -> Result<HttpResponse> {
+    log::warn!("Connect raw called {:?}", path);
+    let path = path.into_inner();
+
+    Ok(ws::start(VpnRawSocket::new(path.net_id), &req, stream)?)
+}
+
+pub struct VpnRawSocket {
+    network_id: String,
+    heartbeat: Instant,
+}
+
+impl VpnRawSocket {
+    pub fn new(network_id: String) -> Self {
+        VpnRawSocket {
+            network_id,
+            heartbeat: Instant::now(),
+        }
+    }
+
+    fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        // packet tracing is also done when the packet data is no longer available,
+        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+        // without the feature packet-trace-enable.
+
+        let data_reversed = reverse_udp(&data).unwrap_or(Vec::new());
+
+        ctx.binary(data_reversed);
+
+        //log::warn!("VpnRawSocket::Tx::2", { &data_trace });
+    }
+}
+
+impl Actor for VpnRawSocket {
+    type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
+                log::warn!("VPN WebSocket: VPN {} connection timed out", act.network_id);
+                ctx.stop();
+            } else {
+                ctx.ping(b"");
+            }
+        });
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        log::warn!("VPN WebSocket: VPN {} connection stopped", self.network_id);
+    }
+}
+
+/*impl StreamHandler<Vec<u8>> for VpnRawSocket {
+    fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
+        ctx.binary(data)
+    }
+}*/
+
+impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
+    fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
+        self.heartbeat = Instant::now();
+        match msg {
+            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes().to_vec(), ctx),
+            Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
+            Ok(ws::Message::Ping(msg)) => {
+                ctx.pong(&msg);
+            }
+            Ok(ws::Message::Pong(_)) => {}
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            _ => {
+                ctx.stop();
+            }
+        }
+    }
+}
+
+impl Handler<Shutdown> for VpnRawSocket {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {

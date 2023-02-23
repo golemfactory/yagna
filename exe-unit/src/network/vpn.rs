@@ -118,7 +118,7 @@ impl Vpn {
         let network_id = packet.network_id;
         let node_id = packet.caller;
         let data = packet.data;
-
+        log::warn!("[vpn] packet from: {} {} {:?}", node_id, network_id, data);
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
         if let Ok(ether_type) = EtherFrame::peek_type(&data) {
@@ -158,7 +158,7 @@ impl Vpn {
         default_id: &str,
     ) {
         let ip_pkt = IpPacket::packet(frame.payload());
-        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
+        log::warn!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
 
         if ip_pkt.is_broadcast() {
             let futs = networks
@@ -198,7 +198,7 @@ impl Vpn {
 
     fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
         let data: Vec<_> = frame.into();
-        log::trace!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
+        log::warn!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
 
         let fut = endpoint
             .udp
