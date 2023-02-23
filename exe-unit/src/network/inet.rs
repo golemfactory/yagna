@@ -235,6 +235,7 @@ impl Handler<Shutdown> for Inet {
     }
 }
 
+/// Receives packets from ExeUnit Runtime and forwards them to proxy network stack for dispatching.
 async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>>, router: Router) {
     while let Some(result) = rx.next().await {
         let packet = match result {
@@ -242,15 +243,37 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             Err(err) => return log::debug!("[inet] runtime -> inet error: {err}"),
         };
 
-        router.handle(&packet).await;
+        // If we failed during handling packet, we should save the error for later.
+        // First connection must be established in network stack, so we can close it.
+        let result = router.handle(&packet).await;
 
-        log::trace!("[inet] runtime -> inet packet {:?}", packet);
+        let desc = dispatch_desc(&packet)
+            .map(|desc| format!("{desc:?}"))
+            .unwrap_or("error".to_string());
+        log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
+
+        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
 
         router.network.receive(packet);
         router.network.poll();
+
+        // We want to fail fast instead of forcing runtime to wait until timeout.
+        // That's why we close the connection here, after it was established.
+        // Otherwise runtime would be unaware, that proxy was unable to connect.
+        //
+        // Note that we can't recover from all errors. We can do this only if we have
+        // connection info.
+        if let Err(ProxyingError::Routeable { meta, error }) = result {
+            log::debug!("[inet] Unable to proxy traffic for connection: {meta:?} due to proxy error: {error}. Forcing disconnect..");
+            tokio::task::spawn_local(router.network.stack.disconnect(meta.handle));
+        }
     }
 }
 
+/// Receives packets from proxy network stack and forwards them to external location.
+/// This function sends packets directly to public internet.
 async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
@@ -271,12 +294,21 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
+                ya_packet_trace::packet_trace_maybe!("exe-unit::inet_ingress_handler", {
+                    &ya_packet_trace::try_extract_from_ip_frame(&payload)
+                });
+
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
                     proxy.update_seen(&key).await;
 
-                    log::trace!("[inet] ingress proxy: send to {:?}", desc.local);
+                    log::trace!(
+                        "[inet] ingress proxy: send to {:?} ({} B), from: {:?}",
+                        desc.local,
+                        payload.len(),
+                        desc.remote
+                    );
 
                     if let Err(e) = sender.send(Bytes::from(payload)).await {
                         log::debug!("[inet] ingress proxy: send error: {}", e);
@@ -291,6 +323,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
     log::debug!("[inet] ingress handler stopped");
 }
 
+/// Receives packets from proxy network stack and sends them to ExeUnit Runtime.
 async fn inet_egress_handler<E: std::fmt::Display>(
     rx: EgressReceiver,
     fwd: tokio::sync::mpsc::UnboundedSender<std::result::Result<Vec<u8>, E>>,
@@ -298,7 +331,11 @@ async fn inet_egress_handler<E: std::fmt::Display>(
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         let frame = event.payload.into_vec();
-        log::trace!("[inet] egress -> runtime packet {} B", frame.len());
+
+        let desc = dispatch_desc(&frame)
+            .map(|desc| format!("{desc:?}"))
+            .unwrap_or("error".to_string());
+        log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {e}");
@@ -306,6 +343,23 @@ async fn inet_egress_handler<E: std::fmt::Display>(
     }
 
     log::debug!("[inet] egress -> runtime handler stopped");
+}
+
+fn dispatch_desc(frame: &Vec<u8>) -> anyhow::Result<SocketDesc> {
+    match EtherFrame::peek_type(frame.as_slice()) {
+        Err(_) | Ok(EtherType::Arp) => bail!("Wrong frame type"),
+        _ => {}
+    }
+    let eth_payload = match EtherFrame::peek_payload(frame.as_slice()) {
+        Ok(payload) => payload,
+        _ => bail!("Error peeking Ethernet frame "),
+    };
+    let ip_packet = match IpPacket::peek(eth_payload) {
+        Ok(_) => IpPacket::packet(eth_payload),
+        _ => bail!("Error peeking Ip packet"),
+    };
+
+    Ok(ip_packet_to_socket_desc(&ip_packet)?)
 }
 
 struct Router {
@@ -318,18 +372,18 @@ impl Router {
         Self { network, proxy }
     }
 
-    async fn handle(&self, frame: &Vec<u8>) {
+    async fn handle(&self, frame: &Vec<u8>) -> std::result::Result<(), ProxyingError> {
         match EtherFrame::peek_type(frame.as_slice()) {
-            Err(_) | Ok(EtherType::Arp) => return,
+            Err(_) | Ok(EtherType::Arp) => return Ok(()),
             _ => {}
         }
         let eth_payload = match EtherFrame::peek_payload(frame.as_slice()) {
             Ok(payload) => payload,
-            _ => return,
+            _ => return Ok(()),
         };
         let ip_packet = match IpPacket::peek(eth_payload) {
             Ok(_) => IpPacket::packet(eth_payload),
-            _ => return,
+            _ => return Ok(()),
         };
 
         match ip_packet_to_socket_desc(&ip_packet) {
@@ -347,9 +401,10 @@ impl Router {
             }
             Err(error) => match error {
                 Error::Net(NetError::ProtocolNotSupported(_)) => {}
-                error => log::debug!("[inet] router: {}", error),
+                error => log::debug!("[inet] router: {error}"),
             },
         }
+        Ok(())
     }
 }
 
@@ -679,12 +734,17 @@ impl From<ya_utils_networking::vpn::Error> for ProxyingError {
 
 fn print_sockets(network: &net::Network) {
     log::trace!("[inet] existing sockets:");
-    for (socket, _) in network.sockets() {
-        log::trace!("[inet] socket: {socket:?}");
+    for (handle, meta) in network.sockets_meta() {
+        log::trace!("[inet] socket: {handle} {meta:?}");
     }
-    log::trace!("[inet] existing bindings:");
+    log::trace!("[inet] existing connections:");
     for (handle, meta) in network.handles().iter() {
-        log::trace!("[inet] bound socket: {handle:?} {meta:?}");
+        log::trace!("[inet] connection: {handle} {meta:?}");
+    }
+
+    log::trace!("[inet] listening sockets:");
+    for handle in network.bindings().iter() {
+        log::trace!("[inet] listening socket: {handle}");
     }
 }
 
