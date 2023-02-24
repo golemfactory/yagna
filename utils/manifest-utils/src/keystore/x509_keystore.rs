@@ -26,26 +26,33 @@ use std::{
 };
 
 use super::{
-    AddParams, AddResponse, CertData, CommonAddParams, Keystore, RemoveParams, RemoveResponse,
+    AddParams, AddResponse, Cert, CommonAddParams, Keystore, RemoveParams, RemoveResponse,
 };
 
-pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
+pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
 pub(super) trait X509AddParams {
     fn permissions(&self) -> &Vec<CertPermissions>;
     /// Whether to apply permissions to all certificates from cert directory.
     fn whole_chain(&self) -> bool;
 }
 
-impl CertData {
+pub struct X509CertData {
+    pub id: String,
+    pub not_after: String,
+    pub subject: BTreeMap<String, String>,
+    pub permissions: String,
+}
+
+impl X509CertData {
     pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
-        let mut data = CertData::try_from(cert)?;
+        let mut data = X509CertData::try_from(cert)?;
         let permissions = permissions.get(cert);
         data.permissions = format_permissions(&permissions);
         Ok(data)
     }
 }
 
-pub struct KeystoreLoadResult {
+pub(super) struct AddX509Response {
     pub loaded: Vec<X509>,
     pub skipped: Vec<X509>,
 }
@@ -57,24 +64,13 @@ pub(super) struct X509KeystoreManager {
 }
 
 impl X509KeystoreManager {
-    pub fn try_load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        let keystore = X509Keystore::load(cert_dir)?;
-        let ids = keystore.certs_ids()?;
-        let cert_dir = cert_dir.clone();
-        Ok(Self {
-            ids,
-            cert_dir,
-            keystore,
-        })
-    }
-
     /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
     /// Certificates already existing in `cert-dir` are skipped.
     fn add_certs<ADD: X509AddParams + CommonAddParams>(
         &self,
         add: &ADD,
         permissions_manager: &mut PermissionsManager,
-    ) -> anyhow::Result<KeystoreLoadResult> {
+    ) -> anyhow::Result<AddX509Response> {
         let mut added = HashMap::new();
         let mut skipped = HashMap::new();
 
@@ -107,7 +103,7 @@ impl X509KeystoreManager {
             add.whole_chain(),
         );
 
-        Ok(KeystoreLoadResult {
+        Ok(AddX509Response {
             loaded: added.into_values().collect(),
             skipped: skipped.into_values().collect(),
         })
@@ -163,27 +159,42 @@ impl X509KeystoreManager {
 }
 
 impl Keystore for X509KeystoreManager {
+    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
+        let keystore = X509Keystore::load(cert_dir)?;
+        let ids = keystore.certs_ids()?;
+        Ok(Self {
+            ids,
+            cert_dir: cert_dir.clone(),
+            keystore,
+        })
+    }
+
+    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+        self.keystore.reload(cert_dir)
+    }
+
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let mut permissions_manager = self.keystore.permissions_manager();
-        let res = self.add_certs(add, &mut permissions_manager)?;
+        let AddX509Response { loaded, skipped } = self.add_certs(add, &mut permissions_manager)?;
 
         permissions_manager
             .save(&self.cert_dir)
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
-        let added = res
-            .loaded
+        let added = loaded
             .into_iter()
-            .map(|cert| CertData::create(&cert, &permissions_manager))
-            .collect::<anyhow::Result<Vec<CertData>>>()?;
-        let duplicated = res
-            .skipped
+            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
-            .map(|cert| CertData::create(&cert, &permissions_manager))
-            .collect::<anyhow::Result<Vec<CertData>>>()?;
-        Ok(AddResponse {
-            added,
-            skipped: duplicated,
-        })
+            .map(|cert| Cert::X509(cert))
+            .collect();
+        let skipped = skipped
+            .into_iter()
+            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .collect::<anyhow::Result<Vec<X509CertData>>>()?
+            .into_iter()
+            .map(|cert| Cert::X509(cert))
+            .collect();
+        Ok(AddResponse { added, skipped })
     }
 
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
@@ -236,19 +247,26 @@ impl Keystore for X509KeystoreManager {
             .save(&self.cert_dir)
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
 
-        let removed: Vec<CertData> = removed
+        let removed: Vec<Cert> = removed
             .into_values()
-            .map(|cert| CertData::create(&cert, &permissions_manager))
-            .try_collect()?;
+            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .collect::<anyhow::Result<Vec<X509CertData>>>()?
+            .into_iter()
+            .map(|cert| Cert::X509(cert))
+            .collect();
         Ok(RemoveResponse { removed })
     }
 
-    fn list(&self) -> Vec<CertData> {
-        self.keystore.list()
+    fn list(&self) -> Vec<Cert> {
+        self.keystore
+            .list()
+            .into_iter()
+            .map(|cert| Cert::X509(cert))
+            .collect()
     }
 }
 
-pub struct CertStore {
+struct CertStore {
     store: X509Store,
     permissions: PermissionsManager,
 }
@@ -320,14 +338,14 @@ impl X509Keystore {
         *inner = store;
     }
 
-    fn list(&self) -> Vec<CertData> {
+    fn list(&self) -> Vec<X509CertData> {
         let inner = self.inner.read().unwrap();
         inner
             .store
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .map(CertData::try_from)
+            .map(X509CertData::try_from)
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
                 Err(err) => {
@@ -534,7 +552,7 @@ pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     Ok(str_to_short_hash(&txt))
 }
 
-impl TryFrom<&X509Ref> for CertData {
+impl TryFrom<&X509Ref> for X509CertData {
     type Error = anyhow::Error;
 
     fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
@@ -548,7 +566,7 @@ impl TryFrom<&X509Ref> for CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
         add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
 
-        Ok(CertData {
+        Ok(X509CertData {
             id,
             not_after,
             subject,

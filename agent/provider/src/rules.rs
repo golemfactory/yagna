@@ -17,18 +17,19 @@ use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
-    keystore::x509_keystore::X509Keystore,
+    // keystore::x509_keystore::X509Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
     policy::CertPermissions,
-    AppManifest,
+    AppManifest, CompositeKeystore, keystore::x509_keystore::X509Keystore,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
+    // pub keystore: CompositeKeystore,
     pub keystore: X509Keystore,
     pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
@@ -41,6 +42,7 @@ impl RulesManager {
         whitelist_file: &Path,
         cert_dir: &Path,
     ) -> Result<Self> {
+        // let keystore = CompositeKeystore::try_new(cert_dir)?;
         let keystore = X509Keystore::load(cert_dir)?;
 
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
@@ -64,6 +66,7 @@ impl RulesManager {
     pub fn remove_dangling_rules(&self) -> Result<()> {
         let mut deleted_partner_rules = vec![];
 
+        // TODO implement get(id)
         let keystore_certs = self.keystore.certs_ids()?;
 
         self.rulestore
@@ -90,6 +93,7 @@ impl RulesManager {
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+        //TODO list all certts and extract ids
         let keystore_certs = self.keystore.certs_ids()?;
 
         if keystore_certs.contains(&cert_id) {
@@ -163,6 +167,7 @@ impl RulesManager {
         let keystore_monitor = {
             let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
+            //TODO impllement reload
             let handler = move |p: PathBuf| match manager.keystore.reload(&cert_dir) {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
@@ -215,6 +220,7 @@ impl RulesManager {
         demand_permissions_present: bool,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
+            //TODO just verify cert using .verify_golem_certificate(&node_identity) with no permissions
             self.keystore
                 .verify_signature(
                     props.cert.clone(),
@@ -254,6 +260,7 @@ impl RulesManager {
         let node_identity =
             node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
 
+        //TODO special case of verify_permissions(cert, required) with no permissions ?
         let verified_cert = self
             .keystore
             .verify_golem_certificate(&node_identity)
@@ -376,7 +383,7 @@ impl RulesManager {
         if demand_permissions_present {
             required.push(CertPermissions::UnverifiedPermissionsChain);
         }
-
+        //TODO special case of verify_golem_certificate(&node_identity) with permissions ?
         self.keystore.verify_permissions(cert, required)
     }
 }

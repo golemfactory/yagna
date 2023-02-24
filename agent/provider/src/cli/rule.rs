@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::keystore::{AddParams, AddResponse};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -86,9 +86,9 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
-                let mut keystore = CompositeKeystore::try_new(&rules.cert_dir)?;
+                let mut keystore = CompositeKeystore::load(&rules.cert_dir)?;
 
-                let AddResponse { added, skipped } = keystore.add(AddParams {
+                let AddResponse { added, skipped } = keystore.add(&AddParams {
                     certs: vec![import_cert],
                     permissions: vec![CertPermissions::All],
                     whole_chain: true,
@@ -103,7 +103,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.keystore.reload(&rules.cert_dir)?;
 
                 for cert in added.into_iter().chain(skipped) {
-                    rules.set_partner_mode(cert.id, mode.clone())?;
+                    rules.set_partner_mode(cert.id(), mode.clone())?;
                 }
 
                 Ok(())

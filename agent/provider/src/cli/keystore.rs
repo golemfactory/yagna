@@ -3,7 +3,9 @@ use crate::startup_config::ProviderConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::keystore::{AddParams, AddResponse, CertData, RemoveParams, RemoveResponse};
+use ya_manifest_utils::golem_certificate::GolemCertificate;
+use ya_manifest_utils::keystore::x509_keystore::X509CertData;
+use ya_manifest_utils::keystore::{AddParams, AddResponse, RemoveParams, RemoveResponse, Keystore, Cert};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -88,7 +90,7 @@ impl KeystoreConfig {
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore = CompositeKeystore::try_new(&cert_dir)?;
+    let keystore = CompositeKeystore::load(&cert_dir)?;
     let certs_data = keystore.list();
     print_cert_list(&config, certs_data)?;
     Ok(())
@@ -96,8 +98,8 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let mut keystore = CompositeKeystore::try_new(&cert_dir)?;
-    let AddResponse { added, skipped } = keystore.add(add.into())?;
+    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let AddResponse { added, skipped } = keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
@@ -113,9 +115,9 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let mut keystore_manager = CompositeKeystore::try_new(&cert_dir)?;
+    let mut keystore_manager = CompositeKeystore::load(&cert_dir)?;
     // let mut permissions_manager = keystore_manager.permissions_manager();
-    let RemoveResponse { removed } = keystore_manager.remove(remove.into())?;
+    let RemoveResponse { removed } = keystore_manager.remove(&remove.into())?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {
@@ -133,7 +135,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertData>) -> anyhow::Result<()> {
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<Cert>) -> anyhow::Result<()> {
     let mut table = CertTable::new();
     for data in certs_data {
         table.add(data);
@@ -165,8 +167,8 @@ impl CertTable {
         Ok(())
     }
 
-    pub fn add(&mut self, data: CertData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
+    pub fn add(&mut self, cert: Cert) {
+        let row = serde_json::json! {[ cert.id(), "", "", "" ]};
         self.table.values.push(row)
     }
 }

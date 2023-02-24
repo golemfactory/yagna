@@ -4,7 +4,7 @@ extern crate serial_test;
 use std::{collections::HashSet, fs};
 use test_case::test_case;
 use ya_manifest_test_utils::*;
-use ya_manifest_utils::{policy::CertPermissions, CompositeKeystore};
+use ya_manifest_utils::{policy::CertPermissions, CompositeKeystore, keystore::Keystore};
 
 static TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -77,11 +77,11 @@ fn certificate_store_test(
     );
     remove_certificates(&test_cert_dir, ids_to_remove);
     // When
-    let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
+    let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can laod keystore");
     let loaded_ids = keystore
         .list()
         .into_iter()
-        .map(|c| c.id)
+        .map(|c| c.id())
         .collect::<HashSet<String>>();
     // Then
     let expected_ids = expected_ids
@@ -121,11 +121,11 @@ fn certificate_name_collision_test() {
 
     let expected_ids: HashSet<String> = HashSet::from(["4e0df976".into(), "0e136cb3".into()]);
     // When
-    let keystore = CompositeKeystore::try_new(&test_cert_dir).expect("Can laod keystore");
+    let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can laod keystore");
     let loaded_ids = keystore
         .list()
         .into_iter()
-        .map(|c| c.id)
+        .map(|c| c.id())
         .collect::<HashSet<String>>();
     // Then
     assert_eq!(expected_ids, loaded_ids);

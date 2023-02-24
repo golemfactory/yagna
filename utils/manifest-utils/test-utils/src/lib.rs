@@ -7,7 +7,7 @@ use std::str;
 use std::sync::Once;
 use std::{collections::HashSet, path::PathBuf};
 use tar::Archive;
-use ya_manifest_utils::keystore::{AddParams, AddResponse, RemoveParams, RemoveResponse};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, RemoveParams, RemoveResponse, Keystore};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 
@@ -29,22 +29,22 @@ pub fn load_certificates_from_dir(
         })
         .collect();
     let mut keystore =
-        CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
+        CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
 
     let add_params = AddParams {
         certs,
         permissions: cert_permissions.clone(),
         whole_chain: false,
     };
-    let certs = keystore.add(add_params).expect("Can load certificates");
+    let certs = keystore.add(&add_params).expect("Can load certificates");
     certs
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> RemoveResponse {
     let mut keystore =
-        CompositeKeystore::try_new(test_cert_dir).expect("Can create keystore manager");
+        CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
     keystore
-        .remove(RemoveParams {
+        .remove(&RemoveParams {
             ids: slice_to_set(cert_ids),
         })
         .expect("Can load certificates")

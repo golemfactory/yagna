@@ -1,13 +1,27 @@
 pub mod golem_keystore;
 pub mod x509_keystore;
 
-use self::x509_keystore::{X509AddParams, X509KeystoreManager};
+use self::x509_keystore::{X509AddParams, X509KeystoreManager, X509CertData};
 use crate::policy::CertPermissions;
 use itertools::Itertools;
 use std::{
     collections::{BTreeMap, HashSet},
-    path::PathBuf,
+    path::{PathBuf, Path}, fmt::Debug,
 };
+
+pub enum Cert {
+    X509(X509CertData),
+    Golem{ id: String, cert: super::golem_certificate::GolemCertificate }
+}
+
+impl Cert {
+    pub fn id(&self) -> String {
+        match self {
+            Cert::Golem { id, cert: _ } => id.into(),
+            Cert::X509(cert) => cert.id.to_string()
+        }
+    }
+}
 
 trait CommonAddParams {
     fn certs(&self) -> &Vec<PathBuf>;
@@ -47,17 +61,10 @@ impl X509AddParams for AddParams {
     }
 }
 
-pub struct CertData {
-    pub id: String,
-    pub not_after: String,
-    pub subject: BTreeMap<String, String>,
-    pub permissions: String,
-}
-
 #[derive(Default)]
 pub struct AddResponse {
-    pub added: Vec<CertData>,
-    pub skipped: Vec<CertData>,
+    pub added: Vec<Cert>,
+    pub skipped: Vec<Cert>,
 }
 
 pub trait CommonRemoveParams {
@@ -76,27 +83,38 @@ impl CommonRemoveParams for RemoveParams {
 
 #[derive(Default)]
 pub struct RemoveResponse {
-    pub removed: Vec<CertData>,
+    pub removed: Vec<Cert>,
 }
 
-trait Keystore {
+// trait Keystore: Debug {
+pub trait Keystore {
+    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> where Self: Sized;
+    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
-    fn list(&self) -> Vec<CertData>;
+    fn list(&self) -> Vec<Cert>;
 }
 
+// #[derive(Debug)]
 pub struct CompositeKeystore {
     keystores: Vec<Box<dyn Keystore>>,
 }
 
-impl CompositeKeystore {
-    pub fn try_new(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        let x509_keystore_manager = X509KeystoreManager::try_load(cert_dir)?;
+impl Keystore for CompositeKeystore {
+    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
+        let x509_keystore_manager = X509KeystoreManager::load(cert_dir)?;
         let keystores: Vec<Box<dyn Keystore>> = vec![Box::new(x509_keystore_manager)];
         Ok(Self { keystores })
     }
 
-    pub fn add(&mut self, add: AddParams) -> anyhow::Result<AddResponse> {
+    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+        for keystore in &mut self.keystores {
+            keystore.reload(cert_dir)?;
+        }
+        Ok(())
+    }
+
+    fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let response = self
             .keystores
             .iter_mut()
@@ -109,7 +127,7 @@ impl CompositeKeystore {
         Ok(response)
     }
 
-    pub fn remove(&mut self, remove: RemoveParams) -> anyhow::Result<RemoveResponse> {
+    fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
         let response = self
             .keystores
             .iter_mut()
@@ -121,7 +139,7 @@ impl CompositeKeystore {
         Ok(response)
     }
 
-    pub fn list(&self) -> Vec<CertData> {
+    fn list(&self) -> Vec<Cert> {
         self.keystores
             .iter()
             .map(|keystore| keystore.list())
