@@ -217,7 +217,6 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         manifest_sig: Option<ManifestSignatureProps>,
-        demand_permissions_present: bool,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
             //TODO just verify cert using .verify_golem_certificate(&node_identity) with no permissions
@@ -228,10 +227,6 @@ impl RulesManager {
                     props.sig_alg,
                     props.manifest_encoded,
                 )
-                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
-
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            self.verify_permissions(&props.cert, demand_permissions_present)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
             let mode = &self
@@ -329,7 +324,6 @@ impl RulesManager {
         manifest: AppManifest,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        demand_permissions_present: bool,
         node_identity: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
@@ -340,7 +334,7 @@ impl RulesManager {
 
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
-            self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
+            self.check_audited_payload_rule(&manifest, manifest_sig),
             self.check_partner_rule(&manifest, node_identity, requestor_id),
         ]
         .into_iter()
