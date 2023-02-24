@@ -94,12 +94,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     whole_chain: true,
                 })?;
 
-                rules
-                    .keystore
-                    .permissions_manager()
-                    .save(&rules.cert_dir)
-                    .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
-
                 rules.keystore.reload(&rules.cert_dir)?;
 
                 for cert in added.into_iter().chain(skipped) {

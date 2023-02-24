@@ -25,7 +25,7 @@ use std::{
 };
 
 use super::{
-    AddParams, AddResponse, Cert, CommonAddParams, Keystore, RemoveParams, RemoveResponse,
+    AddParams, AddResponse, Cert, CommonAddParams, Keystore, RemoveParams, RemoveResponse, KeystoreBuilder,
 };
 
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -54,6 +54,42 @@ impl X509CertData {
 pub(super) struct AddX509Response {
     pub loaded: Vec<X509>,
     pub skipped: Vec<X509>,
+}
+
+pub struct X509KeystoreBuilder {
+    builder: X509StoreBuilder,
+    cert_dir: PathBuf,
+}
+
+impl X509KeystoreBuilder {
+    pub fn new(cert_dir: impl AsRef<Path>) -> Self {
+        let builder  = X509StoreBuilder::new().expect("OpenSSL works");
+        let cert_dir = PathBuf::from(cert_dir.as_ref());
+        Self { builder, cert_dir }
+    }
+}
+
+impl KeystoreBuilder<X509KeystoreManager> for X509KeystoreBuilder {
+    fn try_with(&mut self, file: &PathBuf) -> anyhow::Result<()> {
+        for cert in parse_cert_file(file)? {
+            self.builder.add_cert(cert)?
+        }
+        Ok(())
+    }
+
+    fn build(self) -> anyhow::Result<X509KeystoreManager> {
+        let permissions = PermissionsManager::load(&self.cert_dir).map_err(|e| {
+        anyhow!(
+                "Failed to load permissions file: {}, {e}",
+                self.cert_dir.display()
+            )
+        })?;
+        let keystore = self.builder.build();
+        let inner =  Arc::new(RwLock::new(CertStore::new(keystore, permissions)));
+        let keystore = X509Keystore { store: inner };
+        let ids = keystore.certs_ids()?;
+        Ok(X509KeystoreManager {keystore, ids, cert_dir: self.cert_dir })
+    }
 }
 
 pub(super) struct X509KeystoreManager {
@@ -158,17 +194,7 @@ impl X509KeystoreManager {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        let keystore = X509Keystore::load(cert_dir)?;
-        let ids = keystore.certs_ids()?;
-        Ok(Self {
-            ids,
-            cert_dir: cert_dir.clone(),
-            keystore,
-        })
-    }
-
-    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
         self.keystore.reload(cert_dir)
     }
 
@@ -272,28 +298,28 @@ struct CertStore {
 
 #[derive(Clone)]
 pub struct X509Keystore {
-    inner: Arc<RwLock<CertStore>>,
+    store: Arc<RwLock<CertStore>>,
 }
 
 impl Default for X509Keystore {
     fn default() -> Self {
         let store = X509StoreBuilder::new().expect("SSL works").build();
+        let store = CertStore::new(store, Default::default());
         Self {
-            inner: CertStore::new(store, Default::default()),
+            store: Arc::new(RwLock::new(store)),
         }
     }
 }
 
 impl CertStore {
-    pub fn new(store: X509Store, permissions: PermissionsManager) -> Arc<RwLock<CertStore>> {
-        Arc::new(RwLock::new(CertStore { store, permissions }))
+    pub fn new(store: X509Store, permissions: PermissionsManager) -> CertStore {
+        CertStore { store, permissions }
     }
 }
 
 impl X509Keystore {
     /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert-dir` and creates new `X509Store`.
     pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
-        std::fs::create_dir_all(&cert_dir)?;
         let permissions = PermissionsManager::load(&cert_dir).map_err(|e| {
             anyhow!(
                 "Failed to load permissions file: {}, {e}",
@@ -313,7 +339,8 @@ impl X509Keystore {
             }
         }
         let store = CertStore::new(store.build(), permissions);
-        Ok(Self { inner: store })
+        let store = Arc::new(RwLock::new(store));
+        Ok(Self { store })
     }
 
     pub fn reload(&self, cert_dir: impl AsRef<Path>) -> anyhow::Result<()> {
@@ -324,7 +351,7 @@ impl X509Keystore {
 
     fn replace(&self, other: X509Keystore) {
         let store = {
-            let mut inner = other.inner.write().unwrap();
+            let mut inner = other.store.write().unwrap();
             std::mem::replace(
                 &mut (*inner),
                 CertStore {
@@ -333,12 +360,12 @@ impl X509Keystore {
                 },
             )
         };
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.store.write().unwrap();
         *inner = store;
     }
 
     fn list(&self) -> Vec<X509CertData> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.store.read().unwrap();
         inner
             .store
             .objects()
@@ -383,7 +410,7 @@ impl X509Keystore {
     }
 
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.store.read().unwrap();
         let mut ids = HashSet::new();
         for cert in inner.store.objects() {
             if let Some(cert) = cert.x509() {
@@ -391,7 +418,6 @@ impl X509Keystore {
                 ids.insert(id);
             }
         }
-
         Ok(ids)
     }
 
@@ -405,7 +431,7 @@ impl X509Keystore {
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
         let cert_chain = Self::decode_cert_chain(cert)?;
         let store = self
-            .inner
+            .store
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
         let cert = match cert_chain.last().map(Clone::clone) {
@@ -450,7 +476,7 @@ impl X509Keystore {
 
     fn get_permissions(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
         let store = self
-            .inner
+            .store
             .read()
             .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
         Ok(store.permissions.get(cert))
@@ -487,7 +513,7 @@ impl X509Keystore {
 
     fn find_issuer(&self, cert: &X509) -> anyhow::Result<X509> {
         let store = self
-            .inner
+            .store
             .read()
             .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
         store
@@ -509,7 +535,7 @@ impl X509Keystore {
     }
 
     pub fn permissions_manager(&self) -> PermissionsManager {
-        self.inner.read().unwrap().permissions.clone()
+        self.store.read().unwrap().permissions.clone()
     }
 }
 

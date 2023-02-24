@@ -17,20 +17,18 @@ use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
-    keystore::x509_keystore::X509Keystore,
-    // keystore::x509_keystore::X509Keystore,
+    keystore::{x509_keystore::X509Keystore, Keystore},
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    AppManifest,
+    AppManifest, CompositeKeystore,
 };
 
 #[derive(Clone)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
-    // pub keystore: CompositeKeystore,
-    pub keystore: X509Keystore,
+    pub keystore: CompositeKeystore,
     pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
     whitelist_file: PathBuf,
@@ -42,8 +40,7 @@ impl RulesManager {
         whitelist_file: &Path,
         cert_dir: &Path,
     ) -> Result<Self> {
-        // let keystore = CompositeKeystore::try_new(cert_dir)?;
-        let keystore = X509Keystore::load(cert_dir)?;
+        let keystore = CompositeKeystore::load(&cert_dir.into())?;
 
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;
@@ -66,8 +63,7 @@ impl RulesManager {
     pub fn remove_dangling_rules(&self) -> Result<()> {
         let mut deleted_partner_rules = vec![];
 
-        // TODO implement get(id)
-        let keystore_certs = self.keystore.certs_ids()?;
+        let keystore_certs = self.keystore.list_ids();
 
         self.rulestore
             .config
@@ -93,8 +89,7 @@ impl RulesManager {
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
-        //TODO list all certts and extract ids
-        let keystore_certs = self.keystore.certs_ids()?;
+        let keystore_certs = self.keystore.list_ids();
 
         if keystore_certs.contains(&cert_id) {
             self.rulestore
@@ -255,7 +250,6 @@ impl RulesManager {
         let node_identity =
             node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
 
-        //TODO special case of verify_permissions(cert, required) with no permissions ?
         let verified_cert = self
             .keystore
             .verify_golem_certificate(&node_identity)

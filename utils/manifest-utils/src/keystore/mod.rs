@@ -1,12 +1,23 @@
 pub mod golem_keystore;
 pub mod x509_keystore;
 
-use self::x509_keystore::{X509AddParams, X509CertData, X509KeystoreManager};
-use crate::policy::CertPermissions;
+use self::{
+    golem_keystore::GolemKeystoreBuilder,
+    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+};
+use crate::{
+    golem_certificate::{GolemCertificate, VerificationError},
+    policy::CertPermissions,
+};
 use itertools::Itertools;
 use std::{
-    collections::{HashSet},
-    path::{PathBuf},
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+    collections::HashSet,
+    fs::File,
+    io::Read,
+    path::PathBuf,
+    rc::Rc,
 };
 
 pub enum Cert {
@@ -91,37 +102,90 @@ pub struct RemoveResponse {
 
 // trait Keystore: Debug {
 pub trait Keystore {
-    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self>
-    where
-        Self: Sized;
-    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()>;
+    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
 }
 
-// #[derive(Debug)]
-pub struct CompositeKeystore {
-    keystores: Vec<Box<dyn Keystore>>,
+trait KeystoreBuilder<K: Keystore> {
+    // file is certificate file, certificate is its content
+    fn try_with(&mut self, file: &PathBuf) -> anyhow::Result<()>;
+    fn build(self) -> anyhow::Result<K>;
 }
 
-impl Keystore for CompositeKeystore {
-    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        let x509_keystore_manager = X509KeystoreManager::load(cert_dir)?;
-        let keystores: Vec<Box<dyn Keystore>> = vec![Box::new(x509_keystore_manager)];
+#[derive(Clone)]
+pub struct CompositeKeystore {
+    keystores: Rc<RefCell<Vec<Box<dyn Keystore>>>>,
+}
+
+impl CompositeKeystore {
+    pub fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
+        std::fs::create_dir_all(&cert_dir)?;
+        let mut x509_builder = X509KeystoreBuilder::new(cert_dir);
+        let mut golem_builder = GolemKeystoreBuilder::new(cert_dir);
+
+        let cert_dir = std::fs::read_dir(cert_dir)?;
+        for dir_entry in cert_dir {
+            let file = dir_entry?;
+            let file = file.path();
+            if let Err(err) = golem_builder
+                .try_with(&file)
+                .or_else(|err| {
+                    log::trace!("File '{} is not a Golem certificate. Trying to parse as Golem certificate. Err: {err}'", file.display());
+                    x509_builder.try_with(&file)
+                }) {
+                    log::debug!("File '{} is not a X509 certificate nor a Golem certificate. Err: {err}'", file.display());
+                }
+        }
+
+        let x509_keystore = x509_builder.build()?;
+        let golem_keystore = golem_builder.build()?;
+
+        let keystores: Rc<RefCell<Vec<Box<dyn Keystore>>>> = Rc::new(RefCell::new(vec![
+            Box::new(golem_keystore),
+            Box::new(x509_keystore),
+        ]));
         Ok(Self { keystores })
     }
 
-    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()> {
-        for keystore in &mut self.keystores {
+    pub fn list_ids(&self) -> HashSet<String> {
+        self.list()
+            .into_iter()
+            .map(|cert| cert.id())
+            .collect::<HashSet<String>>()
+    }
+
+    pub fn verify_signature(
+        &self,
+        cert: impl AsRef<str>,
+        sig: impl AsRef<str>,
+        sig_alg: impl AsRef<str>,
+        data: impl AsRef<str>,
+    ) -> anyhow::Result<()> {
+        // verify cert, then
+        todo!()
+    }
+
+    pub fn verify_golem_certificate(
+        &self,
+        node_id: &String,
+    ) -> Result<GolemCertificate, VerificationError> {
+        todo!()
+    }
+}
+
+impl Keystore for CompositeKeystore {
+    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+        for keystore in (&*self.keystores).borrow().iter() {
             keystore.reload(cert_dir)?;
         }
         Ok(())
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
-        let response = self
-            .keystores
+        let response = (&*self.keystores)
+            .borrow_mut()
             .iter_mut()
             .map(|keystore| keystore.add(&add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
@@ -133,8 +197,8 @@ impl Keystore for CompositeKeystore {
     }
 
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
-        let response = self
-            .keystores
+        let response = (&*self.keystores)
+            .borrow_mut()
             .iter_mut()
             .map(|keystore| keystore.remove(&remove))
             .fold_ok(RemoveResponse::default(), |mut acc, mut res| {
@@ -145,7 +209,8 @@ impl Keystore for CompositeKeystore {
     }
 
     fn list(&self) -> Vec<Cert> {
-        self.keystores
+        (&*self.keystores)
+            .borrow()
             .iter()
             .map(|keystore| keystore.list())
             .flatten()
