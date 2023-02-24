@@ -1,24 +1,27 @@
 pub mod golem_keystore;
 pub mod x509_keystore;
 
-use self::x509_keystore::{X509AddParams, X509KeystoreManager, X509CertData};
+use self::x509_keystore::{X509AddParams, X509CertData, X509KeystoreManager};
 use crate::policy::CertPermissions;
 use itertools::Itertools;
 use std::{
-    collections::{BTreeMap, HashSet},
-    path::{PathBuf, Path}, fmt::Debug,
+    collections::{HashSet},
+    path::{PathBuf},
 };
 
 pub enum Cert {
     X509(X509CertData),
-    Golem{ id: String, cert: super::golem_certificate::GolemCertificate }
+    Golem {
+        id: String,
+        cert: super::golem_certificate::GolemCertificate,
+    },
 }
 
 impl Cert {
     pub fn id(&self) -> String {
         match self {
             Cert::Golem { id, cert: _ } => id.into(),
-            Cert::X509(cert) => cert.id.to_string()
+            Cert::X509(cert) => cert.id.to_string(),
         }
     }
 }
@@ -88,7 +91,9 @@ pub struct RemoveResponse {
 
 // trait Keystore: Debug {
 pub trait Keystore {
-    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> where Self: Sized;
+    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self>
+    where
+        Self: Sized;
     fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;

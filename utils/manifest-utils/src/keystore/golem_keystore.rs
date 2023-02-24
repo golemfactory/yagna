@@ -1,4 +1,4 @@
-use std::{path::PathBuf, collections::HashSet};
+use std::{collections::HashSet, path::PathBuf};
 
 use super::Keystore;
 
@@ -11,16 +11,16 @@ struct GolemKeystore {
 }
 
 impl Keystore for GolemKeystore {
-    fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> where Self: Sized {
+    fn load(_cert_dir: &PathBuf) -> anyhow::Result<Self>
+    {
         todo!()
     }
 
-    fn reload(&mut self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&mut self, _cert_dir: &PathBuf) -> anyhow::Result<()> {
         todo!()
     }
 
     fn add(&mut self, _add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
-
         Ok(Default::default())
     }
 

@@ -3,9 +3,11 @@ use crate::startup_config::ProviderConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_manifest_utils::golem_certificate::GolemCertificate;
-use ya_manifest_utils::keystore::x509_keystore::X509CertData;
-use ya_manifest_utils::keystore::{AddParams, AddResponse, RemoveParams, RemoveResponse, Keystore, Cert};
+
+
+use ya_manifest_utils::keystore::{
+    AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
+};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};

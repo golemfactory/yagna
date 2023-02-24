@@ -4,7 +4,6 @@ use crate::{
     util::{format_permissions, str_to_short_hash},
 };
 use anyhow::{anyhow, bail};
-use itertools::Itertools;
 use openssl::{
     hash::MessageDigest,
     nid::Nid,

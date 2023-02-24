@@ -17,13 +17,13 @@ use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
+    keystore::x509_keystore::X509Keystore,
     // keystore::x509_keystore::X509Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    policy::CertPermissions,
-    AppManifest, CompositeKeystore, keystore::x509_keystore::X509Keystore,
+    AppManifest,
 };
 
 #[derive(Clone)]
@@ -369,16 +369,6 @@ impl RulesManager {
             );
             false
         }
-    }
-
-    fn verify_permissions(&self, cert: &str, demand_permissions_present: bool) -> Result<()> {
-        let mut required = vec![CertPermissions::OutboundManifest];
-
-        if demand_permissions_present {
-            required.push(CertPermissions::UnverifiedPermissionsChain);
-        }
-        //TODO special case of verify_golem_certificate(&node_identity) with permissions ?
-        self.keystore.verify_permissions(cert, required)
     }
 }
 

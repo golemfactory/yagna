@@ -3,9 +3,9 @@ use std::ops::Not;
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, Feature, CAPABILITIES_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY,
-    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY, DEMAND_MANIFEST_PROPERTY,
+    DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;

@@ -4,7 +4,7 @@ extern crate serial_test;
 use std::{collections::HashSet, fs};
 use test_case::test_case;
 use ya_manifest_test_utils::*;
-use ya_manifest_utils::{policy::CertPermissions, CompositeKeystore, keystore::Keystore};
+use ya_manifest_utils::{keystore::Keystore, policy::CertPermissions, CompositeKeystore};
 
 static TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
