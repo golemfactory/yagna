@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 
-
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };

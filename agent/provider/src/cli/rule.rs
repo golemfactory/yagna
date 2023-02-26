@@ -3,7 +3,7 @@ use crate::{
     rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;

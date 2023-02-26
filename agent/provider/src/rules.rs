@@ -17,7 +17,7 @@ use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
-    keystore::{x509_keystore::X509Keystore, Keystore},
+    keystore::Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,

@@ -3,22 +3,14 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::GolemKeystoreBuilder,
-    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder},
 };
 use crate::{
     golem_certificate::{GolemCertificate, VerificationError},
     policy::CertPermissions,
 };
 use itertools::Itertools;
-use std::{
-    borrow::{Borrow, BorrowMut},
-    cell::RefCell,
-    collections::HashSet,
-    fs::File,
-    io::Read,
-    path::PathBuf,
-    rc::Rc,
-};
+use std::{borrow::Borrow, collections::HashSet, path::PathBuf};
 
 pub enum Cert {
     X509(X509CertData),
@@ -100,8 +92,7 @@ pub struct RemoveResponse {
     pub removed: Vec<Cert>,
 }
 
-// trait Keystore: Debug {
-pub trait Keystore {
+pub trait Keystore: KeystoreClone + Send {
     fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
@@ -114,9 +105,28 @@ trait KeystoreBuilder<K: Keystore> {
     fn build(self) -> anyhow::Result<K>;
 }
 
+pub trait KeystoreClone {
+    fn clone_box(&self) -> Box<dyn Keystore>;
+}
+
+impl<T> KeystoreClone for T
+where
+    T: 'static + Keystore + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Keystore> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Keystore> {
+    fn clone(&self) -> Box<dyn Keystore> {
+        self.clone_box()
+    }
+}
+
 #[derive(Clone)]
 pub struct CompositeKeystore {
-    keystores: Rc<RefCell<Vec<Box<dyn Keystore>>>>,
+    keystores: Vec<Box<dyn Keystore>>,
 }
 
 impl CompositeKeystore {
@@ -142,10 +152,8 @@ impl CompositeKeystore {
         let x509_keystore = x509_builder.build()?;
         let golem_keystore = golem_builder.build()?;
 
-        let keystores: Rc<RefCell<Vec<Box<dyn Keystore>>>> = Rc::new(RefCell::new(vec![
-            Box::new(golem_keystore),
-            Box::new(x509_keystore),
-        ]));
+        let keystores: Vec<Box<dyn Keystore>> =
+            vec![Box::new(golem_keystore), Box::new(x509_keystore)];
         Ok(Self { keystores })
     }
 
@@ -158,10 +166,10 @@ impl CompositeKeystore {
 
     pub fn verify_signature(
         &self,
-        cert: impl AsRef<str>,
-        sig: impl AsRef<str>,
-        sig_alg: impl AsRef<str>,
-        data: impl AsRef<str>,
+        _cert: impl AsRef<str>,
+        _sig: impl AsRef<str>,
+        _sig_alg: impl AsRef<str>,
+        _data: impl AsRef<str>,
     ) -> anyhow::Result<()> {
         // verify cert, then
         todo!()
@@ -169,7 +177,7 @@ impl CompositeKeystore {
 
     pub fn verify_golem_certificate(
         &self,
-        node_id: &String,
+        _node_id: &String,
     ) -> Result<GolemCertificate, VerificationError> {
         todo!()
     }
@@ -184,8 +192,7 @@ impl Keystore for CompositeKeystore {
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
-        let response = (&*self.keystores)
-            .borrow_mut()
+        let response = (self.keystores)
             .iter_mut()
             .map(|keystore| keystore.add(&add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
@@ -197,8 +204,7 @@ impl Keystore for CompositeKeystore {
     }
 
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
-        let response = (&*self.keystores)
-            .borrow_mut()
+        let response = (self.keystores)
             .iter_mut()
             .map(|keystore| keystore.remove(&remove))
             .fold_ok(RemoveResponse::default(), |mut acc, mut res| {

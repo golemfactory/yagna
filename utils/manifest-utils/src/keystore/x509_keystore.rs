@@ -25,7 +25,8 @@ use std::{
 };
 
 use super::{
-    AddParams, AddResponse, Cert, CommonAddParams, Keystore, RemoveParams, RemoveResponse, KeystoreBuilder,
+    AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
+    RemoveResponse,
 };
 
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -63,7 +64,7 @@ pub struct X509KeystoreBuilder {
 
 impl X509KeystoreBuilder {
     pub fn new(cert_dir: impl AsRef<Path>) -> Self {
-        let builder  = X509StoreBuilder::new().expect("OpenSSL works");
+        let builder = X509StoreBuilder::new().expect("OpenSSL works");
         let cert_dir = PathBuf::from(cert_dir.as_ref());
         Self { builder, cert_dir }
     }
@@ -79,19 +80,24 @@ impl KeystoreBuilder<X509KeystoreManager> for X509KeystoreBuilder {
 
     fn build(self) -> anyhow::Result<X509KeystoreManager> {
         let permissions = PermissionsManager::load(&self.cert_dir).map_err(|e| {
-        anyhow!(
+            anyhow!(
                 "Failed to load permissions file: {}, {e}",
                 self.cert_dir.display()
             )
         })?;
         let keystore = self.builder.build();
-        let inner =  Arc::new(RwLock::new(CertStore::new(keystore, permissions)));
+        let inner = Arc::new(RwLock::new(CertStore::new(keystore, permissions)));
         let keystore = X509Keystore { store: inner };
         let ids = keystore.certs_ids()?;
-        Ok(X509KeystoreManager {keystore, ids, cert_dir: self.cert_dir })
+        Ok(X509KeystoreManager {
+            keystore,
+            ids,
+            cert_dir: self.cert_dir,
+        })
     }
 }
 
+#[derive(Clone)]
 pub(super) struct X509KeystoreManager {
     keystore: X509Keystore,
     ids: HashSet<String>,
