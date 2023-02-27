@@ -1,5 +1,9 @@
 use super::{Cert, Keystore, KeystoreBuilder};
-use crate::golem_certificate::{self, GolemCertificate};
+use crate::{
+    golem_certificate::{self, GolemCertificate},
+    keystore::copy_file,
+    util::str_to_short_hash,
+};
 use anyhow::anyhow;
 use md5::{Digest, Md5};
 use std::{
@@ -79,8 +83,28 @@ impl Keystore for GolemKeystore {
         todo!()
     }
 
-    fn add(&mut self, _add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
-        Ok(Default::default())
+    fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
+        let mut added = Vec::new();
+        let mut skipped = Vec::new();
+        for path in add.certs.iter() {
+            let mut file = File::open(&path)?;
+            let mut content = String::new();
+            file.read_to_string(&mut content)?;
+            let id = str_to_short_hash(&content);
+            match self.verify_golem_certificate(&content) {
+                Ok(cert) => {
+                    if self.certificates.contains_key(&id) {
+                        skipped.push(Cert::Golem { id, cert });
+                        continue;
+                    }
+                    log::debug!("Adding Golem certificate: {:?}", cert);
+                    copy_file(path, &self.cert_dir)?;
+                    added.push(Cert::Golem { id, cert })
+                }
+                Err(err) => log::error!("Failed to parse Golem certificate. Err: {}", err),
+            }
+        }
+        Ok(super::AddResponse { added, skipped })
     }
 
     fn remove(&mut self, _remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {

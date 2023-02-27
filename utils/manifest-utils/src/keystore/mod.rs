@@ -7,7 +7,12 @@ use self::{
 };
 use crate::{golem_certificate::GolemCertificate, policy::CertPermissions};
 use itertools::Itertools;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub enum Cert {
     X509(X509CertData),
@@ -22,6 +27,22 @@ impl Cert {
         match self {
             Cert::Golem { id, cert: _ } => id.into(),
             Cert::X509(cert) => cert.id.to_string(),
+        }
+    }
+
+    pub fn not_after(&self) -> String {
+        match self {
+            Cert::X509(cert) => cert.not_after.clone(),
+            Cert::Golem { id: _, cert: _ } => "".into(),
+        }
+    }
+
+    pub fn subject(&self) -> String {
+        match self {
+            Cert::X509(cert) => {
+                serde_json::to_string(&cert.subject).expect("Can serialize X509 fields")
+            }
+            Cert::Golem { id: _, cert: _ } => "".into(),
         }
     }
 }
@@ -234,4 +255,48 @@ impl Keystore for CompositeKeystore {
             .flatten()
             .collect()
     }
+}
+
+/// Copies file into `dst_dir`.
+/// Renames file if duplicated: "name.ext" into "name.1.ext" etc.
+fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
+    let file_name = get_file_name(src_file)
+        .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {src_file:?}")))?;
+    let mut new_cert_path = dst_dir.clone();
+    new_cert_path.push(file_name);
+    if new_cert_path.exists() {
+        let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
+        let dot_extension = get_file_extension(&new_cert_path)
+            .map(|ex| format!(".{ex}"))
+            .unwrap_or_else(|| String::from(""));
+        for i in 0..u32::MAX {
+            let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
+            new_cert_path = dst_dir.clone();
+            new_cert_path.push(numbered_filename);
+            if !new_cert_path.exists() {
+                break;
+            }
+        }
+        if new_cert_path.exists() {
+            anyhow::bail!("Unable to load certificate");
+        }
+    }
+    fs::copy(src_file, new_cert_path)?;
+    Ok(())
+}
+
+fn get_file_name(path: &Path) -> Option<String> {
+    path.file_name().map(os_str_to_string)
+}
+
+fn os_str_to_string(os_str: &OsStr) -> String {
+    os_str.to_string_lossy().to_string()
+}
+
+fn get_file_extension(path: &Path) -> Option<String> {
+    path.extension().map(os_str_to_string)
+}
+
+fn get_file_stem(path: &Path) -> Option<String> {
+    path.file_stem().map(os_str_to_string)
 }

@@ -116,23 +116,18 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let mut keystore_manager = CompositeKeystore::load(&cert_dir)?;
-    // let mut permissions_manager = keystore_manager.permissions_manager();
-    let RemoveResponse { removed } = keystore_manager.remove(&remove.into())?;
+    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let RemoveResponse { removed } = keystore.remove(&remove.into())?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {
             print_cert_list(&config, Vec::new())?;
         }
     } else {
-        // permissions_manager.set_many(&removed, vec![], true);
         println!("Removed certificates:");
         print_cert_list(&config, removed)?;
     }
 
-    // permissions_manager
-    //     .save(&cert_dir)
-    //     .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 

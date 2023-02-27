@@ -20,7 +20,6 @@ use openssl::{
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
-    ffi::OsStr,
     fs::{self, DirEntry, File},
     io::Read,
     path::{Path, PathBuf},
@@ -130,7 +129,7 @@ impl X509KeystoreManager {
                 }
             }
             if file_certs_len == new_certs.len() {
-                self.load_as_keychain_file(cert_path)?;
+                super::copy_file(cert_path, &self.cert_dir)?;
             } else {
                 self.load_as_certificate_files(cert_path, new_certs)?;
             }
@@ -148,38 +147,11 @@ impl X509KeystoreManager {
         })
     }
 
-    /// Loads keychain file to `cert-dir`
-    fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
-        let file_name = get_file_name(cert_path)
-            .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {cert_path:?}")))?;
-        let mut new_cert_path = self.cert_dir.clone();
-        new_cert_path.push(file_name);
-        if new_cert_path.exists() {
-            let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
-            let dot_extension = get_file_extension(&new_cert_path)
-                .map(|ex| format!(".{ex}"))
-                .unwrap_or_else(|| String::from(""));
-            for i in 0..u32::MAX {
-                let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
-                new_cert_path = self.cert_dir.clone();
-                new_cert_path.push(numbered_filename);
-                if !new_cert_path.exists() {
-                    break;
-                }
-            }
-            if new_cert_path.exists() {
-                anyhow::bail!("Unable to load certificate");
-            }
-        }
-        fs::copy(cert_path, new_cert_path)?;
-        Ok(())
-    }
-
     /// Loads certificates as individual files to `cert-dir`
     fn load_as_certificate_files(&self, cert_path: &Path, certs: Vec<X509>) -> anyhow::Result<()> {
-        let file_stem = get_file_stem(cert_path)
+        let file_stem = super::get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
-        let dot_extension = get_file_extension(cert_path)
+        let dot_extension = super::get_file_extension(cert_path)
             .map(|ex| format!(".{ex}"))
             .unwrap_or_else(|| String::from(""));
         for cert in certs.into_iter() {
@@ -257,8 +229,9 @@ impl Keystore for X509KeystoreManager {
                 }
             }
             if split_and_skip {
-                let file_stem = get_file_stem(&cert_file).expect("Cannot get file name stem");
-                let dot_extension = get_file_extension(&cert_file)
+                let file_stem =
+                    super::get_file_stem(&cert_file).expect("Cannot get file name stem");
+                let dot_extension = super::get_file_extension(&cert_file)
                     .map_or_else(|| String::from(""), |ex| format!(".{ex}"));
                 for (id, cert) in ids_cert {
                     let cert = cert.to_pem()?;
@@ -271,7 +244,9 @@ impl Keystore for X509KeystoreManager {
             }
         }
 
-        let permissions_manager = self.permissions_manager();
+        let mut permissions_manager = self.permissions_manager();
+        let removed_certs: Vec<X509> = removed.clone().into_values().collect();
+        permissions_manager.set_many(&removed_certs, &vec![], true);
         permissions_manager
             .save(&self.cert_dir)
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
@@ -539,7 +514,7 @@ impl X509Keystore {
 }
 
 fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
-    let extension = get_file_extension(cert);
+    let extension = super::get_file_extension(cert);
     let mut cert = File::open(cert)?;
     let mut cert_buffer = Vec::new();
     cert.read_to_end(&mut cert_buffer)?;
@@ -553,22 +528,6 @@ fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
                 .or_else(|_| X509::from_der(&cert_buffer).map(|cert| vec![cert]))?)
         }
     }
-}
-
-fn get_file_extension(path: &Path) -> Option<String> {
-    path.extension().map(os_str_to_string)
-}
-
-fn get_file_name(path: &Path) -> Option<String> {
-    path.file_name().map(os_str_to_string)
-}
-
-fn get_file_stem(path: &Path) -> Option<String> {
-    path.file_stem().map(os_str_to_string)
-}
-
-fn os_str_to_string(os_str: &OsStr) -> String {
-    os_str.to_string_lossy().to_string()
 }
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
