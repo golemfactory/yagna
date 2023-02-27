@@ -16,6 +16,7 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
+framework-test = []
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [
@@ -35,6 +36,7 @@ ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.8" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
+ya-gsb-api = "0.1"
 ya-erc20-driver = { version = "0.4", optional = true }
 ya-zksync-driver = { version = "0.3", optional = true }
 ya-identity = "0.3"
@@ -84,6 +86,9 @@ tokio = { version = "1", features = ["net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
+
+[dev-dependencies]
+ya-test-framework = "0.1"
 
 [package.metadata.deb]
 name = "golem-requestor"
@@ -169,6 +174,7 @@ members = [
     "agent/provider",
     "core/activity",
     "core/gftp",
+    "core/gsb-api",
     "core/identity",
     "core/market",
     "core/market/resolver",
@@ -208,6 +214,8 @@ members = [
     "utils/diesel-utils",
     "utils/fd-metrics",
     "core/metrics",
+    "test-utils/test-framework",
+    "test-utils/test-framework/framework-macro"
 ]
 
 [patch.crates-io]
@@ -225,6 +233,7 @@ ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
+ya-gsb-api = { path = "core/gsb-api" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -271,6 +280,8 @@ ya-provider = { path = "agent/provider" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
+ya-test-framework = { path = "test-utils/test-framework" }
+ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

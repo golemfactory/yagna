@@ -4,8 +4,8 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
     decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_PROPERTY,
-    DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY,
+    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;
@@ -62,6 +62,10 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
+        let node_identity = demand
+            .get_property::<String>(DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY)
+            .ok();
+
         let demand_permissions_present = demand
             .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
             .is_ok();
@@ -69,8 +73,10 @@ impl NegotiatorComponent for ManifestSignature {
         if manifest.is_outbound_requested() {
             match self.rules_manager.check_outbound_rules(
                 manifest,
+                demand.issuer,
                 manifest_sig,
                 demand_permissions_present,
+                node_identity,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
