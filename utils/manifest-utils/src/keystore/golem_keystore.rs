@@ -1,15 +1,13 @@
+use super::{Cert, Keystore, KeystoreBuilder};
+use crate::golem_certificate::{self, GolemCertificate};
+use anyhow::anyhow;
+use md5::{Digest, Md5};
 use std::{
     collections::HashMap,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
 };
-
-use md5::{Digest, Md5};
-
-use crate::golem_certificate::{self, GolemCertificate};
-
-use super::{Cert, Keystore, KeystoreBuilder};
 
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
@@ -67,6 +65,13 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 pub(super) struct GolemKeystore {
     pub certificates: HashMap<String, GolemCertificateEntry>,
     pub cert_dir: PathBuf,
+}
+
+impl GolemKeystore {
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
+        golem_certificate::verify_golem_certificate(cert)
+            .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
+    }
 }
 
 impl Keystore for GolemKeystore {

@@ -1,5 +1,8 @@
+use super::{
+    AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
+    RemoveResponse,
+};
 use crate::{
-    golem_certificate::{verify_golem_certificate, GolemCertificate},
     policy::CertPermissions,
     util::{format_permissions, str_to_short_hash},
 };
@@ -22,11 +25,6 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
-};
-
-use super::{
-    AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
-    RemoveResponse,
 };
 
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -99,7 +97,7 @@ impl KeystoreBuilder<X509KeystoreManager> for X509KeystoreBuilder {
 
 #[derive(Clone)]
 pub(super) struct X509KeystoreManager {
-    keystore: X509Keystore,
+    pub(super) keystore: X509Keystore,
     ids: HashSet<String>,
     cert_dir: PathBuf,
 }
@@ -408,11 +406,6 @@ impl X509Keystore {
             return Err(anyhow::anyhow!("Invalid signature"));
         }
         Ok(())
-    }
-
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
-        verify_golem_certificate(cert)
-            .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {

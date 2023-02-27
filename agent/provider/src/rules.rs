@@ -162,7 +162,6 @@ impl RulesManager {
         let keystore_monitor = {
             let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
-            //TODO impllement reload
             let handler = move |p: PathBuf| match manager.keystore.reload(&cert_dir) {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
@@ -214,7 +213,6 @@ impl RulesManager {
         manifest_sig: Option<ManifestSignatureProps>,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
-            //TODO just verify cert using .verify_golem_certificate(&node_identity) with no permissions
             self.keystore
                 .verify_signature(
                     props.cert.clone(),
