@@ -219,13 +219,17 @@ fn test_keystore_add_certificate_second_time() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
+    assert!(result.contains_key("4e0df976"));
+    assert!(result.contains_key("c128af8c"));
+    //TODO update it when rules permissions are figured out
+    /*
     assert_eq!(check_permissions(&result, "4e0df976"), "none");
     assert_eq!(check_permissions(&result, "c128af8c"), "none");
+    */
 }
 
 #[serial]
 #[test]
-#[ignore] //TODO delete it together with X509 permissions
 fn test_keystore_remove_certificate_check_permissions() {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
 
@@ -256,8 +260,13 @@ fn test_keystore_remove_certificate_check_permissions() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
+    assert!(result.contains_key("4e0df976"));
+    assert!(result.contains_key("c128af8c"));
+    //TODO update it when rules/permissions are figured out
+    /*
     assert_eq!(check_permissions(&result, "4e0df976"), "outbound-manifest");
     assert_eq!(check_permissions(&result, "c128af8c"), "outbound-manifest");
+     */
 }
 
 fn list_certificates_command(
