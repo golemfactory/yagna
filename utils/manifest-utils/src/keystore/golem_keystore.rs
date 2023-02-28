@@ -10,11 +10,13 @@ use std::{
     fs::File,
     io::Read,
     path::{Path, PathBuf},
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
-    file: PathBuf,
+    #[allow(dead_code)]
+    path: PathBuf,
     cert: GolemCertificate,
 }
 
@@ -38,24 +40,15 @@ impl GolemKeystoreBuilder {
 
 impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     fn try_with(&mut self, cert_path: &PathBuf) -> anyhow::Result<()> {
-        let mut cert_file = File::open(cert_path)?;
-        let mut cert_content = String::new();
-        cert_file.read_to_string(&mut cert_content)?;
-        let cert_content = cert_content.trim();
-        let cert = golem_certificate::verify_golem_certificate(&cert_content)?;
-        let id = str_to_short_hash(&cert_content);
-        self.certificates.insert(
-            id,
-            GolemCertificateEntry {
-                file: cert_path.clone(),
-                cert,
-            },
-        );
+        let (id, cert) = read_cert(cert_path)?;
+        let file = cert_path.clone();
+        self.certificates
+            .insert(id, GolemCertificateEntry { path: file, cert });
         Ok(())
     }
 
     fn build(self) -> anyhow::Result<GolemKeystore> {
-        let certificates = self.certificates;
+        let certificates = Arc::new(RwLock::new(self.certificates));
         let cert_dir = self.cert_dir;
         Ok(GolemKeystore {
             certificates,
@@ -64,9 +57,20 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     }
 }
 
+// Return certificate with its id
+fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, GolemCertificate)> {
+    let mut cert_file = File::open(cert_path)?;
+    let mut cert_content = String::new();
+    cert_file.read_to_string(&mut cert_content)?;
+    let cert_content = cert_content.trim();
+    let cert = golem_certificate::verify_golem_certificate(&cert_content)?;
+    let id = str_to_short_hash(&cert_content);
+    Ok((id, cert))
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct GolemKeystore {
-    pub certificates: HashMap<String, GolemCertificateEntry>,
+    pub certificates: Arc<RwLock<HashMap<String, GolemCertificateEntry>>>,
     pub cert_dir: PathBuf,
 }
 
@@ -78,13 +82,42 @@ impl GolemKeystore {
 }
 
 impl Keystore for GolemKeystore {
-    fn reload(&self, _cert_dir: &PathBuf) -> anyhow::Result<()> {
-        todo!()
+    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+        let mut certificates = HashMap::new();
+        let cert_dir = std::fs::read_dir(cert_dir)?;
+        for dir_entry in cert_dir {
+            let file = dir_entry?;
+            let cert_path = file.path();
+            match read_cert(&cert_path) {
+                Ok((id, cert)) => {
+                    certificates.insert(id, cert);
+                }
+                Err(err) => log::trace!(
+                    "Unable to parse file '{:?}' as Golem cert. Err: {}",
+                    cert_path,
+                    err
+                ),
+            }
+        }
+        // let store = {
+        //     let mut inner = other.store.write().unwrap();
+        //     std::mem::replace(
+        //         &mut (*inner),
+        //         CertStore {
+        //             store: X509StoreBuilder::new().unwrap().build(),
+        //             permissions: Default::default(),
+        //         },
+        //     )
+        // };
+        // let mut inner = self.store.write().unwrap();
+        // *inner = store;
+        Ok(())
     }
 
     fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
         let mut added = Vec::new();
         let mut skipped = Vec::new();
+        let mut certificates = self.certificates.write().expect("Can read Golem keystore");
         for path in add.certs.iter() {
             let mut file = File::open(&path)?;
             let mut content = String::new();
@@ -93,12 +126,19 @@ impl Keystore for GolemKeystore {
             let id = str_to_short_hash(&content);
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
-                    if self.certificates.contains_key(&id) {
+                    if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);
                     copy_file(path, &self.cert_dir)?;
+                    certificates.insert(
+                        id.clone(),
+                        GolemCertificateEntry {
+                            path: path.clone(),
+                            cert: cert.clone(),
+                        },
+                    );
                     added.push(Cert::Golem { id, cert })
                 }
                 Err(err) => log::error!("Failed to parse Golem certificate. Err: {}", err),
@@ -113,7 +153,12 @@ impl Keystore for GolemKeystore {
 
     fn list(&self) -> Vec<super::Cert> {
         let mut certificates = Vec::new();
-        for (id, cert_entry) in &self.certificates {
+        for (id, cert_entry) in self
+            .certificates
+            .read()
+            .expect("Can read Golem keystore")
+            .iter()
+        {
             certificates.push(Cert::Golem {
                 id: id.clone(),
                 cert: cert_entry.cert.clone(),
