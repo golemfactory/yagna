@@ -99,18 +99,6 @@ impl Keystore for GolemKeystore {
                 ),
             }
         }
-        // let store = {
-        //     let mut inner = other.store.write().unwrap();
-        //     std::mem::replace(
-        //         &mut (*inner),
-        //         CertStore {
-        //             store: X509StoreBuilder::new().unwrap().build(),
-        //             permissions: Default::default(),
-        //         },
-        //     )
-        // };
-        // let mut inner = self.store.write().unwrap();
-        // *inner = store;
         Ok(())
     }
 
