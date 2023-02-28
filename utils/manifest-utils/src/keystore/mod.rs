@@ -150,7 +150,7 @@ pub struct CompositeKeystore {
 
 impl CompositeKeystore {
     pub fn load(cert_dir: &PathBuf) -> anyhow::Result<Self> {
-        std::fs::create_dir_all(&cert_dir)?;
+        std::fs::create_dir_all(cert_dir)?;
         let mut x509_builder = X509KeystoreBuilder::new(cert_dir);
         let mut golem_builder = GolemKeystoreBuilder::new(cert_dir);
 
@@ -227,7 +227,7 @@ impl Keystore for CompositeKeystore {
         let response = self
             .keystores_mut()
             .iter_mut()
-            .map(|keystore| keystore.add(&add))
+            .map(|keystore| keystore.add(add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
                 acc.added.append(&mut res.added);
                 acc.skipped.append(&mut res.skipped);
@@ -240,7 +240,7 @@ impl Keystore for CompositeKeystore {
         let response = self
             .keystores_mut()
             .iter_mut()
-            .map(|keystore| keystore.remove(&remove))
+            .map(|keystore| keystore.remove(remove))
             .fold_ok(RemoveResponse::default(), |mut acc, mut res| {
                 acc.removed.append(&mut res.removed);
                 acc
@@ -251,8 +251,7 @@ impl Keystore for CompositeKeystore {
     fn list(&self) -> Vec<Cert> {
         self.keystores()
             .iter()
-            .map(|keystore| keystore.list())
-            .flatten()
+            .flat_map(|keystore| keystore.list())
             .collect()
     }
 }

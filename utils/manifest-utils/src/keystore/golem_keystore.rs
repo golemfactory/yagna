@@ -63,8 +63,8 @@ fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, GolemCertificate)> 
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::verify_golem_certificate(&cert_content)?;
-    let id = str_to_short_hash(&cert_content);
+    let cert = golem_certificate::verify_golem_certificate(cert_content)?;
+    let id = str_to_short_hash(cert_content);
     Ok((id, cert))
 }
 
@@ -119,7 +119,7 @@ impl Keystore for GolemKeystore {
         let mut skipped = Vec::new();
         let mut certificates = self.certificates.write().expect("Can read Golem keystore");
         for path in add.certs.iter() {
-            let mut file = File::open(&path)?;
+            let mut file = File::open(path)?;
             let mut content = String::new();
             file.read_to_string(&mut content)?;
             let content = content.trim().to_string();

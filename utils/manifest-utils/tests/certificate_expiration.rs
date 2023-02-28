@@ -148,7 +148,7 @@ mod utils {
     }
 
     pub fn write_cert_to_file(cert: &X509Ref, file_path: &Path) {
-        let mut file = File::create(&file_path).unwrap();
+        let mut file = File::create(file_path).unwrap();
         file.write_all(&cert.to_pem().unwrap()).unwrap();
     }
 

@@ -186,14 +186,14 @@ impl Keystore for X509KeystoreManager {
             .map(|cert| X509CertData::create(&cert, &permissions_manager))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
-            .map(|cert| Cert::X509(cert))
+            .map(Cert::X509)
             .collect();
         let skipped = skipped
             .into_iter()
             .map(|cert| X509CertData::create(&cert, &permissions_manager))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
-            .map(|cert| Cert::X509(cert))
+            .map(Cert::X509)
             .collect();
         Ok(AddResponse { added, skipped })
     }
@@ -256,7 +256,7 @@ impl Keystore for X509KeystoreManager {
             .map(|cert| X509CertData::create(&cert, &permissions_manager))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
-            .map(|cert| Cert::X509(cert))
+            .map(Cert::X509)
             .collect();
         Ok(RemoveResponse { removed })
     }
@@ -265,7 +265,7 @@ impl Keystore for X509KeystoreManager {
         self.keystore
             .list()
             .into_iter()
-            .map(|cert| Cert::X509(cert))
+            .map(Cert::X509)
             .collect()
     }
 }
@@ -532,7 +532,7 @@ fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
-    Ok(str_to_short_hash(&txt))
+    Ok(str_to_short_hash(txt))
 }
 
 impl TryFrom<&X509Ref> for X509CertData {
@@ -661,7 +661,7 @@ impl PermissionsManager {
     }
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(&path.join(PERMISSIONS_FILE))?;
+        let mut file = File::create(path.join(PERMISSIONS_FILE))?;
         Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
     }
 

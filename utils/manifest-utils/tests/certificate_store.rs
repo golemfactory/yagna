@@ -85,7 +85,7 @@ fn certificate_store_test(
         .collect::<HashSet<String>>();
     // Then
     let expected_ids = expected_ids
-        .into_iter()
+        .iter()
         .map(|id| id.to_string())
         .collect::<HashSet<String>>();
     assert_eq!(expected_ids, loaded_ids);

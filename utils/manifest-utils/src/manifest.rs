@@ -285,9 +285,11 @@ impl<'de> Deserialize<'de> for Command {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum ArgMatch {
     /// Byte-to-byte argument equality (default).
     #[strum(ascii_case_insensitive)]
+    #[default]
     Strict,
     /// Treat argument as regular expression.
     /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
@@ -296,11 +298,7 @@ pub enum ArgMatch {
     Regex,
 }
 
-impl Default for ArgMatch {
-    fn default() -> Self {
-        ArgMatch::Strict
-    }
-}
+
 
 /// # Net
 /// Applies constraints to networking.
