@@ -27,11 +27,7 @@ use std::{
 };
 
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
-pub(super) trait X509AddParams {
-    fn permissions(&self) -> &Vec<CertPermissions>;
-    /// Whether to apply permissions to all certificates from cert directory.
-    fn whole_chain(&self) -> bool;
-}
+pub(super) trait X509AddParams {}
 
 pub struct X509CertData {
     pub id: String,
@@ -104,7 +100,7 @@ pub(super) struct X509KeystoreManager {
 impl X509KeystoreManager {
     /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
     /// Certificates already existing in `cert-dir` are skipped.
-    fn add_certs<ADD: X509AddParams + CommonAddParams>(
+    fn add_certs<ADD: CommonAddParams>(
         &self,
         add: &ADD,
         permissions_manager: &mut PermissionsManager,
@@ -135,10 +131,11 @@ impl X509KeystoreManager {
             }
         }
 
+        // TODO delete when working on X509 rules/permissions
         permissions_manager.set_many(
             &added.values().chain(skipped.values()).cloned().collect(),
-            add.permissions(),
-            add.whole_chain(),
+            &Vec::new(),
+            true,
         );
 
         Ok(AddX509Response {
