@@ -3,7 +3,6 @@ use crate::startup_config::ProviderConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
-
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };
@@ -164,7 +163,12 @@ impl CertTable {
     }
 
     pub fn add(&mut self, cert: Cert) {
-        let row = serde_json::json! {[ cert.id(), "", "", "" ]};
+        let row = match cert {
+            Cert::X509(cert) => {
+                serde_json::json! {[ cert.id, cert.not_after, cert.subject, cert.permissions ]}
+            }
+            Cert::Golem { id, cert } => serde_json::json! {[ id, "", "", cert.permissions ]},
+        };
         self.table.values.push(row)
     }
 }

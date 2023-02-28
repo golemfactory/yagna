@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use url::Url;
 use ya_client_model::NodeId;
 
@@ -47,7 +48,7 @@ pub enum VerificationError {
     UrlParseError(Vec<String>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GolemPermission {
     All,
     OutboundUnrestricted,

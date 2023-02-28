@@ -5,7 +5,6 @@ use crate::{
     util::str_to_short_hash,
 };
 use anyhow::anyhow;
-use md5::{Digest, Md5};
 use std::{
     collections::HashMap,
     fs::File,
@@ -38,17 +37,17 @@ impl GolemKeystoreBuilder {
 }
 
 impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
-    fn try_with(&mut self, cert_file: &PathBuf) -> anyhow::Result<()> {
-        let mut cert = File::open(cert_file)?;
-        let mut buffer = String::new();
-        cert.read_to_string(&mut buffer)?;
-        let cert = golem_certificate::verify_golem_certificate(&buffer)?;
-        let id = Md5::digest(&buffer);
-        let id = format!("{id:x}");
+    fn try_with(&mut self, cert_path: &PathBuf) -> anyhow::Result<()> {
+        let mut cert_file = File::open(cert_path)?;
+        let mut cert_content = String::new();
+        cert_file.read_to_string(&mut cert_content)?;
+        let cert_content = cert_content.trim();
+        let cert = golem_certificate::verify_golem_certificate(&cert_content)?;
+        let id = str_to_short_hash(&cert_content);
         self.certificates.insert(
             id,
             GolemCertificateEntry {
-                file: cert_file.clone(),
+                file: cert_path.clone(),
                 cert,
             },
         );
@@ -90,6 +89,7 @@ impl Keystore for GolemKeystore {
             let mut file = File::open(&path)?;
             let mut content = String::new();
             file.read_to_string(&mut content)?;
+            let content = content.trim().to_string();
             let id = str_to_short_hash(&content);
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
