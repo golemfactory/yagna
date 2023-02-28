@@ -146,6 +146,7 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     "Add multiple certificates and check permissions"
 )]
 #[serial]
+#[ignore] //TODO delete it together with X509 permissions
 fn test_keystore_add_certificate_permissions(
     certificates: Vec<&str>,
     permissions: Vec<&str>,
@@ -224,6 +225,7 @@ fn test_keystore_add_certificate_second_time() {
 
 #[serial]
 #[test]
+#[ignore] //TODO delete it together with X509 permissions
 fn test_keystore_remove_certificate_check_permissions() {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
 
