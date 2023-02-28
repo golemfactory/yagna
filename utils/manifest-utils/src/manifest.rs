@@ -298,8 +298,6 @@ pub enum ArgMatch {
     Regex,
 }
 
-
-
 /// # Net
 /// Applies constraints to networking.
 /// Currently, outgoing requests to the public Internet network are covered.

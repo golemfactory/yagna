@@ -262,11 +262,7 @@ impl Keystore for X509KeystoreManager {
     }
 
     fn list(&self) -> Vec<Cert> {
-        self.keystore
-            .list()
-            .into_iter()
-            .map(Cert::X509)
-            .collect()
+        self.keystore.list().into_iter().map(Cert::X509).collect()
     }
 }
 
