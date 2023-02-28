@@ -1,9 +1,5 @@
 use super::{Cert, Keystore, KeystoreBuilder};
-use crate::{
-    golem_certificate::{self, GolemCertificate},
-    keystore::copy_file,
-    util::str_to_short_hash,
-};
+use crate::keystore::copy_file;
 use anyhow::anyhow;
 use std::{
     collections::HashMap,
@@ -13,11 +9,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use golem_certificate::validator::validated_data::ValidatedCert;
+use golem_certificate::{
+    schemas::certificate::Certificate, validator::validated_data::ValidatedNodeDescriptor,
+};
+
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
     #[allow(dead_code)]
     path: PathBuf,
-    cert: GolemCertificate,
+    cert: Certificate,
 }
 
 pub(super) trait GolemCertAddParams {}
@@ -58,14 +59,13 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 }
 
 // Return certificate with its id
-fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, GolemCertificate)> {
+fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, Certificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::verify_golem_certificate(cert_content)?;
-    let id = str_to_short_hash(cert_content);
-    Ok((id, cert))
+    let cert = golem_certificate::validator::validate_golem_certificate(cert_content)?;
+    Ok((cert.chain[0].clone(), cert.cert))
 }
 
 #[derive(Debug, Clone)]
@@ -75,8 +75,13 @@ pub(super) struct GolemKeystore {
 }
 
 impl GolemKeystore {
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
-        golem_certificate::verify_golem_certificate(cert)
+    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
+        golem_certificate::validator::validate_node_descriptor(cert)
+            .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
+    }
+
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCert> {
+        golem_certificate::validator::validate_golem_certificate(cert)
             .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 }
@@ -111,11 +116,14 @@ impl Keystore for GolemKeystore {
             let mut content = String::new();
             file.read_to_string(&mut content)?;
             let content = content.trim().to_string();
-            let id = str_to_short_hash(&content);
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
+                    let id = cert.chain[0].clone();
                     if certificates.contains_key(&id) {
-                        skipped.push(Cert::Golem { id, cert });
+                        skipped.push(Cert::Golem {
+                            id,
+                            cert: cert.cert,
+                        });
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);
@@ -124,10 +132,13 @@ impl Keystore for GolemKeystore {
                         id.clone(),
                         GolemCertificateEntry {
                             path: path.clone(),
-                            cert: cert.clone(),
+                            cert: cert.cert.clone(),
                         },
                     );
-                    added.push(Cert::Golem { id, cert })
+                    added.push(Cert::Golem {
+                        id,
+                        cert: cert.cert,
+                    })
                 }
                 Err(err) => log::error!("Failed to parse Golem certificate. Err: {}", err),
             }

@@ -1,4 +1,3 @@
-pub mod golem_certificate;
 pub mod keystore;
 pub mod manifest;
 pub mod matching;

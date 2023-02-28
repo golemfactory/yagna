@@ -23,6 +23,7 @@ schema = ["schemars"]
 ya-agreement-utils = "0.4.1"
 ya-utils-path = "0.1"
 ya-client-model = "0.5"
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate", rev = "e7156215a615562edc95f81b3dbd1f018bee56a8" }
 
 regex = "1.5"
 serde = "1.0"

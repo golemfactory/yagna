@@ -2571,6 +2571,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "golem-certificate"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/golem-certificate?rev=e7156215a615562edc95f81b3dbd1f018bee56a8#e7156215a615562edc95f81b3dbd1f018bee56a8"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+ "ya-client-model",
+]
+
+[[package]]
 name = "golemsp"
 version = "0.3.0"
 dependencies = [
@@ -5852,6 +5866,7 @@ version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
+ "indexmap",
  "itoa 1.0.5",
  "ryu",
  "serde",
@@ -8035,6 +8050,7 @@ dependencies = [
  "anyhow",
  "base64 0.13.1",
  "chrono",
+ "golem-certificate",
  "hex",
  "itertools 0.10.5",
  "log",
@@ -8332,6 +8348,7 @@ dependencies = [
  "dotenv",
  "futures 0.3.26",
  "futures-util",
+ "golem-certificate",
  "hex",
  "humantime 2.1.0",
  "itertools 0.10.5",

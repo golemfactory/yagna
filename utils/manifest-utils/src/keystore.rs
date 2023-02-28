@@ -5,7 +5,10 @@ use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
     x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
-use crate::{golem_certificate::GolemCertificate, policy::CertPermissions};
+use crate::policy::CertPermissions;
+use golem_certificate::{
+    schemas::certificate::Certificate, validator::validated_data::ValidatedNodeDescriptor,
+};
 use itertools::Itertools;
 use std::{
     collections::HashSet,
@@ -16,10 +19,7 @@ use std::{
 
 pub enum Cert {
     X509(X509CertData),
-    Golem {
-        id: String,
-        cert: super::golem_certificate::GolemCertificate,
-    },
+    Golem { id: String, cert: Certificate },
 }
 
 impl Cert {
@@ -200,8 +200,8 @@ impl CompositeKeystore {
             .verify_signature(cert, sig, sig_alg, data)
     }
 
-    pub fn verify_golem_certificate(&self, cert: &String) -> anyhow::Result<GolemCertificate> {
-        self.golem_keystore.verify_golem_certificate(cert)
+    pub fn verify_node_descriptor(&self, cert: &String) -> anyhow::Result<ValidatedNodeDescriptor> {
+        self.golem_keystore.verify_node_descriptor(cert)
     }
 }
 
