@@ -1,3 +1,7 @@
+use crate::startup_config::FileMonitor;
+use anyhow::{anyhow, Result};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     convert::TryFrom,
@@ -7,30 +11,24 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
-
-use anyhow::{anyhow, Result};
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     golem_certificate::GolemPermission,
+    keystore::Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    policy::CertPermissions,
-    AppManifest, Keystore,
+    AppManifest, CompositeKeystore,
 };
 
-use crate::startup_config::FileMonitor;
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RulesManager {
     pub rulestore: Rulestore,
-    pub keystore: Keystore,
+    pub keystore: CompositeKeystore,
     pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
     whitelist_file: PathBuf,
@@ -42,7 +40,7 @@ impl RulesManager {
         whitelist_file: &Path,
         cert_dir: &Path,
     ) -> Result<Self> {
-        let keystore = Keystore::load(cert_dir)?;
+        let keystore = CompositeKeystore::load(&cert_dir.into())?;
 
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let whitelist = DomainWhitelistState::try_new(patterns)?;
@@ -65,7 +63,7 @@ impl RulesManager {
     pub fn remove_dangling_rules(&self) -> Result<()> {
         let mut deleted_partner_rules = vec![];
 
-        let keystore_certs = self.keystore.certs_ids()?;
+        let keystore_certs = self.keystore.list_ids();
 
         self.rulestore
             .config
@@ -91,7 +89,7 @@ impl RulesManager {
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
-        let keystore_certs = self.keystore.certs_ids()?;
+        let keystore_certs = self.keystore.list_ids();
 
         if keystore_certs.contains(&cert_id) {
             self.rulestore
@@ -213,7 +211,6 @@ impl RulesManager {
         &self,
         manifest: &AppManifest,
         manifest_sig: Option<ManifestSignatureProps>,
-        demand_permissions_present: bool,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
             self.keystore
@@ -223,10 +220,6 @@ impl RulesManager {
                     props.sig_alg,
                     props.manifest_encoded,
                 )
-                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
-
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            self.verify_permissions(&props.cert, demand_permissions_present)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
             let mode = &self
@@ -323,7 +316,6 @@ impl RulesManager {
         manifest: AppManifest,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        demand_permissions_present: bool,
         node_identity: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
@@ -334,7 +326,7 @@ impl RulesManager {
 
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
-            self.check_audited_payload_rule(&manifest, manifest_sig, demand_permissions_present),
+            self.check_audited_payload_rule(&manifest, manifest_sig),
             self.check_partner_rule(&manifest, node_identity, requestor_id),
         ]
         .into_iter()
@@ -369,16 +361,6 @@ impl RulesManager {
             );
             false
         }
-    }
-
-    fn verify_permissions(&self, cert: &str, demand_permissions_present: bool) -> Result<()> {
-        let mut required = vec![CertPermissions::OutboundManifest];
-
-        if demand_permissions_present {
-            required.push(CertPermissions::UnverifiedPermissionsChain);
-        }
-
-        self.keystore.verify_permissions(cert, required)
     }
 }
 

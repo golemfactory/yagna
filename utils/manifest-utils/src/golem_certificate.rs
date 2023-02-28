@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
 use url::Url;
 use ya_client_model::NodeId;
 
+#[derive(Clone, Debug)]
 pub struct GolemCertificate {
     pub node_id: NodeId,
     pub permissions: Vec<GolemPermission>,
@@ -17,7 +19,7 @@ impl GolemCertificate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CertificateId {
     pub public_key: String, // hex
     pub hash: String,       // hex
@@ -46,6 +48,7 @@ pub enum VerificationError {
     UrlParseError(Vec<String>),
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GolemPermission {
     All,
     OutboundUnrestricted,

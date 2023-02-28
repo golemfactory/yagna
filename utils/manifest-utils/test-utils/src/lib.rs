@@ -1,19 +1,15 @@
-use std::fs::{self, File};
-use std::str;
-use std::sync::Once;
-use std::{collections::HashSet, path::PathBuf};
-
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
+use std::fs::{self, File};
+use std::str;
+use std::sync::Once;
+use std::{collections::HashSet, path::PathBuf};
 use tar::Archive;
-
+use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore, RemoveParams, RemoveResponse};
 use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::{
-    util::{self, CertBasicData, CertBasicDataVisitor},
-    KeystoreLoadResult, KeystoreRemoveResult,
-};
+use ya_manifest_utils::CompositeKeystore;
 
 static INIT: Once = Once::new();
 
@@ -22,9 +18,9 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
-    certs_permissions: &Vec<CertPermissions>,
-) -> KeystoreLoadResult {
-    let cert_paths: Vec<PathBuf> = certfile_names
+    cert_permissions: &Vec<CertPermissions>,
+) -> AddResponse {
+    let certs: Vec<PathBuf> = certfile_names
         .iter()
         .map(|certfile_name| {
             let mut cert_path = resource_cert_dir.clone();
@@ -32,56 +28,24 @@ pub fn load_certificates_from_dir(
             cert_path
         })
         .collect();
-    let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    let mut permissions = keystore_manager.permissions_manager();
+    let mut keystore = CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
 
-    let certs = keystore_manager
-        .load_certs(&cert_paths)
-        .expect("Can load certificates");
-
-    permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
-    permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
-    permissions
-        .save(test_cert_dir)
-        .expect("Should be able to save permissions file.");
-
+    let add_params = AddParams {
+        certs,
+        permissions: cert_permissions.clone(),
+        whole_chain: false,
+    };
+    let certs = keystore.add(&add_params).expect("Can load certificates");
     certs
 }
 
-pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
-    let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    keystore_manager
-        .remove_certs(&slice_to_set(cert_ids))
+pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> RemoveResponse {
+    let mut keystore = CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
+    keystore
+        .remove(&RemoveParams {
+            ids: slice_to_set(cert_ids),
+        })
         .expect("Can load certificates")
-}
-
-#[derive(Default)]
-pub struct TestCertDataVisitor {
-    expected: HashSet<String>,
-    actual: HashSet<String>,
-}
-
-impl TestCertDataVisitor {
-    #[allow(dead_code)]
-    pub fn new(expected: &[&str]) -> Self {
-        Self {
-            expected: expected.iter().map(|s| s.to_string()).collect(),
-            ..Default::default()
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn test(&self) {
-        assert_eq!(self.expected, self.actual)
-    }
-}
-
-impl CertBasicDataVisitor for TestCertDataVisitor {
-    fn accept(&mut self, cert_data: CertBasicData) {
-        self.actual.insert(cert_data.id);
-    }
 }
 
 pub struct TestResources {
