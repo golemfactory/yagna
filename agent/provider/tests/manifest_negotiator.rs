@@ -471,7 +471,6 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     "Manifest rejected, even when permissions are set to `All` because `unverified-permissions-chain` permission is also required when Demand comes with its permissions"
 )]
 #[serial]
-#[ignore = "update when permissions/rules are figured out"]
 fn test_manifest_negotiator_certs_permissions(
     signature: Signature,
     cert_permissions_b64: Option<&str>,

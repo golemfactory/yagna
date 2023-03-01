@@ -3,7 +3,7 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager, X509AddParams},
 };
 use crate::{golem_certificate::GolemCertificate, policy::CertPermissions};
 use itertools::Itertools;
@@ -72,6 +72,16 @@ impl AddParams {
 impl CommonAddParams for AddParams {
     fn certs(&self) -> &Vec<PathBuf> {
         &self.certs
+    }
+}
+
+impl X509AddParams for AddParams {
+    fn permissions(&self) -> &Vec<CertPermissions> {
+        &self.permissions
+    }
+
+    fn whole_chain(&self) -> bool {
+        self.whole_chain
     }
 }
 

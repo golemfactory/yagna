@@ -146,7 +146,6 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     "Add multiple certificates and check permissions"
 )]
 #[serial]
-#[ignore] //TODO delete it together with X509 permissions
 fn test_keystore_add_certificate_permissions(
     certificates: Vec<&str>,
     permissions: Vec<&str>,
@@ -181,7 +180,7 @@ fn test_keystore_add_certificate_permissions(
     command.arg("--json").assert().success();
 
     let result = list_certificates_command(&cert_dir).unwrap();
-
+    println!("Result: {result:?}");
     for (cert_id, perm) in expected {
         assert_eq!(check_permissions(&result, cert_id), perm);
     }
@@ -219,13 +218,8 @@ fn test_keystore_add_certificate_second_time() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
-    assert!(result.contains_key("4e0df976"));
-    assert!(result.contains_key("c128af8c"));
-    //TODO update it when rules permissions are figured out
-    /*
     assert_eq!(check_permissions(&result, "4e0df976"), "none");
     assert_eq!(check_permissions(&result, "c128af8c"), "none");
-    */
 }
 
 #[serial]
@@ -260,13 +254,8 @@ fn test_keystore_remove_certificate_check_permissions() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
-    assert!(result.contains_key("4e0df976"));
-    assert!(result.contains_key("c128af8c"));
-    //TODO update it when rules/permissions are figured out
-    /*
     assert_eq!(check_permissions(&result, "4e0df976"), "outbound-manifest");
     assert_eq!(check_permissions(&result, "c128af8c"), "outbound-manifest");
-     */
 }
 
 fn list_certificates_command(

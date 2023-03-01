@@ -27,7 +27,10 @@ use std::{
 };
 
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
-pub(super) trait X509AddParams {}
+pub(super) trait X509AddParams {
+    fn permissions(&self) -> &Vec<CertPermissions>;
+    fn whole_chain(&self) -> bool;
+}
 
 pub struct X509CertData {
     pub id: String,
@@ -37,10 +40,23 @@ pub struct X509CertData {
 }
 
 impl X509CertData {
-    pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
-        let mut data = X509CertData::try_from(cert)?;
-        let permissions = permissions.get(cert);
-        data.permissions = format_permissions(&permissions);
+    pub fn create(cert: &X509Ref, permissions: &Vec<CertPermissions>) -> anyhow::Result<Self> {
+        let id = cert_to_id(cert)?;
+        let not_after = cert.not_after().to_string();
+        let mut subject = BTreeMap::new();
+        add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
+        add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
+        add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
+        add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
+        let permissions = format_permissions(&permissions);
+        let data = X509CertData {
+            id,
+            not_after,
+            subject,
+            permissions,
+        };
         Ok(data)
     }
 }
@@ -100,12 +116,12 @@ pub(super) struct X509KeystoreManager {
 impl X509KeystoreManager {
     /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
     /// Certificates already existing in `cert-dir` are skipped.
-    fn add_certs<ADD: CommonAddParams>(
+    fn add_certs<ADD: CommonAddParams + X509AddParams>(
         &self,
         add: &ADD,
         permissions_manager: &mut PermissionsManager,
     ) -> anyhow::Result<AddX509Response> {
-        let mut added = HashMap::new();
+        let mut loaded = HashMap::new();
         let mut skipped = HashMap::new();
 
         for cert_path in add.certs() {
@@ -117,9 +133,9 @@ impl X509KeystoreManager {
             let file_certs_len = file_certs.len();
             for file_cert in file_certs {
                 let id = cert_to_id(&file_cert)?;
-                if !self.ids.contains(&id) && !added.contains_key(&id) {
+                if !self.ids.contains(&id) && !loaded.contains_key(&id) {
                     new_certs.push(file_cert.clone());
-                    added.insert(id, file_cert);
+                    loaded.insert(id, file_cert);
                 } else {
                     skipped.insert(id, file_cert);
                 }
@@ -130,18 +146,11 @@ impl X509KeystoreManager {
                 self.load_as_certificate_files(cert_path, new_certs)?;
             }
         }
-
-        // TODO delete when working on X509 rules/permissions
-        permissions_manager.set_many(
-            &added.values().chain(skipped.values()).cloned().collect(),
-            &Vec::new(),
-            true,
-        );
-
-        Ok(AddX509Response {
-            loaded: added.into_values().collect(),
-            skipped: skipped.into_values().collect(),
-        })
+        let loaded = loaded.into_values().collect();
+        let skipped = skipped.into_values().collect();
+        permissions_manager.set_many(&loaded, add.permissions(), add.whole_chain());
+        permissions_manager.set_many(&skipped, add.permissions(), add.whole_chain());
+        Ok(AddX509Response { loaded, skipped })
     }
 
     /// Loads certificates as individual files to `cert-dir`
@@ -180,14 +189,14 @@ impl Keystore for X509KeystoreManager {
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
         let added = loaded
             .into_iter()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
             .collect();
         let skipped = skipped
             .into_iter()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
@@ -250,7 +259,7 @@ impl Keystore for X509KeystoreManager {
 
         let removed: Vec<Cert> = removed
             .into_values()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager))
+            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
@@ -343,7 +352,7 @@ impl X509Keystore {
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .map(X509CertData::try_from)
+            .map(|cert| X509CertData::create(cert, &self.permissions_manager().get(&cert)))
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
                 Err(err) => {
@@ -526,29 +535,6 @@ fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
     Ok(str_to_short_hash(txt))
-}
-
-impl TryFrom<&X509Ref> for X509CertData {
-    type Error = anyhow::Error;
-
-    fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
-        let id = cert_to_id(cert)?;
-        let not_after = cert.not_after().to_string();
-        let mut subject = BTreeMap::new();
-        add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
-        add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
-        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
-        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
-        add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
-        add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
-
-        Ok(X509CertData {
-            id,
-            not_after,
-            subject,
-            permissions: "".to_string(),
-        })
-    }
 }
 
 /// Adds entries with given `nid` to given `subject` String.

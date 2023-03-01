@@ -130,7 +130,7 @@ impl Keystore for GolemKeystore {
                     );
                     added.push(Cert::Golem { id, cert })
                 }
-                Err(err) => log::error!("Failed to parse Golem certificate. Err: {}", err),
+                Err(err) => log::warn!("Unable to parse Golem certificate. Err: {}", err),
             }
         }
         Ok(super::AddResponse { added, skipped })
