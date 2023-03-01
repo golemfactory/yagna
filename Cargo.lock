@@ -8309,6 +8309,7 @@ dependencies = [
  "futures 0.3.26",
  "hex",
  "lazy_static",
+ "libsqlite3-sys",
  "log",
  "metrics 0.12.1",
  "mime",
