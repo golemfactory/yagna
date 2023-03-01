@@ -2059,9 +2059,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ff1536f22545e1dbe54d20e89f4fc9fd3e20b8b57b907edeb4a9e858086741"
+checksum = "9aa9f45a3a8c4f547bbd856b19f72561cb1a2b01fb25f9ac4fdfe8bc5173f179"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -9000,6 +9000,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "env_logger 0.7.1",
+ "erc20_payment_lib",
  "ethsign",
  "futures 0.3.26",
  "hex",
