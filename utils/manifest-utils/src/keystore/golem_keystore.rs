@@ -87,18 +87,19 @@ impl Keystore for GolemKeystore {
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {
             let file = dir_entry?;
-            let cert_path = file.path();
-            match read_cert(&cert_path) {
+            let path = file.path();
+            match read_cert(&path) {
                 Ok((id, cert)) => {
+                    let cert = GolemCertificateEntry { path, cert };
                     certificates.insert(id, cert);
                 }
-                Err(err) => log::trace!(
-                    "Unable to parse file '{:?}' as Golem cert. Err: {}",
-                    cert_path,
-                    err
-                ),
+                Err(err) => {
+                    log::trace!("Unable to parse file '{path:?}' as Golem cert. Err: {err}")
+                }
             }
         }
+        let mut certificates_ref = self.certificates.write().unwrap();
+        *certificates_ref = certificates;
         Ok(())
     }
 
