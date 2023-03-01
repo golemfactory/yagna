@@ -40,7 +40,7 @@ ya-client-model = "0.5"
 ya-service-api-interfaces = "0.2"
 ya-utils-futures = "0.2"
 ya-utils-networking = "0.2"
-erc20_payment_lib = "0.1.1"
+erc20_payment_lib = { workspace = true }
 
 [dev-dependencies]
 actix-rt = "2.7"
