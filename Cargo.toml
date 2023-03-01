@@ -30,6 +30,9 @@ packet-trace-enable = [
 name = "yagna"
 path = "core/serv/src/main.rs"
 
+[workspace.dependencies]
+libsqlite3-sys = { version = "=0.22.2", features = ["bundled"] }
+
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
@@ -86,6 +89,11 @@ tokio = { version = "1", features = ["net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
+# this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
+# diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
+# sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
+libsqlite3-sys = { workspace = true }
+
 
 [dev-dependencies]
 ya-test-framework = "0.1"
