@@ -19,7 +19,6 @@ use openssl::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    convert::TryFrom,
     fs::{self, DirEntry, File},
     io::Read,
     path::{Path, PathBuf},
@@ -50,7 +49,7 @@ impl X509CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
         add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
         add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
-        let permissions = format_permissions(&permissions);
+        let permissions = format_permissions(permissions);
         let data = X509CertData {
             id,
             not_after,
@@ -352,7 +351,7 @@ impl X509Keystore {
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .map(|cert| X509CertData::create(cert, &self.permissions_manager().get(&cert)))
+            .map(|cert| X509CertData::create(cert, &self.permissions_manager().get(cert)))
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
                 Err(err) => {

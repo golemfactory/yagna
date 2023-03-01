@@ -3,7 +3,7 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager, X509AddParams},
+    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::{golem_certificate::GolemCertificate, policy::CertPermissions};
 use itertools::Itertools;
@@ -208,6 +208,17 @@ impl CompositeKeystore {
         self.x509_keystore
             .keystore
             .verify_signature(cert, sig, sig_alg, data)
+    }
+
+    //TODO delete when deleting X509 permissions feature
+    pub fn verify_permissions(
+        &self,
+        cert: &str,
+        required: Vec<CertPermissions>,
+    ) -> anyhow::Result<()> {
+        self.x509_keystore
+            .keystore
+            .verify_permissions(cert, required)
     }
 
     pub fn verify_golem_certificate(&self, cert: &String) -> anyhow::Result<GolemCertificate> {

@@ -875,9 +875,7 @@ impl Handler<Unsubscribe> for ProviderMarket {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
-                std::mem::take(&mut self.subscriptions)
-                    .into_iter()
-                    .map(|(k, _)| k)
+                std::mem::take(&mut self.subscriptions).into_keys()
                     .collect::<Vec<_>>()
             }
             OfferKind::WithPresets(preset_names) => {

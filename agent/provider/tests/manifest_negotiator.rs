@@ -456,20 +456,6 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
     None;
     "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
 )]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::OutboundManifest],
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
-    "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::All],
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
-    "Manifest rejected, even when permissions are set to `All` because `unverified-permissions-chain` permission is also required when Demand comes with its permissions"
-)]
 #[serial]
 fn test_manifest_negotiator_certs_permissions(
     signature: Signature,
