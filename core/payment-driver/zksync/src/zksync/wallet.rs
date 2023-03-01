@@ -507,6 +507,10 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
 ) -> Result<H256, GenericError> {
     let token = get_network_token(network, None);
     let amount = base_utils::big_dec_to_u256(&amount);
+    //don't worry about this conversion.
+    //it's just a way to keep zksync backward compatibility
+    //TODO: cleanup when zksync will be updated
+    let amount = zksync::zksync_types::U256::from_dec_str(&amount.to_string()).unwrap();
     let address = wallet.address();
 
     log::info!(
