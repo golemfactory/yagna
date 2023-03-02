@@ -192,7 +192,7 @@ impl CompositeKeystore {
             .collect::<HashSet<String>>()
     }
 
-    pub fn verify_signature(
+    pub fn verify_x509_signature(
         &self,
         cert: impl AsRef<str>,
         sig: impl AsRef<str>,
