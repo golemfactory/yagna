@@ -36,6 +36,7 @@ use ya_zksync_driver as zksync;
 enum Driver {
     Dummy,
     Erc20,
+    Erc20next,
     Zksync,
 }
 
@@ -46,6 +47,7 @@ impl FromStr for Driver {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
             "erc20" => Ok(Driver::Erc20),
+            "erc20next" => Ok(Driver::Erc20next),
             "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -57,6 +59,7 @@ impl std::fmt::Display for Driver {
         match self {
             Driver::Dummy => write!(f, "dummy"),
             Driver::Erc20 => write!(f, "erc20"),
+            Driver::Erc20next => write!(f, "erc20next"),
             Driver::Zksync => write!(f, "zksync"),
         }
     }
@@ -94,6 +97,21 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
 }
 
 pub async fn start_erc20_driver(
+    db: &DbExecutor,
+    requestor_account: SecretKey,
+) -> anyhow::Result<()> {
+    let requestor = NodeId::from(requestor_account.public().address().as_ref());
+    fake_list_identities(vec![requestor]);
+    fake_subscribe_to_events();
+
+    erc20::PaymentDriverService::gsb(db).await?;
+
+    let requestor_sign_tx = get_sign_tx(requestor_account);
+    fake_sign_tx(Box::new(requestor_sign_tx));
+    Ok(())
+}
+
+pub async fn start_erc20_next_driver(
     db: &DbExecutor,
     requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
@@ -256,6 +274,10 @@ async fn main() -> anyhow::Result<()> {
         Driver::Erc20 => {
             start_erc20_driver(&db, requestor_account).await?;
             erc20::DRIVER_NAME
+        }
+        Driver::Erc20next => {
+            start_erc20next_driver(&db, requestor_account).await?;
+            erc20next::DRIVER_NAME
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
