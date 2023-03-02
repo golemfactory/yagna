@@ -215,7 +215,7 @@ impl RulesManager {
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
             self.keystore
-                .verify_signature(
+                .verify_x509_signature(
                     props.cert.clone(),
                     props.sig,
                     props.sig_alg,
