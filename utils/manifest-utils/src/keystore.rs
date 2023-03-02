@@ -178,17 +178,11 @@ impl CompositeKeystore {
     }
 
     fn keystores(&self) -> Vec<&dyn Keystore> {
-        vec![
-            &self.golem_keystore,
-            &self.x509_keystore,
-        ]
+        vec![&self.golem_keystore, &self.x509_keystore]
     }
 
     fn keystores_mut(&mut self) -> Vec<&mut dyn Keystore> {
-        vec![
-            &mut self.golem_keystore,
-            &mut self.x509_keystore,
-        ]
+        vec![&mut self.golem_keystore, &mut self.x509_keystore]
     }
 
     pub fn list_ids(&self) -> HashSet<String> {

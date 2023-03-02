@@ -35,7 +35,7 @@ pub fn load_certificates_from_dir(
         permissions: cert_permissions.clone(),
         whole_chain: false,
     };
-    
+
     keystore.add(&add_params).expect("Can load certificates")
 }
 
