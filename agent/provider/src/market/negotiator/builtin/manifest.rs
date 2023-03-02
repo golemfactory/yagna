@@ -209,7 +209,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let (policy, _tmpdir) = build_policy(&format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}",
             CAPABILITIES_PROPERTY

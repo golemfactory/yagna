@@ -3,7 +3,7 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::policy::CertPermissions;
 use golem_certificate::{
@@ -75,6 +75,16 @@ impl CommonAddParams for AddParams {
     }
 }
 
+impl X509AddParams for AddParams {
+    fn permissions(&self) -> &Vec<CertPermissions> {
+        &self.permissions
+    }
+
+    fn whole_chain(&self) -> bool {
+        self.whole_chain
+    }
+}
+
 #[derive(Default)]
 pub struct AddResponse {
     pub added: Vec<Cert>,
@@ -101,7 +111,7 @@ pub struct RemoveResponse {
 }
 
 pub trait Keystore: KeystoreClone + Send {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()>;
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
@@ -109,7 +119,7 @@ pub trait Keystore: KeystoreClone + Send {
 
 trait KeystoreBuilder<K: Keystore> {
     // file is certificate file, certificate is its content
-    fn try_with(&mut self, file: &PathBuf) -> anyhow::Result<()>;
+    fn try_with(&mut self, file: &Path) -> anyhow::Result<()>;
     fn build(self) -> anyhow::Result<K>;
 }
 
@@ -167,18 +177,12 @@ impl CompositeKeystore {
         })
     }
 
-    fn keystores(&self) -> Vec<Box<&dyn Keystore>> {
-        vec![
-            Box::new(&self.golem_keystore),
-            Box::new(&self.x509_keystore),
-        ]
+    fn keystores(&self) -> Vec<&dyn Keystore> {
+        vec![&self.golem_keystore, &self.x509_keystore]
     }
 
-    fn keystores_mut(&mut self) -> Vec<Box<&mut dyn Keystore>> {
-        vec![
-            Box::new(&mut self.golem_keystore),
-            Box::new(&mut self.x509_keystore),
-        ]
+    fn keystores_mut(&mut self) -> Vec<&mut dyn Keystore> {
+        vec![&mut self.golem_keystore, &mut self.x509_keystore]
     }
 
     pub fn list_ids(&self) -> HashSet<String> {
@@ -188,7 +192,7 @@ impl CompositeKeystore {
             .collect::<HashSet<String>>()
     }
 
-    pub fn verify_signature(
+    pub fn verify_x509_signature(
         &self,
         cert: impl AsRef<str>,
         sig: impl AsRef<str>,
@@ -203,10 +207,21 @@ impl CompositeKeystore {
     pub fn verify_node_descriptor(&self, cert: &String) -> anyhow::Result<ValidatedNodeDescriptor> {
         self.golem_keystore.verify_node_descriptor(cert)
     }
+
+    //TODO delete when deleting X509 permissions feature
+    pub fn verify_permissions(
+        &self,
+        cert: &str,
+        required: Vec<CertPermissions>,
+    ) -> anyhow::Result<()> {
+        self.x509_keystore
+            .keystore
+            .verify_permissions(cert, required)
+    }
 }
 
 impl Keystore for CompositeKeystore {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
         for keystore in self.keystores().iter() {
             keystore.reload(cert_dir)?;
         }
@@ -248,10 +263,10 @@ impl Keystore for CompositeKeystore {
 
 /// Copies file into `dst_dir`.
 /// Renames file if duplicated: "name.ext" into "name.1.ext" etc.
-fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
+fn copy_file(src_file: &PathBuf, dst_dir: &Path) -> anyhow::Result<PathBuf> {
     let file_name = get_file_name(src_file)
         .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {src_file:?}")))?;
-    let mut new_cert_path = dst_dir.clone();
+    let mut new_cert_path = PathBuf::from(dst_dir);
     new_cert_path.push(file_name);
     if new_cert_path.exists() {
         let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
@@ -260,7 +275,7 @@ fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
             .unwrap_or_else(|| String::from(""));
         for i in 0..u32::MAX {
             let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
-            new_cert_path = dst_dir.clone();
+            new_cert_path = PathBuf::from(dst_dir);
             new_cert_path.push(numbered_filename);
             if !new_cert_path.exists() {
                 break;
@@ -270,8 +285,8 @@ fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
             anyhow::bail!("Unable to load certificate");
         }
     }
-    fs::copy(src_file, new_cert_path)?;
-    Ok(())
+    fs::copy(src_file, &new_cert_path)?;
+    Ok(new_cert_path)
 }
 
 fn get_file_name(path: &Path) -> Option<String> {

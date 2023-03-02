@@ -51,12 +51,12 @@ pub struct Add {
     whole_chain: bool,
 }
 
-impl Into<AddParams> for Add {
-    fn into(self) -> AddParams {
+impl From<Add> for AddParams {
+    fn from(val: Add) -> Self {
         AddParams {
-            certs: self.certs,
-            permissions: self.permissions,
-            whole_chain: self.whole_chain,
+            certs: val.certs,
+            permissions: val.permissions,
+            whole_chain: val.whole_chain,
         }
     }
 }
@@ -70,10 +70,10 @@ To find certificate id use `keystore list` command.")]
     ids: Vec<String>,
 }
 
-impl Into<RemoveParams> for Remove {
-    fn into(self) -> RemoveParams {
+impl From<Remove> for RemoveParams {
+    fn from(val: Remove) -> Self {
         RemoveParams {
-            ids: self.ids.into_iter().collect(),
+            ids: val.ids.into_iter().collect(),
         }
     }
 }

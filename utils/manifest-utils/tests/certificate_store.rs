@@ -77,7 +77,7 @@ fn certificate_store_test(
     );
     remove_certificates(&test_cert_dir, ids_to_remove);
     // When
-    let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can laod keystore");
+    let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can load keystore");
     let loaded_ids = keystore
         .list()
         .into_iter()

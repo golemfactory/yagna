@@ -22,6 +22,7 @@ use ya_manifest_utils::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
+    policy::CertPermissions,
     AppManifest, CompositeKeystore,
 };
 
@@ -214,12 +215,16 @@ impl RulesManager {
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
             self.keystore
-                .verify_signature(
+                .verify_x509_signature(
                     props.cert.clone(),
                     props.sig,
                     props.sig_alg,
                     props.manifest_encoded,
                 )
+                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
+
+            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+            self.verify_permissions(&props.cert)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
             let mode = &self
@@ -355,6 +360,11 @@ impl RulesManager {
             );
             false
         }
+    }
+
+    fn verify_permissions(&self, cert: &str) -> Result<()> {
+        let required = vec![CertPermissions::OutboundManifest];
+        self.keystore.verify_permissions(cert, required)
     }
 }
 

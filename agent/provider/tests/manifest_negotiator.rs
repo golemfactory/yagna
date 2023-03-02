@@ -213,7 +213,6 @@ fn manifest_negotiator_test_with_valid_payload_signature(
         signature_b64,
         signature.algorithm,
         cert_b64,
-        None,
         error_msg,
     )
 }
@@ -354,7 +353,6 @@ fn manifest_negotiator_test_with_node_identity(
         None,
         None,
         None,
-        None,
         error_msg,
         &vec![],
         &[],
@@ -416,65 +414,43 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
         signature.private_key_file.map(|sig| sig.to_string()),
         signature.algorithm,
         cert_b64,
-        None,
         error_msg,
     )
 }
 
 #[test_case(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     None;
     "Manifest accepted, because permissions are sufficient"
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    None, // cert_permissions_b64
     &vec![CertPermissions::All],
     None;
     "Manifest accepted, when permissions are set to `All`"
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    None, // cert_permissions_b64
     &vec![],
     Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because certificate has no permissions"
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
-    None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest], // certs_permissions
     Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because parent certificate has no permissions"
 )]
 #[test_case(
     Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    Some("NYI"), // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
     None;
     "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
 )]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::OutboundManifest],
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `outbound-manifest`"); // error msg
-    "Manifest rejected, because certificate has no `unverified-permissions-chain` permission."
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::All],
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest|unverified-permissions-chain`, but has only: `all`"); // error msg
-    "Manifest rejected, even when permissions are set to `All` because `unverified-permissions-chain` permission is also required when Demand comes with its permissions"
-)]
 #[serial]
-#[ignore = "update when permissions/rules are figured out"]
 fn test_manifest_negotiator_certs_permissions(
     signature: Signature,
-    cert_permissions_b64: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
 ) {
@@ -497,7 +473,6 @@ fn test_manifest_negotiator_certs_permissions(
         signature_b64,
         signature.algorithm,
         cert_b64,
-        cert_permissions_b64,
         error_msg,
         provider_certs_permissions,
         &["foo_ca-chain.cert.pem"],
@@ -600,7 +575,6 @@ fn manifest_negotiator_test_whitelist(whitelist: &str, urls: &str, error_msg: Op
         signature_b64,
         signature.algorithm,
         cert_b64,
-        None,
         error_msg,
     )
 }
@@ -618,7 +592,6 @@ fn manifest_negotiator_test_encoded_manifest_without_signature(
         None,
         None,
         None,
-        None,
         error_msg,
     )
 }
@@ -631,7 +604,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     signature_b64: Option<String>,
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
-    cert_permissions_b64: Option<&str>,
     error_msg: Option<&str>,
 ) {
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
@@ -641,7 +613,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         signature_b64,
         signature_alg,
         cert_b64,
-        cert_permissions_b64,
         error_msg,
         &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
@@ -657,7 +628,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     signature_b64: Option<String>,
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
-    cert_permissions_b64: Option<&str>,
     error_msg: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
@@ -694,7 +664,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         signature_b64,
         signature_alg_b64: signature_alg,
         cert_b64,
-        cert_permissions_b64,
         node_identity,
     }));
     let demand = create_demand(demand);
@@ -787,7 +756,6 @@ struct Payload<'a> {
     signature_b64: Option<String>,
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
-    cert_permissions_b64: Option<&'a str>,
     node_identity: Option<String>,
 }
 
@@ -817,12 +785,11 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                 payload.insert("sig", json!({ "algorithm": alg.to_string() }));
             }
 
-            if let (Some(cert), Some(permissions)) = (&p.cert_b64, p.cert_permissions_b64) {
+            if let Some(cert) = &p.cert_b64 {
                 payload.insert(
                     "cert",
                     json!({
-                        "@tag": cert.to_string(),
-                        "permissions": permissions.to_string()
+                        "@tag": cert.to_string()
                     }),
                 );
             } else if let Some(cert_b64) = p.cert_b64 {
