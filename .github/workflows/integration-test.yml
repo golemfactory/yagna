@@ -26,7 +26,7 @@ jobs:
 
   integration-test:
     name: Integration Tests
-    runs-on: [goth, ubuntu-18.04]
+    runs-on: [goth, ubuntu-22.04]
     needs: test_check
     defaults:
       run:
@@ -41,7 +41,7 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.8.0"
+          python-version: "3.10.0"
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v7
