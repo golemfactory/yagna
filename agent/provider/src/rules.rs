@@ -251,7 +251,7 @@ impl RulesManager {
         requestor_id: NodeId,
     ) -> Result<()> {
         let node_identity =
-            node_descriptor.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
+            node_descriptor.ok_or_else(|| anyhow!("Partner rule requires node descriptor"))?;
 
         let verified_node_descriptor = self
             .keystore
