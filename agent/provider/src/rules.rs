@@ -368,7 +368,6 @@ impl RulesManager {
         }
     }
 
-    //TODO delete when deleting X509 permissions feature
     fn verify_permissions(&self, cert: &str) -> Result<()> {
         let required = vec![CertPermissions::OutboundManifest];
         self.keystore.verify_permissions(cert, required)
