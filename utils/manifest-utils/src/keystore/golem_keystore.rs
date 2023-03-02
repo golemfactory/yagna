@@ -39,9 +39,9 @@ impl GolemKeystoreBuilder {
 }
 
 impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
-    fn try_with(&mut self, cert_path: &PathBuf) -> anyhow::Result<()> {
+    fn try_with(&mut self, cert_path: &Path) -> anyhow::Result<()> {
         let (id, cert) = read_cert(cert_path)?;
-        let file = cert_path.clone();
+        let file = PathBuf::from(cert_path);
         self.certificates
             .insert(id, GolemCertificateEntry { path: file, cert });
         Ok(())
@@ -58,7 +58,7 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 }
 
 // Return certificate with its id
-fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, GolemCertificate)> {
+fn read_cert(cert_path: &Path) -> anyhow::Result<(String, GolemCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
@@ -82,7 +82,7 @@ impl GolemKeystore {
 }
 
 impl Keystore for GolemKeystore {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
         let mut certificates = HashMap::new();
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {

@@ -79,7 +79,7 @@ impl X509KeystoreBuilder {
 }
 
 impl KeystoreBuilder<X509KeystoreManager> for X509KeystoreBuilder {
-    fn try_with(&mut self, file: &PathBuf) -> anyhow::Result<()> {
+    fn try_with(&mut self, file: &Path) -> anyhow::Result<()> {
         for cert in parse_cert_file(file)? {
             self.builder.add_cert(cert)?
         }
@@ -175,7 +175,7 @@ impl X509KeystoreManager {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
         self.keystore.reload(cert_dir)
     }
 
@@ -251,7 +251,7 @@ impl Keystore for X509KeystoreManager {
 
         let mut permissions_manager = self.permissions_manager();
         let removed_certs: Vec<X509> = removed.clone().into_values().collect();
-        permissions_manager.set_many(&removed_certs, &vec![], true);
+        permissions_manager.set_many(&removed_certs, &[], true);
         permissions_manager
             .save(&self.cert_dir)
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
@@ -396,7 +396,7 @@ impl X509Keystore {
         Ok(ids)
     }
 
-    fn load_file(store: &mut X509StoreBuilder, cert: &PathBuf) -> anyhow::Result<()> {
+    fn load_file(store: &mut X509StoreBuilder, cert: &Path) -> anyhow::Result<()> {
         for cert in parse_cert_file(cert)? {
             store.add_cert(cert)?
         }
@@ -514,7 +514,7 @@ impl X509Keystore {
     }
 }
 
-fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
+fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
     let extension = super::get_file_extension(cert);
     let mut cert = File::open(cert)?;
     let mut cert_buffer = Vec::new();
@@ -610,9 +610,10 @@ impl PermissionsManager {
         &mut self,
         // With slice I would need add `openssl` dependency directly to ya-rovider.
         #[allow(clippy::ptr_arg)] certs: &Vec<X509>,
-        permissions: &Vec<CertPermissions>,
+        permissions: &[CertPermissions],
         whole_chain: bool,
     ) {
+        let permissions = Vec::from(permissions);
         let certs = match whole_chain {
             false => Self::leaf_certs(certs),
             true => certs.clone(),

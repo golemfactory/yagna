@@ -111,7 +111,7 @@ pub struct RemoveResponse {
 }
 
 pub trait Keystore: KeystoreClone + Send {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()>;
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()>;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
@@ -119,7 +119,7 @@ pub trait Keystore: KeystoreClone + Send {
 
 trait KeystoreBuilder<K: Keystore> {
     // file is certificate file, certificate is its content
-    fn try_with(&mut self, file: &PathBuf) -> anyhow::Result<()>;
+    fn try_with(&mut self, file: &Path) -> anyhow::Result<()>;
     fn build(self) -> anyhow::Result<K>;
 }
 
@@ -177,17 +177,17 @@ impl CompositeKeystore {
         })
     }
 
-    fn keystores(&self) -> Vec<Box<&dyn Keystore>> {
+    fn keystores(&self) -> Vec<&dyn Keystore> {
         vec![
-            Box::new(&self.golem_keystore),
-            Box::new(&self.x509_keystore),
+            &self.golem_keystore,
+            &self.x509_keystore,
         ]
     }
 
-    fn keystores_mut(&mut self) -> Vec<Box<&mut dyn Keystore>> {
+    fn keystores_mut(&mut self) -> Vec<&mut dyn Keystore> {
         vec![
-            Box::new(&mut self.golem_keystore),
-            Box::new(&mut self.x509_keystore),
+            &mut self.golem_keystore,
+            &mut self.x509_keystore,
         ]
     }
 
@@ -221,13 +221,13 @@ impl CompositeKeystore {
             .verify_permissions(cert, required)
     }
 
-    pub fn verify_golem_certificate(&self, cert: &String) -> anyhow::Result<GolemCertificate> {
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
         self.golem_keystore.verify_golem_certificate(cert)
     }
 }
 
 impl Keystore for CompositeKeystore {
-    fn reload(&self, cert_dir: &PathBuf) -> anyhow::Result<()> {
+    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
         for keystore in self.keystores().iter() {
             keystore.reload(cert_dir)?;
         }
@@ -269,10 +269,10 @@ impl Keystore for CompositeKeystore {
 
 /// Copies file into `dst_dir`.
 /// Renames file if duplicated: "name.ext" into "name.1.ext" etc.
-fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+fn copy_file(src_file: &PathBuf, dst_dir: &Path) -> anyhow::Result<PathBuf> {
     let file_name = get_file_name(src_file)
         .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {src_file:?}")))?;
-    let mut new_cert_path = dst_dir.clone();
+    let mut new_cert_path = PathBuf::from(dst_dir);
     new_cert_path.push(file_name);
     if new_cert_path.exists() {
         let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
@@ -281,7 +281,7 @@ fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<PathBuf> {
             .unwrap_or_else(|| String::from(""));
         for i in 0..u32::MAX {
             let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
-            new_cert_path = dst_dir.clone();
+            new_cert_path = PathBuf::from(dst_dir);
             new_cert_path.push(numbered_filename);
             if !new_cert_path.exists() {
                 break;

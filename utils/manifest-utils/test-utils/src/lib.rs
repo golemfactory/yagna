@@ -35,8 +35,8 @@ pub fn load_certificates_from_dir(
         permissions: cert_permissions.clone(),
         whole_chain: false,
     };
-    let certs = keystore.add(&add_params).expect("Can load certificates");
-    certs
+    
+    keystore.add(&add_params).expect("Can load certificates")
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> RemoveResponse {
