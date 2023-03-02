@@ -62,7 +62,7 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let node_identity = demand
+        let node_descriptor = demand
             .get_property::<String>(DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY)
             .ok();
 
@@ -71,7 +71,7 @@ impl NegotiatorComponent for ManifestSignature {
                 manifest,
                 demand.issuer,
                 manifest_sig,
-                node_identity,
+                node_descriptor,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),

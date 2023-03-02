@@ -247,11 +247,11 @@ impl RulesManager {
     fn check_partner_rule(
         &self,
         manifest: &AppManifest,
-        node_identity: Option<String>,
+        node_descriptor: Option<String>,
         requestor_id: NodeId,
     ) -> Result<()> {
         let node_identity =
-            node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
+            node_descriptor.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
 
         let verified_node_descriptor = self
             .keystore
@@ -318,7 +318,7 @@ impl RulesManager {
         manifest: AppManifest,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        node_identity: Option<String>,
+        node_descriptor: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
             log::trace!("Checking rules: outbound is disabled.");
@@ -329,7 +329,7 @@ impl RulesManager {
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_identity, requestor_id),
+            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
