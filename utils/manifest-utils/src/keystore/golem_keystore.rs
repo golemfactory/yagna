@@ -7,7 +7,7 @@ use crate::{
 use anyhow::anyhow;
 use std::{
     collections::HashMap,
-    fs::File,
+    fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
@@ -120,11 +120,11 @@ impl Keystore for GolemKeystore {
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);
-                    copy_file(path, &self.cert_dir)?;
+                    let path = copy_file(path, &self.cert_dir)?;
                     certificates.insert(
                         id.clone(),
                         GolemCertificateEntry {
-                            path: path.clone(),
+                            path,
                             cert: cert.clone(),
                         },
                     );
@@ -136,8 +136,18 @@ impl Keystore for GolemKeystore {
         Ok(super::AddResponse { added, skipped })
     }
 
-    fn remove(&mut self, _remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
-        Ok(Default::default())
+    fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
+        let mut certificates = self.certificates.write().expect("Can write Golem keystore");
+        let mut removed = Vec::new();
+        for id in &remove.ids {
+            if let Some(GolemCertificateEntry { path, cert }) = certificates.remove(id) {
+                log::debug!("Removing Golem certificate: {:?}", cert);
+                fs::remove_file(path)?;
+                let id = id.clone();
+                removed.push(Cert::Golem { id, cert });
+            }
+        }
+        Ok(super::RemoveResponse { removed })
     }
 
     fn list(&self) -> Vec<super::Cert> {

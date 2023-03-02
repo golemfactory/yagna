@@ -269,7 +269,7 @@ impl Keystore for CompositeKeystore {
 
 /// Copies file into `dst_dir`.
 /// Renames file if duplicated: "name.ext" into "name.1.ext" etc.
-fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
+fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<PathBuf> {
     let file_name = get_file_name(src_file)
         .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {src_file:?}")))?;
     let mut new_cert_path = dst_dir.clone();
@@ -291,8 +291,8 @@ fn copy_file(src_file: &PathBuf, dst_dir: &PathBuf) -> anyhow::Result<()> {
             anyhow::bail!("Unable to load certificate");
         }
     }
-    fs::copy(src_file, new_cert_path)?;
-    Ok(())
+    fs::copy(src_file, &new_cert_path)?;
+    Ok(new_cert_path)
 }
 
 fn get_file_name(path: &Path) -> Option<String> {
