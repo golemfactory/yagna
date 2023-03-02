@@ -6,9 +6,7 @@ use self::{
     x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::policy::CertPermissions;
-use golem_certificate::{
-    schemas::certificate::Certificate, validator::validated_data::ValidatedNodeDescriptor,
-};
+use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use std::{
     collections::HashSet,
@@ -19,7 +17,10 @@ use std::{
 
 pub enum Cert {
     X509(X509CertData),
-    Golem { id: String, cert: Certificate },
+    Golem {
+        id: String,
+        cert: ValidatedCertificate,
+    },
 }
 
 impl Cert {

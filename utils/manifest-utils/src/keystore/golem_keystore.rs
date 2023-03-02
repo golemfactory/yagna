@@ -9,16 +9,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use golem_certificate::validator::validated_data::ValidatedCert;
-use golem_certificate::{
-    schemas::certificate::Certificate, validator::validated_data::ValidatedNodeDescriptor,
-};
+use golem_certificate::validator::validated_data::ValidatedCertificate;
+use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
 
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
     #[allow(dead_code)]
     path: PathBuf,
-    cert: Certificate,
+    cert: ValidatedCertificate,
 }
 
 pub(super) trait GolemCertAddParams {}
@@ -59,13 +57,13 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 }
 
 // Return certificate with its id
-fn read_cert(cert_path: &PathBuf) -> anyhow::Result<(String, Certificate)> {
+fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_golem_certificate(cert_content)?;
-    Ok((cert.chain[0].clone(), cert.cert))
+    let cert = golem_certificate::validator::validate_certificate(cert_content)?;
+    Ok((cert.certificate_chain_fingerprints[0].clone(), cert))
 }
 
 #[derive(Debug, Clone)]
@@ -80,8 +78,8 @@ impl GolemKeystore {
             .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCert> {
-        golem_certificate::validator::validate_golem_certificate(cert)
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCertificate> {
+        golem_certificate::validator::validate_certificate(cert)
             .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 }
@@ -119,12 +117,9 @@ impl Keystore for GolemKeystore {
             let content = content.trim().to_string();
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
-                    let id = cert.chain[0].clone();
+                    let id = cert.certificate_chain_fingerprints[0].clone();
                     if certificates.contains_key(&id) {
-                        skipped.push(Cert::Golem {
-                            id,
-                            cert: cert.cert,
-                        });
+                        skipped.push(Cert::Golem { id, cert });
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);
@@ -133,13 +128,10 @@ impl Keystore for GolemKeystore {
                         id.clone(),
                         GolemCertificateEntry {
                             path: path.clone(),
-                            cert: cert.cert.clone(),
+                            cert: cert.clone(),
                         },
                     );
-                    added.push(Cert::Golem {
-                        id,
-                        cert: cert.cert,
-                    })
+                    added.push(Cert::Golem { id, cert })
                 }
                 Err(err) => log::warn!("Unable to parse Golem certificate. Err: {}", err),
             }

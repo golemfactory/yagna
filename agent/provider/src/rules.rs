@@ -258,20 +258,23 @@ impl RulesManager {
             .verify_node_descriptor(&node_identity)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
-        if requestor_id != verified_node_descriptor.descriptor.node_id {
+        if requestor_id != verified_node_descriptor.node_id {
             return Err(anyhow!(
                 "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
-                verified_node_descriptor.descriptor.node_id
+                verified_node_descriptor.node_id
             ));
         }
 
         self::verify_golem_permissions(
-            &verified_node_descriptor.descriptor.permissions,
+            &verified_node_descriptor.permissions,
             &manifest.get_outbound_requested_urls(),
         )
         .map_err(|e| anyhow!("Partner {e}"))?;
 
-        for cert_id in verified_node_descriptor.chain.iter() {
+        for cert_id in verified_node_descriptor
+            .certificate_chain_fingerprints
+            .iter()
+        {
             if let Some(rule) = self
                 .rulestore
                 .config
@@ -288,7 +291,7 @@ impl RulesManager {
         }
         Err(anyhow!(
             "Partner rule whole chain of cert_ids is not trusted: {:?}",
-            verified_node_descriptor.chain
+            verified_node_descriptor.certificate_chain_fingerprints
         ))
     }
 
