@@ -734,8 +734,8 @@ impl From<ya_utils_networking::vpn::Error> for ProxyingError {
 
 fn print_sockets(network: &net::Network) {
     log::trace!("[inet] existing sockets:");
-    for (handle, meta) in network.sockets_meta() {
-        log::trace!("[inet] socket: {handle} {meta:?}");
+    for (handle, meta, state) in network.sockets_meta() {
+        log::trace!("[inet] socket: {handle} ({}) {meta:?}", state.to_string());
     }
     log::trace!("[inet] existing connections:");
     for (handle, meta) in network.handles().iter() {
