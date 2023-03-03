@@ -1,23 +1,18 @@
-#[macro_use]
-extern crate serial_test;
-
-use std::fs;
-use std::path::PathBuf;
-
-use assert_cmd::{assert::Assert, Command};
-use serde_json::Value;
+use assert_cmd::Command;
+use serde_json::{json, Value};
+use tempdir::TempDir;
 use test_case::test_case;
 
-#[serial]
 #[test]
 fn empty_whitelist_json() {
-    clean_data_dir();
+    let data_dir = prepare_data_dir();
+
     Command::cargo_bin("ya-provider")
         .unwrap()
         .arg("whitelist")
         .arg("list")
         .arg("--json")
-        .args(data_dir_args())
+        .args(data_dir_args(data_dir.path().to_str().unwrap()))
         .assert()
         .stdout("[]\n")
         .success();
@@ -26,151 +21,150 @@ fn empty_whitelist_json() {
 #[test_case(
     &["domain.com"],  
     "strict",
-    r#"[{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]"#;
+    json!([{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]);
     "Adding one pattern"
 )]
 #[test_case(
     &["dom.*\\.com", "myapp.com", "other\\.*"],  
     "regex",
-    r#"[
+    json!([
         { "ID": "979b6b99", "Pattern": "dom.*\\.com", "Type": "regex" },
         { "ID": "89dcf5f6", "Pattern": "myapp.com", "Type": "regex" },
         { "ID": "c31deaea", "Pattern": "other\\.*", "Type": "regex" }
-    ]"#;
+    ]);
     "Adding multiple patterns"
 )]
 #[test_case(
     &["domain.com", "domain.com"],  
     "strict",
-    r#"[
+    json!([
         { "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }
-    ]"#;
+    ]);
     "Adding duplicated patterns results in one result"
 )]
-#[serial]
-fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: &str) {
-    clean_data_dir();
-    let expected_add_json_out = json_to_printed_output(expected_add_json_out);
-    whitelist_add(add, pattern_type)
-        .stdout(expected_add_json_out)
-        .success();
+fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: serde_json::Value) {
+    let data_dir = prepare_data_dir();
+
+    let output = whitelist_add(add, pattern_type, data_dir.path().to_str().unwrap());
+
+    assert_eq!(output, expected_add_json_out);
 }
 
 #[test_case(
     &["domain.com"],  
     "strict",
     &["5ce448a6"],
-    r#"[{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]"#,
-    "[]";
+    json!([{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]),
+    json!([]);
     "Adding one pattern, removing it, empty list."
 )]
 #[test_case(
     &["domain.com"],  
     "strict",
     &["5ce448a6", "5ce448a6"],
-    r#"[{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]"#,
-    "[]";
+    json!([{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]),
+    json!([]);
     "Adding one pattern, removing with duplicated ids, empty list."
 )]
 #[test_case(
     &["domain.com", "another.com"],  
     "strict",
     &["5ce448a6"],
-    r#"[{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]"#,
-    r#"[ { "ID": "ee0cc088",  "Pattern": "another.com",  "Type": "strict" }]"#;
+    json!([{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]),
+    json!([ { "ID": "ee0cc088",  "Pattern": "another.com",  "Type": "strict" }]);
     "Adding two patterns, removing one, one on the list."
 )]
 #[test_case(
     &["domain.com"],  
     "strict",
     &["no_such_id"],
-    "[]",
-    r#"[{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]"#;
+    json!([]),
+    json!([{ "ID": "5ce448a6", "Pattern": "domain.com", "Type": "strict" }]);
     "Adding one pattern, removing not existing, one on the list."
 )]
 #[test_case(
     &[],
     "",
     &["no_such_id", "nope"],
-    "[]",
-    "[]";
+    json!([]),
+    json!([]);
     "Removing on empty list. List on empty produces empty list."
 )]
-#[serial]
 fn whitelist_remove_test(
     add: &[&str],
     pattern_type: &str,
     remove_ids: &[&str],
-    remove_out: &str,
-    list_out: &str,
+    remove_out: Value,
+    list_out: Value,
 ) {
-    clean_data_dir();
+    let data_dir = prepare_data_dir();
+    let data_dir_path = data_dir.path().to_str().unwrap();
+
     if !add.is_empty() {
-        whitelist_add(add, pattern_type).success();
+        let _ = whitelist_add(add, pattern_type, data_dir_path);
     }
-    let remove_out = json_to_printed_output(remove_out);
-    whitelist_remove(remove_ids).stdout(remove_out).success();
-    let list_out = json_to_printed_output(list_out);
-    whitelist_list().stdout(list_out).success();
+
+    assert_eq!(whitelist_remove(remove_ids, data_dir_path), remove_out);
+
+    assert_eq!(whitelist_list(data_dir_path), list_out);
 }
 
 // Whitelist test utils
 
-fn whitelist_add(add: &[&str], pattern_type: &str) -> Assert {
-    let mut cmd = Command::cargo_bin("ya-provider").unwrap();
-    cmd.arg("whitelist")
+fn whitelist_add(add: &[&str], pattern_type: &str, data_dir: &str) -> Value {
+    let output = Command::cargo_bin("ya-provider")
+        .unwrap()
+        .arg("whitelist")
         .arg("add")
         .arg("-p")
         .args(add)
         .arg("-t")
         .arg(pattern_type)
         .arg("--json")
-        .args(data_dir_args())
-        .assert()
+        .args(data_dir_args(data_dir))
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn whitelist_remove(ids: &[&str]) -> Assert {
-    let mut cmd = Command::cargo_bin("ya-provider").unwrap();
-    cmd.arg("whitelist")
+fn whitelist_remove(ids: &[&str], data_dir: &str) -> Value {
+    let output = Command::cargo_bin("ya-provider")
+        .unwrap()
+        .arg("whitelist")
         .arg("remove")
         .args(ids)
         .arg("--json")
-        .args(data_dir_args())
-        .assert()
+        .args(data_dir_args(data_dir))
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn whitelist_list() -> Assert {
-    let mut cmd = Command::cargo_bin("ya-provider").unwrap();
-    cmd.arg("whitelist")
+fn whitelist_list(data_dir: &str) -> Value {
+    let output = Command::cargo_bin("ya-provider")
+        .unwrap()
+        .arg("whitelist")
         .arg("list")
         .arg("--json")
-        .args(data_dir_args())
-        .assert()
+        .args(data_dir_args(data_dir))
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn json_to_printed_output(out: &str) -> String {
-    let out: Value = serde_json::from_str(out).unwrap();
-    let out = serde_json::to_string_pretty(&out).unwrap();
-    format!("{out}\n")
+fn prepare_data_dir() -> TempDir {
+    TempDir::new("whitelist-cli-test-data-dir").unwrap()
 }
 
-fn clean_data_dir() {
-    let data_dir = data_dir_path();
-    if data_dir.exists() {
-        fs::remove_dir_all(&data_dir).expect("Can delete data dir");
-    }
-    // Without creating dir eprintln breaks tests https://github.com/golemfactory/yagna/blob/master/utils/path/src/data_dir.rs#L23
-    fs::create_dir(data_dir).unwrap();
-}
-
-fn data_dir_args() -> [String; 2] {
-    let data_dir = data_dir_path();
-    let data_dir = data_dir.to_str().unwrap().to_string();
-    ["--data-dir".to_string(), data_dir]
-}
-
-fn data_dir_path() -> PathBuf {
-    let mut data_dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    data_dir.push("data_dir");
-    data_dir
+fn data_dir_args(data_dir: &str) -> [String; 2] {
+    ["--data-dir".to_string(), data_dir.to_owned()]
 }
