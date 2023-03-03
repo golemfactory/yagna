@@ -13,7 +13,8 @@ use crate::{
     MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
     POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
     RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
-    RINKEBY_TOKEN, YATESTNET_TOKEN, YATESTNET_PLATFORM, YATESTNET_NETWORK
+    RINKEBY_TOKEN, YATESTNET_CURRENCY_LONG, YATESTNET_CURRENCY_SHORT, YATESTNET_NETWORK,
+    YATESTNET_PLATFORM, YATESTNET_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -132,6 +133,10 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
         POLYGON_MAINNET_PLATFORM => Ok((
             POLYGON_MAINNET_CURRENCY_SHORT.to_owned(),
             POLYGON_MAINNET_CURRENCY_LONG.to_owned(),
+        )),
+        YATESTNET_PLATFORM => Ok((
+            YATESTNET_CURRENCY_SHORT.to_owned(),
+            YATESTNET_CURRENCY_LONG.to_owned(),
         )),
         other => Err(GenericError::new(format!(
             "Unable to find network currency for platform: {}",

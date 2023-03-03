@@ -530,10 +530,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
     match network {
         Network::Mainnet => {
             collect_rpc_addr_from("MAINNET_GETH_ADDR", "https://geth.golem.network:55555")
-        },
+        }
         Network::Yatestnet => {
             collect_rpc_addr_from("YATESTNET_GETH_ADDR", "https://yatestnet.org/web3/yagna")
-        },
+        }
         Network::Rinkeby => collect_rpc_addr_from(
             "RINKEBY_GETH_ADDR",
             "http://geth.testnet.golem.network:55555",

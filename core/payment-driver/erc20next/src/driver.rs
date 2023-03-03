@@ -5,10 +5,10 @@
 */
 // Extrnal crates
 use chrono::{Duration, Utc};
+use erc20_payment_lib::runtime::PaymentRuntime;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
-use erc20_payment_lib::runtime::PaymentRuntime;
 
 // Workspace uses
 use ya_payment_driver::{
