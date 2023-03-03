@@ -1,4 +1,4 @@
-use web3::types::{H160, U256};
+use ethereum_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]

@@ -2,7 +2,7 @@ use core::fmt;
 use std::{env, fmt::Display};
 
 use awc::http;
-use web3::types::{H160, H256};
+use ethereum_types::{H160, H256};
 use serde::{Deserialize, Serialize};
 use ya_payment_driver::model::GenericError;
 use ya_utils_networking::resolver;
