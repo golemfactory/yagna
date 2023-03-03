@@ -17,7 +17,7 @@ use ya_payment_driver::{
 use ya_service_api_interfaces::Provider;
 
 // Local uses
-use crate::driver::Erc20Driver;
+use crate::driver::Erc20NextDriver;
 
 pub struct Erc20NextService;
 
@@ -58,7 +58,7 @@ impl Erc20NextService {
             };
 
             log::warn!("Starting payment engine: {:#?}", config);
-            let _pr = start_payment_engine(
+            let pr = start_payment_engine(
                 &private_keys,
                 &receiver_accounts,
                 "db.sqlite",
@@ -68,7 +68,7 @@ impl Erc20NextService {
             .await
             .unwrap();
             log::warn!("Payment engine started - outside task");
-            let driver = Erc20Driver::new(db.clone());
+            let driver = Erc20NextDriver::new(db.clone(), pr);
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
             bus::bind_service(&db, driver_rc.clone()).await?;

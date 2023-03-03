@@ -8,6 +8,7 @@ use chrono::{Duration, Utc};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
+use erc20_payment_lib::runtime::PaymentRuntime;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -46,20 +47,22 @@ lazy_static::lazy_static! {
         );
 }
 
-pub struct Erc20Driver {
+pub struct Erc20NextDriver {
     active_accounts: AccountsRc,
     dao: Erc20Dao,
     sendout_lock: Mutex<()>,
     confirmation_lock: Mutex<()>,
+    payment_runtime: PaymentRuntime,
 }
 
-impl Erc20Driver {
-    pub fn new(db: DbExecutor) -> Self {
+impl Erc20NextDriver {
+    pub fn new(db: DbExecutor, pr: PaymentRuntime) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
             dao: Erc20Dao::new(db),
             sendout_lock: Default::default(),
             confirmation_lock: Default::default(),
+            payment_runtime: pr,
         }
     }
 
@@ -85,7 +88,7 @@ impl Erc20Driver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriver for Erc20Driver {
+impl PaymentDriver for Erc20NextDriver {
     async fn account_event(
         &self,
         _db: DbExecutor,
@@ -227,7 +230,7 @@ impl PaymentDriver for Erc20Driver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriverCron for Erc20Driver {
+impl PaymentDriverCron for Erc20NextDriver {
     async fn confirm_payments(&self) {
         let guard = match self.confirmation_lock.try_lock() {
             None => {

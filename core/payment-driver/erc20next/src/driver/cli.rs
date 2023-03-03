@@ -17,12 +17,12 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 // Local uses
 use crate::{
     dao::Erc20Dao,
-    driver::Erc20Driver,
+    driver::Erc20NextDriver,
     erc20::{utils, wallet},
     network, DRIVER_NAME,
 };
 
-pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
+pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
