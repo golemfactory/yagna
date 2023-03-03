@@ -180,7 +180,7 @@ fn test_keystore_add_certificate_permissions(
     command.arg("--json").assert().success();
 
     let result = list_certificates_command(&cert_dir).unwrap();
-
+    println!("Result: {result:?}");
     for (cert_id, perm) in expected {
         assert_eq!(check_permissions(&result, cert_id), perm);
     }

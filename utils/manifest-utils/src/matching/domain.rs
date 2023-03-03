@@ -61,7 +61,7 @@ impl DomainPatterns {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::File::create(&path)?;
+            std::fs::File::create(path)?;
             let patterns = Self::default();
             patterns.save(path)?;
             Ok(patterns)
@@ -113,7 +113,7 @@ impl TryFrom<&DomainPatterns> for DomainsMatcher {
         }
         if !regex_patterns.is_empty() {
             let regex_patterns = regex_patterns.into_iter().collect::<Vec<String>>();
-            let regex_patterns = RegexSetBuilder::new(&regex_patterns)
+            let regex_patterns = RegexSetBuilder::new(regex_patterns)
                 .case_insensitive(true)
                 .ignore_whitespace(true)
                 .build()?;
