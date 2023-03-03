@@ -48,13 +48,19 @@ impl Erc20NextService {
             };
             let config = config::Config::load("config-payments.toml")?;
 
-            let _pr = start_payment_engine(
-                &private_keys,
-                &receiver_accounts,
-                "db.sqlite",
-                config,
-                Some(additional_options),
-            ).await?;
+
+            log::warn!("Starting payment engine: {:#?}", config);
+            tokio::task::spawn_local(async move {
+                let _pr = start_payment_engine(
+                    &private_keys,
+                    &receiver_accounts,
+                    "db.sqlite",
+                    config,
+                    Some(additional_options),
+                ).await.unwrap();
+                log::warn!("Payment engine started - local task");
+            });
+            log::warn!("Payment engine started - outside task");
             let driver = Erc20Driver::new(db.clone());
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
