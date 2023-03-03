@@ -37,7 +37,7 @@ pub const POLYGON_MAINNET_PLATFORM: &str = "erc20next-polygon-glm";
 pub const POLYGON_MAINNET_CURRENCY_SHORT: &str = "MATIC";
 pub const POLYGON_MAINNET_CURRENCY_LONG: &str = "Polygon";
 
-pub use service::Erc20Service as PaymentDriverService;
+pub use service::Erc20NextService as PaymentDriverService;
 
 // Private
 #[macro_use]
