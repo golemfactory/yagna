@@ -104,6 +104,7 @@ pub enum Network {
     Rinkeby = 4,    //Rinkeby is Ethereum testnet
     Goerli = 5,     //Goerli is another Ethereum testnet
     Mumbai = 80001, //Mumbai is testnet for Polygon network
+    Yatestnet = 987789, //Yatestnet is Golem internal testnet
     Polygon = 137,  //Polygon is Polygon production network
 }
 
@@ -123,6 +124,7 @@ impl FromStr for Network {
             "goerli" => Ok(Network::Goerli),
             "polygon" => Ok(Network::Polygon),
             "mumbai" => Ok(Network::Mumbai),
+            "yatestnet" => Ok(Network::Yatestnet),
             _ => Err(DbError::InvalidData(format!("Invalid network: {}", s))),
         }
     }
@@ -135,6 +137,7 @@ impl Display for Network {
             Network::Rinkeby => f.write_str("rinkeby"),
             Network::Goerli => f.write_str("goerli"),
             Network::Mumbai => f.write_str("mumbai"),
+            Network::Yatestnet => f.write_str("yatestnet"),
             Network::Polygon => f.write_str("polygon"),
         }
     }

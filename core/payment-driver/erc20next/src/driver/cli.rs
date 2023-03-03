@@ -70,6 +70,13 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
+        Network::Yatestnet => format!(
+            r#"Your Yatestnet address is {}.
+
+TODO - add faucet
+"#,
+            address
+        ),
         Network::Goerli => format!(
             r#"Your Goerli Polygon address is {}.
 
@@ -151,6 +158,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         let endpoint = match network {
             Network::Polygon => "https://polygonscan.com/tx/",
             Network::Mainnet => "https://etherscan.io/tx/",
+            Network::Yatestnet => "https://yatestnet.org/tx/",
             Network::Rinkeby => "https://rinkeby.etherscan.io/tx/",
             Network::Goerli => "https://goerli.etherscan.io/tx/",
             Network::Mumbai => "https://mumbai.polygonscan.com/tx/",
