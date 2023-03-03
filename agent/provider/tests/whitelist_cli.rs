@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use tempdir::TempDir;
 use test_case::test_case;
