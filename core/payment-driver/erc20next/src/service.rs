@@ -3,10 +3,10 @@
 */
 
 // External crates
-use std::sync::Arc;
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::runtime::start_payment_engine;
+use std::sync::Arc;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -37,7 +37,6 @@ impl Erc20NextService {
         //Cron::new(driver_rc.clone());
         log::debug!("Cron started");
 
-
         {
             let private_keys = vec![];
             let receiver_accounts = vec![];
@@ -46,20 +45,28 @@ impl Erc20NextService {
                 generate_tx_only: false,
                 skip_multi_contract_check: false,
             };
-            let config = config::Config::load("config-payments.toml")?;
-
+            log::warn!("Loading config");
+            let config_str = include_str!("../config-payments.toml");
+            let config = match config::Config::load("config-payments.toml") {
+                Ok(config) => config,
+                Err(err) => {
+                    log::warn!(
+                        "Failed to load config from config-payments.toml due to {err:?}, using default config"
+                    );
+                    config::Config::load_from_str(config_str).unwrap()
+                }
+            };
 
             log::warn!("Starting payment engine: {:#?}", config);
-            tokio::task::spawn_local(async move {
-                let _pr = start_payment_engine(
-                    &private_keys,
-                    &receiver_accounts,
-                    "db.sqlite",
-                    config,
-                    Some(additional_options),
-                ).await.unwrap();
-                log::warn!("Payment engine started - local task");
-            });
+            let _pr = start_payment_engine(
+                &private_keys,
+                &receiver_accounts,
+                "db.sqlite",
+                config,
+                Some(additional_options),
+            )
+            .await
+            .unwrap();
             log::warn!("Payment engine started - outside task");
             let driver = Erc20Driver::new(db.clone());
             driver.load_active_accounts().await;
