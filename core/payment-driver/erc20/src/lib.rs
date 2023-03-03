@@ -19,6 +19,12 @@ pub const GOERLI_PLATFORM: &str = "erc20-goerli-tglm";
 pub const GOERLI_CURRENCY_SHORT: &str = "tETH";
 pub const GOERLI_CURRENCY_LONG: &str = "Goerli Ether";
 
+pub const YATESTNET_NETWORK: &str = "yatestnet";
+pub const YATESTNET_TOKEN: &str = "tGLM";
+pub const YATESTNET_PLATFORM: &str = "erc20-yatestnet-tglm";
+pub const YATESTNET_CURRENCY_SHORT: &str = "tETH";
+pub const YATESTNET_CURRENCY_LONG: &str = "Test Ether";
+
 pub const MUMBAI_NETWORK: &str = "mumbai";
 pub const MUMBAI_TOKEN: &str = "tGLM";
 pub const MUMBAI_PLATFORM: &str = "erc20-mumbai-tglm";

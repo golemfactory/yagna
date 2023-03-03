@@ -13,7 +13,7 @@ use crate::{
     MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
     POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
     RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
-    RINKEBY_TOKEN,
+    RINKEBY_TOKEN, YATESTNET_TOKEN, YATESTNET_PLATFORM, YATESTNET_NETWORK
 };
 
 lazy_static::lazy_static! {
@@ -36,6 +36,12 @@ lazy_static::lazy_static! {
                 MAINNET_TOKEN.to_string() => MAINNET_PLATFORM.to_string()
             }
         },
+        YATESTNET_NETWORK.to_string() => Network {
+            default_token: YATESTNET_TOKEN.to_string(),
+            tokens: hashmap! {
+                YATESTNET_TOKEN.to_string() => YATESTNET_PLATFORM.to_string()
+            }
+        },
         MUMBAI_NETWORK.to_string() => Network {
             default_token: MUMBAI_TOKEN.to_string(),
             tokens: hashmap! {
@@ -54,6 +60,7 @@ lazy_static::lazy_static! {
     pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
     pub static ref MUMBAI_DB_NETWORK: DbNetwork = DbNetwork::from_str(MUMBAI_NETWORK).unwrap();
     pub static ref POLYGON_MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(POLYGON_MAINNET_NETWORK).unwrap();
+    pub static ref YATESTNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(YATESTNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
@@ -62,6 +69,7 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
         GOERLI_PLATFORM => Ok((*GOERLI_DB_NETWORK, GOERLI_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
         MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
+        YATESTNET_PLATFORM => Ok((*YATESTNET_DB_NETWORK, YATESTNET_TOKEN.to_owned())),
         POLYGON_MAINNET_PLATFORM => Ok((
             *POLYGON_MAINNET_DB_NETWORK,
             POLYGON_MAINNET_TOKEN.to_owned(),
