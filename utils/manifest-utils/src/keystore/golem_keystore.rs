@@ -62,7 +62,7 @@ fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)>
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_certificate(cert_content)?;
+    let cert = golem_certificate::validator::validate_certificate_str(cert_content)?;
     Ok((cert.certificate_chain_fingerprints[0].clone(), cert))
 }
 
@@ -74,12 +74,12 @@ pub(super) struct GolemKeystore {
 
 impl GolemKeystore {
     pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
-        golem_certificate::validator::validate_node_descriptor(cert)
+        golem_certificate::validator::validate_node_descriptor_str(cert)
             .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
     }
 
     pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCertificate> {
-        golem_certificate::validator::validate_certificate(cert)
+        golem_certificate::validator::validate_certificate_str(cert)
             .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 }
