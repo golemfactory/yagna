@@ -234,7 +234,9 @@ pub mod local {
     /// using `ya-relay-server` for communication.
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
     #[serde(rename_all = "camelCase")]
-    pub struct GsbPing {}
+    pub struct GsbPing {
+        pub nodes: Vec<NodeId>,
+    }
 
     impl RpcMessage for GsbPing {
         const ID: &'static str = "GsbPing";

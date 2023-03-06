@@ -1,10 +1,12 @@
 use std::cmp::Ordering;
 use std::fmt::Display;
+use std::str::FromStr;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use humantime::format_duration;
 use structopt::*;
+use ya_client_model::NodeId;
 
 use ya_core_model::net::local as model;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
@@ -26,7 +28,10 @@ pub enum NetCommand {
         node_id: String,
     },
     /// Ping connected nodes
-    Ping {},
+    Ping {
+        /// If None, all connected Nodes will be pinged.
+        node_id: Option<String>,
+    },
 }
 
 impl NetCommand {
@@ -149,9 +154,14 @@ impl NetCommand {
                     "encryption": node.encryption,
                 }))
             }
-            NetCommand::Ping { .. } => {
+            NetCommand::Ping { node_id } => {
                 let pings = bus::service(model::BUS_ID)
-                    .send(model::GsbPing {})
+                    .send(model::GsbPing {
+                        nodes: node_id
+                            .into_iter()
+                            .map(|id| NodeId::from_str(&id))
+                            .collect::<Result<Vec<NodeId>, _>>()?,
+                    })
                     .await
                     .map_err(anyhow::Error::msg)??;
 

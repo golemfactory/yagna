@@ -113,6 +113,11 @@ macro_rules! proxy {
 }
 
 proxy!(
+    GetAlias(NodeId) -> Option<NodeId>,
+    get_alias,
+    |client: Client, msg: GetAlias| async move { client.sessions.alias(&msg.0).await }
+);
+proxy!(
     IsP2p(NodeId) -> bool,
     is_p2p,
     |client: Client, msg: IsP2p| async move { client.sessions.is_p2p(&msg.0).await }
