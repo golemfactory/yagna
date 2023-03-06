@@ -15,8 +15,8 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 use crate::hybrid::Net;
 
 pub(crate) fn bind_service() {
-    let _ = bus::bind(model::BUS_ID, |_: model::GsbPing| {
-        cli_ping().map_err(status_err)
+    let _ = bus::bind(model::BUS_ID, |ping: model::GsbPing| {
+        cli_ping(ping.nodes).map_err(status_err)
     });
 
     ServiceBinder::new(DIAGNOSTIC, &(), ())
@@ -122,14 +122,18 @@ fn to_status_metrics(metrics: &mut ChannelMetrics) -> model::StatusMetrics {
     }
 }
 
-pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
+pub async fn cli_ping(nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
     let client = Net::client().await?;
 
     // This will update sessions ping. We don't display them in this view
     // but I think it is good place to enforce this.
     client.ping_sessions().await?;
 
-    let nodes = client.connected_nodes().await?;
+    let nodes = match nodes.is_empty() {
+        true => client.connected_nodes().await?,
+        false => nodes.into_iter().map(|id| (id, None)).collect(),
+    };
+
     let our_node_id = client.node_id().await?;
     let ping_timeout = Duration::from_secs(10);
 
@@ -198,7 +202,7 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
     .collect::<Vec<_>>();
 
     for result in &mut results {
-        let main_id = match result.node_alias {
+        let main_id = match client.get_alias(result.node_id).await.ok().flatten() {
             Some(id) => id,
             None => result.node_id,
         };
