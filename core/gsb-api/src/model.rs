@@ -21,24 +21,30 @@ pub(crate) struct ServiceRequest {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub(crate) struct ServiceResponse {
     pub(crate) listen: ServiceListenResponse,
+    /// Id of bound GSB services.
+    /// It allows to access WebSocket endpoint and to later unbind GSB services using DELETE method.
+    /// WebSocket endpoint allows to listen on incoming GSB messages.
+    pub(crate) services_id: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub(crate) struct ServiceListenRequest {
+    /// GSB services address prefix.
+    /// Example value: "/public/gftp/id_of_shared_data"
     pub(crate) on: String,
+    /// GSB services address prefix subpath.
+    /// Example value: ["GetMetadata", "GetChunk"]
     pub(crate) components: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub(crate) struct ServiceListenResponse {
+    /// GSB services address prefix.
+    /// Example value: "/public/gftp/id_of_shared_data"
     pub(crate) on: String,
+    /// GSB services address prefix subpath.
+    /// Example value: ["GetMetadata", "GetChunk"]
     pub(crate) components: Vec<String>,
-    pub(crate) links: ServiceLinks,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub(crate) struct ServiceLinks {
-    pub(crate) messages: String,
 }
 
 #[derive(thiserror::Error, Debug)]
