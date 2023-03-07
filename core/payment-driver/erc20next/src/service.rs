@@ -63,6 +63,7 @@ impl Erc20NextService {
                 &receiver_accounts,
                 "db.sqlite",
                 config,
+                None,
                 Some(additional_options),
             )
             .await
