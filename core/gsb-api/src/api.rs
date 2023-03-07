@@ -220,7 +220,7 @@ mod tests {
                 "components": components,
                 "on": service_addr.to_string(),
             },
-            "services_id": encoded_addr
+            "servicesId": encoded_addr
         });
         assert_eq!(body, expected_body);
         let body: ServiceResponse = serde_json::value::from_value(body).unwrap();

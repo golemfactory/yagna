@@ -9,16 +9,19 @@ use serde::{Deserialize, Serialize};
 use ya_client_model::ErrorMessage;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ServicePath {
     pub address: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceRequest {
     pub(crate) listen: ServiceListenRequest,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceResponse {
     pub(crate) listen: ServiceListenResponse,
     /// Id of bound GSB services.
@@ -28,6 +31,7 @@ pub(crate) struct ServiceResponse {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceListenRequest {
     /// GSB services address prefix.
     /// Example value: "/public/gftp/id_of_shared_data"
@@ -38,6 +42,7 @@ pub(crate) struct ServiceListenRequest {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceListenResponse {
     /// GSB services address prefix.
     /// Example value: "/public/gftp/id_of_shared_data"
