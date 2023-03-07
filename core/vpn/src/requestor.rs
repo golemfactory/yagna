@@ -347,7 +347,7 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     };
 
     if ip_packet.protocol() != Protocol::Udp as u8 {
-        bail!("Expected UDP protocol")
+        return Ok(frame.to_vec());
     }
 
     let src = ip_packet.src_address();
