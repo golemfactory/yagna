@@ -249,7 +249,7 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
 
         let desc = dispatch_desc(&packet)
             .map(|desc| format!("{desc:?}"))
-            .unwrap_or("error".to_string());
+            .unwrap_or_else(|_| "error".to_string());
         log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
 
         ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
@@ -334,7 +334,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
 
         let desc = dispatch_desc(&frame)
             .map(|desc| format!("{desc:?}"))
-            .unwrap_or("error".to_string());
+            .unwrap_or_else(|_| "error".to_string());
         log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
         if let Err(e) = fwd.send(Ok(frame)) {
@@ -749,10 +749,7 @@ fn print_sockets(network: &net::Network) {
 }
 
 fn get_handle(network: &net::Network, meta: &ConnectionMeta) -> Option<SocketHandle> {
-    network
-        .connections()
-        .get(&meta)
-        .map(|conn| conn.handle.clone())
+    network.connections().get(meta).map(|conn| conn.handle)
 }
 
 async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
