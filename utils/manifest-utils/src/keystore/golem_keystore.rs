@@ -138,7 +138,7 @@ impl Keystore for GolemKeystore {
                     certificates.insert(
                         id.clone(),
                         GolemCertificateEntry {
-                            path: path.clone(),
+                            path,
                             cert: cert.clone(),
                         },
                     );
