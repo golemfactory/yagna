@@ -2616,7 +2616,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-certificate?rev=e9759c393041b1fb0074671bee844fc9d877f676#e9759c393041b1fb0074671bee844fc9d877f676"
+source = "git+https://github.com/golemfactory/golem-certificate?rev=71cb9a5c76a3e741b26ace018da9fe482ccdc268#71cb9a5c76a3e741b26ace018da9fe482ccdc268"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5954,7 +5954,6 @@ version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
- "indexmap",
  "itoa 1.0.5",
  "ryu",
  "serde",
