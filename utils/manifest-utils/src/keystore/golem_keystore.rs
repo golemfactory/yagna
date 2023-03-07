@@ -63,7 +63,13 @@ fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)>
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
     let cert = golem_certificate::validator::validate_certificate_str(cert_content)?;
-    Ok((cert.certificate_chain_fingerprints[0].clone(), cert))
+    let id = cert
+        .certificate_chain_fingerprints
+        .get(0)
+        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+        .to_owned();
+
+    Ok((id, cert))
 }
 
 #[derive(Debug, Clone)]
@@ -117,7 +123,12 @@ impl Keystore for GolemKeystore {
             let content = content.trim().to_string();
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
-                    let id = cert.certificate_chain_fingerprints[0].clone();
+                    let id = cert
+                        .certificate_chain_fingerprints
+                        .get(0)
+                        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+                        .to_owned();
+
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
