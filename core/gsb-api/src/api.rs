@@ -120,7 +120,7 @@ mod tests {
     use bytes::Bytes;
     use futures::{SinkExt, StreamExt, TryStreamExt};
     use serde::{Deserialize, Serialize};
-    use serde_json::Value;
+    use serde_json::{json, Value};
     use serial_test::serial;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -212,20 +212,20 @@ mod tests {
         let mut bind_resp = bind_req.await.unwrap();
         log::debug!("Bind service response: {:?}", bind_resp);
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
-        let body = bind_resp.body().await.unwrap();
-        let body: ServiceResponse = serde_json::de::from_slice(&body).unwrap();
         let encoded_addr = BASE64.encode(service_addr);
+        let body = bind_resp.body().await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        let expected_body = json!({
+            "listen": {
+                "components": components,
+                "on": service_addr.to_string(),
+            },
+            "services_id": encoded_addr
+        });
+        assert_eq!(body, expected_body);
+        let body: ServiceResponse = serde_json::value::from_value(body).unwrap();
+
         let services_path = format!("/{encoded_addr}");
-        assert_eq!(
-            body,
-            ServiceResponse {
-                listen: ServiceListenResponse {
-                    components,
-                    on: service_addr.to_string(),
-                },
-                services_id: encoded_addr
-            }
-        );
         let location = bind_resp
             .headers()
             .get(actix_web::http::header::LOCATION)
