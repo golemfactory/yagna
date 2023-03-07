@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -13,7 +14,7 @@ use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(StructOpt, Debug)]
-#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder, rename_all = "kebab-case")]
 /// Network management
 pub enum NetCommand {
     /// Show network status
@@ -32,6 +33,15 @@ pub enum NetCommand {
         /// If None, all connected Nodes will be pinged.
         node_id: Option<String>,
     },
+    /// Establish connection to other Node
+    Connect {
+        node_id: String,
+        /// Add Node to neighborhood
+        #[structopt(long)]
+        keep_alive: bool,
+    },
+    /// Disconnect Node
+    Disconnect { node_id: String },
 }
 
 impl NetCommand {
@@ -142,17 +152,7 @@ impl NetCommand {
                     .await
                     .map_err(anyhow::Error::msg)??;
 
-                let naive = NaiveDateTime::from_timestamp_opt(node.seen.into(), 0)
-                    .expect("Failed on out-of-range number of seconds");
-                let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
-
-                CommandOutput::object(serde_json::json!({
-                    "identities": node.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
-                    "endpoints": node.endpoints.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
-                    "seen": seen.to_string(),
-                    "slot": node.slot,
-                    "encryption": node.encryption,
-                }))
+                find_node_to_output(node)
             }
             NetCommand::Ping { node_id } => {
                 let pings = bus::service(model::BUS_ID)
@@ -190,6 +190,31 @@ impl NetCommand {
                 }
                 .into())
             }
+            NetCommand::Connect {
+                node_id,
+                keep_alive,
+            } => {
+                let node: model::FindNodeResponse = bus::service(model::BUS_ID)
+                    .send(model::Connect {
+                        node: NodeId::from_str(&node_id)?,
+                        keep: keep_alive,
+                        reliable_channel: true,
+                        transfer_channel: false,
+                    })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+
+                find_node_to_output(node)
+            }
+            NetCommand::Disconnect { node_id } => {
+                bus::service(model::BUS_ID)
+                    .send(model::Disconnect {
+                        node: NodeId::from_str(&node_id)?,
+                    })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+                Ok(CommandOutput::NoOutput)
+            }
         }
     }
 }
@@ -202,6 +227,20 @@ fn to_kib(value: f32, is_json: bool) -> serde_json::Value {
 #[inline]
 fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
     format_number(value as f64 / (1024. * 1024.), is_json)
+}
+
+fn find_node_to_output(response: model::FindNodeResponse) -> anyhow::Result<CommandOutput> {
+    let naive = NaiveDateTime::from_timestamp_opt(response.seen.into(), 0)
+        .context("Failed on out-of-range number of seconds")?;
+    let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+    CommandOutput::object(serde_json::json!({
+        "identities": response.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+        "endpoints": response.endpoints.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+        "seen": seen.to_string(),
+        "slot": response.slot,
+        "encryption": response.encryption,
+    }))
 }
 
 fn format_number<T>(value: T, is_json: bool) -> serde_json::Value
