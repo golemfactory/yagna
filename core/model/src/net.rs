@@ -23,6 +23,7 @@ pub mod local {
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
+    use crate::net::GenericNetError;
     use ya_client_model::NodeId;
     use ya_service_bus::RpcMessage;
 
@@ -252,6 +253,39 @@ pub mod local {
         pub tcp_ping: Duration,
         pub udp_ping: Duration,
         pub is_p2p: bool,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Connect {
+        pub node: NodeId,
+        /// Node will be added to neighborhood and kept until next update.
+        pub keep: bool,
+        /// Virtual TCP connection will be created.
+        /// If non of flags `reliable_channel` and `transfer_channel` will be set, only
+        /// sessions will be established. If Nodes require relay forwarding,
+        /// no session will be established.
+        pub reliable_channel: bool,
+        /// Virtual TCP connection used for transfers will be created.
+        pub transfer_channel: bool,
+    }
+
+    impl RpcMessage for Connect {
+        const ID: &'static str = "Connect";
+        type Item = FindNodeResponse;
+        type Error = GenericNetError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Disconnect {
+        pub node: NodeId,
+    }
+
+    impl RpcMessage for Disconnect {
+        const ID: &'static str = "Disconnect";
+        type Item = ();
+        type Error = GenericNetError;
     }
 
     #[derive(Clone, Serialize, Deserialize)]

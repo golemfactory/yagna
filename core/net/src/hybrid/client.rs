@@ -7,6 +7,7 @@ use std::sync::RwLock;
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
 
+use ya_core_model::net::local as model;
 use ya_core_model::net::local::FindNodeResponse;
 use ya_core_model::NodeId;
 use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
@@ -112,6 +113,39 @@ macro_rules! proxy {
     };
 }
 
+proxy!(
+    Connect(model::Connect) -> anyhow::Result<()>,
+    connect,
+    |client: Client, msg: Connect| async move {
+        if msg.0.reliable_channel {
+            let _ = client.forward(msg.0.node).await?;
+        }
+
+        if msg.0.transfer_channel {
+            let _ = client.forward_transfer(msg.0.node).await?;
+        }
+
+        if !msg.0.reliable_channel && !msg.0.transfer_channel {
+            let _ = client.forward_unreliable(msg.0.node).await?;
+        }
+        Ok(())
+    }
+);
+proxy!(
+    Disconnect(NodeId) -> anyhow::Result<()>,
+    disconnect,
+    |client: Client, msg: Disconnect| async move {
+        let node_id = msg.0;
+        let node = client.sessions.get_node(node_id).await?;
+
+        if node.is_p2p() {
+            client.sessions.close_session(node.session).await?;
+        } else {
+            client.sessions.remove_node(node_id).await;
+        }
+        Ok(())
+    }
+);
 proxy!(
     GetAlias(NodeId) -> Option<NodeId>,
     get_alias,
