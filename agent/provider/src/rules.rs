@@ -1,5 +1,6 @@
 use crate::startup_config::FileMonitor;
 use anyhow::{anyhow, Result};
+use golem_certificate::schemas::permissions::Permissions;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,7 +17,6 @@ use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
-    golem_certificate::GolemPermission,
     keystore::Keystore,
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
@@ -247,37 +247,31 @@ impl RulesManager {
     fn check_partner_rule(
         &self,
         manifest: &AppManifest,
-        node_identity: Option<String>,
+        node_descriptor: Option<String>,
         requestor_id: NodeId,
     ) -> Result<()> {
-        let node_identity =
-            node_identity.ok_or_else(|| anyhow!("Partner rule requires partner certificate"))?;
+        let node_descriptor =
+            node_descriptor.ok_or_else(|| anyhow!("Partner rule requires node descriptor"))?;
 
-        let verified_cert = self
+        let node_descriptor = self
             .keystore
-            .verify_golem_certificate(&node_identity)
+            .verify_node_descriptor(&node_descriptor)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
-        if requestor_id != verified_cert.node_id {
+        if requestor_id != node_descriptor.node_id {
             return Err(anyhow!(
                 "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
-                verified_cert.node_id
+                node_descriptor.node_id
             ));
         }
 
         self::verify_golem_permissions(
-            &verified_cert.permissions,
+            &node_descriptor.permissions,
             &manifest.get_outbound_requested_urls(),
         )
         .map_err(|e| anyhow!("Partner {e}"))?;
 
-        let cert_ids = verified_cert
-            .cert_ids_chain
-            .iter()
-            .map(|i| i.hash.clone())
-            .collect::<Vec<_>>();
-
-        for cert_id in cert_ids.iter() {
+        for cert_id in node_descriptor.certificate_chain_fingerprints.iter() {
             if let Some(rule) = self
                 .rulestore
                 .config
@@ -294,7 +288,7 @@ impl RulesManager {
         }
         Err(anyhow!(
             "Partner rule whole chain of cert_ids is not trusted: {:?}",
-            cert_ids
+            node_descriptor.certificate_chain_fingerprints
         ))
     }
 
@@ -321,7 +315,7 @@ impl RulesManager {
         manifest: AppManifest,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        node_identity: Option<String>,
+        node_descriptor: Option<String>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
             log::trace!("Checking rules: outbound is disabled.");
@@ -332,7 +326,7 @@ impl RulesManager {
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_identity, requestor_id),
+            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
@@ -374,29 +368,28 @@ impl RulesManager {
     }
 }
 
-fn verify_golem_permissions(
-    cert_permissions: &[GolemPermission],
-    requested_urls: &[Url],
-) -> Result<()> {
-    if cert_permissions.is_empty() {
-        return Err(anyhow!("requestor doesn't have any permissions"));
-    }
-
-    for perm in cert_permissions {
-        match perm {
-            GolemPermission::Outbound(permitted_urls) => {
-                for requested_url in requested_urls {
-                    if permitted_urls.contains(requested_url).not() {
-                        return Err(anyhow!(
-                            "Partner rule forbidden url requested: {requested_url}"
-                        ));
-                    }
+fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
+    match cert_permissions {
+        Permissions::All => Ok(()),
+        Permissions::Object(details) => match &details.outbound {
+            Some(outbound_permissions) => match outbound_permissions {
+                golem_certificate::schemas::permissions::OutboundPermissions::Unrestricted => {
+                    Ok(())
                 }
-            }
-            GolemPermission::OutboundUnrestricted | GolemPermission::All => {}
-        }
+                golem_certificate::schemas::permissions::OutboundPermissions::Urls(
+                    permitted_urls,
+                ) => {
+                    for requested_url in requested_urls {
+                        if permitted_urls.contains(requested_url).not() {
+                            anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
+                        }
+                    }
+                    Ok(())
+                }
+            },
+            None => anyhow::bail!("No outbound permissions"),
+        },
     }
-    Ok(())
 }
 
 fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
