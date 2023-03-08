@@ -56,7 +56,7 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8.0'
+          python-version: '3.10.7'
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v7
@@ -116,7 +116,7 @@ jobs:
         # Python version below should agree with the version set up by this job.
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
-        run: poetry env remove python3.8
+        run: poetry env remove python3.10
 
       - name: Send Discord notification on failure
         uses: Ilshidur/action-discord@0.3.2
