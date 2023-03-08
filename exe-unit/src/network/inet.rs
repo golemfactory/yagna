@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
-use std::iter::FromIterator;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -250,7 +249,7 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
         let desc = dispatch_desc(&packet)
             .map(|desc| format!("{desc:?}"))
             .unwrap_or_else(|_| "error".to_string());
-        log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
+        log::trace!("[inet] runtime -> inet packet {} B, {}", packet.len(), desc);
 
         ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
             &ya_packet_trace::try_extract_from_ip_frame(&packet)
@@ -335,7 +334,11 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         let desc = dispatch_desc(&frame)
             .map(|desc| format!("{desc:?}"))
             .unwrap_or_else(|_| "error".to_string());
-        log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
+        log::trace!(
+            "[inet] egress -> runtime packet {} B, {}",
+            frame.len(),
+            desc
+        );
 
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {e}");
@@ -465,7 +468,7 @@ struct Proxy {
 
 struct ConnectionState {
     sender: TransportSender,
-    last_seen: AtomicU64,
+    last_seen: Arc<AtomicU64>,
     abort: AbortHandle,
 }
 
@@ -496,16 +499,14 @@ impl Proxy {
         state.remotes.get(key).map(|state| state.sender.clone())
     }
 
-    async fn update_seen(&self, key: &TransportKey) -> bool {
+    async fn update_seen(&self, key: &TransportKey) {
         let state = self.state.read().await;
-        state
-            .remotes
-            .get(key)
-            .map(|state| state.update_seen())
-            .is_some()
+        if let Some(conn_state) = state.remotes.get(key) {
+            conn_state.update_seen();
+        }
     }
 
-    async fn drop_unused_connections(&self, sockets_limit: usize) -> usize {
+    async fn close_lru_udp_connections(&self, sockets_limit: usize) {
         let udps = {
             let state = self.state.read().await;
             let mut udps = state
@@ -526,8 +527,6 @@ impl Proxy {
         for key in &udps {
             self.unbind(key.as_socket_desc()).await.ok();
         }
-
-        udps.len()
     }
 
     async fn bind(
@@ -592,8 +591,6 @@ impl Proxy {
             .left_future());
         }
 
-        self.drop_unused_connections(200).await;
-
         print_sockets(&network);
 
         log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
@@ -601,6 +598,10 @@ impl Proxy {
         let (ip, port) = (conv_ip_addr(meta.local.addr)?, meta.local.port);
         if let Some(ref filter) = self.filter {
             filter.validate(meta.protocol, ip, port)?;
+        }
+
+        if meta.protocol == Protocol::Udp {
+            self.close_lru_udp_connections(200).await;
         }
 
         let (tx, rx) = match meta.protocol {
@@ -614,14 +615,15 @@ impl Proxy {
 
         let mut state = self.state.write().await;
         let (conn_state, mut rx) = ConnectionState::new(tx, rx);
+        let update_seen_fn = conn_state.update_seen_fn();
         state.remotes.insert(key.clone(), conn_state);
 
         Ok(async move {
             while let Some(bytes) = rx.next().await {
-                proxy.update_seen(&key).await;
+                update_seen_fn();
 
                 let vec = match bytes {
-                    Ok(bytes) => Vec::from_iter(bytes.into_iter()),
+                    Ok(bytes) => bytes.into_iter().collect::<Vec<_>>(),
                     Err(err) => {
                         log::debug!("[inet] proxy conn: bytes error: {}", err);
                         continue;
@@ -682,23 +684,30 @@ impl ConnectionState {
             ConnectionState {
                 sender,
                 abort,
-                last_seen: AtomicU64::new(
+                last_seen: Arc::new(AtomicU64::new(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or(Duration::from_secs(0))
                         .as_secs(),
-                ),
+                )),
             },
             stream,
         )
     }
 
     fn update_seen(&self) {
-        if let Ok(now) = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|time| time.as_secs())
-        {
-            self.last_seen.store(now, Ordering::Relaxed);
+        (self.update_seen_fn())()
+    }
+
+    fn update_seen_fn(&self) -> impl Fn() {
+        let last_seen = self.last_seen.clone();
+        move || {
+            if let Ok(now) = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_secs())
+            {
+                last_seen.store(now, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -733,18 +742,25 @@ impl From<ya_utils_networking::vpn::Error> for ProxyingError {
 }
 
 fn print_sockets(network: &net::Network) {
-    log::trace!("[inet] existing sockets:");
-    for (handle, meta, state) in network.sockets_meta() {
-        log::trace!("[inet] socket: {handle} ({}) {meta:?}", state.to_string());
-    }
-    log::trace!("[inet] existing connections:");
-    for (handle, meta) in network.handles().iter() {
-        log::trace!("[inet] connection: {handle} {meta:?}");
-    }
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("[inet] existing sockets:");
+        for (handle, meta, state) in network.sockets_meta() {
+            log::trace!(
+                "[inet] socket: {} ({}) {:?}",
+                handle,
+                state.to_string(),
+                meta
+            );
+        }
+        log::trace!("[inet] existing connections:");
+        for (handle, meta) in network.handles().iter() {
+            log::trace!("[inet] connection: {handle} {meta:?}");
+        }
 
-    log::trace!("[inet] listening sockets:");
-    for handle in network.bindings().iter() {
-        log::trace!("[inet] listening socket: {handle}");
+        log::trace!("[inet] listening sockets:");
+        for handle in network.bindings().iter() {
+            log::trace!("[inet] listening socket: {handle}");
+        }
     }
 }
 
