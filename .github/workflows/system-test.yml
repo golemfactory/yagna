@@ -1,4 +1,4 @@
-name: Market Test Suite
+name: System Tests
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    name: Market Test Suite
+    name: System Tests
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -19,7 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -44,8 +44,8 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: Market Test Suite (semi-integration tests)
+      - name: System tests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests -p ya-market --features ya-market/test-suite --locked
+          args: --test '*' --features framework-test

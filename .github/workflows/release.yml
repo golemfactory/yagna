@@ -62,7 +62,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v1
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
@@ -176,7 +176,7 @@ jobs:
             return release.data.upload_url
 
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
@@ -250,7 +250,7 @@ jobs:
             return release.data.upload_url
 
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
       - name: Extract Version
         id: version
         shell: bash

@@ -1,9 +1,10 @@
 name: Build binaries (x86-64) hybrid-net
 
 on:
-  push:
+  pull_request:
     branches:
-      - goth-new-version
+      - master
+      - release/*
 
 env:
   rust_stable: 1.64.0
@@ -22,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v1
 
       - name: Musl
         run: |
@@ -77,7 +78,7 @@ jobs:
           fi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v1
         with:
           name: Yagna ${{ runner.os }} hybrid-net
           path: build
