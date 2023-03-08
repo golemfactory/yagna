@@ -1,10 +1,9 @@
 name: Market Test Suite
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - release/*
+      - Goth-new
 
 env:
   rust_stable: 1.64.0

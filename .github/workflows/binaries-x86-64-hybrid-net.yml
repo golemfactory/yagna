@@ -1,10 +1,10 @@
 name: Build binaries (x86-64) hybrid-net
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - release/*
+      - Goth-new
+      
 
 env:
   rust_stable: 1.64.0

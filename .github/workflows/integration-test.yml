@@ -1,10 +1,9 @@
 name: Goth integration tests
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - release/*
+      - Goth-new
 
 jobs:
   test_check:
