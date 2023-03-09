@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
 use bytes::{Bytes, BytesMut};
+use futures::channel::mpsc::UnboundedSender;
 use futures::future::{AbortHandle, Abortable};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::stream::BoxStream;
@@ -279,12 +280,23 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         match event {
-            IngressEvent::InboundConnection { desc } => log::debug!(
-                "[inet] ingress: connection to {:?} ({}) from {:?}",
-                desc.local,
-                desc.protocol,
-                desc.remote
-            ),
+            IngressEvent::InboundConnection { desc } => {
+                log::debug!(
+                    "[inet] ingress: connection to {:?} ({}) from {:?}",
+                    desc.local,
+                    desc.protocol,
+                    desc.remote
+                );
+
+                match proxy.bind(desc).await {
+                    Ok(handler) => {
+                        tokio::task::spawn_local(handler);
+                    }
+                    Err(err) => {
+                        log::debug!("[inet] router: connection error: {err}");
+                    }
+                }
+            }
             IngressEvent::Disconnected { desc } => {
                 log::debug!(
                     "[inet] ingress: disconnect {:?} ({}) by {:?}",
@@ -393,16 +405,16 @@ impl Router {
 
         match ip_packet_to_socket_desc(&ip_packet) {
             Ok(desc) => {
-                return match self.proxy.bind(desc).await {
-                    Ok(handler) => {
-                        tokio::task::spawn_local(handler);
-                        Ok(())
-                    }
-                    Err(err) => {
-                        log::debug!("[inet] router: connection error: {err}");
-                        Err(err)
-                    }
-                }
+                return Ok(()); /* match self.proxy.bind(desc).await {
+                                   Ok(handler) => {
+                                       tokio::task::spawn_local(handler);
+                                       Ok(())
+                                   }
+                                   Err(err) => {
+                                       log::debug!("[inet] router: connection error: {err}");
+                                       Err(err)
+                                   }
+                               }*/
             }
             Err(error) => match error {
                 Error::Net(NetError::ProtocolNotSupported(_)) => {}
@@ -469,7 +481,7 @@ struct Proxy {
 }
 
 struct ConnectionState {
-    sender: TransportSender,
+    sender: UnboundedSender<bytes::Bytes>,
     last_seen: Arc<AtomicU64>,
     abort: AbortHandle,
 }
@@ -496,7 +508,7 @@ impl Proxy {
         state.remotes.contains_key(key)
     }
 
-    async fn get(&self, key: &TransportKey) -> Option<TransportSender> {
+    async fn get(&self, key: &TransportKey) -> Option<UnboundedSender<bytes::Bytes>> {
         let state = self.state.read().await;
         state.remotes.get(key).map(|state| state.sender.clone())
     }
@@ -616,15 +628,37 @@ impl Proxy {
             self.close_lru_udp_connections(200).await;
         }
 
-        let (tx, rx) = match meta.protocol {
-            Protocol::Tcp => inet_tcp_proxy(ip, port).await,
-            Protocol::Udp => inet_udp_proxy(ip, port).await,
-            other => return Err(NetError::ProtocolNotSupported(other.to_string()).into()),
-        }
-        .map_err(|e| ProxyingError::routeable(conn, e))?;
+        let (tx_tx, mut tx_rx) = futures::channel::mpsc::unbounded();
+        let (mut rx_tx, rx_rx) = futures::channel::mpsc::unbounded();
+
+        tokio::task::spawn_local(async move {
+            let (mut tx, mut rx) = match meta.protocol {
+                Protocol::Tcp => inet_tcp_proxy(ip, port).await,
+                Protocol::Udp => inet_udp_proxy(ip, port).await,
+                other => Err(NetError::ProtocolNotSupported(other.to_string()).into()),
+            }
+            .map_err(|e| ProxyingError::routeable(conn, e))
+            .map_err(|e| {
+                log::debug!("bind_task_error: {e}");
+                e
+            })
+            .unwrap();
+
+            tokio::task::spawn_local(async move {
+                while let Some(data) = tx_rx.next().await {
+                    tx.send(data).await.unwrap();
+                }
+            });
+
+            tokio::task::spawn_local(async move {
+                while let Some(data) = rx.next().await {
+                    rx_tx.send(data).await.unwrap();
+                }
+            });
+        });
 
         let mut state = self.state.write().await;
-        let (conn_state, mut rx) = ConnectionState::new(tx, rx);
+        let (conn_state, mut rx) = ConnectionState::new(tx_tx, rx_rx);
         let update_seen_fn = conn_state.update_seen_fn();
         state.remotes.insert(key.clone(), conn_state);
 
@@ -686,7 +720,10 @@ impl Proxy {
 }
 
 impl ConnectionState {
-    fn new<T>(sender: TransportSender, rx: impl Stream<Item = T>) -> (Self, impl Stream<Item = T>) {
+    fn new<T>(
+        sender: UnboundedSender<bytes::Bytes>,
+        rx: impl Stream<Item = T>,
+    ) -> (Self, impl Stream<Item = T>) {
         let (abort, abort_registration) = AbortHandle::new_pair();
         let stream = Abortable::new(rx, abort_registration);
 
