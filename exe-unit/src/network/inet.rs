@@ -251,10 +251,6 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             .unwrap_or_else(|_| "error".to_string());
         log::trace!("[inet] runtime -> inet packet {} B, {}", packet.len(), desc);
 
-        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
-            &ya_packet_trace::try_extract_from_ip_frame(&packet)
-        });
-
         router.network.receive(packet);
         router.network.poll();
 
@@ -293,10 +289,6 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
-                ya_packet_trace::packet_trace_maybe!("exe-unit::inet_ingress_handler", {
-                    &ya_packet_trace::try_extract_from_ip_frame(&payload)
-                });
-
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
@@ -375,6 +367,8 @@ impl Router {
         Self { network, proxy }
     }
 
+    // this method cannot be called concurrently due to the implementation of
+    // Proxy::close_lru_udp_connections, see the comment therein.
     async fn handle(&self, frame: &Vec<u8>) -> std::result::Result<(), ProxyingError> {
         match EtherFrame::peek_type(frame.as_slice()) {
             Err(_) | Ok(EtherType::Arp) => return Ok(()),
@@ -602,7 +596,9 @@ impl Proxy {
 
         let (ip, port) = (conv_ip_addr(meta.local.addr)?, meta.local.port);
         if let Some(ref filter) = self.filter {
-            filter.validate(meta.protocol, ip, port)?;
+            filter
+                .validate(meta.protocol, ip, port)
+                .map_err(|e| ProxyingError::routeable(conn, e.into()))?;
         }
 
         if meta.protocol == Protocol::Udp {
@@ -614,9 +610,6 @@ impl Proxy {
             Protocol::Udp => inet_udp_proxy(ip, port).await?,
             other => return Err(NetError::ProtocolNotSupported(other.to_string()).into()),
         };
-
-        let conn = Connection { handle, meta };
-        let proxy = self.clone();
 
         let mut state = self.state.write().await;
         let (conn_state, mut rx) = ConnectionState::new(tx, rx);

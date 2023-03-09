@@ -9,10 +9,6 @@ default = []
 service = []
 # Temporary to make goth integration tests work
 central-net = []
-packet-trace-enable = [
-    "ya-packet-trace/enable",
-    "ya-relay-client/packet-trace-enable"
-]
 
 [dependencies]
 ya-client-model = "0.5"
