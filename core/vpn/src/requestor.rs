@@ -480,7 +480,7 @@ impl VpnRawSocket {
                 Ok::<_, anyhow::Error>(())
             }
             .then(|v| match v {
-                Err(e) => fut::ready(log::error!("failed to send packet")),
+                Err(e) => fut::ready(log::error!("failed to send packet {:?}", e)),
                 Ok(()) => fut::ready(()),
             })
             .into_actor(self),
