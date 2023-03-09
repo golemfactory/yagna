@@ -524,6 +524,11 @@ impl Proxy {
                 .collect::<Vec<_>>()
         };
 
+        // This will operate on an out-of-date snapshot of state of sockets if
+        // we start(ed) processing inet requests concurrently. If you're
+        // experiencing a bug relating to data loss in UDP connections and
+        // concurrent processing of requests is implemented, this implementation
+        // is outdated.
         for key in &udps {
             self.unbind(key.as_socket_desc()).await.ok();
         }
