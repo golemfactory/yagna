@@ -1,4 +1,6 @@
 use std::convert::TryFrom;
+use std::net::IpAddr;
+use std::str::FromStr;
 
 use actix::prelude::*;
 use futures::{future, FutureExt};
@@ -163,29 +165,15 @@ impl Vpn {
         log::warn!("[vpn] packet from: {} {} {:?}", node_id, network_id, data);
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
-        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
-            let payload = EtherFrame::peek_payload(&data).unwrap();
-            let ip = match ether_type {
-                EtherType::Arp => {
-                    let pkt = ArpPacket::packet(payload);
-                    ntoh(pkt.get_field(ArpField::SPA))
-                }
-                EtherType::Ip => {
-                    let pkt = IpPacket::packet(payload);
-                    ntoh(pkt.src_address())
-                }
-                _ => None,
-            };
-
-            if let Some(ip) = ip {
-                let _ = self.networks.get_mut(&network_id).map(|network| {
-                    if !network.nodes().contains_key(&node_id) {
-                        log::debug!("[vpn] adding new node: {} {}", ip, node_id);
-                        let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
-                    }
-                });
+        let _ = self.networks.get_mut(&network_id).map(|network| {
+            if !network.nodes().contains_key(&node_id) {
+                let ip = IpAddr::from_str("22.22.22.22").unwrap();
+                log::warn!("[vpn] adding new node: {} {}", ip, node_id);
+                let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
             }
-        }
+        });
+
+
 
         if let Err(e) = self.endpoint.send(Ok(data)) {
             log::debug!("[vpn] ingress error: {}", e);
@@ -336,8 +324,27 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
+        self.networks.as_ref().keys().for_each(|net| {
+            let ip = IpAddr::from_str("22.22.22.22").unwrap();
+            if let Some(endpoint) = self.networks.endpoint(ip) {
+                endpoint.udp
 
-        match EtherFrame::try_from(packet) {
+
+                tokio::task::spawn_local(fut);
+            }
+            //let endpoint = network.1;
+            /*let fut = endpoint
+                .udp
+                .push_raw_as(&self.default_id, packet)
+                .then(|result| async move {
+                    if let Err(err) = result {
+                        log::debug!("[vpn] call error: {err}");
+                    }
+                });
+
+            tokio::task::spawn_local(fut);*/
+        }
+        /*match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
                 EtherFrame::Ip(_) => Self::handle_ip(frame, &self.networks, &self.default_id),
@@ -349,7 +356,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
                     _ => log::debug!("[vpn] frame error (egress): {}", err),
                 };
             }
-        };
+        };*/
     }
 }
 
