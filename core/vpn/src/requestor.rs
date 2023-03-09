@@ -400,12 +400,12 @@ struct ConnectRawArgs {
     dst_ip: String,
 }
 
-//ws://127.0.0.1:7465/net-api/v2/vpn/net/fdbf6dada86046429767432deb036ec1/raw/from/192.168.8.1/to/192.168.8.7
+
 /// Initiates a new RAW connection via WebSockets to the destination address.
-#[actix_web::get("/net/{net_id}/raw/from/{requestor_ip}/to/{dst_ip}")]
+#[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
 async fn connect_raw(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<ConnectRawArgs>,
+    path: web::Path<PathConnect>,
     req: HttpRequest,
     stream: web::Payload,
     identity: Identity,
@@ -413,10 +413,10 @@ async fn connect_raw(
     log::warn!("Connect raw called {:?}", path);
 
     let net_id = path.net_id.clone();
-    let requestor_ip = IpAddr::from_str(&path.requestor_ip).map_err(|e| {
+    /*let requestor_ip = IpAddr::from_str(&path.requestor_ip).map_err(|e| {
         ApiError::Vpn(VpnError::ConnectionError(format!("invalid requestor IP: {}", e)))
-    })?;
-    let dst_ip = IpAddr::from_str(&path.dst_ip).map_err(|e| {
+    })?;*/
+    let dst_ip = IpAddr::from_str(&path.ip).map_err(|e| {
         ApiError::Vpn(VpnError::ConnectionError(format!("invalid destination IP: {}", e)))
     })?;
 
@@ -442,7 +442,7 @@ async fn connect_raw(
         .await??;
 
     Ok(ws::start(
-        VpnRawSocket::new(net_id, requestor_ip, dst_ip, dst_node),
+        VpnRawSocket::new(net_id, dst_ip, dst_ip, dst_node),
         &req,
         stream,
     )?)
