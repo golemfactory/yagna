@@ -12,6 +12,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
@@ -392,17 +393,32 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     Ok(reversed)
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct ConnectRawArgs {
+    net_id: String,
+    requestor_ip: String,
+    dst_ip: String,
+}
+
+//ws://127.0.0.1:7465/net-api/v2/vpn/net/fdbf6dada86046429767432deb036ec1/raw/from/192.168.8.1/to/192.168.8.7
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/from/{requestor_ip}/to/{dst_ip}")]
 async fn connect_raw(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<(String, IpAddr, IpAddr)>,
+    path: web::Path<ConnectRawArgs>,
     req: HttpRequest,
     stream: web::Payload,
     identity: Identity,
 ) -> Result<HttpResponse> {
     log::warn!("Connect raw called {:?}", path);
-    let (net_id, requestor_ip, dst_ip) = path.into_inner();
+
+    let net_id = path.net_id.clone();
+    let requestor_ip = IpAddr::from_str(&path.requestor_ip).map_err(|e| {
+        ApiError::Vpn(VpnError::ConnectionError(format!("invalid requestor IP: {}", e)))
+    })?;
+    let dst_ip = IpAddr::from_str(&path.dst_ip).map_err(|e| {
+        ApiError::Vpn(VpnError::ConnectionError(format!("invalid destination IP: {}", e)))
+    })?;
 
     let vpn = {
         let supervisor = vpn_sup.lock().await;
@@ -576,6 +592,9 @@ struct PathConnect {
     ip: String,
     port: u16,
 }
+
+
+
 
 #[test]
 fn test_to_detect_breaking_ya_client_const_changes() {
