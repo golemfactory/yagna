@@ -410,9 +410,11 @@ async fn connect_raw(
     let nodes = network.send(GetNodes).await??;
     let dst_ip_str = dst_ip.to_string();
     if let Some(dst_node) = nodes.into_iter().find(|n| n.ip == dst_ip_str) {
-        Ok(ws::start(VpnRawSocket::new(path.net_id, src_ip, dst_ip, dst_node), &req, stream)?)
+        Ok(ws::start(VpnRawSocket::new(vpn_id, src_ip, dst_ip, dst_node), &req, stream)?)
     }
-    Err(ApiError::Vpn(VpnError::ConnectionError("destination address not found".to_string())))
+    else {
+        Err(ApiError::Vpn(VpnError::ConnectionError("destination address not found".to_string())))
+    }
 }
 
 pub struct VpnRawSocket {
@@ -444,11 +446,11 @@ impl VpnRawSocket {
         ctx.spawn(async move {
             let res = vpn_node.send(VpnPacket(data)).await??;
 
-            Ok(())
+            Ok::<_, anyhow::Error>(())
         }.then(|v| match v {
-            Err(e) => log::error!("failed to send packet"),
-            Ok(()) => ()
-        }));
+            Err(e) => fut::ready(log::error!("failed to send packet")),
+            Ok(()) => fut::ready(())
+        }).into_actor(self));
     }
 }
 
