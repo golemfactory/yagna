@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
+use std::net::IpAddr;
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
@@ -13,12 +14,16 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
-use ya_client_model::ErrorMessage;
+use ya_client_model::{ErrorMessage, NodeId};
+use ya_service_bus::RpcEndpoint;
+use ya_core_model::activity::VpnPacket;
+use ya_core_model::net::RemoteEndpoint;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{
     Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket,
 };
+use futures::FutureExt;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -387,43 +392,63 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
 }
 
 /// Initiates a new RAW connection via WebSockets to the destination address.
-#[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
+#[actix_web::get("/net/{net_id}/raw/from/{requestor_ip}/to/{dst_ip}")]
 async fn connect_raw(
-    _vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<PathConnect>,
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<(String, IpAddr, IpAddr)>,
     req: HttpRequest,
     stream: web::Payload,
-    _identity: Identity,
+    identity: Identity,
 ) -> Result<HttpResponse> {
     log::warn!("Connect raw called {:?}", path);
-    let path = path.into_inner();
+    let (vpn_id, src_ip, dst_ip) = path.into_inner();
 
-    Ok(ws::start(VpnRawSocket::new(path.net_id), &req, stream)?)
+    let network ={
+        let vpn = vpn_sup.lock().await;
+         vpn.get_network(&identity.identity, &vpn_id)
+    }?;
+    let nodes = network.send(GetNodes).await??;
+    let dst_ip_str = dst_ip.to_string();
+    if let Some(dst_node) = nodes.into_iter().find(|n| n.ip == dst_ip_str) {
+        Ok(ws::start(VpnRawSocket::new(path.net_id, src_ip, dst_ip, dst_node), &req, stream)?)
+    }
+    Err(ApiError::Vpn(VpnError::ConnectionError("destination address not found".to_string())))
 }
 
 pub struct VpnRawSocket {
     network_id: String,
+    src_ip: IpAddr,
+    dst_ip : IpAddr,
+    dst_node : Node,
     heartbeat: Instant,
 }
 
 impl VpnRawSocket {
-    pub fn new(network_id: String) -> Self {
+    pub fn new(network_id: String, src_ip: IpAddr,
+               dst_ip : IpAddr, dst_node : Node) -> Self {
         VpnRawSocket {
             network_id,
+            src_ip,
+            dst_ip,
+            dst_node,
             heartbeat: Instant::now(),
         }
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
-        // packet tracing is also done when the packet data is no longer available,
-        // so we have to make a temporary copy. This incurs no runtime overhead on builds
-        // without the feature packet-trace-enable.
+        use ya_net::*;
 
-        let data_reversed = reverse_udp(&data).unwrap_or(Vec::new());
+        let dst_node_id : NodeId = self.dst_node.id.parse().unwrap();
+        let vpn_node = dst_node_id.service(&format!("/public/vpn/{}", self.network_id));
 
-        ctx.binary(data_reversed);
+        ctx.spawn(async move {
+            let res = vpn_node.send(VpnPacket(data)).await??;
 
-        //log::warn!("VpnRawSocket::Tx::2", { &data_trace });
+            Ok(())
+        }.then(|v| match v {
+            Err(e) => log::error!("failed to send packet"),
+            Ok(()) => ()
+        }));
     }
 }
 

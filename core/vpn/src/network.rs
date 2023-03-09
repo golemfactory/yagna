@@ -466,6 +466,7 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
+
         match self.connections.get(&pkt.meta.into()).cloned() {
             Some(connection) => {
                 // packet tracing is also done when the packet data is no longer available,
