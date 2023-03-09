@@ -267,9 +267,23 @@ impl Actor for Vpn {
             actix_rpc::bind::<VpnControl>(&vpn_id, ctx.address().recipient());
             actix_rpc::bind_raw(&format!("{vpn_id}/raw"), ctx.address().recipient());
 
+            let actor_ = actor.clone();
+            let net_id_ = net_id.clone();
             typed::bind_with_caller::<VpnTcpPacket, _, _>(&vpn_id, move |caller, pkt| {
-                actor
+                actor_
                     .send(PacketTcp {
+                        network_id: net_id_.clone(),
+                        caller,
+                        data: pkt.0,
+                    })
+                    .then(|sent| match sent {
+                        Ok(result) => future::ready(result),
+                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
+                    })
+            });
+            typed::bind_with_caller::<VpnRawPacket, _, _>(&vpn_id, move |caller, pkt| {
+                actor
+                    .send(PacketRaw {
                         network_id: net_id.clone(),
                         caller,
                         data: pkt.0,
@@ -279,6 +293,7 @@ impl Actor for Vpn {
                         Err(err) => future::err(RpcMessageError::Service(err.to_string())),
                     })
             });
+
         });
 
         match self.endpoint.receiver().ok() {
