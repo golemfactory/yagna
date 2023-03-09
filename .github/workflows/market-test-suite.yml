@@ -5,6 +5,7 @@ on:
     branches:
       - goth-new-version
 
+
 env:
   rust_stable: 1.64.0
 
