@@ -8053,6 +8053,7 @@ dependencies = [
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
+ "ya-std-utils",
  "ya-transfer",
  "ya-utils-networking",
  "ya-utils-path",
