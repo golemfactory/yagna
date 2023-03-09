@@ -5,7 +5,8 @@ use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
     x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
-use crate::{golem_certificate::GolemCertificate, policy::CertPermissions};
+use crate::policy::CertPermissions;
+use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use std::{
     collections::HashSet,
@@ -18,7 +19,7 @@ pub enum Cert {
     X509(X509CertData),
     Golem {
         id: String,
-        cert: super::golem_certificate::GolemCertificate,
+        cert: ValidatedCertificate,
     },
 }
 
@@ -204,6 +205,10 @@ impl CompositeKeystore {
             .verify_signature(cert, sig, sig_alg, data)
     }
 
+    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
+        self.golem_keystore.verify_node_descriptor(cert)
+    }
+
     //TODO delete when deleting X509 permissions feature
     pub fn verify_permissions(
         &self,
@@ -213,10 +218,6 @@ impl CompositeKeystore {
         self.x509_keystore
             .keystore
             .verify_permissions(cert, required)
-    }
-
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
-        self.golem_keystore.verify_golem_certificate(cert)
     }
 }
 

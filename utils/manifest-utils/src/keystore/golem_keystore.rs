@@ -1,9 +1,5 @@
 use super::{Cert, Keystore, KeystoreBuilder};
-use crate::{
-    golem_certificate::{self, GolemCertificate},
-    keystore::copy_file,
-    util::str_to_short_hash,
-};
+use crate::keystore::copy_file;
 use anyhow::anyhow;
 use std::{
     collections::HashMap,
@@ -13,11 +9,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use golem_certificate::validator::validated_data::ValidatedCertificate;
+use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
+
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
     #[allow(dead_code)]
     path: PathBuf,
-    cert: GolemCertificate,
+    cert: ValidatedCertificate,
 }
 
 pub(super) trait GolemCertAddParams {}
@@ -58,13 +57,18 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 }
 
 // Return certificate with its id
-fn read_cert(cert_path: &Path) -> anyhow::Result<(String, GolemCertificate)> {
+fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::verify_golem_certificate(cert_content)?;
-    let id = str_to_short_hash(cert_content);
+    let cert = golem_certificate::validator::validate_certificate_str(cert_content)?;
+    let id = cert
+        .certificate_chain_fingerprints
+        .get(0)
+        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+        .to_owned();
+
     Ok((id, cert))
 }
 
@@ -75,8 +79,13 @@ pub(super) struct GolemKeystore {
 }
 
 impl GolemKeystore {
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<GolemCertificate> {
-        golem_certificate::verify_golem_certificate(cert)
+    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
+        golem_certificate::validator::validate_node_descriptor_str(cert)
+            .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
+    }
+
+    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCertificate> {
+        golem_certificate::validator::validate_certificate_str(cert)
             .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
     }
 }
@@ -112,9 +121,14 @@ impl Keystore for GolemKeystore {
             let mut content = String::new();
             file.read_to_string(&mut content)?;
             let content = content.trim().to_string();
-            let id = str_to_short_hash(&content);
             match self.verify_golem_certificate(&content) {
                 Ok(cert) => {
+                    let id = cert
+                        .certificate_chain_fingerprints
+                        .get(0)
+                        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+                        .to_owned();
+
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
