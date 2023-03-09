@@ -1,6 +1,5 @@
 #![allow(clippy::let_unit_value)]
 
-use std::net::IpAddr;
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
@@ -9,21 +8,22 @@ use actix_web_actors::ws;
 use anyhow::bail;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::FutureExt;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
-use ya_service_bus::RpcEndpoint;
-use ya_core_model::activity::VpnPacket;
+use ya_core_model::activity::{VpnRawPacket, VpnTcpPacket};
 use ya_core_model::net::RemoteEndpoint;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::RpcEndpoint;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{
     Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket,
 };
-use futures::FutureExt;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -224,7 +224,7 @@ async fn connect_tcp(
         supervisor.get_network(&identity.identity, &path.net_id)?
     };
     let conn = vpn
-        .send(Connect {
+        .send(ConnectTcp {
             protocol: Protocol::Tcp,
             address: path.ip.to_string(),
             port: path.port,
@@ -246,7 +246,7 @@ pub struct VpnWebSocket {
 }
 
 impl VpnWebSocket {
-    pub fn new(network_id: String, conn: UserConnection) -> Self {
+    pub fn new(network_id: String, conn: UserTcpConnection) -> Self {
         VpnWebSocket {
             network_id,
             heartbeat: Instant::now(),
@@ -268,6 +268,7 @@ impl VpnWebSocket {
         let vpn = self.vpn.clone();
         vpn.send(Packet {
             data,
+            packet_type: PacketType::Tcp,
             meta: self.meta,
         })
         .into_actor(self)
@@ -401,33 +402,46 @@ async fn connect_raw(
     identity: Identity,
 ) -> Result<HttpResponse> {
     log::warn!("Connect raw called {:?}", path);
-    let (vpn_id, src_ip, dst_ip) = path.into_inner();
+    let (net_id, requestor_ip, dst_ip) = path.into_inner();
 
-    let network ={
-        let vpn = vpn_sup.lock().await;
-         vpn.get_network(&identity.identity, &vpn_id)
+    let vpn = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_network(&identity.identity, &net_id)
     }?;
-    let nodes = network.send(GetNodes).await??;
+    let nodes = vpn.send(GetNodes).await??;
     let dst_ip_str = dst_ip.to_string();
-    if let Some(dst_node) = nodes.into_iter().find(|n| n.ip == dst_ip_str) {
-        Ok(ws::start(VpnRawSocket::new(vpn_id, src_ip, dst_ip, dst_node), &req, stream)?)
-    }
-    else {
-        Err(ApiError::Vpn(VpnError::ConnectionError("destination address not found".to_string())))
-    }
+    let dst_node = match nodes.into_iter().find(|n| n.ip == dst_ip_str) {
+        Some(n) => n,
+        None => {
+            return Err(ApiError::Vpn(VpnError::ConnectionError(
+                "destination address not found".to_string(),
+            )))
+        }
+    };
+
+    let conn = vpn
+        .send(ConnectRaw {
+            address: dst_ip_str,
+        })
+        .await??;
+
+    Ok(ws::start(
+        VpnRawSocket::new(net_id, requestor_ip, dst_ip, dst_node),
+        &req,
+        stream,
+    )?)
 }
 
 pub struct VpnRawSocket {
     network_id: String,
     src_ip: IpAddr,
-    dst_ip : IpAddr,
-    dst_node : Node,
+    dst_ip: IpAddr,
+    dst_node: Node,
     heartbeat: Instant,
 }
 
 impl VpnRawSocket {
-    pub fn new(network_id: String, src_ip: IpAddr,
-               dst_ip : IpAddr, dst_node : Node) -> Self {
+    pub fn new(network_id: String, src_ip: IpAddr, dst_ip: IpAddr, dst_node: Node) -> Self {
         VpnRawSocket {
             network_id,
             src_ip,
@@ -440,17 +454,21 @@ impl VpnRawSocket {
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         use ya_net::*;
 
-        let dst_node_id : NodeId = self.dst_node.id.parse().unwrap();
+        let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let vpn_node = dst_node_id.service(&format!("/public/vpn/{}", self.network_id));
 
-        ctx.spawn(async move {
-            let res = vpn_node.send(VpnPacket(data)).await??;
+        ctx.spawn(
+            async move {
+                let res = vpn_node.send(VpnRawPacket(data)).await??;
 
-            Ok::<_, anyhow::Error>(())
-        }.then(|v| match v {
-            Err(e) => fut::ready(log::error!("failed to send packet")),
-            Ok(()) => fut::ready(())
-        }).into_actor(self));
+                Ok::<_, anyhow::Error>(())
+            }
+            .then(|v| match v {
+                Err(e) => fut::ready(log::error!("failed to send packet")),
+                Ok(()) => fut::ready(()),
+            })
+            .into_actor(self),
+        );
     }
 }
 

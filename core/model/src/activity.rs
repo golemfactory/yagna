@@ -182,10 +182,20 @@ impl RpcMessage for VpnControl {
 /// Network data
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VpnPacket(pub Vec<u8>);
+pub struct VpnTcpPacket(pub Vec<u8>);
 
-impl RpcMessage for VpnPacket {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnRawPacket(pub Vec<u8>);
+
+impl RpcMessage for VpnTcpPacket {
     const ID: &'static str = "VpnPacket";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
+impl RpcMessage for VpnRawPacket {
+    const ID: &'static str = "VpnRawPkt";
     type Item = ();
     type Error = RpcMessageError;
 }

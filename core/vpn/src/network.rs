@@ -18,7 +18,7 @@ use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_ro
 use crate::message::*;
 use crate::Result;
 
-use ya_core_model::activity::{VpnControl, VpnPacket};
+use ya_core_model::activity::{VpnControl, VpnTcpPacket};
 use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
@@ -196,11 +196,18 @@ impl VpnSupervisor {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RawConnectionMeta {
+    pub local: String,
+    pub remote: IpAddr,
+}
+
 pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack_network: net::Network,
-    connections: HashMap<SocketDesc, InternalConnection>,
+    connections_tcp: HashMap<SocketDesc, InternalTcpConnection>,
+    connections_raw: HashMap<RawConnectionMeta, InternalRawConnection>,
 }
 
 impl Vpn {
@@ -213,7 +220,8 @@ impl Vpn {
             node_id: node_id.to_string(),
             vpn,
             stack_network,
-            connections: Default::default(),
+            connections_tcp: Default::default(),
+            connections_raw: Default::default(),
         }
     }
 }
@@ -391,16 +399,16 @@ impl Handler<RemoveNode> for Vpn {
     }
 }
 
-impl Handler<Connect> for Vpn {
-    type Result = ActorResponse<Self, Result<UserConnection>>;
+impl Handler<ConnectTcp> for Vpn {
+    type Result = ActorResponse<Self, Result<UserTcpConnection>>;
 
-    fn handle(&mut self, msg: Connect, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ConnectTcp, _: &mut Self::Context) -> Self::Result {
         let remote = match to_ip(&msg.address) {
             Ok(ip) => IpEndpoint::new(ip.into(), msg.port),
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
+        log::info!("VPN {}: connecting (tcp) to {:?}", self.vpn.id(), remote);
 
         let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
@@ -409,20 +417,20 @@ impl Handler<Connect> for Vpn {
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let stack_connection = result?;
-                log::info!("VPN {}: connected to {:?}", id, remote);
+                log::info!("VPN {}: connected (tcp) to {:?}", id, remote);
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
 
-                this.connections.insert(
+                this.connections_tcp.insert(
                     stack_connection.meta.into(),
-                    InternalConnection {
+                    InternalTcpConnection {
                         stack_connection,
                         ingress_tx: tx,
                     },
                 );
 
-                Ok(UserConnection {
+                Ok(UserTcpConnection {
                     vpn,
                     rx,
                     stack_connection,
@@ -433,11 +441,38 @@ impl Handler<Connect> for Vpn {
     }
 }
 
+impl Handler<ConnectRaw> for Vpn {
+    type Result = ActorResponse<Self, Result<UserRawConnection>>;
+
+    fn handle(&mut self, msg: ConnectRaw, _: &mut Self::Context) -> Self::Result {
+        let remote = match to_ip(&msg.address) {
+            Ok(ip) => ip,
+            Err(err) => return ActorResponse::reply(Err(err)),
+        };
+
+        log::info!("VPN {}: connecting (raw) to {:?}", self.vpn.id(), remote);
+
+        let id = self.vpn.id().clone();
+
+        //let network = self.stack_network.clone();
+
+        let raw_connection_meta = RawConnectionMeta {
+            remote: remote.into(),
+            local: "".to_string(),
+        };
+
+        self.connections_raw
+            .insert(raw_connection_meta, InternalRawConnection {});
+
+        ActorResponse::reply(Ok(UserRawConnection {}))
+    }
+}
+
 impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
 
     fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
-        match self.connections.remove(&msg.desc) {
+        match self.connections_tcp.remove(&msg.desc) {
             Some(mut connection) => {
                 log::info!(
                     "Dropping connection to {:?}: {:?}",
@@ -466,58 +501,72 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
+        match pkt.packet_type {
+            PacketType::Tcp => {
+                match self.connections_tcp.get(&pkt.meta.into()).cloned() {
+                    Some(connection) => {
+                        // packet tracing is also done when the packet data is no longer available,
+                        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+                        // without the feature packet-trace-enable.
+                        #[cfg(feature = "packet-trace-enable")]
+                        let data_trace = pkt.data.clone();
 
-        match self.connections.get(&pkt.meta.into()).cloned() {
-            Some(connection) => {
-                // packet tracing is also done when the packet data is no longer available,
-                // so we have to make a temporary copy. This incurs no runtime overhead on builds
-                // without the feature packet-trace-enable.
-                #[cfg(feature = "packet-trace-enable")]
-                let data_trace = pkt.data.clone();
-
-                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", { &data_trace });
-
-                let fut = self
-                    .stack_network
-                    .send(pkt.data, connection.stack_connection)
-                    .map(move |res| {
-                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", {
+                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", {
                             &data_trace
                         });
-                        res
-                    })
-                    .map_err(|e| Error::Other(e.to_string()));
 
-                ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
-                    if let Err(e) = result {
-                        log::warn!(
+                        let fut = self
+                            .stack_network
+                            .send(pkt.data, connection.stack_connection)
+                            .map(move |res| {
+                                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", {
+                                    &data_trace
+                                });
+                                res
+                            })
+                            .map_err(|e| Error::Other(e.to_string()));
+
+                        ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
+                            if let Err(e) = result {
+                                log::warn!(
                             "[vpn: {}] error while sending egress Packet to stack at remote: {} err: {}",
                             connection.stack_connection.meta.remote,
                             this.vpn.id(),
                             e
                         );
 
-                        ctx.address().do_send(Disconnect::new(
-                            connection.stack_connection.meta.into(),
-                            DisconnectReason::ConnectionError,
-                        ));
+                                ctx.address().do_send(Disconnect::new(
+                                    connection.stack_connection.meta.into(),
+                                    DisconnectReason::ConnectionError,
+                                ));
+                            }
+                        }));
+                        ActorResponse::reply(Ok(()))
                     }
-                }));
+                    None => ActorResponse::reply(Err(Error::ConnectionError(format!(
+                        "no connection to remote: {:?}",
+                        pkt.meta.remote
+                    )))),
+                }
+            }
+            PacketType::Raw => {
+                //todo
+                /*let raw_meta = RawConnectionMeta {
+                    remote: "".to_string(),
+                    local: "".to_string(),
+                };*/
+                //match self.connections_raw.get()
                 ActorResponse::reply(Ok(()))
             }
-            None => ActorResponse::reply(Err(Error::ConnectionError(format!(
-                "no connection to remote: {:?}",
-                pkt.meta.remote
-            )))),
         }
     }
 }
 
 /// Handle ingress packet from the network
-impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
-    type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
+impl Handler<RpcEnvelope<VpnTcpPacket>> for Vpn {
+    type Result = <RpcEnvelope<VpnTcpPacket> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<VpnTcpPacket>, _: &mut Self::Context) -> Self::Result {
         self.stack_network.receive(msg.into_inner().0);
         self.stack_network.poll();
         Ok(())
@@ -564,7 +613,7 @@ impl Handler<Ingress> for Vpn {
             IngressEvent::Packet { payload, desc, .. } => {
                 ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Ingress>", { &payload });
 
-                if let Some(mut connection) = self.connections.get(&desc).cloned() {
+                if let Some(mut connection) = self.connections_tcp.get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
 
                     let fut = async move { connection.ingress_tx.send(payload).await }
@@ -641,10 +690,13 @@ impl Handler<Shutdown> for Vpn {
 }
 
 #[derive(Debug, Clone)]
-struct InternalConnection {
+struct InternalTcpConnection {
     pub stack_connection: stack::Connection,
     pub ingress_tx: mpsc::Sender<Vec<u8>>,
 }
+
+#[derive(Debug, Clone)]
+struct InternalRawConnection {}
 
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
