@@ -377,6 +377,8 @@ impl Router {
         Self { network, proxy }
     }
 
+    // this method cannot be called concurrently due to the implementation of
+    // Proxy::close_lru_udp_connections, see the comment therein.
     async fn handle(&self, frame: &Vec<u8>) -> std::result::Result<(), ProxyingError> {
         match EtherFrame::peek_type(frame.as_slice()) {
             Err(_) | Ok(EtherType::Arp) => return Ok(()),
