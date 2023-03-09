@@ -311,9 +311,9 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let net = async {
-                if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                if let Some(endpoint) = inet_endpoint {
                     let inet = start_inet(
-                        inet_endpoint.unwrap(),
+                        endpoint,
                         &service_,
                         rt_ctx.manifest.validator::<UrlValidator>(),
                     )
@@ -321,10 +321,8 @@ impl RuntimeProcess {
                     address.send(SetInetService(inet)).await?;
                 }
 
-                if rt_ctx.manifest.features().contains(&Feature::Vpn) {
-                    if let Some(vpn) =
-                        start_vpn(vpn_endpoint.unwrap(), acl, &service_, &deployment).await?
-                    {
+                if let Some(endpoint) = vpn_endpoint {
+                    if let Some(vpn) = start_vpn(endpoint, acl, &service_, &deployment).await? {
                         address.send(SetVpnService(vpn)).await?;
                     }
                 }
