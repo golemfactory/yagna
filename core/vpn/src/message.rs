@@ -78,7 +78,6 @@ pub enum PacketType {
 #[rtype(result = "Result<()>")]
 pub struct Packet {
     pub data: Vec<u8>,
-    pub packet_type: PacketType,
     pub meta: ConnectionMeta,
 }
 

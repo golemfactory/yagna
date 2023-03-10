@@ -501,63 +501,50 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
-        match pkt.packet_type {
-            PacketType::Tcp => {
-                match self.connections_tcp.get(&pkt.meta.into()).cloned() {
-                    Some(connection) => {
-                        // packet tracing is also done when the packet data is no longer available,
-                        // so we have to make a temporary copy. This incurs no runtime overhead on builds
-                        // without the feature packet-trace-enable.
-                        #[cfg(feature = "packet-trace-enable")]
-                        let data_trace = pkt.data.clone();
+        match self.connections_tcp.get(&pkt.meta.into()).cloned() {
+            Some(connection) => {
+                // packet tracing is also done when the packet data is no longer available,
+                // so we have to make a temporary copy. This incurs no runtime overhead on builds
+                // without the feature packet-trace-enable.
+                #[cfg(feature = "packet-trace-enable")]
+                let data_trace = pkt.data.clone();
 
-                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", {
+                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", {
+                    &data_trace
+                });
+
+                let fut = self
+                    .stack_network
+                    .send(pkt.data, connection.stack_connection)
+                    .map(move |res| {
+                        ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", {
                             &data_trace
                         });
+                        res
+                    })
+                    .map_err(|e| Error::Other(e.to_string()));
 
-                        let fut = self
-                            .stack_network
-                            .send(pkt.data, connection.stack_connection)
-                            .map(move |res| {
-                                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::2", {
-                                    &data_trace
-                                });
-                                res
-                            })
-                            .map_err(|e| Error::Other(e.to_string()));
+                ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
+                    if let Err(e) = result {
+                        log::warn!(
+                    "[vpn: {}] error while sending egress Packet to stack at remote: {} err: {}",
+                    connection.stack_connection.meta.remote,
+                    this.vpn.id(),
+                    e
+                );
 
-                        ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
-                            if let Err(e) = result {
-                                log::warn!(
-                            "[vpn: {}] error while sending egress Packet to stack at remote: {} err: {}",
-                            connection.stack_connection.meta.remote,
-                            this.vpn.id(),
-                            e
-                        );
-
-                                ctx.address().do_send(Disconnect::new(
-                                    connection.stack_connection.meta.into(),
-                                    DisconnectReason::ConnectionError,
-                                ));
-                            }
-                        }));
-                        ActorResponse::reply(Ok(()))
+                        ctx.address().do_send(Disconnect::new(
+                            connection.stack_connection.meta.into(),
+                            DisconnectReason::ConnectionError,
+                        ));
                     }
-                    None => ActorResponse::reply(Err(Error::ConnectionError(format!(
-                        "no connection to remote: {:?}",
-                        pkt.meta.remote
-                    )))),
-                }
-            }
-            PacketType::Raw => {
-                //todo
-                /*let raw_meta = RawConnectionMeta {
-                    remote: "".to_string(),
-                    local: "".to_string(),
-                };*/
-                //match self.connections_raw.get()
+                }));
                 ActorResponse::reply(Ok(()))
             }
+            None => ActorResponse::reply(Err(Error::ConnectionError(format!(
+                "no connection to remote: {:?}",
+                pkt.meta.remote
+            )))),
         }
     }
 }

@@ -269,7 +269,6 @@ impl VpnWebSocket {
         let vpn = self.vpn.clone();
         vpn.send(Packet {
             data,
-            packet_type: PacketType::Tcp,
             meta: self.meta,
         })
         .into_actor(self)
