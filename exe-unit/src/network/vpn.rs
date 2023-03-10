@@ -324,14 +324,14 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
-        self.networks.as_ref().keys().for_each(|net| {
+       /* self.networks.as_ref().keys().for_each(|net| {
             let ip = IpAddr::from_str("22.22.22.22").unwrap();
             if let Some(endpoint) = self.networks.endpoint(ip) {
                 endpoint.udp.send(packet.clone());
 
 
             }
-            tokio::task::spawn_local(fut);
+            //tokio::task::spawn_local(fut);
             //let endpoint = network.1;
             /*let fut = endpoint
                 .udp
@@ -343,7 +343,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
                 });
 
             tokio::task::spawn_local(fut);*/
-        });
+        });*/
         /*match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
