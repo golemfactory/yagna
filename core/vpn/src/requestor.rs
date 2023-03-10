@@ -402,6 +402,7 @@ struct ConnectRawArgs {
 
 
 /// Initiates a new RAW connection via WebSockets to the destination address.
+// #[actix_web::get("/net/{net_id}/raw/from/{port}/to/{ip}")]
 #[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
 async fn connect_raw(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
