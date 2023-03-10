@@ -18,7 +18,7 @@ use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_ro
 use crate::message::*;
 use crate::Result;
 
-use ya_core_model::activity::{VpnControl, VpnTcpPacket};
+use ya_core_model::activity::{VpnControl, VpnPacket};
 use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
@@ -563,10 +563,10 @@ impl Handler<Packet> for Vpn {
 }
 
 /// Handle ingress packet from the network
-impl Handler<RpcEnvelope<VpnTcpPacket>> for Vpn {
-    type Result = <RpcEnvelope<VpnTcpPacket> as Message>::Result;
+impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
+    type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<VpnTcpPacket>, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
         self.stack_network.receive(msg.into_inner().0);
         self.stack_network.poll();
         Ok(())

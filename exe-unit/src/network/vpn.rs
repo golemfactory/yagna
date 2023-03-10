@@ -1,12 +1,10 @@
 use std::convert::TryFrom;
-use std::net::IpAddr;
-use std::str::FromStr;
 
 use actix::prelude::*;
 use futures::{future, FutureExt};
 
 use ya_client_model::NodeId;
-use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnRawPacket, VpnTcpPacket};
+use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
@@ -112,15 +110,15 @@ impl Vpn {
         })
     }
 
-    fn handle_packet_tcp(
+    fn handle_packet(
         &mut self,
-        packet: PacketTcp,
+        packet: Packet,
         _ctx: &mut Context<Self>,
-    ) -> <PacketTcp as Message>::Result {
+    ) -> <Packet as Message>::Result {
         let network_id = packet.network_id;
         let node_id = packet.caller;
         let data = packet.data;
-        log::warn!("[vpn] packet from: {} {} {:?}", node_id, network_id, data);
+
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
         if let Ok(ether_type) = EtherFrame::peek_type(&data) {
@@ -154,41 +152,13 @@ impl Vpn {
         Ok(())
     }
 
-    fn handle_packet_raw(
-        &mut self,
-        packet: PacketRaw,
-        _ctx: &mut Context<Self>,
-    ) -> <PacketRaw as Message>::Result {
-        let network_id = packet.network_id;
-        let node_id = packet.caller;
-        let data = packet.data;
-        log::warn!("[vpn] packet from: {} {} {:?}", node_id, network_id, data);
-        // fixme: should requestor be queried for unknown IP addresses instead?
-        // read and add unknown node id -> ip if it doesn't exist
-        let _ = self.networks.get_mut(&network_id).map(|network| {
-            if !network.nodes().contains_key(&node_id) {
-                let ip = IpAddr::from_str("22.22.22.22").unwrap();
-                log::warn!("[vpn] adding new node: {} {}", ip, node_id);
-                let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
-            }
-        });
-
-
-
-        if let Err(e) = self.endpoint.send(Ok(data)) {
-            log::debug!("[vpn] ingress error: {}", e);
-        }
-
-        Ok(())
-    }
-
     fn handle_ip(
         frame: EtherFrame,
         networks: &Networks<DuoEndpoint<GsbEndpoint>>,
         default_id: &str,
     ) {
         let ip_pkt = IpPacket::packet(frame.payload());
-        log::warn!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
+        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
 
         if ip_pkt.is_broadcast() {
             let futs = networks
@@ -228,7 +198,7 @@ impl Vpn {
 
     fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
         let data: Vec<_> = frame.into();
-        log::warn!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
+        log::trace!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
 
         let fut = endpoint
             .udp
@@ -255,23 +225,9 @@ impl Actor for Vpn {
             actix_rpc::bind::<VpnControl>(&vpn_id, ctx.address().recipient());
             actix_rpc::bind_raw(&format!("{vpn_id}/raw"), ctx.address().recipient());
 
-            let actor_ = actor.clone();
-            let net_id_ = net_id.clone();
-            typed::bind_with_caller::<VpnTcpPacket, _, _>(&vpn_id, move |caller, pkt| {
-                actor_
-                    .send(PacketTcp {
-                        network_id: net_id_.clone(),
-                        caller,
-                        data: pkt.0,
-                    })
-                    .then(|sent| match sent {
-                        Ok(result) => future::ready(result),
-                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
-                    })
-            });
-            typed::bind_with_caller::<VpnRawPacket, _, _>(&vpn_id, move |caller, pkt| {
+            typed::bind_with_caller::<VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
                 actor
-                    .send(PacketRaw {
+                    .send(Packet {
                         network_id: net_id.clone(),
                         caller,
                         data: pkt.0,
@@ -281,7 +237,6 @@ impl Actor for Vpn {
                         Err(err) => future::err(RpcMessageError::Service(err.to_string())),
                     })
             });
-
         });
 
         match self.endpoint.receiver().ok() {
@@ -306,8 +261,8 @@ impl Actor for Vpn {
                 let _ = typed::unbind(&vpn_id).await;
             }
         }
-        .into_actor(self)
-        .wait(ctx);
+            .into_actor(self)
+            .wait(ctx);
 
         Running::Stop
     }
@@ -324,27 +279,8 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
-       /* self.networks.as_ref().keys().for_each(|net| {
-            let ip = IpAddr::from_str("22.22.22.22").unwrap();
-            if let Some(endpoint) = self.networks.endpoint(ip) {
-                endpoint.udp.send(packet.clone());
 
-
-            }
-            //tokio::task::spawn_local(fut);
-            //let endpoint = network.1;
-            /*let fut = endpoint
-                .udp
-                .push_raw_as(&self.default_id, packet)
-                .then(|result| async move {
-                    if let Err(err) = result {
-                        log::debug!("[vpn] call error: {err}");
-                    }
-                });
-
-            tokio::task::spawn_local(fut);*/
-        });*/
-        /*match EtherFrame::try_from(packet) {
+        match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
                 EtherFrame::Ip(_) => Self::handle_ip(frame, &self.networks, &self.default_id),
@@ -356,7 +292,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
                     _ => log::debug!("[vpn] frame error (egress): {}", err),
                 };
             }
-        };*/
+        };
     }
 }
 
@@ -368,7 +304,7 @@ impl Handler<RpcRawCall> for Vpn {
         let packet = {
             let mut split = msg.addr.rsplit('/').skip(1);
             match split.next() {
-                Some(network_id) => PacketTcp {
+                Some(network_id) => Packet {
                     network_id: network_id.to_string(),
                     caller: msg.caller.to_string(),
                     data: msg.body,
@@ -385,35 +321,21 @@ impl Handler<RpcRawCall> for Vpn {
             &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
         });
 
-        self.handle_packet_tcp(packet, ctx)
+        self.handle_packet(packet, ctx)
             .map(|_| Vec::new())
             .map_err(|e| ya_service_bus::Error::GsbBadRequest(e.to_string()))
     }
 }
 
-impl Handler<PacketTcp> for Vpn {
-    type Result = <PacketTcp as Message>::Result;
+impl Handler<Packet> for Vpn {
+    type Result = <Packet as Message>::Result;
 
-    fn handle(&mut self, packet: PacketTcp, ctx: &mut Context<Self>) -> Self::Result {
-        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<PacketTcp>", {
+    fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
             &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
         });
 
-        self.handle_packet_tcp(packet, ctx)
-    }
-}
-
-impl Handler<PacketRaw> for Vpn {
-    type Result = <PacketRaw as Message>::Result;
-
-    fn handle(&mut self, packet: PacketRaw, ctx: &mut Context<Self>) -> Self::Result {
-        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<PacketRaw>", {
-            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
-        });
-        //todo remove this
-        log::warn!("Received PacketRaw message.");
-
-        self.handle_packet_raw(packet, ctx)
+        self.handle_packet(packet, ctx)
     }
 }
 
@@ -457,16 +379,8 @@ impl Handler<Shutdown> for Vpn {
 }
 
 #[derive(Message)]
-#[rtype(result = "<RpcEnvelope<VpnTcpPacket> as Message>::Result")]
-pub(crate) struct PacketTcp {
-    pub network_id: String,
-    pub caller: String,
-    pub data: Vec<u8>,
-}
-
-#[derive(Message)]
-#[rtype(result = "<RpcEnvelope<VpnRawPacket> as Message>::Result")]
-pub(crate) struct PacketRaw {
+#[rtype(result = "<RpcEnvelope<VpnPacket> as Message>::Result")]
+pub(crate) struct Packet {
     pub network_id: String,
     pub caller: String,
     pub data: Vec<u8>,

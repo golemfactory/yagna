@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
-use ya_core_model::activity::{VpnRawPacket, VpnTcpPacket};
+use ya_core_model::activity::{VpnPacket};
 use ya_core_model::net::RemoteEndpoint;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::RpcEndpoint;
@@ -476,7 +476,7 @@ impl VpnRawSocket {
 
         ctx.spawn(
             async move {
-                let res = vpn_node.send(VpnRawPacket(data)).await??;
+                let res = vpn_node.send(VpnPacket(data)).await??;
 
                 Ok::<_, anyhow::Error>(())
             }
