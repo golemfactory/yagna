@@ -400,31 +400,22 @@ struct ConnectRawArgs {
     dst_ip: String,
 }
 
-
 /// Initiates a new RAW connection via WebSockets to the destination address.
-// #[actix_web::get("/net/{net_id}/raw/from/{port}/to/{ip}")]
-#[actix_web::get("/net/{net_id}/raw/{ip}/{port}")]
+#[actix_web::get("/net/{net_id}/raw/from/{src}/to/{dst}")]
 async fn connect_raw(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<PathConnect>,
+    path: web::Path<(String, IpAddr, IpAddr)>,
     req: HttpRequest,
     stream: web::Payload,
     identity: Identity,
 ) -> Result<HttpResponse> {
-    log::warn!("Connect raw called {:?}", path);
-
-    let net_id = path.net_id.clone();
-    /*let requestor_ip = IpAddr::from_str(&path.requestor_ip).map_err(|e| {
-        ApiError::Vpn(VpnError::ConnectionError(format!("invalid requestor IP: {}", e)))
-    })?;*/
-    let dst_ip = IpAddr::from_str(&path.ip).map_err(|e| {
-        ApiError::Vpn(VpnError::ConnectionError(format!("invalid destination IP: {}", e)))
-    })?;
-
+    let (net_id, src, dst_ip) = path.into_inner();
+    log::info!("vpn {net_id} connection from {src} to {dst_ip}");
     let vpn = {
         let supervisor = vpn_sup.lock().await;
         supervisor.get_network(&identity.identity, &net_id)
     }?;
+
     let nodes = vpn.send(GetNodes).await??;
     let dst_ip_str = dst_ip.to_string();
     let dst_node = match nodes.into_iter().find(|n| n.ip == dst_ip_str) {
@@ -593,9 +584,6 @@ struct PathConnect {
     ip: String,
     port: u16,
 }
-
-
-
 
 #[test]
 fn test_to_detect_breaking_ya_client_const_changes() {
