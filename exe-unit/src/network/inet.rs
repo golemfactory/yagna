@@ -249,18 +249,16 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
         // First connection must be established in network stack, so we can close it.
         let result = router.handle(&packet).await;
 
-<<<<<<< HEAD
         ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
             &ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
 
         log::trace!("[inet] runtime -> inet packet {:?}", packet);
-=======
+
         let desc = dispatch_desc(&packet)
             .map(|desc| format!("{desc:?}"))
             .unwrap_or("error".to_string());
         log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
->>>>>>> ca88416f (Fix and more logs)
 
         router.network.receive(packet);
         router.network.poll();
