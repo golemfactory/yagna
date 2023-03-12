@@ -583,12 +583,33 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
 }
 
 impl Handler<RpcRawCall> for Vpn {
-    type Result = std::result::Result<Vec<u8>, ya_service_bus::Error>;
+    type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        self.stack_network.receive(msg.body);
-        self.stack_network.poll();
-        Ok(Vec::new())
+        log::error!("VPN {}: received VpnPacket", self.vpn.id());
+
+        if !self.connections_raw.is_empty() {
+            if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
+                let payload = msg.body;
+                let fut = async move { connection.src_tx.send(payload).await }
+                    .into_actor(self)
+                    .map(move |res, _, ctx| {
+                        res.map_err(|e| {
+//                        ctx.address()
+                            //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+
+                            log::error!("VPN {}: cannot sent", e);
+                            ya_service_bus::error::Error::GsbBadRequest(e.to_string())
+                        })
+                    }.map(|_| Vec::new())
+                    );
+                return ActorResponse::r#async(fut);
+            }
+        } else {
+            self.stack_network.receive(msg.body);
+            self.stack_network.poll();
+        }
+        ActorResponse::reply(Ok(Vec::new()))
     }
 }
 
