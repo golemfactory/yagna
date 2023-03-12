@@ -163,7 +163,7 @@ impl Vpn {
         default_id: &str,
     ) {
         let ip_pkt = IpPacket::packet(frame.payload());
-        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
+        log::info!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
 
         if ip_pkt.is_broadcast() {
             let futs = networks
@@ -203,7 +203,7 @@ impl Vpn {
 
     fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
         let data: Vec<_> = frame.into();
-        log::trace!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
+        log::info!("[vpn] ff egress {} b to {}", data.len(), endpoint.udp.addr());
 
         let fut = endpoint
             .udp
@@ -284,6 +284,9 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
+        log::info!(
+            "[vpn] Runtime to VPN: {} bytes",
+            packet.len());
 
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
