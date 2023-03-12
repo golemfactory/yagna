@@ -119,6 +119,11 @@ impl Vpn {
         let node_id = packet.caller;
         let data = packet.data;
 
+        log::info!(
+            "[vpn] ingress packet from {} on network {}",
+            node_id,
+            network_id
+        );
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
         if let Ok(ether_type) = EtherFrame::peek_type(&data) {
@@ -134,7 +139,7 @@ impl Vpn {
                 }
                 _ => None,
             };
-
+            log::info!("packet ip: {:?}", ip);
             if let Some(ip) = ip {
                 let _ = self.networks.get_mut(&network_id).map(|network| {
                     if !network.nodes().contains_key(&node_id) {

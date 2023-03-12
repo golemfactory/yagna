@@ -558,27 +558,27 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
         log::error!("VPN {}: received VpnPacket", self.vpn.id());
 
-        if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
-            let payload = msg.into_inner().0;
-            let fut = async move { connection.src_tx.send(payload).await }
-                .into_actor(self)
-                .map(move |res, _, ctx| {
-                    res.map_err(|e| {
+        if !self.connections_raw.is_empty() {
+            if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
+                let payload = msg.into_inner().0;
+                let fut = async move { connection.src_tx.send(payload).await }
+                    .into_actor(self)
+                    .map(move |res, _, ctx| {
+                        res.map_err(|e| {
 //                        ctx.address()
-  //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+                            //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
 
-                        log::error!("VPN {}: cannot sent", e);
-                        ya_core_model::activity::RpcMessageError::NotFound(e.to_string())
-                    })
-                });
-            ActorResponse::r#async(fut)
+                            log::error!("VPN {}: cannot sent", e);
+                            ya_core_model::activity::RpcMessageError::NotFound(e.to_string())
+                        })
+                    });
+                return ActorResponse::r#async(fut);
+            }
         } else {
             self.stack_network.receive(msg.into_inner().0);
             self.stack_network.poll();
-            ActorResponse::reply(Ok(()))
         }
-
-
+        ActorResponse::reply(Ok(()))
     }
 }
 
