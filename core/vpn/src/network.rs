@@ -200,6 +200,7 @@ impl VpnSupervisor {
 pub struct RawConnectionMeta {
     pub local: IpAddr,
     pub remote: IpAddr,
+    pub remote_id: String,
 }
 
 pub struct Vpn {
@@ -459,6 +460,7 @@ impl Handler<ConnectRaw> for Vpn {
 
         let raw_connection_meta = RawConnectionMeta {
             remote: remote.into(),
+            remote_id: msg.dst_id,
             local: local.into(),
         };
         let (tx, rx) = mpsc::channel(1);
@@ -582,6 +584,8 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     }
 }
 
+//handling rpc raw calls
+
 impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
@@ -589,7 +593,11 @@ impl Handler<RpcRawCall> for Vpn {
         log::error!("VPN {}: received VpnPacket", self.vpn.id());
 
         if !self.connections_raw.is_empty() {
-            if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
+            let connection_raw = self.connections_raw.iter().find(|(meta, _)| meta.remote_id == msg.caller);
+
+            if let Some(mut connection) = connection_raw {
+                let _connection_meta = connection.0;
+                let mut connection = connection.1.clone();
                 let payload = msg.body;
                 let fut = async move { connection.src_tx.send(payload).await }
                     .into_actor(self)
@@ -604,6 +612,8 @@ impl Handler<RpcRawCall> for Vpn {
                     }.map(|_| Vec::new())
                     );
                 return ActorResponse::r#async(fut);
+            } else {
+                log::error!("VPN {}: cannot find connection", self.vpn.id());
             }
         } else {
             self.stack_network.receive(msg.body);

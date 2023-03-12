@@ -421,6 +421,7 @@ async fn connect_raw(
         .send(ConnectRaw {
             dst_addr: dst_ip,
             src_addr: src,
+            dst_id: dst_node.id.clone(),
         })
         .await??;
 

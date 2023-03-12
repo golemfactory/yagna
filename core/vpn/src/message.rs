@@ -55,6 +55,7 @@ pub struct ConnectTcp {
 pub struct ConnectRaw {
     pub src_addr: IpAddr,
     pub dst_addr: IpAddr,
+    pub dst_id: String,
 }
 
 #[derive(Debug, Message)]
