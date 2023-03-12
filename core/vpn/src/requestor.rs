@@ -419,7 +419,8 @@ async fn connect_raw(
 
     let conn = vpn
         .send(ConnectRaw {
-            address: dst_ip_str,
+            dst_addr: dst_ip,
+            src_addr: src,
         })
         .await??;
 

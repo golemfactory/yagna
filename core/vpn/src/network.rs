@@ -445,7 +445,12 @@ impl Handler<ConnectRaw> for Vpn {
     type Result = ActorResponse<Self, Result<UserRawConnection>>;
 
     fn handle(&mut self, msg: ConnectRaw, _: &mut Self::Context) -> Self::Result {
-        let remote = match to_ip(&msg.address) {
+        //todo: nicer checks without converting to string and back
+        let remote = match to_ip(&msg.dst_addr.to_string()) {
+            Ok(ip) => ip,
+            Err(err) => return ActorResponse::reply(Err(err)),
+        };
+        let local = match to_ip(&msg.src_addr.to_string()) {
             Ok(ip) => ip,
             Err(err) => return ActorResponse::reply(Err(err)),
         };
@@ -454,7 +459,7 @@ impl Handler<ConnectRaw> for Vpn {
 
         let raw_connection_meta = RawConnectionMeta {
             remote: remote.into(),
-            local: self.vpn.address().unwrap(),
+            local: local.into(),
         };
         let (tx, rx) = mpsc::channel(1);
 

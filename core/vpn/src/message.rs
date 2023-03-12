@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
@@ -52,7 +53,8 @@ pub struct ConnectTcp {
 #[derive(Message)]
 #[rtype(result = "Result<UserRawConnection>")]
 pub struct ConnectRaw {
-    pub address: String,
+    pub src_addr: IpAddr,
+    pub dst_addr: IpAddr,
 }
 
 #[derive(Debug, Message)]
