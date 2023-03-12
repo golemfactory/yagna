@@ -12,13 +12,11 @@ use futures::FutureExt;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
 use ya_core_model::activity::{VpnPacket};
-use ya_core_model::net::RemoteEndpoint;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::RpcEndpoint;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
@@ -392,13 +390,6 @@ fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
     Ok(reversed)
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct ConnectRawArgs {
-    net_id: String,
-    requestor_ip: String,
-    dst_ip: String,
-}
-
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/from/{src}/to/{dst}")]
 async fn connect_raw(
@@ -433,7 +424,14 @@ async fn connect_raw(
         .await??;
 
     Ok(ws::start(
-        VpnRawSocket::new(net_id, dst_ip, dst_ip, dst_node),
+        VpnRawSocket{
+            network_id: net_id,
+            src_ip: src,
+            dst_ip,
+            dst_node,
+            heartbeat: Instant::now(),
+            vpn_rx: Some(conn.rx),
+        },
         &req,
         stream,
     )?)
@@ -445,18 +443,10 @@ pub struct VpnRawSocket {
     dst_ip: IpAddr,
     dst_node: Node,
     heartbeat: Instant,
+    vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl VpnRawSocket {
-    pub fn new(network_id: String, src_ip: IpAddr, dst_ip: IpAddr, dst_node: Node) -> Self {
-        VpnRawSocket {
-            network_id,
-            src_ip,
-            dst_ip,
-            dst_node,
-            heartbeat: Instant::now(),
-        }
-    }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         use ya_net::*;
@@ -466,7 +456,7 @@ impl VpnRawSocket {
 
         ctx.spawn(
             async move {
-                let res = vpn_node.send(VpnPacket(data)).await??;
+                let _res = vpn_node.send(VpnPacket(data)).await??;
 
                 Ok::<_, anyhow::Error>(())
             }
@@ -491,6 +481,11 @@ impl Actor for VpnRawSocket {
                 ctx.ping(b"");
             }
         });
+
+        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
+            ya_packet_trace::packet_trace!("VpnWebSocket::Rx", { &packet });
+            packet
+        }));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -498,11 +493,11 @@ impl Actor for VpnRawSocket {
     }
 }
 
-/*impl StreamHandler<Vec<u8>> for VpnRawSocket {
+impl StreamHandler<Vec<u8>> for VpnRawSocket {
     fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
         ctx.binary(data)
     }
-}*/
+}
 
 impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {

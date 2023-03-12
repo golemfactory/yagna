@@ -198,7 +198,7 @@ impl VpnSupervisor {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawConnectionMeta {
-    pub local: String,
+    pub local: IpAddr,
     pub remote: IpAddr,
 }
 
@@ -452,19 +452,16 @@ impl Handler<ConnectRaw> for Vpn {
 
         log::info!("VPN {}: connecting (raw) to {:?}", self.vpn.id(), remote);
 
-        let id = self.vpn.id().clone();
-
-        //let network = self.stack_network.clone();
-
         let raw_connection_meta = RawConnectionMeta {
             remote: remote.into(),
-            local: "".to_string(),
+            local: self.vpn.address().unwrap(),
         };
+        let (tx, rx) = mpsc::channel(1);
 
         self.connections_raw
-            .insert(raw_connection_meta, InternalRawConnection {});
+            .insert(raw_connection_meta, InternalRawConnection {src_tx: tx});
 
-        ActorResponse::reply(Ok(UserRawConnection {}))
+        ActorResponse::reply(Ok(UserRawConnection {rx}))
     }
 }
 
@@ -551,12 +548,32 @@ impl Handler<Packet> for Vpn {
 
 /// Handle ingress packet from the network
 impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
-    type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
+    type Result = ActorResponse<Self, <RpcEnvelope<VpnPacket> as Message>::Result>;
 
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
-        self.stack_network.receive(msg.into_inner().0);
-        self.stack_network.poll();
-        Ok(())
+        log::error!("VPN {}: received VpnPacket", self.vpn.id());
+
+        if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
+            let payload = msg.into_inner().0;
+            let fut = async move { connection.src_tx.send(payload).await }
+                .into_actor(self)
+                .map(move |res, _, ctx| {
+                    res.map_err(|e| {
+//                        ctx.address()
+  //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+
+                        log::error!("VPN {}: cannot sent", e);
+                        ya_core_model::activity::RpcMessageError::NotFound(e.to_string())
+                    })
+                });
+            ActorResponse::r#async(fut)
+        } else {
+            self.stack_network.receive(msg.into_inner().0);
+            self.stack_network.poll();
+            ActorResponse::reply(Ok(()))
+        }
+
+
     }
 }
 
@@ -683,7 +700,9 @@ struct InternalTcpConnection {
 }
 
 #[derive(Debug, Clone)]
-struct InternalRawConnection {}
+struct InternalRawConnection {
+    pub src_tx: mpsc::Sender<Vec<u8>>,
+}
 
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);

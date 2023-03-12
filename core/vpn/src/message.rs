@@ -1,7 +1,6 @@
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
-use std::net::IpAddr;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
     stack::{
@@ -69,11 +68,6 @@ impl Disconnect {
     }
 }
 
-pub enum PacketType {
-    Raw,
-    Tcp,
-}
-
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct Packet {
@@ -97,7 +91,9 @@ pub struct UserTcpConnection {
 }
 
 #[derive(Debug)]
-pub struct UserRawConnection {}
+pub struct UserRawConnection {
+    pub rx: mpsc::Receiver<Vec<u8>>,
+}
 
 #[derive(Clone, Debug)]
 pub enum DisconnectReason {
