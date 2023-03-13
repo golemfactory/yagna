@@ -18,9 +18,8 @@ packet-trace-enable = [
 ya-client-model = "0.5"
 ya-core-model = { version = "^0.8", features=["net", "identity"] }
 
-#ya-relay-client = "0.5"
+ya-relay-client = "0.5"
 #ya-relay-client = { path = "../../../ya-relay/client" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "f9371b572204365920bbe1f6cc9b3e757bf12887" }
 
 ya-sb-proto = { version = "0.6.1" }
 ya-sb-util = { version = "0.4.1" }
