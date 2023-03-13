@@ -8215,7 +8215,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=f9371b572204365920bbe1f6cc9b3e757bf12887#f9371b572204365920bbe1f6cc9b3e757bf12887"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=99c7f0ad911c9cdb45adcebac28b5d83d48266bc#99c7f0ad911c9cdb45adcebac28b5d83d48266bc"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8231,7 +8231,7 @@ dependencies = [
  "ya-packet-trace",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-relay-stack",
 ]
 
 [[package]]
@@ -8262,7 +8262,7 @@ dependencies = [
  "uuid",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-relay-stack",
 ]
 
 [[package]]
@@ -8287,28 +8287,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a6697ae691e31718f517e7d1e744d26b1fee94a3ccfaa41a732ae10778742f"
-dependencies = [
- "derive_more",
- "futures 0.3.26",
- "lazy_static",
- "log",
- "managed",
- "num-derive",
- "num-traits",
- "rand 0.8.5",
- "thiserror",
- "tokio 1.25.0",
- "tokio-stream",
- "ya-relay-util",
- "ya-smoltcp",
-]
-
-[[package]]
-name = "ya-relay-stack"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=f9371b572204365920bbe1f6cc9b3e757bf12887#f9371b572204365920bbe1f6cc9b3e757bf12887"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=99c7f0ad911c9cdb45adcebac28b5d83d48266bc#99c7f0ad911c9cdb45adcebac28b5d83d48266bc"
 dependencies = [
  "derive_more",
  "futures 0.3.26",
@@ -8627,7 +8606,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver 0.21.2",
  "url",
- "ya-relay-stack 0.4.1 (git+https://github.com/golemfactory/ya-relay.git?rev=f9371b572204365920bbe1f6cc9b3e757bf12887)",
+ "ya-relay-stack",
 ]
 
 [[package]]
