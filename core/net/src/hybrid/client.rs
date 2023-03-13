@@ -198,5 +198,5 @@ proxy!(
 proxy!(
     InvalidateNeighbourhoodCache -> (),
     invalidate_neighbourhood_cache,
-    |client: Client| async move { client.invalidate_neighbourhood_cache().await }
+    |_: Client| async move { }
 );
