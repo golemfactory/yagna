@@ -339,7 +339,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
 
         let desc = dispatch_desc(&frame)
             .map(|desc| format!("{desc}"))
-            .unwrap_or("error".to_string());
+            .unwrap_or_else(|_| "error".to_string());
         log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
         if let Err(e) = fwd.send(Ok(frame)) {
