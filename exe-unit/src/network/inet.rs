@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
-use std::iter::FromIterator;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -13,6 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
 use bytes::{Bytes, BytesMut};
+use futures::channel::mpsc::UnboundedSender;
 use futures::future::{AbortHandle, Abortable};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::stream::BoxStream;
@@ -32,6 +32,7 @@ use net::{Error as NetError, Protocol};
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
+use ya_std_utils::LogErr;
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
 use ya_utils_networking::vpn::stack::ya_smoltcp::iface::SocketHandle;
@@ -249,6 +250,11 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
         // First connection must be established in network stack, so we can close it.
         let result = router.handle(&packet).await;
 
+        let desc = dispatch_desc(&packet)
+            .map(|desc| format!("{desc:?}"))
+            .unwrap_or_else(|_| "error".to_string());
+        log::trace!("[inet] runtime -> inet packet {} B, {}", packet.len(), desc);
+
         ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
             &ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
@@ -337,7 +343,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         let frame = event.payload.into_vec();
 
         let desc = dispatch_desc(&frame)
-            .map(|desc| format!("{desc:?}"))
+            .map(|desc| format!("{desc}"))
             .unwrap_or("error".to_string());
         log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
@@ -376,6 +382,8 @@ impl Router {
         Self { network, proxy }
     }
 
+    // this method cannot be called concurrently due to the implementation of
+    // Proxy::close_lru_udp_connections, see the comment therein.
     async fn handle(&self, frame: &Vec<u8>) -> std::result::Result<(), ProxyingError> {
         match EtherFrame::peek_type(frame.as_slice()) {
             Err(_) | Ok(EtherType::Arp) => return Ok(()),
@@ -468,8 +476,8 @@ struct Proxy {
 }
 
 struct ConnectionState {
-    sender: TransportSender,
-    last_seen: AtomicU64,
+    sender: UnboundedSender<bytes::Bytes>,
+    last_seen: Arc<AtomicU64>,
     abort: AbortHandle,
 }
 
@@ -495,21 +503,19 @@ impl Proxy {
         state.remotes.contains_key(key)
     }
 
-    async fn get(&self, key: &TransportKey) -> Option<TransportSender> {
+    async fn get(&self, key: &TransportKey) -> Option<UnboundedSender<bytes::Bytes>> {
         let state = self.state.read().await;
         state.remotes.get(key).map(|state| state.sender.clone())
     }
 
-    async fn update_seen(&self, key: &TransportKey) -> bool {
+    async fn update_seen(&self, key: &TransportKey) {
         let state = self.state.read().await;
-        state
-            .remotes
-            .get(key)
-            .map(|state| state.update_seen())
-            .is_some()
+        if let Some(conn_state) = state.remotes.get(key) {
+            conn_state.update_seen();
+        }
     }
 
-    async fn drop_unused_connections(&self, sockets_limit: usize) -> usize {
+    async fn close_lru_udp_connections(&self, sockets_limit: usize) {
         let udps = {
             let state = self.state.read().await;
             let mut udps = state
@@ -527,11 +533,14 @@ impl Proxy {
                 .collect::<Vec<_>>()
         };
 
+        // This will operate on an out-of-date snapshot of state of sockets if
+        // we start(ed) processing inet requests concurrently. If you're
+        // experiencing a bug relating to data loss in UDP connections and
+        // concurrent processing of requests is implemented, this implementation
+        // is outdated.
         for key in &udps {
             self.unbind(key.as_socket_desc()).await.ok();
         }
-
-        udps.len()
     }
 
     async fn bind(
@@ -596,11 +605,9 @@ impl Proxy {
             .left_future());
         }
 
-        self.drop_unused_connections(200).await;
-
         print_sockets(&network);
 
-        log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
+        log::debug!("[inet] connect to {desc}, using handle: {handle}");
 
         let (ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
@@ -612,23 +619,63 @@ impl Proxy {
                 .map_err(|e| ProxyingError::routeable(conn, e.into()))?;
         }
 
-        let (tx, rx) = match meta.protocol {
-            Protocol::Tcp => inet_tcp_proxy(ip, port).await,
-            Protocol::Udp => inet_udp_proxy(ip, port).await,
-            other => return Err(NetError::ProtocolNotSupported(other.to_string()).into()),
+        if meta.protocol == Protocol::Udp {
+            self.close_lru_udp_connections(200).await;
         }
-        .map_err(|e| ProxyingError::routeable(conn, e))?;
+
+        let (conn_tx, mut proxy_rx) = futures::channel::mpsc::unbounded();
+        let (mut proxy_tx, conn_rx) = futures::channel::mpsc::unbounded();
 
         let mut state = self.state.write().await;
-        let (conn_state, mut rx) = ConnectionState::new(tx, rx);
+        let (conn_state, mut inet_rx) = ConnectionState::new(conn_tx, conn_rx);
+        let update_seen_fn = conn_state.update_seen_fn();
         state.remotes.insert(key.clone(), conn_state);
 
+        let proxy2 = proxy.clone();
+        let network2 = network.clone();
+        tokio::task::spawn_local(async move {
+            let maybe_tx_rx = match meta.protocol {
+                Protocol::Tcp => inet_tcp_proxy(ip, port).await,
+                Protocol::Udp => inet_udp_proxy(ip, port).await,
+                other => Err(NetError::ProtocolNotSupported(other.to_string()).into()),
+            }
+            .map_err(|e| ProxyingError::routeable(conn, e))
+            .log_warn();
+
+            match maybe_tx_rx {
+                Ok((mut tcp_tx, mut tcp_rx)) => {
+                    tokio::task::spawn_local(async move {
+                        while let Some(data) = proxy_rx.next().await {
+                            tcp_tx.send(data).await.log_err().unwrap();
+                        }
+                    });
+
+                    tokio::task::spawn_local(async move {
+                        while let Some(data) = tcp_rx.next().await {
+                            proxy_tx
+                                .send(data.map(Into::<Bytes>::into))
+                                .await
+                                .log_err()
+                                .unwrap();
+                        }
+                    });
+                }
+                Err(_) => {
+                    let handle = match get_handle(&network2, &meta) {
+                        Some(handle_from_net) => handle_from_net,
+                        None => handle,
+                    };
+                    let _ = proxy2.disconnect(handle).await;
+                }
+            }
+        });
+
         Ok(async move {
-            while let Some(bytes) = rx.next().await {
-                proxy.update_seen(&key).await;
+            while let Some(bytes) = inet_rx.next().await {
+                update_seen_fn();
 
                 let vec = match bytes {
-                    Ok(bytes) => Vec::from_iter(bytes.into_iter()),
+                    Ok(bytes) => bytes.into_iter().collect::<Vec<_>>(),
                     Err(err) => {
                         log::debug!("[inet] proxy conn: bytes error: {}", err);
                         continue;
@@ -681,7 +728,10 @@ impl Proxy {
 }
 
 impl ConnectionState {
-    fn new<T>(sender: TransportSender, rx: impl Stream<Item = T>) -> (Self, impl Stream<Item = T>) {
+    fn new<T>(
+        sender: UnboundedSender<bytes::Bytes>,
+        rx: impl Stream<Item = T>,
+    ) -> (Self, impl Stream<Item = T>) {
         let (abort, abort_registration) = AbortHandle::new_pair();
         let stream = Abortable::new(rx, abort_registration);
 
@@ -689,23 +739,30 @@ impl ConnectionState {
             ConnectionState {
                 sender,
                 abort,
-                last_seen: AtomicU64::new(
+                last_seen: Arc::new(AtomicU64::new(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or(Duration::from_secs(0))
                         .as_secs(),
-                ),
+                )),
             },
             stream,
         )
     }
 
     fn update_seen(&self) {
-        if let Ok(now) = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|time| time.as_secs())
-        {
-            self.last_seen.store(now, Ordering::Relaxed);
+        (self.update_seen_fn())()
+    }
+
+    fn update_seen_fn(&self) -> impl Fn() {
+        let last_seen = self.last_seen.clone();
+        move || {
+            if let Ok(now) = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_secs())
+            {
+                last_seen.store(now, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -714,7 +771,7 @@ impl ConnectionState {
 /// to source of connection inside runtime.
 /// This way runtime doesn't have to wait until timeout.
 ///
-/// Some errors `Unrouteable` don't have enough information to recover from this.  
+/// Some errors `Unrouteable` don't have enough information to recover from this.
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyingError {
     #[error("Proxy error: {error} for connection: {meta:?}")]
@@ -740,27 +797,30 @@ impl From<ya_utils_networking::vpn::Error> for ProxyingError {
 }
 
 fn print_sockets(network: &net::Network) {
-    log::trace!("[inet] existing sockets:");
-    for (handle, meta, state) in network.sockets_meta() {
-        log::trace!("[inet] socket: {handle} ({}) {meta:?}", state.to_string());
-    }
-    log::trace!("[inet] existing connections:");
-    for (handle, meta) in network.handles.borrow_mut().iter() {
-        log::trace!("[inet] connection: {handle} {meta:?}");
-    }
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("[inet] existing sockets:");
+        for (handle, meta, state) in network.sockets_meta() {
+            log::trace!(
+                "[inet] socket: {} ({}) {:?}",
+                handle,
+                state.to_string(),
+                meta
+            );
+        }
+        log::trace!("[inet] existing connections:");
+        for (handle, meta) in network.handles().iter() {
+            log::trace!("[inet] connection: {handle} {meta:?}");
+        }
 
-    log::trace!("[inet] listening sockets:");
-    for handle in network.bindings.borrow_mut().iter() {
-        log::trace!("[inet] listening socket: {handle}");
+        log::trace!("[inet] listening sockets:");
+        for handle in network.bindings().iter() {
+            log::trace!("[inet] listening socket: {handle}");
+        }
     }
 }
 
 fn get_handle(network: &net::Network, meta: &ConnectionMeta) -> Option<SocketHandle> {
-    network
-        .connections
-        .borrow()
-        .get(&meta)
-        .map(|conn| conn.handle.clone())
+    network.connections().get(meta).map(|conn| conn.handle)
 }
 
 async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {

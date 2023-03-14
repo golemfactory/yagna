@@ -8053,6 +8053,7 @@ dependencies = [
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
+ "ya-std-utils",
  "ya-transfer",
  "ya-utils-networking",
  "ya-utils-path",
@@ -8555,6 +8556,8 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8a32521e0c31afc839265e88aadba475a773731732b275edcca2f6ea8bcbf18"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8584,6 +8587,8 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "543d77d2ca82cb26757bc8376b7be40afa3da317e606c72638625e24d4b28d20"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
