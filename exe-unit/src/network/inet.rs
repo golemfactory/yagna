@@ -259,6 +259,8 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             &ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
 
+        log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
+
         router.network.receive(packet);
         router.network.poll();
 
@@ -336,13 +338,9 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         let frame = event.payload.into_vec();
 
         let desc = dispatch_desc(&frame)
-            .map(|desc| format!("{desc:?}"))
+            .map(|desc| format!("{desc}"))
             .unwrap_or_else(|_| "error".to_string());
-        log::trace!(
-            "[inet] egress -> runtime packet {} B, {}",
-            frame.len(),
-            desc
-        );
+        log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
 
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {e}");
@@ -604,7 +602,7 @@ impl Proxy {
 
         print_sockets(&network);
 
-        log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
+        log::debug!("[inet] connect to {desc}, using handle: {handle}");
 
         let (ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
@@ -768,7 +766,7 @@ impl ConnectionState {
 /// to source of connection inside runtime.
 /// This way runtime doesn't have to wait until timeout.
 ///
-/// Some errors `Unrouteable` don't have enough information to recover from this.  
+/// Some errors `Unrouteable` don't have enough information to recover from this.
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyingError {
     #[error("Proxy error: {error} for connection: {meta:?}")]
