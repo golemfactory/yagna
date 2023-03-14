@@ -663,7 +663,6 @@ async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: Strin
             addr.do_send(Disconnect {
                 desc: match event {
                     IngressEvent::InboundConnection { desc } => desc,
-
                     IngressEvent::Disconnected { desc } => desc,
                     IngressEvent::Packet { desc, .. } => desc,
                 },
