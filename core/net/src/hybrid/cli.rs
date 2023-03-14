@@ -138,14 +138,14 @@ pub async fn connect(msg: model::Connect) -> anyhow::Result<FindNodeResponse> {
     let client = Net::client().await?;
     client.connect(msg.clone()).await??;
 
-    Ok(client.find_node(msg.node).await??)
+    client.find_node(msg.node).await?
 }
 
 pub async fn disconnect(node: NodeId) -> anyhow::Result<()> {
     log::info!("Disconnecting from Node: {node}");
 
     let client = Net::client().await?;
-    Ok(client.disconnect(node).await??)
+    client.disconnect(node).await?
 }
 
 pub async fn cli_ping(nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
