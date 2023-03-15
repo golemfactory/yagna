@@ -5,8 +5,10 @@ use std::time::{Duration, Instant};
 use ya_client_model::NodeId;
 
 use ya_core_model::net as ya_net;
-use ya_core_model::net::local::{GsbPingResponse, StatusError};
-use ya_core_model::net::{local as model, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC};
+use ya_core_model::net::local::{FindNodeResponse, GsbPingResponse, StatusError};
+use ya_core_model::net::{
+    local as model, GenericNetError, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC,
+};
 use ya_relay_client::ChannelMetrics;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
@@ -15,8 +17,16 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 use crate::hybrid::Net;
 
 pub(crate) fn bind_service() {
-    let _ = bus::bind(model::BUS_ID, |_: model::GsbPing| {
-        cli_ping().map_err(status_err)
+    let _ = bus::bind(model::BUS_ID, |ping: model::GsbPing| {
+        cli_ping(ping.nodes).map_err(status_err)
+    });
+
+    let _ = bus::bind(model::BUS_ID, |msg: model::Connect| {
+        connect(msg).map_err(|e| GenericNetError(e.to_string()))
+    });
+
+    let _ = bus::bind(model::BUS_ID, |msg: model::Disconnect| {
+        disconnect(msg.node).map_err(|e| GenericNetError(e.to_string()))
     });
 
     ServiceBinder::new(DIAGNOSTIC, &(), ())
@@ -122,14 +132,34 @@ fn to_status_metrics(metrics: &mut ChannelMetrics) -> model::StatusMetrics {
     }
 }
 
-pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
+pub async fn connect(msg: model::Connect) -> anyhow::Result<FindNodeResponse> {
+    log::info!("Connecting to Node: {}", msg.node);
+
+    let client = Net::client().await?;
+    client.connect(msg.clone()).await??;
+
+    client.find_node(msg.node).await?
+}
+
+pub async fn disconnect(node: NodeId) -> anyhow::Result<()> {
+    log::info!("Disconnecting from Node: {node}");
+
+    let client = Net::client().await?;
+    client.disconnect(node).await?
+}
+
+pub async fn cli_ping(nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
     let client = Net::client().await?;
 
     // This will update sessions ping. We don't display them in this view
     // but I think it is good place to enforce this.
     client.ping_sessions().await?;
 
-    let nodes = client.connected_nodes().await?;
+    let nodes = match nodes.is_empty() {
+        true => client.connected_nodes().await?,
+        false => nodes.into_iter().map(|id| (id, None)).collect(),
+    };
+
     let our_node_id = client.node_id().await?;
     let ping_timeout = Duration::from_secs(10);
 
@@ -153,7 +183,7 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
 
                     anyhow::Ok(udp_before.elapsed())
                 }
-                .map_err(|e| anyhow!("(Udp ping). {}", e));
+                .map_err(|e| anyhow!("(Udp ping). {e}"));
 
                 let tcp_future = async move {
                     let tcp_before = Instant::now();
@@ -167,7 +197,7 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
 
                     anyhow::Ok(tcp_before.elapsed())
                 }
-                .map_err(|e| anyhow!("(Tcp ping). {}", e));
+                .map_err(|e| anyhow!("(Tcp ping). {e}"));
 
                 futures::future::join(udp_future, tcp_future)
             })
@@ -178,10 +208,10 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
     .enumerate()
     .map(|(idx, results)| {
         if let Err(e) = &results.0 {
-            log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
+            log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
         }
         if let Err(e) = &results.1 {
-            log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
+            log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
         }
 
         let udp_ping = results.0.unwrap_or(ping_timeout);
@@ -198,7 +228,7 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
     .collect::<Vec<_>>();
 
     for result in &mut results {
-        let main_id = match result.node_alias {
+        let main_id = match client.get_alias(result.node_id).await.ok().flatten() {
             Some(id) => id,
             None => result.node_id,
         };
