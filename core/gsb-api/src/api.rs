@@ -71,6 +71,7 @@ async fn get_service_messages(
     path: web::Path<ServicePath>,
     req: HttpRequest,
     stream: web::Payload,
+    _id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     let addr = decode_addr(&path.address)?;
