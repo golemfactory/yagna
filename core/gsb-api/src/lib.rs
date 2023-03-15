@@ -15,7 +15,6 @@ use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use service::Service;
 use services::Services;
-use ya_service_api_interfaces::Provider;
 
 pub const GSB_API_PATH: &str = "gsb-api/v1";
 
@@ -26,11 +25,11 @@ impl GsbApiService {
         Ok(())
     }
 
-    pub fn rest<Context: Provider<Self, ()>>(ctx: &Context) -> actix_web::Scope {
+    pub fn rest<Context>(ctx: &Context) -> actix_web::Scope {
         Self::rest_internal(ctx, crate::services::SERVICES.clone())
     }
 
-    pub(crate) fn rest_internal<Context: Provider<Self, ()>>(
+    pub(crate) fn rest_internal<Context>(
         _: &Context,
         services: Addr<Services>,
     ) -> actix_web::Scope {
