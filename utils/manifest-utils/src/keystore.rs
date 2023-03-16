@@ -92,18 +92,8 @@ pub struct AddResponse {
     pub skipped: Vec<Cert>,
 }
 
-pub trait CommonRemoveParams {
-    fn id(&self) -> &HashSet<String>;
-}
-
 pub struct RemoveParams {
     pub ids: HashSet<String>,
-}
-
-impl CommonRemoveParams for RemoveParams {
-    fn id(&self) -> &HashSet<String> {
-        &self.ids
-    }
 }
 
 #[derive(Default)]

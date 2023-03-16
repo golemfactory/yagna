@@ -1,7 +1,7 @@
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
@@ -68,16 +68,9 @@ impl From<Add> for AddParams {
 pub struct Remove {
     /// Certificate ids
     #[structopt(help = "Space separated list of X.509 certificates' ids. 
-To find certificate id use `keystore list` command.")]
+To find certificate id use `keystore list` command. You may use some prefix
+of the id as long as it is unique.")]
     ids: Vec<String>,
-}
-
-impl From<Remove> for RemoveParams {
-    fn from(val: Remove) -> Self {
-        RemoveParams {
-            ids: val.ids.into_iter().collect(),
-        }
-    }
 }
 
 impl KeystoreConfig {
@@ -118,7 +111,33 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
-    let RemoveResponse { removed } = keystore.remove(&remove.into())?;
+
+    let all_certs = keystore.list();
+    let mut ids = HashSet::new();
+    for remove_prefix in &remove.ids {
+        let full_ids = find_ids_by_prefix(&all_certs, remove_prefix);
+
+        if full_ids.is_empty() {
+            ids.insert(remove_prefix.clone()); //won't match anyway
+        } else if full_ids.len() == 1 {
+            ids.insert(full_ids[0].clone());
+        } else {
+            println_conditional(
+                &config,
+                &format!(
+                    "Prefix '{remove_prefix}' isn't unique, consider using full certificate id"
+                ),
+            );
+            if config.json {
+                print_cert_list(&config, Vec::new())?;
+            }
+
+            return Ok(());
+        }
+    }
+    let remove_params = RemoveParams { ids };
+
+    let RemoveResponse { removed } = keystore.remove(&remove_params)?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {
@@ -140,6 +159,14 @@ fn print_cert_list(config: &ProviderConfig, certs_data: Vec<Cert>) -> anyhow::Re
 
     table_builder.build().print(config)?;
     Ok(())
+}
+
+fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {
+    certs
+        .iter()
+        .map(|cert| cert.id())
+        .filter(|id| id.starts_with(prefix))
+        .collect()
 }
 
 struct CertTableBuilder {
