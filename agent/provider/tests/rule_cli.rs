@@ -172,8 +172,18 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
         .success();
 
     let result = list_rules_command(data_dir.path());
+    let mode_actual = result["outbound"][rule]
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .filter(|(id, _cert)| id.starts_with(&cert_id))
+                .next()
+        })
+        .flatten()
+        .map(|(_id, value)| &value["mode"]);
 
-    assert_eq!(&result["outbound"][rule][&cert_id]["mode"], mode);
+    assert!(mode_actual.is_some());
+    assert_eq!(mode_actual.unwrap(), mode);
 }
 
 #[test_case("partner", "all")]
@@ -201,7 +211,18 @@ fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mo
     let added_certs = list_certs(data_dir.path());
 
     for cert in added_certs {
-        assert_eq!(result["outbound"][rule][cert]["mode"], mode);
+        let mode_actual = result["outbound"][rule]
+            .as_object()
+            .map(|obj| {
+                obj.iter()
+                    .filter(|(id, _cert)| id.starts_with(&cert))
+                    .next()
+            })
+            .flatten()
+            .map(|(_id, value)| &value["mode"]);
+
+        assert!(mode_actual.is_some());
+        assert_eq!(mode_actual.unwrap(), mode);
     }
 }
 
