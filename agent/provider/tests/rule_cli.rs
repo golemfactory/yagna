@@ -1,8 +1,12 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    iter::FromIterator,
+    path::{Path, PathBuf},
+};
 
 use assert_cmd::Command;
 use pretty_assertions::assert_eq;
-use serde_json::json;
+use serde_json::{json, Value};
 use tempdir::TempDir;
 use test_case::test_case;
 
@@ -134,6 +138,7 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .env("RUST_LOG", "info") // tests asserting error may also print logs
         .arg("rule")
         .arg("set")
         .arg("outbound")
@@ -177,11 +182,54 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     assert_eq!(mode_actual.unwrap(), mode);
 }
 
-#[test_case("partner", "all")]
-#[test_case("partner", "none")]
-#[test_case("partner", "whitelist")]
+#[test_case("audited-payload", "all")]
+#[test_case("audited-payload", "none")]
+#[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
-fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mode: &str) {
+#[ignore] // NYI
+fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_to_rulestore(
+    rule: &str,
+    mode: &str,
+) {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("import-cert")
+        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
+        .arg("--mode")
+        .arg(mode)
+        .arg("--whole-chain")
+        .assert()
+        .success();
+
+    let result = list_rules_command(data_dir.path());
+    let added_certs = list_certs(data_dir.path());
+
+    for cert in added_certs {
+        let mode_actual = result["outbound"][rule]
+            .as_object()
+            .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert)))
+            .map(|(_id, value)| &value["mode"]);
+
+        assert_eq!(mode_actual.unwrap(), mode);
+    }
+}
+
+#[test_case("audited-payload", "all")]
+#[test_case("audited-payload", "none")]
+#[test_case("audited-payload", "whitelist")]
+#[serial_test::serial]
+#[ignore] // NYI
+fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to_rulestore(
+    rule: &str,
+    mode: &str,
+) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
     Command::cargo_bin("ya-provider")
@@ -198,13 +246,24 @@ fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mo
         .assert()
         .success();
 
-    let result = list_rules_command(data_dir.path());
+    let rules_list = list_rules_command(data_dir.path());
     let added_certs = list_certs(data_dir.path());
+    let added_certs: HashSet<String> = HashSet::from_iter(added_certs.into_iter());
 
-    for cert in added_certs {
-        let mode_actual = rule_to_mode(&result["outbound"][rule], &cert);
-        assert_eq!(mode_actual.unwrap(), mode);
-    }
+    let leaf_cert_id = added_certs.get("55e451bd").unwrap();
+    let leaf_mode = get_rule_mode(&rules_list, rule, leaf_cert_id);
+    assert_eq!(leaf_mode.unwrap(), mode);
+
+    let root_cert_id = added_certs.get("fe4f04e2").unwrap();
+    let root_mode = get_rule_mode(&rules_list, rule, root_cert_id);
+    assert_eq!(root_mode, None);
+}
+
+fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> Option<&'a Value> {
+    rules_list["outbound"][rule]
+        .as_object()
+        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_id)))
+        .map(|(_id, value)| &value["mode"])
 }
 
 #[test]

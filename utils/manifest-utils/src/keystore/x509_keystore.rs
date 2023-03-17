@@ -74,6 +74,7 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
 pub(super) struct AddX509Response {
     pub loaded: Vec<X509>,
     pub skipped: Vec<X509>,
+    pub leaf_cert_ids: Vec<String>,
 }
 
 pub struct X509KeystoreBuilder {
@@ -156,11 +157,34 @@ impl X509KeystoreManager {
                 self.load_as_certificate_files(cert_path, new_certs)?;
             }
         }
+        let loaded_leaf_cert_ids = leaf_certs(&loaded);
+        let skipped_leaf_cert_ids = leaf_certs(&skipped);
+        let loaded_ids = loaded.keys().map(String::as_str).collect();
+        let skipped_ids = skipped.keys().map(String::as_str).collect();
+        permissions_manager.set_many(
+            &loaded_ids,
+            &loaded_leaf_cert_ids,
+            add.permissions(),
+            add.whole_chain(),
+        );
+        permissions_manager.set_many(
+            &skipped_ids,
+            &skipped_leaf_cert_ids,
+            add.permissions(),
+            add.whole_chain(),
+        );
+        let leaf_cert_ids = loaded_leaf_cert_ids
+            .into_iter()
+            .chain(skipped_leaf_cert_ids.into_iter())
+            .map(str::to_string)
+            .collect();
         let loaded = loaded.into_values().collect();
         let skipped = skipped.into_values().collect();
-        permissions_manager.set_many(&loaded, add.permissions(), add.whole_chain());
-        permissions_manager.set_many(&skipped, add.permissions(), add.whole_chain());
-        Ok(AddX509Response { loaded, skipped })
+        Ok(AddX509Response {
+            loaded,
+            skipped,
+            leaf_cert_ids,
+        })
     }
 
     /// Loads certificates as individual files to `cert-dir`
@@ -185,6 +209,22 @@ impl X509KeystoreManager {
     }
 }
 
+fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {
+    if certs.len() == 1 {
+        // when there is 1 cert it is a leaf cert
+        return certs.keys().map(String::as_ref).collect();
+    }
+    certs
+        .iter()
+        .filter(|(_, cert)| {
+            !certs
+                .iter()
+                .any(|(_, cert2)| cert.issued(cert2) == X509VerifyResult::OK)
+        })
+        .map(|(id, _)| id.as_str())
+        .collect()
+}
+
 impl Keystore for X509KeystoreManager {
     fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
         self.keystore.reload(cert_dir)
@@ -192,7 +232,11 @@ impl Keystore for X509KeystoreManager {
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let mut permissions_manager = self.keystore.permissions_manager();
-        let AddX509Response { loaded, skipped } = self.add_certs(add, &mut permissions_manager)?;
+        let AddX509Response {
+            loaded,
+            skipped,
+            leaf_cert_ids,
+        } = self.add_certs(add, &mut permissions_manager)?;
 
         permissions_manager
             .save(&self.cert_dir)
@@ -211,7 +255,11 @@ impl Keystore for X509KeystoreManager {
             .into_iter()
             .map(Cert::X509)
             .collect();
-        Ok(AddResponse { added, skipped })
+        Ok(AddResponse {
+            added,
+            skipped,
+            leaf_cert_ids,
+        })
     }
 
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse> {
@@ -240,7 +288,7 @@ impl Keystore for X509KeystoreManager {
             let mut split_and_skip = false;
             for id in ids.iter() {
                 if let Some(cert) = ids_cert.remove(id) {
-                    removed.insert(id, cert);
+                    removed.insert(id.clone(), cert);
                     split_and_skip = true;
                 }
             }
@@ -261,8 +309,9 @@ impl Keystore for X509KeystoreManager {
         }
 
         let mut permissions_manager = self.permissions_manager();
-        let removed_certs: Vec<X509> = removed.clone().into_values().collect();
-        permissions_manager.set_many(&removed_certs, &[], true);
+        let leaf_cert_ids = leaf_certs(&removed);
+        let removed_ids = removed.keys().map(|s| s.as_str()).collect();
+        permissions_manager.set_many(&removed_ids, &leaf_cert_ids, &[], true);
         permissions_manager
             .save(&self.cert_dir)
             .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
@@ -612,36 +661,22 @@ impl PermissionsManager {
         self.permissions.insert(cert.to_string(), permissions);
     }
 
-    pub fn set_x509(
-        &mut self,
-        cert: &X509,
-        permissions: Vec<CertPermissions>,
-    ) -> anyhow::Result<()> {
-        let id = cert_to_id(cert)?;
-        self.set(&id, permissions);
-        Ok(())
+    pub fn set_x509(&mut self, id: &str, permissions: Vec<CertPermissions>) {
+        self.set(id, permissions)
     }
 
     pub fn set_many(
         &mut self,
         // With slice I would need add `openssl` dependency directly to ya-rovider.
-        #[allow(clippy::ptr_arg)] certs: &Vec<X509>,
+        #[allow(clippy::ptr_arg)] cert_ids: &Vec<&str>,
+        leaf_cert_ids: &Vec<&str>,
         permissions: &[CertPermissions],
         whole_chain: bool,
     ) {
         let permissions = Vec::from(permissions);
-        let certs = match whole_chain {
-            false => Self::leaf_certs(certs),
-            true => certs.clone(),
-        };
-
-        for cert in certs {
-            if let Err(e) = self.set_x509(&cert, permissions.clone()) {
-                log::error!(
-                    "Failed to set permissions for certificate {:?}. {e}",
-                    cert.subject_name()
-                );
-            }
+        let cert_ids = if whole_chain { cert_ids } else { leaf_cert_ids };
+        for id in cert_ids {
+            self.set_x509(id, permissions.clone());
         }
     }
 
@@ -658,22 +693,6 @@ impl PermissionsManager {
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(path.join(PERMISSIONS_FILE))?;
         Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
-    }
-
-    fn leaf_certs(certs: &[X509]) -> Vec<X509> {
-        if certs.len() == 1 {
-            // when there is 1 cert it is a leaf cert
-            return certs.to_vec();
-        }
-        certs
-            .iter()
-            .cloned()
-            .filter(|cert| {
-                !certs
-                    .iter()
-                    .any(|cert2| cert.issued(cert2) == X509VerifyResult::OK)
-            })
-            .collect()
     }
 }
 

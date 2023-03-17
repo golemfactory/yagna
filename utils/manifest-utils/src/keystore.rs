@@ -117,6 +117,7 @@ impl X509AddParams for AddParams {
 pub struct AddResponse {
     pub added: Vec<Cert>,
     pub skipped: Vec<Cert>,
+    pub leaf_cert_ids: Vec<String>,
 }
 
 pub struct RemoveParams {
@@ -261,6 +262,7 @@ impl Keystore for CompositeKeystore {
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
                 acc.added.append(&mut res.added);
                 acc.skipped.append(&mut res.skipped);
+                acc.leaf_cert_ids.append(&mut res.leaf_cert_ids);
                 acc
             })?;
         Ok(response)

@@ -94,7 +94,11 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
-    let AddResponse { added, skipped } = keystore.add(&add.into())?;
+    let AddResponse {
+        added,
+        skipped,
+        leaf_cert_ids: _,
+    } = keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
