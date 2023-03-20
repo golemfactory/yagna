@@ -6,7 +6,7 @@ use actix_http::ws::CloseReason;
 use anyhow::anyhow;
 use futures::channel::oneshot::{self, Receiver, Sender};
 use futures::future::LocalBoxFuture;
-use futures::{FutureExt, ready};
+use futures::FutureExt;
 use std::pin::Pin;
 use std::{
     collections::{HashMap, HashSet},
@@ -15,9 +15,6 @@ use std::{
     mem,
     result::Result::{Err, Ok},
 };
-use std::task::Poll;
-use std::time::Duration;
-use tokio::time::Sleep;
 use ya_service_bus::RpcRawCall;
 
 pub(crate) struct Service {
@@ -84,8 +81,19 @@ impl Handler<DropMessages> for Service {
     type Result = ResponseFuture<<DropMessages as Message>::Result>;
 
     fn handle(&mut self, msg: DropMessages, _: &mut Self::Context) -> Self::Result {
-        let disconnect_future = self.msg_handler.disconnect(msg);
-        Box::pin(async { disconnect_future.await })
+        let reason = msg.reason.clone();
+        self.msg_handler.drop_messages(msg);
+        if let Some(ws_handler) = self.msg_handler.ws_handler() {
+            log::debug!("Disconnecting from WS. Reason: {reason:?}");
+            let disconnect_fut = ws_handler.send(WsDisconnect(reason));
+            Box::pin(async move {
+                if let Err(err) = disconnect_fut.await {
+                    log::warn!("Failed to disconnect from WS. Err: {}.", err);
+                };
+            })
+        } else {
+            Box::pin(future::ready(()))
+        }
     }
 }
 
@@ -176,7 +184,7 @@ pub(crate) struct StartBuffering;
 impl Handler<StartBuffering> for Service {
     type Result = <StartBuffering as Message>::Result;
 
-    fn handle(&mut self, _: StartBuffering, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: StartBuffering, _ctx: &mut Self::Context) -> Self::Result {
         log::debug!("Start buffering.");
         let old_ws_handler = self.msg_handler.ws_handler();
         if let Some(next_handler) = self.msg_handler.start_buffering() {
@@ -203,10 +211,7 @@ trait MessagesHandler {
 
     fn handle_response(&mut self, msg: WsResponse) -> Result<(), WsResponse>;
 
-    fn disconnect(
-        &mut self,
-        msg: DropMessages,
-    ) -> LocalBoxFuture<()>;
+    fn drop_messages(&mut self, msg: DropMessages);
 
     fn ws_handler(&self) -> Option<Addr<WsMessagesHandler>>;
 }
@@ -215,6 +220,7 @@ fn drop_messages(
     pending_senders: &mut HashMap<String, Sender<WsResponse>>,
     drop_messages: &DropMessages,
 ) {
+    log::debug!("Dropping {} messages", pending_senders.len());
     for (addr, sender) in pending_senders.drain() {
         log::debug!("Closing GSB connection: {}", addr);
         let _ = sender.send(WsResponse {
@@ -310,13 +316,8 @@ impl MessagesHandler for BufferingHandler {
         Err(WsResponse { id, response })
     }
 
-    fn disconnect(
-        &mut self,
-        drop_messages_msg: DropMessages,
-    ) -> LocalBoxFuture<()> {
+    fn drop_messages(&mut self, drop_messages_msg: DropMessages) {
         drop_messages(&mut self.pending_senders, &drop_messages_msg);
-        log::debug!("Disconnecting buffering WS response handler");
-        Box::pin(actix::fut::ready(()))
     }
 
     fn ws_handler(&self) -> Option<Addr<WsMessagesHandler>> {
@@ -383,18 +384,8 @@ impl MessagesHandler for RelayingHandler {
         }
     }
 
-    fn disconnect(
-        &mut self,
-        drop_messages_msg: DropMessages,
-    ) -> LocalBoxFuture<()> {
+    fn drop_messages(&mut self, drop_messages_msg: DropMessages) {
         drop_messages(&mut self.pending_senders, &drop_messages_msg);
-        log::debug!("Disconnecting WS response handler");
-        let disconnect_fut = self.ws_handler.send(WsDisconnect(drop_messages_msg.reason));
-        Box::pin(async move {
-            if let Err(err) = disconnect_fut.await {
-                log::warn!("Failed to disconnect from WS. Err: {}.", err);
-            };
-        })
     }
 
     fn ws_handler(&self) -> Option<Addr<WsMessagesHandler>> {
