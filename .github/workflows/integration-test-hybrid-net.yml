@@ -50,7 +50,9 @@ jobs:
           working-directory: "./goth_tests"
 
       - name: Install dependencies
-        run: poetry install --no-root
+        run: |
+          poetry config experimental.new-installer false
+          poetry install --no-root
 
       - name: Disconnect Docker containers from default network
         continue-on-error: true
