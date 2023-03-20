@@ -8,9 +8,10 @@ pub use crate::middleware::auth::resolver::AppKeyCache;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::{Error, ErrorUnauthorized, ParseError};
-use actix_web::HttpMessage;
+use actix_web::{web, HttpMessage};
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
+use serde::Deserialize;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -65,9 +66,24 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct QueryAuth {
+            auth_token: String,
+        }
+
         let header = parse_auth::<Bearer, _>(&req)
             .ok()
-            .map(|b| b.token().to_string());
+            .map(|b| b.token().to_string())
+            .or_else(|| {
+                if Some("websocket".as_bytes()) == req.headers().get("upgrade").map(AsRef::as_ref) {
+                    web::Query::<QueryAuth>::from_query(req.query_string())
+                        .ok()
+                        .map(|q| q.into_inner().auth_token)
+                } else {
+                    None
+                }
+            });
 
         let cache = self.cache.clone();
         let service = self.service.clone();
