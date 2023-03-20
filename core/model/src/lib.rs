@@ -16,7 +16,7 @@ pub mod identity;
 #[cfg(feature = "market")]
 pub mod market;
 
-#[cfg(any(feature = "net", feature = "gftp"))]
+#[cfg(feature = "net")]
 pub mod net;
 
 #[cfg(feature = "payment")]
