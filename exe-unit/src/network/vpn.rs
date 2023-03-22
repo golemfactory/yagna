@@ -119,11 +119,6 @@ impl Vpn {
         let node_id = packet.caller;
         let data = packet.data;
 
-        log::info!(
-            "[vpn] ingress packet from {} on network {}",
-            node_id,
-            network_id
-        );
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
         if let Ok(ether_type) = EtherFrame::peek_type(&data) {
@@ -139,7 +134,6 @@ impl Vpn {
                 }
                 _ => None,
             };
-            log::info!("packet ip: {:?}", ip);
             if let Some(ip) = ip {
                 let _ = self.networks.get_mut(&network_id).map(|network| {
                     if !network.nodes().contains_key(&node_id) {
@@ -163,7 +157,7 @@ impl Vpn {
         default_id: &str,
     ) {
         let ip_pkt = IpPacket::packet(frame.payload());
-        log::info!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
+        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
 
         if ip_pkt.is_broadcast() {
             let futs = networks
@@ -203,7 +197,7 @@ impl Vpn {
 
     fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
         let data: Vec<_> = frame.into();
-        log::info!("[vpn] ff egress {} b to {}", data.len(), endpoint.udp.addr());
+        log::trace!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
 
         let fut = endpoint
             .udp
@@ -266,8 +260,8 @@ impl Actor for Vpn {
                 let _ = typed::unbind(&vpn_id).await;
             }
         }
-            .into_actor(self)
-            .wait(ctx);
+        .into_actor(self)
+        .wait(ctx);
 
         Running::Stop
     }
@@ -284,9 +278,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
-        log::info!(
-            "[vpn] Runtime to VPN: {} bytes",
-            packet.len());
+        log::trace!("[vpn] Runtime to VPN: {} bytes", packet.len());
 
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {

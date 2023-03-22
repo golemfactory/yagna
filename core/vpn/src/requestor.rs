@@ -5,7 +5,6 @@ use crate::network::VpnSupervisor;
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
-use anyhow::bail;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::FutureExt;
@@ -16,13 +15,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
-use ya_core_model::activity::{VpnPacket};
+use ya_core_model::activity::VpnPacket;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::RpcEndpoint;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
-use ya_utils_networking::vpn::{
-    Error as VpnError, IpPacket, IpV4Field, PeekPacket, Protocol, UdpField, UdpPacket,
-};
+use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -343,53 +340,6 @@ impl Handler<Shutdown> for VpnWebSocket {
     }
 }
 
-// only for echo server
-fn reverse_udp(frame: &Vec<u8>) -> anyhow::Result<Vec<u8>> {
-    let ip_packet = match IpPacket::peek(frame) {
-        Ok(_) => IpPacket::packet(frame),
-        _ => bail!("Error peeking IP packet"),
-    };
-
-    if ip_packet.protocol() != Protocol::Udp as u8 {
-        return Ok(frame.to_vec());
-    }
-
-    let src = ip_packet.src_address();
-    let dst = ip_packet.dst_address();
-
-    println!("Src: {:?}, Dst: {:?}", src, dst);
-
-    let udp_data = ip_packet.payload();
-    let _udp_data_len = udp_data.len();
-
-    let udp_packet = match UdpPacket::peek(udp_data) {
-        Ok(_) => UdpPacket::packet(udp_data),
-        _ => bail!("Error peeking UDP packet"),
-    };
-
-    let src_port = udp_packet.src_port();
-    let dst_port = udp_packet.dst_port();
-    println!("Src port: {:?}, Dst port: {:?}", src_port, dst_port);
-
-    let content = &udp_data[UdpField::PAYLOAD];
-
-    match std::str::from_utf8(content) {
-        Ok(content_str) => println!("Content (string): {content_str:?}"),
-        Err(_e) => println!("Content (binary): {:?}", content),
-    };
-
-    let mut reversed = frame.clone();
-    reversed[IpV4Field::SRC_ADDR].copy_from_slice(&dst);
-    reversed[IpV4Field::DST_ADDR].copy_from_slice(&src);
-
-    let reversed_udp_data = &mut reversed[ip_packet.payload_off()..];
-
-    reversed_udp_data[UdpField::SRC_PORT].copy_from_slice(&udp_data[UdpField::DST_PORT]);
-    reversed_udp_data[UdpField::DST_PORT].copy_from_slice(&udp_data[UdpField::SRC_PORT]);
-
-    Ok(reversed)
-}
-
 /// Initiates a new RAW connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/raw/from/{src}/to/{dst}")]
 async fn connect_raw(
@@ -426,10 +376,10 @@ async fn connect_raw(
         .await??;
 
     Ok(ws::start(
-        VpnRawSocket{
+        VpnRawSocket {
             network_id: net_id,
-            src_ip: src,
-            dst_ip,
+            _src_ip: src,
+            _dst_ip: dst_ip,
             dst_node,
             heartbeat: Instant::now(),
             vpn_rx: Some(conn.rx),
@@ -441,15 +391,14 @@ async fn connect_raw(
 
 pub struct VpnRawSocket {
     network_id: String,
-    src_ip: IpAddr,
-    dst_ip: IpAddr,
+    _src_ip: IpAddr,
+    _dst_ip: IpAddr,
     dst_node: Node,
     heartbeat: Instant,
     vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl VpnRawSocket {
-
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         use ya_net::*;
 

@@ -1,7 +1,7 @@
-use std::net::IpAddr;
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
+use std::net::IpAddr;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
     stack::{
@@ -61,13 +61,22 @@ pub struct ConnectRaw {
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct Disconnect {
-    pub desc: SocketDesc,
+    pub desc: Option<SocketDesc>,
+    pub raw_desc: Option<String>,
     pub reason: DisconnectReason,
 }
 
 impl Disconnect {
-    pub fn new(desc: SocketDesc, reason: DisconnectReason) -> Self {
-        Self { desc, reason }
+    pub fn new(
+        desc: Option<SocketDesc>,
+        raw_desc: Option<String>,
+        reason: DisconnectReason,
+    ) -> Self {
+        Self {
+            desc,
+            raw_desc,
+            reason,
+        }
     }
 }
 

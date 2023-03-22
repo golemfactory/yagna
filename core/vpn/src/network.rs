@@ -466,9 +466,9 @@ impl Handler<ConnectRaw> for Vpn {
         let (tx, rx) = mpsc::channel(1);
 
         self.connections_raw
-            .insert(raw_connection_meta, InternalRawConnection {src_tx: tx});
+            .insert(raw_connection_meta, InternalRawConnection { src_tx: tx });
 
-        ActorResponse::reply(Ok(UserRawConnection {rx}))
+        ActorResponse::reply(Ok(UserRawConnection { rx }))
     }
 }
 
@@ -476,26 +476,28 @@ impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
 
     fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
-        match self.connections_tcp.remove(&msg.desc) {
-            Some(mut connection) => {
-                log::info!(
-                    "Dropping connection to {:?}: {:?}",
-                    msg.desc.remote,
-                    msg.reason
-                );
+        if let Some(desc) = &msg.desc {
+            match self.connections_tcp.remove(&desc) {
+                Some(mut connection) => {
+                    log::info!("Dropping connection to {:?}: {:?}", desc.remote, msg.reason);
 
-                connection.ingress_tx.close_channel();
+                    connection.ingress_tx.close_channel();
 
-                self.stack_network
-                    .stack
-                    .disconnect(connection.stack_connection.handle);
+                    self.stack_network
+                        .stack
+                        .disconnect(connection.stack_connection.handle);
 
-                Ok(())
+                    Ok(())
+                }
+                None => Err(Error::ConnectionError(format!(
+                    "no connection to remote: {:?}",
+                    desc.remote
+                ))),
             }
-            None => Err(Error::ConnectionError(format!(
-                "no connection to remote: {:?}",
-                msg.desc.remote
-            ))),
+        } else {
+            Err(Error::ConnectionError(
+                "no connection descriptor".to_string(),
+            ))
         }
     }
 }
@@ -513,9 +515,7 @@ impl Handler<Packet> for Vpn {
                 #[cfg(feature = "packet-trace-enable")]
                 let data_trace = pkt.data.clone();
 
-                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", {
-                    &data_trace
-                });
+                ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Packet>::1", { &data_trace });
 
                 let fut = self
                     .stack_network
@@ -538,7 +538,8 @@ impl Handler<Packet> for Vpn {
                 );
 
                         ctx.address().do_send(Disconnect::new(
-                            connection.stack_connection.meta.into(),
+                            Some(connection.stack_connection.meta.into()),
+                            None,
                             DisconnectReason::ConnectionError,
                         ));
                     }
@@ -567,8 +568,11 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
                     .into_actor(self)
                     .map(move |res, _, ctx| {
                         res.map_err(|e| {
-//                        ctx.address()
-                            //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+                            ctx.address().do_send(Disconnect::new(
+                                None,
+                                Some("TODO implement".into()),
+                                DisconnectReason::SinkClosed,
+                            ));
 
                             log::error!("VPN {}: cannot sent", e);
                             ya_core_model::activity::RpcMessageError::NotFound(e.to_string())
@@ -584,38 +588,47 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     }
 }
 
-//handling rpc raw calls
-
 impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        log::error!("VPN {}: received VpnPacket", self.vpn.id());
-
         if !self.connections_raw.is_empty() {
-            let connection_raw = self.connections_raw.iter().find(|(meta, _)| meta.remote_id == msg.caller);
+            let connection_raw = self
+                .connections_raw
+                .iter()
+                .find(|(meta, _)| meta.remote_id == msg.caller);
 
-            if let Some(mut connection) = connection_raw {
-                let _connection_meta = connection.0;
-                let mut connection = connection.1.clone();
+            if let Some((_connection_meta, connection)) = connection_raw {
                 let payload = msg.body;
-                let fut = async move { connection.src_tx.send(payload).await }
-                    .into_actor(self)
-                    .map(move |res, _, ctx| {
-                        res.map_err(|e| {
-//                        ctx.address()
-                            //                          .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
 
-                            log::error!("VPN {}: cannot sent", e);
-                            ya_service_bus::error::Error::GsbBadRequest(e.to_string())
-                        })
-                    }.map(|_| Vec::new())
-                    );
+                //Forward packet into raw connection (VpnRawSocket)
+                //look for impl StreamHandler<Vec<u8>> for VpnRawSocket
+                let mut src_tx = connection.src_tx.clone();
+                let fut = async move { src_tx.send(payload).await }
+                    .into_actor(self)
+                    .map(|res, self2, ctx| {
+                        {
+                            res.map_err(|e| {
+                                ctx.address().do_send(Disconnect::new(
+                                    None,
+                                    Some("TODO implement".into()),
+                                    DisconnectReason::SinkClosed,
+                                ));
+
+                                ya_service_bus::error::Error::RemoteError(
+                                    self2.node_id.clone(),
+                                    format!("VPN: cannot sent into raw endpoint: {e}"),
+                                )
+                            })
+                        }
+                        .map(|_| Vec::new())
+                    });
                 return ActorResponse::r#async(fut);
             } else {
                 log::error!("VPN {}: cannot find connection", self.vpn.id());
             }
         } else {
+            //Default behavior - forward packet into stack
             self.stack_network.receive(msg.body);
             self.stack_network.poll();
         }
@@ -645,8 +658,11 @@ impl Handler<Ingress> for Vpn {
                     desc.protocol,
                     desc.remote,
                 );
-                ctx.address()
-                    .do_send(Disconnect::new(desc, DisconnectReason::SocketClosed));
+                ctx.address().do_send(Disconnect::new(
+                    Some(desc),
+                    None,
+                    DisconnectReason::SocketClosed,
+                ));
 
                 ActorResponse::reply(Ok(()))
             }
@@ -660,8 +676,11 @@ impl Handler<Ingress> for Vpn {
                         .into_actor(self)
                         .map(move |res, _, ctx| {
                             res.map_err(|e| {
-                                ctx.address()
-                                    .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+                                ctx.address().do_send(Disconnect::new(
+                                    Some(desc),
+                                    None,
+                                    DisconnectReason::SinkClosed,
+                                ));
 
                                 Error::Other(e.to_string())
                             })
@@ -757,10 +776,11 @@ async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: Strin
 
             addr.do_send(Disconnect {
                 desc: match event {
-                    IngressEvent::InboundConnection { desc } => desc,
-                    IngressEvent::Disconnected { desc } => desc,
-                    IngressEvent::Packet { desc, .. } => desc,
+                    IngressEvent::InboundConnection { desc } => Some(desc),
+                    IngressEvent::Disconnected { desc } => Some(desc),
+                    IngressEvent::Packet { desc, .. } => Some(desc),
                 },
+                raw_desc: None,
                 reason: DisconnectReason::ConnectionError,
             });
         }
@@ -786,7 +806,8 @@ async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>, vpn_id: String)
 
             if let Some((desc, ..)) = event.desc {
                 addr.do_send(Disconnect {
-                    desc,
+                    desc: Some(desc),
+                    raw_desc: None,
                     reason: DisconnectReason::ConnectionError,
                 });
             } else {
