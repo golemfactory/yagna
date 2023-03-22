@@ -4,7 +4,9 @@ use super::{
 };
 use crate::{policy::CertPermissions, util::format_permissions};
 use anyhow::{anyhow, bail};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use openssl::{
+    asn1::Asn1Time,
     hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Public},
@@ -31,7 +33,7 @@ pub(super) trait X509AddParams {
 
 pub struct X509CertData {
     pub id: String,
-    pub not_after: String,
+    pub not_after: DateTime<Utc>,
     pub subject: BTreeMap<String, String>,
     pub permissions: String,
 }
@@ -39,7 +41,11 @@ pub struct X509CertData {
 impl X509CertData {
     pub fn create(cert: &X509Ref, permissions: &Vec<CertPermissions>) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
-        let not_after = cert.not_after().to_string();
+        let time_diff = Asn1Time::from_unix(0)?.diff(cert.not_after())?;
+        let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
+            + Duration::days(time_diff.days as i64)
+            + Duration::seconds(time_diff.secs as i64);
+        let not_after = DateTime::<Utc>::from_utc(not_after, Utc);
         let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
         add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");

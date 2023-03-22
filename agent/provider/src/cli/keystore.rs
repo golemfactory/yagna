@@ -1,5 +1,6 @@
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
+use chrono::SecondsFormat;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -231,14 +232,13 @@ impl CertTableBuilder {
 
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
-            values.push(match cert {
-                Cert::X509(cert) => {
-                    serde_json::json! { [ id_prefix, cert.not_after, cert.subject, cert.permissions ] }
-                }
-                Cert::Golem { cert, .. } => {
-                    serde_json::json! { [ id_prefix, "", "", cert.permissions ] }
-                }
-            });
+            let not_after = cert.not_after().to_rfc3339_opts(SecondsFormat::Secs, true);
+            let permissions = match &cert {
+                Cert::X509(cert) => serde_json::json!(cert.permissions),
+                Cert::Golem { cert, .. } => serde_json::json!(cert.permissions),
+            };
+            values
+                .push(serde_json::json! { [ id_prefix, not_after, cert.subject(), permissions ] });
         }
 
         let columns = vec![

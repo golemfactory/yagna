@@ -6,6 +6,7 @@ use self::{
     x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::policy::CertPermissions;
+use chrono::{DateTime, Utc};
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use std::{
@@ -31,10 +32,10 @@ impl Cert {
         }
     }
 
-    pub fn not_after(&self) -> String {
+    pub fn not_after(&self) -> DateTime<Utc> {
         match self {
-            Cert::X509(cert) => cert.not_after.clone(),
-            Cert::Golem { id: _, cert: _ } => "".into(),
+            Cert::X509(cert) => cert.not_after,
+            Cert::Golem { id: _, cert } => cert.validity_period.not_after,
         }
     }
 
@@ -43,7 +44,8 @@ impl Cert {
             Cert::X509(cert) => {
                 serde_json::to_string(&cert.subject).expect("Can serialize X509 fields")
             }
-            Cert::Golem { id: _, cert: _ } => "".into(),
+            Cert::Golem { id: _, cert } => serde_json::to_string(&cert.subject)
+                .expect("Can serialize Golem certificate fields"),
         }
     }
 }
