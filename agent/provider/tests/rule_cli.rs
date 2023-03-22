@@ -172,12 +172,8 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
         .success();
 
     let result = list_rules_command(data_dir.path());
-    let mode_actual = result["outbound"][rule]
-        .as_object()
-        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert_id)))
-        .map(|(_id, value)| &value["mode"]);
+    let mode_actual = rule_to_mode(&result["outbound"][rule], &cert_id);
 
-    assert!(mode_actual.is_some());
     assert_eq!(mode_actual.unwrap(), mode);
 }
 
@@ -206,12 +202,7 @@ fn rule_set_with_import_cert_should_add_to_keystore_and_rulestore(rule: &str, mo
     let added_certs = list_certs(data_dir.path());
 
     for cert in added_certs {
-        let mode_actual = result["outbound"][rule]
-            .as_object()
-            .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert)))
-            .map(|(_id, value)| &value["mode"]);
-
-        assert!(mode_actual.is_some());
+        let mode_actual = rule_to_mode(&result["outbound"][rule], &cert);
         assert_eq!(mode_actual.unwrap(), mode);
     }
 }
@@ -257,6 +248,15 @@ fn list_rules_command(data_dir: &Path) -> serde_json::Value {
         .unwrap();
 
     serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn rule_to_mode<'json, 's>(
+    rule: &'json serde_json::Value,
+    cert_prefix: &'s str,
+) -> Option<&'json serde_json::Value> {
+    rule.as_object()
+        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert_prefix)))
+        .map(|(_id, value)| &value["mode"])
 }
 
 fn remove_certificate_from_keystore(data_dir: &Path, cert_id: &str) {

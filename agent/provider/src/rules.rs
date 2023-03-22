@@ -1,5 +1,5 @@
 use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use golem_certificate::schemas::permissions::Permissions;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -99,13 +99,11 @@ impl RulesManager {
                 .collect();
 
             if certs.is_empty() {
-                return Err(anyhow!(
+                bail!(
                     "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
-                ));
+                );
             } else if certs.len() > 1 {
-                return Err(anyhow!(
-                    "Setting Partner mode {mode} failed: Cert id: {cert_id} isn't unique"
-                ));
+                bail!("Setting Partner mode {mode} failed: Cert id: {cert_id} isn't unique");
             } else {
                 certs[0].id()
             }
