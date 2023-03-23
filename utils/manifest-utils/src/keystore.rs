@@ -10,12 +10,13 @@ use chrono::{DateTime, Utc};
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
 
+#[derive(Eq, PartialEq)]
 pub enum Cert {
     X509(X509CertData),
     Golem {
@@ -50,6 +51,17 @@ impl Cert {
     }
 }
 
+impl PartialOrd for Cert {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id().partial_cmp(&other.id())
+    }
+}
+
+impl Ord for Cert {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id().cmp(&other.id())
+    }
+}
 trait CommonAddParams {
     fn certs(&self) -> &Vec<PathBuf>;
 }
@@ -178,11 +190,18 @@ impl CompositeKeystore {
         vec![&mut self.golem_keystore, &mut self.x509_keystore]
     }
 
-    pub fn list_ids(&self) -> HashSet<String> {
-        self.list()
+    fn list_sorted(&self) -> BTreeSet<Cert> {
+        self.keystores()
+            .iter()
+            .flat_map(|keystore| keystore.list())
+            .collect::<BTreeSet<Cert>>()
+    }
+
+    pub fn list_ids(&self) -> Vec<String> {
+        self.list_sorted()
             .into_iter()
             .map(|cert| cert.id())
-            .collect::<HashSet<String>>()
+            .collect::<Vec<String>>()
     }
 
     pub fn verify_x509_signature(
@@ -247,10 +266,7 @@ impl Keystore for CompositeKeystore {
     }
 
     fn list(&self) -> Vec<Cert> {
-        self.keystores()
-            .iter()
-            .flat_map(|keystore| keystore.list())
-            .collect()
+        self.list_sorted().into_iter().collect()
     }
 }
 

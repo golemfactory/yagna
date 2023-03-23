@@ -31,6 +31,7 @@ pub(super) trait X509AddParams {
     fn whole_chain(&self) -> bool;
 }
 
+#[derive(Eq, PartialEq)]
 pub struct X509CertData {
     pub id: String,
     pub not_after: DateTime<Utc>,
