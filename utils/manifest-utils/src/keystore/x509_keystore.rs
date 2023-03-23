@@ -42,6 +42,8 @@ pub struct X509CertData {
 impl X509CertData {
     pub fn create(cert: &X509Ref, permissions: &Vec<CertPermissions>) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
+        // Openssl lib allows to access time only through ASN1_TIME_print.
+        // Diff starting from epoch is a workaround to get `not_after` value.
         let time_diff = Asn1Time::from_unix(0)?.diff(cert.not_after())?;
         let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
             + Duration::days(time_diff.days as i64)
