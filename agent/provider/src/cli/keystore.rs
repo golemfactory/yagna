@@ -1,17 +1,16 @@
-use anyhow::anyhow;
-use std::collections::HashSet;
-use std::path::PathBuf;
-
-use structopt::StructOpt;
-use strum::VariantNames;
-
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
-use ya_manifest_utils::KeystoreLoadResult;
-use ya_utils_cli::{CommandOutput, ResponseTable};
-
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use structopt::StructOpt;
+use strum::VariantNames;
+use ya_manifest_utils::keystore::{
+    AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
+};
+use ya_manifest_utils::policy::CertPermissions;
+use ya_manifest_utils::CompositeKeystore;
+use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
 ///
@@ -54,12 +53,23 @@ pub struct Add {
     whole_chain: bool,
 }
 
+impl From<Add> for AddParams {
+    fn from(val: Add) -> Self {
+        AddParams {
+            certs: val.certs,
+            permissions: val.permissions,
+            whole_chain: val.whole_chain,
+        }
+    }
+}
+
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
     #[structopt(help = "Space separated list of X.509 certificates' ids. 
-To find certificate id use `keystore list` command.")]
+To find certificate id use `keystore list` command. You may use some prefix
+of the id as long as it is unique.")]
     ids: Vec<String>,
 }
 
@@ -75,80 +85,173 @@ impl KeystoreConfig {
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let table = CertTable::new();
-    let table = util::visit_certificates(&cert_dir, table)?;
-    table.print(&config)?;
+    let keystore = CompositeKeystore::load(&cert_dir)?;
+    let certs_data = keystore.list();
+    print_cert_list(&config, certs_data)?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
+    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let AddResponse { added, skipped } = keystore.add(&add.into())?;
 
-    let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
-
-    permissions_manager.set_many(
-        &loaded.iter().chain(skipped.iter()).cloned().collect(),
-        add.permissions,
-        add.whole_chain,
-    );
-
-    if !loaded.is_empty() {
+    if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
-        let certs_data = util::to_cert_data(&loaded, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+        print_cert_list(&config, added)?;
     }
 
     if !skipped.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        let certs_data = util::to_cert_data(&skipped, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+        print_cert_list(&config, skipped)?;
     }
-
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
-    let ids: HashSet<String> = remove.ids.into_iter().collect();
-    match keystore_manager.remove_certs(&ids)? {
-        util::KeystoreRemoveResult::NothingToRemove => {
-            println_conditional(&config, "No matching certificates to remove.");
+    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+
+    let all_certs = keystore.list();
+    let mut ids = HashSet::new();
+    for remove_prefix in &remove.ids {
+        let full_ids = find_ids_by_prefix(&all_certs, remove_prefix);
+
+        if full_ids.is_empty() {
+            ids.insert(remove_prefix.clone()); //won't match anyway
+        } else if full_ids.len() == 1 {
+            ids.insert(full_ids[0].clone());
+        } else {
+            println_conditional(
+                &config,
+                &format!(
+                    "Prefix '{remove_prefix}' isn't unique, consider using full certificate id"
+                ),
+            );
             if config.json {
                 print_cert_list(&config, Vec::new())?;
             }
-        }
-        util::KeystoreRemoveResult::Removed { removed } => {
-            permissions_manager.set_many(&removed, vec![], true);
 
-            println!("Removed certificates:");
-            let certs_data = util::to_cert_data(&removed, &permissions_manager)?;
-            print_cert_list(&config, certs_data)?;
+            return Ok(());
         }
-    };
+    }
+    let remove_params = RemoveParams { ids };
 
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+    let RemoveResponse { removed } = keystore.remove(&remove_params)?;
+    if removed.is_empty() {
+        println_conditional(&config, "No matching certificates to remove.");
+        if config.json {
+            print_cert_list(&config, Vec::new())?;
+        }
+    } else {
+        println!("Removed certificates:");
+        print_cert_list(&config, removed)?;
+    }
+
     Ok(())
 }
 
-fn print_cert_list(
-    config: &ProviderConfig,
-    certs_data: Vec<util::CertBasicData>,
-) -> anyhow::Result<()> {
-    let mut table = CertTable::new();
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<Cert>) -> anyhow::Result<()> {
+    let mut table_builder = CertTableBuilder::new();
     for data in certs_data {
-        table.add(data);
+        table_builder.add(data);
     }
-    table.print(config)?;
+
+    table_builder.build().print(config)?;
     Ok(())
+}
+
+fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {
+    certs
+        .iter()
+        .map(|cert| cert.id())
+        .filter(|id| id.starts_with(prefix))
+        .collect()
+}
+
+struct CertTableBuilder {
+    entries: Vec<Cert>,
+}
+
+impl CertTableBuilder {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, cert: Cert) {
+        self.entries.push(cert)
+    }
+
+    pub fn build(self) -> CertTable {
+        const DIGEST_PREFIX_LENGTHS: [usize; 3] = [8, 32, 128];
+
+        // hard-code support for the use of the entire signature, regardless of its size,
+        // ensure all prefixes are no longer than the signature, and remove duplicates.
+        //
+        // these are, by construction, sorted smallest to largest.
+        let prefix_lengths = |id_len| {
+            DIGEST_PREFIX_LENGTHS
+                .iter()
+                .map(move |&n| std::cmp::min(n, id_len))
+                .chain(std::iter::once(id_len))
+                .dedup()
+        };
+
+        let mut prefix_uses = HashMap::<String, u32>::new();
+        for cert in &self.entries {
+            for len in prefix_lengths(cert.id().len()) {
+                let mut prefix = cert.id();
+                prefix.truncate(len);
+
+                *prefix_uses.entry(prefix).or_default() += 1;
+            }
+        }
+
+        let mut ids = Vec::new();
+        for cert in &self.entries {
+            for len in prefix_lengths(cert.id().len()) {
+                let mut prefix = cert.id();
+                prefix.truncate(len);
+
+                let usages = *prefix_uses
+                    .get(&prefix)
+                    .expect("Internal error, unexpected prefix");
+
+                // the longest prefix (i.e. the entire fingerprint) will be unique, so
+                // this condition is guaranteed to execute during the last iteration,
+                // at the latest.
+                if usages == 1 {
+                    ids.push(prefix);
+                    break;
+                }
+            }
+        }
+
+        let mut values = Vec::new();
+        for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
+            values.push(match cert {
+                Cert::X509(cert) => {
+                    serde_json::json! { [ id_prefix, cert.not_after, cert.subject, cert.permissions ] }
+                }
+                Cert::Golem { cert, .. } => {
+                    serde_json::json! { [ id_prefix, "", "", cert.permissions ] }
+                }
+            });
+        }
+
+        let columns = vec![
+            "ID".to_string(),
+            "Not After".to_string(),
+            "Subject".to_string(),
+            "Permissions".to_string(),
+        ];
+
+        let table = ResponseTable { columns, values };
+
+        CertTable { table }
+    }
 }
 
 struct CertTable {
@@ -156,32 +259,9 @@ struct CertTable {
 }
 
 impl CertTable {
-    pub fn new() -> Self {
-        let columns = vec![
-            "ID".to_string(),
-            "Not After".to_string(),
-            "Subject".to_string(),
-            "Permissions".to_string(),
-        ];
-        let values = vec![];
-        let table = ResponseTable { columns, values };
-        Self { table }
-    }
-
     pub fn print(self, config: &ProviderConfig) -> anyhow::Result<()> {
         let output = CommandOutput::from(self.table);
         output.print(config.json)?;
         Ok(())
-    }
-
-    pub fn add(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
-        self.table.values.push(row)
-    }
-}
-
-impl CertBasicDataVisitor for CertTable {
-    fn accept(&mut self, data: CertBasicData) {
-        self.add(data)
     }
 }

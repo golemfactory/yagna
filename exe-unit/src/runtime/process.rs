@@ -157,6 +157,8 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        log::trace!("Handle process command: {cmd:?}");
+
         let mut rt_args = match self.args() {
             Ok(args) => args,
             Err(err) => return Box::pin(future::err(err)),
@@ -227,6 +229,8 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        log::trace!("Handle service command: {cmd:?}");
+
         let (cmd, ctx) = cmd.split();
         match cmd {
             ExeScriptCommand::Start { args } => self.handle_service_start(ctx, args, address),
@@ -243,6 +247,8 @@ impl RuntimeProcess {
         args: Vec<String>,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        log::trace!("Handle service start, CommandContext: {ctx:?}, args: {args:?}");
+
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
@@ -256,6 +262,8 @@ impl RuntimeProcess {
 
         async move {
             let vpn_endpoint = if rt_ctx.manifest.features().contains(&Feature::Vpn) {
+                log::trace!("Creating VPN transport endpoint for ExeUnit Runtime");
+
                 let endpoint = Endpoint::default_transport().await?;
                 rt_args.arg("--vpn-endpoint");
                 rt_args.arg(endpoint.local().to_string());
@@ -265,6 +273,8 @@ impl RuntimeProcess {
             };
 
             let inet_endpoint = if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                log::trace!("Creating Outbound transport endpoint for ExeUnit Runtime");
+
                 let endpoint = Endpoint::default_transport().await?;
                 rt_args.arg("--inet-endpoint");
                 rt_args.arg(endpoint.local().to_string());
@@ -291,7 +301,7 @@ impl RuntimeProcess {
                 .await?;
             let hello = service
                 .hello(SERVICE_PROTOCOL_VERSION)
-                .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
+                .map_err(|e| Error::runtime(format!("service hello error: {e:?}")));
 
             let _handle = monitor.any_process(ctx);
             match future::select(service.stopped(), hello).await {
@@ -301,9 +311,9 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let net = async {
-                if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                if let Some(endpoint) = inet_endpoint {
                     let inet = start_inet(
-                        inet_endpoint.unwrap(),
+                        endpoint,
                         &service_,
                         rt_ctx.manifest.validator::<UrlValidator>(),
                     )
@@ -311,10 +321,8 @@ impl RuntimeProcess {
                     address.send(SetInetService(inet)).await?;
                 }
 
-                if rt_ctx.manifest.features().contains(&Feature::Vpn) {
-                    if let Some(vpn) =
-                        start_vpn(vpn_endpoint.unwrap(), acl, &service_, &deployment).await?
-                    {
+                if let Some(endpoint) = vpn_endpoint {
+                    if let Some(vpn) = start_vpn(endpoint, acl, &service_, &deployment).await? {
                         address.send(SetVpnService(vpn)).await?;
                     }
                 }
@@ -403,6 +411,7 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
 
     fn handle(&mut self, cmd: ExecuteCommand, ctx: &mut Self::Context) -> Self::Result {
         let address = ctx.address();
+        let cmd_ = cmd.clone();
         match &cmd.command {
             ExeScriptCommand::Deploy { .. } => self.handle_process_command(cmd, address),
             _ => match &self.deployment.runtime_mode {
@@ -410,6 +419,14 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
                 RuntimeMode::Service => self.handle_service_command(cmd, address),
             },
         }
+        .map(move |result| {
+            match &result {
+                Ok(value) => log::debug!("{cmd_} returned code: {value}"),
+                Err(e) => log::debug!("{cmd_} failed (ExeUnit error): {e}"),
+            };
+            result
+        })
+        .boxed_local()
     }
 }
 
