@@ -15,9 +15,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
-use ya_core_model::activity::VpnPacket;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::RpcEndpoint;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
@@ -377,6 +375,7 @@ async fn connect_raw(
 
     Ok(ws::start(
         VpnRawSocket {
+            node_id: identity.identity.to_string(),
             network_id: net_id,
             _src_ip: src,
             _dst_ip: dst_ip,
@@ -390,6 +389,7 @@ async fn connect_raw(
 }
 
 pub struct VpnRawSocket {
+    node_id: String,
     network_id: String,
     _src_ip: IpAddr,
     _dst_ip: IpAddr,
@@ -403,11 +403,13 @@ impl VpnRawSocket {
         use ya_net::*;
 
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
-        let vpn_node = dst_node_id.service(&format!("/public/vpn/{}", self.network_id));
+        let current_node_id = self.node_id.clone();
+
+        let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
 
         ctx.spawn(
             async move {
-                let _res = vpn_node.send(VpnPacket(data)).await??;
+                let _res = vpn_node.push_raw_as(&current_node_id, data).await?;
 
                 Ok::<_, anyhow::Error>(())
             }
