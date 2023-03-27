@@ -408,16 +408,16 @@ impl VpnRawSocket {
 
 
         static mut PACKET_NO: u64 = 1;
-        let packet_no = 1;
-        unsafe {
+        let packet_no = unsafe {
             PACKET_NO += 1;
-        }
+            PACKET_NO
+        };
 
         log::info!("VPN WebSocket: VPN {} forwarding packet to {}", packet_no, dst_node_id);
         let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
         log::info!("VPN WebSocket: VPN {} forwarding packet 2 to {}", packet_no, dst_node_id);
 
-        ctx.spawn(
+        ctx.wait(
             async move {
                 let _res = match vpn_node.push_raw_as(&current_node_id, data).await{
                     Ok(_) => Ok(()),
