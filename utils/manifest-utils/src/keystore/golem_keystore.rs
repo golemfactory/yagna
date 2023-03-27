@@ -110,6 +110,7 @@ impl Keystore for GolemKeystore {
     fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
         let mut added = Vec::new();
         let mut skipped = Vec::new();
+        let mut invalid = Vec::new();
         let mut certificates = self
             .certificates
             .write()
@@ -134,12 +135,16 @@ impl Keystore for GolemKeystore {
                     leaf_cert_ids.push(id.clone());
                     added.push(Cert::Golem { id, cert })
                 }
-                Err(err) => log::warn!("Unable to parse Golem certificate. Err: {}", err),
+                Err(err) => {
+                    log::warn!("Unable to parse Golem certificate. Err: {}", err);
+                    invalid.push(path.clone());
+                }
             }
         }
         Ok(super::AddResponse {
             added,
-            skipped,
+            duplicated: skipped,
+            invalid,
             leaf_cert_ids,
         })
     }

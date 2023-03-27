@@ -96,7 +96,8 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
     let AddResponse {
         added,
-        skipped,
+        duplicated,
+        invalid: _,
         leaf_cert_ids: _,
     } = keystore.add(&add.into())?;
 
@@ -105,9 +106,9 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         print_cert_list(&config, added)?;
     }
 
-    if !skipped.is_empty() && !config.json {
+    if !duplicated.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        print_cert_list(&config, skipped)?;
+        print_cert_list(&config, duplicated)?;
     }
     Ok(())
 }

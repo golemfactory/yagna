@@ -73,7 +73,8 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
 
 pub(super) struct AddX509Response {
     pub loaded: Vec<X509>,
-    pub skipped: Vec<X509>,
+    pub duplicated: Vec<X509>,
+    pub invalid: Vec<PathBuf>,
     pub leaf_cert_ids: Vec<String>,
 }
 
@@ -134,27 +135,37 @@ impl X509KeystoreManager {
     ) -> anyhow::Result<AddX509Response> {
         let mut loaded = HashMap::new();
         let mut skipped = HashMap::new();
+        let mut invalid = Vec::new();
 
         for cert_path in add.certs() {
             let mut new_certs = Vec::new();
-            let file_certs = parse_cert_file(cert_path)?;
-            if file_certs.is_empty() {
-                continue;
-            }
-            let file_certs_len = file_certs.len();
-            for file_cert in file_certs {
-                let id = cert_to_id(&file_cert)?;
-                if !self.ids.contains(&id) && !loaded.contains_key(&id) {
-                    new_certs.push(file_cert.clone());
-                    loaded.insert(id, file_cert);
-                } else {
-                    skipped.insert(id, file_cert);
+            match parse_cert_file(cert_path) {
+                Ok(file_certs) => {
+                    if file_certs.is_empty() {
+                        continue;
+                    }
+                    let file_certs_len = file_certs.len();
+                    for file_cert in file_certs {
+                        let id = cert_to_id(&file_cert)?;
+                        if !self.ids.contains(&id) && !loaded.contains_key(&id) {
+                            new_certs.push(file_cert.clone());
+                            loaded.insert(id, file_cert);
+                        } else {
+                            skipped.insert(id, file_cert);
+                        }
+                    }
+                    if file_certs_len == new_certs.len() {
+                        super::copy_file(cert_path, &self.cert_dir)?;
+                    } else {
+                        // Splits certificate chain file into individual certificate files
+                        // because some of the certificates are already loaded.
+                        self.load_as_certificate_files(cert_path, new_certs)?;
+                    }
                 }
-            }
-            if file_certs_len == new_certs.len() {
-                super::copy_file(cert_path, &self.cert_dir)?;
-            } else {
-                self.load_as_certificate_files(cert_path, new_certs)?;
+                Err(err) => {
+                    log::warn!("Unable to parse X.509 certificate. Err: {err}");
+                    invalid.push(cert_path.clone());
+                }
             }
         }
         let loaded_leaf_cert_ids = leaf_certs(&loaded);
@@ -179,10 +190,11 @@ impl X509KeystoreManager {
             .map(str::to_string)
             .collect();
         let loaded = loaded.into_values().collect();
-        let skipped = skipped.into_values().collect();
+        let duplicated = skipped.into_values().collect();
         Ok(AddX509Response {
             loaded,
-            skipped,
+            duplicated,
+            invalid,
             leaf_cert_ids,
         })
     }
@@ -234,7 +246,8 @@ impl Keystore for X509KeystoreManager {
         let mut permissions_manager = self.keystore.permissions_manager();
         let AddX509Response {
             loaded,
-            skipped,
+            duplicated,
+            invalid,
             leaf_cert_ids,
         } = self.add_certs(add, &mut permissions_manager)?;
 
@@ -248,7 +261,7 @@ impl Keystore for X509KeystoreManager {
             .into_iter()
             .map(Cert::X509)
             .collect();
-        let skipped = skipped
+        let skipped = duplicated
             .into_iter()
             .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
@@ -257,7 +270,8 @@ impl Keystore for X509KeystoreManager {
             .collect();
         Ok(AddResponse {
             added,
-            skipped,
+            duplicated: skipped,
+            invalid,
             leaf_cert_ids,
         })
     }

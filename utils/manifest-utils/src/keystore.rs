@@ -116,7 +116,8 @@ impl X509AddParams for AddParams {
 #[derive(Default)]
 pub struct AddResponse {
     pub added: Vec<Cert>,
-    pub skipped: Vec<Cert>,
+    pub duplicated: Vec<Cert>,
+    pub invalid: Vec<PathBuf>,
     pub leaf_cert_ids: Vec<String>,
 }
 
@@ -218,6 +219,10 @@ impl CompositeKeystore {
             .collect::<Vec<String>>()
     }
 
+    pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.golem_keystore.add(add)
+    }
+
     pub fn verify_x509_signature(
         &self,
         cert: impl AsRef<str>,
@@ -254,14 +259,15 @@ impl Keystore for CompositeKeystore {
         Ok(())
     }
 
-    fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+    fn add<'p>(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let response = self
             .keystores_mut()
             .iter_mut()
             .map(|keystore| keystore.add(add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
                 acc.added.append(&mut res.added);
-                acc.skipped.append(&mut res.skipped);
+                acc.duplicated.append(&mut res.duplicated);
+                acc.invalid.append(&mut res.invalid);
                 acc.leaf_cert_ids.append(&mut res.leaf_cert_ids);
                 acc
             })?;

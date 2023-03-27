@@ -106,14 +106,18 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 let mut keystore = CompositeKeystore::load(&rules.cert_dir)?;
 
                 let AddResponse {
-                    added: _,
-                    skipped: _,
+                    invalid,
                     leaf_cert_ids,
-                } = keystore.add(&AddParams {
+                    ..
+                } = keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
                     permissions: vec![CertPermissions::All],
                     whole_chain: false,
                 })?;
+
+                for cert_path in invalid {
+                    log::error!("Failed to import {cert_path:?}. Partner mode can be set only for Golem certificate.");
+                }
 
                 rules.keystore.reload(&rules.cert_dir)?;
 
