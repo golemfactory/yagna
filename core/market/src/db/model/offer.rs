@@ -1,6 +1,5 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -82,7 +81,7 @@ impl Offer {
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
         Ok(ClientOffer {
             offer_id: self.id.to_string(),
-            provider_id: self.node_id.clone(),
+            provider_id: self.node_id,
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
@@ -142,18 +141,18 @@ mod tests {
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
-            id: SubscriptionId::from_str(&false_subscription_id).unwrap(),
+            id: SubscriptionId::from_str(false_subscription_id).unwrap(),
             properties: "{}".to_string(),
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),
             creation_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(0, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(0, 1, 1).unwrap(),
             ),
             insertion_ts: None,
             expiration_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(15, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
         };
         assert!(offer.validate().is_err());
@@ -165,18 +164,18 @@ mod tests {
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
-            id: SubscriptionId::from_str(&offer_id).unwrap(),
+            id: SubscriptionId::from_str(offer_id).unwrap(),
             properties: "{}".to_string(),
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),
             creation_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(0, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(0, 1, 1).unwrap(),
             ),
             insertion_ts: None,
             expiration_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(15, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
         };
         let id = SubscriptionId::generate_id(

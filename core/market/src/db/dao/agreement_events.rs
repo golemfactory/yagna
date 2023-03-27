@@ -3,8 +3,9 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
+use ya_persistence::executor::PoolType;
 use ya_persistence::executor::{readonly_transaction, ConnType};
-use ya_persistence::executor::{AsDao, PoolType};
+use ya_persistence::types::AdaptTimestamp;
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{Agreement, AgreementEvent, AgreementId, NewAgreementEvent};
@@ -13,15 +14,15 @@ use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
-use crate::db::DbResult;
+use crate::db::{AsMixedDao, DbResult};
 
 pub struct AgreementEventsDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for AgreementEventsDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for AgreementEventsDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, _ram_pool: &'a PoolType) -> Self {
+        Self { pool: disk_pool }
     }
 }
 
@@ -34,7 +35,7 @@ impl<'c> AgreementEventsDao<'c> {
         after_timestamp: NaiveDateTime,
     ) -> DbResult<Vec<AgreementEvent>> {
         let session_id = session_id.clone();
-        let node_id = node_id.clone();
+        let node_id = *node_id;
         readonly_transaction(self.pool, move |conn| {
             // We will get only one Agreement, by using this filter.
             // There will be no way to get Requestor'a Agreement, when being Provider, and vice versa,
@@ -56,7 +57,7 @@ impl<'c> AgreementEventsDao<'c> {
 
             Ok(market_agreement_event
                 .filter(event::agreement_id.eq_any(select_corresponding_agreement))
-                .filter(event::timestamp.gt(after_timestamp))
+                .filter(event::timestamp.gt(after_timestamp.adapt()))
                 .order_by(event::timestamp.asc())
                 .limit(max_events as i64)
                 .load::<AgreementEvent>(conn)?)

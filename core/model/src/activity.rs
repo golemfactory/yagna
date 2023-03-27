@@ -5,7 +5,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-use crate::Role;
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
@@ -53,14 +52,14 @@ impl RpcMessage for Create {
     type Error = RpcMessageError;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResponse {
     pub activity_id: String,
     pub credentials: Option<local::Credentials>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CreateResponseCompat {
     ActivityId(String),
@@ -145,7 +144,7 @@ impl RpcMessage for GetUsage {
 }
 
 /// Update remote network configuration
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VpnControl {
     AddNodes {
@@ -181,7 +180,7 @@ impl RpcMessage for VpnControl {
 }
 
 /// Network data
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VpnPacket(pub Vec<u8>);
 
@@ -247,7 +246,7 @@ impl RpcMessage for GetExecBatchResults {
 }
 
 /// Stream script execution events.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
@@ -280,18 +279,19 @@ pub mod local {
     use super::*;
     use chrono::{DateTime, Utc};
     use std::collections::BTreeMap;
+    use ya_client_model::market::Role;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";
 
     /// Set state of the activity.
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Stats {
         pub identity: NodeId,
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct StatsResult {
         pub total: BTreeMap<String, u64>,
@@ -337,7 +337,7 @@ pub mod local {
         type Error = RpcMessageError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub enum Credentials {
         Sgx {

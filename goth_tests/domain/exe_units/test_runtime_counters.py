@@ -24,7 +24,6 @@ def build_demand(
         DemandBuilder(requestor)
         .props_from_template(None)
         .property("golem.srv.caps.multi-activity", True)
-        .property("golem.com.payment.debit-notes.accept-timeout?", 8)
         .constraints(
             "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
@@ -34,14 +33,14 @@ def build_demand(
     )
 
 
-def _exe_script(duration: float = 3.0):
+def _exe_script(duration: int = 10000):
     return [
         {"deploy": {}},
         {"start": {"args": []}},
         {
             "run": {
                 "entry_point": "sleep",
-                "args": [f"{duration * 1000}"],
+                "args": [f"{duration}"],
             }
         },
     ]
@@ -102,14 +101,21 @@ async def test_custom_runtime_counter(
 
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
         await requestor.collect_results(
-            activity_id, batch_id, len(exe_script), timeout=10
+            activity_id, batch_id, len(exe_script), timeout=30
         )
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
+        logger.info("waiting for last debit note to be send")
+        await provider.provider_agent.wait_for_log(r"(.*)Sending debit note(.*)")
+        logger.info("waiting for last debit note to be received")
+        await requestor.container.logs.wait_for_entry(
+            r"(.*)DebitNote \[(.+)\] received from node(.*)"
+        )
+
         debit_notes = await requestor.api.payment.get_debit_notes()
-        last_debit_note = debit_notes[-1]
+        last_debit_note = debit_notes[0]
         logger.info("last debit note: %r", last_debit_note)
 
         assert len(last_debit_note.usage_counter_vector) == len(usage_vector)

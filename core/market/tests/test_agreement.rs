@@ -1,7 +1,8 @@
-use actix_web::{http::StatusCode, test, web::Bytes};
+use actix_web::{http::StatusCode, web::Bytes};
 use chrono::{Duration, Utc};
 
-use ya_core_model::{market, Role};
+use ya_client::model::market::Role;
+use ya_core_model::market;
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -65,6 +66,51 @@ async fn test_gsb_get_agreement() {
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
     assert_eq!(agreement.app_session_id, sess_id);
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_gsb_list_agreements() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap()
+        .proposal_id;
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+        .unwrap();
+
+    // than: confirm agreement with app_session_id
+    let sess_id = Some("sess-iksde".into());
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, sess_id.clone())
+        .await
+        .unwrap();
+
+    let agreements = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
+        .send(market::ListAgreements::default())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(agreements.len(), 1);
+    assert_eq!(agreements[0].id, agreement_id.into_client());
+    assert_eq!(agreements[0].role, Role::Requestor);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -319,7 +365,7 @@ async fn agreement_expired_before_confirmation() {
         .unwrap();
 
     // try to wait a bit, because CI on Windows is failing here...
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // than: a try to confirm agreement...
     let result = req_engine
@@ -373,7 +419,7 @@ async fn agreement_expired_before_approval() {
         .await
         .unwrap();
 
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement
@@ -1190,27 +1236,27 @@ async fn test_terminate_invalid_reason() {
     .unwrap()
     .r_agreement;
 
-    let mut app = network.get_rest_app(REQ_NAME).await;
+    let app = network.get_rest_app(REQ_NAME).await;
     let url = format!(
         "/market-api/v1/agreements/{}/terminate",
         agreement_id.into_client(),
     );
 
     let reason = "Unstructured message. Should be json.".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }

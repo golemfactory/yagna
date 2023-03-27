@@ -26,11 +26,11 @@ pub struct WriteObj {
 
 impl WriteObj {
     pub fn new(agreement: Agreement, role: Role) -> Self {
-        let provider_id = agreement.provider_id().clone();
-        let requestor_id = agreement.requestor_id().clone();
+        let provider_id = *agreement.provider_id();
+        let requestor_id = *agreement.requestor_id();
         let (owner_id, peer_id) = match &role {
-            Role::Provider => (provider_id.clone(), requestor_id.clone()),
-            Role::Requestor => (requestor_id.clone(), provider_id.clone()),
+            Role::Provider => (provider_id, requestor_id),
+            Role::Requestor => (requestor_id, provider_id),
         };
 
         let demand_properties = expand(agreement.demand.properties);
@@ -45,12 +45,12 @@ impl WriteObj {
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(provider_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| provider_id.to_string().to_lowercase());
         let payer_addr = demand_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(requestor_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| requestor_id.to_string().to_lowercase());
 
         Self {
             id: agreement.agreement_id,

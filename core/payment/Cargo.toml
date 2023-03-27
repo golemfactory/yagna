@@ -1,6 +1,6 @@
 [package]
 name = "ya-payment"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -8,20 +8,19 @@ edition = "2018"
 default = []
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
-ya-client-model = { version = "0.3", features = ["with-diesel"] }
-ya-core-model = { version = "^0.4", features = [ "activity", "driver", "identity", "market", "payment" ] }
-ya-net = "0.2"
-ya-metrics = "0.1.0"
-ya-persistence = "0.2"
+ya-agreement-utils = { version = "0.4.1" }
+ya-client-model = { version = "0.5", features = ["with-diesel"] }
+ya-core-model = { version = "^0.8", features = [ "activity", "driver", "identity", "market", "payment" ] }
+ya-net = "0.3"
+ya-metrics = "0.2"
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
+ya-service-api-interfaces = "0.2"
+ya-service-api-web = "0.2"
+ya-service-bus = "0.6.1"
 
-actix-rt = "1.0"
-actix-web = "3.2"
-anyhow = "1.0.26"
+actix-web = "4"
+anyhow = "1.0"
 base64 = "0.12"
 bigdecimal = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -41,22 +40,19 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["fs"] }
+tokio = { version = "1", features = ["fs", "signal", "macros"] }
+uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 humantime="2.0.1"
 
 [dev-dependencies]
-ya-client = "0.5"
-ya-dummy-driver = "0.2"
-ya-erc20-driver = "0.3"
-ya-zksync-driver = "0.2"
-ya-net = { version = "0.2", features = ["service"] }
-ya-sb-router = "0.4"
+ya-client = "0.7"
+ya-dummy-driver = "0.3"
+ya-erc20-driver = "0.4"
+ya-zksync-driver = "0.3"
+ya-net = { version = "0.3", features = ["service"] }
+ya-sb-router = "0.6.1"
 
-actix-rt = "1.0"
-
-rand = "0.7"
-# Lock ethsign on this commit to match parity-crypto=0.6 from zksync_eth_client
-ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45f3a3313e5418876b3d3e751ba87e" }
-# TODO: Upgrade to latest = 0.8 after zksync_eth_client is updated
-# ethsign = "0.8"
+actix-rt = "2.7"
+rand = "0.8"
+ethsign = "0.8"

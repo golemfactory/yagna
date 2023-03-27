@@ -9,7 +9,7 @@ pub static POC_OFFER_PROPERTIES_JSON: &str = r#"
     1.0
   ],
   "golem.com.scheme": "payu",
-  "golem.com.scheme.payu.interval_sec": 6.0,
+  "golem.com.scheme.payu.debit-note.interval-sec?": 6.0,
   "golem.com.usage.vector": [
     "golem.usage.duration_sec",
     "golem.usage.cpu_sec"
@@ -39,7 +39,7 @@ pub static POC_OFFER_PROPERTIES_JSON_DEEP: &str = r#"
       },
       "scheme": "payu",
       "scheme.payu": {
-        "interval_sec": 6.0
+        "debit-note.interval-sec?": 6.0
       },
       "usage": {
         "vector": [
@@ -72,11 +72,11 @@ pub static POC_OFFER_PROPERTIES_JSON_DEEP: &str = r#"
   }
 }"#;
 
-pub static POC_OFFER_PROPERTIES_FLAT: &'static [&'static str] = &[
+pub static POC_OFFER_PROPERTIES_FLAT: &[&str] = &[
     "golem.com.pricing.model=\"linear\"",
     "golem.com.pricing.model.linear.coeffs=[0.1,0.2,1.0]",
     "golem.com.scheme=\"payu\"",
-    "golem.com.scheme.payu.interval_sec=6.0",
+    "golem.com.scheme.payu.debit-note.interval-sec?=6.0",
     "golem.com.usage.vector=[\"golem.usage.duration_sec\",\"golem.usage.cpu_sec\"]",
     "golem.inf.mem.gib=1.0",
     "golem.inf.storage.gib=10.0",
@@ -109,14 +109,14 @@ pub static POC_DEMAND_PROPERTIES_JSON_DEEP: &str = r#"
   }
 }"#;
 
-pub static POC_DEMAND_PROPERTIES_FLAT: &'static [&'static str] = &[
+pub static POC_DEMAND_PROPERTIES_FLAT: &[&str] = &[
     "golem.node.debug.subnet=\"piotr\"",
     "golem.node.id.name=\"test1\"",
     "golem.srv.comp.expiration=1590765503361",
     "golem.srv.comp.task_package=\"hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://12.34.56.78:8000/rust-wasi-tutorial.zip\""
 ];
 
-pub static POC_DEMAND_CONSTRAINTS: &'static str = r#"
+pub static POC_DEMAND_CONSTRAINTS: &str = r#"
 (&
 (golem.inf.mem.gib>0.5)
 (golem.inf.storage.gib>1)
@@ -124,5 +124,5 @@ pub static POC_DEMAND_CONSTRAINTS: &'static str = r#"
 (golem.node.debug.subnet=piotr)
 )"#;
 
-pub static POC_OFFER_CONSTRAINTS: &'static str =
+pub static POC_OFFER_CONSTRAINTS: &str =
     "(&(golem.node.debug.subnet=piotr)(golem.srv.comp.expiration>0))";

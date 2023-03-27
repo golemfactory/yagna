@@ -36,7 +36,7 @@ fn match_simple_error() {
     let prep_demand_result = PreparedDemand::from(&demand);
 
     match prep_demand_result {
-        Ok(_) => assert!(false, "Demand content error was not caught!"),
+        Ok(_) => panic!("Demand content error was not caught!"),
         Err(prep_error) => assert_eq!(
             prep_error,
             PrepareError::new("Error parsing Demand constraints: Parsing error: Alternative")

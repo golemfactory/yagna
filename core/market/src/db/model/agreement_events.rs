@@ -12,6 +12,7 @@ use ya_client::model::market::{
     AgreementEventType as ClientEventType, AgreementOperationEvent as ClientEvent, Reason,
 };
 use ya_diesel_utils::DbTextField;
+use ya_persistence::types::{AdaptTimestamp, TimestampAdapter};
 
 #[derive(
     DbTextField,
@@ -20,6 +21,7 @@ use ya_diesel_utils::DbTextField;
     AsExpression,
     FromSqlRow,
     PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -52,7 +54,7 @@ pub struct AgreementEvent {
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: TimestampAdapter,
     pub issuer: Owner,
     pub reason: Option<DbReason>,
 }
@@ -90,9 +92,9 @@ impl NewAgreementEvent {
             // so we need to have the same value on both nodes.
             // I don't know, how to solve this problem now, so I leave code that makes it possible to
             // add this external timestamp to database, but here I will use generated value.
-            timestamp: Utc::now().naive_utc(),
+            timestamp: Utc::now().adapt(),
             issuer: terminator,
-            reason: reason.map(|reason| DbReason(reason)),
+            reason: reason.map(DbReason),
         })
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.7.3"
+version = "0.11.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -16,46 +16,59 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
+framework-test = []
+# Temporary to make goth integration tests work
+central-net = ['ya-net/central-net']
+packet-trace-enable = [
+    "ya-vpn/packet-trace-enable",
+    "ya-file-logging/packet-trace-enable",
+    "ya-net/packet-trace-enable",
+    "ya-service-bus/packet-trace-enable"
+]
 
 [[bin]]
 name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
-ya-activity = "0.3"
+ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.4"}
-ya-dummy-driver = { version = "0.2", optional = true }
+ya-core-model = { version = "^0.8" }
+ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
-ya-erc20-driver = { version = "0.3", optional = true }
-ya-zksync-driver = { version = "0.2", optional = true }
-ya-identity = "0.2"
-ya-market = "0.3"
-ya-metrics = "0.1"
-ya-net = { version = "0.2", features = ["service"] }
-ya-payment = "0.2"
-ya-persistence = { version = "0.2", features = ["service"] }
-ya-sb-proto = "0.4"
-ya-sb-router = "0.4"
+ya-gsb-api = "0.1"
+ya-erc20-driver = { version = "0.4", optional = true }
+ya-zksync-driver = { version = "0.3", optional = true }
+ya-identity = "0.3"
+ya-market = "0.4"
+ya-metrics = "0.2"
+ya-net = { version = "0.3", features = ["service"] }
+ya-payment = "0.3"
+ya-persistence = { version = "0.3", features = ["service"] }
+ya-sb-proto = "0.6.1"
+ya-sb-router = "0.6.1"
 ya-service-api = "0.1"
-ya-service-api-derive = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
-ya-sgx = "0.1"
+ya-service-api-derive = "0.2"
+ya-service-api-interfaces = "0.2"
+ya-service-api-web = "0.2"
+ya-service-bus = "0.6.1"
+ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = "0.1"
-ya-utils-process = { version = "0.1", features = ["lock"] }
-ya-utils-networking = "0.1"
-ya-version = "0.1"
-ya-vpn = "0.1"
+ya-utils-futures = "0.2"
+ya-utils-process = { version = "0.2", features = ["lock"] }
+ya-utils-networking = "0.2"
+ya-fd-metrics = { path = "utils/fd-metrics" }
+ya-version = "0.2"
+ya-vpn = "0.2"
+ya-client = "0.7"
+ya-client-model = "0.5"
 
-gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
-ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
+gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
+ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
 
-actix-rt = "1.0"
-actix-service = "1.0"
-actix-web = "3.2"
+actix-rt = "2.7"
+actix-service = "2"
+actix-web = "4"
 anyhow = "1.0"
 chrono = "0.4"
 directories = "2.0.2"
@@ -63,44 +76,96 @@ dotenv = "0.15.0"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
+metrics = "0.12"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
+serde = "1.0"
+serde_json = "1.0"
 structopt = "0.3"
-tokio = {version = "0.2.22", features=["uds"]}
+tokio = { version = "1", features = ["net"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
 
+[dev-dependencies]
+ya-test-framework = "0.1"
+
 [package.metadata.deb]
-name="golem-requestor"
+name = "golem-requestor"
 assets = [
-    ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/gftp", "usr/bin/", "755"],
-    ["README.md", "usr/share/doc/yagna/", "644"],
-    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+    [
+        "target/release/yagna",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/gftp",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "README.md",
+        "usr/share/doc/yagna/",
+        "644",
+    ],
+    [
+        "core/serv/README.md",
+        "usr/share/doc/yagna/service.md",
+        "644",
+    ],
 ]
-conflicts="ya-provider"
-features=["static-openssl"]
-maintainer-scripts="debian/core"
-depends="libgcc1, libc6 (>= 2.23)"
-extended-description="""The Next Golem Milestone.
+conflicts = "ya-provider"
+features = ["static-openssl"]
+maintainer-scripts = "debian/core"
+depends = "libgcc1, libc6 (>= 2.23)"
+extended-description = """The Next Golem Milestone.
 
 An open platform and marketplace for distributed computations.
 """
 
 
 [package.metadata.deb.variants.provider]
-name="golem-provider"
-replaces="golem-requestor"
-maintainer-scripts="debian/core"
-features=["static-openssl"]
-depends="libgcc1, libc6 (>= 2.23)"
+name = "golem-provider"
+replaces = "golem-requestor"
+maintainer-scripts = "debian/provider"
+features = ["static-openssl"]
+depends = "libgcc1, libc6 (>= 2.23)"
 assets = [
-    ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/ya-provider", "usr/bin/", "755"],
-    ["target/release/gftp", "usr/bin/", "755"],
-    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
-    ["README.md", "usr/share/doc/yagna/", "644"],
-    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
-    ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
+    [
+        "target/release/yagna",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/ya-provider",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/gftp",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/exe-unit",
+        "usr/lib/yagna/plugins/",
+        "755",
+    ],
+    [
+        "README.md",
+        "usr/share/doc/yagna/",
+        "644",
+    ],
+    [
+        "core/serv/README.md",
+        "usr/share/doc/yagna/service.md",
+        "644",
+    ],
+    [
+        "agent/provider/readme.md",
+        "usr/share/doc/yagna/run-provider.md",
+        "644",
+    ],
 ]
 
 
@@ -109,6 +174,7 @@ members = [
     "agent/provider",
     "core/activity",
     "core/gftp",
+    "core/gsb-api",
     "core/identity",
     "core/market",
     "core/market/resolver",
@@ -121,7 +187,6 @@ members = [
     "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
-    "core/serv-api/cache",
     "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
@@ -134,8 +199,12 @@ members = [
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
+    "utils/cli",
     "utils/compile-time-utils",
+    "utils/file-logging",
     "utils/futures",
+    "utils/manifest-utils",
+    "utils/manifest-utils/test-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
@@ -143,7 +212,10 @@ members = [
     "utils/scheduler",
     "utils/transfer",
     "utils/diesel-utils",
-    "core/metrics"
+    "utils/fd-metrics",
+    "core/metrics",
+    "test-utils/test-framework",
+    "test-utils/test-framework/framework-macro"
 ]
 
 [patch.crates-io]
@@ -161,28 +233,34 @@ ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
+ya-gsb-api = { path = "core/gsb-api" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
 ya-persistence = { path = "core/persistence" }
 ya-service-api = { path = "core/serv-api" }
-ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+
+#ya-service-bus = { path = "../ya-service-bus" }
+#ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
+#ya-sb-router = { path = "../ya-service-bus/crates/router" }
+#ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
+#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
 
-#ya-client = { path = "../ya-client" }
-#ya-client-model = { path = "../ya-client/model" }
+## RELAY and networking stack
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "d8e2246d1a6bda7e2c7044aed785a0e7c5cf7316" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "d8e2246d1a6bda7e2c7044aed785a0e7c5cf7316" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -192,19 +270,32 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
+ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
-ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-actix = { path = "utils/actix_utils" }
+ya-utils-cli = { path = "utils/cli" }
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking" }
 ya-utils-path = { path = "utils/path" }
-ya-utils-process = { path = "utils/process"}
-ya-diesel-utils = { path = "utils/diesel-utils"}
+ya-utils-process = { path = "utils/process" }
+ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
-ya-provider = { path = "agent/provider"}
+ya-provider = { path = "agent/provider" }
 
+## TEST UTILS
+ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
+ya-test-framework = { path = "test-utils/test-framework" }
+ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
+
+ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
-[profile.dev]
-split-debuginfo = "unpacked"
+#
+# TODO: reenable split-debuginfo.
+# Commented out split-debuginfo makes Windows builds fail due to "`-Csplit-debuginfo=unpacked` is unstable on this platform."
+# This should not be the case (cargo is meant to verify that this option is supported), but it is since version 1.65, I think.
+# [profile.dev]
+# split-debuginfo = "unpacked"

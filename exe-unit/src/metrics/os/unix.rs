@@ -11,7 +11,7 @@ lazy_static::lazy_static! {
 const MAX_UPDATE_RESOLUTION_MS: i64 = 100;
 
 pub fn cpu_time() -> Result<Duration> {
-    let mut metrics = (&(*METRICS)).write().map_err(SystemError::from)?;
+    let mut metrics = (*METRICS).write().map_err(SystemError::from)?;
     metrics.sample()?;
     Ok(metrics.cpu_total)
 }
@@ -22,7 +22,7 @@ pub fn mem_rss() -> Result<f64> {
 }
 
 pub fn mem_peak_rss() -> Result<f64> {
-    let mut metrics = (&(*METRICS)).write().map_err(SystemError::from)?;
+    let mut metrics = (*METRICS).write().map_err(SystemError::from)?;
     metrics.sample()?;
     Ok(metrics.mem_total)
 }
@@ -71,7 +71,7 @@ impl Metrics {
 
         if usage.cpu_sec > self.cpu_total {
             let dv = usage.cpu_sec - self.cpu_total;
-            *self.cpu.entry(-1).or_insert_with(|| Duration::default()) += dv;
+            *self.cpu.entry(-1).or_insert_with(Duration::default) += dv;
             self.cpu_total += dv;
         }
         if usage.rss_gib > self.mem_total {

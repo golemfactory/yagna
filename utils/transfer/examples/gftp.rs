@@ -29,12 +29,10 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
     let mut rng = rand::thread_rng();
 
     for _ in 0..chunk_count {
-        let input: Vec<u8> = (0..chunk_size)
-            .map(|_| rng.gen_range(0, 256) as u8)
-            .collect();
+        let input: Vec<u8> = (0..chunk_size).map(|_| rng.gen_range(0..=255u8)).collect();
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
@@ -57,12 +55,15 @@ fn hash_file(path: &Path) -> HashOutput {
 
 #[actix_rt::main]
 async fn main() -> Result<(), Error> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    );
     env_logger::init();
 
     let temp_dir = TempDir::new("transfer").unwrap();
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::info!(
         "Creating a random file of size {} * {}",
@@ -81,7 +82,7 @@ async fn main() -> Result<(), Error> {
 
     let path_th = path.clone();
     thread::spawn(move || {
-        System::new("gftp").block_on(async move {
+        System::new().block_on(async move {
             let url = gftp::publish(&path_th).await.unwrap();
             log::info!("Publishing file at {:?}", url);
             tx.send(url).unwrap();
@@ -112,7 +113,7 @@ async fn main() -> Result<(), Error> {
 
     let path_th = path_up.clone();
     thread::spawn(move || {
-        System::new("gftp").block_on(async move {
+        System::new().block_on(async move {
             let url = open_for_upload(&path_th).await.unwrap();
             log::info!("Awaiting upload at {:?}", url);
             tx.send(url).unwrap();

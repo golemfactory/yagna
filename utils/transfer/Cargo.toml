@@ -1,52 +1,51 @@
 [package]
 name = "ya-transfer"
-version = "0.1.0"
+version = "0.3.0"
 description = "Yagna transfer util"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = "0.3"
-ya-core-model = { version = "^0.4"}
-ya-net = "0.2"
-ya-service-bus = "0.4"
+ya-client-model = "0.5"
+ya-core-model = { version = "^0.8" }
+ya-service-bus = "0.6.1"
 ya-utils-path = "0.1"
-gftp = { version = "^0.2"}
+gftp = { version = "^0.3" }
 
-actix-http = "2.2"
-actix-rt = "1.1"
-awc = { version = "2.0", features = ["openssl"] }
+actix-http = "3"
+actix-web = "4"
+actix-rt = "2.7"
+awc = { version = "3.0", features = ["openssl"] }
 # async-compression 0.3.8+ deprecates the "stream" module
-async-compression = { version = "=0.3.7", features = ["stream", "bzip2", "gzip", "xz"] }
-bytes = "0.5.4"
+async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
+bytes = "1.0"
 futures = "0.3.4"
 globset = "0.4.5"
-h2 = "0.2.7"
+h2 = "0.3.3"
 hex = "0.4.2"
 lazy_static = "1.4.0"
-log = "0.4.8"
+log = "0.4"
 percent-encoding = "2.1"
-rand = "0.7.3"
+rand = "0.8"
 regex = "1.3.4"
 serde = "1.0.104"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
 thiserror = "1.0.11"
-tokio = {version = "0.2.11", features = ["fs"] }
-tokio-byteorder = "0.2.0"
-tokio-tar = "0.2.0"
+tokio = { version = "1", features = ["fs", "io-util"] }
+tokio-tar = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 
 [dependencies.zip]
 version = "0.5.6"
-features = ["tokio-02"]
-git = "https://github.com/mfranciszkiewicz/zip-rs.git"
-branch = "feature/tokio"
+features = ["tokio-1"]
+git = "https://github.com/golemfactory/zip-rs.git"
+branch = "feature/tokio-1"
 
 [dev-dependencies]
-actix-files = "0.4"
-actix-web = "3.2"
+actix-web = "4"
 anyhow = "1.0"
 env_logger = "0.7"
 sha2 = "0.8.1"

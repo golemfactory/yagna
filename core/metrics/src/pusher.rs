@@ -1,4 +1,5 @@
-use actix_web::client::{Client, ConnectError, SendRequestError};
+use awc::error::{ConnectError, SendRequestError};
+use awc::Client;
 use tokio::time::{self, Duration, Instant};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
@@ -14,12 +15,12 @@ pub fn spawn(ctx: MetricsCtx) {
 
     log::debug!("Starting metrics pusher");
     tokio::task::spawn_local(async move {
-        push_forever(ctx.push_host_url.unwrap().as_str()).await;
+        push_forever(ctx.push_host_url.unwrap().as_str(), &ctx.job).await;
     });
     log::info!("Metrics pusher started");
 }
 
-pub async fn push_forever(host_url: &str) {
+pub async fn push_forever(host_url: &str, job: &str) {
     let node_identity = match try_get_default_id().await {
         Ok(default_id) => default_id,
         Err(e) => {
@@ -30,7 +31,7 @@ pub async fn push_forever(host_url: &str) {
             return;
         }
     };
-    let push_url = match get_push_url(host_url, &node_identity) {
+    let push_url = match get_push_url(host_url, &node_identity, job) {
         Ok(url) => url,
         Err(e) => {
             log::warn!(
@@ -90,7 +91,7 @@ async fn get_default_id() -> anyhow::Result<IdentityInfo> {
     let default_id = bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
         .await??
-        .ok_or(anyhow::anyhow!("Default identity not found"))?;
+        .ok_or_else(|| anyhow::anyhow!("Default identity not found"))?;
     Ok(default_id)
 }
 
@@ -107,20 +108,20 @@ async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {
             }
         }
     }
-    Err(last_error.unwrap_or(anyhow::anyhow!("Undefined error")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Undefined error")))
 }
 
-fn get_push_url(host_url: &str, id: &IdentityInfo) -> anyhow::Result<String> {
+fn get_push_url(host_url: &str, id: &IdentityInfo, job: &str) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
     let url = base
-        .join("/metrics/job/community.1/")?
+        .join(&format!("/metrics/job/{job}/"))?
         .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
             id.alias
                 .as_ref()
                 .map(|alias| utf8_percent_encode(alias, NON_ALPHANUMERIC).to_string())
-                .unwrap_or(id.node_id.to_string())
+                .unwrap_or_else(|| id.node_id.to_string())
         ))?;
     Ok(String::from(url.as_str()))
 }
@@ -140,6 +141,7 @@ mod test {
                 is_locked: false,
                 is_default: false,
             },
+            "community.1",
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/ala%2Fma%2Fkota", url);
@@ -155,6 +157,7 @@ mod test {
                 is_locked: false,
                 is_default: false,
             },
+            "community.1",
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);

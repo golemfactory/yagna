@@ -25,6 +25,7 @@ use crate::protocol::negotiation::messages::ProposalContent;
     AsExpression,
     FromSqlRow,
     PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -52,6 +53,7 @@ pub enum ProposalState {
     AsExpression,
     FromSqlRow,
     PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -129,8 +131,8 @@ impl Proposal {
         let negotiation = Negotiation::from_subscriptions(&demand, &offer, Owner::Requestor);
         let creation_ts = Utc::now().naive_utc();
         let expiration_ts = match demand.expiration_ts < offer.expiration_ts {
-            true => demand.expiration_ts.clone(),
-            false => offer.expiration_ts.clone(),
+            true => demand.expiration_ts,
+            false => offer.expiration_ts,
         };
 
         let proposal_id =
@@ -169,7 +171,7 @@ impl Proposal {
         // TODO: Initial proposal id will differ on Requestor and Provider!!
         let creation_ts = Utc::now().naive_utc();
         let proposal_id =
-            ProposalId::generate_id(&offer.id, &demand_id, &creation_ts, Owner::Provider);
+            ProposalId::generate_id(&offer.id, demand_id, &creation_ts, Owner::Provider);
 
         let proposal = DbProposal {
             id: proposal_id,
@@ -234,7 +236,7 @@ impl Proposal {
             constraints: proposal.constraints.clone(),
             state: ProposalState::Draft,
             creation_ts,
-            expiration_ts: expiration_ts.clone(),
+            expiration_ts: *expiration_ts,
         };
 
         Ok(Proposal {
@@ -266,22 +268,22 @@ impl Proposal {
     pub fn issuer(&self) -> NodeId {
         match self.body.issuer {
             Issuer::Us => match self.body.id.owner() {
-                Owner::Requestor => self.negotiation.requestor_id.clone(),
-                Owner::Provider => self.negotiation.provider_id.clone(),
+                Owner::Requestor => self.negotiation.requestor_id,
+                Owner::Provider => self.negotiation.provider_id,
             },
             Issuer::Them => match self.body.id.owner() {
-                Owner::Requestor => self.negotiation.provider_id.clone(),
-                Owner::Provider => self.negotiation.requestor_id.clone(),
+                Owner::Requestor => self.negotiation.provider_id,
+                Owner::Provider => self.negotiation.requestor_id,
             },
         }
     }
 
     pub fn validate_id(&self) -> Result<(), ProposalIdValidationError> {
-        Ok(self.body.id.validate(
+        self.body.id.validate(
             &self.negotiation.offer_id,
             &self.negotiation.demand_id,
             &self.body.creation_ts,
-        )?)
+        )
     }
 }
 

@@ -23,7 +23,7 @@ impl Service {
         self.components.contains(&component)
     }
 
-    fn parse_attrs(attrs: &Vec<Attribute>) -> Result<HashSet<Component>> {
+    fn parse_attrs(attrs: &[Attribute]) -> Result<HashSet<Component>> {
         let mut components = HashSet::new();
 
         for attr in attrs.iter() {
@@ -49,10 +49,7 @@ impl Service {
 
         let nested = syn::parse_macro_input::parse::<AttributeArgs>(stream.into())?;
         match nested.first() {
-            Some(nested_meta) => match nested_meta {
-                NestedMeta::Meta(meta) => Ok(meta.clone()),
-                _ => Err(Error::new(attr.span(), "Invalid format")),
-            },
+            Some(NestedMeta::Meta(meta)) => Ok(meta.clone()),
             _ => Err(Error::new(attr.span(), "Invalid format")),
         }
     }
@@ -100,12 +97,11 @@ impl TryFrom<&Variant> for Service {
     type Error = Error;
 
     fn try_from(variant: &Variant) -> Result<Self> {
-        let span = variant.ident.span().into();
         let name = variant.ident.clone();
         let components = Self::parse_attrs(&variant.attrs)?;
         let path = match &variant.fields {
             Fields::Unnamed(fields) => Self::parse_fields(fields)?,
-            _ => return Err(Error::new(span, "Invalid format")),
+            _ => return Err(Error::new(variant.ident.span(), "Invalid format")),
         };
 
         Ok(Self {
@@ -121,7 +117,7 @@ impl std::fmt::Debug for Service {
         f.write_str(&format!(
             "Service < name: {}, path: {}, components: {:?} >",
             self.name,
-            self.path.to_token_stream().to_string(),
+            self.path.to_token_stream(),
             self.components
         ))
     }

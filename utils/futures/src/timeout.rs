@@ -1,7 +1,8 @@
 use futures3::future::{Either, Future, Map};
 use futures3::FutureExt;
 use std::time::Duration;
-use tokio::time::{timeout, Elapsed, Timeout};
+use tokio::time::error::Elapsed;
+use tokio::time::{timeout, Timeout};
 
 pub trait IntoDuration {
     fn into_duration(self) -> Duration;
@@ -75,7 +76,7 @@ where
     fn timeout(self, duration: Option<D>) -> Either<Timeout<Self>, MapType<Self>> {
         match duration {
             Some(d) => Either::Left(timeout(d.into_duration(), self)),
-            None => Either::Right(self.map(|v| Result::Ok(v))),
+            None => Either::Right(self.map(Result::Ok)),
         }
     }
 }

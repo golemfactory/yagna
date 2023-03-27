@@ -133,7 +133,7 @@ impl StorageMetric {
     }
 
     fn spawn(&self) {
-        let interval = self.interval.clone();
+        let interval = self.interval;
         let path = self.path.clone();
         let last = self.last.clone();
         let running = self.running.clone();
@@ -162,10 +162,7 @@ impl StorageMetric {
     #[inline]
     fn read_dir_size(dir: fs::ReadDir) -> (u64, usize) {
         dir.fold((0, 0), |(sz, sk), file| {
-            let (size, skipped) = match Self::read_file_size(file) {
-                Ok(res) => res,
-                Err(_) => (0u64, 1),
-            };
+            let (size, skipped) = Self::read_file_size(file).unwrap_or((0u64, 1));
             (sz + size, sk + skipped)
         })
     }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::ops::Not;
@@ -11,22 +11,27 @@ use futures::future::{self, LocalBoxFuture};
 use futures::{FutureExt, TryFutureExt};
 use tokio::process::Command;
 
+use ya_agreement_utils::agreement::OfferTemplate;
+use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
+use ya_manifest_utils::Feature;
+use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
+
 use crate::acl::Acl;
 use crate::error::Error;
+use crate::manifest::{ManifestContext, UrlValidator};
 use crate::message::{
     CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
 };
-use crate::network::{start_vpn, Vpn};
+use crate::network::inet::start_inet;
+use crate::network::inet::Inet;
+use crate::network::vpn::{start_vpn, Vpn};
+use crate::network::Endpoint;
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeMode};
 use crate::state::Deployment;
 use crate::ExeUnitContext;
-
-use ya_agreement_utils::agreement::OfferTemplate;
-use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
-use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -41,7 +46,7 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
-    ctx: ExeUnitContext,
+    ctx: RuntimeProcessContext,
     binary: PathBuf,
     deployment: Deployment,
     children: HashSet<ChildProcess>,
@@ -49,12 +54,13 @@ pub struct RuntimeProcess {
     monitor: Option<EventMonitor>,
     acl: Acl,
     vpn: Option<Addr<Vpn>>,
+    inet: Option<Addr<Inet>>,
 }
 
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
-            ctx: ctx.clone(),
+            ctx: ctx.into(),
             binary,
             deployment: Default::default(),
             children: Default::default(),
@@ -62,12 +68,13 @@ impl RuntimeProcess {
             monitor: None,
             acl: ctx.acl.clone(),
             vpn: None,
+            inet: None,
         }
     }
 
-    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate, Error> {
+    pub fn offer_template(binary: PathBuf, mut args: Vec<String>) -> Result<OfferTemplate, Error> {
         let current_path = std::env::current_dir();
-        let args = vec![OsString::from("offer-template")];
+        args.push("offer-template".to_string());
 
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
@@ -78,14 +85,14 @@ impl RuntimeProcess {
 
         let child = std::process::Command::new(binary.clone())
             .args(args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
 
         let result = child.wait_with_output()?;
         match result.status.success() {
             true => {
-                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                let stdout = vec_to_string(result.stdout).unwrap_or_default();
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
                     Error::Other(msg)
@@ -107,7 +114,7 @@ impl RuntimeProcess {
         args.arg("--workdir");
         args.arg(&self.ctx.work_dir);
 
-        if self.ctx.supervise.image {
+        if self.ctx.supervise_image {
             match self.deployment.task_package.as_ref() {
                 Some(val) => {
                     args.arg("--task-package");
@@ -121,8 +128,8 @@ impl RuntimeProcess {
             }
         }
 
-        if !self.ctx.supervise.hardware {
-            let inf = &self.ctx.agreement.infrastructure;
+        if !self.ctx.supervise_hardware {
+            let inf = &self.ctx.infrastructure;
 
             if let Some(val) = inf.get("cpu.threads") {
                 args.arg("--cpu-cores");
@@ -138,6 +145,8 @@ impl RuntimeProcess {
             }
         }
 
+        args.args(self.ctx.runtime_args.iter());
+
         Ok(args)
     }
 }
@@ -148,9 +157,11 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        log::trace!("Handle process command: {cmd:?}");
+
         let mut rt_args = match self.args() {
             Ok(args) => args,
-            Err(err) => return futures::future::err(err).boxed_local(),
+            Err(err) => return Box::pin(future::err(err)),
         };
 
         let (cmd, ctx) = cmd.split();
@@ -164,10 +175,11 @@ impl RuntimeProcess {
                 .arg(entry_point)
                 .arg("--")
                 .args(args),
-            _ => return future::ok(0).boxed_local(),
+            _ => return Box::pin(future::ok(0)),
         };
 
         let binary = self.binary.clone();
+        let work_dir = self.ctx.work_dir.clone();
 
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
@@ -178,6 +190,7 @@ impl RuntimeProcess {
 
         async move {
             let mut child = Command::new(binary)
+                .current_dir(&work_dir)
                 .args(rt_args)
                 .kill_on_drop(true)
                 .stdout(Stdio::piped())
@@ -194,15 +207,18 @@ impl RuntimeProcess {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
+            let pid = child
+                .id()
+                .ok_or_else(|| Error::runtime("Missing process id"))?;
             let proc = if cfg!(feature = "sgx") {
-                ChildProcess::from(child.id())
+                ChildProcess::from(pid)
             } else {
-                let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
+                let tree = ProcessTree::try_new(pid).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
             let _guard = ChildProcessGuard::new(proc, address.clone());
 
-            let result = future::join3(child, stdout, stderr).await;
+            let result = future::join3(child.wait(), stdout, stderr).await;
             Ok(result.0?.code().unwrap_or(-1))
         }
         .boxed_local()
@@ -213,13 +229,15 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        log::trace!("Handle service command: {cmd:?}");
+
         let (cmd, ctx) = cmd.split();
         match cmd {
             ExeScriptCommand::Start { args } => self.handle_service_start(ctx, args, address),
             ExeScriptCommand::Run {
                 entry_point, args, ..
             } => self.handle_service_run(ctx, entry_point, args),
-            _ => future::ok(0).boxed_local(),
+            _ => Box::pin(future::ok(0)),
         }
     }
 
@@ -229,33 +247,61 @@ impl RuntimeProcess {
         args: Vec<String>,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let mut rt_args = match self.args() {
-            Ok(rt_args) => rt_args,
-            Err(err) => return futures::future::err(err).boxed_local(),
-        };
-        rt_args.arg("start").args(args);
-
-        log::info!(
-            "Executing {:?} with {:?} from path {:?}",
-            self.binary,
-            rt_args,
-            std::env::current_dir()
-        );
-
-        let mut command = Command::new(&self.binary);
-        command.args(rt_args);
+        log::trace!("Handle service start, CommandContext: {ctx:?}, args: {args:?}");
 
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
 
+        let rt_ctx = self.ctx.clone();
+        let rt_binary = self.binary.clone();
+        let mut rt_args = match self.args() {
+            Ok(rt_args) => rt_args,
+            Err(err) => return Box::pin(future::err(err)),
+        };
+
         async move {
+            let vpn_endpoint = if rt_ctx.manifest.features().contains(&Feature::Vpn) {
+                log::trace!("Creating VPN transport endpoint for ExeUnit Runtime");
+
+                let endpoint = Endpoint::default_transport().await?;
+                rt_args.arg("--vpn-endpoint");
+                rt_args.arg(endpoint.local().to_string());
+                Some(endpoint)
+            } else {
+                None
+            };
+
+            let inet_endpoint = if rt_ctx.manifest.features().contains(&Feature::Inet) {
+                log::trace!("Creating Outbound transport endpoint for ExeUnit Runtime");
+
+                let endpoint = Endpoint::default_transport().await?;
+                rt_args.arg("--inet-endpoint");
+                rt_args.arg(endpoint.local().to_string());
+                Some(endpoint)
+            } else {
+                None
+            };
+
+            rt_args.arg("start").args(args);
+
+            log::info!(
+                "Executing {:?} with {:?} from path {:?}",
+                rt_binary,
+                rt_args,
+                std::env::current_dir()
+            );
+
+            let mut command = Command::new(&rt_binary);
+            command.current_dir(&rt_ctx.work_dir);
+            command.args(rt_args);
+
             let service = spawn(command, monitor.clone())
                 .map_err(Error::runtime)
                 .await?;
             let hello = service
                 .hello(SERVICE_PROTOCOL_VERSION)
-                .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
+                .map_err(|e| Error::runtime(format!("service hello error: {e:?}")));
 
             let _handle = monitor.any_process(ctx);
             match future::select(service.stopped(), hello).await {
@@ -264,15 +310,28 @@ impl RuntimeProcess {
             }
 
             let service_ = service.clone();
-            let vpn = async {
-                if let Some(vpn) = start_vpn(acl, &service_, deployment).await? {
-                    address.send(SetVpnService(vpn)).await?;
+            let net = async {
+                if let Some(endpoint) = inet_endpoint {
+                    let inet = start_inet(
+                        endpoint,
+                        &service_,
+                        rt_ctx.manifest.validator::<UrlValidator>(),
+                    )
+                    .await?;
+                    address.send(SetInetService(inet)).await?;
                 }
+
+                if let Some(endpoint) = vpn_endpoint {
+                    if let Some(vpn) = start_vpn(endpoint, acl, &service_, &deployment).await? {
+                        address.send(SetVpnService(vpn)).await?;
+                    }
+                }
+
                 Ok::<_, Error>(())
             };
 
-            futures::pin_mut!(vpn);
-            match future::select(service.stopped(), vpn).await {
+            futures::pin_mut!(net);
+            match future::select(service.stopped(), net).await {
                 future::Either::Left((result, _)) => return Ok(result),
                 future::Either::Right((result, _)) => result.map(|_| ())?,
             }
@@ -293,7 +352,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let (service, ctrl) = match self.service.as_ref() {
             Some(svc) => (svc.service.clone(), svc.control.clone()),
-            None => return future::err(Error::runtime("START command not run")).boxed_local(),
+            None => return Box::pin(future::err(Error::runtime("START command not run"))),
         };
 
         log::info!(
@@ -310,16 +369,18 @@ impl RuntimeProcess {
                 .ok_or_else(|| Error::runtime("Invalid binary name"))?;
             args.insert(0, name.to_string_lossy().to_string());
 
-            let mut run_process = RunProcess::default();
-            run_process.bin = entry_point;
-            run_process.args = args;
-
-            let process = match service.run_process(run_process).await {
-                Ok(result) => result,
-                Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
+            let run_process = RunProcess {
+                bin: entry_point,
+                args,
+                ..Default::default()
             };
 
-            Ok(monitor.process(ctx, process.pid).await)
+            let handle = monitor.next_process(ctx);
+            if let Err(error) = service.run_process(run_process).await {
+                return Err(Error::RuntimeError(format!("{:?}", error)));
+            };
+
+            Ok(handle.await)
         };
 
         async move {
@@ -350,6 +411,7 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
 
     fn handle(&mut self, cmd: ExecuteCommand, ctx: &mut Self::Context) -> Self::Result {
         let address = ctx.address();
+        let cmd_ = cmd.clone();
         match &cmd.command {
             ExeScriptCommand::Deploy { .. } => self.handle_process_command(cmd, address),
             _ => match &self.deployment.runtime_mode {
@@ -357,6 +419,14 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
                 RuntimeMode::Service => self.handle_service_command(cmd, address),
             },
         }
+        .map(move |result| {
+            match &result {
+                Ok(value) => log::debug!("{cmd_} returned code: {value}"),
+                Err(e) => log::debug!("{cmd_} failed (ExeUnit error): {e}"),
+            };
+            result
+        })
+        .boxed_local()
     }
 }
 
@@ -400,6 +470,16 @@ impl Handler<SetVpnService> for RuntimeProcess {
     }
 }
 
+impl Handler<SetInetService> for RuntimeProcess {
+    type Result = <SetVpnService as Message>::Result;
+
+    fn handle(&mut self, msg: SetInetService, _: &mut Self::Context) -> Self::Result {
+        if let Some(inet) = self.inet.replace(msg.0) {
+            inet.do_send(Shutdown(ShutdownReason::Interrupted(0)));
+        }
+    }
+}
+
 impl Handler<AddChildProcess> for RuntimeProcess {
     type Result = <AddChildProcess as Message>::Result;
 
@@ -423,11 +503,17 @@ impl Handler<Shutdown> for RuntimeProcess {
         let timeout = process_kill_timeout_seconds();
         let proc = self.service.take();
         let vpn = self.vpn.take();
-        let mut children = std::mem::replace(&mut self.children, HashSet::new());
+        let inet = self.inet.take();
+        let mut children = std::mem::take(&mut self.children);
+
+        log::info!("Shutting down the runtime process: {:?}", msg.0);
 
         async move {
             if let Some(vpn) = vpn {
-                let _ = vpn.send(msg).await;
+                let _ = vpn.send(Shutdown(ShutdownReason::Finished)).await;
+            }
+            if let Some(inet) = inet {
+                let _ = inet.send(Shutdown(ShutdownReason::Finished)).await;
             }
             if let Some(proc) = proc {
                 let _ = proc.service.shutdown().await;
@@ -436,6 +522,29 @@ impl Handler<Shutdown> for RuntimeProcess {
             Ok(())
         }
         .boxed_local()
+    }
+}
+
+#[derive(Clone)]
+struct RuntimeProcessContext {
+    work_dir: PathBuf,
+    runtime_args: Vec<String>,
+    supervise_image: bool,
+    supervise_hardware: bool,
+    infrastructure: HashMap<String, f64>,
+    manifest: ManifestContext,
+}
+
+impl<'a> From<&'a ExeUnitContext> for RuntimeProcessContext {
+    fn from(ctx: &'a ExeUnitContext) -> Self {
+        Self {
+            work_dir: ctx.work_dir.clone(),
+            runtime_args: ctx.runtime_args.clone(),
+            supervise_image: ctx.supervise.image,
+            supervise_hardware: ctx.supervise.hardware,
+            infrastructure: ctx.agreement.infrastructure.clone(),
+            manifest: ctx.supervise.manifest.clone(),
+        }
     }
 }
 
@@ -471,10 +580,7 @@ struct ChildProcessGuard {
 impl ChildProcessGuard {
     fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
         addr.do_send(AddChildProcess(inner.clone()));
-        ChildProcessGuard {
-            inner,
-            addr: addr.clone(),
-        }
+        ChildProcessGuard { inner, addr }
     }
 }
 
@@ -575,6 +681,10 @@ struct SetProcessService(ProcessService);
 #[derive(Message)]
 #[rtype("()")]
 struct SetVpnService(Addr<Vpn>);
+
+#[derive(Message)]
+#[rtype("()")]
+struct SetInetService(Addr<Inet>);
 
 #[derive(Message)]
 #[rtype("()")]

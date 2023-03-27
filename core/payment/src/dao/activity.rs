@@ -101,16 +101,15 @@ pub fn increase_amount_paid(
         .load(conn)?;
 
     debit_note::update_status(&debit_note_ids, owner_id, &DocumentStatus::Settled, conn)?;
-    if let Role::Provider = role {
-        for debit_note_id in debit_note_ids {
-            debit_note_event::create::<()>(
-                debit_note_id,
-                owner_id.clone(),
-                DebitNoteEventType::DebitNoteSettledEvent,
-                None,
-                conn,
-            )?;
-        }
+
+    for debit_note_id in debit_note_ids {
+        debit_note_event::create::<()>(
+            debit_note_id,
+            *owner_id,
+            DebitNoteEventType::DebitNoteSettledEvent,
+            None,
+            conn,
+        )?;
     }
 
     Ok(())
@@ -184,7 +183,7 @@ impl<'a> ActivityDao<'a> {
                 .select(dsl::id)
                 .first(conn)
                 .optional()?;
-            if let Some(_) = existing {
+            if existing.is_some() {
                 return Ok(());
             }
 

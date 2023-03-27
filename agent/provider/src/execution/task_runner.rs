@@ -2,8 +2,8 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
-use futures::future::join_all;
-use futures::{FutureExt, TryFutureExt};
+use futures::future::{join_all, select, Either};
+use futures::{Future, FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use structopt::StructOpt;
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::activity::provider_event::ProviderEventType;
-use ya_client::model::activity::{ActivityState, ProviderEvent, State};
+use ya_client::model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{Signal, SignalSlot};
@@ -184,18 +184,20 @@ impl TaskRunner {
 
         // Try convert to str to check if won't fail. If not we can than
         // unwrap() all paths that we created relative to current_dir.
-        data_dir.to_str().ok_or(anyhow!(
-            "Current dir [{}] contains invalid characters.",
-            data_dir.display()
-        ))?;
+        data_dir.to_str().ok_or_else(|| {
+            anyhow!(
+                "Current dir [{}] contains invalid characters.",
+                data_dir.display()
+            )
+        })?;
 
         Ok(TaskRunner {
             api: Arc::new(client),
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
-            activity_created: SignalSlot::<CreateActivity>::new(),
-            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
+            activity_created: SignalSlot::<CreateActivity>::default(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::default(),
             config: Arc::new(config),
             event_ts: Utc::now(),
             tasks_dir,
@@ -216,7 +218,7 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: Vec<ProviderEvent>, myself: &Addr<TaskRunner>) {
-        if events.len() == 0 {
+        if events.is_empty() {
             return;
         };
 
@@ -266,13 +268,13 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        let exeunit_name = exe_unit_name_from(&agreement)?;
+        let exeunit_name = exe_unit_name_from(agreement)?;
 
         let task = match self.create_task(
             &exeunit_name,
             &msg.activity_id,
             &msg.agreement_id,
-            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+            msg.requestor_pub_key.as_deref(),
         ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
@@ -280,6 +282,27 @@ impl TaskRunner {
 
         let process = task.exeunit.get_process_handle();
         self.tasks.push(task);
+
+        // Log ExeUnit initialization message
+        let activity_id = msg.activity_id.clone();
+        let api = self.api.clone();
+        let proc = process.clone();
+
+        tokio::task::spawn_local(async move {
+            let mut finished = Box::pin(proc.wait_until_finished());
+            let mut monitor = StateMonitor::default();
+
+            while let Either::Left((result, fut)) =
+                select(Box::pin(api.get_activity_state(&activity_id)), finished).await
+            {
+                finished = fut;
+
+                if let Ok(state) = result {
+                    monitor.update(state.state);
+                }
+                monitor.sleep().await;
+            }
+        });
 
         // We need to discover that ExeUnit process finished.
         // We can't be sure that Requestor will send DestroyActivity.
@@ -289,7 +312,7 @@ impl TaskRunner {
         let state_retry_interval = self.config.exeunit_state_retry_interval;
         let api = self.api.clone();
 
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             let status = process.wait_until_finished().await;
 
             // If it was brutal termination than ExeUnit probably didn't set state.
@@ -346,9 +369,9 @@ impl TaskRunner {
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
-            activity_id: msg.activity_id.clone(),
+            activity_id: msg.activity_id,
         };
-        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg);
         Ok(())
     }
 
@@ -360,7 +383,7 @@ impl TaskRunner {
         log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
 
         // Agreement waits for first create activity event.
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }
@@ -370,7 +393,7 @@ impl TaskRunner {
         let args = vec![String::from("offer-template")];
         self.registry
             .run_exeunit_with_output(exeunit_name, args, &working_dir)
-            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+            .map_err(|error| error.context("ExeUnit offer-template command failed".to_string()))
     }
 
     fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
@@ -406,22 +429,34 @@ impl TaskRunner {
 
         let agreement_path = working_dir
             .parent()
-            .ok_or(anyhow!("None"))? // Parent must exist, since we built this path.
+            .ok_or_else(|| anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
 
-        self.save_agreement(&agreement_path, &agreement_id)?;
+        self.save_agreement(&agreement_path, agreement_id)?;
 
         let mut args = vec![
             "service-bus",
             activity_id,
             ya_core_model::activity::local::BUS_ID,
         ];
-        args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-c",
+                self.cache_dir.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
+        args.extend(["-w", working_dir.to_str().ok_or_else(|| anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-a",
+                agreement_path.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
 
         if let Some(req_pub_key) = requestor_pub_key {
-            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+            args.extend(["--requestor-pub-key", req_pub_key].iter());
         }
 
         let args = args.iter().map(ToString::to_string).collect();
@@ -451,7 +486,7 @@ impl TaskRunner {
         let agreement = self
             .active_agreements
             .get(agreement_id)
-            .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?;
+            .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
         let agreement_file = File::create(&agreement_path).map_err(|error| {
             anyhow!(
@@ -510,7 +545,7 @@ async fn set_activity_terminated(
             error,
             retry_interval
         );
-        tokio::time::delay_for(retry_interval).await;
+        tokio::time::sleep(retry_interval).await;
     }
 }
 
@@ -553,7 +588,7 @@ forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
-const PROPERTY_USAGE_VECTOR: &'static str = "golem.com.usage.vector";
+const PROPERTY_USAGE_VECTOR: &str = "golem.com.usage.vector";
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -587,11 +622,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 {
                     serde_json::Value::Array(vec) => {
                         let mut usage_vector = vec.clone();
-                        usage_vector.extend(
-                            coeffs
-                                .into_iter()
-                                .map(|prop| serde_json::Value::String(prop)),
-                        );
+                        usage_vector.extend(coeffs.into_iter().map(serde_json::Value::String));
                         template.set_property(
                             PROPERTY_USAGE_VECTOR,
                             serde_json::Value::Array(usage_vector),
@@ -600,7 +631,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                     _ => anyhow::bail!("offer template: invalid usage vector format"),
                 }
 
-                log::info!("offer-template: {} = {:?}", preset.name, template);
+                log::debug!("offer-template: {} = {:?}", preset.name, template);
                 result.insert(preset.name, template);
             }
             Ok(result)
@@ -610,20 +641,20 @@ impl Handler<GetOfferTemplates> for TaskRunner {
 }
 
 impl Handler<UpdateActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let addr = ctx.address();
         let client = self.api.clone();
 
-        let mut event_ts = self.event_ts.clone();
+        let mut event_ts = self.event_ts;
         let app_session_id = self.config.session_id.clone();
         let poll_timeout = Duration::from_secs(3);
 
         let fut = async move {
             let result = client
                 .get_activity_events(
-                    Some(event_ts.clone()),
+                    Some(event_ts),
                     Some(app_session_id),
                     Some(poll_timeout),
                     None,
@@ -632,10 +663,9 @@ impl Handler<UpdateActivity> for TaskRunner {
 
             match result {
                 Ok(events) => {
-                    events
-                        .iter()
-                        .max_by_key(|e| e.event_date)
-                        .map(|e| event_ts = event_ts.max(e.event_date));
+                    if let Some(e) = events.iter().max_by_key(|e| e.event_date) {
+                        event_ts = event_ts.max(e.event_date);
+                    }
                     Self::dispatch_events(events, &addr).await;
                 }
                 Err(error) => log::error!("Can't query activity events: {:?}", error),
@@ -657,7 +687,7 @@ impl Handler<TerminateActivity> for TaskRunner {
 
     fn handle(&mut self, msg: TerminateActivity, _ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         async move {
             set_activity_terminated(
@@ -674,12 +704,12 @@ impl Handler<TerminateActivity> for TaskRunner {
 }
 
 impl Handler<CreateActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
         let activity_id = msg.activity_id.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         let result = self.on_create_activity(msg, ctx);
         match result {
@@ -703,7 +733,7 @@ impl Handler<CreateActivity> for TaskRunner {
 }
 
 impl Handler<DestroyActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: DestroyActivity, _ctx: &mut Context<Self>) -> Self::Result {
         log::info!("Destroying activity [{}].", msg.activity_id);
@@ -743,11 +773,11 @@ impl Handler<DestroyActivity> for TaskRunner {
 }
 
 impl Handler<AgreementClosed> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -763,11 +793,11 @@ impl Handler<AgreementClosed> for TaskRunner {
 }
 
 impl Handler<AgreementBroken> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -782,7 +812,7 @@ impl Handler<AgreementBroken> for TaskRunner {
 }
 
 impl Handler<Shutdown> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         let ids = self
@@ -808,5 +838,53 @@ impl Handler<Shutdown> for TaskRunner {
         };
 
         ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
+struct StateMonitor {
+    state: StatePair,
+    interval: Duration,
+}
+
+impl Default for StateMonitor {
+    fn default() -> Self {
+        StateMonitor {
+            state: StatePair(State::New, None),
+            interval: Self::INITIAL_INTERVAL,
+        }
+    }
+}
+
+impl StateMonitor {
+    const INITIAL_INTERVAL: Duration = Duration::from_millis(750);
+    const INTERVAL: Duration = Duration::from_secs(5);
+
+    fn update(&mut self, state: StatePair) {
+        match state {
+            StatePair(State::Initialized, None)
+            | StatePair(State::Deployed, _)
+            | StatePair(State::Ready, _) => {
+                if self.state.0 == State::New {
+                    log::info!("ExeUnit initialized");
+                    self.interval = Self::INTERVAL;
+                }
+            }
+            StatePair(State::Unresponsive, _) => {
+                if self.state.0 != State::Unresponsive {
+                    log::warn!("ExeUnit is unresponsive");
+                }
+            }
+            _ => {}
+        }
+
+        if self.state.0 == State::Unresponsive && state.0 != State::Unresponsive {
+            log::warn!("ExeUnit is now responsive");
+        }
+
+        self.state = state;
+    }
+
+    fn sleep(&self) -> impl Future<Output = ()> {
+        tokio::time::sleep(self.interval)
     }
 }

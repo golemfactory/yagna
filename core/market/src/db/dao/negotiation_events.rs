@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use ya_client::model::market::Reason;
 use ya_persistence::executor::ConnType;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, PoolType};
 
 use crate::config::DbConfig;
 use crate::db::dao::demand::{demand_status, DemandState};
@@ -13,7 +13,7 @@ use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{Agreement, EventType, MarketEvent, Owner, Proposal, SubscriptionId};
 use crate::db::schema::market_negotiation_event::dsl;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
@@ -29,9 +29,9 @@ pub struct NegotiationEventsDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for NegotiationEventsDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for NegotiationEventsDao<'a> {
+    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self { pool: ram_pool }
     }
 }
 
@@ -90,7 +90,6 @@ impl<'c> NegotiationEventsDao<'c> {
             let basic_query =
                 dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id));
             let mut events = basic_query
-                .clone()
                 .filter(dsl::event_type.ne_all(vec![
                     EventType::ProviderNewProposal,
                     EventType::RequestorNewProposal,
@@ -162,12 +161,12 @@ fn validate_subscription(
     owner: Owner,
 ) -> Result<(), TakeEventsError> {
     match owner {
-        Owner::Requestor => match demand_status(conn, &subscription_id)? {
+        Owner::Requestor => match demand_status(conn, subscription_id)? {
             DemandState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
             DemandState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),
         },
-        Owner::Provider => match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
+        Owner::Provider => match query_state(conn, subscription_id, &Utc::now().naive_utc())? {
             OfferState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
             OfferState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),

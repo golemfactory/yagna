@@ -5,7 +5,7 @@ use std::{ops::Not, path::PathBuf, str::FromStr, string::ToString};
 const ORGANIZATION: &str = "GolemFactory";
 const QUALIFIER: &str = "";
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataDir(PathBuf);
 
 impl DataDir {

@@ -58,7 +58,7 @@ pub fn network_token_to_platform(
         }
     };
 
-    let token = token.unwrap_or(network_config.default_token.clone());
+    let token = token.unwrap_or_else(|| network_config.default_token.clone());
     let platform = network_config.tokens.get(&token);
     let platform = match platform {
         Some(p) => p,
@@ -76,5 +76,5 @@ pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
     // Fetch network config, safe as long as all DbNetwork entries are in SUPPORTED_NETWORKS
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
     // TODO: Check if token in network.tokens
-    token.unwrap_or(network_config.default_token.clone())
+    token.unwrap_or_else(|| network_config.default_token.clone())
 }

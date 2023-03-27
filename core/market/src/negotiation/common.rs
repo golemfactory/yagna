@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use ya_client::model::market::{proposal::Proposal as ClientProposal, reason::Reason, NewProposal};
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
@@ -21,6 +20,7 @@ use crate::db::{
         Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, MarketEvent, Owner,
         Proposal, ProposalId, ProposalState, SubscriptionId,
     },
+    DbMixedExecutor,
 };
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
@@ -53,7 +53,7 @@ type IsFirst = bool;
 
 #[derive(Clone)]
 pub struct CommonBroker {
-    pub(super) db: DbExecutor,
+    pub(super) db: DbMixedExecutor,
     pub(super) store: SubscriptionStore,
     pub(super) negotiation_notifier: EventNotifier<SubscriptionId>,
     pub(super) session_notifier: EventNotifier<AppSessionId>,
@@ -64,17 +64,17 @@ pub struct CommonBroker {
 
 impl CommonBroker {
     pub fn new(
-        db: DbExecutor,
+        db: DbMixedExecutor,
         store: SubscriptionStore,
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> CommonBroker {
         CommonBroker {
             store,
-            db: db.clone(),
-            negotiation_notifier: EventNotifier::new(),
+            db,
+            negotiation_notifier: EventNotifier::default(),
             session_notifier,
-            agreement_notifier: EventNotifier::new(),
+            agreement_notifier: EventNotifier::default(),
             config,
             agreement_lock: AgreementLock::new(),
         }
@@ -150,7 +150,7 @@ impl CommonBroker {
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
 
-        let proposal = self.get_proposal(subs_id.clone(), proposal_id).await?;
+        let proposal = self.get_proposal(subs_id, proposal_id).await?;
 
         self.validate_proposal(&proposal, caller_id, caller_role)
             .await?;
@@ -197,7 +197,7 @@ impl CommonBroker {
                 .take_events(subscription_id, max_events, owner)
                 .await?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 return Ok(events);
             }
 
@@ -255,7 +255,7 @@ impl CommonBroker {
                 .await
                 .map_err(|e| AgreementEventsError::Internal(e.to_string()))?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 counter!("market.agreements.events.queried", events.len() as u64);
                 return Ok(events);
             }
@@ -274,9 +274,10 @@ impl CommonBroker {
                     NotifierError::ChannelClosed(_) => {
                         Err(AgreementEventsError::Internal(error.to_string()))
                     }
-                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal(format!(
+                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal(
                         "Code logic error. Shouldn't get Unsubscribe in Agreement events notifier."
-                    ))),
+                            .to_string(),
+                    )),
                 };
             }
             // Ok result means, that event with required sessionId id was added.
@@ -292,10 +293,9 @@ impl CommonBroker {
         subs_id: Option<&SubscriptionId>,
         id: &ProposalId,
     ) -> Result<Proposal, GetProposalError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<ProposalDao>()
-            .get_proposal(&id)
+            .get_proposal(id)
             .await
             .map_err(|e| GetProposalError::Internal(id.clone(), subs_id.cloned(), e.to_string()))?
             .filter(|proposal| {
@@ -316,7 +316,7 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or(GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
+            .ok_or_else(|| GetProposalError::NotFound(id.clone(), subs_id.cloned()))
     }
 
     pub async fn get_client_proposal(
@@ -342,11 +342,7 @@ impl CommonBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement = match dao
-            .select_by_node(
-                &client_agreement_id,
-                id.identity.clone(),
-                Utc::now().naive_utc(),
-            )
+            .select_by_node(&client_agreement_id, id.identity, Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
         {
@@ -368,7 +364,7 @@ impl CommonBroker {
                 &agreement,
                 reason.clone(),
                 "NotSigned".to_string(),
-                timestamp.clone(),
+                timestamp,
             )
             .await?;
 
@@ -379,7 +375,7 @@ impl CommonBroker {
                 &timestamp,
             )
             .await
-            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?;
         }
 
         self.notify_agreement(&agreement).await;
@@ -452,7 +448,7 @@ impl CommonBroker {
                 .select(&agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
-                .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
+                .ok_or_else(|| RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
             let auth_id = match caller_role {
                 Owner::Provider => agreement.provider_id,
@@ -682,6 +678,8 @@ impl CommonBroker {
         })
     }
 
+    //TODO https://github.com/golemfactory/yagna/issues/2247
+    #[allow(clippy::unnecessary_operation)]
     pub async fn validate_proposal(
         &self,
         proposal: &Proposal,
@@ -692,7 +690,7 @@ impl CommonBroker {
             Owner::Provider => &proposal.negotiation.provider_id != caller_id,
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
-            ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
+            ProposalValidationError::Unauthorized(proposal.body.id.clone(), *caller_id);
         }
 
         if &proposal.issuer() == caller_id {
@@ -719,7 +717,7 @@ impl CommonBroker {
         let session_notifier = &self.session_notifier;
 
         // Notify everyone waiting on Agreement events endpoint.
-        if let Some(_) = &agreement.session_id {
+        if agreement.session_id.is_some() {
             session_notifier.notify(&agreement.session_id.clone()).await;
         }
         // Even if session_id was not None, we want to notify everyone else,
@@ -796,16 +794,14 @@ pub fn validate_match(
         | Match::Undefined {
             demand_mismatch,
             offer_mismatch,
-        } => {
-            return Err(MatchValidationError::NotMatching {
-                new: new_proposal.body.id.clone(),
-                prev: prev_proposal.body.id.clone(),
-                mismatches: format!(
-                    "Mismatched constraints - Offer: {:?}, Demand: {:?}",
-                    offer_mismatch, demand_mismatch
-                ),
-            })
-        }
+        } => Err(MatchValidationError::NotMatching {
+            new: new_proposal.body.id.clone(),
+            prev: prev_proposal.body.id.clone(),
+            mismatches: format!(
+                "Mismatched constraints - Offer: {:?}, Demand: {:?}",
+                offer_mismatch, demand_mismatch
+            ),
+        }),
     }
 }
 
@@ -820,13 +816,12 @@ pub fn validate_transition(
 fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
     reason
         .as_ref()
-        .map(|reason| {
+        .and_then(|reason| {
             reason
                 .extra
                 .get(key)
                 .map(|json| json.as_str().map(|code| code.to_string()))
         })
-        .flatten()
         .flatten()
 }
 
@@ -842,7 +837,9 @@ pub fn inc_terminate_metrics(reason: &Option<Reason>, owner: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
-    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
+    let reason_code = r_code
+        .xor(p_code)
+        .unwrap_or_else(|| "NotSpecified".to_string());
     match owner {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)

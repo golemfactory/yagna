@@ -1,49 +1,48 @@
 [package]
 name = "ya-identity"
-version = "0.2.0"
+version = "0.3.0"
 description = "Yagna identity management"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = { version = "0.3", features = ["with-diesel"] }
-ya-core-model = { version = "^0.4", features = ["identity", "appkey"] }
-ya-persistence = "0.2"
+ya-client-model = { version = "0.5", features = ["with-diesel"] }
+ya-core-model = { version = "^0.8", features = ["identity", "appkey"] }
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.4"
+ya-service-api-interfaces = "0.2"
+ya-service-bus = "0.6.1"
 
-actix-rt = "1.1"
 anyhow = "1.0"
 appdirs = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+ctrlc = "3.2"
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
-# Lock ethsign on this commit to match parity-crypto=0.6 from zksync_eth_client
-ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45f3a3313e5418876b3d3e751ba87e" }
-# TODO: Upgrade to latest = 0.8 after zksync_eth_client is updated
-# ethsign = "0.8"
+ethsign = "0.8"
 futures = "0.3"
 log = "0.4"
 promptly = "0.3.0"
 r2d2 = "0.8.8"
-rand = "0.7.3"
+rand = "0.8"
 rpassword = "3.0.2"
 serde_json = "1.0"
+sha2 = "0.9.1"
 structopt = "0.3"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["fs", "blocking"] }
+tokio = { version = "1", features = ["fs"] }
 uuid = { version = "0.8", features = ["v4"] }
 rustc-hex = "2.1.0"
+yansi = "0.5.0"
 
 [dev-dependencies]
-ya-service-api-derive = "0.1"
-ya-sb-router = "0.4"
+ya-service-api-derive = "0.2"
+ya-sb-router = "0.6.1"
 
-actix-service = "1.0.5"
-actix-web = "3.2"
-awc = "2.0"
+actix-rt = "2.7"
+actix-service = "2"
+actix-web = "4"
+awc = "3"
 base64 = "0.12"
 dotenv = "0.15"
 env_logger = "0.7.1"
-sha2 = "0.9.1"

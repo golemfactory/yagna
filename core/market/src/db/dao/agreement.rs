@@ -1,9 +1,9 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
-use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::config::DbConfig;
 use crate::db::dao::agreement_events::create_event;
@@ -17,7 +17,7 @@ use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveAgreementError {
@@ -31,11 +31,15 @@ pub enum SaveAgreementError {
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
+    ram_pool: &'c PoolType,
 }
 
-impl<'a> AsDao<'a> for AgreementDao<'a> {
-    fn as_dao(pool: &'a PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for AgreementDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self {
+            pool: disk_pool,
+            ram_pool,
+        }
     }
 }
 
@@ -57,6 +61,48 @@ pub enum AgreementDaoError {
 }
 
 impl<'c> AgreementDao<'c> {
+    pub async fn list(
+        &self,
+        node_id: Option<NodeId>,
+        state: Option<AgreementState>,
+        before: Option<DateTime<Utc>>,
+        after: Option<DateTime<Utc>>,
+        app_session_id: Option<String>,
+    ) -> Result<Vec<Agreement>, AgreementDaoError> {
+        do_with_transaction(self.pool, move |conn| {
+            let mut query = market_agreement.into_boxed();
+
+            if let Some(node_id) = node_id {
+                query = query.filter(
+                    agreement::provider_id
+                        .eq(node_id)
+                        .or(agreement::requestor_id.eq(node_id)),
+                );
+            };
+
+            if let Some(app_session_id) = app_session_id {
+                query = query.filter(agreement::session_id.eq(app_session_id))
+            }
+
+            if let Some(state) = state {
+                query = query.filter(agreement::state.eq(state));
+            }
+
+            if let Some(before) = before {
+                query = query.filter(agreement::creation_ts.lt(before.naive_utc()));
+            }
+
+            if let Some(after) = after {
+                query = query.filter(agreement::creation_ts.gt(after.naive_utc()));
+            }
+
+            let agreements = query.get_results::<Agreement>(conn)?;
+
+            Ok(agreements)
+        })
+        .await
+    }
+
     pub async fn select(
         &self,
         id: &AgreementId,
@@ -130,12 +176,18 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
+        // TODO: Accessing two databases can cause race conditions in some edge cases.
         let proposal_id = agreement.offer_proposal_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.ram_pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
-                return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
+                return Err(SaveAgreementError::ProposalCountered(proposal_id));
             }
+            Ok(())
+        })
+        .await?;
 
+        let proposal_id = agreement.offer_proposal_id.clone();
+        let agreement = do_with_transaction(self.pool, move |conn| {
             if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::Exists(
                     agreement.id,
@@ -146,8 +198,12 @@ impl<'c> AgreementDao<'c> {
             diesel::insert_into(market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
+            Ok(agreement)
+        })
+        .await?;
 
-            update_proposal_state(conn, &proposal_id, ProposalState::Accepted)?;
+        do_with_transaction(self.ram_pool, move |conn| {
+            update_proposal_state(conn, &agreement.offer_proposal_id, ProposalState::Accepted)?;
             Ok(agreement)
         })
         .await
@@ -157,11 +213,11 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-        signature: &String,
+        signature: &str,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
-        let signature = signature.clone();
+        let signature = signature.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -184,13 +240,13 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-        signature: &String,
+        signature: &str,
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
-        let signature = signature.clone();
-        let timestamp = timestamp.clone();
+        let signature = signature.to_owned();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -215,10 +271,10 @@ impl<'c> AgreementDao<'c> {
     pub async fn approve(
         &self,
         id: &AgreementId,
-        signature: &String,
+        signature: &str,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let signature = signature.clone();
+        let signature = signature.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -233,7 +289,9 @@ impl<'c> AgreementDao<'c> {
                 &agreement,
                 None,
                 Owner::Provider,
-                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+                agreement
+                    .approved_ts
+                    .unwrap_or_else(|| Utc::now().naive_utc()),
             )?;
 
             Ok(agreement)
@@ -248,7 +306,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -269,7 +327,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -291,7 +349,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =

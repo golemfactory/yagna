@@ -10,8 +10,8 @@ use crate::db::dao::ReleaseDAO;
 use crate::db::model::DBRelease;
 use crate::service::cli::ReleaseMessage;
 
-const REPO_OWNER: &'static str = "golemfactory";
-const REPO_NAME: &'static str = "yagna";
+const REPO_OWNER: &str = "golemfactory";
+const REPO_NAME: &str = "yagna";
 
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
     log::debug!("Checking latest Yagna release");
@@ -21,6 +21,7 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
             .repo_name(REPO_NAME)
             .bin_name("") // seems required by builder but unused
             .current_version("") // similar as above
+            .target_version_tag("latest")
             .build()?
             .get_latest_release()?)
     })
@@ -60,6 +61,12 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
 
     let running_tag = ya_compile_time_utils::git_tag!();
     log::debug!("Checking release for running tag: {}", running_tag);
+
+    if running_tag.contains("-rc") {
+        log::trace!("Currently running Yagna rc release. Not stored in DB.");
+
+        return Ok(DBRelease::current()?.into());
+    }
 
     let db_rel = match tokio::task::spawn_blocking(move || {
         UpdateBuilder::new()

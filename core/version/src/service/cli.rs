@@ -4,11 +4,12 @@ use ya_core_model::version;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const UPDATE_CMD: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
+const PROVIDER_UPDATE_CMD: &str = "curl -sSf https://join.golem.network/as-provider | bash -";
+const REQUESTOR_UPDATE_CMD: &str = "curl -sSf https://join.golem.network/as-requestor | bash -";
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna {0} is available! Update via `{UPDATE_CMD}`")]
+    #[error("New Yagna {0} is available! Update via `{PROVIDER_UPDATE_CMD}` or `{REQUESTOR_UPDATE_CMD}`")]
     Available(&'a version::Release),
     #[error("Your Yagna is up to date: {0}")]
     UpToDate(&'a version::Release),
@@ -81,7 +82,8 @@ mod test {
         assert_eq!(
             ReleaseMessage::Available(&r).to_string(),
             format!(
-                "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available! Update via `curl -sSf https://join.golem.network/as-provider | bash -`"
+                "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available! Update via \
+                `curl -sSf https://join.golem.network/as-provider | bash -` or `curl -sSf https://join.golem.network/as-requestor | bash -`"
             )
         );
     }

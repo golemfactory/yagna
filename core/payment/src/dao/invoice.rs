@@ -74,7 +74,7 @@ pub fn update_status(
 impl<'c> InvoiceDao<'c> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
-        let owner_id = invoice.owner_id.clone();
+        let owner_id = invoice.owner_id;
         let role = invoice.role.clone();
         do_with_transaction(self.pool, move |conn| {
             if let Some(read_invoice) = query!()
@@ -85,9 +85,10 @@ impl<'c> InvoiceDao<'c> {
             {
                 return match equivalent(&read_invoice, &invoice) {
                     true => Ok(()),
-                    false => Err(DbError::Integrity(format!(
+                    false => Err(DbError::Integrity(
                         "Invoice with the same id and different content already exists."
-                    ))),
+                            .to_string(),
+                    )),
                 };
             };
 
@@ -100,7 +101,7 @@ impl<'c> InvoiceDao<'c> {
             // Diesel cannot do batch insert into SQLite database
             activity_ids.into_iter().try_for_each(|activity_id| {
                 let invoice_id = invoice_id.clone();
-                let owner_id = owner_id.clone();
+                let owner_id = owner_id;
                 diesel::insert_into(activity_dsl::pay_invoice_x_activity)
                     .values(InvoiceXActivity {
                         invoice_id,
@@ -111,15 +112,13 @@ impl<'c> InvoiceDao<'c> {
                     .map(|_| ())
             })?;
 
-            if let Role::Requestor = role {
-                invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
-                    InvoiceEventType::InvoiceReceivedEvent,
-                    None,
-                    conn,
-                )?;
-            }
+            invoice_event::create::<()>(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceReceivedEvent,
+                None,
+                conn,
+            )?;
 
             Ok(())
         })
@@ -127,8 +126,8 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn create_new(&self, invoice: NewInvoice, issuer_id: NodeId) -> DbResult<String> {
-        let activity_ids = invoice.activity_ids.clone().unwrap_or(vec![]);
-        let invoice = WriteObj::new_issued(invoice, issuer_id.clone());
+        let activity_ids = invoice.activity_ids.clone().unwrap_or_default();
+        let invoice = WriteObj::new_issued(invoice, issuer_id);
         let invoice_id = invoice.id.clone();
         self.insert(invoice, activity_ids).await?;
         Ok(invoice_id)
@@ -259,16 +258,9 @@ impl<'c> InvoiceDao<'c> {
 
             update_status(&invoice_id, &owner_id, &status, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
-            if let Role::Provider = role {
-                for event in events {
-                    invoice_event::create::<()>(
-                        invoice_id.clone(),
-                        owner_id.clone(),
-                        event,
-                        None,
-                        conn,
-                    )?;
-                }
+
+            for event in events {
+                invoice_event::create::<()>(invoice_id.clone(), owner_id, event, None, conn)?;
             }
 
             Ok(())
@@ -284,9 +276,8 @@ impl<'c> InvoiceDao<'c> {
     //             .select((dsl::agreement_id, dsl::amount, dsl::role))
     //             .first(conn)?;
     //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-    //         if let Role::Provider = role {
     //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
-    //         }
+    //
     //         Ok(())
     //     })
     //     .await
@@ -302,15 +293,14 @@ impl<'c> InvoiceDao<'c> {
             agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
 
             update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
-            if let Role::Requestor = role {
-                invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
-                    InvoiceEventType::InvoiceCancelledEvent,
-                    None,
-                    conn,
-                )?;
-            }
+            invoice_event::create::<()>(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceCancelledEvent,
+                None,
+                conn,
+            )?;
+
             Ok(())
         })
         .await
@@ -348,7 +338,7 @@ fn join_invoices_with_activities(
     invoices
         .into_iter()
         .map(|invoice| {
-            let activity_ids = activities_map.remove(&invoice.id).unwrap_or(vec![]);
+            let activity_ids = activities_map.remove(&invoice.id).unwrap_or_default();
             invoice.into_api_model(activity_ids)
         })
         .collect()

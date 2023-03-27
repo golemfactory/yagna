@@ -3,7 +3,7 @@ use thiserror::Error;
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/local/identity";
+pub const BUS_ID: &str = "/local/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ack {}
@@ -20,6 +20,8 @@ pub enum Error {
     InternalErr(String),
     #[error("bad keystore format: {0}")]
     BadKeyStoreFormat(String),
+    #[error("invalid password")]
+    InvalidPassword,
 }
 
 impl Error {
@@ -208,6 +210,28 @@ pub struct Subscribe {
 impl RpcMessage for Subscribe {
     const ID: &'static str = "Subscribe";
     type Item = Ack;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unsubscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Unsubscribe {
+    const ID: &'static str = "Unsubscribe";
+    type Item = Ack;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPubKey(pub NodeId);
+
+impl RpcMessage for GetPubKey {
+    const ID: &'static str = "GetPubKey";
+    type Item = Vec<u8>;
     type Error = Error;
 }
 

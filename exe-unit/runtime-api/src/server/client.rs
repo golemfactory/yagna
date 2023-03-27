@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
-const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
+static REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
 struct ClientInner<Out> {
     ids: u64,
@@ -100,8 +100,9 @@ where
     Out::Error: Debug,
 {
     fn hello(&self, version: &str) -> AsyncResponse<'_, String> {
+        let id = REQUEST_ID.fetch_add(1, Relaxed);
         let request = proto::Request {
-            id: REQUEST_ID.fetch_add(1, Relaxed),
+            id,
             command: Some(proto::request::Command::Hello(proto::request::Hello {
                 version: version.to_owned(),
             })),
@@ -118,8 +119,9 @@ where
     }
 
     fn run_process(&self, run: RunProcess) -> AsyncResponse<RunProcessResp> {
+        let id = REQUEST_ID.fetch_add(1, Relaxed);
         let request = proto::Request {
-            id: REQUEST_ID.fetch_add(1, Relaxed),
+            id,
             command: Some(proto::request::Command::Run(run)),
         };
         let fut = self.call(request);
@@ -134,8 +136,9 @@ where
     }
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<()> {
+        let id = REQUEST_ID.fetch_add(1, Relaxed);
         let request = proto::Request {
-            id: REQUEST_ID.fetch_add(1, Relaxed),
+            id,
             command: Some(proto::request::Command::Kill(kill)),
         };
         let fut = self.call(request);
@@ -150,8 +153,9 @@ where
     }
 
     fn create_network(&self, network: CreateNetwork) -> AsyncResponse<CreateNetworkResp> {
+        let id = REQUEST_ID.fetch_add(1, Relaxed);
         let request = proto::Request {
-            id: REQUEST_ID.fetch_add(1, Relaxed),
+            id,
             command: Some(proto::request::Command::Network(network)),
         };
         let fut = self.call(request);
@@ -167,8 +171,10 @@ where
 
     fn shutdown(&self) -> AsyncResponse<'_, ()> {
         let shutdown = proto::request::Shutdown::default();
+        let id = REQUEST_ID.fetch_add(1, Relaxed);
+
         let request = proto::Request {
-            id: REQUEST_ID.fetch_add(1, Relaxed),
+            id,
             command: Some(proto::request::Command::Shutdown(shutdown)),
         };
         let fut = self.call(request);
@@ -191,7 +197,9 @@ pub async fn spawn(
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
-    let pid = child.id();
+    let pid = child
+        .id()
+        .ok_or_else(|| anyhow::anyhow!("Missing child process PID"))?;
     let stdin =
         tokio_util::codec::FramedWrite::new(child.stdin.take().unwrap(), codec::Codec::default());
     let stdout = child.stdout.take().unwrap();
@@ -213,17 +221,18 @@ pub async fn spawn(
             }
         };
         let _ = tokio::task::spawn(async move {
-            futures::pin_mut!(child);
-            futures::pin_mut!(kill_rx);
-            futures::pin_mut!(pump);
-            let code = match future::select(child, future::select(pump, kill_rx)).await {
-                future::Either::Left((result, _)) => map_return_code(result, pid),
-                future::Either::Right((_, mut child)) => {
-                    let _ = child.kill();
-                    map_return_code(child.await, pid)
+            let code = tokio::select! {
+                r = child.wait() => map_return_code(r, pid),
+                _ = pump => {
+                    let _ = child.start_kill();
+                    map_return_code(child.wait().await, pid)
+                }
+                _ = kill_rx => {
+                    let _ = child.start_kill();
+                    map_return_code(child.wait().await, pid)
                 }
             };
-            if let Err(_) = status_tx.send(code) {
+            if status_tx.send(code).is_err() {
                 log::warn!("Unable to update process {} status: receiver is gone", pid);
             }
         });
@@ -233,10 +242,10 @@ pub async fn spawn(
         use proto::response::Command;
         match response.command {
             Some(Command::Status(status)) => {
-                let _ = handler.on_process_status(status).await;
+                handler.on_process_status(status).await;
             }
             Some(Command::RtStatus(status)) => {
-                let _ = handler.on_runtime_status(status).await;
+                handler.on_runtime_status(status).await;
             }
             cmd => log::warn!("invalid event: {:?}", cmd),
         }

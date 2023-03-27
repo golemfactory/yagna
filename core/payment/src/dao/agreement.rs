@@ -5,6 +5,7 @@ use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
@@ -147,15 +148,13 @@ pub fn increase_amount_paid(
 
     if let Some((invoice_id, role)) = invoice_query {
         invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
-        if let Role::Provider = role {
-            invoice_event::create::<()>(
-                invoice_id,
-                owner_id.clone(),
-                InvoiceEventType::InvoiceSettledEvent,
-                None,
-                conn,
-            )?;
-        }
+        invoice_event::create::<()>(
+            invoice_id,
+            *owner_id,
+            InvoiceEventType::InvoiceSettledEvent,
+            None,
+            conn,
+        )?;
     }
 
     Ok(())
@@ -195,7 +194,7 @@ impl<'a> AgreementDao<'a> {
                 .select(dsl::id)
                 .first(conn)
                 .optional()?;
-            if let Some(_) = existing {
+            if existing.is_some() {
                 return Ok(());
             }
 
@@ -232,12 +231,21 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payee_addr: String,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payee_addr.eq(payee_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp))
+                        .limit(1)
+                        .select(invoice_dsl::id),
+                ))
+                .select(crate::schema::pay_agreement::all_columns)
                 .get_results(conn)?;
             Ok(make_summary(agreements))
         })
@@ -249,12 +257,21 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payer_addr: String,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payer_addr.eq(payer_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp))
+                        .limit(1)
+                        .select(invoice_dsl::id),
+                ))
+                .select(crate::schema::pay_agreement::all_columns)
                 .get_results(conn)?;
             Ok(make_summary(agreements))
         })

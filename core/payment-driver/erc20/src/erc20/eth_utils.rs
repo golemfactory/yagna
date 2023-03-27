@@ -4,9 +4,9 @@ use ethereum_types::U256;
 use rlp::RlpStream;
 use tiny_keccak::{Hasher, Keccak};
 
-use crate::erc20::transaction::RawTransaction;
+use crate::erc20::transaction::YagnaRawTransaction;
 
-pub fn get_tx_hash(tx: &RawTransaction, chain_id: u64) -> Vec<u8> {
+pub fn get_tx_hash(tx: &YagnaRawTransaction, chain_id: u64) -> Vec<u8> {
     let mut hash = RlpStream::new();
     hash.begin_unbounded_list();
     tx_encode(tx, &mut hash);
@@ -17,15 +17,15 @@ pub fn get_tx_hash(tx: &RawTransaction, chain_id: u64) -> Vec<u8> {
     keccak256_hash(&hash.out())
 }
 
-fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
+pub fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
     let mut hasher = Keccak::v256();
     hasher.update(bytes);
     let mut resp: [u8; 32] = Default::default();
     hasher.finalize(&mut resp);
-    resp.iter().cloned().collect()
+    resp.to_vec()
 }
 
-fn tx_encode(tx: &RawTransaction, s: &mut RlpStream) {
+fn tx_encode(tx: &YagnaRawTransaction, s: &mut RlpStream) {
     s.append(&tx.nonce);
     s.append(&tx.gas_price);
     s.append(&tx.gas);
@@ -40,14 +40,18 @@ fn tx_encode(tx: &RawTransaction, s: &mut RlpStream) {
 
 // MISSING RawTransaction.encode_signed_tx()
 
-pub fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) -> Vec<u8> {
+pub fn encode_signed_tx(
+    raw_tx: &YagnaRawTransaction,
+    signature: Vec<u8>,
+    chain_id: u64,
+) -> Vec<u8> {
     let (sig_v, sig_r, sig_s) = prepare_signature(signature, chain_id);
 
     let mut tx = RlpStream::new();
 
     tx.begin_unbounded_list();
 
-    tx_encode(&raw_tx, &mut tx);
+    tx_encode(raw_tx, &mut tx);
     tx.append(&sig_v);
     tx.append(&sig_r);
     tx.append(&sig_s);
@@ -57,14 +61,14 @@ pub fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u
     tx.out().to_vec()
 }
 
-fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
+fn prepare_signature(mut signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
     // TODO ugly solution
     assert_eq!(signature.len(), 65);
 
     let sig_v = signature[0];
     let sig_v = sig_v as u64 + chain_id * 2 + 35;
 
-    let mut sig_r = signature.to_owned().split_off(1);
+    let mut sig_r = signature.split_off(1);
     let mut sig_s = sig_r.split_off(32);
 
     prepare_signature_part(&mut sig_r);
@@ -82,7 +86,7 @@ fn prepare_signature_part(part: &mut Vec<u8>) {
 
 // MISSING contract.encode()
 
-use ethabi::Error;
+use ethabi::{Error, Token};
 use web3::contract::tokens::Tokenize;
 use web3::contract::Contract;
 use web3::Transport;
@@ -100,4 +104,18 @@ where
         .abi()
         .function(func)
         .and_then(|function| function.encode_input(&params.into_tokens()))
+}
+
+pub fn contract_decode<T>(
+    contract: &Contract<T>,
+    func: &str,
+    data: Vec<u8>,
+) -> Result<Vec<Token>, Error>
+where
+    T: Transport,
+{
+    contract
+        .abi()
+        .function(func)
+        .and_then(|function| function.decode_input(&data))
 }

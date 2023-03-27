@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anyhow::{anyhow, bail, Result};
 use dialoguer::{Input, Select};
@@ -62,10 +62,10 @@ impl PresetsConfig {
                 if no_interactive {
                     update_presets(&config, names, params)
                 } else {
-                    if names.all || names.names.len() != 1 {
+                    if names.all || names.name.len() != 1 {
                         anyhow::bail!("choose one name for interactive update");
                     }
-                    update_preset_interactive(config, names.names.drain(..).next().unwrap())
+                    update_preset_interactive(config, names.name.drain(..).next().unwrap())
                 }
             }
             PresetsConfig::Activate { name } => activate_preset(config, name),
@@ -100,8 +100,12 @@ impl PresetUpdater {
             .position(|exeunit| exeunit == &self.preset.exeunit_name)
             .unwrap_or(0);
 
+        if self.exeunits.is_empty() {
+            bail!("ExeUnits list empty");
+        }
+
         let exeunit_idx = Select::new()
-            .with_prompt("ExeUnit")
+            .with_prompt("ExeUnit [select with arrow keys]")
             .items(&self.exeunits[..])
             .default(prev_exeunit)
             .interact()?;
@@ -117,7 +121,7 @@ impl PresetUpdater {
             .unwrap_or(0);
 
         let pricing_idx = Select::new()
-            .with_prompt("Pricing model")
+            .with_prompt("Pricing model [select with arrow keys]")
             .items(&self.pricing_models[..])
             .default(prev_pricing)
             .interact()?;
@@ -127,10 +131,10 @@ impl PresetUpdater {
 
     pub fn update_metrics(&mut self, config: &ProviderConfig) -> Result<()> {
         let registry = config.registry()?;
-        let mut usage_coeffs: HashMap<String, f64> = Default::default();
+        let mut usage_coeffs: BTreeMap<String, f64> = Default::default();
         let exe_unit_desc = registry.find_exeunit(&self.preset.exeunit_name)?;
 
-        fn get_usage(m: &HashMap<String, f64>, k1: &str, k2: &str) -> f64 {
+        fn get_usage(m: &BTreeMap<String, f64>, k1: &str, k2: &str) -> f64 {
             m.get(k1)
                 .cloned()
                 .unwrap_or_else(|| m.get(k2).cloned().unwrap_or(0.))
@@ -205,12 +209,16 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
 
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
 
-    let mut preset = Preset::default();
-    preset.name = params
-        .preset_name
-        .ok_or(anyhow!("Preset name is required."))?;
-    preset.exeunit_name = params.exe_unit.ok_or(anyhow!("ExeUnit is required."))?;
-    preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
+    let mut preset = Preset {
+        name: params
+            .preset_name
+            .ok_or_else(|| anyhow!("Preset name is required."))?,
+        exeunit_name: params
+            .exe_unit
+            .ok_or_else(|| anyhow!("ExeUnit is required."))?,
+        pricing_model: params.pricing.unwrap_or_else(|| "linear".to_string()),
+        ..Default::default()
+    };
 
     let registry = config.registry()?;
 
@@ -220,7 +228,7 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
         if is_initial_coefficient_name(name) {
             preset.initial_price = *price;
         } else {
-            let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
+            let usage_coefficient = exe_unit_desc.resolve_coefficient(name)?;
 
             preset.usage_coeffs.insert(usage_coefficient, *price);
         }
@@ -292,7 +300,7 @@ fn update_presets(
     let names = if names.all {
         presets.list_names()
     } else {
-        names.names
+        names.name
     };
 
     for name in names {
@@ -315,11 +323,11 @@ fn update_presets(
                 } else {
                     preset
                         .usage_coeffs
-                        .insert(exe_unit_desc.resolve_coefficient(&name)?, *price);
+                        .insert(exe_unit_desc.resolve_coefficient(name)?, *price);
                 }
             }
 
-            validate_preset(&config, &preset)?;
+            validate_preset(config, preset)?;
 
             Ok(())
         })?;
@@ -343,7 +351,7 @@ fn validate_preset(config: &ProviderConfig, preset: &Preset) -> anyhow::Result<(
     let registry = config.registry()?;
     registry.find_exeunit(&preset.exeunit_name)?;
 
-    if !(preset.pricing_model == "linear") {
+    if preset.pricing_model != "linear" {
         bail!("Not supported pricing model.")
     }
 

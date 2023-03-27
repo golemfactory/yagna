@@ -1,8 +1,10 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
+use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
+
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -10,24 +12,25 @@ use std::{
     env,
     fmt::Debug,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use structopt::{clap, StructOpt};
 use url::Url;
-
 use ya_activity::service::Activity as ActivityService;
 use ya_file_logging::start_logger;
+use ya_gsb_api::GsbApiService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, Identity},
+    middleware::{auth, cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -36,12 +39,23 @@ use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
 use ya_vpn::VpnService;
 
+use ya_service_bus::typed as gsb;
+
 mod autocomplete;
+mod extension;
+mod model;
+
+use crate::extension::Extension;
 use autocomplete::CompleteCommand;
+
+use ya_activity::TrackerRef;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 }
+
+const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -88,6 +102,10 @@ struct CliArgs {
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
+    #[structopt(hidden = true)]
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    quiet: bool,
+
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -100,7 +118,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }
@@ -115,6 +133,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            quiet: args.quiet,
             accept_terms: if cfg!(feature = "tos") {
                 args.accept_terms
             } else {
@@ -129,7 +148,10 @@ impl TryFrom<&CliArgs> for CliCtx {
 struct ServiceContext {
     ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
+    mixed_dbs: HashMap<TypeId, DbMixedExecutor>,
     default_db: DbExecutor,
+    default_mixed: DbMixedExecutor,
+    activity_tracker: ya_activity::TrackerRef,
 }
 
 impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
@@ -141,6 +163,21 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
+    fn component(&self) -> DbMixedExecutor {
+        match self.mixed_dbs.get(&TypeId::of::<S>()) {
+            Some(db) => db.clone(),
+            None => self.default_mixed.clone(),
+        }
+    }
+}
+
+impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
+    fn component(&self) -> ya_activity::TrackerRef {
+        self.activity_tracker.clone()
+    }
+}
+
 impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
     fn component(&self) -> CliCtx {
         self.ctx.clone()
@@ -148,14 +185,19 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
-    }
+    fn component(&self) {}
 }
 
 impl ServiceContext {
-    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+    fn make_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
+    }
+
+    fn make_mixed_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbMixedExecutor)> {
+        let disk_db = DbExecutor::from_data_dir(path, name)?;
+        let ram_db = DbExecutor::in_memory(name)?;
+
+        Ok((TypeId::of::<S>(), DbMixedExecutor::new(disk_db, ram_db)))
     }
 
     fn set_metrics_ctx(&mut self, metrics_opts: &MetricsPusherOpts) {
@@ -170,7 +212,6 @@ impl TryFrom<CliCtx> for ServiceContext {
         let default_name = clap::crate_name!();
         let default_db = DbExecutor::from_data_dir(&ctx.data_dir, default_name)?;
         let dbs = [
-            Self::make_entry::<MarketService>(&ctx.data_dir, "market")?,
             Self::make_entry::<ActivityService>(&ctx.data_dir, "activity")?,
             Self::make_entry::<PaymentService>(&ctx.data_dir, "payment")?,
         ]
@@ -178,10 +219,17 @@ impl TryFrom<CliCtx> for ServiceContext {
         .cloned()
         .collect();
 
+        let market_db = Self::make_mixed_entry::<MarketService>(&ctx.data_dir, "market")?;
+        let mixed_dbs = [market_db.clone()].iter().cloned().collect();
+        let activity_tracker = TrackerRef::create();
+
         Ok(ServiceContext {
             ctx,
             dbs,
+            mixed_dbs,
             default_db,
+            default_mixed: market_db.1,
+            activity_tracker,
         })
     }
 }
@@ -199,11 +247,12 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb)]
+    #[enable(gsb, rest, cli)]
     Net(NetService),
+    //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
     Activity(ActivityService),
@@ -211,12 +260,14 @@ enum Services {
     Payment(PaymentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
+    #[enable(gsb, rest)]
+    GsbApi(GsbApiService),
 }
 
 #[cfg(not(any(
     feature = "dummy-driver",
     feature = "erc20-driver",
-    feature = "zksync-driver"
+    feature = "zksync-driver",
 )))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
@@ -259,25 +310,113 @@ enum CliCommand {
     /// Core service usage
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
     Service(ServiceCommand),
+
+    /// Extension management
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Extension(ExtensionCommand),
+
+    #[structopt(external_subcommand)]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Other(Vec<String>),
 }
 
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
+            CliCommand::Extension(ext) => ext.run_command(ctx).await,
+            CliCommand::Other(args) => extension::run::<CliArgs>(ctx, args).await,
         }
     }
 }
 
 #[derive(StructOpt, Debug)]
+enum ExtensionCommand {
+    /// List available extensions
+    List {},
+    /// Autostart extension
+    Register { args: Vec<String> },
+    /// Remove extension from autostart
+    Unregister { name: String },
+}
+
+impl ExtensionCommand {
+    pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            ExtensionCommand::List {} => {
+                let extensions = Extension::list();
+
+                if ctx.json_output {
+                    Self::map(extensions.into_iter())
+                } else {
+                    Self::table(extensions.into_iter())
+                }
+            }
+            ExtensionCommand::Register { mut args } => {
+                let mut ext = Extension::find(args.clone())?;
+                args.remove(0);
+
+                ext.conf.args = args;
+                ext.conf.autostart = true;
+                ext.write_conf().await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
+            ExtensionCommand::Unregister { name } => {
+                let mut ext = Extension::find(vec![name])?;
+                ext.conf.autostart = false;
+                ext.write_conf().await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
+        }
+    }
+
+    fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        CommandOutput::object(
+            extensions
+                .map(|mut ext| {
+                    let name = std::mem::take(&mut ext.name);
+                    (name, ext)
+                })
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+
+    fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        Ok(ResponseTable {
+            columns: vec![
+                "name".into(),
+                "autostart".into(),
+                "path".into(),
+                "args".into(),
+            ],
+            values: extensions
+                .map(|ext| {
+                    serde_json::json! {[
+                        ext.name,
+                        if ext.conf.autostart { 'x' } else { ' ' },
+                        ext.path,
+                        ext.conf.args.join(" "),
+                    ]}
+                })
+                .collect(),
+        }
+        .into())
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
+    Shutdown(ShutdownOpts),
 }
 
 #[derive(StructOpt, Debug)]
@@ -296,7 +435,7 @@ struct ServiceCommandOpts {
     metrics_opts: MetricsPusherOpts,
 
     #[structopt(long, env, default_value = "60")]
-    max_rest_timeout: usize,
+    max_rest_timeout: u64,
 
     ///changes log level from info to debug
     #[structopt(long)]
@@ -307,6 +446,9 @@ struct ServiceCommandOpts {
     /// If set to empty string, then logging to files is disabled.
     #[structopt(long, env = "YAGNA_LOG_DIR")]
     log_dir: Option<PathBuf>,
+
+    #[structopt(flatten)]
+    cors: CorsConfig,
 }
 
 #[cfg(unix)]
@@ -320,9 +462,15 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     if unset_environment {
         env::remove_var("NOTIFY_SOCKET");
     }
-    let mut socket = tokio::net::UnixDatagram::unbound()?;
+    let socket = tokio::net::UnixDatagram::unbound()?;
     socket.send_to(state.as_ref(), addr).await?;
     Ok(())
+}
+
+#[derive(StructOpt, Debug)]
+struct ShutdownOpts {
+    #[structopt(long)]
+    gracefully: bool,
 }
 
 #[cfg(not(unix))]
@@ -343,13 +491,14 @@ impl ServiceCommand {
                 max_rest_timeout,
                 log_dir,
                 debug,
+                cors,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -365,12 +514,16 @@ impl ServiceCommand {
                     }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
+                        ("h2", log::LevelFilter::Off),
+                        ("hyper", log::LevelFilter::Info),
+                        ("reqwest", log::LevelFilter::Info),
                         ("tokio_core", log::LevelFilter::Info),
                         ("tokio_reactor", log::LevelFilter::Info),
-                        ("reqwest", log::LevelFilter::Info),
-                        ("hyper", log::LevelFilter::Info),
+                        ("trust_dns_resolver", log::LevelFilter::Info),
+                        ("trust_dns_proto", log::LevelFilter::Info),
                         ("web3", log::LevelFilter::Info),
-                        ("h2", log::LevelFilter::Info),
+                        ("tokio_util", log::LevelFilter::Off),
+                        ("mio", log::LevelFilter::Off),
                     ],
                     force_debug,
                 )?;
@@ -406,27 +559,73 @@ impl ServiceCommand {
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
+                let rest_address = api_host_port.clone();
+                let cors = AppKeyCors::new(cors).await?;
+
+                tokio::task::spawn_local(async move {
+                    ya_net::hybrid::send_bcast_new_neighbour().await
+                });
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
-                        .route("/me", web::get().to(me));
-
-                    Services::rest(app, &context)
+                        .wrap(auth::Auth::new(cors.cache()))
+                        .wrap(cors.cors())
+                        .route("/me", web::get().to(me))
+                        .service(forward_gsb);
+                    let rest = Services::rest(app, &context);
+                    log::info!("Http server thread started on: {}", rest_address);
+                    rest
                 })
                 // this is maximum supported timeout for our REST API
-                .keep_alive(max_rest_timeout.clone())
+                .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
+                    .await
+                    .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
+
+                gsb::bind(model::BUS_ID, move |_request: model::ShutdownRequest| {
+                    log::warn!("ShutdownRequest not supported after migrating to new actix.");
+                    // actix_rt::spawn(async move {
+                    //     actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
+                    //     actix_rt::System::current().stop()
+                    // });
+
+                    async move { Ok(()) }
+                });
+
+                tokio::spawn(async {
+                    loop {
+                        for (fd_type, count) in ya_fd_metrics::fd_metrics() {
+                            gauge!(format!("yagna.fds.{fd_type}"), count as i64);
+                        }
+
+                        tokio::time::sleep(FD_METRICS_INTERVAL).await;
+                    }
+                });
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
                 PaymentService::shut_down().await;
+                NetService::shutdown()
+                    .await
+                    .map_err(|e| log::error!("Error shutting down NET: {}", e))
+                    .ok();
+
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
+            }
+            Self::Shutdown(opts) => {
+                let result = gsb::service(model::BUS_ID)
+                    .call(model::ShutdownRequest {
+                        graceful: opts.gracefully,
+                    })
+                    .await?;
+                CommandOutput::object(result)
             }
         }
     }
@@ -445,11 +644,11 @@ https://handbook.golem.network/see-also/terms
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    stdout.write(header.as_bytes())?;
+    let _ = stdout.write(header.as_bytes())?;
     stdout.flush()?;
 
     loop {
-        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        let _ = stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
         stdout.flush()?;
 
         let mut buffer = String::new();
@@ -466,6 +665,33 @@ async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
 
+#[actix_web::post("/_gsb/{service:.*}")]
+async fn forward_gsb(
+    id: Identity,
+    service: web::Path<String>,
+    data: web::Json<serde_json::Value>,
+) -> impl Responder {
+    use ya_service_bus::untyped as bus;
+    let service = service.into_inner();
+
+    log::debug!(target: "gsb-bridge", "called: {}", service);
+
+    let inner_data = data.into_inner();
+    let data = ya_service_bus::serialization::to_vec(&inner_data)
+        .map_err(actix_web::error::ErrorBadRequest)?;
+    let r = bus::send(
+        &format!("/{}", service),
+        &format!("/local/{}", id.identity),
+        &data,
+    )
+    .await
+    .map_err(actix_web::error::ErrorInternalServerError)?;
+
+    let json_resp: serde_json::Value = ya_service_bus::serialization::from_slice(&r)
+        .map_err(actix_web::error::ErrorInternalServerError)?;
+    Ok::<_, actix_web::Error>(web::Json(json_resp))
+}
+
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -475,5 +701,12 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
-    args.run_command().await
+    match args.run_command().await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            //this way runtime/command error is at least possibly visible in yagna logs
+            log::error!("Exiting..., error details: {:?}", err);
+            Err(err)
+        }
+    }
 }

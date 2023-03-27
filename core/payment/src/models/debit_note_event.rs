@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{DebitNoteEvent, DebitNoteEventType};
 use ya_client_model::NodeId;
+use ya_persistence::types::{AdaptTimestamp, Role, TimestampAdapter};
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_debit_note_event"]
@@ -15,6 +16,7 @@ pub struct WriteObj {
     pub owner_id: NodeId,
     pub event_type: String,
     pub details: Option<String>,
+    pub timestamp: TimestampAdapter,
 }
 
 impl WriteObj {
@@ -33,6 +35,7 @@ impl WriteObj {
             owner_id,
             event_type: event_type.to_string(),
             details,
+            timestamp: Utc::now().adapt(),
         })
     }
 }
@@ -41,6 +44,7 @@ impl WriteObj {
 #[table_name = "pay_debit_note_event_read"]
 #[primary_key(debit_note_id, event_type)]
 pub struct ReadObj {
+    pub role: Role,
     pub debit_note_id: String,
     pub owner_id: NodeId,
     pub event_type: String,

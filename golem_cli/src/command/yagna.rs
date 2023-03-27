@@ -1,12 +1,12 @@
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use futures::prelude::*;
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
+use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 
 use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
@@ -21,7 +21,10 @@ pub struct PaymentPlatform {
     pub token: &'static str,
 }
 
-pub struct PaymentDriver(pub HashMap<&'static str, PaymentPlatform>);
+pub struct PaymentDriver {
+    pub platforms: HashMap<&'static str, PaymentPlatform>,
+    pub name: &'static str,
+}
 
 lazy_static! {
     pub static ref ZKSYNC_DRIVER: PaymentDriver = {
@@ -34,15 +37,19 @@ lazy_static! {
                 token: "GLM",
             },
         );
-        zksync.insert(
-            NetworkName::Rinkeby.into(),
-            PaymentPlatform {
-                platform: "zksync-rinkeby-tglm",
-                driver: "zksync",
-                token: "tGLM",
-            },
-        );
-        PaymentDriver(zksync)
+        // zksync.insert(
+        //     NetworkName::Rinkeby.into(),
+        //     PaymentPlatform {
+        //         platform: "zksync-rinkeby-tglm",
+        //         driver: "zksync",
+        //         token: "tGLM",
+        //     },
+        // );
+
+        PaymentDriver {
+            platforms: zksync,
+            name: "zksync",
+        }
     };
     pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
@@ -62,18 +69,97 @@ lazy_static! {
                 token: "tGLM",
             },
         );
-        PaymentDriver(erc20)
+        erc20.insert(
+            NetworkName::Goerli.into(),
+            PaymentPlatform {
+                platform: "erc20-goerli-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Mumbai.into(),
+            PaymentPlatform {
+                platform: "erc20-mumbai-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Polygon.into(),
+            PaymentPlatform {
+                platform: "erc20-polygon-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
+
+        PaymentDriver {
+            platforms: erc20,
+            name: "erc20",
+        }
     };
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ZKSYNC_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
     pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
         let net: &str = network.into();
-        Ok(self.0.get(net).ok_or(anyhow!(
-            "Payment driver config for network '{}' not found.",
-            network
-        ))?)
+        self.platforms
+            .get(net)
+            .ok_or_else(|| anyhow!("Payment driver config for network '{}' not found.", network))
     }
+
+    pub fn status_label(&self, network: &NetworkName) -> String {
+        if self.name == ZKSYNC_DRIVER.name {
+            return "zksync".to_string();
+        }
+
+        if network == &NetworkName::Mainnet {
+            "on-chain".to_string()
+        } else {
+            network.to_string().to_lowercase()
+        }
+    }
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Display,
+    EnumVariantNames,
+    EnumString,
+    Eq,
+    Hash,
+    IntoStaticStr,
+    PartialEq,
+    Serialize,
+)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkGroup {
+    Mainnet,
+    Testnet,
+}
+
+lazy_static! {
+    pub static ref NETWORK_GROUP_MAP: HashMap<NetworkGroup, Vec<NetworkName>> = {
+        let mut ngm = HashMap::new();
+        ngm.insert(
+            NetworkGroup::Mainnet,
+            vec![NetworkName::Mainnet, NetworkName::Polygon],
+        );
+        ngm.insert(
+            NetworkGroup::Testnet,
+            vec![
+                NetworkName::Rinkeby,
+                NetworkName::Mumbai,
+                NetworkName::Goerli,
+            ],
+        );
+        ngm
+    };
 }
 
 #[derive(Deserialize)]
@@ -222,6 +308,16 @@ impl YagnaCommand {
         self.run().await
     }
 
+    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
+        let mut cmd = self.cmd;
+        let output = cmd.arg("--quiet").args(args).status().await?;
+
+        match output.code() {
+            Some(c) => Ok(c),
+            None => anyhow::bail!("Unknown process exit code"),
+        }
+    }
+
     pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         let mut cmd = self.cmd;
 
@@ -258,26 +354,20 @@ impl YagnaCommand {
         }
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
-        cmd.kill_on_drop(true);
-        let child = cmd.spawn()?;
-        let wait_for = tracker.wait_for_start();
-        futures::pin_mut!(wait_for);
-        match future::try_select(child, wait_for).await {
-            Ok(future::Either::Right((_wait_ends, child))) => Ok(child),
-            Ok(future::Either::Left((child_ends, _wait))) => {
-                anyhow::bail!(
-                    "Golem Service exited prematurely with status: {}",
-                    child_ends
-                );
-            }
-            Err(future::Either::Left((child_err, _wait))) => {
-                anyhow::bail!("Failed to start Golem Service: {}", child_err);
-            }
-            Err(future::Either::Right((wait_err, mut child))) => {
-                log::error!("Killing Golem Service, since wait failed: {}", wait_err);
-                child.kill()?;
-                let _ = child.await?;
-                Err(wait_err)
+        let mut child = cmd.kill_on_drop(true).spawn()?;
+
+        tokio::select! {
+            r = child.wait() => match r {
+                Ok(s) => anyhow::bail!("Golem Service exited prematurely with status: {}", s),
+                Err(e) => anyhow::bail!("Failed to start Golem Service: {}", e),
+            },
+            r = tracker.wait_for_start() => match r {
+                Ok(_) => Ok(child),
+                Err(e) => {
+                    log::error!("Killing Golem Service, since wait failed: {}", e);
+                    child.kill().await?;
+                    Err(e)
+                }
             }
         }
     }

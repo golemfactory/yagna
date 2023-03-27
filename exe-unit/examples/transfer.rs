@@ -11,6 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempdir::TempDir;
+use tokio::io::AsyncWriteExt;
 use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
@@ -38,7 +39,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
             .collect();
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
@@ -67,38 +68,38 @@ async fn upload(
     let mut dst_path = path.as_ref().clone();
     dst_path.push(name.as_ref());
 
-    let mut dst = web::block(|| std::fs::File::create(dst_path))
-        .await
-        .unwrap();
+    let mut dst = tokio::fs::File::create(dst_path).await.unwrap();
 
     while let Some(chunk) = payload.next().await {
         let data = chunk.unwrap();
-        dst = web::block(move || dst.write_all(&data).map(|_| dst)).await?;
+        dst.write_all(&data).await?;
     }
 
     Ok(HttpResponse::Ok().finish())
 }
 
-fn start_http(path: PathBuf) -> anyhow::Result<()> {
+async fn start_http(path: PathBuf) -> anyhow::Result<()> {
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(actix_files::Files::new("/", inner.clone()))
     })
     .bind("127.0.0.1:8001")?
-    .run();
+    .run()
+    .await?;
 
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(web::resource("/{name}").route(web::put().to(upload)))
     })
     .bind("127.0.0.1:8002")?
-    .run();
+    .run()
+    .await?;
 
     Ok(())
 }
@@ -143,7 +144,10 @@ fn verify_hash<S: AsRef<str>, P: AsRef<Path>>(hash: &HashOutput, path: P, file_n
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("debug".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
+    );
     env_logger::init();
 
     log::debug!("Creating directories");
@@ -171,8 +175,8 @@ async fn main() -> anyhow::Result<()> {
         },
     ];
 
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::debug!(
         "Creating a random file of size {} * {}",
@@ -184,15 +188,17 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Starting HTTP servers");
 
     let path = temp_dir.to_path_buf();
-    std::thread::spawn(move || {
-        let sys = System::new("http");
-        start_http(path).expect("unable to start http servers");
+    tokio::task::spawn_local(async move {
+        let sys = System::new();
+        start_http(path)
+            .await
+            .expect("unable to start http servers");
         sys.run().expect("sys.run");
     });
 
     let agreement = Agreement {
         inner: AgreementView {
-            agreement_id: String::new(),
+            id: String::new(),
             json: Value::Null,
         },
         task_package: Some(format!(
@@ -214,6 +220,7 @@ async fn main() -> anyhow::Result<()> {
         agreement,
         work_dir: work_dir.clone(),
         cache_dir,
+        runtime_args: Default::default(),
         #[cfg(feature = "sgx")]
         crypto: init_crypto()?,
     };
@@ -275,8 +282,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive TAR.GZ) -> HTTP");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(
         &addr,
@@ -292,8 +301,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive ZIP) -> HTTP");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("zip"));
+    let args = TransferArgs {
+        format: Some(String::from("zip")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(
         &addr,
@@ -309,8 +320,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer HTTP -> container (extract TAR.GZ)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     transfer_with_args(
         &addr,
         "http://127.0.0.1:8001/input.tar.gz",
@@ -329,8 +342,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer HTTP -> container (extract ZIP)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("zip"));
+    let args = TransferArgs {
+        format: Some(String::from("zip")),
+        ..Default::default()
+    };
     transfer_with_args(
         &addr,
         "http://127.0.0.1:8001/input.zip",
@@ -349,8 +364,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Transfer container (archive TAR.GZ) -> container (extract TAR.GZ)");
-    let mut args = TransferArgs::default();
-    args.format = Some(String::from("tar.gz"));
+    let args = TransferArgs {
+        format: Some(String::from("tar.gz")),
+        ..Default::default()
+    };
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(&addr, "container:/input", "container:/extract", args).await?;
     log::warn!("Transfer complete");

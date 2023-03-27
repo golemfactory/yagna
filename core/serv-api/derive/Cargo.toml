@@ -1,6 +1,6 @@
 [package]
 name = "ya-service-api-derive"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -12,16 +12,16 @@ lazy_static = "1.4"
 proc-macro-hack = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
-strum = "0.19"
-strum_macros = "0.19"
+strum = "0.24"
+strum_macros = "0.24"
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
-ya-service-api-interfaces = "0.1"
+ya-service-api-interfaces = "0.2"
 
-actix-rt = "1.1"
-actix-service = "1.0"
-actix-web = "3.3"
+actix-rt = "2.7"
+actix-service = "2"
+actix-web = "4"
 anyhow = "1.0"
 log = "0.4"
 structopt = "0.3"

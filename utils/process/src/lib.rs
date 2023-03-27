@@ -12,7 +12,6 @@ pub mod lock;
 
 #[cfg(unix)]
 use {
-    actix::prelude::*,
     futures::future::{AbortHandle, Abortable},
     shared_child::unix::SharedChildExt,
 };
@@ -31,7 +30,7 @@ impl ProcessGroupExt<Command> for Command {
 
         unsafe {
             self.pre_exec(|| {
-                nix::unistd::setsid().map_err(|e| io::Error::from(e))?;
+                nix::unistd::setsid().map_err(io::Error::from)?;
                 Ok(())
             });
         }
@@ -51,7 +50,7 @@ impl ProcessGroupExt<tokio::process::Command> for tokio::process::Command {
 
         unsafe {
             self.pre_exec(|| {
-                nix::unistd::setsid().map_err(|e| io::Error::from(e))?;
+                nix::unistd::setsid().map_err(io::Error::from)?;
                 Ok(())
             });
         }
@@ -80,9 +79,9 @@ pub struct ProcessHandle {
 }
 
 impl ProcessHandle {
-    pub fn new(mut command: &mut Command) -> Result<ProcessHandle> {
+    pub fn new(command: &mut Command) -> Result<ProcessHandle> {
         Ok(ProcessHandle {
-            process: Arc::new(SharedChild::spawn(&mut command)?),
+            process: Arc::new(SharedChild::spawn(command)?),
         })
     }
 
@@ -97,7 +96,7 @@ impl ProcessHandle {
     #[cfg(unix)]
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
         let process = self.process.clone();
-        if let Err(_) = process.send_signal(libc::SIGTERM) {
+        if process.send_signal(libc::SIGTERM).is_err() {
             // Error means, that probably process was already terminated, because:
             // - We have permissions to send signal, since we created this process.
             // - We specified correct signal SIGTERM.
@@ -108,8 +107,8 @@ impl ProcessHandle {
         let process = self.clone();
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
-        Arbiter::spawn(async move {
-            tokio::time::delay_for(timeout).await;
+        tokio::task::spawn_local(async move {
+            tokio::time::sleep(timeout).await;
             abort_handle.abort();
         });
 
@@ -165,6 +164,6 @@ impl ProcessHandle {
         // Note: unwrap can't fail here. All sender, receiver and thread will
         // end their lifetime before await will return. There's no danger
         // that one of them will be dropped earlier.
-        return receiver.await.unwrap();
+        receiver.await.unwrap()
     }
 }

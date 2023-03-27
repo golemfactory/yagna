@@ -14,7 +14,7 @@ use url::{quirks::hostname, Position, Url};
 
 use ya_core_model::gftp as model;
 use ya_core_model::identity;
-use ya_core_model::net::TryRemoteEndpoint;
+use ya_core_model::net::{RemoteEndpoint, TryRemoteEndpoint};
 use ya_core_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -102,7 +102,7 @@ pub async fn publish(path: &Path) -> Result<Url> {
     let filedesc = FileDesc::open(path)?;
     filedesc.bind_handlers();
 
-    Ok(gftp_url(&filedesc.hash).await?)
+    gftp_url(&filedesc.hash).await
 }
 
 pub async fn close(url: &Url) -> Result<bool> {
@@ -129,7 +129,7 @@ pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
 }
 
 pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Result<()> {
-    let remote = node_id.try_service(&model::file_bus_id(hash))?;
+    let remote = node_id.service_transfer(&model::file_bus_id(hash));
     log::debug!("Creating target file {}", dst_path.display());
 
     let mut file = create_dest_file(dst_path)?;
@@ -172,25 +172,26 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
 pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
     let hash_name = rand::thread_rng()
         .sample_iter(&Alphanumeric)
+        .map(char::from)
         .take(65)
         .collect::<String>();
 
-    let file = Arc::new(Mutex::new(create_dest_file(&filepath)?));
+    let file = Arc::new(Mutex::new(create_dest_file(filepath)?));
 
     let gsb_address = model::file_bus_id(&hash_name);
     let file_clone = file.clone();
     let _ = bus::bind(&gsb_address, move |msg: model::UploadChunk| {
         let file = file_clone.clone();
-        async move { Ok(chunk_uploaded(file.clone(), msg).await?) }
+        async move { chunk_uploaded(file.clone(), msg).await }
     });
 
     let file_clone = file.clone();
     let _ = bus::bind(&gsb_address, move |msg: model::UploadFinished| {
         let file = file_clone.clone();
-        async move { Ok(upload_finished(file.clone(), msg).await?) }
+        async move { upload_finished(file.clone(), msg).await }
     });
 
-    Ok(gftp_url(&hash_name).await?)
+    gftp_url(&hash_name).await
 }
 
 async fn chunk_uploaded(
@@ -319,7 +320,7 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
     let mut hasher = Sha3_256::new();
 
     file.seek(SeekFrom::Start(0))
-        .with_context(|| format!("Can't seek file at offset 0."))?;
+        .with_context(|| "Can't seek file at offset 0.".to_string())?;
     io::copy(&mut file, &mut hasher)?;
 
     Ok(format!("{:x}", hasher.result()))
@@ -336,7 +337,7 @@ pub fn extract_url(url: &Url) -> Result<(NodeId, String)> {
         )));
     }
 
-    let node_id = NodeId::from_str(hostname(&url))
+    let node_id = NodeId::from_str(hostname(url))
         .with_context(|| format!("Url {} has invalid node_id.", url))?;
 
     // Note: Remove slash from beginning of path.
@@ -367,11 +368,11 @@ fn create_dest_file(file_path: &Path) -> Result<File> {
             file_path.display()
         )
     })?;
-    Ok(OpenOptions::new()
+    OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
         .open(file_path)
-        .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))?)
+        .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))
 }

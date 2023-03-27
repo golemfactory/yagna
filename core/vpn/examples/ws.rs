@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
-use ya_client::net::NetRequestorApi;
+use ya_client::net::NetVpnApi;
 use ya_client::web::WebClient;
 use ya_client_model::net::{Address, NewNetwork, Node};
 
@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         Some(_) => cli.api_url,
         None => std::env::var("YAGNA_API_URL").ok(),
     }
-    .unwrap_or("http://127.0.0.1:7464".to_string());
+    .unwrap_or_else(|| "http://127.0.0.1:7464".to_string());
     let app_key = match &cli.app_key {
         Some(app_key) => Some(app_key.clone()),
         None => std::env::var("YAGNA_APPKEY").ok(),
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
         .api_url(Url::parse(&api_url)?)
         .auth_token(&app_key)
         .build();
-    let api: NetRequestorApi = client.interface()?;
+    let api: NetVpnApi = client.interface()?;
 
     if cli.skip_create {
         println!("Re-using network: {}", net_id);
@@ -125,14 +125,14 @@ async fn main() -> anyhow::Result<()> {
         let net_id = &network.id;
 
         api.add_address(
-            &net_id,
+            net_id,
             &Address {
                 ip: net_requestor_address,
             },
         )
         .await?;
         api.add_node(
-            &net_id,
+            net_id,
             &Node {
                 id: cli.id.clone(),
                 ip: cli.host.clone(),
@@ -146,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let connection = api.connect_tcp(&net_id, &cli.host, cli.port).await?;
     let (mut sink, mut stream) = connection.split();
 
-    Arbiter::spawn(async move {
+    tokio::task::spawn_local(async move {
         const CHUNK_SIZE: usize = 65535;
         let mut buf = [0u8; CHUNK_SIZE];
         let mut remaining = input_sz as u64;
@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 vec
             };
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 break;
             }
             remaining -= vec.len() as u64;
@@ -173,7 +173,8 @@ async fn main() -> anyhow::Result<()> {
             println!("Tx {} bytes", vec.len());
             if let Err(e) = sink.send(ws::Message::Binary(Bytes::from(vec))).await {
                 eprintln!("Error sending data: {}", e);
-                break Arbiter::current().stop();
+                Arbiter::current().stop();
+                break;
             }
         }
     });

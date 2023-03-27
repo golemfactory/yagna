@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use diesel::prelude::*;
 
 use ya_core_model::version::{Release, VersionInfo};
@@ -37,7 +36,7 @@ impl<'c> ReleaseDAO<'c> {
     }
 
     pub async fn current_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, move |conn| get_current_release(conn)).await
+        readonly_transaction(self.pool, get_current_release).await
     }
 
     pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
@@ -48,7 +47,8 @@ impl<'c> ReleaseDAO<'c> {
         log::debug!("Getting Yagna version: current and pending from DB");
         readonly_transaction(self.pool, move |conn| {
             Ok(VersionInfo {
-                current: get_current_release(conn)?.ok_or(anyhow!("Can't get current release."))?,
+                current: get_current_release(conn)?
+                    .unwrap_or_else(|| DBRelease::current().unwrap().into()),
                 pending: get_pending_release(conn, true)?,
             })
         })
@@ -91,6 +91,7 @@ fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
 fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Option<Release>> {
     let mut query = version_release
         // insertion_ts is to distinguish among fake-entries of `DBRelease::current`
+        .filter(release::version.not_like("%rc%"))
         .order((release::release_ts.desc(), release::insertion_ts.desc()))
         .into_boxed();
     if !include_seen {

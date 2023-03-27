@@ -12,7 +12,7 @@ use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
 pub struct GetMetrics;
 
@@ -23,14 +23,14 @@ pub struct SetMetric {
     pub value: f64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, MessageResponse)]
 pub struct GetStateResponse(pub StatePair);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetBatchResultsResponse")]
 pub struct GetBatchResults {
     pub batch_id: String,
@@ -40,14 +40,14 @@ pub struct GetBatchResults {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
 pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "Option<String>")]
 pub struct GetStdOut {
     pub batch_id: String,
     pub idx: usize,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
     pub state: StatePair,
@@ -80,7 +80,8 @@ impl From<StatePair> for SetState {
     }
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug, Message, derive_more::Display)]
+#[display(fmt = "Command: {:?} (batch = {}[{}])", command, batch_id, idx)]
 #[rtype(result = "Result<i32>")]
 pub struct ExecuteCommand {
     pub batch_id: String,
@@ -91,10 +92,10 @@ pub struct ExecuteCommand {
 
 impl ExecuteCommand {
     pub fn stateless(&self) -> bool {
-        match &self.command {
-            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. } => true,
-            _ => false,
-        }
+        matches!(
+            &self.command,
+            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. }
+        )
     }
 
     pub fn split(self) -> (ExeScriptCommand, CommandContext) {
@@ -174,7 +175,7 @@ pub struct UpdateDeployment {
 #[rtype(result = "Result<()>")]
 pub struct Initialize;
 
-#[derive(Clone, Debug, PartialEq, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Message)]
 #[rtype(result = "()")]
 pub struct Register<Svc>(pub Addr<Svc>)
 where

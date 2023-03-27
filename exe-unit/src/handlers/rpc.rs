@@ -1,19 +1,22 @@
-use crate::error::Error;
-use crate::message::{GetBatchResults, GetMetrics};
-use crate::runtime::Runtime;
-use crate::{ExeUnit, RuntimeRef};
+use std::time::Duration;
+
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::oneshot;
 use futures::{SinkExt, StreamExt};
-use std::time::Duration;
 use tokio::time::timeout;
+
+#[cfg(feature = "sgx")]
+use ya_client_model::activity::encrypted::RpcMessageError as SgxMessageError;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_core_model::activity::*;
 use ya_service_bus::{Error as RpcError, RpcEnvelope, RpcStreamCall};
 
-#[cfg(feature = "sgx")]
-use ya_client_model::activity::encrypted::RpcMessageError as SgxMessageError;
+use crate::error::Error;
+use crate::manifest::{ManifestValidatorExt, ScriptValidator};
+use crate::message::{GetBatchResults, GetMetrics};
+use crate::runtime::Runtime;
+use crate::{ExeUnit, RuntimeRef};
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
@@ -22,16 +25,23 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         let batch_id = msg.batch_id.clone();
+        let msg = msg.into_inner();
+
         if self.state.batches.contains_key(&batch_id) {
             let m = format!("Batch {} already exists", batch_id);
             return Err(RpcMessageError::BadRequest(m));
         }
 
+        let validator = self.ctx.supervise.manifest.validator::<ScriptValidator>();
+        if let Err(e) = validator.with(|c| c.validate(msg.exe_script.iter())) {
+            let m = format!("Manifest violation in ExeScript: {}", e);
+            return Err(RpcMessageError::BadRequest(m));
+        }
+
         let (tx, rx) = oneshot::channel();
-        let msg = msg.into_inner();
         self.state.start_batch(msg.clone(), tx);
 
-        let fut = RuntimeRef::from_ctx(&ctx)
+        RuntimeRef::from_ctx(ctx)
             .exec(
                 msg,
                 self.runtime.clone(),
@@ -39,8 +49,8 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
                 self.events.tx.clone(),
                 rx,
             )
-            .into_actor(self);
-        ctx.spawn(fut);
+            .into_actor(self)
+            .spawn(ctx);
 
         Ok(batch_id)
     }
@@ -53,7 +63,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         Ok(ActivityState {
-            state: self.state.inner.clone(),
+            state: self.state.inner,
             reason: None,
             error_message: None,
         })
@@ -61,7 +71,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, ActivityUsage, RpcMessageError>;
+    type Result = ActorResponse<Self, Result<ActivityUsage, RpcMessageError>>;
 
     fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
         if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
@@ -119,7 +129,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, Vec<ExeScriptCommandResult>, RpcMessageError>;
+    type Result = ActorResponse<Self, Result<Vec<ExeScriptCommandResult>, RpcMessageError>>;
 
     fn handle(
         &mut self,
@@ -146,17 +156,16 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
         let notifier = batch.notifier.clone();
 
-        let idx = msg.command_index.clone();
+        let idx = msg.command_index;
         let batch_id = msg.batch_id.clone();
 
         let fut = async move {
             if timeout(duration, notifier.when(move |i| i >= await_idx))
                 .await
                 .is_err()
+                && msg.command_index.is_some()
             {
-                if msg.command_index.is_some() {
-                    return Err(RpcMessageError::Timeout);
-                }
+                return Err(RpcMessageError::Timeout);
             }
             match address.send(GetBatchResults { batch_id, idx }).await {
                 Ok(results) => Ok(results.0),
@@ -169,7 +178,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), RpcError>;
+    type Result = ActorResponse<Self, Result<(), RpcError>>;
 
     fn handle(
         &mut self,

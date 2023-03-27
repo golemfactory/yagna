@@ -1,374 +1,334 @@
-#![allow(unused)]
-use crate::error::Error;
-use crate::message::Shutdown;
-use crate::state::{Deployment, DeploymentNetwork};
-use crate::Result;
-use actix::prelude::*;
-use futures::channel::mpsc;
-use futures::future;
-use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use std::convert::TryFrom;
-use std::ops::Not;
+use std::mem::size_of;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
-use tokio::io;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::time::Duration;
 
-use crate::acl::Acl;
-use ya_core_model::activity;
-use ya_core_model::activity::{RpcMessageError, VpnControl};
-use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
-use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
-use ya_utils_networking::vpn::common::ntoh;
-use ya_utils_networking::vpn::error::Error as VpnError;
-use ya_utils_networking::vpn::{
-    self, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks, PeekPacket,
-    MAX_FRAME_SIZE,
-};
+use bytes::{Buf, BytesMut};
+use futures::future::{BoxFuture, FutureExt};
+use futures::stream::{BoxStream, Peekable};
+use futures::{Stream, StreamExt};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpSocket, UdpSocket};
+use tokio::sync::mpsc;
 
-pub(crate) async fn start_vpn<R: RuntimeService>(
-    acl: Acl,
-    service: &R,
-    deployment: Deployment,
-) -> Result<Option<Addr<Vpn>>> {
-    if !deployment.networking() {
-        return Ok(None);
+use ya_runtime_api::deploy::ContainerEndpoint;
+use ya_runtime_api::server::Network;
+use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
+use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
+use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
+
+use crate::error::Error;
+use crate::state::DeploymentNetwork;
+use crate::Result;
+
+pub(crate) mod inet;
+pub(crate) mod vpn;
+
+type SocketChannel = (
+    mpsc::UnboundedSender<Result<Vec<u8>>>,
+    mpsc::UnboundedReceiver<Result<Vec<u8>>>,
+);
+
+const SOCKET_BUFFER_SIZE: usize = 2097152;
+const BUFFER_SIZE: usize = DEFAULT_MAX_FRAME_SIZE * 4;
+
+pub(crate) enum Endpoint {
+    New {
+        local: LocalEndpoint,
+    },
+    Connected {
+        local: LocalEndpoint,
+        remote: RemoteEndpoint,
+    },
+    Poisoned,
+}
+
+// FIXME: IPv6 support
+impl Endpoint {
+    pub async fn default_transport() -> Result<Self> {
+        Self::udp4().await
     }
 
-    let networks = deployment
-        .networks
-        .values()
-        .map(TryFrom::try_from)
-        .collect::<Result<_>>()?;
-    let hosts = deployment.hosts.clone();
-    let response = service
-        .create_network(CreateNetwork { networks, hosts })
-        .await
-        .map_err(|e| Error::Other(format!("Network setup error: {:?}", e)))?;
-
-    let endpoint = match response.endpoint {
-        Some(endpoint) => VpnEndpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("VPN endpoint already connected".into()).into()),
-    };
-
-    let vpn = Vpn::try_new(acl, endpoint, deployment)?;
-    Ok(Some(vpn.start()))
-}
-
-pub(crate) struct Vpn {
-    // TODO: Populate & use ACL
-    acl: Acl,
-    networks: Networks<GsbEndpoint>,
-    endpoint: VpnEndpoint,
-    rx_buf: Option<RxBuffer>,
-}
-
-impl Vpn {
-    fn try_new(acl: Acl, endpoint: VpnEndpoint, deployment: Deployment) -> Result<Self> {
-        let mut networks = vpn::Networks::default();
-
-        deployment
-            .networks
-            .iter()
-            .try_for_each(|(id, net)| networks.add(id.clone(), net.network))?;
-
-        deployment.networks.into_iter().try_for_each(|(id, net)| {
-            let network = networks.get_mut(&id).unwrap();
-            net.nodes
-                .into_iter()
-                .try_for_each(|(ip, id)| network.add_node(ip, &id, gsb_endpoint))?;
-            Ok::<_, VpnError>(())
-        })?;
-
-        Ok(Self {
-            acl,
-            networks,
-            endpoint,
-            rx_buf: Some(Default::default()),
+    #[allow(unused)]
+    pub async fn unix() -> Result<Self> {
+        Ok(Self::New {
+            local: LocalEndpoint::UnixStream,
         })
     }
 
-    fn handle_ip(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
-        let ip_pkt = IpPacket::packet(frame.payload());
-        log::trace!("Egress packet to {:?}", ip_pkt.dst_address());
-
-        if ip_pkt.is_broadcast() {
-            let futs = self
-                .networks
-                .endpoints()
-                .into_iter()
-                .map(|e| e.call(activity::VpnPacket(frame.as_ref().to_vec())))
-                .collect::<Vec<_>>();
-            futs.is_empty().not().then(|| {
-                let fut = future::join_all(futs).then(|_| future::ready(()));
-                ctx.spawn(fut.into_actor(self))
-            });
-        } else {
-            let ip = ip_pkt.dst_address();
-            match self.networks.endpoint(ip) {
-                Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
-                None => log::debug!("No endpoint for {:?}", ip),
-            }
-        }
+    #[allow(unused)]
+    pub async fn tcp() -> Result<Self> {
+        Ok(Self::New {
+            local: LocalEndpoint::TcpStream,
+        })
     }
 
-    fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
-        let arp = ArpPacket::packet(frame.payload());
-        // forward only IP ARP packets
-        if arp.get_field(ArpField::PTYPE) != &[08, 00] {
-            return;
-        }
-
-        let ip = arp.get_field(ArpField::TPA);
-        match self.networks.endpoint(ip) {
-            Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
-            None => log::debug!("No endpoint for {:?}", ip),
-        }
+    #[allow(unused)]
+    #[inline]
+    pub async fn udp4() -> Result<Self> {
+        Self::udp(Domain::IPV4).await
     }
 
-    fn forward_frame(&mut self, endpoint: GsbEndpoint, frame: EtherFrame, ctx: &mut Context<Self>) {
-        let pkt: Vec<_> = frame.into();
-        log::trace!("Egress {} b", pkt.len());
-
-        endpoint
-            .call(activity::VpnPacket(pkt))
-            .map_err(|err| log::debug!("VPN call error: {}", err))
-            .then(|_| future::ready(()))
-            .into_actor(self)
-            .spawn(ctx);
-    }
-}
-
-impl Actor for Vpn {
-    type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.networks.as_ref().keys().for_each(|net| {
-            let actor = ctx.address();
-            let net_id = net.clone();
-            let vpn_id = activity::exeunit::network_id(&net_id);
-
-            actix_rpc::bind::<activity::VpnControl>(&vpn_id, ctx.address().recipient());
-            typed::bind_with_caller::<activity::VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
-                actor
-                    .send(Packet {
-                        network_id: net_id.clone(),
-                        caller,
-                        data: pkt.0,
-                    })
-                    .then(|sent| match sent {
-                        Ok(result) => future::ready(result),
-                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
-                    })
-            });
-        });
-
-        match self.endpoint.rx.take() {
-            Some(rx) => {
-                Self::add_stream(rx, ctx);
-                log::info!("Started VPN service")
-            }
-            None => {
-                ctx.stop();
-                log::error!("No local VPN endpoint");
-            }
-        };
+    #[allow(unused)]
+    #[inline]
+    pub async fn udp6() -> Result<Self> {
+        Self::udp(Domain::IPV6).await
     }
 
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
-        log::info!("Stopping VPN service");
-
-        let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
-        async move {
-            for net in networks {
-                let vpn_id = activity::exeunit::network_id(&net);
-                let _ = typed::unbind(&vpn_id).await;
-            }
-        }
-        .into_actor(self)
-        .wait(ctx);
-
-        Running::Stop
-    }
-}
-
-/// Egress traffic handler (VM -> VPN)
-impl StreamHandler<Result<Vec<u8>>> for Vpn {
-    fn handle(&mut self, result: Result<Vec<u8>>, ctx: &mut Context<Self>) {
-        let received = match result {
-            Ok(vec) => vec,
-            Err(err) => return log::debug!("VPN error (egress): {}", err),
-        };
-        let mut rx_buf = match self.rx_buf.take() {
-            Some(buf) => buf,
-            None => return log::error!("Programming error: rx buffer already taken"),
+    #[allow(unused)]
+    async fn udp(domain: Domain) -> Result<Self> {
+        let ip: IpAddr = match domain {
+            Domain::IPV4 => Ipv4Addr::new(127, 0, 0, 1).into(),
+            Domain::IPV6 => Ipv6Addr::from(1).into(),
+            other => return Err(Error::Other(format!("Unknown socket domain: {other:?}"))),
         };
 
-        for packet in rx_buf.process(received) {
-            let frame = match EtherFrame::try_from(packet) {
-                Ok(frame) => match &frame {
-                    EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
-                    EtherFrame::Ip(_) => self.handle_ip(frame, ctx),
-                    frame => log::debug!("VPN: unimplemented EtherType: {}", frame),
-                },
-                Err(err) => {
-                    match &err {
-                        VpnError::ProtocolNotSupported(_) => (),
-                        _ => log::debug!("VPN frame error (egress): {}", err),
-                    };
-                    continue;
-                }
-            };
-        }
+        let addr = SocketAddr::new(ip, 0);
+        let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
 
-        self.rx_buf.replace(rx_buf);
+        socket.set_recv_buffer_size(SOCKET_BUFFER_SIZE)?;
+        socket.set_send_buffer_size(SOCKET_BUFFER_SIZE)?;
+        socket.set_nonblocking(true)?;
+
+        socket.bind(&SockAddr::from(addr))?;
+
+        let addr = socket
+            .local_addr()?
+            .as_socket()
+            .ok_or_else(|| Error::Other("Unable to bind to {addr}".to_string()))?;
+
+        log::info!("VM UDP endpoint bound at {addr}");
+
+        let socket = UdpSocket::from_std(socket.into())?;
+        Ok(Self::New {
+            local: LocalEndpoint::UdpDatagram(Arc::new(socket)),
+        })
     }
-}
 
-/// Ingress traffic handler (VPN -> VM)
-impl Handler<Packet> for Vpn {
-    type Result = <Packet as Message>::Result;
+    pub async fn connect(&mut self, endpoint: impl Into<ContainerEndpoint>) -> Result<()> {
+        match std::mem::replace(self, Self::Poisoned) {
+            Self::New { local } => {
+                let remote = match endpoint.into() {
+                    ContainerEndpoint::UnixStream(path) => RemoteEndpoint::unix(path).await,
+                    ContainerEndpoint::UdpDatagram(addr) => {
+                        let s = match local {
+                            LocalEndpoint::UdpDatagram(ref s) => s.clone(),
+                            _ => return Err(Error::Other("Endpoint type mismatch".to_string())),
+                        };
 
-    fn handle(&mut self, mut packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
-        log::trace!("Ingress {} b", packet.data.len());
-
-        let network_id = packet.network_id;
-        let node_id = packet.caller;
-        let data = packet.data.into_boxed_slice();
-
-        // fixme: should requestor be queried for unknown IP addresses instead?
-        // read and add unknown node id -> ip if it doesn't exist
-        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
-            let payload = EtherFrame::peek_payload(&data).unwrap();
-            let ip = match ether_type {
-                EtherType::Arp => {
-                    let pkt = ArpPacket::packet(payload);
-                    ntoh(pkt.get_field(ArpField::SPA))
-                }
-                EtherType::Ip => {
-                    let pkt = IpPacket::packet(payload);
-                    ntoh(pkt.src_address())
-                }
-                _ => None,
-            };
-
-            if let Some(ip) = ip {
-                log::debug!("Adding new node: {} {}", ip, node_id);
-                self.networks.get_mut(&network_id).map(|network| {
-                    if !network.nodes().contains_key(&node_id) {
-                        network.add_node(ip, &node_id, gsb_endpoint);
+                        RemoteEndpoint::udp(addr, s).await
                     }
-                });
+                    ContainerEndpoint::TcpStream(addr) => RemoteEndpoint::tcp(addr).await,
+                    ep => Err(Error::Other(format!("Unsupported endpoint type: {:?}", ep))),
+                }?;
+
+                *self = Self::Connected { local, remote };
+                Ok(())
             }
-        }
-
-        let mut data = data.into();
-        write_prefix(&mut data);
-
-        let mut tx = self.endpoint.tx.clone();
-        async move {
-            if let Err(e) = tx.send(Ok(data)).await {
-                log::debug!("Ingress VPN error: {}", e);
+            e @ Self::Connected { .. } => {
+                *self = e;
+                Err(io::Error::from(io::ErrorKind::AlreadyExists).into())
             }
-        }
-        .into_actor(self)
-        .spawn(ctx);
-
-        Ok(())
-    }
-}
-
-impl Handler<RpcEnvelope<activity::VpnControl>> for Vpn {
-    type Result = <RpcEnvelope<activity::VpnControl> as Message>::Result;
-
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<activity::VpnControl>,
-        _: &mut Context<Self>,
-    ) -> Self::Result {
-        // if !self.acl.has_access(msg.caller(), AccessRole::Control) {
-        //     return Err(AclError::Forbidden(msg.caller().to_string(), AccessRole::Control).into());
-        // }
-
-        match msg.into_inner() {
-            VpnControl::AddNodes { network_id, nodes } => {
-                let network = self.networks.get_mut(&network_id).map_err(Error::from)?;
-                for (ip, id) in Deployment::map_nodes(nodes).map_err(Error::from)? {
-                    network
-                        .add_node(ip, &id, gsb_endpoint)
-                        .map_err(Error::from)?;
-                }
-            }
-            VpnControl::RemoveNodes {
-                network_id,
-                node_ids,
-            } => {
-                let network = self.networks.get_mut(&network_id).map_err(Error::from)?;
-                node_ids.into_iter().for_each(|id| network.remove_node(&id));
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Handler<Shutdown> for Vpn {
-    type Result = <Shutdown as Message>::Result;
-
-    fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        log::info!("Shutting down VPN: {:?}", msg.0);
-        ctx.stop();
-        Ok(())
-    }
-}
-
-#[derive(Message)]
-#[rtype(result = "<RpcEnvelope<activity::VpnPacket> as Message>::Result")]
-struct Packet {
-    network_id: String,
-    caller: String,
-    data: Vec<u8>,
-}
-
-struct VpnEndpoint {
-    tx: mpsc::Sender<Result<Vec<u8>>>,
-    rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
-}
-
-impl VpnEndpoint {
-    pub async fn connect(endpoint: NetworkEndpoint) -> Result<Self> {
-        match endpoint {
-            NetworkEndpoint::Socket(path) => Self::connect_socket(path).await,
+            Self::Poisoned => panic!("Programming error: endpoint in poisoned state"),
         }
     }
 
+    pub fn local(&self) -> &LocalEndpoint {
+        match self {
+            Self::New { local } | Self::Connected { local, .. } => local,
+            Self::Poisoned => panic!("Programming error: endpoint in poisoned state"),
+        }
+    }
+
+    #[inline]
+    pub fn send(&self, message: Result<Vec<u8>>) -> Result<()> {
+        match self {
+            Self::Connected { remote, .. } => remote.tx.send(message).map_err(Error::from),
+            _ => Err(io::Error::from(io::ErrorKind::NotConnected).into()),
+        }
+    }
+
+    #[inline]
+    pub fn sender(&mut self) -> Result<mpsc::UnboundedSender<Result<Vec<u8>>>> {
+        match self {
+            Self::Connected { remote, .. } => Ok(remote.tx.clone()),
+            _ => Err(io::Error::from(io::ErrorKind::NotConnected).into()),
+        }
+    }
+
+    pub fn receiver(&mut self) -> Result<BoxStream<'static, Result<Vec<u8>>>> {
+        match self {
+            Self::Connected { remote, .. } => remote
+                .rx
+                .take()
+                .ok_or_else(|| Error::Other("Endpoint already taken".to_string())),
+            _ => Err(io::Error::from(io::ErrorKind::NotConnected).into()),
+        }
+    }
+}
+
+impl From<LocalEndpoint> for Endpoint {
+    fn from(local: LocalEndpoint) -> Self {
+        Self::New { local }
+    }
+}
+
+#[non_exhaustive]
+#[allow(unused)]
+pub(crate) enum LocalEndpoint {
+    UnixStream,
+    UdpDatagram(Arc<UdpSocket>),
+    TcpListener(TcpSocket),
+    TcpStream,
+}
+
+impl std::fmt::Display for LocalEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnixStream => write!(f, "unix://"),
+            Self::UdpDatagram(socket) => {
+                let s = socket.local_addr().map_err(|_| std::fmt::Error {})?;
+                write!(f, "udp://{}", s)
+            }
+            Self::TcpListener(socket) => {
+                let s = socket.local_addr().map_err(|_| std::fmt::Error {})?;
+                write!(f, "tcp-connect://{}", s)
+            }
+            Self::TcpStream => write!(f, "tcp-listen://"),
+        }
+    }
+}
+
+pub(crate) struct RemoteEndpoint {
+    tx: mpsc::UnboundedSender<Result<Vec<u8>>>,
+    rx: Option<BoxStream<'static, Result<Vec<u8>>>>,
+}
+
+impl RemoteEndpoint {
+    // legacy socket endpoint (non-virtio)
     #[cfg(unix)]
-    async fn connect_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
-        use bytes::Bytes;
-        use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
+    async fn unix<P: AsRef<Path>>(path: P) -> Result<Self> {
+        const PREFIX_SIZE: usize = size_of::<u16>();
+        const PREFIX_NE: bool = true;
 
-        let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
+        type SocketChannel = (
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
+        );
+
+        let path = path.as_ref();
+        log::info!(
+            "Connecting to Unix socket (stream) endpoint {}",
+            path.display()
+        );
+
+        let socket = tokio::net::UnixStream::connect(path).await?;
         let (read, write) = io::split(socket);
+        let (tx, rx): SocketChannel = mpsc::unbounded_channel();
 
-        let sink = FramedWrite::new(write, BytesCodec::new()).with(|v| future::ok(Bytes::from(v)));
-        let stream = FramedRead::with_capacity(read, BytesCodec::new(), MAX_FRAME_SIZE)
-            .into_stream()
-            .map_ok(|b| b.to_vec())
-            .map_err(|e| Error::from(e));
+        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, PREFIX_NE);
+        let writer = async_write_future(rx, write, PREFIX_SIZE, PREFIX_NE);
 
-        let (tx_si, rx_si) = mpsc::channel(1);
-        Arbiter::spawn(async move {
-            if let Err(e) = rx_si.forward(sink).await {
-                log::error!("VPN socket forward error: {}", e);
-            }
-        });
+        tokio::task::spawn(writer);
 
         Ok(Self {
-            tx: tx_si,
-            rx: Some(Box::new(stream)),
+            tx,
+            rx: Some(stream),
         })
     }
 
     #[cfg(not(unix))]
-    async fn connect_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+    async fn unix<P: AsRef<Path>>(_path: P) -> Result<Self> {
         Err(Error::Other("OS not supported".into()))
+    }
+
+    async fn tcp(addr: SocketAddr) -> Result<Self> {
+        const PREFIX_SIZE: usize = size_of::<u32>();
+        const PREFIX_NE: bool = false;
+
+        type SocketChannel = (
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
+        );
+
+        let domain = if addr.is_ipv4() {
+            Domain::IPV4
+        } else {
+            Domain::IPV6
+        };
+
+        let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+        socket.set_recv_buffer_size(SOCKET_BUFFER_SIZE)?;
+        socket.set_send_buffer_size(SOCKET_BUFFER_SIZE)?;
+        socket.set_nonblocking(true)?;
+
+        log::info!("Connecting to TCP endpoint {addr}");
+        socket.connect_timeout(&SockAddr::from(addr), Duration::from_secs(2))?;
+
+        let stream = tokio::net::TcpStream::from_std(socket.into())?;
+        let (read, write) = io::split(stream);
+        let (tx, rx): SocketChannel = mpsc::unbounded_channel();
+
+        log::info!("Spawning TCP endpoint event loop");
+        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, PREFIX_NE);
+        let writer = async_write_future(rx, write, PREFIX_SIZE, PREFIX_NE);
+
+        tokio::task::spawn(writer);
+
+        Ok(Self {
+            tx,
+            rx: Some(stream),
+        })
+    }
+
+    async fn udp(addr: SocketAddr, socket: Arc<UdpSocket>) -> Result<Self> {
+        let read = socket.clone();
+        let write = socket;
+        let (tx, rx): SocketChannel = mpsc::unbounded_channel();
+
+        let stream = {
+            let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
+            futures::stream::unfold((read, buffer), |(r, mut b)| async move {
+                match r.recv_from(&mut b).await.map(|t| t.0) {
+                    Ok(0) => None,
+                    Ok(n) => Some((Ok::<_, Error>(Vec::from(&b[..n])), (r, b))),
+                    Err(e) => Some((Err(e.into()), (r, b))),
+                }
+            })
+            .boxed()
+        };
+
+        log::info!("Spawning UDP endpoint event loop");
+        let writer = async move {
+            let mut rx = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
+            loop {
+                match StreamExt::next(&mut rx).await {
+                    Some(Ok(data)) => {
+                        if let Err(e) = write.send_to(data.as_slice(), addr).await {
+                            log::error!("error writing to VM endpoint: {e}");
+                            break;
+                        }
+                    }
+                    Some(Err(e)) => {
+                        log::error!("VM endpoint error: {e}");
+                        break;
+                    }
+                    None => break,
+                }
+            }
+        }
+        .boxed();
+        tokio::task::spawn(writer);
+
+        Ok(Self {
+            tx,
+            rx: Some(stream),
+        })
     }
 }
 
@@ -382,7 +342,7 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
             .network
             .hosts()
             .find(|ip_| ip_ != &ip)
-            .ok_or_else(|| VpnError::NetAddrTaken(ip))?;
+            .ok_or(NetError::NetAddrTaken(ip))?;
 
         Ok(Network {
             addr: ip.to_string(),
@@ -393,100 +353,243 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
     }
 }
 
-type Prefix = u16;
-const PREFIX_SIZE: usize = std::mem::size_of::<Prefix>();
-
-pub(self) struct RxBuffer {
-    expected: usize,
-    inner: Vec<u8>,
+fn async_read_stream<const N: usize, R>(
+    read: R,
+    prefix_size: usize,
+    prefix_ne: bool,
+) -> BoxStream<'static, Result<Vec<u8>>>
+where
+    R: AsyncReadExt + Unpin + Send + 'static,
+{
+    let stream = {
+        let buffer: [u8; N] = [0u8; N];
+        futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
+            match r.read(&mut b).await {
+                Ok(0) => None,
+                Ok(n) => Some((Ok::<_, io::Error>(BytesMut::from(&b[..n])), (r, b))),
+                Err(e) => Some((Err(e), (r, b))),
+            }
+        })
+    }
+    .boxed();
+    RxBufferStream::new(stream, N, prefix_size, prefix_ne).boxed()
 }
 
-impl Default for RxBuffer {
-    fn default() -> Self {
-        Self {
-            expected: 0,
-            inner: Vec::with_capacity(PREFIX_SIZE + MAX_FRAME_SIZE),
+fn async_write_future<'a, W>(
+    rx: mpsc::UnboundedReceiver<Result<Vec<u8>>>,
+    mut write: W,
+    prefix_size: usize,
+    prefix_ne: bool,
+) -> BoxFuture<'a, ()>
+where
+    W: AsyncWriteExt + Unpin + Send + 'a,
+{
+    async move {
+        let mut rx = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
+        loop {
+            match StreamExt::next(&mut rx).await {
+                Some(Ok(mut data)) => {
+                    write_prefix(&mut data, prefix_size, prefix_ne);
+                    if let Err(e) = write.write_all(data.as_slice()).await {
+                        log::error!("VM endpoint write error: {e}");
+                        break;
+                    }
+                }
+                Some(Err(e)) => {
+                    log::error!("VM endpoint error: {e}");
+                    break;
+                }
+                None => break,
+            }
         }
     }
+    .boxed()
+}
+
+struct RxBuffer {
+    inner: BytesMut,
+    prefix_size: usize,
+    prefix_ne: bool,
 }
 
 impl RxBuffer {
-    pub fn process(&mut self, received: Vec<u8>) -> RxIterator {
-        RxIterator {
-            buffer: self,
-            received,
+    pub fn new(capacity: usize, prefix_size: usize, prefix_ne: bool) -> Self {
+        Self {
+            inner: BytesMut::with_capacity(capacity),
+            prefix_size,
+            prefix_ne,
         }
     }
-}
 
-struct RxIterator<'a> {
-    buffer: &'a mut RxBuffer,
-    received: Vec<u8>,
-}
-
-impl<'a> Iterator for RxIterator<'a> {
-    type Item = Vec<u8>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.expected > 0 && self.received.len() > 0 {
-            let len = self.buffer.expected.min(self.received.len());
-            self.buffer.inner.extend(self.received.drain(..len));
+    pub fn process(&mut self, bytes: BytesMut) -> Option<Vec<u8>> {
+        if self.inner.is_empty() {
+            let _ = std::mem::replace(&mut self.inner, bytes);
+        } else {
+            self.inner.extend(bytes);
         }
+        self.take_next()
+    }
 
-        if let Some(len) = read_prefix(&self.buffer.inner) {
-            if let Some(item) = take_next(&mut self.buffer.inner, len) {
-                self.buffer.expected = read_prefix(&self.buffer.inner).unwrap_or(0) as usize;
-                return Some(item);
+    fn read_prefix(&self) -> Option<usize> {
+        match self.prefix_size {
+            1 => prefix_u8::read(&self.inner, self.prefix_ne),
+            2 => prefix_u16::read(&self.inner, self.prefix_ne),
+            4 => prefix_u32::read(&self.inner, self.prefix_ne),
+            8 => prefix_u64::read(&self.inner, self.prefix_ne),
+            16 => prefix_u128::read(&self.inner, self.prefix_ne),
+            _ => panic!("programming error: unsupported size: {}", self.prefix_size),
+        }
+    }
+
+    fn has_next(&self) -> bool {
+        self.read_prefix()
+            .map(|n| self.inner.len() >= self.prefix_size + n)
+            .unwrap_or(false)
+    }
+
+    fn take_next(&mut self) -> Option<Vec<u8>> {
+        if let Some(n) = self.read_prefix() {
+            if self.inner.len() >= self.prefix_size + n {
+                self.inner.advance(self.prefix_size);
+                return Some(self.inner.split_to(n).to_vec());
             }
         }
-
-        if let Some(len) = read_prefix(&self.received) {
-            if let Some(item) = take_next(&mut self.received, len) {
-                return Some(item);
-            }
-        }
-
-        self.buffer.inner.extend(self.received.drain(..));
-        if let Some(len) = read_prefix(&self.buffer.inner) {
-            self.buffer.expected = len as usize;
-        }
-
         None
     }
 }
 
-fn take_next(src: &mut Vec<u8>, len: Prefix) -> Option<Vec<u8>> {
-    let p_len = PREFIX_SIZE + len as usize;
-    if src.len() >= p_len {
-        return Some(src.drain(..p_len).skip(PREFIX_SIZE).collect());
+fn write_prefix(buf: &mut Vec<u8>, prefix_size: usize, prefix_ne: bool) {
+    match prefix_size {
+        1 => prefix_u8::write(buf, prefix_ne),
+        2 => prefix_u16::write(buf, prefix_ne),
+        4 => prefix_u32::write(buf, prefix_ne),
+        8 => prefix_u64::write(buf, prefix_ne),
+        16 => prefix_u128::write(buf, prefix_ne),
+        _ => panic!("programming error: unsupported size: {}", prefix_size),
     }
-    None
 }
 
-fn read_prefix(src: &Vec<u8>) -> Option<Prefix> {
-    if src.len() < PREFIX_SIZE {
-        return None;
+struct RxBufferStream<S, E>
+where
+    S: Stream<Item = std::result::Result<BytesMut, E>>,
+{
+    rx_buffer: RxBuffer,
+    inner: Peekable<S>,
+}
+
+impl<S, E> RxBufferStream<S, E>
+where
+    S: Stream<Item = std::result::Result<BytesMut, E>>,
+{
+    pub fn new(stream: S, capacity: usize, prefix_size: usize, prefix_ne: bool) -> Self {
+        Self {
+            rx_buffer: RxBuffer::new(capacity, prefix_size, prefix_ne),
+            inner: stream.peekable(),
+        }
     }
-    let mut u16_buf = [0u8; PREFIX_SIZE];
-    u16_buf.copy_from_slice(&src[..PREFIX_SIZE]);
-    Some(u16::from_ne_bytes(u16_buf))
 }
 
-fn write_prefix(dst: &mut Vec<u8>) {
-    let len_u16 = dst.len() as u16;
-    dst.reserve(PREFIX_SIZE);
-    dst.splice(0..0, u16::to_ne_bytes(len_u16).to_vec());
+impl<S, E> Stream for RxBufferStream<S, E>
+where
+    S: Stream<Item = std::result::Result<BytesMut, E>> + Unpin + 'static,
+    E: Into<Error> + 'static,
+{
+    type Item = Result<Vec<u8>>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if let Some(vec) = self.rx_buffer.take_next() {
+            if self.rx_buffer.has_next() {
+                cx.waker().wake_by_ref();
+            }
+            return Poll::Ready(Some(Ok(vec)));
+        }
+
+        match Pin::new(&mut self.inner).poll_next(cx) {
+            Poll::Ready(Some(Ok(bytes))) => {
+                let mut wake_scheduled = false;
+                if Pin::new(&mut self.inner).poll_peek(cx).is_ready() {
+                    cx.waker().wake_by_ref();
+                    wake_scheduled = true;
+                }
+
+                match self.rx_buffer.process(bytes) {
+                    Some(vec) => {
+                        if !wake_scheduled && self.rx_buffer.has_next() {
+                            cx.waker().wake_by_ref();
+                        }
+                        Poll::Ready(Some(Ok(vec)))
+                    }
+                    _ => Poll::Pending,
+                }
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e.into()))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
-fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
-    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+fn gsb_endpoint(node_id: &str, net_id: &str) -> DuoEndpoint<GsbEndpoint> {
+    DuoEndpoint {
+        tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}/raw", node_id, net_id)),
+    }
 }
+
+macro_rules! impl_prefix {
+    ($ty:ty, $m:ident) => {
+        pub mod $m {
+            use bytes::BytesMut;
+
+            const SIZE: usize = std::mem::size_of::<$ty>();
+
+            pub fn read(buf: &BytesMut, ne: bool) -> Option<usize> {
+                if buf.len() < SIZE {
+                    return None;
+                }
+
+                let mut sz: [u8; SIZE] = [0u8; SIZE];
+                sz.copy_from_slice(&buf[..SIZE]);
+
+                Some(if ne {
+                    <$ty>::from_ne_bytes(sz)
+                } else {
+                    <$ty>::from_be_bytes(sz)
+                } as usize)
+            }
+
+            #[inline]
+            pub fn write(buf: &mut Vec<u8>, ne: bool) {
+                let len = buf.len();
+                buf.reserve(SIZE);
+                if ne {
+                    buf.splice(0..0, <$ty>::to_ne_bytes(len as $ty));
+                } else {
+                    buf.splice(0..0, <$ty>::to_be_bytes(len as $ty));
+                }
+            }
+        }
+    };
+}
+
+impl_prefix!(u8, prefix_u8);
+impl_prefix!(u16, prefix_u16);
+impl_prefix!(u32, prefix_u32);
+impl_prefix!(u64, prefix_u64);
+impl_prefix!(u128, prefix_u128);
 
 #[cfg(test)]
 mod test {
-    use super::{write_prefix, RxBuffer};
+    use crate::network::RxBufferStream;
+    use bytes::BytesMut;
+    use futures::StreamExt;
     use std::iter::FromIterator;
 
+    use super::write_prefix;
+
+    const PREFIX_SIZE: usize = std::mem::size_of::<u32>();
+
+    #[derive(Copy, Clone)]
     enum TxMode {
         Full,
         Chunked(usize),
@@ -501,28 +604,56 @@ mod test {
         }
     }
 
-    #[test]
-    fn rx_buffer() {
-        for mut tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
-            for sz in vec![1, 2, 3, 5, 7, 12, 64] {
-                let src = (0..=255u8)
+    #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+    struct TestError;
+
+    impl From<TestError> for super::Error {
+        fn from(_: TestError) -> Self {
+            super::Error::Other("test error".to_string())
+        }
+    }
+
+    async fn process_rx_buffer_stream(mode: TxMode, size: usize) {
+        let src = (0..=255u8)
+            .into_iter()
+            .flat_map(|e| {
+                let vec = Vec::from_iter(std::iter::repeat(e).take(size));
+                mode.split(vec)
                     .into_iter()
-                    .map(|e| Vec::from_iter(std::iter::repeat(e).take(sz)))
-                    .collect::<Vec<_>>();
+                    .map(|mut v| {
+                        write_prefix(&mut v, PREFIX_SIZE, false);
+                        Ok::<_, TestError>(BytesMut::from_iter(v))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
 
-                let mut buf = RxBuffer::default();
-                let mut dst = Vec::with_capacity(src.len());
+        let stream = futures::stream::iter(src.clone());
+        let buf_stream = RxBufferStream::new(stream, 1500, PREFIX_SIZE, false);
 
-                src.iter().cloned().for_each(|mut v| {
-                    write_prefix(&mut v);
-                    for received in tx.split(v) {
-                        for item in buf.process(received) {
-                            dst.push(item);
-                        }
-                    }
-                });
+        let dst = buf_stream
+            .fold(vec![], |mut dst, item| async move {
+                if let Ok(mut v) = item {
+                    write_prefix(&mut v, PREFIX_SIZE, false);
+                    dst.push(Ok::<_, TestError>(BytesMut::from_iter(v)));
+                }
+                dst
+            })
+            .await;
 
-                assert_eq!(src, dst);
+        assert_eq!(src, dst);
+    }
+
+    #[tokio::test]
+    async fn rx_buffer_stream() {
+        const PREFIX_SIZE: usize = 4;
+
+        let modes = vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)];
+        let sizes = [1, 2, 3, 5, 7, 12, 64];
+
+        for mode in modes {
+            for size in sizes {
+                process_rx_buffer_stream(mode, size).await;
             }
         }
     }

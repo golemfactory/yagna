@@ -1,0 +1,10 @@
+[package]
+name = "ya-fd-metrics"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2021"
+description = "Provides file descriptor statistics"
+
+[dependencies]
+libc = "0.2.137"
+nix = "0.25"

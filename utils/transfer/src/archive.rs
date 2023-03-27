@@ -1,13 +1,12 @@
 use crate::error::Error;
 use crate::TransferData;
-use actix_rt::Arbiter;
-use async_compression::stream::{BzDecoder, BzEncoder};
-use async_compression::stream::{GzipDecoder, GzipEncoder};
-use async_compression::stream::{XzDecoder, XzEncoder};
-use bytes::Bytes;
+use async_compression::futures::bufread::{BzDecoder, BzEncoder};
+use async_compression::futures::bufread::{GzipDecoder, GzipEncoder};
+use async_compression::futures::bufread::{XzDecoder, XzEncoder};
+use bytes::{Bytes, BytesMut};
 use futures::channel::{mpsc, mpsc::Sender};
 use futures::task::{Context, Poll};
-use futures::{FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
+use futures::{AsyncRead, FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use rand::Rng;
 use std::convert::TryFrom;
 use std::fs::create_dir_all;
@@ -16,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::str::FromStr;
 use tokio::fs::OpenOptions;
-use tokio::io::{copy, AsyncWriteExt};
+use tokio::io::{copy, AsyncWriteExt, ReadBuf};
 use ya_client_model::activity::TransferArgs;
 use ya_utils_path::normalize_path;
 use zip::tokio::read::read_zipfile_from_stream;
@@ -78,7 +77,7 @@ impl<'s> TryFrom<&'s str> for ArchiveFormat {
     }
 }
 
-impl<'s> TryFrom<&TransferArgs> for ArchiveFormat {
+impl TryFrom<&TransferArgs> for ArchiveFormat {
     type Error = Error;
 
     fn try_from(args: &TransferArgs) -> Result<Self, Self::Error> {
@@ -127,7 +126,7 @@ where
     P: AsRef<Path> + Send + Sync + 'a,
     R: AsRef<Path> + Unpin + Send + Sync + 'static,
 {
-    let path_root = match normalize_path(path_root.as_ref()) {
+    let path_root = match normalize_path(&path_root) {
         Ok(path) => path,
         Err(error) => return Box::pin(futures_stream_err(error).map(BytesResult::convert)),
     };
@@ -139,16 +138,28 @@ where
                 .map(BytesResult::convert),
         ),
         ArchiveFormat::TarBz2 => Box::pin(
-            BzEncoder::new(archive_tar(path_iter, path_root, evt_sender).await)
-                .map(BytesResult::convert),
+            codec_stream(BzEncoder::new(
+                archive_tar(path_iter, path_root, evt_sender)
+                    .await
+                    .into_async_read(),
+            ))
+            .map(BytesResult::convert),
         ),
         ArchiveFormat::TarGz => Box::pin(
-            GzipEncoder::new(archive_tar(path_iter, path_root, evt_sender).await)
-                .map(BytesResult::convert),
+            codec_stream(GzipEncoder::new(
+                archive_tar(path_iter, path_root, evt_sender)
+                    .await
+                    .into_async_read(),
+            ))
+            .map(BytesResult::convert),
         ),
         ArchiveFormat::TarXz => Box::pin(
-            XzEncoder::new(archive_tar(path_iter, path_root, evt_sender).await)
-                .map(BytesResult::convert),
+            codec_stream(XzEncoder::new(
+                archive_tar(path_iter, path_root, evt_sender)
+                    .await
+                    .into_async_read(),
+            ))
+            .map(BytesResult::convert),
         ),
         ArchiveFormat::Zip | ArchiveFormat::ZipStored => {
             archive_zip(
@@ -180,12 +191,12 @@ where
 
     let fut = async move {
         let mut path_iter = path_iter.peekable();
-        if let None = path_iter.peek() {
+        if path_iter.peek().is_none() {
             return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         let writer = TokioAsyncWrite(
-            tx.sink_map_err(|e| io_error(e))
+            tx.sink_map_err(io_error)
                 .with(|b| futures::future::ok::<_, io::Error>(Ok(b))),
         );
         let mut builder = tokio_tar::Builder::new(writer);
@@ -221,7 +232,7 @@ where
         }
     });
 
-    Arbiter::spawn(fut);
+    tokio::task::spawn_local(fut);
     rx
 }
 
@@ -305,7 +316,7 @@ where
         }
     });
 
-    Arbiter::new().send(Box::pin(fut));
+    tokio::task::spawn(fut);
 
     if let Some(Err(e)) = rx.next().await {
         return Box::pin(futures_stream_err(io_error(e)).map(BytesResult::convert));
@@ -317,7 +328,7 @@ where
     }
 }
 
-pub async fn extract<'a, B, S, E, P>(
+pub async fn extract<B, S, E, P>(
     stream: S,
     path: P,
     format: ArchiveFormat,
@@ -325,26 +336,41 @@ pub async fn extract<'a, B, S, E, P>(
 ) -> Result<(), E>
 where
     B: Into<Bytes>,
-    S: Stream<Item = Result<B, E>> + Unpin + Send + Sync + 'a,
-    E: Into<io::Error> + From<io::Error> + 'a,
-    P: AsRef<Path> + 'a,
+    S: Stream<Item = Result<B, E>> + Unpin + Send + Sync + 'static,
+    E: Into<io::Error> + From<io::Error> + 'static,
+    P: AsRef<Path> + 'static,
 {
     std::fs::create_dir_all(&path)?;
     let path = normalize_path(path.as_ref())?;
 
-    let stream = stream.map(|r| r.map(|b| b.into()).map_err(|e| e.into()));
+    let stream = stream.map(|r| r.map(Into::into).map_err(Into::into));
     match format {
         ArchiveFormat::Tar => {
             extract_tar(stream, path, evt_sender).await?;
         }
         ArchiveFormat::TarBz2 => {
-            extract_tar(BzDecoder::new(stream).into_stream(), path, evt_sender).await?;
+            extract_tar(
+                codec_stream(BzDecoder::new(stream.into_async_read())),
+                path,
+                evt_sender,
+            )
+            .await?;
         }
         ArchiveFormat::TarGz => {
-            extract_tar(GzipDecoder::new(stream).into_stream(), path, evt_sender).await?;
+            extract_tar(
+                codec_stream(GzipDecoder::new(stream.into_async_read())),
+                path,
+                evt_sender,
+            )
+            .await?;
         }
         ArchiveFormat::TarXz => {
-            extract_tar(XzDecoder::new(stream).into_stream(), path, evt_sender).await?;
+            extract_tar(
+                codec_stream(XzDecoder::new(stream.into_async_read())),
+                path,
+                evt_sender,
+            )
+            .await?;
         }
         ArchiveFormat::Zip | ArchiveFormat::ZipStored => {
             extract_zip(stream, path, evt_sender).await?;
@@ -365,44 +391,40 @@ where
     let path = path.as_ref();
     let mut reader = TokioAsyncRead(stream.into_async_read());
 
-    loop {
-        if let Some(mut result) = read_zipfile_from_stream(&mut reader)
-            .await
-            .map_err(|e| io_error(e))?
-        {
-            let name = result.sanitized_name();
-            let size = result.size() as usize;
-            let file_path = path.join(&name);
+    while let Some(mut result) = read_zipfile_from_stream(&mut reader)
+        .await
+        .map_err(io_error)?
+    {
+        let name = result.sanitized_name();
+        let size = result.size() as usize;
+        let file_path = path.join(&name);
 
-            let _ = evt_sender
-                .send(FileEvent::Processing {
-                    name: name.clone(),
-                    size,
-                    is_dir: result.is_dir(),
-                })
-                .await;
+        let _ = evt_sender
+            .send(FileEvent::Processing {
+                name: name.clone(),
+                size,
+                is_dir: result.is_dir(),
+            })
+            .await;
 
-            if result.is_dir() {
-                create_dir_all(file_path)?;
-            } else {
-                if let Some(parent) = file_path.parent() {
-                    create_dir_all(parent)?;
-                }
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(file_path)
-                    .await?;
-                copy(&mut result, &mut file).await?;
-                file.flush().await?;
-            }
-
-            let _ = evt_sender.send(FileEvent::Finished { name }).await;
-            result.exhaust().await;
+        if result.is_dir() {
+            create_dir_all(file_path)?;
         } else {
-            break;
+            if let Some(parent) = file_path.parent() {
+                create_dir_all(parent)?;
+            }
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(file_path)
+                .await?;
+            copy(&mut result, &mut file).await?;
+            file.flush().await?;
         }
+
+        let _ = evt_sender.send(FileEvent::Finished { name }).await;
+        result.exhaust().await;
     }
 
     Ok(())
@@ -414,7 +436,7 @@ async fn extract_tar<'a, S, P>(
     mut evt_sender: Sender<FileEvent>,
 ) -> Result<(), io::Error>
 where
-    S: Stream<Item = Result<Bytes, io::Error>> + Unpin + Send + Sync + 'a,
+    S: Stream<Item = Result<Bytes, io::Error>> + Send + Sync + Unpin + 'a,
     P: AsRef<Path>,
 {
     let path = path.as_ref();
@@ -430,10 +452,7 @@ where
         let evt = FileEvent::Processing {
             name: name.clone(),
             size: header.size().ok().unwrap_or(0) as usize,
-            is_dir: match header.entry_type() {
-                tokio_tar::EntryType::Directory => true,
-                _ => false,
-            },
+            is_dir: header.entry_type() == tokio_tar::EntryType::Directory,
         };
         let _ = evt_sender.send(evt).await;
 
@@ -443,6 +462,25 @@ where
     }
 
     Ok(())
+}
+
+fn codec_stream<R>(s: R) -> Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + Sync + 'static>>
+where
+    R: AsyncRead + Send + Sync + Unpin + 'static,
+{
+    use futures::io::AsyncReadExt;
+
+    let stream = futures::stream::try_unfold(s, |mut encoder| async move {
+        let mut chunk = BytesMut::with_capacity(40 * 1024);
+        match encoder.read(&mut chunk).await? {
+            0 => Ok(None),
+            len => {
+                chunk.truncate(len);
+                Ok(Some((chunk.freeze(), encoder)))
+            }
+        }
+    });
+    Box::pin(stream)
 }
 
 #[inline(always)]
@@ -462,11 +500,14 @@ where
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<tokio::io::Result<usize>> {
-        Pin::new(&mut self.0)
-            .poll_read(cx, buf)
-            .map_err(|e| io_error(e))
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        // FIXME: cheeck
+        match Pin::new(&mut self.0).poll_read(cx, buf.filled_mut()) {
+            Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
+            Poll::Ready(Err(e)) => Poll::Ready(Err(io_error(e))),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -511,8 +552,8 @@ impl tokio::io::AsyncRead for AsyncReadErr {
     fn poll_read(
         self: Pin<&mut Self>,
         _: &mut Context<'_>,
-        _: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
+        _: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         let this = self.get_mut();
         let error = io::Error::from(this.0.kind());
         Poll::Ready(Err(error))
@@ -547,9 +588,12 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        match Pin::new(&mut this.reader).poll_read(cx, &mut this.buf) {
-            Poll::Ready(Ok(0)) => Poll::Ready(None),
-            Poll::Ready(Ok(n)) => Poll::Ready(Some(Ok(Bytes::copy_from_slice(&this.buf[..n])))),
+        let mut read = ReadBuf::new(&mut this.buf);
+        match Pin::new(&mut this.reader).poll_read(cx, &mut read) {
+            Poll::Ready(Ok(())) => match read.filled().len() {
+                0 => Poll::Ready(None),
+                n => Poll::Ready(Some(Ok(Bytes::copy_from_slice(&read.filled()[..n])))),
+            },
             Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
             Poll::Pending => Poll::Pending,
         }

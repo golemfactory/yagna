@@ -44,25 +44,25 @@ impl From<ya_service_bus::error::Error> for Error {
 }
 
 macro_rules! into_error {
-    ($self:ident, $code:expr) => {
+    ($e:ident, $code:expr) => {
         model::Error {
             code: $code,
-            message: format!("{:?}", $self),
+            message: format!("{:?}", $e),
         }
     };
 }
 
-impl Into<model::Error> for Error {
-    fn into(self) -> model::Error {
-        match self {
-            Error::Db(_) => into_error!(self, 500),
-            Error::Dao(_) => into_error!(self, 500),
-            Error::Gsb(_) => into_error!(self, 500),
-            Error::RuntimeError(_) => into_error!(self, 500),
-            Error::Internal(_) => into_error!(self, 500),
-            Error::AlreadyExists => into_error!(self, 400),
-            Error::NotFound => into_error!(self, 404),
-            Error::Forbidden => into_error!(self, 403),
+impl From<Error> for model::Error {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::Db(_) => into_error!(e, 500),
+            Error::Dao(_) => into_error!(e, 500),
+            Error::Gsb(_) => into_error!(e, 500),
+            Error::RuntimeError(_) => into_error!(e, 500),
+            Error::Internal(_) => into_error!(e, 500),
+            Error::AlreadyExists => into_error!(e, 400),
+            Error::NotFound => into_error!(e, 404),
+            Error::Forbidden => into_error!(e, 403),
         }
     }
 }

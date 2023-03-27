@@ -1,4 +1,6 @@
 pub mod proto {
+    #![allow(clippy::derive_partial_eq_without_eq)]
+
     include!(concat!(env!("OUT_DIR"), "/ya_runtime_api.rs"));
 
     impl response::Error {
@@ -23,7 +25,7 @@ pub use proto::response::CreateNetwork as CreateNetworkResp;
 pub use proto::response::Error as ErrorResponse;
 pub use proto::response::RunProcess as RunProcessResp;
 pub use proto::response::{ErrorCode, ProcessStatus, RuntimeStatus};
-pub use proto::Network;
+pub use proto::{Network, NetworkInterface};
 
 use futures::future::{BoxFuture, LocalBoxFuture};
 use futures::prelude::*;

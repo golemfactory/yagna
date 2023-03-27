@@ -1,14 +1,13 @@
 name: Market Test Suite
 
 on:
-  push:
-    branches:
-      - master
-      - release/*
   pull_request:
     branches:
       - master
       - release/*
+
+env:
+  rust_stable: 1.64.0
 
 jobs:
   build:
@@ -26,10 +25,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install last stable Rust
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
 
       - name: Check lockfile
@@ -50,4 +49,3 @@ jobs:
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked
-

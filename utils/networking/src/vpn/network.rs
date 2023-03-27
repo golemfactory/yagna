@@ -4,6 +4,12 @@ use ipnet::IpNet;
 use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
 
+#[derive(Clone)]
+pub struct DuoEndpoint<E> {
+    pub tcp: E,
+    pub udp: E,
+}
+
 pub struct Networks<E> {
     networks: HashMap<String, Network<E>>,
 }
@@ -18,11 +24,11 @@ impl<E> Default for Networks<E> {
 
 impl<E: Clone> Networks<E> {
     pub fn get_mut(&mut self, id: &str) -> Result<&mut Network<E>, Error> {
-        self.networks.get_mut(id).ok_or_else(|| Error::NetNotFound)
+        self.networks.get_mut(id).ok_or(Error::NetNotFound)
     }
 
     pub fn endpoint<B: AsRef<[u8]>>(&self, ip: B) -> Option<E> {
-        self.as_ref()
+        self.networks
             .values()
             .filter_map(|n| n.endpoint(ip.as_ref()))
             .next()
@@ -44,8 +50,7 @@ impl<E: Clone> Networks<E> {
         if self
             .networks
             .values()
-            .find(|n| n.as_ref() == &network || n.as_ref().contains(&network.addr()))
-            .is_some()
+            .any(|n| n.as_ref() == &network || n.as_ref().contains(&network.addr()))
         {
             return Err(Error::NetAddrTaken(network.addr()));
         }
@@ -90,11 +95,7 @@ impl<E> Network<E> {
     }
 
     pub fn address(&self) -> Result<IpAddr, Error> {
-        self.addresses
-            .iter()
-            .next()
-            .cloned()
-            .ok_or_else(|| Error::NetEmpty)
+        self.addresses.iter().next().cloned().ok_or(Error::NetEmpty)
     }
 
     pub fn endpoints(&self) -> &HashMap<Box<[u8]>, E> {
@@ -106,7 +107,7 @@ impl<E> Network<E> {
     }
 
     pub fn add_address(&mut self, ip: &str) -> Result<(), Error> {
-        let ip = to_ip(ip.as_ref())?;
+        let ip = to_ip(ip)?;
         if !self.network.contains(&ip) {
             return Err(Error::NetAddr(ip.to_string()));
         }
@@ -123,7 +124,7 @@ impl<E> Network<E> {
         }
 
         let node_id = id.to_string();
-        let ip: Box<[u8]> = hton(ip_addr).into();
+        let ip: Box<[u8]> = hton(ip_addr);
 
         if self.endpoints.contains_key(&ip) {
             return Err(Error::IpAddrTaken(ip_addr));
@@ -139,11 +140,11 @@ impl<E> Network<E> {
     }
 
     pub fn remove_node(&mut self, node_id: &str) {
-        self.nodes.remove(node_id).map(|addrs| {
+        if let Some(addrs) = self.nodes.remove(node_id) {
             addrs.into_iter().for_each(|a| {
                 self.endpoints.remove(&to_octets(a));
             });
-        });
+        }
     }
 }
 

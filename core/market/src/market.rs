@@ -1,3 +1,4 @@
+use actix_web::web::Data;
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
@@ -6,7 +7,7 @@ use thiserror::Error;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, AppSessionId, SubscriptionId};
+use crate::db::model::{AgreementId, AppSessionId, Owner, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
@@ -18,16 +19,17 @@ use crate::negotiation::error::{
 };
 use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
+use crate::testing::AgreementState;
 
 use ya_client::model::market::{
-    Agreement, AgreementOperationEvent as ClientAgreementEvent, Demand, NewDemand, NewOffer, Offer,
-    Reason,
+    Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
+    NewDemand, NewOffer, Offer, Reason, Role,
 };
 use ya_core_model::market::{local, BUS_ID};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 
+use crate::db::DbMixedExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
@@ -58,11 +60,13 @@ pub enum MarketInitError {
     Migration(#[from] anyhow::Error),
     #[error("Failed to initialize config. Error: {0}.")]
     Config(#[from] structopt::clap::Error),
+    #[error("Failed to initialize in memory market database. Error: {0}.")]
+    InMemory(anyhow::Error),
 }
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub db: DbExecutor,
+    pub db: DbMixedExecutor,
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
@@ -70,7 +74,7 @@ pub struct MarketService {
 
 impl MarketService {
     pub fn new(
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
     ) -> Result<Self, MarketInitError> {
@@ -81,14 +85,17 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
-        db.apply_migration(crate::db::migrations::run_with_output)?;
+        db.ram_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        db.disk_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
         let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;
 
         // We need the same notifier for both Provider and Requestor implementation since we have
         // single endpoint and both implementations are able to add events.
-        let agreement_notifier = EventNotifier::<AppSessionId>::new();
+        let agreement_notifier = EventNotifier::<AppSessionId>::default();
 
         let provider_engine = ProviderBroker::new(
             db.clone(),
@@ -98,7 +105,7 @@ impl MarketService {
         )?;
         let requestor_engine = RequestorBroker::new(
             db.clone(),
-            store.clone(),
+            store,
             listeners.proposal_receiver,
             agreement_notifier,
             config.clone(),
@@ -132,12 +139,14 @@ impl MarketService {
         Ok(())
     }
 
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context: Provider<Self, DbMixedExecutor>>(
+        ctx: &Context,
+    ) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
         Ok(market.bind_gsb(BUS_ID, local::BUS_ID).await?)
     }
 
-    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
+    pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
         match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
@@ -149,9 +158,9 @@ impl MarketService {
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
-            .data(myself)
-            .app_data(rest_api::path_config())
-            .app_data(rest_api::json_config())
+            .app_data(Data::new(myself))
+            .app_data(Data::new(rest_api::path_config()))
+            .app_data(Data::new(rest_api::json_config()))
             .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)
@@ -226,6 +235,41 @@ impl MarketService {
         Ok(())
     }
 
+    pub async fn list_agreements(
+        &self,
+        id: &Identity,
+        state: Option<AgreementState>,
+        before: Option<DateTime<Utc>>,
+        after: Option<DateTime<Utc>>,
+        app_sesssion_id: Option<String>,
+    ) -> Result<Vec<AgreementListEntry>, AgreementError> {
+        let agreements = self
+            .db
+            .as_dao::<AgreementDao>()
+            .list(Some(id.identity), state, before, after, app_sesssion_id)
+            .await
+            .map_err(|e| AgreementError::Internal(e.to_string()))?;
+
+        let mut result = Vec::new();
+        let naive_to_utc = |ts| DateTime::<Utc>::from_utc(ts, Utc);
+
+        for agreement in agreements {
+            let role = match agreement.id.owner() {
+                Owner::Provider => Role::Provider,
+                Owner::Requestor => Role::Requestor,
+            };
+
+            result.push(AgreementListEntry {
+                id: agreement.id.into_client(),
+                timestamp: naive_to_utc(agreement.creation_ts),
+                approved_date: agreement.approved_ts.map(naive_to_utc),
+                role,
+            });
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_agreement(
         &self,
         agreement_id: &AgreementId,
@@ -277,7 +321,7 @@ impl MarketService {
 }
 
 impl Service for MarketService {
-    type Cli = ();
+    type Cli = crate::cli::Command;
 }
 
 // =========================================== //
@@ -298,7 +342,7 @@ impl StaticMarket {
 
     pub fn get_or_init_market(
         &self,
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
     ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {

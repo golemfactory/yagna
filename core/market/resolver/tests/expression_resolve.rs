@@ -654,14 +654,14 @@ fn resolve_complex_and_undefined() {
                 &PropertyRef::Value(String::from("b"), PropertyRefType::Any),
             ],
             Expression::And(vec![
-                Box::new(Expression::Equals(
+                Expression::Equals(
                     PropertyRef::Value(String::from("a"), PropertyRefType::Any),
                     String::from("b"),
-                )),
-                Box::new(Expression::Equals(
+                ),
+                Expression::Equals(
                     PropertyRef::Value(String::from("b"), PropertyRefType::Any),
                     String::from("c"),
-                )),
+                ),
             ]),
         ),
     );

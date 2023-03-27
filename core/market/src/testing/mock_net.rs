@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -49,14 +48,14 @@ impl MockNet {
 
     pub fn register_node(&self, node_id: &NodeId, prefix: &str) {
         // Only two first components
-        let mut iter = prefix.split("/").fuse();
+        let mut iter = prefix.split('/').fuse();
         let prefix = match (iter.next(), iter.next(), iter.next()) {
             (Some(""), Some(test_name), Some(name)) => format!("/{}/{}", test_name, name),
             _ => panic!("[MockNet] Can't register prefix {}", prefix),
         };
 
         let mut inner = self.inner.lock().unwrap();
-        if let Some(_) = inner.nodes.insert(node_id.clone(), prefix) {
+        if inner.nodes.insert(*node_id, prefix).is_some() {
             panic!("[MockNet] Node [{}] already existed.", &node_id);
         }
     }
@@ -67,7 +66,7 @@ impl MockNet {
             .nodes
             .remove(node_id)
             .map(|_| ())
-            .ok_or(anyhow::anyhow!("node not registered: {}", node_id))
+            .ok_or_else(|| anyhow::anyhow!("node not registered: {}", node_id))
     }
 
     async fn translate_address(&self, address: String) -> Result<(NodeId, String)> {
@@ -76,19 +75,19 @@ impl MockNet {
             Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
         };
 
-        let mut iter = to_addr.split("/").fuse();
+        let mut iter = to_addr.split('/').fuse();
         let dst_id = match (iter.next(), iter.next(), iter.next()) {
             (Some(""), Some("net"), Some(dst_id)) => dst_id,
             _ => panic!("[MockNet] Invalid destination address {}", to_addr),
         };
 
-        let dest_node_id = NodeId::from_str(&dst_id)?;
+        let dest_node_id = NodeId::from_str(dst_id)?;
         let inner = self.inner.lock().unwrap();
         let local_prefix = inner.nodes.get(&dest_node_id);
 
         if let Some(local_prefix) = local_prefix {
             let net_prefix = format!("/net/{}", dst_id);
-            Ok((from_node, to_addr.replacen(&net_prefix, &local_prefix, 1)))
+            Ok((from_node, to_addr.replacen(&net_prefix, local_prefix, 1)))
         } else {
             Err(Error::GsbFailure(format!(
                 "[MockNet] Can't find destination address for endpoint [{}].",
@@ -101,7 +100,7 @@ impl MockNet {
         let inner = self.inner.lock().unwrap();
         for (id, prefix) in inner.nodes.iter() {
             if address.contains(prefix) {
-                return Some(id.clone());
+                return Some(*id);
             }
         }
         None
@@ -142,7 +141,7 @@ impl MockNetInner {
                 let stub: SendBroadcastStub = serialization::from_slice(msg).unwrap();
                 let caller = caller.to_string();
 
-                let msg = msg.iter().copied().collect::<Vec<_>>();
+                let msg = msg.to_vec();
 
                 let topic = stub.topic;
                 let endpoints = bcast.resolve(&caller, &topic);
@@ -172,7 +171,7 @@ impl MockNetInner {
                     );
                     let caller = caller.clone();
                     let msg = msg.clone();
-                    Arbiter::spawn(async move {
+                    tokio::task::spawn_local(async move {
                         let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                     });
                 }
@@ -200,7 +199,7 @@ impl MockNetInner {
                         &caller,
                         &local_addr
                     );
-                    Ok(local_bus::send(&local_addr, &from.to_string(), &data).await?)
+                    local_bus::send(&local_addr, &from.to_string(), &data).await
                 }
             },
             (),
@@ -210,14 +209,14 @@ impl MockNetInner {
 
 // Copied from core/net/api.rs
 pub(crate) fn parse_from_addr(from_addr: &str) -> Result<(NodeId, String)> {
-    let mut it = from_addr.split("/").fuse();
+    let mut it = from_addr.split('/').fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())
     {
         to_node_id.parse::<NodeId>()?;
         let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
+        if it.next().is_some() {
             return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }

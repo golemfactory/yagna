@@ -33,6 +33,7 @@ async fn assert_requested_amount(
             driver: driver.to_string(),
             network: network.clone(),
             token: None,
+            after_timestamp: 0,
         })
         .await??;
     assert_eq!(&payer_status.outgoing.requested.total_amount, amount);
@@ -43,6 +44,7 @@ async fn assert_requested_amount(
             driver: driver.to_string(),
             network: network.clone(),
             token: None,
+            after_timestamp: 0,
         })
         .await??;
     assert_eq!(&payee_status.incoming.requested.total_amount, amount);
@@ -51,7 +53,7 @@ async fn assert_requested_amount(
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 

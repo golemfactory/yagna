@@ -2,14 +2,12 @@ use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId, ProposalState};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveProposalError {
@@ -34,9 +32,9 @@ pub struct ProposalDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for ProposalDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for ProposalDao<'a> {
+    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self { pool: ram_pool }
     }
 }
 
@@ -66,7 +64,7 @@ impl<'c> ProposalDao<'c> {
             let prev_proposal_id = proposal
                 .prev_proposal_id
                 .clone()
-                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
+                .ok_or_else(|| SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
             if has_counter_proposal(conn, &prev_proposal_id)? {
                 return Err(SaveProposalError::AlreadyCountered(prev_proposal_id));
@@ -76,7 +74,7 @@ impl<'c> ProposalDao<'c> {
                 .filter(dsl::id.eq(&prev_proposal_id))
                 .first(conn)
                 .optional()?
-                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
+                .ok_or_else(|| SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
             // If previous Proposal was rejected, we must change it's state back.
             if prev_proposal.state == ProposalState::Rejected {

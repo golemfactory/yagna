@@ -6,14 +6,19 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{fs, io};
 use ya_utils_path::SwapSave;
 
-pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
+pub(crate) const GLOBALS_JSON: &str = "globals.json";
+pub(crate) const DEFAULT_SUBNET: &str = "public";
+
+fn default_subnet() -> Option<String> {
+    Some(DEFAULT_SUBNET.into())
+}
 
 #[derive(Clone, Debug, Default, Serialize, derive_more::Display)]
 #[display(
     fmt = "{}{}{}",
-    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
-    "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
-    "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
+    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or_else(|| \"\".into())",
+    "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or_else(|| \"\".into())",
+    "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or_else(|| \"\".into())"
 )]
 pub struct GlobalsState {
     pub node_name: Option<String>,
@@ -92,6 +97,8 @@ impl GlobalsState {
         }
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
+        } else {
+            self.subnet = default_subnet();
         }
         if node_config.account.account.is_some() {
             self.account = node_config.account.account;

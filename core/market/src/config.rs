@@ -20,6 +20,9 @@ pub struct DiscoveryConfig {
     pub max_bcasted_offers: u32,
     #[structopt(env, default_value = "200")]
     pub max_bcasted_unsubscribes: u32,
+    /// If number of broadcasts at the same time exceeds this value, than all new broadcasts will be dropped.  
+    #[structopt(env, default_value = "14")]
+    pub bcast_receiving_queue_size: usize,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_bcast_interval: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
@@ -61,7 +64,7 @@ impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
-        Ok(Config::from_iter_safe(&[""])?)
+        Config::from_iter_safe(&[""])
     }
 }
 

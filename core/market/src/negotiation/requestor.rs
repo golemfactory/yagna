@@ -7,7 +7,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
 use ya_client::model::NodeId;
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -15,6 +14,7 @@ use crate::db::{
     dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, Issuer, Owner, ProposalId, SubscriptionId},
+    DbMixedExecutor,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
@@ -43,13 +43,13 @@ pub struct RequestorBroker {
 
 impl RequestorBroker {
     pub fn new(
-        db: DbExecutor,
+        db: DbMixedExecutor,
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
-        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
+        let broker = CommonBroker::new(db, store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
@@ -317,24 +317,24 @@ impl RequestorBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             validate_transition(&agreement, AgreementState::Cancelled)?;
 
             let timestamp = Utc::now().naive_utc();
             self.api
-                .cancel_agreement(&agreement, reason.clone(), timestamp.clone())
+                .cancel_agreement(&agreement, reason.clone(), timestamp)
                 .await?;
 
             dao.cancel(&agreement.id, reason.clone(), &timestamp)
                 .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+                .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?
         };
 
         self.common.notify_agreement(&agreement).await;
@@ -371,7 +371,7 @@ impl RequestorBroker {
                 .select(id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| WaitForApprovalError::Get(id.clone(), e))?
-                .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
+                .ok_or_else(|| WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
                 AgreementState::Approved => {
@@ -418,14 +418,10 @@ impl RequestorBroker {
             // We won't be able to process `on_agreement_approved`, before we
             // finish execution under this lock. This avoids errors related to
             // Provider approving Agreement before we set proper state in database.
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let mut agreement = match dao
-                .select(
-                    agreement_id,
-                    Some(id.identity.clone()),
-                    Utc::now().naive_utc(),
-                )
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
             {
@@ -458,7 +454,7 @@ impl RequestorBroker {
                 &agreement_id
             );
         }
-        return Ok(());
+        Ok(())
     }
 
     async fn query_reason_for(&self, agreement_id: &AgreementId) -> Option<Reason> {
@@ -485,9 +481,9 @@ async fn on_agreement_approved(
     msg: AgreementApproved,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_approved(broker, caller, msg)
+    agreement_approved(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_approved(
@@ -507,7 +503,7 @@ async fn agreement_approved(
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.provider_id != caller {
             // Don't reveal, that we know this Agreement id.
@@ -515,7 +511,7 @@ async fn agreement_approved(
         }
 
         validate_transition(&agreement, AgreementState::Approving).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         // Validate Agreement `valid_to` timestamp. In previous version we got
@@ -582,7 +578,7 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
             .select(&agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| AgreementError::NotFound(agreement_id.to_string()))?
-            .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+            .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
         // TODO: Sign Agreement.
         let signature = "NoSignature".to_string();
@@ -593,10 +589,9 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
         NegotiationApi::commit_agreement(&agreement).await?;
 
         // We approve Agreement in database, when we are sure, that committing succeeded.
-        Ok(dao
-            .approve(&agreement.id, &signature)
+        dao.approve(&agreement.id, &signature)
             .await
-            .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))?)
+            .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))
     }
     .await
     {
@@ -645,9 +640,9 @@ async fn on_agreement_rejected(
     msg: AgreementRejected,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_rejected(broker, caller, msg)
+    agreement_rejected(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_rejected(
@@ -663,7 +658,7 @@ async fn agreement_rejected(
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.provider_id != caller {
             // Don't reveal, that we know this Agreement id.
@@ -671,7 +666,7 @@ async fn agreement_rejected(
         }
 
         validate_transition(&agreement, AgreementState::Rejected).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         dao.reject(&agreement.id, msg.reason.clone(), &msg.rejection_ts)
@@ -703,14 +698,13 @@ pub async fn proposal_receiver_thread(
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
         let broker = broker.clone();
-        match async move {
+        if let Err(error) = async move {
             log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
             broker.generate_proposal(proposal).await
         }
         .await
         {
-            Err(error) => log::warn!("Failed to add proposal. Error: {}", error),
-            Ok(_) => (),
+            log::warn!("Failed to add proposal. Error: {}", error)
         }
     }
 }

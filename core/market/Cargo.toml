@@ -1,6 +1,6 @@
 [package]
 name = "ya-market"
-version = "0.3.0"
+version = "0.4.0"
 description = "The Distributed Marketplace implementation for Yagna."
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -10,25 +10,25 @@ test-suite = []
 bcast-singleton = []
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
-ya-client = "0.5"
-ya-core-model = { version = "^0.4", features = ["market", "net"] }
+ya-agreement-utils = { version = "0.4.1" }
+ya-client = "0.7"
+ya-core-model = { version = "^0.8", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
 ya-market-resolver = "0.2"
-ya-net = "0.2"
-ya-persistence = "0.2"
+ya-net = "0.3"
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
+ya-service-api-interfaces = "0.2"
+ya-service-api-web = "0.2"
+ya-service-bus = "0.6.1"
 ya-std-utils = "0.1"
-ya-utils-actix = "0.1"
+ya-utils-actix = "0.2"
 
-actix = { version = "0.10", default-features = false }
-actix-http = { version = "2.2" }
-actix-rt = { version = "1.0.0" }
-actix-service = { version = "1.0" }
-actix-web = "3.2"
+actix = { version = "0.13", default-features = false }
+actix-http = "3"
+actix-rt = "2.7"
+actix-service = "2"
+actix-web = "4"
 anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
@@ -39,7 +39,7 @@ diesel_migrations = "1.4"
 digest = "0.8.1"
 env_logger = { version = "0.7" }
 futures = "0.3"
-humantime = "2.0.0"
+humantime = "2"
 lazy_static = "1.4"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 log = "0.4"
@@ -47,22 +47,21 @@ metrics="0.12"
 num-derive = "0.3"
 num-traits = "0.2"
 r2d2 = "0.8"
-rand = "0.7.2"
+rand = "0.8"
 regex = "1.4.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8.2"
-structopt = "0.3.20"
-strum = "0.19.5"
-strum_macros = "0.19.4"
+structopt = "0.3"
+strum = "0.24"
+strum_macros = "0.24"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 all_asserts = "2.2.0"
 serde_json = "1.0"
-#serial_test = "0.5.0"
-serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test"}
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
 structopt = "0.3"
-tokio = { version = "0.2", features = ["macros", "rt-core"] }
+tokio = { version = "1", features = ["macros", "rt"] }

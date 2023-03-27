@@ -1,10 +1,13 @@
+#![allow(clippy::type_complexity)]
+
+use actix_web::web::Data;
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
-use serde_json;
+
 use std::convert::TryInto;
 use std::io::Write;
 use std::pin::Pin;
@@ -18,6 +21,7 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_net::Config;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
@@ -25,7 +29,6 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_api_web::scope::ExtendableScope;
-use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::typed as bus;
 use ya_zksync_driver as zksync;
 
@@ -215,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
     let provider_id = format!("0x{}", hex::encode(provider_account.public().address()));
     let provider_addr = args
         .provider_addr
-        .unwrap_or(provider_id.clone())
+        .unwrap_or_else(|| provider_id.clone())
         .to_lowercase();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
@@ -223,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
     let requestor_id = format!("0x{}", hex::encode(requestor_account.public().address()));
     let requestor_addr = args
         .requestor_addr
-        .unwrap_or(requestor_id.clone())
+        .unwrap_or_else(|| requestor_id.clone())
         .to_lowercase();
 
     log::info!(
@@ -337,9 +340,14 @@ async fn main() -> anyhow::Result<()> {
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
-    let client_info = ClientInfo::new("payment");
     log::info!("bind remote...");
-    let _ = ya_net::bind_remote(client_info, provider_id, vec![provider_id, requestor_id]).await?;
+
+    ya_net::hybrid::start_network(
+        Arc::new(Config::from_env()?),
+        provider_id,
+        vec![provider_id, requestor_id],
+    )
+    .await?;
 
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();
@@ -358,11 +366,11 @@ async fn main() -> anyhow::Result<()> {
         };
 
         let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
-            .data(db.clone())
+            .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(provider_identity));
         let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
-            .data(db.clone())
+            .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(requestor_identity));
         App::new()

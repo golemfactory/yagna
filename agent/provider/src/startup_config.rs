@@ -18,8 +18,12 @@ use ya_utils_path::data_dir::DataDir;
 use crate::cli::clean::CleanConfig;
 use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
+use crate::cli::keystore::KeystoreConfig;
+use crate::cli::pre_install::PreInstallConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+use crate::cli::rule::RuleCommand;
+use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
@@ -27,12 +31,16 @@ use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
-    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
-
+    static ref DEFAULT_DATA_DIR: String = default_data_dir();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
-pub(crate) const PRESETS_JSON: &'static str = "presets.json";
-pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
+pub(crate) const DOMAIN_WHITELIST_JSON: &str = "domain_whitelist.json";
+pub(crate) const RULES_JSON: &str = "rules.json";
+pub(crate) const PRESETS_JSON: &str = "presets.json";
+pub(crate) const HARDWARE_JSON: &str = "hardware.json";
+pub(crate) const CERT_DIR: &str = "cert-dir";
+
+const DATA_DIR_ENV: &str = "DATA_DIR";
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone, Debug)]
@@ -51,7 +59,7 @@ pub struct ProviderConfig {
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "DATA_DIR",
+        env = DATA_DIR_ENV,
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
@@ -61,34 +69,44 @@ pub struct ProviderConfig {
         set = clap::ArgSettings::Global,
         env = "PROVIDER_LOG_DIR",
     )]
-    pub log_dir: Option<DataDir>,
-
+    log_dir: Option<DataDir>,
+    /// Certificates directory
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "PROVIDER_CERT_DIR",
+    )]
+    cert_dir: Option<DataDir>,
+    #[structopt(skip = DOMAIN_WHITELIST_JSON)]
+    pub domain_whitelist_file: PathBuf,
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
     #[structopt(skip = PRESETS_JSON)]
     pub presets_file: PathBuf,
     #[structopt(skip = HARDWARE_JSON)]
     pub hardware_file: PathBuf,
+    #[structopt(skip = RULES_JSON)]
+    pub rules_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_CORES")
-    ]
+        env = "YA_RT_CORES"
+    )]
     pub rt_cores: Option<usize>,
     /// Max amount of available RAM (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_MEM")
-    ]
+        env = "YA_RT_MEM"
+    )]
     pub rt_mem: Option<f64>,
     /// Max amount of available storage (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_STORAGE")
-    ]
+        env = "YA_RT_STORAGE"
+    )]
     pub rt_storage: Option<f64>,
 
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -97,17 +115,38 @@ pub struct ProviderConfig {
 
 impl ProviderConfig {
     pub fn registry(&self) -> anyhow::Result<ExeUnitsRegistry> {
-        let mut r = ExeUnitsRegistry::new();
+        let mut r = ExeUnitsRegistry::default();
         r.register_from_file_pattern(&self.exe_unit_path)?;
         Ok(r)
+    }
+
+    pub fn log_dir_path(&self) -> anyhow::Result<PathBuf> {
+        let log_dir = if let Some(log_dir) = &self.log_dir {
+            log_dir.get_or_create()?
+        } else {
+            self.data_dir.get_or_create()?
+        };
+        Ok(log_dir)
+    }
+
+    pub fn cert_dir_path(&self) -> anyhow::Result<PathBuf> {
+        let cert_dir = if let Some(cert_dir) = &self.cert_dir {
+            cert_dir.get_or_create()?
+        } else {
+            let mut cert_dir = self.data_dir.get_or_create()?;
+            cert_dir.push(CERT_DIR);
+            std::fs::create_dir_all(&cert_dir)?;
+            cert_dir
+        };
+        Ok(cert_dir)
     }
 }
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
 #[display(
-    fmt = "{}Network: {}",
-    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or(\"\".into())",
-    network
+    fmt = "{}Networks: {:?}",
+    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or_else(|| \"\".into())",
+    networks
 )]
 pub struct ReceiverAccount {
     /// Account for payments.
@@ -115,7 +154,7 @@ pub struct ReceiverAccount {
     pub account: Option<NodeId>,
     /// Payment network.
     #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
-    pub network: NetworkName,
+    pub networks: Vec<NetworkName>,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -169,8 +208,8 @@ pub struct UpdateNames {
     #[structopt(long, group = "update_names")]
     pub all: bool,
 
-    #[structopt(group = "update_names")]
-    pub names: Vec<String>,
+    #[structopt(long, group = "update_names")]
+    pub name: Vec<String>,
 }
 
 #[derive(StructOpt, Clone)]
@@ -186,6 +225,7 @@ pub struct StartupConfig {
     pub commands: Commands,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Clone)]
 pub enum Commands {
     /// Run provider agent
@@ -194,42 +234,90 @@ pub enum Commands {
     Config(ConfigConfig),
     /// Manage offer presets
     Preset(PresetsConfig),
+    /// Run once by the installer before any other commands
+    PreInstall(PreInstallConfig),
     /// Manage hardware profiles
     Profile(ProfileConfig),
     /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
+    Keystore(KeystoreConfig),
+    /// Manage domain whitelist
+    Whitelist(WhitelistConfig),
     /// Clean up disk space
     Clean(CleanConfig),
+    /// Manage Rule config
+    Rule(RuleCommand),
 }
 
 #[derive(Debug)]
 pub struct FileMonitor {
+    #[allow(dead_code)]
     pub(crate) path: PathBuf,
     pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileMonitorConfig {
+    pub watch_delay: Duration,
+    pub sleep_delay: Duration,
+    pub verbose: bool,
+}
+
+impl Default for FileMonitorConfig {
+    fn default() -> Self {
+        Self {
+            watch_delay: Duration::from_secs(3),
+            sleep_delay: Duration::from_secs(2),
+            verbose: true,
+        }
+    }
+}
+
+impl FileMonitorConfig {
+    pub fn silent() -> Self {
+        Self {
+            verbose: false,
+            ..Default::default()
+        }
+    }
 }
 
 impl FileMonitor {
     pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
     where
         P: AsRef<Path>,
-        H: Fn(DebouncedEvent) -> () + Send + 'static,
+        H: Fn(DebouncedEvent) + Send + 'static,
+    {
+        Self::spawn_with(path, handler, Default::default())
+    }
+
+    pub fn spawn_with<P, H>(
+        path: P,
+        handler: H,
+        config: FileMonitorConfig,
+    ) -> std::result::Result<Self, notify::Error>
+    where
+        P: AsRef<Path>,
+        H: Fn(DebouncedEvent) + Send + 'static,
     {
         let path = path.as_ref().to_path_buf();
         let path_th = path.clone();
         let (tx, rx) = mpsc::channel();
         let (tx_ctl, mut rx_ctl) = oneshot::channel();
 
-        let watch_delay = Duration::from_secs(3);
-        let sleep_delay = Duration::from_secs(2);
-        let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, config.watch_delay)?;
 
         std::thread::spawn(move || {
             let mut active = false;
             loop {
                 if !active {
-                    match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                    match watcher.watch(&path_th, RecursiveMode::Recursive) {
                         Ok(_) => active = true,
-                        Err(e) => log::error!("Unable to monitor path '{:?}': {}", path_th, e),
+                        Err(e) => {
+                            if config.verbose {
+                                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
+                            }
+                        }
                     }
                 }
                 if let Ok(event) = rx.try_recv() {
@@ -247,9 +335,12 @@ impl FileMonitor {
                 if let Ok(Some(_)) = rx_ctl.try_recv() {
                     break;
                 }
-                std::thread::sleep(sleep_delay);
+                std::thread::sleep(config.sleep_delay);
             }
-            log::error!("Stopping file monitor: {:?}", path_th);
+
+            if config.verbose {
+                log::info!("Stopping file monitor: {:?}", path_th);
+            }
         });
 
         Ok(Self {
@@ -258,9 +349,15 @@ impl FileMonitor {
         })
     }
 
-    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent) -> ()
+    pub fn stop(&mut self) {
+        if let Some(sender) = self.thread_ctl.take() {
+            let _ = sender.send(());
+        }
+    }
+
+    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent)
     where
-        F: Fn(PathBuf) -> () + Send + 'static,
+        F: Fn(PathBuf) + Send + 'static,
     {
         move |e| match e {
             DebouncedEvent::Write(p)
@@ -277,9 +374,7 @@ impl FileMonitor {
 
 impl Drop for FileMonitor {
     fn drop(&mut self) {
-        if let Some(sender) = self.thread_ctl.take() {
-            let _ = sender.send(());
-        }
+        self.stop();
     }
 }
 
@@ -298,8 +393,12 @@ where
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
+fn default_data_dir() -> String {
+    DataDir::new(clap::crate_name!()).to_string()
+}
+
 fn default_plugins() -> PathBuf {
-    if let Some(mut exe) = env::current_exe().ok() {
+    if let Ok(mut exe) = env::current_exe() {
         exe.pop();
         exe.push("plugins");
         if exe.is_dir() {

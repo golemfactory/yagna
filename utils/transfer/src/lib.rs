@@ -12,7 +12,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::time::Duration;
 
-use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
@@ -42,7 +41,7 @@ where
 {
     let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    Ok(rx.await??)
+    rx.await?
 }
 
 /// Transfers data between `TransferProvider`s within current context
@@ -67,7 +66,7 @@ where
 
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
-            let stream = wrap_stream(src.source(&src_url.url, ctx), &src_url)?;
+            let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
             let sink = dst.destination(&dst_url.url, ctx);
 
             transfer(stream, sink).await?;
@@ -79,7 +78,7 @@ where
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
                     log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
-                    tokio::time::delay_for(delay).await;
+                    tokio::time::sleep(delay).await;
                 }
                 None => return Err(err),
             },
@@ -163,7 +162,7 @@ where
 
     pub fn err(e: E) -> Self {
         let (this, mut sender, _) = Self::create(1);
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             if let Err(e) = sender.send(Err(e)).await {
                 log::warn!("send error: {}", e);
             }
@@ -192,6 +191,7 @@ pub struct TransferSink<T, E> {
     res_rx: Option<oneshot::Receiver<Result<(), E>>>,
 }
 
+#[allow(clippy::type_complexity)]
 impl<T, E> TransferSink<T, E> {
     pub fn create(
         channel_size: usize,
@@ -331,7 +331,7 @@ impl TransferState {
     }
 
     pub fn size(&self) -> Option<u64> {
-        self.inner.borrow().size.clone()
+        self.inner.borrow().size
     }
 
     pub fn set_size(&self, size: Option<u64>) {
@@ -352,8 +352,7 @@ impl TransferState {
         (*self.inner.borrow_mut())
             .retry
             .as_mut()
-            .map(|r| r.delay(&err))
-            .flatten()
+            .and_then(|r| r.delay(err))
     }
 }
 

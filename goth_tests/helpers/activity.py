@@ -109,9 +109,30 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
             }
         },
     ]
+def vm_exe_script_outbound(runner: Runner, output_file: str = "output.txt"):
+    """VM exe script builder."""
+    """Create a VM exe script for running a outbound task."""
+
+    output_path = Path(runner.web_root_path) / output_file
+    if output_path.exists():
+        os.remove(output_path)
+
+    web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
+
+    return [
+        {"deploy": {}},
+        {"start": {}},
+        {"run": {"entry_point": "/golem/entrypoints/request.sh", "args": []}},
+        {
+            "transfer": {
+                "from": f"container:/golem/output/output.txt",
+                "to": f"{web_server_addr}/upload/{output_file}",
+            }
+        },
+    ]
 
 
-def wasi_sleeper_exe_script(duration: float = 10.):
+def wasi_sleeper_exe_script(duration: float = 10.0):
     """WASI exe script builder."""
     """Create a WASI exe script for running a WASI sleeper task."""
 
@@ -123,5 +144,5 @@ def wasi_sleeper_exe_script(duration: float = 10.):
                 "entry_point": "rust-wasi-sleeper",
                 "args": [f"{duration}"],
             }
-        }
+        },
     ]

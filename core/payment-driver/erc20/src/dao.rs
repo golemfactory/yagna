@@ -2,9 +2,6 @@
     Database Access Object, all you need to interact with the database.
 */
 
-// Extrernal crates
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use web3::types::U256;
 
 // Workspace uses
@@ -14,7 +11,7 @@ use ya_payment_driver::{
         Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
         PAYMENT_STATUS_NOT_YET,
     },
-    model::{GenericError, PaymentDetails, SchedulePayment},
+    model::{GenericError, SchedulePayment},
     utils,
 };
 
@@ -65,7 +62,7 @@ impl Erc20Dao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let glm_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(&msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
@@ -74,7 +71,7 @@ impl Erc20Dao {
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
-            sender: msg.sender().clone(),
+            sender: msg.sender(),
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
@@ -97,53 +94,25 @@ impl Erc20Dao {
         address: &str,
         network: Network,
     ) -> Result<U256, GenericError> {
-        let max_db = self
+        let list_of_nonces = self
             .transaction()
             .get_used_nonces(address, network)
             .await
-            .map_err(GenericError::new)?
-            .into_iter()
-            .map(utils::u256_from_big_endian_hex)
-            .max();
+            .map_err(GenericError::new)?;
 
-        let next_nonce = match max_db {
-            Some(nonce) => nonce + U256::from(1),
+        let max_nonce = list_of_nonces.into_iter().max();
+
+        let next_nonce = match max_nonce {
+            Some(nonce) => U256::from(nonce + 1),
             None => U256::from(0),
         };
 
         Ok(next_nonce)
     }
 
-    pub async fn insert_transaction(
-        &self,
-        details: &PaymentDetails,
-        date: DateTime<Utc>,
-    ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on erc20
-        // TODO: Implement pre-sign
-        let tx_id = Uuid::new_v4().to_string();
-        let tx = TransactionEntity {
-            tx_id: tx_id.clone(),
-            sender: details.sender.clone(),
-            nonce: "".to_string(), // not used till pre-sign
-            status: TransactionStatus::Created as i32,
-            timestamp: date.naive_utc(),
-            tx_type: 0,                // Erc20 only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
-            tx_hash: None,
-            network: Network::Rinkeby, // TODO: update network
-        };
-
-        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
-            log::error!("Failed to store transaction for {:?} : {:?}", details, e)
-            // TO CHECK: Should it continue or stop the process...
-        }
-        tx_id
-    }
-
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
         let tx_id = tx.tx_id.clone();
+
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
@@ -151,20 +120,76 @@ impl Erc20Dao {
         tx_id
     }
 
-    pub async fn transaction_confirmed(&self, tx_id: &str) -> Vec<PaymentEntity> {
+    pub async fn get_payments_based_on_tx(&self, tx_id: &str) -> Vec<PaymentEntity> {
+        match self.payment().get_by_tx_id(tx_id.to_string()).await {
+            Ok(payments) => payments,
+            Err(e) => {
+                log::error!("Failed to fetch `payments` for tx {:?} : {:?}", tx_id, e);
+                vec![]
+            }
+        }
+    }
+
+    pub async fn transaction_confirmed(
+        &self,
+        tx_id: &str,
+        final_hash: &str,
+        final_gas_price: Option<String>,
+    ) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into())
+            .confirm_tx(
+                tx_id.to_string(),
+                TransactionStatus::Confirmed,
+                None,
+                Some(final_hash.to_string()),
+                final_gas_price,
+            )
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
-        match self.payment().get_by_tx_id(tx_id.to_string()).await {
-            Ok(payments) => return payments,
-            Err(e) => log::error!("Failed to fetch `payments` for tx {:?} : {:?}", tx_id, e),
-        };
-        vec![]
+    }
+
+    pub async fn transaction_confirmed_and_failed(
+        &self,
+        tx_id: &str,
+        final_hash: &str,
+        final_gas_price: Option<String>,
+        error: &str,
+    ) {
+        if let Err(e) = self
+            .transaction()
+            .confirm_tx(
+                tx_id.to_string(),
+                TransactionStatus::ErrorOnChain,
+                Some(error.to_string()),
+                Some(final_hash.to_string()),
+                final_gas_price,
+            )
+            .await
+        {
+            log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn transaction_failed_with_nonce_too_low(&self, tx_id: &str, error: &str) {
+        if let Err(e) = self
+            .transaction()
+            .confirm_tx(
+                tx_id.to_string(),
+                TransactionStatus::ErrorNonceTooLow,
+                Some(error.to_string()),
+                None,
+                None,
+            )
+            .await
+        {
+            log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
     }
 
     pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {
@@ -189,10 +214,10 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str) {
+    pub async fn retry_send_transaction(&self, tx_id: &str, bump_gas: bool) {
         if let Err(e) = self
             .transaction()
-            .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
+            .update_tx_send_again(tx_id.to_string(), bump_gas)
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
@@ -200,10 +225,61 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_failed(&self, tx_id: &str) {
+    pub async fn update_tx_fields(
+        &self,
+        tx_id: &str,
+        encoded: String,
+        signature: String,
+        current_gas_price: Option<String>,
+    ) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Failed.into())
+            .update_tx_fields(tx_id.to_string(), encoded, signature, current_gas_price)
+            .await
+        {
+            log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(
+        &self,
+        tx_id: &str,
+        overwrite_tmp_onchain_txs: &str,
+    ) {
+        if let Err(e) = self
+            .transaction()
+            .overwrite_tmp_onchain_txs_and_status_back_to_pending(
+                tx_id.to_string(),
+                overwrite_tmp_onchain_txs.to_string(),
+            )
+            .await
+        {
+            log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<String>) {
+        if let Err(e) = self
+            .transaction()
+            .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), gas_price)
+            .await
+        {
+            log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn transaction_failed_send(&self, tx_id: &str, new_resent_count: i32, error: &str) {
+        if let Err(e) = self
+            .transaction()
+            .update_error_sent(
+                tx_id.to_string(),
+                TransactionStatus::ErrorSent,
+                new_resent_count,
+                Some(error.to_string()),
+            )
             .await
         {
             log::error!(

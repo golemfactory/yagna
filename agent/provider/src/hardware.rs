@@ -93,7 +93,7 @@ impl Resources {
     ) -> Result<Self, Error> {
         let max_caps = Self::max_caps(path)?;
         if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
-            let mut user_caps = max_caps.clone();
+            let mut user_caps = max_caps;
 
             if let Some(cores) = config.rt_cores {
                 user_caps.cpu_threads = cores as i32;
@@ -232,7 +232,7 @@ impl Profiles {
                 }
                 std::fs::File::create(&path)?;
 
-                let mut profiles = Self::try_with_config(&path, &config)?;
+                let mut profiles = Self::try_with_config(&path, config)?;
                 let default_caps = Resources::default_caps(&path)?;
                 for profile in profiles.profiles.values_mut() {
                     *profile = profile.cap(&default_caps);
@@ -260,7 +260,7 @@ impl Profiles {
     }
 
     fn try_with_config<P: AsRef<Path>>(path: P, config: &ProviderConfig) -> Result<Self, Error> {
-        let resources = Resources::try_with_config(path.as_ref(), &config)?;
+        let resources = Resources::try_with_config(path.as_ref(), config)?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -298,7 +298,7 @@ impl Profiles {
         if name == self.active {
             return Err(ProfileError::Active(name).into());
         }
-        if let None = self.profiles.remove(&name) {
+        if self.profiles.remove(&name).is_none() {
             return Err(ProfileError::Unknown(name).into());
         }
         Ok(())
@@ -351,7 +351,7 @@ impl ManagerState {
             .profiles
             .get(&self.profiles.active)
             .cloned()
-            .ok_or_else(|| ProfileError::Unknown(name))?
+            .ok_or(ProfileError::Unknown(name))?
             .cap(&self.res_available);
 
         if res == self.res_cap {
@@ -369,11 +369,11 @@ impl ManagerState {
 
 impl Manager {
     pub fn try_new(conf: &ProviderConfig) -> Result<Self, Error> {
-        let profiles = Profiles::load_or_create(&conf)?;
+        let profiles = Profiles::load_or_create(conf)?;
 
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_with_config(conf.hardware_file.as_path(), &conf)?,
+            res_available: Resources::try_with_config(conf.hardware_file.as_path(), conf)?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
@@ -397,7 +397,7 @@ impl Manager {
                 let result = { state.lock().unwrap().update(profiles) };
                 match result {
                     Ok(val) => match val {
-                        true => tx.broadcast(Event::HardwareChanged).unwrap_or_default(),
+                        true => tx.send(Event::HardwareChanged).unwrap_or_default(),
                         false => log::info!("Hardware configuration unchanged"),
                     },
                     Err(err) => log::warn!("Error updating hardware configuration: {:?}", err),
@@ -421,7 +421,7 @@ impl Manager {
     #[inline]
     pub fn capped(&self) -> Resources {
         let state = self.state.lock().unwrap();
-        state.res_cap.clone()
+        state.res_cap
     }
 
     #[allow(dead_code)]
@@ -580,9 +580,9 @@ mod tests {
             storage_gib: 200.,
         };
         let state = ManagerState {
-            res_available: res.clone(),
-            res_cap: res.clone(),
-            res_remaining: res.clone(),
+            res_available: res,
+            res_cap: res,
+            res_remaining: res,
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
@@ -599,9 +599,9 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1".into(), alloc.clone()).unwrap();
-        man.allocate("2".into(), alloc.clone()).unwrap();
-        man.allocate("3".into(), alloc.clone()).unwrap();
+        man.allocate("1".into(), alloc).unwrap();
+        man.allocate("2".into(), alloc).unwrap();
+        man.allocate("3".into(), alloc).unwrap();
         man.release("1".into()).unwrap();
         man.release("2".into()).unwrap();
         man.release("3".into()).unwrap();
@@ -620,9 +620,9 @@ mod tests {
             storage_gib: 200.,
         };
         let state = ManagerState {
-            res_available: res.clone(),
-            res_cap: res.clone(),
-            res_remaining: res.clone(),
+            res_available: res,
+            res_cap: res,
+            res_remaining: res,
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
@@ -639,7 +639,7 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1".into(), alloc.clone()).unwrap();
+        man.allocate("1".into(), alloc).unwrap();
         assert!(man.allocate("1".into(), alloc).is_err());
         assert!(man.release("2".into()).is_err());
         assert!(man

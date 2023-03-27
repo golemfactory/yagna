@@ -1,10 +1,14 @@
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
-use smoltcp::socket::SocketHandle;
-use smoltcp::wire::IpEndpoint;
 use ya_client_model::net::*;
-use ya_utils_networking::vpn::{Error, Protocol};
+use ya_utils_networking::vpn::{
+    stack::{
+        connection::{Connection, ConnectionMeta},
+        EgressEvent, IngressEvent,
+    },
+    Protocol, SocketDesc,
+};
 
 #[derive(Debug, Message)]
 #[rtype(result = "Result<Vec<Address>>")]
@@ -48,24 +52,13 @@ pub struct Connect {
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct Disconnect {
-    pub handle: SocketHandle,
+    pub desc: SocketDesc,
     pub reason: DisconnectReason,
 }
 
 impl Disconnect {
-    pub fn new(handle: SocketHandle, reason: DisconnectReason) -> Self {
-        Self { handle, reason }
-    }
-
-    pub fn with(handle: SocketHandle, err: &Error) -> Self {
-        Self::new(
-            handle,
-            match &err {
-                Error::Cancelled => DisconnectReason::SinkClosed,
-                Error::ConnectionTimeout => DisconnectReason::ConnectionTimeout,
-                _ => DisconnectReason::ConnectionFailed,
-            },
-        )
+    pub fn new(desc: SocketDesc, reason: DisconnectReason) -> Self {
+        Self { desc, reason }
     }
 }
 
@@ -84,30 +77,34 @@ pub struct Shutdown;
 #[rtype(result = "Result<()>")]
 pub struct DataSent;
 
-#[derive(Clone, Debug)]
-pub struct ConnectionMeta {
-    pub handle: SocketHandle,
-    pub protocol: Protocol,
-    pub remote: IpEndpoint,
-}
-
 #[derive(Debug)]
 pub struct UserConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
-    pub meta: ConnectionMeta,
+    pub stack_connection: Connection,
 }
 
 #[derive(Clone, Debug)]
 pub enum DisconnectReason {
     SinkClosed,
     SocketClosed,
-    ConnectionFailed,
-    ConnectionTimeout,
+    ConnectionError,
 }
 
 impl std::fmt::Display for DisconnectReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Ingress {
+    pub event: IngressEvent,
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Egress {
+    pub event: EgressEvent,
 }

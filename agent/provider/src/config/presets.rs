@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use anyhow::anyhow;
@@ -14,14 +14,15 @@ pub struct PresetV0 {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
-    pub usage_coeffs: HashMap<String, f64>,
+    pub usage_coeffs: BTreeMap<String, f64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Presets {
     pub active: Vec<String>,
-    pub presets: HashMap<String, Preset>,
+    // It's important that all values are sorted, so that other tools can easily detect changes.
+    pub presets: BTreeMap<String, Preset>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,7 +58,7 @@ impl Presets {
             presets
                 .presets
                 .get(name)
-                .ok_or(anyhow!("Invalid active preset: {:?}", name))
+                .ok_or_else(|| anyhow!("Invalid active preset: {:?}", name))
                 .map(|_| ())
         })?;
 
@@ -100,15 +101,6 @@ impl Presets {
             });
 
         (updated.into_iter().collect(), removed.into_iter().collect())
-    }
-}
-
-impl Default for Presets {
-    fn default() -> Self {
-        Presets {
-            active: Vec::new(),
-            presets: HashMap::new(),
-        }
     }
 }
 

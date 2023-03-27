@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use ya_client_model::ErrorMessage;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/local/version";
+pub const BUS_ID: &str = "/local/version";
 
 /// Skip upgrading to the latest Yagna release.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Skip();
 
@@ -19,7 +19,7 @@ impl RpcMessage for Skip {
     type Error = ErrorMessage;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Get {
     pub check: bool,
@@ -41,7 +41,7 @@ impl RpcMessage for Get {
     type Error = ErrorMessage;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "camelCase")]
 #[error("Version {version} '{name}' released {}", release_ts.format("%Y-%m-%d"))]
 pub struct Release {
@@ -53,7 +53,7 @@ pub struct Release {
     pub update_ts: Option<NaiveDateTime>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionInfo {
     pub current: Release,

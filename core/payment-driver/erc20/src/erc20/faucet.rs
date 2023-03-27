@@ -7,7 +7,7 @@ use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use web3::types::{H160, U256};
 
 // Workspace uses
@@ -24,8 +24,9 @@ const FAUCET_ADDR_ENVAR: &str = "ETH_FAUCET_ADDRESS";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {
-    static ref MIN_GLM_BALANCE: U256 = utils::big_dec_to_u256(BigDecimal::from(50));
-    static ref MIN_ETH_BALANCE: U256 = utils::big_dec_to_u256(BigDecimal::from_f64(0.005).unwrap());
+    static ref MIN_GLM_BALANCE: U256 = utils::big_dec_to_u256(&BigDecimal::from(50));
+    static ref MIN_ETH_BALANCE: U256 =
+        utils::big_dec_to_u256(&BigDecimal::from_f64(0.005).unwrap());
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
 
@@ -63,7 +64,7 @@ pub async fn request_glm(
                             MAX_FAUCET_REQUESTS,
                             e
                         );
-                        delay_for(time::Duration::from_secs(10)).await;
+                        sleep(time::Duration::from_secs(10)).await;
                     }
                 }
             }
@@ -77,7 +78,7 @@ pub async fn request_glm(
         return Ok(());
     }
     let pending = dao.get_pending_faucet_txs(&str_addr, network).await;
-    for _tx in pending {
+    if !pending.is_empty() {
         log::info!("Already pending a mint transactin.");
         return Ok(());
     }
@@ -94,7 +95,7 @@ pub async fn request_glm(
     // Wait for tx to get mined:
     // - send_payments job runs every 10 seconds
     // - blocks are mined every 15 seconds
-    delay_for(time::Duration::from_secs(10)).await;
+    sleep(time::Duration::from_secs(10)).await;
 
     wait_for_glm(address, network).await?;
 
@@ -109,7 +110,7 @@ async fn wait_for_eth(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tETH from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tETH timed out.";
     log::error!("{}", msg);
@@ -124,7 +125,7 @@ async fn wait_for_glm(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tGLM from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);
@@ -160,7 +161,7 @@ async fn resolve_faucet_url() -> Result<String, GenericError> {
         _ => {
             let faucet_host = resolver::resolve_yagna_srv_record(DEFAULT_FAUCET_SRV_PREFIX)
                 .await
-                .unwrap_or(DEFAULT_ETH_FAUCET_HOST.to_string());
+                .unwrap_or_else(|_| DEFAULT_ETH_FAUCET_HOST.to_string());
 
             Ok(format!("http://{}:4000/donate", faucet_host))
         }

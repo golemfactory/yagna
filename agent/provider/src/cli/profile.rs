@@ -40,7 +40,7 @@ impl ProfileConfig {
                 }
                 ProfileConfig::Create { name, resources } => {
                     let mut profiles = Profiles::load_or_create(&config)?;
-                    if let Some(_) = profiles.get(&name) {
+                    if profiles.get(&name).is_some() {
                         return Err(ProfileError::AlreadyExists(name).into());
                     }
                     profiles.add(name, resources)?;
@@ -93,7 +93,7 @@ fn update_profiles(
             update_profile(resources, new_resources);
         }
     } else {
-        for name in names.names {
+        for name in names.name {
             match profiles.get_mut(&name) {
                 Some(resources) => update_profile(resources, new_resources),
                 _ => return Err(ProfileError::Unknown(name).into()),

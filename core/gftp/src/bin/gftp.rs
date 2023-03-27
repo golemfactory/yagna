@@ -1,8 +1,7 @@
-use actix_rt::Arbiter;
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
-use std::mem;
+
 use structopt::{clap, StructOpt};
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
@@ -117,7 +116,7 @@ async fn server_loop() {
                 0 => break,
                 _ => match buffer.trim().is_empty() {
                     true => continue,
-                    _ => mem::replace(&mut buffer, String::new()),
+                    _ => std::mem::take(&mut buffer),
                 },
             },
             Err(error) => {
@@ -134,12 +133,14 @@ async fn server_loop() {
                     continue;
                 }
                 match msg.body {
-                    RpcBody::Request { request } => Arbiter::spawn(async move {
-                        if let ExecMode::Shutdown = execute(id, request, verbose).await {
-                            tokio::time::delay_for(Duration::from_secs(1)).await;
-                            std::process::exit(0);
-                        }
-                    }),
+                    RpcBody::Request { request } => {
+                        tokio::task::spawn_local(async move {
+                            if let ExecMode::Shutdown = execute(id, request, verbose).await {
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                                std::process::exit(0);
+                            }
+                        });
+                    }
                     _ => RpcMessage::request_error(id.as_ref()).print(verbose),
                 }
             }

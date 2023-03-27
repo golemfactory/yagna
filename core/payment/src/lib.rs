@@ -28,7 +28,8 @@ pub mod migrations {
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm"; // TODO: remove
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-rinkeby-tglm";
+
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -48,10 +49,16 @@ impl Service for PaymentService {
 
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db: DbExecutor = context.component();
+        let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
+
         let processor = PaymentProcessor::new(db.clone());
-        self::service::bind_service(&db, processor);
+        self::service::bind_service(&db, processor.clone());
+
+        tokio::task::spawn(async move {
+            processor.release_allocations(false).await;
+        });
+
         Ok(())
     }
 
@@ -61,15 +68,17 @@ impl PaymentService {
 
     pub async fn shut_down() {
         log::info!("Stopping payment service... It may take up to 10 seconds to send out all transactions. Hit Ctrl+C again to interrupt and shut down immediately.");
-        futures::future::select(
-            tokio::time::timeout(
-                *PAYMENT_SHUTDOWN_TIMEOUT,
-                bus::service(pay_local::BUS_ID)
-                    .call(pay_local::ShutDown::new(*PAYMENT_SHUTDOWN_TIMEOUT)),
-            ),
-            actix_rt::signal::ctrl_c().boxed(),
-        )
-        .await;
+
+        let timeout = tokio::time::timeout(
+            *PAYMENT_SHUTDOWN_TIMEOUT,
+            bus::service(pay_local::BUS_ID)
+                .call(pay_local::ShutDown::new(*PAYMENT_SHUTDOWN_TIMEOUT)),
+        );
+
+        tokio::select! {
+            _ = timeout => {},
+            _ = tokio::signal::ctrl_c().boxed() => {},
+        }
         log::info!("Payment service stopped.");
     }
 }
