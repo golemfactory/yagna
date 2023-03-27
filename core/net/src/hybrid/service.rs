@@ -9,8 +9,9 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use std::task::Poll;
 
+use actix::Actor;
 use anyhow::{anyhow, Context as AnyhowContext};
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
@@ -20,6 +21,7 @@ use url::Url;
 
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
+use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
@@ -28,6 +30,7 @@ use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
 use crate::config::Config;
+use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
@@ -46,66 +49,58 @@ type ArcMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
 
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
-}
-
-lazy_static::lazy_static! {
     pub(crate) static ref BCAST_HANDLERS: ArcMap<String, Arc<Mutex<BCastHandler>>> = Default::default();
-}
-
-lazy_static::lazy_static! {
     pub(crate) static ref BCAST_SENDER: Arc<RwLock<Option<NetSender>>> = Default::default();
+    pub(crate) static ref SHUTDOWN_TX: Arc<RwLock<Option<oneshot::Sender<()>>>> = Default::default();
 }
 
 thread_local! {
-    pub(crate) static CLIENT: RefCell<Option<Client>> = Default::default();
-}
-
-async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
-    let host_port = match &config.host {
-        Some(val) => val.to_string(),
-        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
-            .await
-            // FIXME: remove
-            .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
-    };
-    log::trace!("resolving host_port: {}", host_port);
-    let (host, port) = &host_port
-        .split_once(":")
-        .context("Please use host:port format")?;
-    let ip = resolver::try_resolve_dns_record(&host).await;
-    let ip_port = format!("{}:{}", ip, port);
-    let socket = ip_port
-        .to_socket_addrs()?
-        .next()
-        .expect("relay address needed");
-    Ok(socket)
+    static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
 pub struct Net;
 
 impl Net {
+    #[inline]
+    pub async fn client() -> anyhow::Result<ClientProxy> {
+        ClientProxy::new().await
+    }
+
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
+        let (started_tx, started_rx) = oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
         log::info!(
             "HYBRID_NET - Using default identity as network id: {:?}",
             default_id
         );
-        start_network(Arc::new(config), default_id, ids).await?;
-        Ok(())
+
+        std::thread::spawn(move || {
+            let mut system = actix::System::new("hybrid-net");
+            system.block_on(async move {
+                SHUTDOWN_TX.write().await.replace(shutdown_tx);
+
+                let result = start_network(Arc::new(config), default_id, ids).await;
+                started_tx.send(result).expect("Unable to start network");
+                let _ = shutdown_rx.await;
+            });
+        });
+
+        started_rx
+            .await
+            .map_err(|_| anyhow!("Error starting network"))?
     }
 
     pub async fn shutdown() -> anyhow::Result<()> {
-        let mut client = CLIENT
-            .with(|c| c.borrow().clone())
-            .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
-        client.shutdown().await
+        if let Ok(client) = Self::client().await {
+            let _ = client.shutdown().await;
+        }
+        if let Some(sender) = { SHUTDOWN_TX.write().await.take() } {
+            let _ = sender.send(());
+        }
+        Ok(())
     }
-}
-
-// FIXME: examples compatibility
-#[allow(unused)]
-pub async fn bind_remote<T>(_: T, default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
-    start_network(Arc::new(Config::from_env()?), default_id, ids).await
 }
 
 pub async fn start_network(
@@ -116,35 +111,22 @@ pub async fn start_network(
     counter!("net.connections.p2p", 0);
     counter!("net.connections.relay", 0);
 
-    let url = Url::parse(&format!(
-        "udp://{}",
-        relay_addr(&config)
-            .await
-            .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
-    ))?;
-
-    log::debug!("Setting up hybrid net with url: {}", url);
     log::info!("Starting network (hybrid) with identity: {}", default_id);
 
+    let broadcast_size = config.broadcast_size;
     let crypto = IdentityCryptoProvider::new(default_id);
-    let client = ClientBuilder::from_url(url)
-        .crypto(crypto.clone())
-        .listen(config.bind_url.clone())
-        .expire_session_after(config.session_expiration.clone())
-        .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
-        .connect()
-        .build()
-        .await?;
-    CLIENT.with(|c| {
-        c.borrow_mut().replace(client.clone());
+
+    let client = build_client(config, crypto.clone()).await?;
+    CLIENT.with(|inner| {
+        inner.borrow_mut().replace(client.clone());
     });
 
-    let (btx, brx) = mpsc::channel(1);
-    {
-        BCAST_SENDER.write().await.replace(btx);
-    }
+    ClientActor::new(client.clone()).start();
 
-    let receiver = client.forward_receiver().await.unwrap();
+    let (btx, brx) = mpsc::channel(1);
+    BCAST_SENDER.write().await.replace(btx);
+
+    let receiver = client.clone().forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
     ids.iter().for_each(|id| {
         let service = net::net_service(id);
@@ -155,13 +137,9 @@ pub async fn start_network(
 
     // outbound traffic
     let net_handler = || {
-        let default_id = default_id.clone();
-        move |_: &str, addr: &str| {
-            let from = default_id.clone();
-            match parse_net_to_addr(addr) {
-                Ok((to, addr)) => Ok((from, to, addr)),
-                Err(err) => anyhow::bail!("invalid address: {}", err),
-            }
+        move |_: &str, addr: &str| match parse_net_to_addr(addr) {
+            Ok((to, addr)) => Ok((default_id, to, addr)),
+            Err(err) => anyhow::bail!("invalid address: {}", err),
         }
     };
     bind_local_bus(net::BUS_ID_UDP, state.clone(), false, net_handler());
@@ -181,7 +159,7 @@ pub async fn start_network(
     bind_local_bus("/from", state.clone(), true, from_handler());
     bind_local_bus("/udp/from", state.clone(), false, from_handler());
 
-    tokio::task::spawn_local(broadcast_handler(brx, config.clone()));
+    tokio::task::spawn_local(broadcast_handler(brx, broadcast_size));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
 
     bind_identity_event_handler(crypto).await;
@@ -194,6 +172,47 @@ pub async fn start_network(
     }
 
     Ok(())
+}
+
+async fn build_client(
+    config: Arc<Config>,
+    crypto: impl CryptoProvider + 'static,
+) -> anyhow::Result<Client> {
+    let addr = relay_addr(&config)
+        .await
+        .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?;
+    let url = Url::parse(&format!("udp://{addr}"))?;
+
+    log::debug!("Setting up hybrid net with url: {url}");
+
+    ClientBuilder::from_url(url)
+        .crypto(crypto)
+        .listen(config.bind_url.clone())
+        .expire_session_after(config.session_expiration)
+        .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
+        .connect()
+        .build()
+        .await
+}
+
+async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+    let host_port = match &config.host {
+        Some(val) => val.to_string(),
+        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
+            .await
+            // FIXME: remove
+            .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
+    };
+    log::trace!("resolving host_port: {}", host_port);
+    let (host, port) = &host_port
+        .split_once(':')
+        .context("Please use host:port format")?;
+    let ip = resolver::try_resolve_dns_record(host).await;
+    let socket = format!("{}:{}", ip, port)
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow!("Invalid relay address: {ip}:{port}"))?;
+    Ok(socket)
 }
 
 fn bind_local_bus<F>(address: &'static str, state: State, reliable: bool, resolver: F)
@@ -311,14 +330,15 @@ async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
         let client = CLIENT.with(|c| c.borrow().clone());
 
         async move {
-            Ok(if let Some(client) = client {
+            if let Some(client) = client {
                 match event {
                     identity::event::Event::AccountUnlocked { .. }
                     | identity::event::Event::AccountLocked { .. } => {
                         client.reconnect_server().await
                     }
                 }
-            })
+            };
+            Ok(())
         }
     });
 
@@ -407,7 +427,7 @@ fn forward_bus_to_net(
         match state.forward_sink(remote_id, reliable).await {
             Ok(mut sink) => {
                 let _ = sink.send(msg).await.map_err(|_| {
-                    let err = format!("error sending message: session closed");
+                    let err = "error sending message: session closed".to_string();
                     handler_reply_service_err(request_id, err, tx);
                 });
             }
@@ -424,16 +444,15 @@ fn forward_bus_to_net(
 /// Forward broadcast messages from the network to the local bus
 fn broadcast_handler(
     rx: NetReceiver,
-    config: Arc<Config>,
+    broadcast_size: u32,
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
-        let config = config.clone();
         async move {
             let client = CLIENT
                 .with(|c| c.borrow().clone())
                 .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
             client
-                .broadcast(payload, config.broadcast_size)
+                .broadcast(payload, broadcast_size)
                 .await
                 .map_err(|e| anyhow!("Broadcast failed: {}", e))
         }
@@ -480,7 +499,7 @@ fn forward_handler(
 
                 log::trace!("received forward packet ({} B)", fwd.payload.len());
 
-                if tx.send(fwd.payload.into()).await.is_err() {
+                if tx.send(fwd.payload).await.is_err() {
                     log::debug!("net routing error: channel closed");
                     state.remove(&key);
                 }
@@ -568,7 +587,6 @@ fn handle_request(
 
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
-    let eos_chain = eos.clone();
 
     let stream = match {
         let inner = state.inner.borrow();
@@ -606,10 +624,10 @@ fn handle_request(
         }
     })
     .chain(futures::stream::poll_fn(move |_| {
-        if eos_chain.load(Relaxed) {
+        if eos.load(Relaxed) {
             Poll::Ready(None)
         } else {
-            eos_chain.store(true, Relaxed);
+            eos.store(true, Relaxed);
             Poll::Ready(Some(codec::reply_eos(request_id_chain.clone())))
         }
     }))
@@ -691,7 +709,7 @@ fn handle_reply(
         } else {
             ResponseChunk::Part(data)
         };
-        if let Err(_) = request.tx.send(chunk).await {
+        if request.tx.send(chunk).await.is_err() {
             log::debug!("failed to forward reply: channel closed");
         }
     });
@@ -726,7 +744,7 @@ fn handle_broadcast(
             .resolve(&topic)
             .await
             .into_iter()
-            .filter_map(|e| handlers.get(e.as_ref()).clone())
+            .filter_map(|e| handlers.get(e.as_ref()))
         {
             let mut h = handler.lock().await;
             (*(h))(caller.clone(), data.as_ref());
@@ -783,11 +801,10 @@ impl State {
 
     fn remove(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
-        inner.routes.remove(&key);
+        inner.routes.remove(key);
     }
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 struct Request<S: Clone> {
     #[allow(dead_code)]
@@ -823,7 +840,7 @@ fn handler_reply_err(
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
     const ADDR_CONST: usize = 6;
 
-    let mut it = addr.split("/").fuse().skip(1).peekable();
+    let mut it = addr.split('/').fuse().skip(1).peekable();
     let (prefix, to) = match (it.next(), it.next(), it.next()) {
         (Some("udp"), Some("net"), Some(to)) if it.peek().is_some() => ("/udp", to),
         (Some("net"), Some(to), Some(_)) => ("", to),
@@ -840,7 +857,7 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
 fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
     const ADDR_CONST: usize = 10;
 
-    let mut it = addr.split("/").fuse().skip(1).peekable();
+    let mut it = addr.split('/').fuse().skip(1).peekable();
     let (prefix, from, to) = match (it.next(), it.next(), it.next(), it.next(), it.next()) {
         (Some("udp"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
             ("/udp", from, to)
@@ -860,5 +877,5 @@ fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
 fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    rng.gen::<u64>() & 0x1f_ff_ff__ff_ff_ff_ffu64
+    rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
 }
