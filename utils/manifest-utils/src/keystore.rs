@@ -62,6 +62,13 @@ impl Cert {
             Cert::Golem { cert, .. } => serde_json::json!(cert.subject.display_name),
         }
     }
+
+    pub fn type_name(&self) -> &str {
+        match self {
+            Cert::X509(_) => x509_keystore::CERT_NAME,
+            Cert::Golem { .. } => golem_keystore::CERT_NAME,
+        }
+    }
 }
 
 impl PartialOrd for Cert {

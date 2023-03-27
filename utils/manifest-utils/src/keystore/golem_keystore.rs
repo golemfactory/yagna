@@ -12,6 +12,8 @@ use std::{
 use golem_certificate::validator::validated_data::ValidatedCertificate;
 use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
 
+pub const CERT_NAME: &str = "Golem";
+
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
     #[allow(dead_code)]
@@ -66,7 +68,7 @@ fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)>
     let id = cert
         .certificate_chain_fingerprints
         .get(0)
-        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+        .ok_or_else(|| anyhow!("No leaf cert id found in {CERT_NAME} certificate"))?
         .to_owned();
 
     Ok((id, cert))
@@ -98,7 +100,7 @@ impl Keystore for GolemKeystore {
                     certificates.insert(id, cert);
                 }
                 Err(err) => {
-                    log::trace!("Unable to parse file '{path:?}' as Golem cert. Err: {err}")
+                    log::trace!("Unable to parse file '{path:?}' as {CERT_NAME} cert. Err: {err}")
                 }
             }
         }

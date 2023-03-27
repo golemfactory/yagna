@@ -25,6 +25,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+pub const CERT_NAME: &str = "X.509";
 pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
 pub(super) trait X509AddParams {
     fn permissions(&self) -> &Vec<CertPermissions>;
@@ -572,7 +573,7 @@ impl X509Keystore {
             .filter_map(|cert| cert.x509())
             .map(|cert| cert.to_owned())
             .find(|trusted| trusted.issued(cert) == X509VerifyResult::OK)
-            .ok_or_else(|| anyhow!("Issuer certificate not found in X509Keystore"))
+            .ok_or_else(|| anyhow!("Issuer certificate not found in {CERT_NAME} keystore"))
     }
 
     fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
