@@ -2,10 +2,7 @@ use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
     RemoveResponse,
 };
-use crate::{
-    policy::CertPermissions,
-    util::{format_permissions, str_to_short_hash},
-};
+use crate::{policy::CertPermissions, util::format_permissions};
 use anyhow::{anyhow, bail};
 use openssl::{
     hash::MessageDigest,
@@ -19,6 +16,7 @@ use openssl::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Write,
     fs::{self, DirEntry, File},
     io::Read,
     path::{Path, PathBuf},
@@ -532,8 +530,13 @@ fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
 }
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
-    let txt = cert.to_text()?;
-    Ok(str_to_short_hash(txt))
+    let bytes = cert.digest(MessageDigest::sha512())?;
+    let mut digest = String::with_capacity(bytes.len() * 2);
+    for byte in bytes.iter() {
+        write!(digest, "{byte:02x}")?;
+    }
+
+    Ok(digest)
 }
 
 /// Adds entries with given `nid` to given `subject` String.

@@ -115,7 +115,10 @@ impl Keystore for GolemKeystore {
     fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
         let mut added = Vec::new();
         let mut skipped = Vec::new();
-        let mut certificates = self.certificates.write().expect("Can read Golem keystore");
+        let mut certificates = self
+            .certificates
+            .write()
+            .expect("Can't read Golem keystore");
         for path in add.certs.iter() {
             let mut file = File::open(path)?;
             let mut content = String::new();
@@ -151,7 +154,10 @@ impl Keystore for GolemKeystore {
     }
 
     fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
-        let mut certificates = self.certificates.write().expect("Can write Golem keystore");
+        let mut certificates = self
+            .certificates
+            .write()
+            .expect("Can't write Golem keystore");
         let mut removed = Vec::new();
         for id in &remove.ids {
             if let Some(GolemCertificateEntry { path, cert }) = certificates.remove(id) {
@@ -169,7 +175,7 @@ impl Keystore for GolemKeystore {
         for (id, cert_entry) in self
             .certificates
             .read()
-            .expect("Can read Golem keystore")
+            .expect("Can't read Golem keystore")
             .iter()
         {
             certificates.push(Cert::Golem {

@@ -1,5 +1,5 @@
 use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use golem_certificate::schemas::permissions::Permissions;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -90,30 +90,41 @@ impl RulesManager {
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
-        let keystore_certs = self.keystore.list_ids();
+        let cert_id = {
+            let certs: Vec<_> = self
+                .keystore
+                .list()
+                .into_iter()
+                .filter(|cert| cert.id().starts_with(&cert_id))
+                .collect();
 
-        if keystore_certs.contains(&cert_id) {
-            self.rulestore
-                .config
-                .write()
-                .unwrap()
-                .outbound
-                .partner
-                .insert(
-                    cert_id.clone(),
-                    CertRule {
-                        mode: mode.clone(),
-                        description: "".into(),
-                    },
+            if certs.is_empty() {
+                bail!(
+                    "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
                 );
-            log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
+            } else if certs.len() > 1 {
+                bail!("Setting Partner mode {mode} failed: Cert id: {cert_id} isn't unique");
+            } else {
+                certs[0].id()
+            }
+        };
 
-            self.rulestore.save()
-        } else {
-            Err(anyhow!(
-                "Setting Partner mode {mode} failed: No cert id: {cert_id} found in keystore"
-            ))
-        }
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .partner
+            .insert(
+                cert_id.clone(),
+                CertRule {
+                    mode: mode.clone(),
+                    description: "".into(),
+                },
+            );
+        log::trace!("Added Partner rule for cert_id: {cert_id} with mode: {mode}");
+
+        self.rulestore.save()
     }
 
     pub fn set_enabled(&self, enabled: bool) -> Result<()> {
