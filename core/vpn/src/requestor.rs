@@ -466,7 +466,24 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
                 ctx.close(reason);
                 ctx.stop();
             }
-            _ => {
+            Ok(ws::Message::Continuation(_)) => {
+                log::warn!(
+                    "VPN WebSocket: VPN {} connection error: continuation not supported",
+                    self.network_id
+                );
+            }
+            Ok(ws::Message::Nop) => {
+                log::warn!(
+                    "VPN WebSocket: VPN {} connection error: nop not supported",
+                    self.network_id
+                );
+            }
+            Err(e) => {
+                log::error!(
+                    "VPN WebSocket: VPN {} connection error: {:?}",
+                    self.network_id,
+                    e
+                );
                 ctx.stop();
             }
         }
