@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use rand::thread_rng;
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -405,9 +406,16 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
-        log::info!("VPN WebSocket: VPN {} forwarding packet to {}", self.network_id, dst_node_id);
+
+        static mut PACKET_NO: u64 = 1;
+        let packet_no = 1;
+        unsafe {
+            PACKET_NO += 1;
+        }
+
+        log::info!("VPN WebSocket: VPN {} forwarding packet to {}", packet_no, dst_node_id);
         let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
-        log::info!("VPN WebSocket: VPN {} forwarding packet 2 to {}", self.network_id, dst_node_id);
+        log::info!("VPN WebSocket: VPN {} forwarding packet 2 to {}", packet_no, dst_node_id);
 
         ctx.spawn(
             async move {
@@ -418,6 +426,8 @@ impl VpnRawSocket {
                         Err(anyhow::anyhow!("failed to send packet {:?}", e))
                     },
                 };
+                log::info!("Pushed message to {}", packet_no);
+
 
 
 
