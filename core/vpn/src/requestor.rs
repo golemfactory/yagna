@@ -463,6 +463,7 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
             }
             Ok(ws::Message::Pong(_)) => {}
             Ok(ws::Message::Close(reason)) => {
+                log::warn!("Received message close, close reason: {:?}", reason);
                 ctx.close(reason);
                 ctx.stop();
             }
