@@ -401,7 +401,7 @@ async fn accept_invoice(
         Err(e) => return response::server_error(&e),
     };
     // OK when invoice.amount is greater than or equal to agreement.amount_accepted
-    if &invoice.amount < &agreement.total_amount_accepted.0 {
+    if invoice.amount < agreement.total_amount_accepted.0 {
         let msg = format!(
             "Invoice is smaller than agreement.total_amount_accepted. \
             invoice_id={}, invoice_amount={}, total_amount_accepted={}",

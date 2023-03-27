@@ -249,7 +249,7 @@ impl<'c> InvoiceDao<'c> {
             let mut events = vec![InvoiceEventType::InvoiceAcceptedEvent];
 
             // Zero-amount invoices should be settled immediately.
-            let status = if amount.0 == BigDecimal::zero().into() {
+            let status = if amount.0.is_zero() {
                 events.push(InvoiceEventType::InvoiceSettledEvent);
                 DocumentStatus::Settled
             } else {
