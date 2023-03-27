@@ -405,11 +405,21 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
+        log::info!("VPN WebSocket: VPN {} forwarding packet to {}", self.network_id, dst_node_id);
         let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
+        log::info!("VPN WebSocket: VPN {} forwarding packet 2 to {}", self.network_id, dst_node_id);
 
         ctx.spawn(
             async move {
-                let _res = vpn_node.push_raw_as(&current_node_id, data).await?;
+                let _res = match vpn_node.push_raw_as(&current_node_id, data).await{
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        log::error!("failed to send packet {:?}", e);
+                        Err(anyhow::anyhow!("failed to send packet {:?}", e))
+                    },
+                };
+
+
 
                 Ok::<_, anyhow::Error>(())
             }
