@@ -107,42 +107,42 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     vec!["foo_ca-chain.cert.pem"],
     vec!["all"],
     false,
-    vec![("c128af8c", "none"), ("4e0df976", "all")];
+    vec![("fe4f04e2", "none"), ("55e451bd", "all")];
     "Add certificates specifying permissions without `--whole-chain` flag"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem"],
     vec![],
     false,
-    vec![("c128af8c", "none"), ("4e0df976", "none")];
+    vec![("fe4f04e2", "none"), ("55e451bd", "none")];
     "No permissions specified"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem"],
     vec!["all"],
     true,
-    vec![("c128af8c", "all"), ("4e0df976", "all")];
+    vec![("fe4f04e2", "all"), ("55e451bd", "all")];
     "Add certificates specifying permissions with `--whole-chain` flag"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem"],
     vec!["all", "outbound-manifest"],
     false,
-    vec![("c128af8c", "none"), ("4e0df976", "all")];
+    vec![("fe4f04e2", "none"), ("55e451bd", "all")];
     "If `all` permission is specified, all other permissions are ignored"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem", "foo_req.cert.pem"],
     vec!["outbound-manifest"],
     false,
-    vec![("c128af8c", "none"), ("4e0df976", "none"), ("0e136cb3", "outbound-manifest")];
+    vec![("fe4f04e2", "none"), ("55e451bd", "none"), ("25b9430c", "outbound-manifest")];
     "Add longer permissions chain"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem", "dummy_inter.cert.pem"],
     vec!["outbound-manifest"],
     false,
-    vec![("c128af8c", "none"), ("4e0df976", "outbound-manifest"), ("2e6e701d", "outbound-manifest")];
+    vec![("fe4f04e2", "none"), ("55e451bd", "outbound-manifest"), ("20e9eb45", "outbound-manifest")];
     "Add multiple certificates and check permissions"
 )]
 #[serial]
@@ -180,9 +180,9 @@ fn test_keystore_add_certificate_permissions(
     command.arg("--json").assert().success();
 
     let result = list_certificates_command(&cert_dir).unwrap();
-
+    println!("Result: {result:#?}");
     for (cert_id, perm) in expected {
-        assert_eq!(check_permissions(&result, cert_id), perm);
+        assert_eq!(check_permissions(&result, dbg!(cert_id)), perm);
     }
 }
 
@@ -218,8 +218,8 @@ fn test_keystore_add_certificate_second_time() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
-    assert_eq!(check_permissions(&result, "4e0df976"), "none");
-    assert_eq!(check_permissions(&result, "c128af8c"), "none");
+    assert_eq!(check_permissions(&result, "55e451bd"), "none");
+    assert_eq!(check_permissions(&result, "fe4f04e2"), "none");
 }
 
 #[serial]
@@ -247,15 +247,15 @@ fn test_keystore_remove_certificate_check_permissions() {
         .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
         .arg("keystore")
         .arg("remove")
-        .arg("2e6e701d")
+        .arg("fe4f04e2")
         .arg("--json")
         .assert()
         .success();
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
-    assert_eq!(check_permissions(&result, "4e0df976"), "outbound-manifest");
-    assert_eq!(check_permissions(&result, "c128af8c"), "outbound-manifest");
+    assert_eq!(check_permissions(&result, "55e451bd"), "outbound-manifest");
+    assert_eq!(check_permissions(&result, "25b9430c"), "outbound-manifest");
 }
 
 fn list_certificates_command(

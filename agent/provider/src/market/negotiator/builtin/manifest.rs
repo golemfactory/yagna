@@ -3,8 +3,8 @@ use std::ops::Not;
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY, DEMAND_MANIFEST_PROPERTY,
     DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
@@ -62,15 +62,16 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let demand_permissions_present = demand
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
-            .is_ok();
+        let node_descriptor = demand
+            .get_property::<String>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
+            .ok();
 
         if manifest.is_outbound_requested() {
             match self.rules_manager.check_outbound_rules(
                 manifest,
+                demand.issuer,
                 manifest_sig,
-                demand_permissions_present,
+                node_descriptor,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(offer),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
@@ -208,7 +209,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let (policy, _tmpdir) = build_policy(&format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}",
             CAPABILITIES_PROPERTY

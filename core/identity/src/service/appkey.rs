@@ -2,7 +2,7 @@ use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use futures::prelude::*;
 use uuid::Uuid;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -44,8 +44,34 @@ fn send_events(s: Ref<Subscription>, event: model::event::Event) -> impl Future<
     }
 }
 
+pub async fn preconfigured_to_appkey_model(
+    preconfigured_node_id: Option<ya_client_model::NodeId>,
+    preconfigured_appkey: String,
+    created_date: NaiveDateTime,
+) -> Result<model::AppKey, ya_core_model::appkey::Error> {
+    let node_id = match preconfigured_node_id {
+        Some(node_id) => node_id,
+        None => {
+            let default_identity = bus::service(idm::BUS_ID)
+                .send(idm::Get::ByDefault)
+                .await
+                .map_err(model::Error::internal)?
+                .map_err(model::Error::internal)?
+                .ok_or_else(|| model::Error::internal("Default identity not found"))?;
+            default_identity.node_id
+        }
+    };
+    Ok(model::AppKey {
+        name: model::AUTOCONFIGURED_KEY_NAME.to_string(),
+        key: preconfigured_appkey.clone(),
+        role: model::DEFAULT_ROLE.to_string(),
+        identity: node_id,
+        created_date,
+        allow_origins: vec![],
+    })
+}
+
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
-    let dbx = db.clone();
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
     let subscription = Rc::new(RefCell::new(Subscription::default()));
@@ -64,83 +90,86 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let create_tx = tx.clone();
-    // Create a new application key entry
-    let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
-        let key = Uuid::new_v4().to_simple().to_string();
-        let db = dbx.clone();
-        let mut create_tx = create_tx.clone();
-        async move {
-            let dao = db.as_dao::<AppKeyDao>();
-
-            let result = match dao.get_for_name(create.name.clone()).await {
-                Ok((app_key, _)) => {
-                    if app_key.identity_id == create.identity {
-                        Ok(app_key.key)
-                    } else {
-                        Err(model::Error::bad_request(format!(
-                            "app-key with name {} already defined with identity {}",
-                            app_key.name, app_key.identity_id
-                        )))
-                    }
-                }
-                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
-                    .create(
-                        key.clone(),
-                        create.name,
-                        create.role,
-                        create.identity,
-                        create.allow_origins,
-                    )
-                    .await
-                    .map_err(model::Error::internal)
-                    .map(|_| key),
-                Err(e) => Err(model::Error::internal(e)),
-            }?;
-
-            let (appkey, role) = db
-                .as_dao::<AppKeyDao>()
-                .get(result.clone())
-                .await
-                .map_err(|e| model::Error::internal(e.to_string()))?;
-
-            let _ = create_tx
-                .send(model::event::Event::NewKey(appkey.to_core_model(role)))
-                .await;
-            Ok(result)
-        }
-    });
-
-    let dbx = db.clone();
-    let preconfigured_appkey = crate::autoconf::preconfigured_appkey()?;
+    let preconfigured_appkey = crate::autoconf::preconfigured_appkey();
     let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
     let start_datetime = Utc::now().naive_utc();
-    // Retrieve an application key entry based on the key itself
-    let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
-        let db = dbx.clone();
+
+    {
+        // Create a new application key entry
+        let db = db.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
-        async move {
-            if preconfigured_appkey.as_ref() == Some(&get.key) {
-                let node_id = match preconfigured_node_id {
-                    Some(node_id) => node_id,
-                    None => {
-                        let default_identity = bus::service(idm::BUS_ID)
-                            .send(idm::Get::ByDefault)
-                            .await
-                            .map_err(model::Error::internal)?
-                            .map_err(model::Error::internal)?
-                            .ok_or_else(|| model::Error::internal("appkey not found"))?;
-                        default_identity.node_id
+        let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
+            let key = Uuid::new_v4().to_simple().to_string();
+            let db = db.clone();
+            let preconfigured_appkey = preconfigured_appkey.clone();
+            let mut create_tx = create_tx.clone();
+            async move {
+                let dao = db.as_dao::<AppKeyDao>();
+
+                if let Some(_preconfigured_appkey) = preconfigured_appkey {
+                    if create.name == model::AUTOCONFIGURED_KEY_NAME {
+                        return Err(model::Error::internal(
+                            "Preconfigured appkey already exists",
+                        ));
                     }
-                };
-                Ok(model::AppKey {
-                    name: "autoconfigured".to_string(),
-                    key: get.key.clone(),
-                    role: model::DEFAULT_ROLE.to_string(),
-                    identity: node_id,
-                    created_date: start_datetime,
-                    allow_origins: vec![],
-                })
-            } else {
+                }
+
+                let result = match dao.get_for_name(create.name.clone()).await {
+                    Ok((app_key, _)) => {
+                        if app_key.identity_id == create.identity {
+                            Ok(app_key.key)
+                        } else {
+                            Err(model::Error::bad_request(format!(
+                                "app-key with name {} already defined with identity {}",
+                                app_key.name, app_key.identity_id
+                            )))
+                        }
+                    }
+                    Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
+                        .create(
+                            key.clone(),
+                            create.name,
+                            create.role,
+                            create.identity,
+                            create.allow_origins,
+                        )
+                        .await
+                        .map_err(model::Error::internal)
+                        .map(|_| key),
+                    Err(e) => Err(model::Error::internal(e)),
+                }?;
+
+                let (appkey, role) = db
+                    .as_dao::<AppKeyDao>()
+                    .get(result.clone())
+                    .await
+                    .map_err(|e| model::Error::internal(e.to_string()))?;
+
+                let _ = create_tx
+                    .send(model::event::Event::NewKey(appkey.to_core_model(role)))
+                    .await;
+                Ok(result)
+            }
+        });
+    }
+
+    {
+        let db = db.clone();
+        let preconfigured_appkey = preconfigured_appkey.clone();
+        let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
+            let db = db.clone();
+            let preconfigured_appkey = preconfigured_appkey.clone();
+            async move {
+                if let Some(preconfigured_appkey) = preconfigured_appkey {
+                    if preconfigured_appkey == get.key {
+                        return preconfigured_to_appkey_model(
+                            preconfigured_node_id,
+                            preconfigured_appkey,
+                            start_datetime,
+                        )
+                        .await;
+                    }
+                }
                 let (appkey, role) = db
                     .as_dao::<AppKeyDao>()
                     .get(get.key)
@@ -149,67 +178,105 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
 
                 Ok(appkey.to_core_model(role))
             }
-        }
-    });
+        });
+    }
 
-    let db_ = db.clone();
-    let _ = bus::bind(model::BUS_ID, move |get: model::GetByName| {
-        let db = db_.clone();
-        async move {
-            let (appkey, role) = db
-                .as_dao::<AppKeyDao>()
-                .get_for_name(get.name)
-                .await
-                .map_err(|e| model::Error::internal(e.to_string()))?;
+    {
+        let db = db.clone();
+        let preconfigured_appkey = preconfigured_appkey.clone();
+        let _ = bus::bind(model::BUS_ID, move |get: model::GetByName| {
+            let db = db.clone();
+            let preconfigured_appkey = preconfigured_appkey.clone();
+            async move {
+                if let Some(preconfigured_appkey) = preconfigured_appkey {
+                    if model::AUTOCONFIGURED_KEY_NAME == get.name {
+                        return preconfigured_to_appkey_model(
+                            preconfigured_node_id,
+                            preconfigured_appkey,
+                            start_datetime,
+                        )
+                        .await;
+                    }
+                }
 
-            Ok(appkey.to_core_model(role))
-        }
-    });
+                let (appkey, role) = db
+                    .as_dao::<AppKeyDao>()
+                    .get_for_name(get.name)
+                    .await
+                    .map_err(|e| model::Error::internal(e.to_string()))?;
 
-    let dbx = db.clone();
-    let _ = bus::bind(model::BUS_ID, move |list: model::List| {
-        let db = dbx.clone();
+                Ok(appkey.to_core_model(role))
+            }
+        });
+    }
 
-        async move {
-            let result = db
-                .as_dao::<AppKeyDao>()
-                .list(list.identity, list.page, list.per_page)
-                .await
-                .map_err(Into::<model::Error>::into)?;
+    {
+        let db = db.clone();
+        let preconfigured_appkey = preconfigured_appkey.clone();
+        let _ = bus::bind(model::BUS_ID, move |list: model::List| {
+            let db = db.clone();
+            let preconfigured_appkey = preconfigured_appkey.clone();
+            async move {
+                let result = db
+                    .as_dao::<AppKeyDao>()
+                    .list(list.identity, list.page, list.per_page)
+                    .await
+                    .map_err(Into::<model::Error>::into)?;
 
-            let keys = result
-                .0
-                .into_iter()
-                .map(|(app_key, role)| app_key.to_core_model(role))
-                .collect();
+                let mut keys: Vec<ya_core_model::appkey::AppKey> = result
+                    .0
+                    .into_iter()
+                    .map(|(app_key, role)| app_key.to_core_model(role))
+                    .collect();
 
-            Ok((keys, result.1))
-        }
-    });
+                if let Some(preconfigured_appkey) = preconfigured_appkey {
+                    keys.push(
+                        preconfigured_to_appkey_model(
+                            preconfigured_node_id,
+                            preconfigured_appkey,
+                            start_datetime,
+                        )
+                        .await?,
+                    );
+                }
 
-    let create_tx = tx;
-    let dbx = db.clone();
-    let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
-        let db = dbx.clone();
-        let mut create_tx = create_tx.clone();
-        async move {
-            let (appkey, role) = db
-                .as_dao::<AppKeyDao>()
-                .get_for_name(rm.name.clone())
-                .await
-                .map_err(|e| model::Error::internal(e.to_string()))?;
+                Ok((keys.clone(), result.1))
+            }
+        });
+    }
 
-            db.as_dao::<AppKeyDao>()
-                .remove(rm.name, rm.identity)
-                .await
-                .map_err(Into::<model::Error>::into)?;
+    {
+        let create_tx = tx;
+        let db = db.clone();
+        let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
+            let db = db.clone();
+            let preconfigured_appkey = preconfigured_appkey.clone();
+            let mut create_tx = create_tx.clone();
+            async move {
+                if let Some(_preconfigured_appkey) = preconfigured_appkey {
+                    if model::AUTOCONFIGURED_KEY_NAME == rm.name {
+                        return Err(model::Error::internal("Cannot remove autoconfigured key"));
+                    }
+                }
 
-            let _ = create_tx
-                .send(model::event::Event::DroppedKey(appkey.to_core_model(role)))
-                .await;
-            Ok(())
-        }
-    });
+                let (appkey, role) = db
+                    .as_dao::<AppKeyDao>()
+                    .get_for_name(rm.name.clone())
+                    .await
+                    .map_err(|e| model::Error::internal(e.to_string()))?;
+
+                db.as_dao::<AppKeyDao>()
+                    .remove(rm.name, rm.identity)
+                    .await
+                    .map_err(Into::<model::Error>::into)?;
+
+                let _ = create_tx
+                    .send(model::event::Event::DroppedKey(appkey.to_core_model(role)))
+                    .await;
+                Ok(())
+            }
+        });
+    }
 
     Ok(())
 }

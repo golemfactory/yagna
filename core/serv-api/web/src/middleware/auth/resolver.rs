@@ -18,6 +18,8 @@ impl AppKeyCache {
         let mut page = 1;
         let mut appkeys = vec![];
 
+        log::trace!("AppKeyCache: asking Identity service for app-keys.");
+
         loop {
             let (mut keys, pages) = bus::service(model::BUS_ID)
                 .send(model::List {
@@ -90,6 +92,8 @@ impl AppKeyCache {
         let this = self.clone();
         let endpoint = BUS_ID.to_string();
 
+        log::trace!("AppKeyCache: binding endpoints listening to events.");
+
         let _ = bus::bind(&endpoint, move |event: model::event::Event| {
             let this = this.clone();
 
@@ -111,6 +115,8 @@ impl AppKeyCache {
                 Ok(())
             }
         });
+
+        log::trace!("AppKeyCache: subscribing to events notifications.");
         bus::service(model::BUS_ID)
             .send(model::Subscribe { endpoint })
             .await??;

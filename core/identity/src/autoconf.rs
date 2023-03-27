@@ -32,6 +32,6 @@ pub fn preconfigured_node_id() -> anyhow::Result<Option<NodeId>> {
     Ok(Some(NodeId::from(secret.public().address().as_ref())))
 }
 
-pub fn preconfigured_appkey() -> anyhow::Result<Option<String>> {
-    Ok(env::var(ENV_AUTOCONF_APP_KEY).ok())
+pub fn preconfigured_appkey() -> Option<String> {
+    env::var(ENV_AUTOCONF_APP_KEY).ok()
 }
