@@ -4,8 +4,7 @@ extern crate serial_test;
 use std::{fs, path::PathBuf};
 
 use ya_manifest_test_utils::*;
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::Keystore;
+use ya_manifest_utils::{keystore::x509_keystore::X509Keystore, policy::CertPermissions};
 
 static TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -26,7 +25,7 @@ fn valid_certificate_test() {
     let request = prepare_request(resource_cert_dir);
 
     // Then
-    let keystore = Keystore::load(&test_cert_dir).expect("Can load certificates");
+    let keystore = X509Keystore::load(&test_cert_dir).expect("Can load certificates");
     keystore
         .verify_signature(request.cert, request.sig, request.sig_alg, request.data)
         .expect("Signature and cert can be validated")
@@ -47,7 +46,7 @@ fn invalid_certificate_test() {
     let request = prepare_request(resource_cert_dir);
 
     // Then
-    let keystore = Keystore::load(&test_cert_dir).expect("Can load certificates");
+    let keystore = X509Keystore::load(&test_cert_dir).expect("Can load certificates");
     let result =
         keystore.verify_signature(request.cert, request.sig, request.sig_alg, request.data);
     assert!(

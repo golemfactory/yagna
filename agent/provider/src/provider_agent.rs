@@ -65,7 +65,7 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AgentNegotiatorsConfig {
     pub rules_manager: RulesManager,
 }
@@ -253,7 +253,7 @@ impl ProviderAgent {
         exeunit_desc: ExeUnitDesc,
     ) -> anyhow::Result<CreateOffer> {
         let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-            "linear" => Box::new(LinearPricingOffer::default()),
+            "linear" => Box::<LinearPricingOffer>::default(),
             other => return Err(anyhow!("Unsupported pricing model: {}", other)),
         };
         let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;

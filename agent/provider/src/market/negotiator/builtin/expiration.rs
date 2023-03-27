@@ -238,6 +238,7 @@ impl Config {
 #[cfg(test)]
 mod test_expiration_negotiator {
     use super::*;
+
     use ya_agreement_utils::agreement::expand;
     use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferDefinition, OfferTemplate, ServiceInfo};
     use ya_client_model::market::proposal::State;
@@ -281,10 +282,11 @@ mod test_expiration_negotiator {
 
     impl ToProposal for OfferTemplate {
         fn to_proposal(self) -> ProposalView {
+            let template = self.into_template();
             ProposalView {
                 content: OfferTemplate {
-                    properties: expand(self.properties),
-                    constraints: self.constraints,
+                    properties: expand(template.properties),
+                    constraints: template.constraints,
                 },
                 id: "sagdshgdfgd".to_string(),
                 issuer: Default::default(),

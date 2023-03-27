@@ -821,7 +821,11 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::debug!("Offer created: {}", offer.display());
+            log::info!(
+                "Offer for preset: {} = {}",
+                msg.preset.name,
+                offer.display()
+            );
 
             log::info!("Subscribing to events... [{}]", msg.preset.name);
 
@@ -1031,8 +1035,7 @@ impl Handler<Unsubscribe> for ProviderMarket {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
                 std::mem::take(&mut self.subscriptions)
-                    .into_iter()
-                    .map(|(k, _)| k)
+                    .into_keys()
                     .collect::<Vec<_>>()
             }
             OfferKind::WithPresets(preset_names) => {

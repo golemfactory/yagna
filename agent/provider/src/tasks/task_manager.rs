@@ -490,6 +490,7 @@ impl Handler<BreakAgreement> for TaskManager {
 
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
+        let agreement_id = msg.agreement_id.clone();
 
         self.cancel_handles(ctx, &msg.agreement_id);
 
@@ -519,13 +520,20 @@ impl Handler<BreakAgreement> for TaskManager {
                 finish_transition(&actx.myself, &msg.agreement_id, new_state).await?;
 
                 log::info!("Agreement [{}] cleanup finished.", msg.agreement_id);
-                Ok(())
+                anyhow::Ok(())
             }
             .await
         }
-        .map_err(move |error: Error| log::error!("Can't break agreement. Error: {}", error));
+        .into_actor(self)
+        .map(move |result, myself, _| match result {
+            Err(e) if myself.tasks.is_agreement_finalized(&agreement_id) => {
+                log::warn!("Can't break already finalized agreement. Error: {e}")
+            }
+            Err(e) => log::error!("Can't break agreement. Error: {e}"),
+            _ => (),
+        });
 
-        ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
+        ActorResponse::r#async(future.map(|_, _, _| Ok(())))
     }
 }
 

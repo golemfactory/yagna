@@ -22,8 +22,7 @@ pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
 pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
-pub const DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY: &str =
-    "golem.srv.comp.payload.cert.permissions";
+pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.node.descriptor";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
@@ -111,19 +110,20 @@ impl AppManifest {
             })
     }
 
-    pub fn is_outbound_requested(&self) -> bool {
-        if let Some(urls) = self
-            .comp_manifest
+    /// Returns empty vector if there is no outbound requested
+    pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
+        self.comp_manifest
             .as_ref()
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
             .and_then(|out| out.urls.as_ref())
-        {
-            !urls.is_empty()
-        } else {
-            false
-        }
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn is_outbound_requested(&self) -> bool {
+        self.get_outbound_requested_urls().is_empty().not()
     }
 
     pub fn features(&self) -> HashSet<Feature> {
@@ -285,21 +285,17 @@ impl<'de> Deserialize<'de> for Command {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum ArgMatch {
     /// Byte-to-byte argument equality (default).
     #[strum(ascii_case_insensitive)]
+    #[default]
     Strict,
     /// Treat argument as regular expression.
     /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
     /// w/o the support for look around and backreferences (among others).
     #[strum(ascii_case_insensitive)]
     Regex,
-}
-
-impl Default for ArgMatch {
-    fn default() -> Self {
-        ArgMatch::Strict
-    }
 }
 
 /// # Net

@@ -7,8 +7,8 @@ use structopt::StructOpt;
 use ya_agreement_utils::Error;
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY, DEMAND_MANIFEST_PROPERTY,
     DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 use ya_negotiators::component::{
@@ -81,15 +81,16 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let demand_permissions_present = their
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
-            .is_ok();
+        let node_descriptor = their
+            .get_property::<String>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
+            .ok();
 
         if manifest.is_outbound_requested() {
             match self.rules_manager.check_outbound_rules(
                 manifest,
+                their.issuer,
                 manifest_sig,
-                demand_permissions_present,
+                node_descriptor,
             ) {
                 crate::rules::CheckRulesResult::Accept => acceptance(ours, score),
                 crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
@@ -236,7 +237,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let (policy, _tmpdir) = build_policy(&format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}",
             CAPABILITIES_PROPERTY

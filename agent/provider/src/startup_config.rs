@@ -19,6 +19,7 @@ use crate::cli::clean::CleanConfig;
 use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
 use crate::cli::keystore::KeystoreConfig;
+use crate::cli::pre_install::PreInstallConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
 use crate::cli::rule::RuleCommand;
@@ -233,6 +234,8 @@ pub enum Commands {
     Config(ConfigConfig),
     /// Manage offer presets
     Preset(PresetsConfig),
+    /// Run once by the installer before any other commands
+    PreInstall(PreInstallConfig),
     /// Manage hardware profiles
     Profile(ProfileConfig),
     /// Manage ExeUnits

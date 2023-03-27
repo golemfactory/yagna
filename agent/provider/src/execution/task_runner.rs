@@ -629,7 +629,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                     _ => anyhow::bail!("offer template: invalid usage vector format"),
                 }
 
-                log::info!("offer-template: {} = {:?}", preset.name, template);
+                log::debug!("offer-template: {} = {:?}", preset.name, template);
                 result.insert(preset.name, template);
             }
             Ok(result)

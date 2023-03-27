@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::fmt::Formatter;
 
-use crate::agreement::flatten;
+use crate::agreement::{flatten, flatten_value, PROPERTY_TAG};
 use crate::Error;
 
 /// TODO: Could we use Constraints instead of String?? This would require parsing string.
 ///  It is complicated, but we could use code from resolver to do this.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct OfferTemplate {
     pub properties: Value,
     pub constraints: String,
@@ -84,6 +85,13 @@ impl OfferTemplate {
             .collect();
         Ok(map)
     }
+
+    pub fn flatten(&self) -> OfferTemplate {
+        OfferTemplate {
+            properties: flatten_value(self.clone().properties),
+            constraints: self.constraints.clone(),
+        }
+    }
 }
 
 pub fn patch(a: &mut Value, b: Value) {
@@ -95,5 +103,42 @@ pub fn patch(a: &mut Value, b: Value) {
             }
         }
         (a, b) => *a = b,
+    }
+}
+
+pub struct PointerPaths {
+    /// Pointer path
+    pub path: String,
+    /// Pointer path ending with `PROPERTY_TAG`
+    pub path_w_tag: String,
+}
+
+pub fn property_to_pointer_paths(property: &str) -> PointerPaths {
+    let path = format!("/{}", property.replace('.', "/"));
+    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
+    PointerPaths { path, path_w_tag }
+}
+
+impl std::fmt::Display for OfferTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let template = self.flatten();
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string_pretty(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "{:?}", template),
+        }
+    }
+}
+
+impl std::fmt::Debug for OfferTemplate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let template = self.flatten();
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "(serialization error)"),
+        }
     }
 }
