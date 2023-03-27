@@ -6,9 +6,10 @@ use self::{
     x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::policy::CertPermissions;
-use chrono::{DateTime, Utc};
+use chrono::SecondsFormat;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
+use serde_json::Value;
 use std::{
     collections::{BTreeSet, HashSet},
     ffi::OsStr,
@@ -16,6 +17,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// Large enum variant caused by flatten maps of possible additional fields in 'ValidatedCertificate'.
+#[allow(clippy::large_enum_variant)]
 #[derive(Eq, PartialEq)]
 pub enum Cert {
     X509(X509CertData),
@@ -26,6 +29,7 @@ pub enum Cert {
 }
 
 impl Cert {
+    /// Certificate id (long).
     pub fn id(&self) -> String {
         match self {
             Cert::Golem { id, cert: _ } => id.into(),
@@ -33,20 +37,29 @@ impl Cert {
         }
     }
 
-    pub fn not_after(&self) -> DateTime<Utc> {
-        match self {
+    /// Not_after date in RFC3339 format.
+    pub fn not_after(&self) -> String {
+        let not_after = match self {
             Cert::X509(cert) => cert.not_after,
             Cert::Golem { id: _, cert } => cert.validity_period.not_after,
+        };
+        not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
+    }
+
+    /// Permissions displayed Json value.
+    pub fn permissions(&self) -> Value {
+        match self {
+            Cert::X509(cert) => serde_json::json!(cert.permissions),
+            Cert::Golem { cert, .. } => serde_json::json!(cert.permissions),
         }
     }
 
-    pub fn subject(&self) -> String {
+    /// Subject displayed Json value.
+    /// Json for X.509 certificate, 'display_name' for Golem certificate.
+    pub fn subject(&self) -> Value {
         match self {
-            Cert::X509(cert) => {
-                serde_json::to_string(&cert.subject).expect("Can serialize X509 fields")
-            }
-            Cert::Golem { id: _, cert } => serde_json::to_string(&cert.subject)
-                .expect("Can serialize Golem certificate fields"),
+            Cert::X509(cert) => serde_json::json!(cert.subject),
+            Cert::Golem { cert, .. } => serde_json::json!(cert.subject.display_name),
         }
     }
 }

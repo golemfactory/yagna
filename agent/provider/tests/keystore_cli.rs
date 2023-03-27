@@ -257,6 +257,18 @@ fn verify_not_after_date_format() {
     assert_eq!(read_not_after(&result, "25b9430c"), "2122-07-17T12:05:22Z")
 }
 
+#[serial]
+#[test]
+fn verify_subject_format() {
+    let result = add_and_list(
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+        vec![],
+        false,
+    );
+    assert_eq!(read_subject(&result, "cb16a2ed"), "Example partner cert");
+    assert_eq!(read_subject(&result, "25b9430c"), "{\"C\":\"CZ\",\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\",\"ST\":\"Bohemia\"}")
+}
+
 fn add_and_list(
     certificates: Vec<&str>,
     permissions: Vec<&str>,
@@ -355,6 +367,10 @@ fn read_not_after(certs: &HashMap<String, Value>, id: &str) -> String {
 
 fn read_permissions(certs: &HashMap<String, Value>, id: &str) -> String {
     read_field(certs, id, "Permissions")
+}
+
+fn read_subject(certs: &HashMap<String, Value>, id: &str) -> String {
+    read_field(certs, id, "Subject")
 }
 
 fn read_field(certs: &HashMap<String, Value>, id: &str, field: &str) -> String {
