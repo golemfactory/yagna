@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
@@ -587,27 +588,42 @@ impl Handler<RpcRawCall> for Vpn {
                 //Forward packet into raw connection (VpnRawSocket)
                 //look for impl StreamHandler<Vec<u8>> for VpnRawSocket
                 let mut src_tx = connection.src_tx.clone();
-                let fut = async move { src_tx.send(payload).await }
-                    .into_actor(self)
-                    .map(move |res, self2, ctx| {
-                        {
-                            log::info!("VPN: raw packet has been sent to connection.src_tx {}", packet_no);
-                            res.map_err(|e| {
-                                log::error!("VPN {}: cannot sent into raw endpoint: {e}", e);
-                                ctx.address().do_send(Disconnect::new(
-                                    None,
-                                    Some("TODO implement".into()),
-                                    DisconnectReason::SinkClosed,
-                                ));
-
-                                ya_service_bus::error::Error::RemoteError(
+                let fut = async move {
+                    tokio::time::timeout(Duration::from_millis(300), src_tx.send(payload)).await
+                }
+                .into_actor(self)
+                .map(move |res, self2, ctx| {
+                    {
+                        let res = match res {
+                            Ok(res) => res,
+                            Err(_) => {
+                                log::warn!("VPN: timeout on sent to raw endpoint");
+                                return Err(ya_service_bus::error::Error::RemoteError(
                                     self2.node_id.clone(),
-                                    format!("VPN: cannot sent into raw endpoint: {e}"),
-                                )
-                            })
-                        }
-                        .map(|_| Vec::new())
-                    });
+                                    format!("VPN: timeout on sent to raw endpoint"),
+                                ));
+                            }
+                        };
+                        log::info!(
+                            "VPN: raw packet has been sent to connection.src_tx {}",
+                            packet_no
+                        );
+                        res.map_err(|e| {
+                            log::error!("VPN {}: cannot sent into raw endpoint: {e}", e);
+                            ctx.address().do_send(Disconnect::new(
+                                None,
+                                Some("TODO implement".into()),
+                                DisconnectReason::SinkClosed,
+                            ));
+
+                            ya_service_bus::error::Error::RemoteError(
+                                self2.node_id.clone(),
+                                format!("VPN: cannot sent into raw endpoint: {e}"),
+                            )
+                        })
+                    }
+                    .map(|_| Vec::new())
+                });
                 return ActorResponse::r#async(fut);
             } else {
                 log::error!("VPN {}: cannot find connection", self.vpn.id());
