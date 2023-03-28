@@ -577,6 +577,7 @@ impl Handler<RpcRawCall> for Vpn {
 
             if let Some((_connection_meta, connection)) = connection_raw {
                 let payload = msg.body;
+                log::info!("VPN: sending raw packet to connection.src_tx");
 
                 //Forward packet into raw connection (VpnRawSocket)
                 //look for impl StreamHandler<Vec<u8>> for VpnRawSocket

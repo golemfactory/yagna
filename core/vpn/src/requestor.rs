@@ -13,6 +13,7 @@ use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
@@ -406,11 +407,8 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
-        static mut PACKET_NO: u64 = 1;
-        let packet_no = unsafe {
-            PACKET_NO += 1;
-            PACKET_NO
-        };
+        static PACKET_NO: AtomicU64 = AtomicU64::new(0);
+        let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
 
         log::info!(
             "VPN WebSocket: VPN {} forwarding packet to {}",
