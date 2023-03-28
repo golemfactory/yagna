@@ -559,31 +559,8 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     type Result = ActorResponse<Self, <RpcEnvelope<VpnPacket> as Message>::Result>;
 
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
-        log::error!("VPN {}: received VpnPacket", self.vpn.id());
-
-        if !self.connections_raw.is_empty() {
-            if let Some(mut connection) = self.connections_raw.values_mut().next().cloned() {
-                let payload = msg.into_inner().0;
-                let fut = async move { connection.src_tx.send(payload).await }
-                    .into_actor(self)
-                    .map(move |res, _, ctx| {
-                        res.map_err(|e| {
-                            ctx.address().do_send(Disconnect::new(
-                                None,
-                                Some("TODO implement".into()),
-                                DisconnectReason::SinkClosed,
-                            ));
-
-                            log::error!("VPN {}: cannot sent", e);
-                            ya_core_model::activity::RpcMessageError::NotFound(e.to_string())
-                        })
-                    });
-                return ActorResponse::r#async(fut);
-            }
-        } else {
-            self.stack_network.receive(msg.into_inner().0);
-            self.stack_network.poll();
-        }
+        self.stack_network.receive(msg.into_inner().0);
+        self.stack_network.poll();
         ActorResponse::reply(Ok(()))
     }
 }
@@ -609,6 +586,7 @@ impl Handler<RpcRawCall> for Vpn {
                     .map(|res, self2, ctx| {
                         {
                             res.map_err(|e| {
+                                log::error!("VPN {}: cannot sent into raw endpoint: {e}", e);
                                 ctx.address().do_send(Disconnect::new(
                                     None,
                                     Some("TODO implement".into()),

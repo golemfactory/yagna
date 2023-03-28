@@ -9,11 +9,11 @@ use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::FutureExt;
 use futures::StreamExt;
+use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use rand::thread_rng;
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -406,30 +406,34 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
-
         static mut PACKET_NO: u64 = 1;
         let packet_no = unsafe {
             PACKET_NO += 1;
             PACKET_NO
         };
 
-        log::info!("VPN WebSocket: VPN {} forwarding packet to {}", packet_no, dst_node_id);
+        log::info!(
+            "VPN WebSocket: VPN {} forwarding packet to {}",
+            packet_no,
+            dst_node_id
+        );
         let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
-        log::info!("VPN WebSocket: VPN {} forwarding packet 2 to {}", packet_no, dst_node_id);
+        log::info!(
+            "VPN WebSocket: VPN {} forwarding packet 2 to {}",
+            packet_no,
+            dst_node_id
+        );
 
         ctx.wait(
             async move {
-                let _res = match vpn_node.push_raw_as(&current_node_id, data).await{
+                let _res = match vpn_node.push_raw_as(&current_node_id, data).await {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         log::error!("failed to send packet {:?}", e);
                         Err(anyhow::anyhow!("failed to send packet {:?}", e))
-                    },
+                    }
                 };
                 log::info!("Pushed message to {}", packet_no);
-
-
-
 
                 Ok::<_, anyhow::Error>(())
             }
@@ -470,6 +474,11 @@ impl StreamHandler<Vec<u8>> for VpnRawSocket {
     fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
         ctx.binary(data)
     }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        log::warn!("VPN WebSocket: UserRawConnection stream closed");
+        ctx.stop();
+    }
 }
 
 impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
@@ -508,6 +517,10 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
                 ctx.stop();
             }
         }
+    }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        todo!()
     }
 }
 
