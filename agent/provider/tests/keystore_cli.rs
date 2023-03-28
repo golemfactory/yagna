@@ -174,7 +174,7 @@ fn test_keystore_add_certificate_permissions(
 
 #[serial]
 #[test]
-fn test_keystore_add_certificate_second_time() {
+fn test_keystore_set_should_modify_existing_permissions() {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
 
     add(
