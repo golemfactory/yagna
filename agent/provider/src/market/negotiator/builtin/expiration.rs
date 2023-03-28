@@ -239,8 +239,9 @@ impl Config {
 mod test_expiration_negotiator {
     use super::*;
 
-    use ya_agreement_utils::agreement::expand;
-    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferDefinition, OfferTemplate, ServiceInfo};
+    use crate::typed_props::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
+
+    use ya_agreement_utils::{agreement::expand, OfferTemplate};
     use ya_client_model::market::proposal::State;
 
     fn expiration_config() -> serde_yaml::Value {
@@ -282,11 +283,10 @@ mod test_expiration_negotiator {
 
     impl ToProposal for OfferTemplate {
         fn to_proposal(self) -> ProposalView {
-            let template = self.into_template();
             ProposalView {
                 content: OfferTemplate {
-                    properties: expand(template.properties),
-                    constraints: template.constraints,
+                    properties: expand(self.properties),
+                    constraints: self.constraints,
                 },
                 id: "sagdshgdfgd".to_string(),
                 issuer: Default::default(),

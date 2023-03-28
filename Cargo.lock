@@ -7473,7 +7473,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -7970,6 +7970,7 @@ dependencies = [
 [[package]]
 name = "ya-agreement-utils"
 version = "0.2.0"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
 dependencies = [
  "chrono",
  "serde",
@@ -7998,6 +7999,7 @@ dependencies = [
 [[package]]
 name = "ya-builtin-negotiators"
 version = "0.1.0"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8476,6 +8478,7 @@ dependencies = [
 [[package]]
 name = "ya-negotiator-component"
 version = "0.1.0"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -8492,6 +8495,7 @@ dependencies = [
 [[package]]
 name = "ya-negotiator-shared-lib-interface"
 version = "0.1.0"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
 dependencies = [
  "abi_stable",
  "anyhow",
@@ -8508,6 +8512,7 @@ dependencies = [
 [[package]]
 name = "ya-negotiators"
 version = "0.1.0"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
 dependencies = [
  "actix",
  "actix_derive",

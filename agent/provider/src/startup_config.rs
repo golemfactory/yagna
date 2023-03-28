@@ -305,7 +305,8 @@ impl FileMonitor {
         let (tx, rx) = mpsc::channel();
         let (tx_ctl, mut rx_ctl) = oneshot::channel();
 
-        let mut watcher: RecommendedWatcher = Watcher::new(tx, config.watch_delay)?;
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, config.watch_delay)
+            .map_err(|e| notify::Error::Generic(format!("Creating file Watcher: {e}")))?;
 
         std::thread::spawn(move || {
             let mut active = false;

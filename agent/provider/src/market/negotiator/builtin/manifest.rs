@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::ops::Not;
@@ -17,15 +18,14 @@ use ya_negotiators::component::{
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 
 use crate::rules::{ManifestSignatureProps, RulesManager};
-use crate::startup_config::FileMonitor;
+//use crate::startup_config::FileMonitor;
 
 pub struct ManifestSignature {
     enabled: bool,
     rules_manager: RulesManager,
-
-    rulestore_monitor: FileMonitor,
-    keystore_monitor: FileMonitor,
-    whitelist_monitor: FileMonitor,
+    // rulestore_monitor: FileMonitor,
+    // keystore_monitor: FileMonitor,
+    // whitelist_monitor: FileMonitor,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -143,16 +143,20 @@ impl ManifestSignature {
             &config.rules_file,
             &config.whitelist_file,
             &config.cert_dir,
-        )?;
-        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
-            rules_manager.spawn_file_monitors()?;
+        )
+        .map_err(|e| anyhow!("Failed to load RulesManager: {e}"))?;
+
+        // TODO: enable and implement freeing resources in shurdown
+        // let (rulestore_monitor, keystore_monitor, whitelist_monitor) = rules_manager
+        //     .spawn_file_monitors()
+        //     .map_err(|e| anyhow!("Failed to spawn rules monitors: {e}"))?;
 
         Ok(ManifestSignature {
             enabled,
             rules_manager,
-            rulestore_monitor,
-            keystore_monitor,
-            whitelist_monitor,
+            // rulestore_monitor,
+            // keystore_monitor,
+            // whitelist_monitor,
         })
     }
 }
