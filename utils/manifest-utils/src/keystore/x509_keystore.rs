@@ -685,7 +685,6 @@ impl std::fmt::Debug for X509Keystore {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
     use openssl::asn1::Asn1Time;
     use test_case::test_case;
 
