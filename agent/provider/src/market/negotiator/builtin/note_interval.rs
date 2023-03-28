@@ -1,11 +1,12 @@
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_agreement_utils::{Error, OfferTemplate, ProposalView};
-use ya_negotiators::component::{RejectReason, Score};
+use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{NegotiationResult, NegotiatorComponent};
+use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
 
 use crate::display::EnableDisplay;
 
@@ -34,8 +35,14 @@ pub struct Config {
     pub debit_note_interval: std::time::Duration,
 }
 
-impl DebitNoteInterval {
-    pub fn new(config: serde_yaml::Value) -> anyhow::Result<Self> {
+impl NegotiatorFactory<DebitNoteInterval> for DebitNoteInterval {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<DebitNoteInterval> {
         let config: Config = serde_yaml::from_value(config)?;
 
         let min_interval = Duration::from_std(config.min_debit_note_interval)?;
@@ -57,7 +64,7 @@ impl DebitNoteInterval {
     }
 }
 
-impl NegotiatorComponent for DebitNoteInterval {
+impl NegotiatorComponentMut for DebitNoteInterval {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,

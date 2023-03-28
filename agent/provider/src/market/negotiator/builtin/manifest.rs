@@ -13,7 +13,8 @@ use ya_manifest_utils::{
     DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 use ya_negotiators::component::{
-    NegotiationResult, NegotiatorComponent, ProposalView, RejectReason, Score,
+    NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut, ProposalView,
+    RejectReason, Score,
 };
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 
@@ -36,7 +37,7 @@ pub struct ManifestSignatureConfig {
     pub cert_dir: PathBuf,
 }
 
-impl NegotiatorComponent for ManifestSignature {
+impl NegotiatorComponentMut for ManifestSignature {
     fn negotiate_step(
         &mut self,
         their: &ProposalView,
@@ -115,12 +116,20 @@ pub fn policy_from_env() -> anyhow::Result<NegotiatorConfig> {
     })
 }
 
-impl ManifestSignature {
-    pub fn new(config: serde_yaml::Value) -> anyhow::Result<Self> {
+impl NegotiatorFactory<ManifestSignature> for ManifestSignature {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<ManifestSignature> {
         let config: ManifestSignatureConfig = serde_yaml::from_value(config)?;
         Ok(ManifestSignature::from(config)?)
     }
+}
 
+impl ManifestSignature {
     pub fn from(config: ManifestSignatureConfig) -> anyhow::Result<Self> {
         let policy = config.policy;
         let policies = policy.policy_set();
@@ -197,7 +206,10 @@ mod tests {
         })
         .unwrap();
 
-        (ManifestSignature::new(config).unwrap(), tempdir)
+        (
+            ManifestSignature::new("", config, PathBuf::new()).unwrap(),
+            tempdir,
+        )
     }
 
     #[test]

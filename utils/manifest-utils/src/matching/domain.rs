@@ -39,9 +39,7 @@ impl DomainWhitelistState {
 
 impl DomainsMatcher {
     pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
-        Ok(DomainsMatcher::try_from(&DomainPatterns::load_or_create(
-            path,
-        )?)?)
+        DomainsMatcher::try_from(&DomainPatterns::load_or_create(path)?)
     }
 }
 

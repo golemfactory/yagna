@@ -1,11 +1,12 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_agreement_utils::{Error, OfferTemplate, ProposalView};
-use ya_negotiators::component::{RejectReason, Score};
+use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{NegotiationResult, NegotiatorComponent};
+use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
 
 use crate::display::EnableDisplay;
 
@@ -38,8 +39,14 @@ pub struct Config {
     pub payment_timeout_required_duration: std::time::Duration,
 }
 
-impl PaymentTimeout {
-    pub fn new(config: serde_yaml::Value) -> anyhow::Result<Self> {
+impl NegotiatorFactory<PaymentTimeout> for PaymentTimeout {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<PaymentTimeout> {
         let config: Config = serde_yaml::from_value(config)?;
 
         let min_timeout = Duration::from_std(config.min_payment_timeout)?;
@@ -64,7 +71,7 @@ impl PaymentTimeout {
     }
 }
 
-impl NegotiatorComponent for PaymentTimeout {
+impl NegotiatorComponentMut for PaymentTimeout {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,

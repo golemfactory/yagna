@@ -171,8 +171,9 @@ impl ProviderAgent {
 
         let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
 
-        let market =
-            ProviderMarket::new(api.market, &data_dir, args.market, agent_negotiators_cfg)?.start();
+        let market = ProviderMarket::new(api.market, &data_dir, args.market, agent_negotiators_cfg)
+            .await?
+            .start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner =
             TaskRunner::new(api.activity, args.runner, registry, data_dir.clone())?.start();
