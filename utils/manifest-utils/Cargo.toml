@@ -57,3 +57,4 @@ shlex = "1.1"
 tar = "0.4"
 test-case = "2.2"
 ya-manifest-test-utils = "0.1"
+openssl = { version = "0.10", features = ["vendored"] }

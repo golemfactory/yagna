@@ -692,14 +692,13 @@ mod tests {
     use super::asn1_time_to_date_time;
 
     // No test for malformed date because 'Asn1Time' arrvies from parsed certificate.
-    #[test_case("2023-03-29T11:59:59Z" ; "After epoch")]
-    #[test_case("1900-01-01T00:00:00Z" ; "Before epoch")]
-    pub fn read_not_after_test(time: &str) {
-        let date_time = DateTime::parse_from_rfc3339(time).unwrap();
-        let asn1_time = Asn1Time::from_unix(date_time.timestamp()).unwrap();
+    #[test_case("20230329115959Z", "2023-03-29T11:59:59Z" ; "After epoch")]
+    #[test_case("19000101000000Z", "1900-01-01T00:00:00Z" ; "Before epoch")]
+    pub fn read_not_after_test(asn1_time: &str, expected_time: &str) {
+        let asn1_time = Asn1Time::from_str(asn1_time).unwrap();
         let date_time = asn1_time_to_date_time(&asn1_time).unwrap();
         assert_eq!(
-            time,
+            expected_time,
             date_time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
         );
     }
