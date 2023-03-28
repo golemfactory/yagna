@@ -569,6 +569,7 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
+        log::info!("Get rawcall message from {}", msg.caller);
         if !self.connections_raw.is_empty() {
             let connection_raw = self
                 .connections_raw
