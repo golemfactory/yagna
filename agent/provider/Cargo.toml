@@ -25,7 +25,7 @@ ya-utils-cli = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.2", features = ['lock'] }
 ya-std-utils = "0.1"
-golem-certificate = { git = "https://github.com/golemfactory/golem-certificate", rev = "ee4982e2dfd4bcceaac04585bfcf6754ba7313c9" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate", rev = "a8eb02b80c8fd77daaf92ba27600564d4ff55fef" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"
