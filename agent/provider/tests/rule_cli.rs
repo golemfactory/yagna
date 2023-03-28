@@ -157,11 +157,41 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
 #[test_case("partner", "none")]
 #[test_case("partner", "whitelist")]
 #[serial_test::serial]
-#[ignore] // Enable it when Golem certificates will be available in tests
+fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    let cert_id =
+        add_certificate_to_keystore(data_dir.path(), &resource_cert_dir, "foo_req.cert.pem");
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("cert-id")
+        .arg(&cert_id)
+        .arg("--mode")
+        .arg(mode)
+        .assert()
+        .stderr(
+            "Error: Failed to set partner mode for certificate 25b9430c. Partner mode can be set only for Golem certificate.\n".to_string()
+        );
+}
+
+#[test_case("partner", "all")]
+#[test_case("partner", "none")]
+#[test_case("partner", "whitelist")]
+#[serial_test::serial]
 fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
-    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir);
+    let cert_id = add_certificate_to_keystore(
+        data_dir.path(),
+        &resource_cert_dir,
+        "partner-certificate.signed.json",
+    );
 
     Command::cargo_bin("ya-provider")
         .unwrap()
@@ -181,6 +211,44 @@ fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     let mode_actual = rule_to_mode(&result["outbound"][rule], &cert_id);
 
     assert_eq!(mode_actual.unwrap(), mode);
+}
+
+#[test_case("partner", "all")]
+#[test_case("partner", "none")]
+#[test_case("partner", "whitelist")]
+#[serial_test::serial]
+fn rule_set_with_import_golem_cert_should_add_cert_to_keystore_and_to_rulestore(
+    rule: &str,
+    mode: &str,
+) {
+    let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
+
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg(rule)
+        .arg("import-cert")
+        .arg(resource_cert_dir.join("partner-certificate.signed.json"))
+        .arg("--mode")
+        .arg(mode)
+        .assert()
+        .success();
+
+    let result = list_rules_command(data_dir.path());
+    let added_certs = list_certs(data_dir.path());
+
+    assert!(!added_certs.is_empty());
+    for cert in added_certs {
+        let mode_actual = result["outbound"][rule]
+            .as_object()
+            .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert)))
+            .map(|(_id, value)| &value["mode"]);
+
+        assert_eq!(mode_actual.unwrap(), mode);
+    }
 }
 
 #[test_case("audited-payload", "all")]
@@ -275,7 +343,11 @@ fn removing_cert_should_also_remove_its_rule() {
 
     let rule = "partner";
 
-    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir);
+    let cert_id = add_certificate_to_keystore(
+        data_dir.path(),
+        &resource_cert_dir,
+        "partner-certificate.signed.json",
+    );
 
     Command::cargo_bin("ya-provider")
         .unwrap()
@@ -331,13 +403,13 @@ fn remove_certificate_from_keystore(data_dir: &Path, cert_id: &str) {
         .success();
 }
 
-fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path) -> String {
+fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path, cert: &str) -> String {
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.to_str().unwrap())
         .arg("keystore")
         .arg("add")
-        .arg(resource_cert_dir.join("partner-certificate.signed.json"))
+        .arg(resource_cert_dir.join(cert))
         .assert()
         .success();
 
