@@ -10,43 +10,24 @@ pub use max_agreements::MaxAgreements;
 pub use note_interval::DebitNoteInterval;
 pub use payment_timeout::PaymentTimeout;
 
-use ya_negotiators::component::register_negotiator;
-use ya_negotiators::NegotiatorComponent;
+use ya_negotiators::component::{factory, register_negotiator};
 
 pub fn register_negotiators() {
     register_negotiator(
         "ya-provider",
         "LimitExpiration",
-        Box::new(|config, _| {
-            Ok(Box::new(LimitExpiration::new(config)?) as Box<dyn NegotiatorComponent>)
-        }),
+        factory::<LimitExpiration>(),
     );
-    register_negotiator(
-        "ya-provider",
-        "LimitAgreements",
-        Box::new(|config, _| {
-            Ok(Box::new(MaxAgreements::new(config)?) as Box<dyn NegotiatorComponent>)
-        }),
-    );
-    register_negotiator(
-        "ya-provider",
-        "PaymentTimeout",
-        Box::new(|config, _| {
-            Ok(Box::new(PaymentTimeout::new(config)?) as Box<dyn NegotiatorComponent>)
-        }),
-    );
+    register_negotiator("ya-provider", "LimitAgreements", factory::<MaxAgreements>());
+    register_negotiator("ya-provider", "PaymentTimeout", factory::<PaymentTimeout>());
     register_negotiator(
         "ya-provider",
         "DebitNoteInterval",
-        Box::new(|config, _| {
-            Ok(Box::new(DebitNoteInterval::new(config)?) as Box<dyn NegotiatorComponent>)
-        }),
+        factory::<DebitNoteInterval>(),
     );
     register_negotiator(
         "ya-provider",
         "ManifestSignature",
-        Box::new(|config, _| {
-            Ok(Box::new(ManifestSignature::new(config)?) as Box<dyn NegotiatorComponent>)
-        }),
+        factory::<ManifestSignature>(),
     );
 }

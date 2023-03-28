@@ -14,8 +14,8 @@ use ya_client_model::market::proposal::State;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Policy, PolicyConfig};
-use ya_negotiators::component::Score;
-use ya_negotiators::{NegotiationResult, NegotiatorComponent};
+use ya_negotiators::component::{NegotiatorFactory, Score};
+use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
 use ya_provider::market::negotiator::builtin::{
     manifest::ManifestSignatureConfig, ManifestSignature,
 };
@@ -78,7 +78,7 @@ fn manifest_negotiator_test_accepted_because_of_no_payload() {
     })
     .unwrap();
 
-    let mut manifest_negotiator = ManifestSignature::new(config).unwrap();
+    let mut manifest_negotiator = ManifestSignature::new("", config, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(payload);
@@ -679,7 +679,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     })
     .unwrap();
 
-    let mut manifest_negotiator = ManifestSignature::new(config).unwrap();
+    let mut manifest_negotiator = ManifestSignature::new("", config, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(Some(Payload {

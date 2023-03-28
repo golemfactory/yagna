@@ -3,52 +3,6 @@
 version = 3
 
 [[package]]
-name = "abi_stable"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c14e9b355e56a614082b552bf24c28b9db1ac50325c96125a1f2723575b39653"
-dependencies = [
- "abi_stable_derive",
- "abi_stable_shared",
- "core_extensions",
- "crossbeam-channel 0.5.7",
- "generational-arena",
- "libloading",
- "lock_api 0.4.9",
- "parking_lot 0.11.2",
- "repr_offset",
- "rustc_version 0.2.3",
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
-name = "abi_stable_derive"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3434fe2abd3d4c780fb4c23b747cdb8bc2fc1b52dc2329b7b40c1b62ae9f1ab"
-dependencies = [
- "abi_stable_shared",
- "as_derive_utils",
- "core_extensions",
- "proc-macro2",
- "quote",
- "rustc_version 0.2.3",
- "syn 1.0.109",
- "typed-arena",
-]
-
-[[package]]
-name = "abi_stable_shared"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a96112d6a13f37dd1cc2a2f07f7f12b7c3d176b6eec36e7987432a70fece8b48"
-dependencies = [
- "core_extensions",
-]
-
-[[package]]
 name = "actix"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -615,18 +569,6 @@ name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
-
-[[package]]
-name = "as_derive_utils"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc3613a62c7b739739a2cb1ee166ac275f16c5b86caf454ba21a2f79f04b025"
-dependencies = [
- "core_extensions",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "askama_escape"
@@ -1320,15 +1262,6 @@ name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
-
-[[package]]
-name = "core_extensions"
-version = "0.1.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a117e1ca5d83ff939487e48e143c6a642cebd01a88f472a4ec7dc4773690fda"
-dependencies = [
- "rustc_version 0.2.3",
-]
 
 [[package]]
 name = "cpufeatures"
@@ -2587,15 +2520,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generational-arena"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e1d3b771574f62d0548cee0ad9057857e9fc25d7a3335f140c84f6acd0bf601"
-dependencies = [
- "cfg-if 0.1.10",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3498,16 +3422,6 @@ name = "libc"
 version = "0.2.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99227334921fae1a979cf0bfdfcc6b3e5ce376ef57e16fb6fb3ea2ed6095f80c"
-
-[[package]]
-name = "libloading"
-version = "0.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "351a32417a12d5f7e82c368a66781e307834dae04c6ce0cd4456d52989229883"
-dependencies = [
- "cfg-if 1.0.0",
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "libm"
@@ -5463,15 +5377,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "repr_offset"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "422498868d83340d45980a20132f29cbdcf8a84bf6e9e95b151a0b47f1288df4"
-dependencies = [
- "rustc_version 0.2.3",
-]
-
-[[package]]
 name = "reqwest"
 version = "0.10.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7288,12 +7193,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
-name = "typed-arena"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
-
-[[package]]
 name = "typed-headers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7970,12 +7869,12 @@ dependencies = [
 [[package]]
 name = "ya-agreement-utils"
 version = "0.2.0"
-source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=77e0598a2c0d2148466970469ccc66f8820044c5#77e0598a2c0d2148466970469ccc66f8820044c5"
 dependencies = [
  "chrono",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.19",
  "thiserror",
  "ya-client-model",
 ]
@@ -7999,7 +7898,7 @@ dependencies = [
 [[package]]
 name = "ya-builtin-negotiators"
 version = "0.1.0"
-source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=77e0598a2c0d2148466970469ccc66f8820044c5#77e0598a2c0d2148466970469ccc66f8820044c5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8009,7 +7908,7 @@ dependencies = [
  "log-derive",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.19",
  "ya-agreement-utils 0.2.0",
  "ya-client-model",
  "ya-negotiator-component",
@@ -8478,41 +8377,28 @@ dependencies = [
 [[package]]
 name = "ya-negotiator-component"
 version = "0.1.0"
-source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=77e0598a2c0d2148466970469ccc66f8820044c5#77e0598a2c0d2148466970469ccc66f8820044c5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "derive_more",
+ "futures 0.3.27",
  "lazy_static",
  "log",
  "log-derive",
+ "regex",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.19",
+ "tokio 1.26.0",
  "ya-agreement-utils 0.2.0",
  "ya-client-model",
-]
-
-[[package]]
-name = "ya-negotiator-shared-lib-interface"
-version = "0.1.0"
-source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
-dependencies = [
- "abi_stable",
- "anyhow",
- "lazy_static",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "thiserror",
- "ya-agreement-utils 0.2.0",
- "ya-client-model",
- "ya-negotiator-component",
 ]
 
 [[package]]
 name = "ya-negotiators"
 version = "0.1.0"
-source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e#b8ceb3a3396e3ea9ff3fa9245c55984331ebc57e"
+source = "git+https://github.com/nieznanysprawiciel/ya-negotiator?rev=77e0598a2c0d2148466970469ccc66f8820044c5#77e0598a2c0d2148466970469ccc66f8820044c5"
 dependencies = [
  "actix",
  "actix_derive",
@@ -8523,7 +8409,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.19",
  "thiserror",
  "tokio 1.26.0",
  "tokio-stream",
@@ -8531,7 +8417,6 @@ dependencies = [
  "ya-builtin-negotiators",
  "ya-client-model",
  "ya-negotiator-component",
- "ya-negotiator-shared-lib-interface",
 ]
 
 [[package]]
@@ -8728,7 +8613,7 @@ dependencies = [
  "semver 0.11.0",
  "serde",
  "serde_json",
- "serde_yaml 0.8.26",
+ "serde_yaml 0.9.19",
  "serial_test 0.9.0",
  "shared_child",
  "shlex 1.1.0",

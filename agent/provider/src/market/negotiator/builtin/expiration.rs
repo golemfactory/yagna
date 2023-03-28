@@ -2,12 +2,13 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use humantime;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_agreement_utils::{Error, OfferTemplate, ProposalView};
-use ya_negotiators::component::{RejectReason, Score};
+use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{NegotiationResult, NegotiatorComponent};
+use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
 
 use crate::display::EnableDisplay;
 
@@ -56,8 +57,14 @@ pub struct Config {
     pub debit_note_acceptance_deadline: std::time::Duration,
 }
 
-impl LimitExpiration {
-    pub fn new(config: serde_yaml::Value) -> anyhow::Result<LimitExpiration> {
+impl NegotiatorFactory<LimitExpiration> for LimitExpiration {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<LimitExpiration> {
         let config: Config = serde_yaml::from_value(config)?;
         let component = LimitExpiration {
             min_expiration: chrono::Duration::from_std(config.min_agreement_expiration)?,
@@ -105,7 +112,7 @@ fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
     }
 }
 
-impl NegotiatorComponent for LimitExpiration {
+impl NegotiatorComponentMut for LimitExpiration {
     fn negotiate_step(
         &mut self,
         their: &ProposalView,
@@ -302,7 +309,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_lower_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(config).unwrap();
+        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -335,7 +342,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_greater_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(config).unwrap();
+        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -366,7 +373,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_equal_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(config).unwrap();
+        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -401,7 +408,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_to_high_expiration() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(config).unwrap();
+        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -431,7 +438,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_expiration_ok() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(config).unwrap();
+        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())

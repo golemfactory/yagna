@@ -199,7 +199,7 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(
+    pub async fn new(
         api: MarketProviderApi,
         data_dir: &Path,
         config: MarketConfig,
@@ -216,11 +216,12 @@ impl ProviderMarket {
         let negotiators_workdir = data_dir.join(&config.negotiators_workdir);
         std::fs::create_dir_all(&negotiators_workdir)?;
 
-        let (negotiator, callbacks) = factory::create_negotiator(
+        let (negotiator, callbacks) = factory::create_negotiator_actor(
             negotiator_config,
             negotiators_workdir,
             config.negotiators_plugins.clone(),
-        )?;
+        )
+        .await?;
 
         Ok(ProviderMarket {
             negotiator,

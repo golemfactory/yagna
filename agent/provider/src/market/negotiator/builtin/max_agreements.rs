@@ -1,12 +1,13 @@
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, ProposalView};
-use ya_negotiators::component::{RejectReason, Score};
+use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{AgreementResult, NegotiationResult, NegotiatorComponent};
+use ya_negotiators::{AgreementResult, NegotiationResult, NegotiatorComponentMut};
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
@@ -21,21 +22,29 @@ pub struct MaxAgreements {
     max_agreements: u32,
 }
 
-impl MaxAgreements {
-    pub fn new(config: serde_yaml::Value) -> anyhow::Result<MaxAgreements> {
+impl NegotiatorFactory<MaxAgreements> for MaxAgreements {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<MaxAgreements> {
         let config: Config = serde_yaml::from_value(config)?;
         Ok(MaxAgreements {
             max_agreements: config.max_simultaneous_agreements,
             active_agreements: HashSet::new(),
         })
     }
+}
 
+impl MaxAgreements {
     pub fn has_free_slot(&self) -> bool {
         self.active_agreements.len() < self.max_agreements as usize
     }
 }
 
-impl NegotiatorComponent for MaxAgreements {
+impl NegotiatorComponentMut for MaxAgreements {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
