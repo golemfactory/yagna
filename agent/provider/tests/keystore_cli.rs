@@ -213,7 +213,7 @@ fn test_keystore_remove_certificate_check_permissions() {
         &cert_dir,
     );
 
-    // This call doesn't specify any permissions, so the will be removed.
+    // Removing a certificate from the chain should not remove permissions of remaining ones.
     remove(&cert_dir, vec!["fe4f04e2"]);
 
     let result = list_certificates_command(&cert_dir).unwrap();
