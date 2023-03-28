@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
@@ -569,7 +570,10 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        log::info!("Get rawcall message from {}", msg.caller);
+        static PACKET_NO: AtomicU64 = AtomicU64::new(0);
+        let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
+
+        log::info!("Get rawcall message from {} {}", msg.caller, packet_no);
         if !self.connections_raw.is_empty() {
             let connection_raw = self
                 .connections_raw
@@ -578,15 +582,16 @@ impl Handler<RpcRawCall> for Vpn {
 
             if let Some((_connection_meta, connection)) = connection_raw {
                 let payload = msg.body;
-                log::info!("VPN: sending raw packet to connection.src_tx");
+                log::info!("VPN: sending raw packet to connection.src_tx {}", packet_no);
 
                 //Forward packet into raw connection (VpnRawSocket)
                 //look for impl StreamHandler<Vec<u8>> for VpnRawSocket
                 let mut src_tx = connection.src_tx.clone();
                 let fut = async move { src_tx.send(payload).await }
                     .into_actor(self)
-                    .map(|res, self2, ctx| {
+                    .map(move |res, self2, ctx| {
                         {
+                            log::info!("VPN: raw packet has been sent to connection.src_tx {}", packet_no);
                             res.map_err(|e| {
                                 log::error!("VPN {}: cannot sent into raw endpoint: {e}", e);
                                 ctx.address().do_send(Disconnect::new(
