@@ -520,7 +520,8 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        todo!()
+        log::warn!("VPN WebSocket: Websocket stream closed");
+        ctx.stop();
     }
 }
 
