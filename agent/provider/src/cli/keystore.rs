@@ -231,14 +231,8 @@ impl CertTableBuilder {
 
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
-            values.push(match cert {
-                Cert::X509(cert) => {
-                    serde_json::json! { [ id_prefix, cert.not_after, cert.subject, cert.permissions ] }
-                }
-                Cert::Golem { cert, .. } => {
-                    serde_json::json! { [ id_prefix, "", "", cert.permissions ] }
-                }
-            });
+            values
+                .push(serde_json::json! { [ id_prefix, cert.not_after(), cert.subject(), cert.permissions() ] });
         }
 
         let columns = vec![

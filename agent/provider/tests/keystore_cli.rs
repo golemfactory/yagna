@@ -145,6 +145,20 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     vec![("fe4f04e2", "none"), ("55e451bd", "outbound-manifest"), ("20e9eb45", "outbound-manifest")];
     "Add multiple certificates and check permissions"
 )]
+#[test_case(
+    vec!["root-certificate.signed.json", "partner-certificate.signed.json"],
+    vec![],
+    false,
+    vec![("80c84b27", "all"), ("cb16a2ed", "{\"outbound\":\"unrestricted\"}")];
+    "Add multiple Golem certificates and check permissions"
+)]
+#[test_case(
+    vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+    vec![],
+    false,
+    vec![("25b9430c", "none"), ("cb16a2ed", "{\"outbound\":\"unrestricted\"}")];
+    "Add Golem and X509 certificate and then check permissions"
+)]
 #[serial]
 fn test_keystore_add_certificate_permissions(
     certificates: Vec<&str>,
@@ -152,11 +166,135 @@ fn test_keystore_add_certificate_permissions(
     whole_chain: bool,
     expected: Vec<(&str, &str)>,
 ) {
+    let result = add_and_list(certificates, permissions, whole_chain);
+    for (cert_id, perm) in expected {
+        assert_eq!(read_permissions(&result, dbg!(cert_id)), perm);
+    }
+}
+
+#[serial]
+#[test]
+fn test_keystore_set_should_modify_existing_permissions() {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
 
+    add(
+        vec!["foo_ca-chain.cert.pem"],
+        vec!["all"],
+        true,
+        &resource_cert_dir,
+        &cert_dir,
+    );
+
+    // This call doesn't specify any permissions, so these should be removed.
+    add(
+        vec!["foo_ca-chain.cert.pem"],
+        vec![],
+        true,
+        &resource_cert_dir,
+        &cert_dir,
+    );
+
+    let result = list_certificates_command(&cert_dir).unwrap();
+
+    assert_eq!(read_permissions(&result, "55e451bd"), "none");
+    assert_eq!(read_permissions(&result, "fe4f04e2"), "none");
+}
+
+#[serial]
+#[test]
+fn test_keystore_remove_certificate_check_permissions() {
+    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
+
+    add(
+        vec!["foo_ca-chain.cert.pem", "foo_req.cert.pem"],
+        vec!["outbound-manifest"],
+        true,
+        &resource_cert_dir,
+        &cert_dir,
+    );
+
+    // Removing a certificate from the chain should not remove permissions of remaining ones.
+    remove(&cert_dir, vec!["fe4f04e2"]);
+
+    let result = list_certificates_command(&cert_dir).unwrap();
+
+    assert_eq!(read_permissions(&result, "55e451bd"), "outbound-manifest");
+    assert_eq!(read_permissions(&result, "25b9430c"), "outbound-manifest");
+}
+
+#[serial]
+#[test]
+fn test_add_and_remove_certificates() {
+    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
+    add(
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+        vec![],
+        false,
+        &resource_cert_dir,
+        &cert_dir,
+    );
+
+    let result = list_certificates_command(&cert_dir).unwrap();
+    assert!(result.contains_key("cb16a2ed"));
+    assert!(result.contains_key("25b9430c"));
+    assert_eq!(result.len(), 2);
+
+    remove(&cert_dir, vec!["cb16a2ed", "25b9430c"]);
+
+    let result = list_certificates_command(&cert_dir).unwrap();
+    assert!(result.is_empty());
+}
+
+#[serial]
+#[test]
+fn verify_not_after_date_format() {
+    let result = add_and_list(
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+        vec![],
+        false,
+    );
+    assert_eq!(read_not_after(&result, "cb16a2ed"), "2025-01-01T00:00:00Z");
+    assert_eq!(read_not_after(&result, "25b9430c"), "2122-07-17T12:05:22Z")
+}
+
+#[serial]
+#[test]
+fn verify_subject_format() {
+    let result = add_and_list(
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+        vec![],
+        false,
+    );
+    assert_eq!(read_subject(&result, "cb16a2ed"), "Example partner cert");
+    assert_eq!(read_subject(&result, "25b9430c"), "{\"C\":\"CZ\",\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\",\"ST\":\"Bohemia\"}")
+}
+
+fn add_and_list(
+    certificates: Vec<&str>,
+    permissions: Vec<&str>,
+    whole_chain: bool,
+) -> HashMap<String, Value> {
+    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
+    add(
+        certificates,
+        permissions,
+        whole_chain,
+        &resource_cert_dir,
+        &cert_dir,
+    );
+    list_certificates_command(&cert_dir).unwrap()
+}
+
+fn add(
+    certificates: Vec<&str>,
+    permissions: Vec<&str>,
+    whole_chain: bool,
+    resource_cert_dir: &Path,
+    cert_dir: &Path,
+) {
     let mut command = Command::cargo_bin("ya-provider").unwrap();
     command
-        .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
+        .args(["--cert-dir", cert_dir.to_str().unwrap()])
         .arg("keystore")
         .arg("add");
 
@@ -178,84 +316,18 @@ fn test_keystore_add_certificate_permissions(
     }
 
     command.arg("--json").assert().success();
+}
 
-    let result = list_certificates_command(&cert_dir).unwrap();
-    println!("Result: {result:#?}");
-    for (cert_id, perm) in expected {
-        assert_eq!(check_permissions(&result, dbg!(cert_id)), perm);
+fn remove(cert_dir: &Path, certificate_ids: Vec<&str>) {
+    let mut command = Command::cargo_bin("ya-provider").unwrap();
+    command
+        .args(["--cert-dir", cert_dir.to_str().unwrap()])
+        .arg("keystore")
+        .arg("remove");
+    for certificate_id in certificate_ids {
+        command.arg(certificate_id);
     }
-}
-
-#[serial]
-#[test]
-fn test_keystore_add_certificate_second_time() {
-    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
-
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
-        .arg("keystore")
-        .arg("add")
-        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
-        .arg("--permissions")
-        .arg("all")
-        .arg("--whole-chain")
-        .arg("--json")
-        .assert()
-        .success();
-
-    // This call doesn't specify any permissions, so the will be removed.
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
-        .arg("keystore")
-        .arg("add")
-        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
-        .arg("--whole-chain")
-        .arg("--json")
-        .assert()
-        .success();
-
-    let result = list_certificates_command(&cert_dir).unwrap();
-
-    assert_eq!(check_permissions(&result, "55e451bd"), "none");
-    assert_eq!(check_permissions(&result, "fe4f04e2"), "none");
-}
-
-#[serial]
-#[test]
-fn test_keystore_remove_certificate_check_permissions() {
-    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
-
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
-        .arg("keystore")
-        .arg("add")
-        .arg(resource_cert_dir.join("foo_ca-chain.cert.pem"))
-        .arg(resource_cert_dir.join("foo_req.cert.pem"))
-        .arg("--permissions")
-        .arg("outbound-manifest")
-        .arg("--whole-chain")
-        .arg("--json")
-        .assert()
-        .success();
-
-    // This call doesn't specify any permissions, so the will be removed.
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
-        .arg("keystore")
-        .arg("remove")
-        .arg("fe4f04e2")
-        .arg("--json")
-        .assert()
-        .success();
-
-    let result = list_certificates_command(&cert_dir).unwrap();
-
-    assert_eq!(check_permissions(&result, "55e451bd"), "outbound-manifest");
-    assert_eq!(check_permissions(&result, "25b9430c"), "outbound-manifest");
+    command.arg("--json").assert().success();
 }
 
 fn list_certificates_command(
@@ -289,11 +361,24 @@ fn list_certificates_command(
         .collect())
 }
 
-fn check_permissions(certs: &HashMap<String, Value>, id: &str) -> String {
-    certs[id]
-        .get("Permissions")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_string()
+fn read_not_after(certs: &HashMap<String, Value>, id: &str) -> String {
+    read_field(certs, id, "Not After")
+}
+
+fn read_permissions(certs: &HashMap<String, Value>, id: &str) -> String {
+    read_field(certs, id, "Permissions")
+}
+
+fn read_subject(certs: &HashMap<String, Value>, id: &str) -> String {
+    read_field(certs, id, "Subject")
+}
+
+fn read_field(certs: &HashMap<String, Value>, id: &str, field: &str) -> String {
+    let permissions = certs[id].get(field).unwrap();
+    if permissions.is_string() {
+        // Calling `to_string` would result in quoted string.
+        permissions.as_str().unwrap().into()
+    } else {
+        permissions.to_string()
+    }
 }
