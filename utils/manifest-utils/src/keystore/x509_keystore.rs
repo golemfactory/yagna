@@ -49,8 +49,6 @@ impl X509CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
-        add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
-        add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
         let permissions = format_permissions(permissions);
         let data = X509CertData {
             id,
