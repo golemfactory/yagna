@@ -2,10 +2,10 @@ use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use directories::UserDirs;
-use futures::channel::oneshot;
 use notify::*;
 use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
@@ -253,7 +253,7 @@ pub enum Commands {
 pub struct FileMonitor {
     #[allow(dead_code)]
     pub(crate) path: PathBuf,
-    pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
+    pub(crate) thread_ctl: Option<mpsc::Sender<()>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -282,6 +282,35 @@ impl FileMonitorConfig {
     }
 }
 
+enum Element<T: Sync + Send + 'static> {
+    Some(T),
+    Eos,
+}
+
+fn abortable_channel<T: Sync + Send + 'static>(
+) -> (mpsc::Sender<T>, Receiver<Element<T>>, mpsc::Sender<()>) {
+    let (tx, rx) = mpsc::channel::<T>();
+    let (txe, rxe) = mpsc::channel::<Element<T>>();
+    let (tx_abort, rx_abort) = mpsc::channel();
+
+    let txe_ = txe.clone();
+    std::thread::spawn(move || {
+        for element in rx.iter().map(|t| Element::Some(t)) {
+            if txe_.send(element).is_err() {
+                break;
+            }
+        }
+    });
+
+    std::thread::spawn(move || {
+        if rx_abort.recv().is_ok() {
+            txe.send(Element::Eos).ok();
+        }
+    });
+
+    (tx, rxe, tx_abort)
+}
+
 impl FileMonitor {
     pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
     where
@@ -302,8 +331,7 @@ impl FileMonitor {
     {
         let path = path.as_ref().to_path_buf();
         let path_th = path.clone();
-        let (tx, rx) = mpsc::channel();
-        let (tx_ctl, mut rx_ctl) = oneshot::channel();
+        let (tx, rx, abort) = abortable_channel();
 
         let mut watcher: RecommendedWatcher = Watcher::new(tx, config.watch_delay)
             .map_err(|e| notify::Error::Generic(format!("Creating file Watcher: {e}")))?;
@@ -321,32 +349,35 @@ impl FileMonitor {
                         }
                     }
                 }
-                if let Ok(event) = rx.try_recv() {
-                    match &event {
-                        DebouncedEvent::Rename(_, _) | DebouncedEvent::Remove(_) => {
-                            let _ = watcher.unwatch(&path_th);
-                            active = false
+                if let Ok(event) = rx.recv() {
+                    match event {
+                        Element::Some(event) => {
+                            match &event {
+                                DebouncedEvent::Rename(_, _) | DebouncedEvent::Remove(_) => {
+                                    let _ = watcher.unwatch(&path_th);
+                                    active = false
+                                }
+                                _ => (),
+                            };
+                            handler(event);
                         }
-                        _ => (),
+                        Element::Eos => {
+                            let _ = watcher.unwatch(&path_th);
+
+                            if config.verbose {
+                                log::info!("Stopping file monitor: {:?}", path_th);
+                            }
+                            break;
+                        }
                     }
-                    handler(event);
                     continue;
                 }
-
-                if let Ok(Some(_)) = rx_ctl.try_recv() {
-                    break;
-                }
-                std::thread::sleep(config.sleep_delay);
-            }
-
-            if config.verbose {
-                log::info!("Stopping file monitor: {:?}", path_th);
             }
         });
 
         Ok(Self {
             path,
-            thread_ctl: Some(tx_ctl),
+            thread_ctl: Some(abort),
         })
     }
 

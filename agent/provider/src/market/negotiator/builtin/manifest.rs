@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::ops::Not;
 use std::path::PathBuf;
+use std::time::Duration;
 use structopt::StructOpt;
 
 use ya_agreement_utils::Error;
@@ -19,14 +20,15 @@ use ya_negotiators::component::{
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 
 use crate::rules::{ManifestSignatureProps, RulesManager};
-//use crate::startup_config::FileMonitor;
+use crate::startup_config::FileMonitor;
 
 pub struct ManifestSignature {
     enabled: bool,
     rules_manager: RulesManager,
-    // rulestore_monitor: FileMonitor,
-    // keystore_monitor: FileMonitor,
-    // whitelist_monitor: FileMonitor,
+
+    rulestore_monitor: FileMonitor,
+    keystore_monitor: FileMonitor,
+    whitelist_monitor: FileMonitor,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,6 +103,11 @@ impl NegotiatorComponentMut for ManifestSignature {
             acceptance(ours, score)
         }
     }
+
+    fn shutdown(&mut self, _timeout: Duration) -> anyhow::Result<()> {
+        self.shutdown();
+        Ok(())
+    }
 }
 
 pub fn policy_from_env() -> anyhow::Result<NegotiatorConfig> {
@@ -155,18 +162,29 @@ impl ManifestSignature {
         )
         .map_err(|e| anyhow!("Failed to load RulesManager: {e}"))?;
 
-        // TODO: enable and implement freeing resources in shurdown
-        // let (rulestore_monitor, keystore_monitor, whitelist_monitor) = rules_manager
-        //     .spawn_file_monitors()
-        //     .map_err(|e| anyhow!("Failed to spawn rules monitors: {e}"))?;
+        let (rulestore_monitor, keystore_monitor, whitelist_monitor) = rules_manager
+            .spawn_file_monitors()
+            .map_err(|e| anyhow!("Failed to spawn rules monitors: {e}"))?;
 
         Ok(ManifestSignature {
             enabled,
             rules_manager,
-            // rulestore_monitor,
-            // keystore_monitor,
-            // whitelist_monitor,
+            rulestore_monitor,
+            keystore_monitor,
+            whitelist_monitor,
         })
+    }
+
+    fn shutdown(&mut self) {
+        self.rulestore_monitor.stop();
+        self.keystore_monitor.stop();
+        self.whitelist_monitor.stop();
+    }
+}
+
+impl Drop for ManifestSignature {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
