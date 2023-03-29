@@ -62,6 +62,13 @@ impl Cert {
             Cert::Golem { cert, .. } => serde_json::json!(cert.subject.display_name),
         }
     }
+
+    pub fn type_name(&self) -> &str {
+        match self {
+            Cert::X509(_) => x509_keystore::CERT_NAME,
+            Cert::Golem { .. } => golem_keystore::CERT_NAME,
+        }
+    }
 }
 
 impl PartialOrd for Cert {
@@ -116,7 +123,9 @@ impl X509AddParams for AddParams {
 #[derive(Default)]
 pub struct AddResponse {
     pub added: Vec<Cert>,
-    pub skipped: Vec<Cert>,
+    pub duplicated: Vec<Cert>,
+    pub invalid: Vec<PathBuf>,
+    pub leaf_cert_ids: Vec<String>,
 }
 
 pub struct RemoveParams {
@@ -217,6 +226,10 @@ impl CompositeKeystore {
             .collect::<Vec<String>>()
     }
 
+    pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.golem_keystore.add(add)
+    }
+
     pub fn verify_x509_signature(
         &self,
         cert: impl AsRef<str>,
@@ -260,7 +273,9 @@ impl Keystore for CompositeKeystore {
             .map(|keystore| keystore.add(add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
                 acc.added.append(&mut res.added);
-                acc.skipped.append(&mut res.skipped);
+                acc.duplicated.append(&mut res.duplicated);
+                acc.invalid.append(&mut res.invalid);
+                acc.leaf_cert_ids.append(&mut res.leaf_cert_ids);
                 acc
             })?;
         Ok(response)
