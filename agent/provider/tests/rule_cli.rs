@@ -337,7 +337,6 @@ fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> 
 
 #[test]
 #[serial_test::serial]
-#[ignore] // Enable it when Golem certificates will be available in tests
 fn removing_cert_should_also_remove_its_rule() {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
