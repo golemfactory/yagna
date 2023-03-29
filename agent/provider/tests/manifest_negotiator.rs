@@ -285,8 +285,6 @@ fn manifest_negotiator_test_with_node_identity(
         partner_rule
     );
 
-    dbg!(&rulestore);
-
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
     let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
@@ -581,14 +579,12 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
-    // if signature_b64.is_some() {
     load_certificates_from_dir(
         &resource_cert_dir,
         &test_cert_dir,
         provider_certs,
         provider_certs_permissions,
     );
-    // }
 
     let node_descriptor = if let Some(node_descriptor_filename) = node_descriptor_filename {
         Some(std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap())
