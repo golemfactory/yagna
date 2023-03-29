@@ -218,59 +218,59 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "all", "description": ""}"#,
-    r#"["https://different-domain.com"]"#, // compManifest.net.inet.out.urls
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-invalid-signature.signed.json",
     Some("chain not trusted"); // error msg
     "Rejected because descriptor is not valid"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "all", "description": ""}"#,
-    r#"["https://different-domain.com"]"#, // compManifest.net.inet.out.urls
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-different-node.signed.json",
-    Some("chain not trusted"); // error msg
+    Some("Partner rule nodes mismatch"); // error msg
     "Rejected because descriptor is meant for different node id"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "all", "description": ""}"#,
-    r#"["https://different-domain.com"]"#, // compManifest.net.inet.out.urls
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-no-permissions.signed.json",
-    Some("chain not trusted"); // error msg
+    Some("Partner No outbound permissions"); // error msg
     "Rejected because descriptor doesn't have any permissions"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "all", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
     r#"["https://different-domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
-    Some("chain not trusted"); // error msg
+    Some("Partner Partner rule forbidden url requested: https://different-domain.com/"); // error msg
     "Rejected because descriptor doesn't have url permissions"
 )]
 #[test_case(
     r#""different_trusted_id": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
-    Some("chain not trusted"); // error msg
+    Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
     "Rejected because cert chain is not trusted"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "whitelist", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "whitelist", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     None; // error msg
     "Accepted because valid descriptor is trusted to valid whitelist"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "all", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     None; // error msg
     "Accepted because valid descriptor is trusted to all"
 )]
 #[test_case(
-    r#""80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3": { "mode": "none", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "none", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
-    Some("none"); // error msg
+    Some("Partner rule is disabled"); // error msg
     "Rejected because valid descriptor is not trusted"
 )]
 #[serial]
@@ -284,6 +284,8 @@ fn manifest_negotiator_test_with_node_identity(
         r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "none", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
         partner_rule
     );
+
+    dbg!(&rulestore);
 
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
@@ -646,7 +648,7 @@ fn create_demand(demand: Value) -> ProposalView {
             properties: expand(demand),
             constraints: "()".to_string(),
         },
-        id: "id".to_string(),
+        id: "0x0000000000000000000000000000000000000000".to_string(),
         issuer: Default::default(),
         state: State::Initial,
         timestamp: Default::default(),
@@ -659,7 +661,7 @@ fn create_offer() -> ProposalView {
             properties: expand(serde_json::from_str(r#"{ "any": "thing" }"#).unwrap()),
             constraints: "()".to_string(),
         },
-        id: "id".to_string(),
+        id: "0x0000000000000000000000000000000000000000".to_string(),
         issuer: Default::default(),
         state: State::Initial,
         timestamp: Default::default(),
@@ -752,7 +754,7 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         }
                     },
                     "node": {
-                        "identity": p.node_descriptor
+                        "descriptor": p.node_descriptor
                     }
                 },
             })
