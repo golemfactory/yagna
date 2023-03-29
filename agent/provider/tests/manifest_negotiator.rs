@@ -586,11 +586,9 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         provider_certs_permissions,
     );
 
-    let node_descriptor = if let Some(node_descriptor_filename) = node_descriptor_filename {
-        Some(std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap())
-    } else {
-        None
-    };
+    let node_descriptor = node_descriptor_filename.map(|node_descriptor_filename| {
+        std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap()
+    });
     let whitelist_file = create_whitelist_file(whitelist);
     let rules_file_name = test_cert_dir.join("rules.json");
     let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
