@@ -2,12 +2,11 @@ use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
     RemoveResponse,
 };
-use crate::{
-    policy::CertPermissions,
-    util::{format_permissions, str_to_short_hash},
-};
+use crate::{policy::CertPermissions, util::format_permissions};
 use anyhow::{anyhow, bail};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use openssl::{
+    asn1::{Asn1Time, Asn1TimeRef},
     hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Public},
@@ -19,6 +18,7 @@ use openssl::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Write,
     fs::{self, DirEntry, File},
     io::Read,
     path::{Path, PathBuf},
@@ -31,9 +31,10 @@ pub(super) trait X509AddParams {
     fn whole_chain(&self) -> bool;
 }
 
+#[derive(Eq, PartialEq)]
 pub struct X509CertData {
     pub id: String,
-    pub not_after: String,
+    pub not_after: DateTime<Utc>,
     pub subject: BTreeMap<String, String>,
     pub permissions: String,
 }
@@ -41,7 +42,7 @@ pub struct X509CertData {
 impl X509CertData {
     pub fn create(cert: &X509Ref, permissions: &Vec<CertPermissions>) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
-        let not_after = cert.not_after().to_string();
+        let not_after = asn1_time_to_date_time(cert.not_after())?;
         let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
         add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
@@ -58,6 +59,16 @@ impl X509CertData {
         };
         Ok(data)
     }
+}
+
+fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
+    // Openssl lib allows to access time only through ASN1_TIME_print.
+    // Diff starting from epoch is a workaround to get `not_after` value.
+    let time_diff = Asn1Time::from_unix(0)?.diff(time)?;
+    let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
+        + Duration::days(time_diff.days as i64)
+        + Duration::seconds(time_diff.secs as i64);
+    Ok(DateTime::<Utc>::from_utc(not_after, Utc))
 }
 
 pub(super) struct AddX509Response {
@@ -532,8 +543,13 @@ fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
 }
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
-    let txt = cert.to_text()?;
-    Ok(str_to_short_hash(txt))
+    let bytes = cert.digest(MessageDigest::sha512())?;
+    let mut digest = String::with_capacity(bytes.len() * 2);
+    for byte in bytes.iter() {
+        write!(digest, "{byte:02x}")?;
+    }
+
+    Ok(digest)
 }
 
 /// Adds entries with given `nid` to given `subject` String.
@@ -664,5 +680,25 @@ impl PermissionsManager {
 impl std::fmt::Debug for X509Keystore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Keystore")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use openssl::asn1::Asn1Time;
+    use test_case::test_case;
+
+    use super::asn1_time_to_date_time;
+
+    // No test for malformed date because 'Asn1Time' arrvies from parsed certificate.
+    #[test_case("20230329115959Z", "2023-03-29T11:59:59Z" ; "After epoch")]
+    #[test_case("19000101000000Z", "1900-01-01T00:00:00Z" ; "Before epoch")]
+    pub fn read_not_after_test(asn1_time: &str, expected_time: &str) {
+        let asn1_time = Asn1Time::from_str(asn1_time).unwrap();
+        let date_time = asn1_time_to_date_time(&asn1_time).unwrap();
+        assert_eq!(
+            expected_time,
+            date_time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        );
     }
 }

@@ -21,13 +21,13 @@ static TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     &["foo_ca.cert.pem"],
     &[],
-    &["c128af8c"],
+    &["fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99"],
     &["foo_ca.cert.pem", "cert-permissions.json"]; 
     "Can load one certificate"
 )]
 #[test_case(
     &["foo_ca.cert.pem", "foo_inter.cert.pem"],
-    &["c128af8c", "4e0df976"],
+    &["fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99", "55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673"],
     &[],
     &["cert-permissions.json"];
     "Can remove all certificates"
@@ -35,28 +35,28 @@ static TEST_RESOURCES: TestResources = TestResources {
 #[test_case(
     &["foo_ca-chain.cert.pem"],
     &[],
-    &["4e0df976", "c128af8c"],
+    &["55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673", "fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99"],
     &["foo_ca-chain.cert.pem", "cert-permissions.json"]; 
     "Load keychain loads two certificates and stores them in received form (single keychain file)"
 )]
 #[test_case(
     &["foo_ca-chain.cert.pem"],
-    &["c128af8c"],
-    &["4e0df976"],
-    &["foo_ca-chain.cert.4e0df976.pem", "cert-permissions.json"]; 
+    &["fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99"],
+    &["55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673"],
+    &["foo_ca-chain.cert.55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673.pem", "cert-permissions.json"]; 
     "Load keychain and remove root CA results with intermediate cert and cert file with id in the name"
 )]
 #[test_case(
     &["foo_ca-chain.cert.pem"], 
-    &["4e0df976"], 
-    &["c128af8c"], 
-    &["foo_ca-chain.cert.c128af8c.pem", "cert-permissions.json"]; 
+    &["55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673"], 
+    &["fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99"], 
+    &["foo_ca-chain.cert.fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99.pem", "cert-permissions.json"]; 
     "Load keychain and remove intermediate cert results with root CA and cert file with id in the name"
 )]
 #[test_case(
     &["foo_ca.cert.pem", "foo_ca.cert.pem", "foo_ca.cert.pem"], 
     &[],
-    &["c128af8c"],
+    &["fe4f04e2517488ba32acd4354fca66fd67b4078722fcd1a17a1487b7723477b62af2f17fa35c9b329b52658ccfbbe663c64c3fdf4378519d9279c13e88f7bb99"],
     &["foo_ca.cert.pem", "cert-permissions.json"]; 
     "Adding duplicates results in a single certificate in the store"
 )]
@@ -78,11 +78,7 @@ fn certificate_store_test(
     remove_certificates(&test_cert_dir, ids_to_remove);
     // When
     let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can load keystore");
-    let loaded_ids = keystore
-        .list()
-        .into_iter()
-        .map(|c| c.id())
-        .collect::<HashSet<String>>();
+    let loaded_ids = keystore.list_ids().into_iter().collect::<HashSet<String>>();
     // Then
     let expected_ids = expected_ids
         .iter()
@@ -119,7 +115,7 @@ fn certificate_name_collision_test() {
         &vec![CertPermissions::All],
     );
 
-    let expected_ids: HashSet<String> = HashSet::from(["4e0df976".into(), "0e136cb3".into()]);
+    let expected_ids: HashSet<String> = HashSet::from(["25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1".into(), "55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673".into()]);
     // When
     let keystore = CompositeKeystore::load(&test_cert_dir).expect("Can laod keystore");
     let loaded_ids = keystore
