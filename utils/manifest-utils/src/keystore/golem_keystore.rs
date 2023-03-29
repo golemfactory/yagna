@@ -12,6 +12,8 @@ use std::{
 use golem_certificate::validator::validated_data::ValidatedCertificate;
 use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
 
+pub const CERT_NAME: &str = "Golem";
+
 #[derive(Debug, Clone)]
 pub struct GolemCertificateEntry {
     #[allow(dead_code)]
@@ -66,7 +68,7 @@ fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)>
     let id = cert
         .certificate_chain_fingerprints
         .get(0)
-        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
+        .ok_or_else(|| anyhow!("No leaf cert id found in {CERT_NAME} certificate"))?
         .to_owned();
 
     Ok((id, cert))
@@ -83,11 +85,6 @@ impl GolemKeystore {
         golem_certificate::validator::validate_node_descriptor_str(cert)
             .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
     }
-
-    pub fn verify_golem_certificate(&self, cert: &str) -> anyhow::Result<ValidatedCertificate> {
-        golem_certificate::validator::validate_certificate_str(cert)
-            .map_err(|e| anyhow!("verification of golem certificate failed: {e}"))
-    }
 }
 
 impl Keystore for GolemKeystore {
@@ -103,7 +100,7 @@ impl Keystore for GolemKeystore {
                     certificates.insert(id, cert);
                 }
                 Err(err) => {
-                    log::trace!("Unable to parse file '{path:?}' as Golem cert. Err: {err}")
+                    log::trace!("Unable to parse file '{path:?}' as {CERT_NAME} cert. Err: {err}")
                 }
             }
         }
@@ -115,23 +112,15 @@ impl Keystore for GolemKeystore {
     fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {
         let mut added = Vec::new();
         let mut skipped = Vec::new();
+        let mut invalid = Vec::new();
         let mut certificates = self
             .certificates
             .write()
             .expect("Can't read Golem keystore");
+        let mut leaf_cert_ids = Vec::new();
         for path in add.certs.iter() {
-            let mut file = File::open(path)?;
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            let content = content.trim().to_string();
-            match self.verify_golem_certificate(&content) {
-                Ok(cert) => {
-                    let id = cert
-                        .certificate_chain_fingerprints
-                        .get(0)
-                        .ok_or_else(|| anyhow!("No leaf cert id found in golem certificate"))?
-                        .to_owned();
-
+            match read_cert(path.as_path()) {
+                Ok((id, cert)) => {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
@@ -145,12 +134,21 @@ impl Keystore for GolemKeystore {
                             cert: cert.clone(),
                         },
                     );
+                    leaf_cert_ids.push(id.clone());
                     added.push(Cert::Golem { id, cert })
                 }
-                Err(err) => log::warn!("Unable to parse Golem certificate. Err: {}", err),
+                Err(err) => {
+                    log::warn!("Unable to parse Golem certificate. Err: {}", err);
+                    invalid.push(path.clone());
+                }
             }
         }
-        Ok(super::AddResponse { added, skipped })
+        Ok(super::AddResponse {
+            added,
+            duplicated: skipped,
+            invalid,
+            leaf_cert_ids,
+        })
     }
 
     fn remove(&mut self, remove: &super::RemoveParams) -> anyhow::Result<super::RemoveResponse> {
