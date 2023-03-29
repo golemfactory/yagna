@@ -681,7 +681,7 @@ impl PermissionsManager {
     pub fn set_many(
         &mut self,
         // With slice I would need add `openssl` dependency directly to ya-rovider.
-        #[allow(clippy::ptr_arg)] cert_ids: &Vec<&str>,
+        cert_ids: &Vec<&str>,
         leaf_cert_ids: &Vec<&str>,
         permissions: &[CertPermissions],
         whole_chain: bool,
