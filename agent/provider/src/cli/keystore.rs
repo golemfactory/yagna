@@ -95,10 +95,7 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
     let AddResponse {
-        added,
-        duplicated,
-        invalid: _,
-        leaf_cert_ids: _,
+        added, duplicated, ..
     } = keystore.add(&add.into())?;
 
     if !added.is_empty() {

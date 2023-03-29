@@ -260,7 +260,7 @@ impl Keystore for X509KeystoreManager {
             .into_iter()
             .map(Cert::X509)
             .collect();
-        let skipped = duplicated
+        let duplicated = duplicated
             .into_iter()
             .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
@@ -269,7 +269,7 @@ impl Keystore for X509KeystoreManager {
             .collect();
         Ok(AddResponse {
             added,
-            duplicated: skipped,
+            duplicated,
             invalid,
             leaf_cert_ids,
         })

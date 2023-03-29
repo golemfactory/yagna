@@ -266,7 +266,7 @@ impl Keystore for CompositeKeystore {
         Ok(())
     }
 
-    fn add<'p>(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+    fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         let response = self
             .keystores_mut()
             .iter_mut()
