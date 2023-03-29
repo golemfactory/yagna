@@ -221,7 +221,7 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     "node-descriptor-invalid-signature.signed.json",
-    Some("chain not trusted"); // error msg
+    Some("Partner verification of node descriptor failed: signature error"); // error msg
     "Rejected because descriptor is not valid"
 )]
 #[test_case(
