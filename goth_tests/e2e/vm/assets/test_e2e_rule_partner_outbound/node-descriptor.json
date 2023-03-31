@@ -1,0 +1,18 @@
+{
+    "$schema": "https://golem.network/schemas/v1/node-descriptor.schema.json",
+    "nodeDescriptor": {
+        "nodeId": "0x63fc2ad3d021a4d7e64323529a55a9442c444da0",
+        "validityPeriod": {
+            "notBefore": "2023-01-01T00:00:00Z",
+            "notAfter": "2029-01-01T00:00:00Z"
+        },
+        "permissions": {
+            "outbound": {
+                "urls": [
+                    "https://api.coingecko.com/",
+                    "https://httpbin.org/"
+                ]
+            }
+        }
+    }
+}
