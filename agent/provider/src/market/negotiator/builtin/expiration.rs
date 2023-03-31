@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use ya_agreement_utils::{Error, OfferTemplate, ProposalView};
-use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
+use ya_negotiators::agreement::{Error, OfferTemplate, ProposalView};
+use ya_negotiators::component::{
+    NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut, RejectReason,
+    Score,
+};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
 
 use crate::display::EnableDisplay;
 
@@ -63,6 +65,7 @@ impl NegotiatorFactory<LimitExpiration> for LimitExpiration {
     fn new(
         _name: &str,
         config: serde_yaml::Value,
+        _agent_env: serde_yaml::Value,
         _workdir: PathBuf,
     ) -> anyhow::Result<LimitExpiration> {
         let config: Config = serde_yaml::from_value(config)?;
@@ -309,7 +312,8 @@ mod test_expiration_negotiator {
     #[test]
     fn test_lower_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
+        let mut negotiator =
+            LimitExpiration::new("_", config, serde_yaml::Value::Null, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -342,7 +346,8 @@ mod test_expiration_negotiator {
     #[test]
     fn test_greater_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
+        let mut negotiator =
+            LimitExpiration::new("_", config, serde_yaml::Value::Null, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -373,7 +378,8 @@ mod test_expiration_negotiator {
     #[test]
     fn test_equal_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
+        let mut negotiator =
+            LimitExpiration::new("_", config, serde_yaml::Value::Null, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -408,7 +414,8 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_to_high_expiration() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
+        let mut negotiator =
+            LimitExpiration::new("_", config, serde_yaml::Value::Null, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -438,7 +445,8 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_expiration_ok() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new("_", config, PathBuf::new()).unwrap();
+        let mut negotiator =
+            LimitExpiration::new("_", config, serde_yaml::Value::Null, PathBuf::new()).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())

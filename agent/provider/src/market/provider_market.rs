@@ -40,9 +40,9 @@ use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::builtin::manifest::policy_from_env;
 use crate::market::negotiator::builtin::*;
+use crate::market::negotiator::AgentNegotiatorsConfig;
 use crate::market::termination_reason::{GolemReason, ProviderAgreementResult};
 use crate::payments::{InvoiceNotification, ProviderInvoiceEvent};
-use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 use crate::typed_props::OfferDefinition;
@@ -182,11 +182,11 @@ fn load_negotiators_config(
             negotiator_config.negotiators.push(policy_from_env()?);
 
             if create_not_existing {
-                log::info!("Creating negotiators config at: {:?}", path);
+                log::info!("Creating negotiators config at: {path:?}");
 
                 let content = serde_yaml::to_string(&negotiator_config)?;
                 File::create(&path)
-                    .map_err(|e| anyhow!("Can't create file: {:?}. Error: {e}", path))?
+                    .map_err(|e| anyhow!("Can't create file: {path:?}. Error: {e}"))?
                     .write_all(content.as_bytes())?;
             }
             negotiator_config
@@ -218,6 +218,7 @@ impl ProviderMarket {
 
         let (negotiator, callbacks) = factory::create_negotiator_actor(
             negotiator_config,
+            serde_yaml::to_value(&agent_negotiators_cfg)?,
             negotiators_workdir,
             config.negotiators_plugins.clone(),
         )
@@ -750,6 +751,9 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        let negotiator = self.negotiator.clone();
+        let config = self.config.clone();
+
         for (_, handle) in self.handles.drain() {
             ctx.cancel_future(handle);
         }
@@ -762,6 +766,12 @@ impl Handler<Shutdown> for ProviderMarket {
                 .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
                 .ok()
                 .unwrap_or(());
+
+            negotiator
+                .shutdown(config.negotiators_shutdown_timeout)
+                .await
+                .log_err_msg("Negotiators shutdown failed")
+                .ok();
             Ok(())
         }
         .boxed_local()

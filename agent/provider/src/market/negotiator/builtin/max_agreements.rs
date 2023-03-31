@@ -4,10 +4,12 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use ya_agreement_utils::{AgreementView, ProposalView};
-use ya_negotiators::component::{NegotiatorFactory, NegotiatorMut, RejectReason, Score};
+use ya_negotiators::agreement::{AgreementView, ProposalView};
+use ya_negotiators::component::{
+    AgreementResult, NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut,
+    RejectReason, Score,
+};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
-use ya_negotiators::{AgreementResult, NegotiationResult, NegotiatorComponentMut};
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
@@ -28,6 +30,7 @@ impl NegotiatorFactory<MaxAgreements> for MaxAgreements {
     fn new(
         _name: &str,
         config: serde_yaml::Value,
+        _agent_env: serde_yaml::Value,
         _workdir: PathBuf,
     ) -> anyhow::Result<MaxAgreements> {
         let config: Config = serde_yaml::from_value(config)?;

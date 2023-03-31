@@ -16,9 +16,8 @@ use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_negotiators::component::{NegotiatorFactory, Score};
 use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
-use ya_provider::market::negotiator::builtin::{
-    manifest::ManifestSignatureConfig, ManifestSignature,
-};
+use ya_provider::market::config::AgentNegotiatorsConfig;
+use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::rules::RulesManager;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
@@ -69,16 +68,17 @@ fn manifest_negotiator_test_accepted_because_of_no_payload() {
         RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
             .expect("Can't load RulesManager");
 
-    let config = create_manifest_signature_validating_policy_config();
-    let config = serde_yaml::to_value(ManifestSignatureConfig {
-        policy: config,
+    let config =
+        serde_yaml::to_value(create_manifest_signature_validating_policy_config()).unwrap();
+    let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
         rules_file: rules_file_name,
         whitelist_file,
         cert_dir: test_cert_dir,
     })
     .unwrap();
 
-    let mut manifest_negotiator = ManifestSignature::new("", config, PathBuf::new()).unwrap();
+    let mut manifest_negotiator =
+        ManifestSignature::new("", config, agent_env, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(payload);
@@ -670,16 +670,17 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
             .expect("Can't load RulesManager");
 
-    let config = create_manifest_signature_validating_policy_config();
-    let config = serde_yaml::to_value(ManifestSignatureConfig {
-        policy: config,
+    let config =
+        serde_yaml::to_value(create_manifest_signature_validating_policy_config()).unwrap();
+    let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
         rules_file: rules_file_name,
         whitelist_file,
         cert_dir: test_cert_dir,
     })
     .unwrap();
 
-    let mut manifest_negotiator = ManifestSignature::new("", config, PathBuf::new()).unwrap();
+    let mut manifest_negotiator =
+        ManifestSignature::new("", config, agent_env, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(Some(Payload {

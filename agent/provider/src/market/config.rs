@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
-use crate::startup_config::DEFAULT_PLUGINS_DIR;
+use crate::startup_config::{ProviderConfig, DEFAULT_PLUGINS_DIR};
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_NEGOTIATORS_PLUGINS_DIR: PathBuf = default_negotiators_plugins();
@@ -20,6 +22,8 @@ pub struct MarketConfig {
     pub session_id: String,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10s")]
+    pub negotiators_shutdown_timeout: std::time::Duration,
     /// Relative to Provider DataDir
     #[structopt(long, env, default_value = "negotiations")]
     pub negotiators_workdir: String,
@@ -34,9 +38,30 @@ pub struct MarketConfig {
     pub create_negotiators_config: bool,
 }
 
+/// Agent configuration that will be passed to negotiators.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AgentNegotiatorsConfig {
+    pub rules_file: PathBuf,
+    pub whitelist_file: PathBuf,
+    pub cert_dir: PathBuf,
+}
+
 fn default_negotiators_plugins() -> PathBuf {
     PathBuf::from(&*DEFAULT_PLUGINS_DIR)
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| "/.local/lib/yagna/plugins/".into())
+}
+
+impl TryFrom<ProviderConfig> for AgentNegotiatorsConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(config: ProviderConfig) -> anyhow::Result<Self> {
+        let cert_dir = config.cert_dir_path()?;
+        Ok(AgentNegotiatorsConfig {
+            rules_file: config.rules_file,
+            whitelist_file: config.domain_whitelist_file,
+            cert_dir,
+        })
+    }
 }

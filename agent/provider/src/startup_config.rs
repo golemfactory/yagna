@@ -259,7 +259,6 @@ pub struct FileMonitor {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileMonitorConfig {
     pub watch_delay: Duration,
-    pub sleep_delay: Duration,
     pub verbose: bool,
 }
 
@@ -267,7 +266,6 @@ impl Default for FileMonitorConfig {
     fn default() -> Self {
         Self {
             watch_delay: Duration::from_secs(3),
-            sleep_delay: Duration::from_secs(2),
             verbose: true,
         }
     }

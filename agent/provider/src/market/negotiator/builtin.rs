@@ -10,7 +10,7 @@ pub use max_agreements::MaxAgreements;
 pub use note_interval::DebitNoteInterval;
 pub use payment_timeout::PaymentTimeout;
 
-use ya_negotiators::component::{factory, register_negotiator};
+use ya_negotiators::lib::{factory, register_negotiator};
 
 pub fn register_negotiators() {
     register_negotiator(

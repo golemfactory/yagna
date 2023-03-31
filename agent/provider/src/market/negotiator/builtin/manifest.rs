@@ -1,24 +1,24 @@
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::ops::Not;
 use std::path::PathBuf;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use ya_agreement_utils::Error;
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
     decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY, DEMAND_MANIFEST_PROPERTY,
     DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
+use ya_negotiators::agreement::Error;
 use ya_negotiators::component::{
     NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut, ProposalView,
     RejectReason, Score,
 };
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 
+use crate::market::config::AgentNegotiatorsConfig;
 use crate::rules::{ManifestSignatureProps, RulesManager};
 use crate::startup_config::FileMonitor;
 
@@ -29,14 +29,6 @@ pub struct ManifestSignature {
     rulestore_monitor: FileMonitor,
     keystore_monitor: FileMonitor,
     whitelist_monitor: FileMonitor,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ManifestSignatureConfig {
-    pub policy: PolicyConfig,
-    pub rules_file: PathBuf,
-    pub whitelist_file: PathBuf,
-    pub cert_dir: PathBuf,
 }
 
 impl NegotiatorComponentMut for ManifestSignature {
@@ -113,13 +105,13 @@ impl NegotiatorComponentMut for ManifestSignature {
 pub fn policy_from_env() -> anyhow::Result<NegotiatorConfig> {
     // Empty command line arguments, because we want to use ENV fallback
     // or default values if ENV variables are not set.
-    let config = PolicyConfig::from_iter_safe(&[""])?;
+    let policy = PolicyConfig::from_iter_safe(&[""])?;
     Ok(NegotiatorConfig {
         name: "ManifestSignature".to_string(),
         load_mode: LoadMode::StaticLib {
             library: "ya-provider".to_string(),
         },
-        params: serde_yaml::to_value(&config)?,
+        params: serde_yaml::to_value(&policy)?,
     })
 }
 
@@ -129,16 +121,17 @@ impl NegotiatorFactory<ManifestSignature> for ManifestSignature {
     fn new(
         _name: &str,
         config: serde_yaml::Value,
+        agent_env: serde_yaml::Value,
         _workdir: PathBuf,
     ) -> anyhow::Result<ManifestSignature> {
-        let config: ManifestSignatureConfig = serde_yaml::from_value(config)?;
-        ManifestSignature::from(config)
+        let config: PolicyConfig = serde_yaml::from_value(config)?;
+        let agent_env: AgentNegotiatorsConfig = serde_yaml::from_value(agent_env)?;
+        ManifestSignature::from(config, agent_env)
     }
 }
 
 impl ManifestSignature {
-    pub fn from(config: ManifestSignatureConfig) -> anyhow::Result<Self> {
-        let policy = config.policy;
+    pub fn from(policy: PolicyConfig, agent_env: AgentNegotiatorsConfig) -> anyhow::Result<Self> {
         let policies = policy.policy_set();
         let properties = policy.trusted_property_map();
 
@@ -156,9 +149,9 @@ impl ManifestSignature {
         };
 
         let rules_manager = RulesManager::load_or_create(
-            &config.rules_file,
-            &config.whitelist_file,
-            &config.cert_dir,
+            &agent_env.rules_file,
+            &agent_env.whitelist_file,
+            &agent_env.cert_dir,
         )
         .map_err(|e| anyhow!("Failed to load RulesManager: {e}"))?;
 
@@ -216,8 +209,8 @@ mod tests {
 
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
 
-        let config = serde_yaml::to_value(ManifestSignatureConfig {
-            policy: PolicyConfig::from_iter(arguments),
+        let policy = serde_yaml::to_value(PolicyConfig::from_iter(arguments)).unwrap();
+        let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
             rules_file,
             whitelist_file,
             cert_dir,
@@ -225,7 +218,7 @@ mod tests {
         .unwrap();
 
         (
-            ManifestSignature::new("", config, PathBuf::new()).unwrap(),
+            ManifestSignature::new("", policy, agent_env, PathBuf::new()).unwrap(),
             tempdir,
         )
     }

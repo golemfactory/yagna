@@ -23,10 +23,10 @@ use crate::execution::{
     UpdateActivity,
 };
 use crate::hardware;
+use crate::market::negotiator::AgentNegotiatorsConfig;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::rules::RulesManager;
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 use crate::typed_props::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
@@ -65,11 +65,6 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone)]
-pub struct AgentNegotiatorsConfig {
-    pub rules_manager: RulesManager,
-}
-
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -80,9 +75,6 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
-    rulestore_monitor: FileMonitor,
-    keystore_monitor: FileMonitor,
-    whitelist_monitor: FileMonitor,
     net_api: NetApi,
 }
 
@@ -135,14 +127,6 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let cert_dir = config.cert_dir_path()?;
-
-        let rules_manager = RulesManager::load_or_create(
-            &config.rules_file,
-            &config.domain_whitelist_file,
-            &cert_dir,
-        )?;
-
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
@@ -166,12 +150,11 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
-            rules_manager.spawn_file_monitors()?;
 
-        let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
+        let agent_negotiators_env = AgentNegotiatorsConfig::try_from(config.clone())
+            .map_err(|e| anyhow!("Failed to convert config to negotiators env: {e}"))?;
 
-        let market = ProviderMarket::new(api.market, &data_dir, args.market, agent_negotiators_cfg)
+        let market = ProviderMarket::new(api.market, &data_dir, args.market, agent_negotiators_env)
             .await?
             .start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -191,9 +174,6 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
-            rulestore_monitor,
-            keystore_monitor,
-            whitelist_monitor,
             net_api,
         })
     }
@@ -517,9 +497,6 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
-        self.keystore_monitor.stop();
-        self.rulestore_monitor.stop();
-        self.whitelist_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
