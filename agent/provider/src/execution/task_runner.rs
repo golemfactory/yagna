@@ -231,11 +231,12 @@ impl TaskRunner {
             .map(|(event, myself)| async move {
                 let _ = match event.event_type {
                     ProviderEventType::CreateActivity { requestor_pub_key } => {
-                        Ok(myself.signal(CreateActivity {
+                        myself.signal(CreateActivity {
                             activity_id: event.activity_id,
                             agreement_id: event.agreement_id,
                             requestor_pub_key,
-                        }))
+                        });
+                        Ok(())
                     }
                     ProviderEventType::DestroyActivity {} => {
                         myself

@@ -121,7 +121,7 @@ impl NegotiatorComponentMut for LimitExpiration {
     ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(their)?;
         let our_deadline = debit_deadline_from(&ours)?;
-        let req_expiration = proposal_expiration_from(&their)?;
+        let req_expiration = proposal_expiration_from(their)?;
 
         // Let's check if Requestor is able to accept DebitNotes.
         let max_expiration_delta = match &req_deadline {

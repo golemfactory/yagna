@@ -132,7 +132,7 @@ impl NegotiatorFactory<ManifestSignature> for ManifestSignature {
         _workdir: PathBuf,
     ) -> anyhow::Result<ManifestSignature> {
         let config: ManifestSignatureConfig = serde_yaml::from_value(config)?;
-        Ok(ManifestSignature::from(config)?)
+        ManifestSignature::from(config)
     }
 }
 

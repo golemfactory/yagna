@@ -38,5 +38,5 @@ fn default_negotiators_plugins() -> PathBuf {
     PathBuf::from(&*DEFAULT_PLUGINS_DIR)
         .parent()
         .map(Path::to_path_buf)
-        .unwrap_or("/.local/lib/yagna/plugins/".into())
+        .unwrap_or_else(|| "/.local/lib/yagna/plugins/".into())
 }

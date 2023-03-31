@@ -87,9 +87,9 @@ impl NegotiatorComponentMut for PaymentTimeout {
             (expires_at - now) < self.required_from
         } else {
             return Ok(NegotiationResult::Reject {
-                reason: RejectReason::new(format!(
-                    "Computation expiration time was set in the past"
-                )),
+                reason: RejectReason::new(
+                    "Computation expiration time was set in the past".to_string(),
+                ),
                 is_final: true,
             });
         };

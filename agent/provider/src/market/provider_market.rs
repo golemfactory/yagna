@@ -403,7 +403,7 @@ async fn process_proposal(
     };
 
     ctx.negotiator
-        .react_to_proposal(&subscription.id, &their, &prev_proposal)
+        .react_to_proposal(&subscription.id, their, &prev_proposal)
         .await
         .map_err(|e| {
             anyhow!(
@@ -565,7 +565,7 @@ async fn process_proposal_decision(ctx: AsyncCtx, decision: ProposalAction) -> a
                 .api
                 .get_proposal(
                     &subscription_id,
-                    &proposal.prev_proposal_id.unwrap_or("".to_string()),
+                    &proposal.prev_proposal_id.unwrap_or_else(|| "".to_string()),
                 )
                 .await?;
 
@@ -739,8 +739,7 @@ impl Actor for ProviderMarket {
             self.handles.insert(
                 "collect-proposal-decisions".to_string(),
                 ctx.spawn(
-                    collect_proposal_decisions(actx.clone(), callbacks.proposal_channel)
-                        .into_actor(self),
+                    collect_proposal_decisions(actx, callbacks.proposal_channel).into_actor(self),
                 ),
             );
         }
@@ -851,7 +850,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         ProviderAgreementResult::BrokenByUs { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
         ProviderAgreementResult::ClosedByRequestor => return,
-        ProviderAgreementResult::BrokenByRequestor { .. } => return (),
+        ProviderAgreementResult::BrokenByRequestor { .. } => return,
         // No need to terminate since we didn't have Agreement with Requestor.
         ProviderAgreementResult::ApprovalFailed => return,
     };

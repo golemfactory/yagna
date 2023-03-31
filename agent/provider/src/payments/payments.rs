@@ -1004,7 +1004,7 @@ impl Handler<InvoiceRejected> for Payments {
                         .invoice_signal
                         .send_signal(InvoiceNotification {
                             agreement_id: invoice.agreement_id.clone(),
-                            invoice_id: invoice.invoice_id.clone(),
+                            invoice_id: invoice.invoice_id,
                             event: ProviderInvoiceEvent::InvoiceRejectedEvent,
                         })
                         .ok();
@@ -1015,7 +1015,7 @@ impl Handler<InvoiceRejected> for Payments {
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
             });
 
-        return ActorResponse::r#async(future);
+        ActorResponse::r#async(future)
     }
 }
 
