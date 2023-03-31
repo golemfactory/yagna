@@ -1,10 +1,10 @@
 {
   "$schema": "https://golem.network/schemas/v1/node-descriptor.schema.json",
   "nodeDescriptor": {
-    "nodeId": "0x63fc2ad3d021a4d7e64323529a55a9442c444da0",
+    "nodeId": "0xd1d84f0e28d6fedf03c73151f98df95139700aa7",
     "validityPeriod": {
       "notBefore": "2023-01-01T00:00:00Z",
-      "notAfter": "2029-01-01T00:00:00Z"
+      "notAfter": "2025-01-01T00:00:00Z"
     },
     "permissions": {
       "outbound": {
@@ -20,7 +20,7 @@
       "hash": "sha512",
       "encryption": "EdDSA"
     },
-    "value": "a6bcf8509d7a4f7a594870cde3f1f4771874b9ca9c98b5ab407ad73f9473297e2604ab7be9378176bbebb2332eff6182bba9d133be576c7a292207356504130b",
+    "value": "a3b9bb6a5b8bc4087aefb3ffe0d4474b1e72eba79da39ba59f98793341d98c5e47b483742ec47fe9c4f3a7512ddc1b61760f9ba950fd548e5709fdac69d37e02",
     "signer": {
       "$schema": "https://golem.network/schemas/v1/certificate.schema.json",
       "certificate": {
