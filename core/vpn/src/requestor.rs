@@ -9,7 +9,6 @@ use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::FutureExt;
 use futures::StreamExt;
-use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};

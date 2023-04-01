@@ -32,6 +32,6 @@ tokio = { version = "1", features = ["macros"] }
 ya-client-model = "0.5"
 ya-core-model = { version = "^0.8", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.3"
-ya-service-bus = "0.6.1"
+ya-service-bus = { workspace = true }
 
 [dev-dependencies]

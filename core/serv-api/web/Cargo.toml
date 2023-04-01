@@ -9,7 +9,7 @@ edition = "2018"
 ya-client = "0.7"
 ya-core-model = { version = "^0.8", features = ["appkey"] }
 ya-service-api = "0.1"
-ya-service-bus = "0.6.1"
+ya-service-bus = { workspace = true }
 
 actix-cors = "0.6"
 actix-service = "2"
@@ -25,7 +25,7 @@ url = "2.1.1"
 [dev-dependencies]
 ya-identity = "0.3"
 ya-persistence = "0.3"
-ya-sb-router = "0.6.1"
+ya-sb-router = { workspace = true }
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 

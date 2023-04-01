@@ -21,11 +21,11 @@ ya-core-model = { version = "^0.8", features=["net", "identity"] }
 ya-relay-client = "0.5"
 #ya-relay-client = { path = "../../../ya-relay/client" }
 
-ya-sb-proto = { version = "0.6.1" }
-ya-sb-util = { version = "0.4.1" }
+ya-sb-proto = { workspace = true }
+ya-sb-util = { workspace = true }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = {workspace = true }
 ya-utils-networking = "0.2"
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
@@ -49,12 +49,12 @@ bytes = { version = "1" }
 ethsign = { version = "0.8" }
 tokio-util = { version = "0.7" }
 url = { version = "2.2" }
-prost = { version = "0.10" }
+prost = { version = "0.11.8" }
 rand = { version = "0.7"}
 
 [dev-dependencies]
-ya-sb-proto = "0.6.1"
-ya-sb-router = "0.6.1"
+ya-sb-proto = { workspace = true }
+ya-sb-router = { workspace = true }
 
 env_logger = "0.7"
 serde = "1.0"
