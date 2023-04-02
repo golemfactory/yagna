@@ -31,10 +31,10 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [workspace.dependencies]
-ya-service-bus = { git = "https://github.com/scx1332/ya-service-bus.git", version = "0.6.1" }
-ya-sb-proto = { git = "https://github.com/scx1332/ya-service-bus.git", version = "0.6.1" }
-ya-sb-router = { git = "https://github.com/scx1332/ya-service-bus.git", version = "0.6.1" }
-ya-sb-util = { git = "https://github.com/scx1332/ya-service-bus.git", version = "0.4.1" }
+ya-service-bus = { git = "https://github.com/scx1332/ya-service-bus.git", branch="scx1332/logs", version = "0.6.1" }
+ya-sb-proto = { git = "https://github.com/scx1332/ya-service-bus.git", branch="scx1332/logs", version = "0.6.1" }
+ya-sb-router = { git = "https://github.com/scx1332/ya-service-bus.git", branch="scx1332/logs", version = "0.6.1" }
+ya-sb-util = { git = "https://github.com/scx1332/ya-service-bus.git", branch="scx1332/logs", version = "0.4.1" }
 # ya-service-bus = { path = "../../scx1332/ya-service-bus" }
 # ya-sb-proto = { path = "../../scx1332/ya-service-bus/crates/proto" }
 # ya-sb-router = { path = "../../scx1332/ya-service-bus/crates/router" }
