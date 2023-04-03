@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use actix::prelude::*;
@@ -210,7 +209,7 @@ pub struct Vpn {
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack_network: net::Network,
     connections_tcp: HashMap<SocketDesc, InternalTcpConnection>,
-    connections_raw: HashMap<RawConnectionMeta, InternalRawConnection>,
+    connections_raw: HashMap<RawSocketDesc, InternalRawConnection>,
 }
 
 impl Vpn {
@@ -449,57 +448,79 @@ impl Handler<ConnectRaw> for Vpn {
 
     fn handle(&mut self, msg: ConnectRaw, _: &mut Self::Context) -> Self::Result {
         //todo: nicer checks without converting to string and back
-        let remote = match to_ip(&msg.dst_addr.to_string()) {
+        let raw_socket_desc = msg.raw_socket_desc;
+        let remote = match to_ip(&raw_socket_desc.dst_addr.to_string()) {
             Ok(ip) => ip,
             Err(err) => return ActorResponse::reply(Err(err)),
         };
-        let local = match to_ip(&msg.src_addr.to_string()) {
+        let local = match to_ip(&raw_socket_desc.src_addr.to_string()) {
             Ok(ip) => ip,
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting (raw) to {:?}", self.vpn.id(), remote);
+        log::info!(
+            "VPN {}: connecting (raw) from {} to {}",
+            self.vpn.id(),
+            local,
+            remote
+        );
 
-        let raw_connection_meta = RawConnectionMeta {
-            remote: remote.into(),
-            remote_id: msg.dst_id,
-            local: local.into(),
-        };
         let (tx, rx) = mpsc::channel(1);
 
         self.connections_raw
-            .insert(raw_connection_meta, InternalRawConnection { src_tx: tx });
+            .insert(raw_socket_desc, InternalRawConnection { src_tx: tx });
 
         ActorResponse::reply(Ok(UserRawConnection { rx }))
     }
 }
 
-impl Handler<Disconnect> for Vpn {
-    type Result = <Disconnect as Message>::Result;
+impl Handler<DisconnectTcp> for Vpn {
+    type Result = <DisconnectTcp as Message>::Result;
 
-    fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
-        if let Some(desc) = &msg.desc {
-            match self.connections_tcp.remove(&desc) {
-                Some(mut connection) => {
-                    log::info!("Dropping connection to {:?}: {:?}", desc.remote, msg.reason);
+    fn handle(&mut self, msg: DisconnectTcp, _: &mut Self::Context) -> Self::Result {
+        match self.connections_tcp.remove(&msg.desc) {
+            Some(mut connection) => {
+                log::info!(
+                    "Dropping connection to {:?}: {:?}",
+                    msg.desc.remote,
+                    msg.reason
+                );
 
-                    connection.ingress_tx.close_channel();
+                connection.ingress_tx.close_channel();
 
-                    self.stack_network
-                        .stack
-                        .disconnect(connection.stack_connection.handle);
+                self.stack_network
+                    .stack
+                    .disconnect(connection.stack_connection.handle);
 
-                    Ok(())
-                }
-                None => Err(Error::ConnectionError(format!(
-                    "no connection to remote: {:?}",
-                    desc.remote
-                ))),
+                Ok(())
             }
-        } else {
-            Err(Error::ConnectionError(
-                "no connection descriptor".to_string(),
-            ))
+            None => Err(Error::ConnectionError(format!(
+                "no connection to remote: {:?}",
+                msg.desc.remote
+            ))),
+        }
+    }
+}
+
+impl Handler<DisconnectRaw> for Vpn {
+    type Result = <DisconnectRaw as Message>::Result;
+
+    fn handle(&mut self, msg: DisconnectRaw, _: &mut Self::Context) -> Self::Result {
+        match self.connections_raw.remove(&msg.raw_socket_desc) {
+            Some(mut _connection) => {
+                log::info!("Dropping raw connection {:?}", msg.raw_socket_desc);
+                Ok(())
+            }
+            None => {
+                log::error!(
+                    "Cannot disconnect, no raw connection found: {:?}",
+                    msg.raw_socket_desc
+                );
+                Err(Error::ConnectionError(format!(
+                    "Cannot disconnect, no raw connection found: {:?}",
+                    msg.raw_socket_desc
+                )))
+            }
         }
     }
 }
@@ -539,11 +560,10 @@ impl Handler<Packet> for Vpn {
                     e
                 );
 
-                        ctx.address().do_send(Disconnect::new(
-                            Some(connection.stack_connection.meta.into()),
-                            None,
-                            DisconnectReason::ConnectionError,
-                        ));
+                        ctx.address().do_send(DisconnectTcp {
+                            desc: connection.stack_connection.meta.into(),
+                            reason: DisconnectReason::ConnectionError,
+                        });
                     }
                 }));
                 ActorResponse::reply(Ok(()))
@@ -571,22 +591,29 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        static PACKET_NO: AtomicU64 = AtomicU64::new(0);
-        let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
+        #[cfg(feature = "trace-forward-packets")]
+        let packet_no = {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static PACKET_NO: AtomicU64 = AtomicU64::new(0);
+            let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
+            log::info!("Get raw call message from {} {}", msg.caller, packet_no);
+            packet_no
+        };
 
-        log::info!("Get rawcall message from {} {}", msg.caller, packet_no);
         if !self.connections_raw.is_empty() {
             let connection_raw = self
                 .connections_raw
                 .iter()
-                .find(|(meta, _)| meta.remote_id == msg.caller);
+                .find(|(raw_sock, _)| raw_sock.dst_id == msg.caller);
 
-            if let Some((_connection_meta, connection)) = connection_raw {
+            if let Some((raw_socket_desc, connection)) = connection_raw {
                 let payload = msg.body;
+                #[cfg(feature = "trace-forward-packets")]
                 log::info!("VPN: sending raw packet to connection.src_tx {}", packet_no);
 
                 //Forward packet into raw connection (VpnRawSocket)
                 //look for impl StreamHandler<Vec<u8>> for VpnRawSocket
+                let raw_socket_desc: RawSocketDesc = (*raw_socket_desc).clone();
                 let mut src_tx = connection.src_tx.clone();
                 let fut = async move {
                     tokio::time::timeout(Duration::from_millis(300), src_tx.send(payload)).await
@@ -604,17 +631,17 @@ impl Handler<RpcRawCall> for Vpn {
                                 ));
                             }
                         };
+                        #[cfg(feature = "trace-forward-packets")]
                         log::info!(
                             "VPN: raw packet has been sent to connection.src_tx {}",
                             packet_no
                         );
                         res.map_err(|e| {
                             log::error!("VPN {}: cannot sent into raw endpoint: {e}", e);
-                            ctx.address().do_send(Disconnect::new(
-                                None,
-                                Some("TODO implement".into()),
-                                DisconnectReason::SinkClosed,
-                            ));
+                            ctx.address().do_send(DisconnectRaw {
+                                raw_socket_desc,
+                                reason: DisconnectReason::SinkClosed,
+                            });
 
                             ya_service_bus::error::Error::RemoteError(
                                 self2.node_id.clone(),
@@ -625,14 +652,18 @@ impl Handler<RpcRawCall> for Vpn {
                     .map(|_| Vec::new())
                 });
                 return ActorResponse::r#async(fut);
-            } else {
-                log::error!("VPN {}: cannot find connection", self.vpn.id());
             }
-        } else {
-            //Default behavior - forward packet into stack
-            self.stack_network.receive(msg.body);
-            self.stack_network.poll();
+            #[cfg(feature = "trace-forward-packets")]
+            log::info!(
+                "VPN {}: cannot find RAW connection, passing to stack",
+                self.vpn.id()
+            );
         }
+
+        //Default behavior - forward packet into stack
+        self.stack_network.receive(msg.body);
+        self.stack_network.poll();
+
         ActorResponse::reply(Ok(Vec::new()))
     }
 }
@@ -659,11 +690,10 @@ impl Handler<Ingress> for Vpn {
                     desc.protocol,
                     desc.remote,
                 );
-                ctx.address().do_send(Disconnect::new(
-                    Some(desc),
-                    None,
-                    DisconnectReason::SocketClosed,
-                ));
+                ctx.address().do_send(DisconnectTcp {
+                    desc,
+                    reason: DisconnectReason::SocketClosed,
+                });
 
                 ActorResponse::reply(Ok(()))
             }
@@ -677,11 +707,10 @@ impl Handler<Ingress> for Vpn {
                         .into_actor(self)
                         .map(move |res, _, ctx| {
                             res.map_err(|e| {
-                                ctx.address().do_send(Disconnect::new(
-                                    Some(desc),
-                                    None,
-                                    DisconnectReason::SinkClosed,
-                                ));
+                                ctx.address().do_send(DisconnectTcp {
+                                    desc,
+                                    reason: DisconnectReason::SinkClosed,
+                                });
 
                                 Error::Other(e.to_string())
                             })
@@ -775,13 +804,12 @@ async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: Strin
                 e
             );
 
-            addr.do_send(Disconnect {
+            addr.do_send(DisconnectTcp {
                 desc: match event {
-                    IngressEvent::InboundConnection { desc } => Some(desc),
-                    IngressEvent::Disconnected { desc } => Some(desc),
-                    IngressEvent::Packet { desc, .. } => Some(desc),
+                    IngressEvent::InboundConnection { desc } => desc,
+                    IngressEvent::Disconnected { desc } => desc,
+                    IngressEvent::Packet { desc, .. } => desc,
                 },
-                raw_desc: None,
                 reason: DisconnectReason::ConnectionError,
             });
         }
@@ -806,9 +834,8 @@ async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>, vpn_id: String)
             );
 
             if let Some((desc, ..)) = event.desc {
-                addr.do_send(Disconnect {
-                    desc: Some(desc),
-                    raw_desc: None,
+                addr.do_send(DisconnectTcp {
+                    desc,
                     reason: DisconnectReason::ConnectionError,
                 });
             } else {

@@ -367,9 +367,11 @@ async fn connect_raw(
 
     let conn = vpn
         .send(ConnectRaw {
-            dst_addr: dst_ip,
-            src_addr: src,
-            dst_id: dst_node.id.clone(),
+            raw_socket_desc: RawSocketDesc {
+                dst_addr: dst_ip,
+                src_addr: src,
+                dst_id: dst_node.id.clone(),
+            },
         })
         .await??;
 
@@ -456,10 +458,7 @@ impl Actor for VpnRawSocket {
             }
         });
 
-        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
-            ya_packet_trace::packet_trace!("VpnWebSocket::Rx", { &packet });
-            packet
-        }));
+        ctx.add_stream(self.vpn_rx.take().unwrap());
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -482,7 +481,9 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
         self.heartbeat = Instant::now();
         match msg {
-            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes().to_vec(), ctx),
+            Ok(ws::Message::Text(_)) => {
+                log::warn!("VPN RawSocket: Received text message, not supported");
+            }
             Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
             Ok(ws::Message::Ping(msg)) => {
                 ctx.pong(&msg);
@@ -495,19 +496,19 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
             }
             Ok(ws::Message::Continuation(_)) => {
                 log::warn!(
-                    "VPN WebSocket: VPN {} connection error: continuation not supported",
+                    "VPN RawSocket: VPN {} connection error: continuation not supported",
                     self.network_id
                 );
             }
             Ok(ws::Message::Nop) => {
                 log::warn!(
-                    "VPN WebSocket: VPN {} connection error: nop not supported",
+                    "VPN RawSocket: VPN {} connection error: nop not supported",
                     self.network_id
                 );
             }
             Err(e) => {
                 log::error!(
-                    "VPN WebSocket: VPN {} connection error: {:?}",
+                    "VPN RawSocket: VPN {} connection error: {:?}",
                     self.network_id,
                     e
                 );
@@ -517,7 +518,7 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        log::warn!("VPN WebSocket: Websocket stream closed");
+        log::warn!("VPN RawSocket: Websocket stream closed");
         ctx.stop();
     }
 }
@@ -526,7 +527,7 @@ impl Handler<Shutdown> for VpnRawSocket {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
+        log::warn!("VPN RawSocket: VPN {} is shutting down", self.network_id);
         ctx.stop();
         Ok(())
     }

@@ -50,34 +50,31 @@ pub struct ConnectTcp {
     pub port: u16,
 }
 
-#[derive(Message)]
-#[rtype(result = "Result<UserRawConnection>")]
-pub struct ConnectRaw {
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct RawSocketDesc {
     pub src_addr: IpAddr,
     pub dst_addr: IpAddr,
     pub dst_id: String,
 }
 
 #[derive(Debug, Message)]
+#[rtype(result = "Result<UserRawConnection>")]
+pub struct ConnectRaw {
+    pub raw_socket_desc: RawSocketDesc,
+}
+
+#[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
-pub struct Disconnect {
-    pub desc: Option<SocketDesc>,
-    pub raw_desc: Option<String>,
+pub struct DisconnectTcp {
+    pub desc: SocketDesc,
     pub reason: DisconnectReason,
 }
 
-impl Disconnect {
-    pub fn new(
-        desc: Option<SocketDesc>,
-        raw_desc: Option<String>,
-        reason: DisconnectReason,
-    ) -> Self {
-        Self {
-            desc,
-            raw_desc,
-            reason,
-        }
-    }
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct DisconnectRaw {
+    pub raw_socket_desc: RawSocketDesc,
+    pub reason: DisconnectReason,
 }
 
 #[derive(Message)]
