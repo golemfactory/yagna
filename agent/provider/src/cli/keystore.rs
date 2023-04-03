@@ -94,16 +94,18 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
-    let AddResponse { added, skipped } = keystore.add(&add.into())?;
+    let AddResponse {
+        added, duplicated, ..
+    } = keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
         print_cert_list(&config, added)?;
     }
 
-    if !skipped.is_empty() && !config.json {
+    if !duplicated.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        print_cert_list(&config, skipped)?;
+        print_cert_list(&config, duplicated)?;
     }
     Ok(())
 }
@@ -231,21 +233,16 @@ impl CertTableBuilder {
 
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
-            values.push(match cert {
-                Cert::X509(cert) => {
-                    serde_json::json! { [ id_prefix, cert.not_after, cert.subject, cert.permissions ] }
-                }
-                Cert::Golem { cert, .. } => {
-                    serde_json::json! { [ id_prefix, "", "", cert.permissions ] }
-                }
-            });
+            values
+                .push(serde_json::json! { [ id_prefix, cert.type_name(), cert.not_after(), cert.subject(), cert.permissions() ] });
         }
 
         let columns = vec![
-            "ID".to_string(),
-            "Not After".to_string(),
-            "Subject".to_string(),
-            "Permissions".to_string(),
+            "ID".into(),
+            "Type".into(),
+            "Not After".into(),
+            "Subject".into(),
+            "Permissions".into(),
         ];
 
         let table = ResponseTable { columns, values };

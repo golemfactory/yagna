@@ -77,6 +77,11 @@ impl<'c> IdentityDao<'c> {
                 diesel::insert_into(s::identity::table)
                     .values(&preconfigured_identity)
                     .execute(conn)?;
+                diesel::update(s::identity::table)
+                    .set(id_dsl::is_default.eq(false))
+                    .filter(id_dsl::identity_id.ne(preconfigured_identity.identity_id))
+                    .execute(conn)?;
+
                 Ok(preconfigured_identity)
             }
         })

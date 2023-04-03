@@ -17,7 +17,7 @@ use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
-    keystore::Keystore,
+    keystore::{Cert, Keystore},
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
@@ -91,7 +91,7 @@ impl RulesManager {
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
-            let certs: Vec<_> = self
+            let certs: Vec<Cert> = self
                 .keystore
                 .list()
                 .into_iter()
@@ -105,7 +105,13 @@ impl RulesManager {
             } else if certs.len() > 1 {
                 bail!("Setting Partner mode {mode} failed: Cert id: {cert_id} isn't unique");
             } else {
-                certs[0].id()
+                let cert = &certs[0];
+                match cert {
+                    Cert::X509(_) => bail!(
+                        "Failed to set partner mode for certificate {cert_id}. Partner mode can be set only for Golem certificate."
+                    ),
+                    Cert::Golem { id, .. } => id.clone(),
+                }
             }
         };
 
