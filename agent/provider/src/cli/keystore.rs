@@ -14,8 +14,9 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
 ///
-/// Keystore stores X.509 or Golem certificates.
-/// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+/// Keystore supports Golem and X.509 certificates.
+/// X.509 certificates are supported in PEM or DER formats and PEM certificate chains.
+/// Certificates allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
 /// Certificate gets validated against certificates loaded into the keystore.
 /// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
