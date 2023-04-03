@@ -554,11 +554,11 @@ impl Handler<Packet> for Vpn {
                 ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
                     if let Err(e) = result {
                         log::warn!(
-                    "[vpn: {}] error while sending egress Packet to stack at remote: {} err: {}",
-                    connection.stack_connection.meta.remote,
-                    this.vpn.id(),
-                    e
-                );
+                            "[vpn: {}] error while sending egress Packet to stack at remote: {} err: {}",
+                            connection.stack_connection.meta.remote,
+                            this.vpn.id(),
+                            e
+                        );
 
                         ctx.address().do_send(DisconnectTcp {
                             desc: connection.stack_connection.meta.into(),
