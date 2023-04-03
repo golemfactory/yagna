@@ -1,3 +1,4 @@
+#![allow(clippy::unit_arg)]
 mod message;
 mod network;
 mod requestor;

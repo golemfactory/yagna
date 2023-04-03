@@ -627,7 +627,7 @@ impl Handler<RpcRawCall> for Vpn {
                                 log::warn!("VPN: timeout on sent to raw endpoint");
                                 return Err(ya_service_bus::error::Error::RemoteError(
                                     self2.node_id.clone(),
-                                    format!("VPN: timeout on sent to raw endpoint"),
+                                    "VPN: timeout on sent to raw endpoint".into(),
                                 ));
                             }
                         };
