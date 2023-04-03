@@ -5,7 +5,7 @@
 
 docker-compose:
   # Path to compose file to be used, relative to `docker-dir`
-  compose-file: "docker-compose.yml"
+  compose-file: "docker-compose-hybrid-net.yml"
   docker-dir: "assets/docker/"
 
   build-environment:
@@ -19,6 +19,12 @@ docker-compose:
     # branch: ...
     # commit-hash: ...
     # release-tag: ...
+
+    # binary-path: "/home/przemek/Code/Golem/yagna/target/debug/bin"
+    # deb-path: ...
+    # branch: "2466_outbound_partner_rule_e2e"
+    # commit-hash: "7d66a8ed42e28c5cbe977793889157f7682faca5"
+    release-tag: "v0.13.0-raw-rc3"
 
   compose-log-patterns:
     ethereum: ".*Wallets supplied."
@@ -46,6 +52,8 @@ node-types:
         destination: "/root/.local/share/ya-provider/exe-unit/cache/tmp"
       - read-write: "assets/provider/cert-dir"
         destination: "/root/.local/share/ya-provider/cert-dir"
+      - read-write: "assets/provider/rules.json"
+        destination: "/root/.local/share/ya-provider/rules.json"
     privileged-mode: True
 
 nodes:
