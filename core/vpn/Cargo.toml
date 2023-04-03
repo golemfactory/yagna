@@ -38,6 +38,7 @@ tokio-stream = "0.1.6"
 uuid = { version = "0.8", features = ["v4"] }
 
 [features]
+trace-forward-packets = []
 packet-trace-enable = ["ya-packet-trace/enable"]
 default = []
 

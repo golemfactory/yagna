@@ -9,10 +9,8 @@ use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::FutureExt;
 use futures::StreamExt;
-use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
@@ -407,20 +405,20 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
+        #[cfg(feature = "trace-forward-packets")]
+        use std::sync::atomic::{AtomicU64, Ordering};
+        #[cfg(feature = "trace-forward-packets")]
         static PACKET_NO: AtomicU64 = AtomicU64::new(0);
+        #[cfg(feature = "trace-forward-packets")]
         let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
 
+        #[cfg(feature = "trace-forward-packets")]
         log::info!(
             "VPN WebSocket: VPN {} forwarding packet to {}",
             packet_no,
             dst_node_id
         );
         let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
-        log::info!(
-            "VPN WebSocket: VPN {} forwarding packet 2 to {}",
-            packet_no,
-            dst_node_id
-        );
 
         ctx.wait(
             async move {
@@ -431,6 +429,7 @@ impl VpnRawSocket {
                         Err(anyhow::anyhow!("failed to send packet {:?}", e))
                     }
                 };
+                #[cfg(feature = "trace-forward-packets")]
                 log::info!("Pushed message to {}", packet_no);
 
                 Ok::<_, anyhow::Error>(())
