@@ -5,6 +5,7 @@ use crate::network::{Vpn, VpnSupervisor};
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
+use actix_web_actors::ws::WsResponseBuilder;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::FutureExt;
@@ -13,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use actix_web_actors::ws::WsResponseBuilder;
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -378,15 +378,20 @@ async fn connect_raw(
         })
         .await??;
 
-    let (_addr, response) = WsResponseBuilder::new(VpnRawSocket {
-        node_id: identity.identity.to_string(),
-        dst_node,
-        network_id: net_id,
-        raw_conn_desc: raw_socket_desc,
-        heartbeat: Instant::now(),
-        vpn_rx: Some(conn.rx),
-        vpn_service: vpn,
-    }, &req, stream).start_with_addr()?;
+    let (_addr, response) = WsResponseBuilder::new(
+        VpnRawSocket {
+            node_id: identity.identity.to_string(),
+            dst_node,
+            network_id: net_id,
+            raw_conn_desc: raw_socket_desc,
+            heartbeat: Instant::now(),
+            vpn_rx: Some(conn.rx),
+            vpn_service: vpn,
+        },
+        &req,
+        stream,
+    )
+    .start_with_addr()?;
 
     Ok(response)
 }
@@ -408,14 +413,14 @@ impl VpnRawSocket {
         let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
         let current_node_id = self.node_id.clone();
 
-        #[cfg(feature = "trace-forward-packets")]
+        #[cfg(feature = "trace-raw-packets")]
         use std::sync::atomic::{AtomicU64, Ordering};
-        #[cfg(feature = "trace-forward-packets")]
+        #[cfg(feature = "trace-raw-packets")]
         static PACKET_NO: AtomicU64 = AtomicU64::new(0);
-        #[cfg(feature = "trace-forward-packets")]
+        #[cfg(feature = "trace-raw-packets")]
         let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
 
-        #[cfg(feature = "trace-forward-packets")]
+        #[cfg(feature = "trace-raw-packets")]
         log::info!(
             "VPN WebSocket: VPN {} forwarding packet to {}",
             packet_no,
@@ -432,7 +437,7 @@ impl VpnRawSocket {
                         Err(anyhow::anyhow!("failed to send packet {:?}", e))
                     }
                 };
-                #[cfg(feature = "trace-forward-packets")]
+                #[cfg(feature = "trace-raw-packets")]
                 log::info!("Pushed message to {}", packet_no);
 
                 Ok::<_, anyhow::Error>(())

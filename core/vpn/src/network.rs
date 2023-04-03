@@ -591,7 +591,7 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = ActorResponse<Self, std::result::Result<Vec<u8>, ya_service_bus::Error>>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        #[cfg(feature = "trace-forward-packets")]
+        #[cfg(feature = "trace-raw-packets")]
         let packet_no = {
             use std::sync::atomic::{AtomicU64, Ordering};
             static PACKET_NO: AtomicU64 = AtomicU64::new(0);
@@ -608,7 +608,7 @@ impl Handler<RpcRawCall> for Vpn {
 
             if let Some((raw_socket_desc, connection)) = connection_raw {
                 let payload = msg.body;
-                #[cfg(feature = "trace-forward-packets")]
+                #[cfg(feature = "trace-raw-packets")]
                 log::info!("VPN: sending raw packet to connection.src_tx {}", packet_no);
 
                 //Forward packet into raw connection (VpnRawSocket)
@@ -631,7 +631,7 @@ impl Handler<RpcRawCall> for Vpn {
                                 ));
                             }
                         };
-                        #[cfg(feature = "trace-forward-packets")]
+                        #[cfg(feature = "trace-raw-packets")]
                         log::info!(
                             "VPN: raw packet has been sent to connection.src_tx {}",
                             packet_no
@@ -653,7 +653,7 @@ impl Handler<RpcRawCall> for Vpn {
                 });
                 return ActorResponse::r#async(fut);
             }
-            #[cfg(feature = "trace-forward-packets")]
+            #[cfg(feature = "trace-raw-packets")]
             log::info!(
                 "VPN {}: cannot find RAW connection, passing to stack",
                 self.vpn.id()

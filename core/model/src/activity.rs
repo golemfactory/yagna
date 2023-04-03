@@ -179,6 +179,7 @@ impl RpcMessage for VpnControl {
     type Error = RpcMessageError;
 }
 
+/// Network data
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VpnPacket(pub Vec<u8>);
