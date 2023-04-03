@@ -32,7 +32,7 @@ pub enum KeystoreConfig {
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct Add {
-    /// Paths to certificates or certificates chains
+    /// Paths to certificates or certificate chains
     #[structopt(
         parse(from_os_str),
         help = "Space separated list of certificate files to be added to the Keystore."
