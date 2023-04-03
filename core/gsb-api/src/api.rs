@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use crate::model::{
     GsbApiError, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
 };
@@ -365,8 +366,7 @@ mod tests {
 
         verify_delete_service(&mut api, &service_addr).await;
     }
-
-    #[test_case(r#"{}"#, Frame::Close(Some(CloseReason { 
+    #[test_case(r#"{}"#, Frame::Close(Some(CloseReason {
         code: CloseCode::Policy,
         description: Some("Failed to read response. Err: Missing root map. Err: Empty map".to_string()) })); 
         "Close when empty"
