@@ -68,7 +68,7 @@ impl From<Add> for AddParams {
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
-    #[structopt(help = "Space separated list of X.509 or Golem certificates' ids. 
+    #[structopt(help = "Space separated list of certificates' ids. 
 To find certificate id use `keystore list` command. You may use some prefix
 of the id as long as it is unique.")]
     ids: Vec<String>,
