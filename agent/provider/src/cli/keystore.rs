@@ -14,27 +14,27 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
 ///
-/// Keystore stores X.509 certificates.
+/// Keystore stores X.509 or Golem certificates.
 /// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
 /// Certificate gets validated against certificates loaded into the keystore.
 /// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
-    /// List trusted X.509 certificates
+    /// List trusted certificates
     List,
-    /// Add new trusted X.509 certificates
+    /// Add new trusted certificates
     Add(Add),
-    /// Remove trusted X.509 certificates
+    /// Remove trusted certificates
     Remove(Remove),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct Add {
-    /// Paths to X.509 certificates or certificates chains
+    /// Paths to certificates or certificates chains
     #[structopt(
         parse(from_os_str),
-        help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
+        help = "Space separated list of certificate files to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
     /// Set certificates permissions for signing certain Golem features.
@@ -67,7 +67,7 @@ impl From<Add> for AddParams {
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
-    #[structopt(help = "Space separated list of X.509 certificates' ids. 
+    #[structopt(help = "Space separated list of certificates' ids. 
 To find certificate id use `keystore list` command. You may use some prefix
 of the id as long as it is unique.")]
     ids: Vec<String>,
