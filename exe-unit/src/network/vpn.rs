@@ -134,7 +134,7 @@ impl Vpn {
                 }
                 _ => None,
             };
-            
+
             if let Some(ip) = ip {
                 let _ = self.networks.get_mut(&network_id).map(|network| {
                     if !network.nodes().contains_key(&node_id) {
