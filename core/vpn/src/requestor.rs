@@ -468,7 +468,7 @@ impl Actor for VpnRawSocket {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::info!("VPN WebSocket: VPN {} connection stopped", self.network_id);
+        log::info!("VPN RawSocket: VPN {} connection stopped", self.network_id);
         let _ = self.vpn_service.send(DisconnectRaw {
             raw_socket_desc: self.raw_conn_desc.clone(),
             reason: DisconnectReason::SocketClosed,
@@ -482,7 +482,7 @@ impl StreamHandler<Vec<u8>> for VpnRawSocket {
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        log::warn!("VPN WebSocket: UserRawConnection stream closed");
+        log::info!("VPN RawSocket: UserRawConnection stream closed");
         ctx.stop();
     }
 }
@@ -528,7 +528,7 @@ impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        log::warn!("VPN RawSocket: Websocket stream closed");
+        log::info!("VPN RawSocket: Websocket stream closed");
         ctx.stop();
     }
 }
@@ -537,7 +537,7 @@ impl Handler<Shutdown> for VpnRawSocket {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        log::warn!("VPN RawSocket: VPN {} is shutting down", self.network_id);
+        log::info!("VPN RawSocket: VPN {} is shutting down", self.network_id);
         ctx.stop();
         Ok(())
     }
