@@ -1,7 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
 use crate::message::*;
-use crate::network::VpnSupervisor;
+use crate::network::{Vpn, VpnSupervisor};
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use actix_web_actors::ws::WsResponseBuilder;
 use ya_client_model::net::*;
 use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -365,39 +366,39 @@ async fn connect_raw(
         }
     };
 
+    let raw_socket_desc = RawSocketDesc {
+        dst_addr: dst_ip,
+        src_addr: src,
+        dst_id: dst_node.id.clone(),
+    };
+
     let conn = vpn
         .send(ConnectRaw {
-            raw_socket_desc: RawSocketDesc {
-                dst_addr: dst_ip,
-                src_addr: src,
-                dst_id: dst_node.id.clone(),
-            },
+            raw_socket_desc: raw_socket_desc.clone(),
         })
         .await??;
 
-    Ok(ws::start(
-        VpnRawSocket {
-            node_id: identity.identity.to_string(),
-            network_id: net_id,
-            _src_ip: src,
-            _dst_ip: dst_ip,
-            dst_node,
-            heartbeat: Instant::now(),
-            vpn_rx: Some(conn.rx),
-        },
-        &req,
-        stream,
-    )?)
+    let (_addr, response) = WsResponseBuilder::new(VpnRawSocket {
+        node_id: identity.identity.to_string(),
+        dst_node,
+        network_id: net_id,
+        raw_conn_desc: raw_socket_desc,
+        heartbeat: Instant::now(),
+        vpn_rx: Some(conn.rx),
+        vpn_service: vpn,
+    }, &req, stream).start_with_addr()?;
+
+    Ok(response)
 }
 
 pub struct VpnRawSocket {
     node_id: String,
-    network_id: String,
-    _src_ip: IpAddr,
-    _dst_ip: IpAddr,
     dst_node: Node,
+    network_id: String,
+    raw_conn_desc: RawSocketDesc,
     heartbeat: Instant,
     vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
+    vpn_service: Addr<Vpn>,
 }
 
 impl VpnRawSocket {
@@ -462,7 +463,11 @@ impl Actor for VpnRawSocket {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::warn!("VPN WebSocket: VPN {} connection stopped", self.network_id);
+        log::info!("VPN WebSocket: VPN {} connection stopped", self.network_id);
+        let _ = self.vpn_service.send(DisconnectRaw {
+            raw_socket_desc: self.raw_conn_desc.clone(),
+            reason: DisconnectReason::SocketClosed,
+        });
     }
 }
 
