@@ -757,8 +757,8 @@ ya-aioclient = "^0.6"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "9e558dca5ed46af98bc38348733dfc3b34c621ab"
-resolved_reference = "9e558dca5ed46af98bc38348733dfc3b34c621ab"
+reference = "a6e63b875fd4b254476eaafcc20657e5a99f7f73"
+resolved_reference = "a6e63b875fd4b254476eaafcc20657e5a99f7f73"
 
 [[package]]
 name = "h11"
@@ -2287,4 +2287,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.0"
-content-hash = "1cd807aed2e4b37e471225636873dc94ffcaeca03353b37197258a61ab251236"
+content-hash = "47262fa649db62183722cc1cc39802fa8ab73e133965dc6de88ca3ea5d1ef034"

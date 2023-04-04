@@ -56,6 +56,7 @@ node-types:
         destination: "/root/.local/share/ya-provider/rules.json"
     privileged-mode: True
 
+# test_e2e_rule_partner_outbound overrides this property
 nodes:
   - name: "requestor"
     type: "Requestor"

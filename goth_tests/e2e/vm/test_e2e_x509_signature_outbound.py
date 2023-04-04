@@ -36,13 +36,6 @@ async def test_e2e_x509_signature_outbound(
 ):
     """Test successful flow requesting a task using outbound network feature. X.509 cert negotiation scenario."""
 
-    # Test external api request just one Requestor and one Provider
-    nodes = [
-        {"name": "requestor", "type": "Requestor"},
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
-    ]
-    config_overrides.append(("nodes", nodes))
-
     goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
