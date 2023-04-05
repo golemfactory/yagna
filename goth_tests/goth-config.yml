@@ -20,12 +20,6 @@ docker-compose:
     # commit-hash: ...
     # release-tag: ...
 
-    # binary-path: "/home/przemek/Code/Golem/yagna/target/debug/bin"
-    # deb-path: ...
-    # branch: "2466_outbound_partner_rule_e2e"
-    # commit-hash: "7d66a8ed42e28c5cbe977793889157f7682faca5"
-    release-tag: "v0.13.0-raw-rc3"
-
   compose-log-patterns:
     ethereum: ".*Wallets supplied."
     zksync: ".*Running on http://.*:3030/.*"
