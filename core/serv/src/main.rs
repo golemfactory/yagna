@@ -297,6 +297,7 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     Ok(drivers)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     #[structopt(flatten)]

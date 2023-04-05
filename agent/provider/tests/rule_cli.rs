@@ -382,12 +382,12 @@ fn list_rules_command(data_dir: &Path) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn rule_to_mode<'json, 's>(
+fn rule_to_mode<'json>(
     rule: &'json serde_json::Value,
-    cert_prefix: &'s str,
+    cert_prefix: &str,
 ) -> Option<&'json serde_json::Value> {
     rule.as_object()
-        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(&cert_prefix)))
+        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_prefix)))
         .map(|(_id, value)| &value["mode"])
 }
 

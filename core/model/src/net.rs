@@ -489,7 +489,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(
-            net_service(&node_id),
+            net_service(node_id),
             "/net/0xbabe000000000000000000000000000000000000".to_string()
         );
     }
