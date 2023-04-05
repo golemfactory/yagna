@@ -349,7 +349,8 @@ impl TransferState {
     }
 
     pub fn delay(&self, err: &Error) -> Option<Duration> {
-        (*self.inner.borrow_mut())
+        self.inner
+            .borrow_mut()
             .retry
             .as_mut()
             .and_then(|r| r.delay(err))
