@@ -6,9 +6,10 @@ Updated node descriptor needs to be signed. To do so perform following steps:
 Checkout golem-certificate and install cmdline tool:
 
 ```sh
-git clone git@github.com:golemfactory/golem-certificate.git;
-cd golem-certificate/cli;
+git clone git@github.com:golemfactory/golem-certificate.git
+cd golem-certificate/cli
 cargo install --path .
+cd -
 ```
 
 Extract `partner-keypair.key` from `ya-manifest-test-utils` project:
@@ -20,7 +21,7 @@ tar -xf ../../../../../utils/manifest-utils/test-utils/resources/test/certificat
 Sign `node-descriptor.json`
 
 ```sh
-golem-certificate-cli sign node-descriptor.json partner-certificate.signed.json partner-keypair.key
+golem-certificate-cli sign node-descriptor.json node-descriptor.signed.json partner-keypair.key
 ```
 
-Commit generated `partner-certificate.signed.json` file.
+Commit generated `node-descriptor.signed.json` file.
