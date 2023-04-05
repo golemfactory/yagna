@@ -389,10 +389,10 @@ where
     pub fn try_new(stream: S, alg: &str, hash: Vec<u8>) -> Result<Self, Error> {
         let hasher: Box<dyn DynDigest> = match alg {
             "sha3" => match hash.len() * 8 {
-                224 => Box::new(Sha3_224::default()),
-                256 => Box::new(Sha3_256::default()),
-                384 => Box::new(Sha3_384::default()),
-                512 => Box::new(Sha3_512::default()),
+                224 => Box::<Sha3_224>::default(),
+                256 => Box::<Sha3_256>::default(),
+                384 => Box::<Sha3_384>::default(),
+                512 => Box::<Sha3_512>::default(),
                 len => {
                     return Err(Error::UnsupportedDigestError(format!(
                         "Unsupported digest {} of length {}: {}",
@@ -449,7 +449,7 @@ where
                     } else {
                         return Poll::Ready(Some(Err(Error::InvalidHashError {
                             expected: hex::encode(&self.hash),
-                            hash: hex::encode(&result),
+                            hash: hex::encode(result),
                         })));
                     }
                 }

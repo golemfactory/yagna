@@ -230,10 +230,10 @@ impl Profiles {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                std::fs::File::create(&path)?;
+                std::fs::File::create(path)?;
 
-                let mut profiles = Self::try_with_config(&path, config)?;
-                let default_caps = Resources::default_caps(&path)?;
+                let mut profiles = Self::try_with_config(path, config)?;
+                let default_caps = Resources::default_caps(path)?;
                 for profile in profiles.profiles.values_mut() {
                     *profile = profile.cap(&default_caps);
                 }
@@ -499,7 +499,7 @@ fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
         use nix::sys::statvfs::statvfs;
         let stat =
             statvfs(path.as_os_str()).map_err(|e| sys_info::Error::General(e.to_string()))?;
-        Ok(stat.blocks_available() as u64 * stat.fragment_size())
+        Ok(stat.blocks_available() * stat.fragment_size())
     }
 }
 

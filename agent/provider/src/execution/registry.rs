@@ -278,17 +278,14 @@ impl ExeUnitsRegistry {
     }
 
     pub fn list(&self) -> Vec<ExeUnitDesc> {
-        self.descriptors
-            .iter()
-            .map(|(_, desc)| desc.clone())
-            .collect()
+        self.descriptors.values().cloned().collect()
     }
 
     pub fn validate(&self) -> Result<(), RegistryError> {
         let errors = self
             .descriptors
-            .iter()
-            .map(|(_, desc)| desc.validate())
+            .values()
+            .map(|desc| desc.validate())
             .filter_map(|result| match result {
                 Err(error) => Some(error),
                 Ok(_) => None,
