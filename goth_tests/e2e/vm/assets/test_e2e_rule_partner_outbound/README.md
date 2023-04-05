@@ -21,7 +21,7 @@ tar -xf ../../../../../utils/manifest-utils/test-utils/resources/test/certificat
 Sign `node-descriptor.json`
 
 ```sh
-golem-certificate-cli sign node-descriptor.json node-descriptor.signed.json partner-keypair.key
+golem-certificate-cli sign node-descriptor.json partner-certificate.signed.json partner-keypair.key
 ```
 
 Commit generated `node-descriptor.signed.json` file.
