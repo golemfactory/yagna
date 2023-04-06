@@ -348,18 +348,18 @@ impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         match self {
             Self::Vpn(err) => match err {
-                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
+                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(err)),
                 VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
                 VpnError::Forbidden => HttpResponse::Forbidden().finish(),
                 VpnError::Cancelled => {
-                    HttpResponse::InternalServerError().json(ErrorMessage::new(&err))
+                    HttpResponse::InternalServerError().json(ErrorMessage::new(err))
                 }
-                _ => HttpResponse::BadRequest().json(ErrorMessage::new(&err)),
+                _ => HttpResponse::BadRequest().json(ErrorMessage::new(err)),
             },
             Self::ChannelError(_) | Self::WebError(_) => {
-                HttpResponse::BadRequest().json(ErrorMessage::new(&self))
+                HttpResponse::BadRequest().json(ErrorMessage::new(self))
             }
         }
     }

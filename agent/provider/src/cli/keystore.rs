@@ -14,27 +14,28 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
 ///
-/// Keystore stores X.509 certificates.
-/// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+/// Keystore stores Golem and X.509 certificates.
+/// X.509 certificates are supported in PEM or DER formats and PEM certificate chains.
+/// Certificates allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
 /// Certificate gets validated against certificates loaded into the keystore.
 /// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
-    /// List trusted X.509 certificates
+    /// List trusted certificates
     List,
-    /// Add new trusted X.509 certificates
+    /// Add new trusted certificates
     Add(Add),
-    /// Remove trusted X.509 certificates
+    /// Remove trusted certificates
     Remove(Remove),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct Add {
-    /// Paths to X.509 certificates or certificates chains
+    /// Paths to certificates or certificate chains
     #[structopt(
         parse(from_os_str),
-        help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
+        help = "Space separated list of certificate files to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
     /// Set certificates permissions for signing certain Golem features.
@@ -67,7 +68,7 @@ impl From<Add> for AddParams {
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
-    #[structopt(help = "Space separated list of X.509 certificates' ids. 
+    #[structopt(help = "Space separated list of certificates' ids. 
 To find certificate id use `keystore list` command. You may use some prefix
 of the id as long as it is unique.")]
     ids: Vec<String>,
@@ -94,16 +95,18 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let mut keystore = CompositeKeystore::load(&cert_dir)?;
-    let AddResponse { added, skipped } = keystore.add(&add.into())?;
+    let AddResponse {
+        added, duplicated, ..
+    } = keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
         print_cert_list(&config, added)?;
     }
 
-    if !skipped.is_empty() && !config.json {
+    if !duplicated.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        print_cert_list(&config, skipped)?;
+        print_cert_list(&config, duplicated)?;
     }
     Ok(())
 }
@@ -232,14 +235,15 @@ impl CertTableBuilder {
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
             values
-                .push(serde_json::json! { [ id_prefix, cert.not_after(), cert.subject(), cert.permissions() ] });
+                .push(serde_json::json! { [ id_prefix, cert.type_name(), cert.not_after(), cert.subject(), cert.permissions() ] });
         }
 
         let columns = vec![
-            "ID".to_string(),
-            "Not After".to_string(),
-            "Subject".to_string(),
-            "Permissions".to_string(),
+            "ID".into(),
+            "Type".into(),
+            "Not After".into(),
+            "Subject".into(),
+            "Permissions".into(),
         ];
 
         let table = ResponseTable { columns, values };

@@ -210,8 +210,9 @@ pub struct Stop {
 #[rtype(result = "Result<()>")]
 pub struct Shutdown(pub ShutdownReason);
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Default, thiserror::Error)]
 pub enum ShutdownReason {
+    #[default]
     #[error("Finished")]
     Finished,
     #[error("Interrupted by signal: {0}")]
@@ -220,10 +221,4 @@ pub enum ShutdownReason {
     UsageLimitExceeded(String),
     #[error("{0}")]
     Error(#[from] Error),
-}
-
-impl Default for ShutdownReason {
-    fn default() -> Self {
-        ShutdownReason::Finished
-    }
 }

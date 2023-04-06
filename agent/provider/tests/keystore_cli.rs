@@ -266,7 +266,7 @@ fn verify_subject_format() {
         false,
     );
     assert_eq!(read_subject(&result, "cb16a2ed"), "Example partner cert");
-    assert_eq!(read_subject(&result, "25b9430c"), "{\"C\":\"CZ\",\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\",\"ST\":\"Bohemia\"}")
+    assert_eq!(read_subject(&result, "25b9430c"), "{\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\"}")
 }
 
 fn add_and_list(

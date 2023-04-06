@@ -331,7 +331,7 @@ impl TryRemoteEndpoint for NodeId {
         }
         let exported_part = &bus_addr[PUBLIC_PREFIX.len()..];
         let net_bus_addr = format!("{}/{:?}{}", BUS_ID, self, exported_part);
-        Ok(bus::service(&net_bus_addr))
+        Ok(bus::service(net_bus_addr))
     }
 }
 
@@ -489,7 +489,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(
-            net_service(&node_id),
+            net_service(node_id),
             "/net/0xbabe000000000000000000000000000000000000".to_string()
         );
     }

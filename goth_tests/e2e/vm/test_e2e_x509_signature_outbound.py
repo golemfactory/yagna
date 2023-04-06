@@ -24,24 +24,17 @@ from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
-logger = logging.getLogger("goth.test.e2e_outbound")
+logger = logging.getLogger("goth.test.x509_signature_outbound")
 
 
 @pytest.mark.asyncio
-async def test_e2e_outbound(
+async def test_e2e_x509_signature_outbound(
     common_assets: Path,
     default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test successful flow requesting a outbound curl task with goth REST API client."""
-
-    # Test external api request just one Requestor and one Provider
-    nodes = [
-        {"name": "requestor", "type": "Requestor"},
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
-    ]
-    config_overrides.append(("nodes", nodes))
+    """Test successful flow requesting a task using outbound network feature. X.509 cert negotiation scenario."""
 
     goth_config = load_yaml(default_config, config_overrides)
 
@@ -56,8 +49,8 @@ async def test_e2e_outbound(
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
         manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
-        signature = open(f"{runner.web_root_path}/outbound_signature.sha256.base64").read()
-        certificate = open(f"{runner.web_root_path}/outbound_certificate.cert").read()
+        signature = open(f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_signature.sha256.base64").read()
+        certificate = open(f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_certificate.cert").read()
 
         # Market
         demand = (

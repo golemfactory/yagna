@@ -488,7 +488,7 @@ impl TaskRunner {
             .get(agreement_id)
             .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
-        let agreement_file = File::create(&agreement_path).map_err(|error| {
+        let agreement_file = File::create(agreement_path).map_err(|error| {
             anyhow!(
                 "Can't create agreement file [{}]. Error: {}",
                 &agreement_path.display(),
