@@ -48,7 +48,7 @@ fn test_addr_prefix_to_component() {
 
 impl From<Bind> for Service {
     fn from(bind: Bind) -> Self {
-        let msg_handler: Box<dyn MessagesHandler> = Box::new(BufferingHandler::default());
+        let msg_handler: Box<dyn MessagesHandler> = Box::<BufferingHandler>::default();
         // convert to error and return it when e.g. components empty
         let addr_prefix = bind.addr_prefix;
         let mut addresses = HashSet::new();
@@ -197,7 +197,7 @@ impl Handler<StartBuffering> for Service {
 trait MessagesHandler {
     fn start_buffering(&mut self) -> Option<Box<dyn MessagesHandler>>;
 
-    // Returns new handler and sync future.
+    /// Returns new handler and sync future.
     fn start_relaying(
         &mut self,
         ws_handler: Addr<WsMessagesHandler>,
@@ -335,7 +335,7 @@ struct RelayingHandler {
 impl MessagesHandler for RelayingHandler {
     fn start_buffering(&mut self) -> Option<Box<dyn MessagesHandler>> {
         let pending_senders = mem::take(&mut self.pending_senders);
-        let pending_msgs = Default::default();
+        let pending_msgs = Vec::default();
         Some(Box::new(BufferingHandler {
             pending_senders,
             pending_msgs,

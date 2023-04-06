@@ -10,6 +10,7 @@ use actix::{Actor, Addr, Handler, StreamHandler};
 use actix_http::ws::CloseCode;
 use actix_http::ws::{CloseReason, ProtocolError};
 use actix_web_actors::ws::{self, WebsocketContext};
+
 use flexbuffers::{BuilderOptions, MapReader, Reader};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -58,12 +59,12 @@ impl WsResponse {
     pub(crate) fn try_new(
         response_key: &str,
         id: &str,
-        payload: MapReader<&[u8]>,
+        payload: &MapReader<&[u8]>,
     ) -> Result<WsResponse, String> {
         let mut response_builder = flexbuffers::Builder::new(BuilderOptions::empty());
         let mut response_map_builder = response_builder.start_map();
         let response_map_field_builder = response_map_builder.start_map(response_key);
-        match flexbuffer_util::clone_map(response_map_field_builder, &payload) {
+        match flexbuffer_util::clone_map(response_map_field_builder, payload) {
             Ok(_) => {
                 response_map_builder.end_map();
                 let response = WsResponse {
@@ -132,8 +133,8 @@ pub(crate) struct WsMessagesHandler {
 }
 
 impl WsMessagesHandler {
-    pub fn handle(&mut self, buffer: bytes::Bytes, ctx: &mut WebsocketContext<WsMessagesHandler>) {
-        match self.read_response(buffer) {
+    pub fn handle(&mut self, buffer: &bytes::Bytes, ctx: &mut WebsocketContext<WsMessagesHandler>) {
+        match read_ws_response(buffer) {
             Ok(ws_response) => {
                 self.service
                     .send(ws_response)
@@ -154,38 +155,19 @@ impl WsMessagesHandler {
         }
     }
 
-    pub fn read_response(&mut self, buffer: bytes::Bytes) -> Result<WsResponse, String> {
-        let response =
-            Reader::get_root(&*buffer).map_err(|err| format!("Missing root. Err: {err}"))?;
-        let response = flexbuffer_util::as_map(&response, false)
-            .map_err(|err| format!("Missing root map. Err: {err}"))?;
-        let id = flexbuffer_util::read_string(&response, "id")
-            .map_err(|err| format!("Missing response id. Err: {err}"))?;
-        if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", false) {
-            WsResponse::try_new("Err", &id, error_payload)
-                .map_err(|err| format!("Failed to read error payload. Id: {id}. Err: {err}"))
-        } else if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", true) {
-            WsResponse::try_new("Ok", &id, payload)
-                .map_err(|err| format!("Failed to read payload. Id: {id}. Err: {err}"))
-        } else {
-            Err(format!("Missing 'payload' and 'error' fields. Id: {id}."))
-        }
-    }
-
     fn start_buffering(
         &self,
         reason: Option<CloseReason>,
         ctx: &mut WebsocketContext<WsMessagesHandler>,
     ) {
         log::debug!("WS Close. Reason: {reason:?}");
-        let drop_messages = match reason {
-            Some(reason) => DropMessages { reason },
-            None => {
-                let code = CloseCode::Normal;
-                let description = Some("Closing".to_string());
-                let reason = CloseReason { code, description };
-                DropMessages { reason }
-            }
+        let drop_messages = if let Some(reason) = reason {
+            DropMessages { reason }
+        } else {
+            let code = CloseCode::Normal;
+            let description = Some("Closing".to_string());
+            let reason = CloseReason { code, description };
+            DropMessages { reason }
         };
         let drop_messages_fut = self.service.send(drop_messages).boxed();
         let start_buffering_fut = self.service.send(StartBuffering).boxed();
@@ -205,6 +187,24 @@ impl WsMessagesHandler {
         self.start_buffering(reason.clone(), ctx);
         log::warn!("Closing WS handler: {}", desc);
         ctx.close(reason);
+    }
+}
+
+fn read_ws_response(buffer: &bytes::Bytes) -> Result<WsResponse, String> {
+    let response =
+        Reader::get_root(&**buffer).map_err(|err| format!("Missing root. Err: {err}"))?;
+    let response = flexbuffer_util::as_map(&response, false)
+        .map_err(|err| format!("Missing root map. Err: {err}"))?;
+    let id = flexbuffer_util::read_string(&response, "id")
+        .map_err(|err| format!("Missing response id. Err: {err}"))?;
+    if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", false) {
+        WsResponse::try_new("Err", &id, &error_payload)
+            .map_err(|err| format!("Failed to read error payload. Id: {id}. Err: {err}"))
+    } else if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", true) {
+        WsResponse::try_new("Ok", &id, &payload)
+            .map_err(|err| format!("Failed to read payload. Id: {id}. Err: {err}"))
+    } else {
+        Err(format!("Missing 'payload' and 'error' fields. Id: {id}."))
     }
 }
 
@@ -254,7 +254,7 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             Ok(msg) => match msg {
                 ws::Message::Binary(msg) => {
                     log::debug!("WS Binary (len {})", msg.len());
-                    self.handle(msg, ctx);
+                    self.handle(&msg, ctx);
                 }
                 ws::Message::Text(_) => {
                     self.close(ctx, CloseCode::Unsupported, "Text msg unsupported.")
@@ -423,7 +423,7 @@ mod flexbuffer_util {
             pusher.set_key(key);
             let value = map_reader.index(key)?;
             let value_type = value.flexbuffer_type();
-            pusher = push(value, value_type, pusher)?;
+            pusher = push(&value, value_type, pusher)?;
         }
         pusher.end();
         Ok(())
@@ -431,7 +431,7 @@ mod flexbuffer_util {
 
     fn clone_vec<'a, P: FlexPusher<'a>>(
         pusher: &mut P,
-        reader: Reader<&[u8]>,
+        reader: &Reader<&[u8]>,
         value_type: FlexBufferType,
     ) -> Result<(), flexbuffers::ReaderError> {
         clone_vec_optional_type(pusher, reader, Some(value_type))
@@ -439,14 +439,14 @@ mod flexbuffer_util {
 
     fn clone_vec_untyped<'a, P: FlexPusher<'a>>(
         flex_pusher: &mut P,
-        reader: Reader<&[u8]>,
+        reader: &Reader<&[u8]>,
     ) -> Result<(), flexbuffers::ReaderError> {
         clone_vec_optional_type(flex_pusher, reader, None)
     }
 
     fn clone_vec_optional_type<'a, P: FlexPusher<'a>>(
         flex_pusher: &mut P,
-        reader: Reader<&[u8]>,
+        reader: &Reader<&[u8]>,
         value_type: Option<FlexBufferType>,
     ) -> Result<(), flexbuffers::ReaderError> {
         let builder = flex_pusher.start_vector();
@@ -454,14 +454,14 @@ mod flexbuffer_util {
         let mut pusher = FlexVecPusher { builder };
         for value in vector_reader.iter() {
             let v_type = value_type.unwrap_or_else(|| value.flexbuffer_type());
-            pusher = push(value, v_type, pusher)?;
+            pusher = push(&value, v_type, pusher)?;
         }
         pusher.end();
         Ok(())
     }
 
     fn push<'r, 'b, B: FlexPusher<'b>>(
-        value: Reader<&[u8]>,
+        value: &Reader<&[u8]>,
         value_type: FlexBufferType,
         mut pusher: B,
     ) -> Result<B, flexbuffers::ReaderError> {
@@ -583,10 +583,12 @@ mod flexbuffer_util {
             let top = ComplexMsg {
                 content: vec![1, 2, u16::MAX],
                 id: "meh".to_string(),
-                payload: Payload { file_size: 123123 },
+                payload: Payload { file_size: 123_123 },
                 nested: DefaultMsg {
                     id: "my_id".to_string(),
-                    payload: Payload { file_size: 3456456 },
+                    payload: Payload {
+                        file_size: 3_456_456,
+                    },
                 },
                 other: i32::MIN,
             };
