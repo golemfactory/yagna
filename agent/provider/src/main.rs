@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     match cli_args.commands {
         Commands::Run(args) => {
             let app_name = clap::crate_name!();
-            let _lock = ProcLock::new(&app_name, &data_dir)?.lock(std::process::id())?;
+            let _lock = ProcLock::new(app_name, &data_dir)?.lock(std::process::id())?;
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 

@@ -1,6 +1,6 @@
 # Golem
 
-User friedly CLI for running provider.
+User friendly CLI for running provider.
 
 ## Under the hood
 

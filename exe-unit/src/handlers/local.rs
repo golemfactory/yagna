@@ -235,7 +235,7 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
 
         Ok(SignExeScriptResponse {
             output: json,
-            sig: hex::encode(&sig_vec),
+            sig: hex::encode(sig_vec),
         })
     }
 

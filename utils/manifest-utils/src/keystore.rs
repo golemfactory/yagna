@@ -6,15 +6,20 @@ use self::{
     x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
 use crate::policy::CertPermissions;
+use chrono::SecondsFormat;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
+use serde_json::Value;
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
 
+// Large enum variant caused by flatten maps of possible additional fields in 'ValidatedCertificate'.
+#[allow(clippy::large_enum_variant)]
+#[derive(Eq, PartialEq)]
 pub enum Cert {
     X509(X509CertData),
     Golem {
@@ -24,6 +29,7 @@ pub enum Cert {
 }
 
 impl Cert {
+    /// Certificate id (long).
     pub fn id(&self) -> String {
         match self {
             Cert::Golem { id, cert: _ } => id.into(),
@@ -31,23 +37,51 @@ impl Cert {
         }
     }
 
+    /// Not_after date in RFC3339 format.
     pub fn not_after(&self) -> String {
+        let not_after = match self {
+            Cert::X509(cert) => cert.not_after,
+            Cert::Golem { id: _, cert } => cert.validity_period.not_after,
+        };
+        not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
+    }
+
+    /// Permissions displayed Json value.
+    pub fn permissions(&self) -> Value {
         match self {
-            Cert::X509(cert) => cert.not_after.clone(),
-            Cert::Golem { id: _, cert: _ } => "".into(),
+            Cert::X509(cert) => serde_json::json!(cert.permissions),
+            Cert::Golem { cert, .. } => serde_json::json!(cert.permissions),
         }
     }
 
-    pub fn subject(&self) -> String {
+    /// Subject displayed Json value.
+    /// Json for X.509 certificate, 'display_name' for Golem certificate.
+    pub fn subject(&self) -> Value {
         match self {
-            Cert::X509(cert) => {
-                serde_json::to_string(&cert.subject).expect("Can serialize X509 fields")
-            }
-            Cert::Golem { id: _, cert: _ } => "".into(),
+            Cert::X509(cert) => serde_json::json!(cert.subject),
+            Cert::Golem { cert, .. } => serde_json::json!(cert.subject.display_name),
+        }
+    }
+
+    pub fn type_name(&self) -> &str {
+        match self {
+            Cert::X509(_) => x509_keystore::CERT_NAME,
+            Cert::Golem { .. } => golem_keystore::CERT_NAME,
         }
     }
 }
 
+impl PartialOrd for Cert {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id().partial_cmp(&other.id())
+    }
+}
+
+impl Ord for Cert {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id().cmp(&other.id())
+    }
+}
 trait CommonAddParams {
     fn certs(&self) -> &Vec<PathBuf>;
 }
@@ -89,7 +123,9 @@ impl X509AddParams for AddParams {
 #[derive(Default)]
 pub struct AddResponse {
     pub added: Vec<Cert>,
-    pub skipped: Vec<Cert>,
+    pub duplicated: Vec<Cert>,
+    pub invalid: Vec<PathBuf>,
+    pub leaf_cert_ids: Vec<String>,
 }
 
 pub struct RemoveParams {
@@ -176,11 +212,22 @@ impl CompositeKeystore {
         vec![&mut self.golem_keystore, &mut self.x509_keystore]
     }
 
-    pub fn list_ids(&self) -> HashSet<String> {
-        self.list()
+    fn list_sorted(&self) -> BTreeSet<Cert> {
+        self.keystores()
+            .iter()
+            .flat_map(|keystore| keystore.list())
+            .collect::<BTreeSet<Cert>>()
+    }
+
+    pub fn list_ids(&self) -> Vec<String> {
+        self.list_sorted()
             .into_iter()
             .map(|cert| cert.id())
-            .collect::<HashSet<String>>()
+            .collect::<Vec<String>>()
+    }
+
+    pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.golem_keystore.add(add)
     }
 
     pub fn verify_x509_signature(
@@ -226,7 +273,9 @@ impl Keystore for CompositeKeystore {
             .map(|keystore| keystore.add(add))
             .fold_ok(AddResponse::default(), |mut acc, mut res| {
                 acc.added.append(&mut res.added);
-                acc.skipped.append(&mut res.skipped);
+                acc.duplicated.append(&mut res.duplicated);
+                acc.invalid.append(&mut res.invalid);
+                acc.leaf_cert_ids.append(&mut res.leaf_cert_ids);
                 acc
             })?;
         Ok(response)
@@ -245,10 +294,7 @@ impl Keystore for CompositeKeystore {
     }
 
     fn list(&self) -> Vec<Cert> {
-        self.keystores()
-            .iter()
-            .flat_map(|keystore| keystore.list())
-            .collect()
+        self.list_sorted().into_iter().collect()
     }
 }
 

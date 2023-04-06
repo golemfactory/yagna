@@ -40,16 +40,33 @@ pub enum SetOutboundRule {
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
-    Partner(RuleWithCert),
+    Partner(PartnerRuleWithCert),
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum RuleWithCert {
-    CertId {
-        cert_id: String,
+pub struct CertId {
+    cert_id: String,
+    #[structopt(short, long, possible_values = Mode::VARIANTS)]
+    mode: Mode,
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum AuditedPayloadRuleWithCert {
+    CertId(CertId),
+    ImportCert {
+        import_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
+        /// When importing chain of X.509 certificates set rule to every certificate in a chain.
+        /// By default rule is assigned only to last (leaf) certificate of a chain.
+        #[structopt(short, long)]
+        whole_chain: bool,
     },
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum PartnerRuleWithCert {
+    CertId(CertId),
     ImportCert {
         import_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
@@ -82,22 +99,30 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
                 None => rules.set_default_audited_payload_mode(mode),
             },
-            SetOutboundRule::Partner(RuleWithCert::CertId { cert_id, mode }) => {
+            SetOutboundRule::Partner(PartnerRuleWithCert::CertId(CertId { cert_id, mode })) => {
                 rules.set_partner_mode(cert_id, mode)
             }
-            SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
+            SetOutboundRule::Partner(PartnerRuleWithCert::ImportCert { import_cert, mode }) => {
                 let mut keystore = CompositeKeystore::load(&rules.cert_dir)?;
 
-                let AddResponse { added, skipped } = keystore.add(&AddParams {
+                let AddResponse {
+                    invalid,
+                    leaf_cert_ids,
+                    ..
+                } = keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
                     permissions: vec![CertPermissions::All],
-                    whole_chain: true,
+                    whole_chain: false,
                 })?;
+
+                for cert_path in invalid {
+                    log::error!("Failed to import {cert_path:?}. Partner mode can be set only for Golem certificate.");
+                }
 
                 rules.keystore.reload(&rules.cert_dir)?;
 
-                for cert in added.into_iter().chain(skipped) {
-                    rules.set_partner_mode(cert.id(), mode.clone())?;
+                for cert_id in leaf_cert_ids {
+                    rules.set_partner_mode(cert_id, mode.clone())?;
                 }
 
                 Ok(())

@@ -1,6 +1,6 @@
 [package]
 name = "golemsp"
-description = "User friedly CLI for running Golem Provider"
+description = "User friendly CLI for running Golem Provider"
 version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

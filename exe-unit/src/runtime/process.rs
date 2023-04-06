@@ -166,12 +166,12 @@ impl RuntimeProcess {
 
         let (cmd, ctx) = cmd.split();
         match cmd {
-            ExeScriptCommand::Deploy { .. } => rt_args.args(&["deploy", "--"]),
-            ExeScriptCommand::Start { args } => rt_args.args(&["start", "--"]).args(args),
+            ExeScriptCommand::Deploy { .. } => rt_args.args(["deploy", "--"]),
+            ExeScriptCommand::Start { args } => rt_args.args(["start", "--"]).args(args),
             ExeScriptCommand::Run {
                 entry_point, args, ..
             } => rt_args
-                .args(&["run", "--entrypoint"])
+                .args(["run", "--entrypoint"])
                 .arg(entry_point)
                 .arg("--")
                 .args(args),

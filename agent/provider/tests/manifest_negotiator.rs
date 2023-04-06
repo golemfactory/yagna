@@ -218,127 +218,70 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("all"),
-    None; // error msg
-    "Accepted because permission is all"
+    "node-descriptor-invalid-signature.signed.json",
+    Some("Partner verification of node descriptor failed: signature error"); // error msg
+    "Rejected because descriptor is not valid"
 )]
 #[test_case(
-    r#""outbound-urls": { "mode": "all", "description": ""}"#,
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("outbound-urls|https://domain.com"),
-    None;
-    "Accepted as requested domain is in the permitted ones in cert"
-)]
-#[test_case(
-    r#""outbound": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("outbound"),
-    None;
-    "Accepted as permission is outbound unrestricted"
-)]
-#[test_case(
-    r#""all": { "mode": "whitelist", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("all"),
-    None; // error msg
-    "Accepted because partner rule matched whitelist"
-)]
-#[test_case(
-    r#""all": { "mode": "whitelist", "description": ""}"#,
-    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("all"),
-    Some("Partner rule didn't match whitelist"); // error msg
-    "Rejected because partner rule mismatched whitelist"
-)]
-#[test_case(
-    r#""all": { "mode": "none", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("all"),
-    Some("Partner rule is disabled"); // error msg
-    "Rejected because partner rule is disabled"
-)]
-#[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    None,
-    Some("Partner rule requires partner certificate"); // error msg
-    "Rejected because partner rule requires node data"
-)]
-#[test_case(
-    r#""invalid-data": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("invalid-data"),
-    Some("Partner verification of golem certificate failed: Invalid data"); // error msg
-    "Rejected because node data is invalid"
-)]
-#[test_case(
-    r#""expired": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("expired"),
-    Some("Partner verification of golem certificate failed: Certificate is expired"); // error msg
-    "Rejected because certificate expired"
-)]
-#[test_case(
-    r#""invalid-signature": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("invalid-signature"),
-    Some("Partner verification of golem certificate failed: Certificate has invalid signature"); // error msg
-    "Rejected because certificate has invalid signature"
-)]
-#[test_case(
-    r#""invalid-permissions": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("invalid-permissions"),
-    Some("Partner verification of golem certificate failed: Certificate does not have all required permissions"); // error msg
-    "Rejected because certificate has invalid permissions"
-)]
-#[test_case(
-    r#""outbound-urls": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("outbound-urls|invalid-url"),
-    Some("Partner verification of golem certificate failed: Url parse error"); // error msg
-    "Rejected because certificate has invalid urls inside"
-)]
-#[test_case(
-    r#""different-trusted-cert": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("all"),
-    Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
-    "Rejected because certificate chain is not trusted"
-)]
-#[test_case(
-    r#""all": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("outbound-urls|https://permitted.com"),
-    Some("Partner Partner rule forbidden url requested"); // error msg
-    "Rejected because certificate does not permit different url"
-)]
-#[test_case(
-    r#""no-permissions": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("no-permissions"),
-    Some("Partner requestor doesn't have any permissions"); // error msg
-    "Rejected because certificate does not have any permissions"
-)]
-#[test_case(
-    r#""non-default-node-id": { "mode": "all", "description": ""}"#,
-    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("non-default-node-id"),
+    "node-descriptor-different-node.signed.json",
     Some("Partner rule nodes mismatch"); // error msg
-    "Rejected because requestor node id doesn't match with node_json id"
+    "Rejected because descriptor is meant for different node id"
+)]
+#[test_case(
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-no-permissions.signed.json",
+    Some("Partner No outbound permissions"); // error msg
+    "Rejected because descriptor doesn't have any permissions"
+)]
+#[test_case(
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://different-domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-happy-path.signed.json",
+    Some("Partner Partner rule forbidden url requested: https://different-domain.com/"); // error msg
+    "Rejected because descriptor doesn't have url permissions"
+)]
+#[test_case(
+    r#""different_trusted_id": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-happy-path.signed.json",
+    Some("Partner rule whole chain of cert_ids is not trusted"); // error msg
+    "Rejected because cert chain is not trusted"
+)]
+#[test_case(
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "whitelist", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-happy-path.signed.json",
+    None; // error msg
+    "Accepted because valid descriptor is trusted to valid whitelist"
+)]
+#[test_case(
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-happy-path.signed.json",
+    None; // error msg
+    "Accepted because valid descriptor is trusted to all"
+)]
+#[test_case(
+    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "none", "description": ""}"#,
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    "node-descriptor-happy-path.signed.json",
+    Some("Partner rule is disabled"); // error msg
+    "Rejected because valid descriptor is not trusted"
 )]
 #[serial]
-#[ignore = "Update them when permissions/rules are figured out"]
 fn manifest_negotiator_test_with_node_identity(
     partner_rule: &str,
     urls: &str,
-    node_identity: Option<&str>,
+    descriptor_file: &str,
     error_msg: Option<&str>,
 ) {
     let rulestore = format!(
-        r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "all", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
+        r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "none", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
         partner_rule
     );
 
@@ -355,8 +298,8 @@ fn manifest_negotiator_test_with_node_identity(
         None,
         error_msg,
         &vec![],
-        &[],
-        node_identity.map(|n| n.to_string()),
+        &["partner-certificate.signed.json"],
+        Some(descriptor_file),
     )
 }
 
@@ -631,20 +574,21 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     error_msg: Option<&str>,
     provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
-    node_identity: Option<String>,
+    node_descriptor_filename: Option<&str>,
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
-    if signature_b64.is_some() {
-        load_certificates_from_dir(
-            &resource_cert_dir,
-            &test_cert_dir,
-            provider_certs,
-            provider_certs_permissions,
-        );
-    }
+    load_certificates_from_dir(
+        &resource_cert_dir,
+        &test_cert_dir,
+        provider_certs,
+        provider_certs_permissions,
+    );
 
+    let node_descriptor = node_descriptor_filename.map(|node_descriptor_filename| {
+        std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap()
+    });
     let whitelist_file = create_whitelist_file(whitelist);
     let rules_file_name = test_cert_dir.join("rules.json");
     let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
@@ -664,7 +608,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         signature_b64,
         signature_alg_b64: signature_alg,
         cert_b64,
-        node_identity,
+        node_descriptor,
     }));
     let demand = create_demand(demand);
     let offer = create_offer();
@@ -698,7 +642,7 @@ fn create_demand(demand: Value) -> ProposalView {
             properties: expand(demand),
             constraints: "()".to_string(),
         },
-        id: "id".to_string(),
+        id: "0x0000000000000000000000000000000000000000".to_string(),
         issuer: Default::default(),
         state: State::Initial,
         timestamp: Default::default(),
@@ -711,7 +655,7 @@ fn create_offer() -> ProposalView {
             properties: expand(serde_json::from_str(r#"{ "any": "thing" }"#).unwrap()),
             constraints: "()".to_string(),
         },
-        id: "id".to_string(),
+        id: "0x0000000000000000000000000000000000000000".to_string(),
         issuer: Default::default(),
         state: State::Initial,
         timestamp: Default::default(),
@@ -756,7 +700,7 @@ struct Payload<'a> {
     signature_b64: Option<String>,
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
-    node_identity: Option<String>,
+    node_descriptor: Option<String>,
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
@@ -804,7 +748,7 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                         }
                     },
                     "node": {
-                        "identity": p.node_identity
+                        "descriptor": p.node_descriptor
                     }
                 },
             })
