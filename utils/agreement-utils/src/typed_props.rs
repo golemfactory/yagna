@@ -240,7 +240,7 @@ mod test {
             offer: OfferTemplate::default(),
         };
 
-        let offer = serde_json::to_value(&offer.into_json()).unwrap();
+        let offer = serde_json::to_value(offer.into_json()).unwrap();
 
         let expected_offer = json!({
             "golem.com": null,

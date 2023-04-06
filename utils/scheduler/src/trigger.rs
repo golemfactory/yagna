@@ -95,7 +95,7 @@ mod tests {
         let now = Local::now();
         let strange_seconds = 121;
         let seconds = strange_seconds % 60;
-        let minutes = (strange_seconds / 60) as u32;
+        let minutes = strange_seconds / 60;
         let strange_interval = Interval::new(0, 0, 0, strange_seconds);
         let time_with_offset =
             now + Duration::minutes(i64::from(minutes)) + Duration::seconds(i64::from(seconds));

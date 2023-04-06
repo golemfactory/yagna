@@ -13,16 +13,11 @@ pub trait Runtime:
 {
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub enum RuntimeMode {
+    #[default]
     ProcessPerCommand,
     Service,
-}
-
-impl Default for RuntimeMode {
-    fn default() -> Self {
-        RuntimeMode::ProcessPerCommand
-    }
 }
 
 impl From<StartMode> for RuntimeMode {

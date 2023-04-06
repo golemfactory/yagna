@@ -92,7 +92,7 @@ impl Discovery {
 
         if must_schedule {
             let myself = self.clone();
-            let _ = tokio::task::spawn_local(async move {
+            tokio::task::spawn_local(async move {
                 // Sleep to collect multiple offers to send
                 sleep(myself.inner.config.offer_broadcast_delay).await;
                 myself.send_bcast_offers().await;
@@ -193,7 +193,7 @@ impl Discovery {
 
         if must_schedule {
             let myself = self.clone();
-            let _ = tokio::task::spawn_local(async move {
+            tokio::task::spawn_local(async move {
                 // Sleep to collect multiple unsubscribes to send
                 sleep(myself.inner.config.unsub_broadcast_delay).await;
                 myself.send_bcast_unsubscribes().await;
