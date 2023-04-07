@@ -48,6 +48,9 @@ async fn validate_orders(
 
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
+        if order.amount.0 == BigDecimal::zero() {
+            return OrderValidationError::zero_amount(order);
+        }
         if order.payment_platform != platform {
             return OrderValidationError::platform(order, platform);
         }
@@ -448,6 +451,12 @@ impl PaymentProcessor {
             return Err(SchedulePaymentError::Shutdown);
         }
         let amount = msg.amount.clone();
+        if amount <= BigDecimal::zero() {
+            return Err(SchedulePaymentError::InvalidInput(format!(
+                "Can not schedule payment with <=0 amount: {}",
+                &amount
+            )));
+        }
         let driver =
             self.registry
                 .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
@@ -527,6 +536,9 @@ impl PaymentProcessor {
         for agreement_payment in payment.agreement_payments.iter() {
             let agreement_id = &agreement_payment.agreement_id;
             let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+            if agreement_payment.amount == BigDecimal::zero() {
+                return VerifyPaymentError::agreement_zero_amount(agreement_id);
+            }
             match agreement {
                 None => return VerifyPaymentError::agreement_not_found(agreement_id),
                 Some(agreement) if &agreement.payee_addr != payee_addr => {
@@ -549,6 +561,9 @@ impl PaymentProcessor {
         let activity_dao: ActivityDao = self.db_executor.as_dao();
         for activity_payment in payment.activity_payments.iter() {
             let activity_id = &activity_payment.activity_id;
+            if activity_payment.amount == BigDecimal::zero() {
+                return VerifyPaymentError::activity_zero_amount(activity_id);
+            }
             let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
             match activity {
                 None => return VerifyPaymentError::activity_not_found(activity_id),
