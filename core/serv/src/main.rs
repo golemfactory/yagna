@@ -581,21 +581,27 @@ impl ServiceCommand {
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?
+                .run();
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
-                gsb::bind(model::BUS_ID, move |_request: model::ShutdownRequest| {
-                    log::warn!("ShutdownRequest not supported after migrating to new actix.");
-                    // actix_rt::spawn(async move {
-                    //     actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
-                    //     actix_rt::System::current().stop()
-                    // });
-
-                    async move { Ok(()) }
-                });
+                {
+                    let server_handle = server.handle();
+                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
+                        log::info!(
+                            "ShutdownRequest {}",
+                            request.graceful.then_some("graceful").unwrap_or("")
+                        );
+                        let server_handle = server_handle.clone();
+                        async move {
+                            server_handle.stop(request.graceful).await;
+                            Ok(())
+                        }
+                    });
+                }
 
                 tokio::spawn(async {
                     loop {
@@ -607,7 +613,7 @@ impl ServiceCommand {
                     }
                 });
 
-                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
+                future::try_join(server, sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
