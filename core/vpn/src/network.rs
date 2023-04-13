@@ -93,6 +93,9 @@ impl VpnSupervisor {
 
         let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
+
+        log::info!("Creating network: {net_id} ({net_ip})");
+
         let net_gw = match network
             .gateway
             .as_ref()
@@ -142,6 +145,8 @@ impl VpnSupervisor {
         node_id: &NodeId,
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.networks.remove(network_id).ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
@@ -155,6 +160,8 @@ impl VpnSupervisor {
         network_id: &str,
         id: String,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing Node: {id} from network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.vpn(network_id)?;
         self.forward(vpn, RemoveNode { id })
@@ -248,7 +255,7 @@ impl Actor for Vpn {
             .into_actor(self)
             .spawn(ctx);
 
-        log::info!("VPN {} started", id);
+        log::info!("VPN {id} started");
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -263,7 +270,7 @@ impl Actor for Vpn {
         async move {
             let _ = typed::unbind(&vpn_url).await;
             let _ = typed::unbind(&format!("{vpn_url}/raw")).await;
-            log::info!("VPN {} stopped", id);
+            log::info!("VPN {id} stopped");
         }
         .into_actor(self)
         .wait(ctx);
@@ -288,6 +295,13 @@ impl Handler<AddAddress> for Vpn {
     type Result = <AddAddress as Message>::Result;
 
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
+        log::info!(
+            "Network: {} assigning new ip address: {} for identity: {}",
+            self.vpn.id(),
+            msg.address,
+            self.node_id
+        );
+
         let ip: IpAddr = msg.address.parse()?;
 
         let net = self.vpn.as_ref();
@@ -301,9 +315,7 @@ impl Handler<AddAddress> for Vpn {
         }
 
         self.stack_network.stack.add_address(cidr);
-
         self.vpn.add_address(&msg.address)?;
-
         Ok(())
     }
 }
@@ -332,6 +344,8 @@ impl Handler<AddNode> for Vpn {
     type Result = <AddNode as Message>::Result;
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
+        log::info!("Adding Node: {} to network: {}", msg.address, self.vpn.id());
+
         let ip = to_ip(&msg.address)?;
 
         match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
@@ -400,7 +414,7 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
+        log::info!("VPN {}: connecting to {remote:?}", self.vpn.id());
 
         let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
@@ -409,7 +423,7 @@ impl Handler<Connect> for Vpn {
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let stack_connection = result?;
-                log::info!("VPN {}: connected to {:?}", id, remote);
+                log::info!("VPN {id}: connected to {remote:?}");
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
