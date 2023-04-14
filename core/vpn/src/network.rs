@@ -870,8 +870,8 @@ mod tests {
             )
             .await?;
 
-        supervisor.get_network(&node_id, &network1.id)?;
-        supervisor.get_network(&node_id, &network2.id)?;
+        assert!(supervisor.get_network(&node_id, &network1.id).is_ok());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
 
         supervisor.remove_network(&node_id, &network1.id)?;
 
