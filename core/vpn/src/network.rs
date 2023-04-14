@@ -863,7 +863,7 @@ mod tests {
             .create_network(
                 node_id,
                 NewNetwork {
-                    ip: "10.0.0.0".to_string(),
+                    ip: "10.1.0.0".to_string(),
                     mask: None,
                     gateway: None,
                 },
