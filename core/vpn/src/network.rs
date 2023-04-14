@@ -834,4 +834,40 @@ mod tests {
 
         Ok(())
     }
+
+    #[actix_rt::test]
+    async fn create_remove_2_networks() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network1 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+        let network2 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        supervisor.get_network(&node_id, &network1.id)?;
+        supervisor.get_network(&node_id, &network2.id)?;
+
+        supervisor.remove_network(&node_id, &network1.id)?;
+
+        assert!(supervisor.get_network(&node_id, &network1.id).is_err());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
+        Ok(())
+    }
 }
