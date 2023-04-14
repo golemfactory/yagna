@@ -150,8 +150,17 @@ impl VpnSupervisor {
         self.owner(node_id, network_id)?;
         let vpn = self.networks.remove(network_id).ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.ownership.remove(node_id);
+        self.remove_ownership(node_id, network_id);
         self.forward(vpn, Shutdown {})
+    }
+
+    fn remove_ownership(&mut self, node_id: &NodeId, network_id: &str) {
+        if let Some(ownership) = self.ownership.get_mut(node_id) {
+            ownership.remove(network_id);
+            if ownership.is_empty() {
+                self.ownership.remove(node_id);
+            }
+        }
     }
 
     pub fn remove_node<'a>(
