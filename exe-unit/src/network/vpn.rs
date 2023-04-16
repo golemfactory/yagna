@@ -170,7 +170,7 @@ impl Vpn {
                 future::join_all(futs).then(|_| future::ready(())).await;
             });
         } else {
-            let gateway_test_ip = "192.168.8.9";
+            let gateway_test_ip = [192, 168, 8, 9];
             let ip = ip_pkt.dst_address();
             match networks.endpoint(ip) {
                 Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
@@ -178,7 +178,7 @@ impl Vpn {
                     log::debug!("[vpn] no endpoint for {ip:?}");
                     match networks.endpoint(gateway_test_ip) {
                         Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
-                        None => log::debug!("[vpn] no gateway endpoint found {ip:?}"),
+                        None => log::debug!("[vpn] no gateway endpoint found {gateway_test_ip:?}"),
                     }
                 },
             }
