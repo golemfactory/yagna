@@ -181,7 +181,7 @@ impl Vpn {
                         match networks.endpoint(&dst_mac[2..6]) {
                             Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
                             None => {
-                                log::debug!("[vpn] no gateway endpoint found {:?}", &dst_mac[2..6])
+                                log::debug!("[vpn] endpoint not found {:?} or {:?}", &ip, &dst_mac[2..6])
                             },
                         }
                     } else {

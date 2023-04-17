@@ -392,6 +392,7 @@ pub(crate) struct Deployment {
 pub(crate) struct DeploymentNetwork {
     pub network: IpNet,
     pub node_ip: IpAddr,
+    pub gateway: Option<IpAddr>,
     pub nodes: HashMap<IpAddr, String>,
 }
 
@@ -408,12 +409,14 @@ impl Deployment {
                 let network = to_net(&net.ip, net.mask)?;
                 let node_ip = IpAddr::from_str(&net.node_ip)?;
                 let nodes = Self::map_nodes(net.nodes)?;
+                let gateway = net.gateway.map(|ip| IpAddr::from_str(&ip)).transpose()?;
                 Ok((
                     id,
                     DeploymentNetwork {
                         network,
                         node_ip,
                         nodes,
+                        gateway
                     },
                 ))
             })
