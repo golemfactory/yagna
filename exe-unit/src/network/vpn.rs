@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use actix::prelude::*;
 use futures::{future, FutureExt};
@@ -153,6 +153,7 @@ impl Vpn {
     }
 
     fn handle_ip(
+        dst_mac: [u8; 6],
         frame: EtherFrame,
         networks: &Networks<DuoEndpoint<GsbEndpoint>>,
         default_id: &str,
@@ -174,7 +175,6 @@ impl Vpn {
             match networks.endpoint(ip) {
                 Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
                 None => {
-                    let dst_mac = frame[EtherField::DST_MAC];
                     //yagna local network mac address assignment
                     if dst_mac[0] == 0xA0 && dst_mac[1] == 0x13 {
                         //last four bytes should be ip address (our convention of assigning mac addresses)
@@ -294,10 +294,17 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
 
+        if packet.len() < 14 {
+            log::debug!("[vpn] packet too short (egress)");
+            return;
+        }
+        let dst_mac: [u8; 6] = packet[EtherField::DST_MAC].try_into().unwrap();
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
-                EtherFrame::Ip(_) => Self::handle_ip(frame, &self.networks, &self.default_id),
+                EtherFrame::Ip(_) => {
+                    Self::handle_ip(dst_mac, frame, &self.networks, &self.default_id)
+                },
                 frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
             },
             Err(err) => {
