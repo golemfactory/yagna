@@ -11,7 +11,7 @@ use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
 use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
-use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
+use ya_utils_networking::vpn::{common::ntoh, Error as NetError, EtherField, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
 
 use crate::acl::Acl;
@@ -170,15 +170,22 @@ impl Vpn {
                 future::join_all(futs).then(|_| future::ready(())).await;
             });
         } else {
-            let gateway_test_ip = [192, 168, 8, 9];
             let ip = ip_pkt.dst_address();
             match networks.endpoint(ip) {
                 Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
                 None => {
-                    log::debug!("[vpn] no endpoint for {ip:?}");
-                    match networks.endpoint(gateway_test_ip) {
-                        Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
-                        None => log::debug!("[vpn] no gateway endpoint found {gateway_test_ip:?}"),
+                    let dst_mac = frame[EtherField::DST_MAC];
+                    //yagna local network mac address assignment
+                    if dst_mac[0] == 0xA0 && dst_mac[1] == 0x13 {
+                        //last four bytes should be ip address (our convention of assigning mac addresses)
+                        match networks.endpoint(&dst_mac[2..6]) {
+                            Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+                            None => {
+                                log::debug!("[vpn] no gateway endpoint found {:?}", &dst_mac[2..6])
+                            },
+                        }
+                    } else {
+                        log::debug!("[vpn] mac address not recognized {dst_mac:?}")
                     }
                 },
             }
