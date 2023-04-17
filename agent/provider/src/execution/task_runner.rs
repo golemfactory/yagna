@@ -261,7 +261,6 @@ impl TaskRunner {
     // =========================================== //
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
         let agreement = match self.active_agreements.get(&msg.agreement_id) {
             None => bail!("Can't create activity for not my agreement [{:?}].", msg),

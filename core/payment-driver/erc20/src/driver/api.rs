@@ -81,9 +81,10 @@ pub async fn schedule_payment(
     dao: &Erc20Dao,
     msg: SchedulePayment,
 ) -> Result<String, GenericError> {
+    log::debug!("schedule_payment {msg:?}");
+
     let order_id = Uuid::new_v4().to_string();
     dao.insert_payment(&order_id, &msg).await?;
-    log::info!("schedule_payment()");
     Ok(order_id)
 }
 
