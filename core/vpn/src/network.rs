@@ -423,7 +423,8 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {remote:?}", self.vpn.id());
+        let vpn_id = self.vpn.id();
+        log::info!("VPN {vpn_id}: connecting to {remote:?}");
 
         let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
