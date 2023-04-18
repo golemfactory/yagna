@@ -469,7 +469,7 @@ impl Actor for VpnRawSocket {
 
     fn stopped(&mut self, _: &mut Self::Context) {
         log::info!("VPN RawSocket: VPN {} connection stopped", self.network_id);
-        let _ = self.vpn_service.send(DisconnectRaw {
+        self.vpn_service.do_send(DisconnectRaw {
             raw_socket_desc: self.raw_conn_desc.clone(),
             reason: DisconnectReason::SocketClosed,
         });

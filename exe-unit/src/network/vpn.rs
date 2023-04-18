@@ -7,7 +7,7 @@ use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
 use ya_runtime_api::deploy::ContainerEndpoint;
-use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
+use ya_runtime_api::server::{CreateNetwork, Network, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
 use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
@@ -17,7 +17,7 @@ use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPac
 use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::network::{self, Endpoint};
+use crate::network::{self, network_to_runtime_command, Endpoint};
 use crate::state::Deployment;
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -39,20 +39,20 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .ok_or_else(|| Error::Other("no default identity set".to_string()))?
         .node_id;
 
-    let networks = deployment
+    let network_commands = deployment
         .networks
         .values()
-        .map(TryFrom::try_from)
-        .collect::<crate::Result<_>>()?;
+        .map(network_to_runtime_command)
+        .collect::<Vec<Network>>();
 
-    let network = CreateNetwork {
-        networks,
+    let create_network = CreateNetwork {
+        networks: network_commands,
         hosts: deployment.hosts.clone(),
         interface: NetworkInterface::Vpn as i32,
     };
-    log::info!("Creating VPN network: {:#?}", network);
+    log::info!("Creating VPN network: {:#?}", create_network);
     let response = service
-        .create_network(network)
+        .create_network(create_network)
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
@@ -183,13 +183,17 @@ impl Vpn {
                         match networks.endpoint(&dst_mac[2..6]) {
                             Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
                             None => {
-                                log::debug!("[vpn] endpoint not found {:?} or {:?}", &ip, &dst_mac[2..6])
-                            },
+                                log::debug!(
+                                    "[vpn] endpoint not found {:?} or {:?}",
+                                    &ip,
+                                    &dst_mac[2..6]
+                                )
+                            }
                         }
                     } else {
                         log::debug!("[vpn] mac address not recognized {dst_mac:?}")
                     }
-                },
+                }
             }
         }
     }
@@ -306,7 +310,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
                 EtherFrame::Ip(_) => {
                     Self::handle_ip(dst_mac, frame, &self.networks, &self.default_id)
-                },
+                }
                 frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
             },
             Err(err) => {
