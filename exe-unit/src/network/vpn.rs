@@ -45,12 +45,14 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .map(TryFrom::try_from)
         .collect::<crate::Result<_>>()?;
 
+    let network = CreateNetwork {
+        networks,
+        hosts: deployment.hosts.clone(),
+        interface: NetworkInterface::Vpn as i32,
+    };
+    log::info!("Creating VPN network: {:#?}", network);
     let response = service
-        .create_network(CreateNetwork {
-            networks,
-            hosts: deployment.hosts.clone(),
-            interface: NetworkInterface::Vpn as i32,
-        })
+        .create_network(network)
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
