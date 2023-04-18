@@ -142,12 +142,12 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
     log::info!("Transferring file");
     transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
     log::info!("File downloaded, verifying contents");
-    verify_file_hash(&dst_path, &args.hash)?;
+    verify_file_hash(dst_path, &args.hash)?;
 
     log::info!("Retrying transfer on a completed file");
     transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
     log::info!("Verifying contents");
-    verify_file_hash(&dst_path, &args.hash)?;
+    verify_file_hash(dst_path, &args.hash)?;
 
     Ok(())
 }

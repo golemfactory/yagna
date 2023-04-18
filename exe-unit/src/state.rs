@@ -141,7 +141,7 @@ impl Batch {
                     0 => CommandResult::Ok,
                     _ => CommandResult::Error,
                 });
-                self.notifier.notify(idx as usize);
+                self.notifier.notify(idx);
                 Some(event)
             }
             RuntimeEventKind::StdOut(out) => {

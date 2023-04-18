@@ -143,7 +143,7 @@ mod tests {
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
         fn component(&self) {
-            panic!("GSB API service does not use it.")
+            panic!("GSB API service does not use it.");
         }
     }
 
@@ -314,6 +314,7 @@ mod tests {
     #[actix_web::test]
     #[serial]
     async fn error_payload_test() {
+        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let mut api = dummy_api();
 
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -325,7 +326,6 @@ mod tests {
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let (gsb_res, ws_res) = tokio::join!(
             async {
                 let msg = GetChunk {
