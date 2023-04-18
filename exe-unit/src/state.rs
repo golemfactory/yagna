@@ -392,7 +392,6 @@ pub(crate) struct Deployment {
 pub(crate) struct DeploymentNetwork {
     pub network: IpNet,
     pub node_ip: IpAddr,
-    pub gateway: Option<IpAddr>,
     pub nodes: HashMap<IpAddr, String>,
 }
 
@@ -416,7 +415,6 @@ impl Deployment {
                         network,
                         node_ip,
                         nodes,
-                        gateway
                     },
                 ))
             })
