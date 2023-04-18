@@ -338,11 +338,14 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
     fn try_from(net: &'a DeploymentNetwork) -> Result<Self> {
         let ip = net.network.addr();
         let mask = net.network.netmask();
-        let gateway = net
-            .network
-            .hosts()
-            .find(|ip_| ip_ != &ip)
-            .ok_or(NetError::NetAddrTaken(ip))?;
+        let gateway = if let Some(gateway) = net.gateway {
+            gateway
+        } else {
+            net.network
+                .hosts()
+                .find(|ip_| ip_ != &ip)
+                .ok_or(NetError::NetAddrTaken(ip))?
+        };
 
         Ok(Network {
             addr: ip.to_string(),

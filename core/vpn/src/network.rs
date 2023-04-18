@@ -433,17 +433,16 @@ impl Handler<ConnectTcp> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        let vpn_id = self.vpn.id();
-        log::info!("VPN {}: connecting (tcp) to {:?}", self.vpn.id(), remote);
+        let vpn_id = self.vpn.id().clone();
+        log::info!("VPN {}: connecting (tcp) to {:?}", vpn_id, remote);
 
-        let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
 
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let stack_connection = result?;
-                log::info!("VPN {}: connected (tcp) to {:?}", id, remote);
+                log::info!("VPN {}: connected (tcp) to {:?}", vpn_id, remote);
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
