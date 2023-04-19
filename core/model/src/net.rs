@@ -250,8 +250,8 @@ pub mod local {
     pub struct GsbPingResponse {
         pub node_id: NodeId,
         pub node_alias: Option<NodeId>,
-        pub tcp_ping: Duration,
-        pub udp_ping: Duration,
+        pub tcp_ping: Option<Duration>,
+        pub udp_ping: Option<Duration>,
         pub is_p2p: bool,
     }
 
