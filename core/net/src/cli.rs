@@ -230,9 +230,9 @@ fn to_ms(value: Option<f64>, is_json: bool) -> serde_json::Value {
         }
     } else {
         if let Some(value) = value {
-            format!("{:.3}ms", value).into()
+            format!("{:.3}", value).into()
         } else {
-            "NaN".into()
+            serde_json::Value::Null
         }
     }
 }
