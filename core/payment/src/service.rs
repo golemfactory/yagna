@@ -422,16 +422,14 @@ mod public {
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
                 .await?;
             db.as_dao::<ActivityDao>()
-                .create_if_not_exists(activity_id, node_id, Role::Requestor, agreement_id)
+                .create_if_not_exists(activity_id.clone(), node_id, Role::Requestor, agreement_id)
                 .await?;
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
                 .await?;
 
             log::info!(
-                "DebitNote [{}] received from node [{}].",
-                debit_note_id,
-                issuer_id
+                "DebitNote [{debit_note_id}] for Activity [{activity_id}] received from node [{issuer_id}]."
             );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
@@ -492,7 +490,7 @@ mod public {
 
         match dao.accept(debit_note_id.clone(), node_id).await {
             Ok(_) => {
-                log::info!("Node [{}] accepted DebitNote [{}].", node_id, debit_note_id);
+                log::info!("Node [{node_id}] accepted DebitNote [{debit_note_id}].");
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -604,7 +602,9 @@ mod public {
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
 
-            log::info!("Invoice [{invoice_id}] received from node [{sender_id}].");
+            log::info!(
+                "Invoice [{invoice_id}] for Agreement [{agreement_id}] received from node [{sender_id}]."
+            );
             counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
@@ -664,7 +664,12 @@ mod public {
 
         match dao.accept(invoice_id.clone(), node_id).await {
             Ok(_) => {
-                log::info!("Node [{}] accepted invoice [{}].", node_id, invoice_id);
+                log::info!(
+                    "Node [{}] accepted invoice [{}] for Agreement [{}].",
+                    node_id,
+                    invoice_id,
+                    invoice.agreement_id
+                );
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -719,9 +724,10 @@ mod public {
         match dao.cancel(invoice_id.clone(), invoice.recipient_id).await {
             Ok(_) => {
                 log::info!(
-                    "Node [{}] cancelled invoice [{}].",
+                    "Node [{}] cancelled invoice [{}] for Agreement [{}]..",
                     invoice.recipient_id,
-                    invoice_id
+                    invoice_id,
+                    invoice.agreement_id
                 );
                 counter!("payment.invoices.requestor.cancelled", 1);
                 Ok(Ack {})

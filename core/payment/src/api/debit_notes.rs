@@ -180,13 +180,14 @@ async fn issue_debit_note(
             .create_if_not_exists(agreement, node_id, Role::Provider)
             .await?;
         db.as_dao::<ActivityDao>()
-            .create_if_not_exists(activity_id, node_id, Role::Provider, agreement_id)
+            .create_if_not_exists(activity_id.clone(), node_id, Role::Provider, agreement_id)
             .await?;
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        let debit_note = dao.get(debit_note_id, node_id).await?;
+        let debit_note = dao.get(debit_note_id.clone(), node_id).await?;
 
+        log::info!("DebitNote [{debit_note_id}] for Activity [{activity_id}] issued.");
         counter!("payment.debit_notes.provider.issued", 1);
         Ok(debit_note)
     }
@@ -225,28 +226,34 @@ async fn send_debit_note(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let activity_id = debit_note.activity_id.clone();
+    let recipient_id = debit_note.recipient_id.clone();
 
     let result = with_timeout(timeout, async move {
         match async move {
             log::debug!(
                 "Sending DebitNote [{}] to [{}].",
-                debit_note_id,
+                debit_note.debit_note_id,
                 debit_note.recipient_id
             );
+
+            let debit_note_id = debit_note.debit_note_id.clone();
 
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
                 .service(PUBLIC_SERVICE)
                 .call(SendDebitNote(debit_note))
                 .await??;
-            dao.mark_received(debit_note_id, node_id).await?;
+            dao.mark_received(debit_note_id.clone(), node_id).await?;
             Ok(())
         }
         .timeout(Some(timeout))
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("DebitNote [{}] sent.", path.debit_note_id);
+                log::info!(
+                    "DebitNote [{debit_note_id}] for Activity [{activity_id}] sent to [{recipient_id}]."
+                );
                 counter!("payment.debit_notes.provider.sent", 1);
                 response::ok(Null)
             }
@@ -393,7 +400,11 @@ async fn accept_debit_note(
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("DebitNote [{}] accepted.", path.debit_note_id);
+                log::info!(
+                    "DebitNote [{}] for Activity [{}] accepted.",
+                    path.debit_note_id,
+                    activity_id
+                );
                 counter!("payment.debit_notes.requestor.accepted", 1);
                 response::ok(Null)
             }
