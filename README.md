@@ -1,7 +1,7 @@
 ## Golem
 
 Official Rust implementation of Golem. Golem is a network of nodes that implement the Golem Network protocol. We provide the default implementation of such a node in the form of the Golem daemon, Yagna.
-
+ 
 <h5 align="center">
   <a href='https://golem.network/'><img
       width='500px'
