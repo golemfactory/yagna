@@ -17,7 +17,7 @@ use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
-    keystore::{Cert, Keystore},
+    keystore::{x509_keystore::X509Keystore, Cert, Keystore},
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
@@ -88,6 +88,52 @@ impl RulesManager {
         }
     }
 
+    pub fn set_audited_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+        let cert_id = {
+            let certs: Vec<Cert> = self
+                .keystore
+                .list()
+                .into_iter()
+                .filter(|cert| cert.id().starts_with(&cert_id))
+                .collect();
+
+            if certs.is_empty() {
+                bail!(
+                    "Setting Audited-Payload mode {mode} failed: No cert id: {cert_id} found in keystore"
+                );
+            } else if certs.len() > 1 {
+                bail!(
+                    "Setting Audited-Payload mode {mode} failed: Cert id: {cert_id} isn't unique"
+                );
+            } else {
+                let cert = &certs[0];
+                match cert {
+                    Cert::X509(_) => bail!(
+                        "Failed to set audited-payload mode for certificate {cert_id}. Audited-Payload mode can be set only for Golem certificate."
+                    ),
+                    Cert::Golem { id, .. } => id.clone(),
+                }
+            }
+        };
+
+        self.rulestore
+            .config
+            .write()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .insert(
+                cert_id.clone(),
+                CertRule {
+                    mode: mode.clone(),
+                    description: "".into(),
+                },
+            );
+        log::trace!("Added Audited-Payload rule for cert_id: {cert_id} with mode: {mode}");
+
+        self.rulestore.save()
+    }
+
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
             let certs: Vec<Cert> = self
@@ -142,20 +188,6 @@ impl RulesManager {
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
         log::debug!("Setting outbound everyone mode: {mode}");
         self.rulestore.config.write().unwrap().outbound.everyone = mode;
-
-        self.rulestore.save()
-    }
-
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {mode}");
-        self.rulestore
-            .config
-            .write()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode = mode;
 
         self.rulestore.save()
     }
@@ -239,18 +271,31 @@ impl RulesManager {
                 )
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            let mode = &self
-                .rulestore
-                .config
-                .read()
-                .unwrap()
-                .outbound
-                .audited_payload
-                .default
-                .mode;
+            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
+            self.verify_permissions(&props.cert)
+                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            self.check_mode(mode, manifest)
-                .map_err(|e| anyhow!("Audited-Payload {e}"))
+            let cert_chain_ids = X509Keystore::list_cert_chain_ids(&props.cert)?;
+            for cert_id in &cert_chain_ids {
+                if let Some(rule) = self
+                    .rulestore
+                    .config
+                    .read()
+                    .unwrap()
+                    .outbound
+                    .audited_payload
+                    .get(cert_id)
+                {
+                    return self
+                        .check_mode(&rule.mode, manifest)
+                        .map_err(|e| anyhow!("Partner {e}"));
+                }
+            }
+
+            Err(anyhow!(
+                "Audited-Payload rule whole chain of cert_ids is not trusted: {:?}",
+                cert_chain_ids
+            ))
         } else {
             Err(anyhow!("Audited-Payload rule requires manifest signature"))
         }
@@ -259,7 +304,7 @@ impl RulesManager {
     fn check_partner_rule(
         &self,
         manifest: &AppManifest,
-        node_descriptor: Option<String>,
+        node_descriptor: Option<&str>,
         requestor_id: NodeId,
     ) -> Result<()> {
         let node_descriptor =
@@ -267,7 +312,7 @@ impl RulesManager {
 
         let node_descriptor = self
             .keystore
-            .verify_node_descriptor(&node_descriptor)
+            .verify_node_descriptor(node_descriptor)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
         if requestor_id != node_descriptor.node_id {
@@ -338,7 +383,7 @@ impl RulesManager {
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
+            self.check_partner_rule(&manifest, node_descriptor.as_deref(), requestor_id),
         ]
         .into_iter()
         .partition_result();
@@ -495,12 +540,7 @@ impl Default for RulesConfig {
             outbound: OutboundConfig {
                 enabled: true,
                 everyone: Mode::None,
-                audited_payload: CertRules {
-                    default: CertRule {
-                        mode: Mode::All,
-                        description: "Default setting".into(),
-                    },
-                },
+                audited_payload: HashMap::new(),
                 partner: HashMap::new(),
             },
         }
@@ -512,14 +552,10 @@ impl Default for RulesConfig {
 pub struct OutboundConfig {
     pub enabled: bool,
     pub everyone: Mode,
-    pub audited_payload: CertRules,
+    #[serde(default)]
+    pub audited_payload: HashMap<String, CertRule>,
     #[serde(default)]
     pub partner: HashMap<String, CertRule>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CertRules {
-    pub default: CertRule,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

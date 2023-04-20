@@ -2,8 +2,9 @@ use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
     RemoveResponse,
 };
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use golem_certificate::schemas::certificate::Fingerprint;
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
     hash::MessageDigest,
