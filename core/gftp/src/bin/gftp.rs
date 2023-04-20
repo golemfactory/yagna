@@ -8,6 +8,35 @@ use tokio::io::AsyncBufReadExt;
 use tokio::time::Duration;
 
 #[derive(StructOpt)]
+struct BenchmarkOptions {
+    #[structopt(
+    long,
+    default_value = "1000000000",
+    )]
+    pub max_bytes: usize,
+    #[structopt(
+    long,
+    default_value = "86400",
+    )]
+    pub max_time_sec: usize,
+    #[structopt(
+    long,
+    default_value = "12",
+    )]
+    pub chunk_at_once: usize,
+    #[structopt(
+    long,
+    default_value = "40960",
+    )]
+    pub chunk_size: usize,
+    #[structopt(
+    long,
+    default_value = "2.0",
+    )]
+    pub refresh_every_sec: f64,
+}
+
+#[derive(StructOpt)]
 #[structopt(version = ya_compile_time_utils::version_describe!())]
 struct Args {
     #[structopt(flatten)]
@@ -26,6 +55,10 @@ struct Args {
 enum Command {
     #[structopt(flatten)]
     Command(RpcRequest),
+
+    #[structopt(name = "benchmark")]
+    Benchmark(BenchmarkOptions),
+
     /// Starts in JSON RPC server mode
     Server,
 }
@@ -37,9 +70,9 @@ enum ExecMode {
     Shutdown,
 }
 
-async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecMode {
+async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool, benchmark_options: BenchmarkOptions) -> ExecMode {
     let id = id.as_ref();
-    match execute_inner(id, request, verbose).await {
+    match execute_inner(id, request, verbose, benchmark_options).await {
         Ok(exec_mode) => exec_mode,
         Err(error) => {
             RpcMessage::error(id, error).print(verbose);
@@ -48,7 +81,7 @@ async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecM
     }
 }
 
-async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -> Result<ExecMode> {
+async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool, benchmark_options: BenchmarkOptions) -> Result<ExecMode> {
     let exec_mode = match request {
         RpcRequest::Version {} => {
             let version = ya_compile_time_utils::version_describe!().to_string();
@@ -57,6 +90,10 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
         }
         RpcRequest::Publish { files } => {
             let mut result = Vec::new();
+            if files.is_empty() {
+                log::error!("Empty file list provided.");
+                return Err(anyhow::anyhow!("Empty file list provided."));
+            }
             for file in files {
                 let url = gftp::publish(&file).await?;
                 result.push((file, url));
@@ -66,6 +103,11 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
                 _ => RpcMessage::files_response(id, result),
             }
             .print(verbose);
+            ExecMode::Service
+        }
+        RpcRequest::PublishBenchmark {} => {
+            let result = gftp::publish_benchmark("benchmark").await?;
+            RpcMessage::benchmark_response(id, result).print(verbose);
             ExecMode::Service
         }
         RpcRequest::Close { urls } => {
@@ -86,6 +128,19 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
             RpcMessage::file_response(id, output_file, url).print(verbose);
             ExecMode::OneShot
         }
+        RpcRequest::DownloadBenchmark { url} => {
+            let BenchmarkOptions {
+                max_bytes,
+                max_time_sec,
+                chunk_at_once,
+                chunk_size,
+                refresh_every_sec,
+            } = benchmark_options;
+
+            gftp::download_benchmark_from_url(&url, max_bytes, max_time_sec, chunk_at_once, chunk_size, refresh_every_sec).await?;
+            RpcMessage::benchmark_response(id, url).print(verbose);
+            ExecMode::OneShot
+        }
         RpcRequest::Receive { output_file } => {
             let url = gftp::open_for_upload(&output_file).await?;
             RpcMessage::file_response(id, output_file, url).print(verbose);
@@ -100,6 +155,7 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
             RpcMessage::response(id, RpcResult::Status(RpcStatusResult::Ok)).print(verbose);
             ExecMode::Shutdown
         }
+
     };
 
     Ok(exec_mode)
@@ -135,7 +191,13 @@ async fn server_loop() {
                 match msg.body {
                     RpcBody::Request { request } => {
                         tokio::task::spawn_local(async move {
-                            if let ExecMode::Shutdown = execute(id, request, verbose).await {
+                            if let ExecMode::Shutdown = execute(id, request, verbose, BenchmarkOptions{
+                                max_bytes: 0,
+                                max_time_sec: 0,
+                                chunk_at_once: 0,
+                                chunk_size: 0,
+                                refresh_every_sec: 1.0
+                            }).await {
                                 tokio::time::sleep(Duration::from_secs(1)).await;
                                 std::process::exit(0);
                             }
@@ -159,10 +221,20 @@ async fn main() -> Result<()> {
 
     let args = Args::from_args();
     match args.command {
-        Command::Command(request) => match execute(None, request, args.verbose).await {
+        Command::Command(request) => match execute(None, request, args.verbose, BenchmarkOptions{
+max_bytes: 0,
+            max_time_sec: 0,
+            chunk_at_once: 0,
+            chunk_size: 0,
+            refresh_every_sec: 1.0
+
+        }).await {
             ExecMode::Service => actix_rt::signal::ctrl_c().await?,
             _ => log::debug!("Shutting down"),
         },
+        Command::Benchmark(bench_options) => {
+            log::debug!("Running benchmark");
+        }
         Command::Server => server_loop().await,
     }
 

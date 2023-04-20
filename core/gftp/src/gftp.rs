@@ -10,6 +10,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fs, io};
+use std::hash::Hash;
+use std::iter::repeat_with;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 use url::{quirks::hostname, Position, Url};
 
 use ya_core_model::gftp as model;
@@ -23,6 +27,68 @@ pub const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
 // =========================================== //
 // File download - publisher side ("requestor")
 // =========================================== //
+
+struct BenchmarkDescr {
+    hash: String,
+    meta: model::GftpMetadata,
+    rng: fastrand::Rng,
+}
+impl BenchmarkDescr {
+    fn new(hash: String, meta: model::GftpMetadata) -> Arc<Self> {
+        Arc::new(BenchmarkDescr { hash, meta, rng: fastrand::Rng::new() })
+    }
+
+    pub fn open(name: &str) -> Result<Arc<BenchmarkDescr>> {
+        let meta = model::GftpMetadata {
+            file_size: 2000000000000,
+        };
+        let hash = {
+            let mut hasher = Sha3_256::new();
+            hasher.write_all(name.as_bytes());
+
+            format!("{:x}", hasher.result())
+        };
+
+        Ok(BenchmarkDescr::new(hash, meta))
+    }
+
+    pub fn bind_handlers(self: &Arc<Self>) {
+        let gsb_address = model::file_bus_id(&self.hash);
+        let desc = self.clone();
+        let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
+            log::debug!("Received GetMetadata request. Returning metadata. {:?}", desc.meta);
+            future::ok(desc.meta.clone())
+        });
+
+        let desc = self.clone();
+        let _ = bus::bind(&gsb_address, move |msg: model::GetChunk| {
+            let desc = desc.clone();
+            async move { desc.get_chunk(msg.offset, msg.size).await }
+        });
+    }
+
+    async fn get_chunk(
+        &self,
+        offset: u64,
+        chunk_size: u64,
+    ) -> Result<model::GftpChunk, model::Error> {
+        let bytes_to_read = if self.meta.file_size - offset < chunk_size {
+            self.meta.file_size - offset
+        } else {
+            chunk_size
+        } as usize;
+
+        log::debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
+        //let mut buffer = vec![0u8; bytes_to_read];
+        let mut bytes: Vec<u8> = repeat_with(|| self.rng.u8(..)).take(bytes_to_read).collect();
+
+
+        Ok(model::GftpChunk {
+            offset,
+            content: bytes,
+        })
+    }
+}
 
 struct FileDesc {
     hash: String,
@@ -53,6 +119,7 @@ impl FileDesc {
         let gsb_address = model::file_bus_id(&self.hash);
         let desc = self.clone();
         let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
+            log::debug!("Received GetMetadata request. Returning metadata. {:?}", desc.meta);
             future::ok(desc.meta.clone())
         });
 
@@ -103,6 +170,13 @@ pub async fn publish(path: &Path) -> Result<Url> {
     filedesc.bind_handlers();
 
     gftp_url(&filedesc.hash).await
+}
+
+pub async fn publish_benchmark(str: &str) -> Result<Url> {
+    let benchmark_descriptor = BenchmarkDescr::open(str)?;
+    benchmark_descriptor.bind_handlers();
+
+    gftp_url(&benchmark_descriptor.hash).await
 }
 
 pub async fn close(url: &Url) -> Result<bool> {
@@ -157,6 +231,88 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
             future::ready((|| {
                 let chunk = result?;
                 file.write_all(&chunk.content[..])?;
+                Ok(())
+            })())
+        })
+        .await?;
+
+    Ok(())
+}
+
+// =========================================== //
+// Benchmark download - client side
+// =========================================== //
+
+pub async fn download_benchmark_from_url(url: &Url, max_bytes: usize, max_time_sec: usize, chunk_at_once: usize, chunk_size: usize, refresh_every_sec: f64) -> Result<()> {
+    let (node_id, hash) = extract_url(url)?;
+    download_benchmark(node_id, &hash, max_bytes, max_time_sec, chunk_at_once, chunk_size, refresh_every_sec).await
+}
+
+pub async fn download_benchmark(node_id: NodeId, hash: &str, max_bytes: usize, max_time_sec: usize, chunk_at_once: usize, chunk_size: usize, refresh_every_sec: f64) -> Result<()> {
+    let remote = node_id.service_transfer(&model::file_bus_id(hash));
+ //   log::debug!("Creating target file {}", dst_path.display());
+
+   // let mut file = create_dest_file(dst_path)?;
+
+    log::debug!("Loading benchmark metadata");
+    let metadata = remote.send(model::GetMetadata {}).await??;
+
+    log::info!("Benchmark will attempt to download up to {}", humansize::format_size(max_bytes, humansize::DECIMAL));
+    let chunk_size = DEFAULT_CHUNK_SIZE;
+    let num_chunks = (metadata.file_size + (chunk_size - 1)) / chunk_size; // Divide and round up.
+
+    let sum_bytes_ = Arc::new(AtomicUsize::new(0));
+    let sum_chunks_ = Arc::new(AtomicUsize::new(0));
+    let sum_bytes = sum_bytes_.clone();
+    let sum_chunks = sum_chunks_.clone();
+    tokio::spawn(async move {
+        let mut last_sum_bytes = 0;
+        let mut last_chunks = 0;
+        let mut last_time = Instant::now();
+        let refresh_every_seconds = 0.5;
+        log::info!("Starting download progress loop. Refresh every {refresh_every_seconds}s");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        loop {
+            let sum_bytes = sum_bytes.load(Ordering::SeqCst);
+            let sum_chunks = sum_chunks.load(Ordering::SeqCst);
+            let current_time = Instant::now();
+            let elapsed = current_time - last_time;
+            let bytes_per_sec = (sum_bytes - last_sum_bytes) as f64 / elapsed.as_secs_f64();
+            let chunks_per_sec = (sum_chunks - last_chunks) as f64 / elapsed.as_secs_f64();
+
+
+            last_sum_bytes = sum_bytes;
+            last_chunks = sum_chunks;
+            last_time = current_time;
+            tokio::time::sleep(Duration::from_secs_f64(refresh_every_seconds)).await;
+            log::info!(
+                "Downloaded {} bytes in {} chunks, {}/s, {:.2} chunks/s",
+                humansize::format_size(sum_bytes, humansize::DECIMAL),
+                sum_chunks,
+                humansize::format_size(bytes_per_sec as u64, humansize::DECIMAL),
+                chunks_per_sec
+            );
+        }
+    });
+
+    futures::stream::iter(0..num_chunks)
+        .map(|chunk_number| {
+            remote.call(model::GetChunk {
+                offset: chunk_number * chunk_size,
+                size: chunk_size,
+            })
+        })
+        .buffered(12)
+        .map_err(anyhow::Error::from)
+        .try_for_each(move |result| {
+            let sum_bytes = sum_bytes_.clone();
+            let sum_chunks = sum_chunks_.clone();
+            future::ready((|| {
+                let chunk = result?;
+                let buf = &chunk.content[..];
+                sum_bytes.fetch_add(buf.len(), Ordering::SeqCst);
+                sum_chunks.fetch_add(1, Ordering::SeqCst);
+                //log::debug!("Downloaded chunk: {:?}", sum_bytes.load(Ordering::SeqCst));
                 Ok(())
             })())
         })

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::PathBuf;
+use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
@@ -77,6 +78,10 @@ impl RpcMessage {
         }
     }
 
+    pub fn benchmark_response(id: Option<&RpcId>, url: Url) -> Self {
+        Self::response(id, RpcResult::Benchmark(RpcBenchmarkResult { url }))
+    }
+
     pub fn file_response(id: Option<&RpcId>, file: PathBuf, url: Url) -> Self {
         Self::response(id, RpcResult::File(RpcFileResult { file, url }))
     }
@@ -149,6 +154,7 @@ pub enum RpcBody {
     },
 }
 
+
 #[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
 #[serde(tag = "method", content = "params")]
 #[serde(rename_all = "snake_case")]
@@ -157,6 +163,8 @@ pub enum RpcRequest {
     Version {},
     /// Publishes files (blocking)
     Publish { files: Vec<PathBuf> },
+    /// Publishes endpoint for benchmark (blocking)
+    PublishBenchmark {},
     /// Stops publishing a file
     Close { urls: Vec<Url> },
     /// Downloads a file
@@ -165,6 +173,11 @@ pub enum RpcRequest {
         url: Url,
         /// Destination path
         output_file: PathBuf,
+    },
+    /// Download part of benchmark
+    DownloadBenchmark {
+        /// Source URL
+        url: Url,
     },
     /// Waits for file upload (blocking)
     Receive {
@@ -186,6 +199,7 @@ pub enum RpcRequest {
 #[serde(untagged)]
 pub enum RpcResult {
     String(String),
+    Benchmark(RpcBenchmarkResult),
     File(RpcFileResult),
     Files(Vec<RpcFileResult>),
     Status(RpcStatusResult),
@@ -206,6 +220,12 @@ impl From<bool> for RpcStatusResult {
             false => RpcStatusResult::Error,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct RpcBenchmarkResult {
+    pub url: Url,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
