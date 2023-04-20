@@ -7966,7 +7966,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=c86fd1ac1e092857294925731902e427c22a7ab5#c86fd1ac1e092857294925731902e427c22a7ab5"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=44b078a16dcd53c5681eb14f88149c39f4d0a880#44b078a16dcd53c5681eb14f88149c39f4d0a880"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7987,7 +7987,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=c86fd1ac1e092857294925731902e427c22a7ab5#c86fd1ac1e092857294925731902e427c22a7ab5"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=44b078a16dcd53c5681eb14f88149c39f4d0a880#44b078a16dcd53c5681eb14f88149c39f4d0a880"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8017,7 +8017,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=c86fd1ac1e092857294925731902e427c22a7ab5#c86fd1ac1e092857294925731902e427c22a7ab5"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=44b078a16dcd53c5681eb14f88149c39f4d0a880#44b078a16dcd53c5681eb14f88149c39f4d0a880"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -8035,7 +8035,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=c86fd1ac1e092857294925731902e427c22a7ab5#c86fd1ac1e092857294925731902e427c22a7ab5"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=44b078a16dcd53c5681eb14f88149c39f4d0a880#44b078a16dcd53c5681eb14f88149c39f4d0a880"
 dependencies = [
  "derive_more",
  "futures 0.3.24",
@@ -8055,7 +8055,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=c86fd1ac1e092857294925731902e427c22a7ab5#c86fd1ac1e092857294925731902e427c22a7ab5"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=44b078a16dcd53c5681eb14f88149c39f4d0a880#44b078a16dcd53c5681eb14f88149c39f4d0a880"
 dependencies = [
  "bytes 1.2.1",
  "derive_more",

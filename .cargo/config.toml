@@ -12,7 +12,5 @@ email = "contact@golem.network"
 
 [profile.release]
 lto="fat"
-opt-level=3
+opt-level=1
 codegen-units=1
-
-

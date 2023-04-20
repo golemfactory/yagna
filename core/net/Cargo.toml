@@ -16,7 +16,7 @@ ya-core-model = { version = "^0.8", features=["net", "identity"] }
 
 # ya-relay-client = "0.4"
 # ya-relay-client = { path = "../../../ya-relay/client" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c86fd1ac1e092857294925731902e427c22a7ab5" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "44b078a16dcd53c5681eb14f88149c39f4d0a880" }
 
 ya-sb-proto = { version = "0.6" }
 ya-sb-util = { version = "0.4" }
