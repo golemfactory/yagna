@@ -584,17 +584,18 @@ mod public {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = *agreement.requestor_id();
+        let owner_id = *agreement.requestor_id();
+        let sender_id = *agreement.provider_id();
         match async move {
             db.as_dao::<AgreementDao>()
-                .create_if_not_exists(agreement, node_id, Role::Requestor)
+                .create_if_not_exists(agreement, owner_id, Role::Requestor)
                 .await?;
 
             let dao: ActivityDao = db.as_dao();
             for activity_id in activity_ids {
                 dao.create_if_not_exists(
                     activity_id,
-                    node_id,
+                    owner_id,
                     Role::Requestor,
                     agreement_id.clone(),
                 )
@@ -603,7 +604,7 @@ mod public {
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
 
-            log::info!("Invoice [{}] received from node [{}].", node_id, invoice_id);
+            log::info!("Invoice [{invoice_id}] received from node [{sender_id}].");
             counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
