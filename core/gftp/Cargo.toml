@@ -35,7 +35,7 @@ serde_json = "1.0"
 sha3 = "0.8.2"
 structopt = "0.3.9"
 thiserror = "1.0.20"
-tokio = { version = "1", features = ["io-std", "time"] }
+tokio = { version = "1", features = ["io-std", "time", "macros"] }
 url = { version = "2.1.1", features = ["serde"] }
 fastrand = "1.4.0"
 humansize = "2.1.3"
