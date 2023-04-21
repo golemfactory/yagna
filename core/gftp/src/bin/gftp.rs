@@ -66,7 +66,6 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
             }
             BenchmarkCommands::Download(bench_options) => {
                 gftp::download_benchmark_from_url(&bench_options.url, &bench_options).await?;
-                RpcMessage::benchmark_response(id, bench_options.url).print(verbose);
                 ExecMode::OneShot
             }
         },

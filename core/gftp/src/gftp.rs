@@ -9,7 +9,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::iter::repeat_with;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fs, io};
@@ -287,9 +287,7 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
     }
     let max_time_sec = opt.max_time_sec;
     if let Some(max_time_sec) = max_time_sec {
-        log::info!(
-            "Benchmark will limit run time {} seconds",
-            max_time_sec)
+        log::info!("Benchmark will limit run time {} seconds", max_time_sec)
     } else {
         log::info!("There will be no time limit on download test");
     }
@@ -298,8 +296,7 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
     if chunk_at_once < 1 {
         return Err(anyhow!("Chunk at once must be at least 1"));
     }
-    let num_chunks =
-    if let Some(max_bytes) = max_bytes {
+    let num_chunks = if let Some(max_bytes) = max_bytes {
         (max_bytes + (chunk_size - 1)) / chunk_size // Divide and round up.
     } else {
         u64::MAX
@@ -348,7 +345,6 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
     let sum_bytes = sum_bytes_.clone();
     let sum_chunks = sum_chunks_.clone();
 
-    let local = task::LocalSet::new();
     let ts2 = task::spawn_local(async move {
         futures::stream::iter(0..num_chunks)
             .map(|chunk_number| {
@@ -384,11 +380,11 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
     });
 
     tokio::select! {
-        res = ts => {
+        _ = ts => {
             log::info!("Download progress loop finished.");
         }
         _ = ts2 => {
-            log::info!("Download loop finished.");
+            log::info!("Download task finished.");
         }
     }
 
@@ -396,12 +392,7 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
     let sum_chunks = sum_chunks_.load(Ordering::SeqCst);
     if let Some(max_bytes) = max_bytes {
         if sum_bytes != max_bytes {
-            log::warn!(
-            "Downloaded {} bytes, expected {}",
-            sum_bytes,
-            max_bytes
-        );
-            ;
+            log::warn!("Downloaded {} bytes, expected {}", sum_bytes, max_bytes);
         }
     }
     println!(
@@ -411,9 +402,6 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt)
         sum_chunks,
         total_time_start.elapsed().as_secs_f64()
     );
-
-    log::info!("Benchmark finished.");
-
     Ok(())
 }
 
@@ -545,7 +533,7 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
 fn get_chunks(
     file_path: &Path,
     chunk_size: u64,
-) -> Result<impl Iterator<Item=Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error>
+) -> Result<impl Iterator<Item = Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error>
 {
     let mut file = OpenOptions::new().read(true).open(file_path)?;
 
