@@ -28,7 +28,6 @@ struct Args {
 enum Command {
     #[structopt(flatten)]
     Command(RpcRequest),
-
     /// Starts in JSON RPC server mode
     Server,
 }
@@ -181,7 +180,6 @@ async fn main() -> Result<()> {
             ExecMode::Service => actix_rt::signal::ctrl_c().await?,
             _ => log::debug!("Shutting down"),
         },
-
         Command::Server => server_loop().await,
     }
 
