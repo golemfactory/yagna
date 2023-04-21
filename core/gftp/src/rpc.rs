@@ -158,10 +158,10 @@ pub enum RpcBody {
 pub struct BenchmarkOpt {
     #[structopt()]
     pub url: Url,
-    #[structopt(short = "b", long, default_value = "1000000000")]
-    pub max_bytes: u64,
-    #[structopt(short = "t", long, default_value = "86400")]
-    pub max_time_sec: u32,
+    #[structopt(short = "b", long)]
+    pub max_bytes: Option<u64>,
+    #[structopt(short = "t", long)]
+    pub max_time_sec: Option<u32>,
     #[structopt(short = "u", long, default_value = "12")]
     pub chunk_at_once: u32,
     #[structopt(short = "c", long, default_value = "40960")]
