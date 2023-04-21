@@ -10,15 +10,15 @@ use tokio::io::AsyncBufReadExt;
 use tokio::time::Duration;
 
 #[derive(StructOpt)]
-#[structopt(version = ya_compile_time_utils::version_describe ! ())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct Args {
     #[structopt(flatten)]
     command: Command,
     /// Increases output verbosity
     #[structopt(
-    short,
-    long,
-    set = clap::ArgSettings::Global,
+        short,
+        long,
+        set = clap::ArgSettings::Global,
     )]
     verbose: bool,
 }
