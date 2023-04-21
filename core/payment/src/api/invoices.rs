@@ -226,7 +226,7 @@ async fn send_invoice(
     }
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let agreement_id = invoice.agreement_id.clone();
-    let recipient_id = invoice.recipient_id.clone();
+    let recipient_id = invoice.recipient_id;
 
     let result = async move {
         match async move {

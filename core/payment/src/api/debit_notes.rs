@@ -227,7 +227,7 @@ async fn send_debit_note(
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let activity_id = debit_note.activity_id.clone();
-    let recipient_id = debit_note.recipient_id.clone();
+    let recipient_id = debit_note.recipient_id;
 
     let result = with_timeout(timeout, async move {
         match async move {
