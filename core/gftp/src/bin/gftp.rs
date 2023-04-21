@@ -1,6 +1,8 @@
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
-use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
+use gftp::rpc::{
+    BenchmarkCommands, RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult,
+};
 
 use structopt::{clap, StructOpt};
 use tokio::io;
@@ -55,8 +57,23 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
             RpcMessage::response(id, RpcResult::String(version)).print(verbose);
             ExecMode::OneShot
         }
+        RpcRequest::Benchmark(benchmark_commands) => match benchmark_commands {
+            BenchmarkCommands::Publish => {
+                let result = gftp::publish_benchmark("benchmark").await?;
+                RpcMessage::benchmark_response(id, result).print(verbose);
+                ExecMode::Service
+            }
+            BenchmarkCommands::Download(bench_options) => {
+                gftp::download_benchmark_from_url(&bench_options.url, &bench_options).await?;
+                ExecMode::OneShot
+            }
+        },
         RpcRequest::Publish { files } => {
             let mut result = Vec::new();
+            if files.is_empty() {
+                log::error!("Empty file list provided.");
+                return Err(anyhow::anyhow!("Empty file list provided."));
+            }
             for file in files {
                 let url = gftp::publish(&file).await?;
                 result.push((file, url));

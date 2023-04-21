@@ -77,6 +77,10 @@ impl RpcMessage {
         }
     }
 
+    pub fn benchmark_response(id: Option<&RpcId>, url: Url) -> Self {
+        Self::response(id, RpcResult::Benchmark(RpcBenchmarkResult { url }))
+    }
+
     pub fn file_response(id: Option<&RpcId>, file: PathBuf, url: Url) -> Self {
         Self::response(id, RpcResult::File(RpcFileResult { file, url }))
     }
@@ -150,6 +154,31 @@ pub enum RpcBody {
 }
 
 #[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct BenchmarkOpt {
+    #[structopt()]
+    pub url: Url,
+    #[structopt(short = "b", long)]
+    pub max_bytes: Option<u64>,
+    #[structopt(short = "t", long)]
+    pub max_time_sec: Option<u32>,
+    #[structopt(short = "u", long, default_value = "12")]
+    pub chunk_at_once: u32,
+    #[structopt(short = "c", long, default_value = "40960")]
+    pub chunk_size: u64,
+    #[structopt(short = "s", long, default_value = "2.0")]
+    pub refresh_every_sec: f64,
+}
+
+#[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
+pub enum BenchmarkCommands {
+    /// Run at one node to enable benchmarking from other nodes
+    Publish,
+    /// Run if already enabled benchmark server on other node
+    Download(BenchmarkOpt),
+}
+
+#[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
 #[serde(tag = "method", content = "params")]
 #[serde(rename_all = "snake_case")]
 pub enum RpcRequest {
@@ -157,6 +186,9 @@ pub enum RpcRequest {
     Version {},
     /// Publishes files (blocking)
     Publish { files: Vec<PathBuf> },
+    /// Benchmark options
+    #[structopt(name = "benchmark")]
+    Benchmark(BenchmarkCommands),
     /// Stops publishing a file
     Close { urls: Vec<Url> },
     /// Downloads a file
@@ -186,6 +218,7 @@ pub enum RpcRequest {
 #[serde(untagged)]
 pub enum RpcResult {
     String(String),
+    Benchmark(RpcBenchmarkResult),
     File(RpcFileResult),
     Files(Vec<RpcFileResult>),
     Status(RpcStatusResult),
@@ -206,6 +239,12 @@ impl From<bool> for RpcStatusResult {
             false => RpcStatusResult::Error,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct RpcBenchmarkResult {
+    pub url: Url,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

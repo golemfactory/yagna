@@ -6,12 +6,17 @@ use rand::Rng;
 use sha3::{Digest, Sha3_256};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::iter::repeat_with;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use std::{fs, io};
+use tokio::task;
 use url::{quirks::hostname, Position, Url};
 
+use crate::rpc::BenchmarkOpt;
 use ya_core_model::gftp as model;
 use ya_core_model::identity;
 use ya_core_model::net::{RemoteEndpoint, TryRemoteEndpoint};
@@ -23,6 +28,77 @@ pub const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
 // =========================================== //
 // File download - publisher side ("requestor")
 // =========================================== //
+
+struct BenchmarkDescr {
+    hash: String,
+    meta: model::GftpMetadata,
+    rng: fastrand::Rng,
+}
+
+impl BenchmarkDescr {
+    fn new(hash: String, meta: model::GftpMetadata) -> Arc<Self> {
+        Arc::new(BenchmarkDescr {
+            hash,
+            meta,
+            rng: fastrand::Rng::new(),
+        })
+    }
+
+    pub fn open(name: &str) -> Result<Arc<BenchmarkDescr>> {
+        let meta = model::GftpMetadata {
+            file_size: 2000000000000,
+        };
+        let hash = {
+            let mut hasher = Sha3_256::new();
+            let _ = hasher.write_all(name.as_bytes());
+
+            format!("{:x}", hasher.result())
+        };
+
+        Ok(BenchmarkDescr::new(hash, meta))
+    }
+
+    pub fn bind_handlers(self: &Arc<Self>) {
+        let gsb_address = model::file_bus_id(&self.hash);
+        let desc = self.clone();
+        let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
+            log::debug!(
+                "Received GetMetadata request. Returning metadata. {:?}",
+                desc.meta
+            );
+            future::ok(desc.meta.clone())
+        });
+
+        let desc = self.clone();
+        let _ = bus::bind(&gsb_address, move |msg: model::GetChunk| {
+            let desc = desc.clone();
+            async move { desc.get_chunk(msg.offset, msg.size).await }
+        });
+    }
+
+    async fn get_chunk(
+        &self,
+        offset: u64,
+        chunk_size: u64,
+    ) -> Result<model::GftpChunk, model::Error> {
+        let bytes_to_read = if self.meta.file_size - offset < chunk_size {
+            self.meta.file_size - offset
+        } else {
+            chunk_size
+        } as usize;
+
+        log::debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
+        //let mut buffer = vec![0u8; bytes_to_read];
+        let bytes: Vec<u8> = repeat_with(|| self.rng.u8(..))
+            .take(bytes_to_read)
+            .collect();
+
+        Ok(model::GftpChunk {
+            offset,
+            content: bytes,
+        })
+    }
+}
 
 struct FileDesc {
     hash: String,
@@ -53,6 +129,10 @@ impl FileDesc {
         let gsb_address = model::file_bus_id(&self.hash);
         let desc = self.clone();
         let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
+            log::debug!(
+                "Received GetMetadata request. Returning metadata. {:?}",
+                desc.meta
+            );
             future::ok(desc.meta.clone())
         });
 
@@ -103,6 +183,13 @@ pub async fn publish(path: &Path) -> Result<Url> {
     filedesc.bind_handlers();
 
     gftp_url(&filedesc.hash).await
+}
+
+pub async fn publish_benchmark(str: &str) -> Result<Url> {
+    let benchmark_descriptor = BenchmarkDescr::open(str)?;
+    benchmark_descriptor.bind_handlers();
+
+    gftp_url(&benchmark_descriptor.hash).await
 }
 
 pub async fn close(url: &Url) -> Result<bool> {
@@ -162,6 +249,159 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
         })
         .await?;
 
+    Ok(())
+}
+
+// =========================================== //
+// Benchmark download - client side
+// =========================================== //
+
+pub async fn download_benchmark_from_url(url: &Url, opt: &BenchmarkOpt) -> Result<()> {
+    let (node_id, hash) = extract_url(url)?;
+    download_benchmark(node_id, &hash, opt).await
+}
+
+pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt) -> Result<()> {
+    let total_time_start = Instant::now();
+
+    let remote = node_id.service_transfer(&model::file_bus_id(hash));
+    //   log::debug!("Creating target file {}", dst_path.display());
+
+    // let mut file = create_dest_file(dst_path)?;
+
+    //    log::debug!("Loading benchmark metadata");
+    //  let metadata = remote.send(model::GetMetadata {}).await??;
+
+    let max_bytes = opt.max_bytes;
+    if let Some(max_bytes) = max_bytes {
+        log::info!(
+            "Benchmark will limit download size to {}",
+            humansize::format_size(max_bytes, humansize::DECIMAL)
+        );
+    } else {
+        log::info!("There will be no size limit on download test");
+    }
+    let chunk_size = opt.chunk_size;
+    if chunk_size < 1 {
+        return Err(anyhow!("Chunk size must be at least 1"));
+    }
+    let max_time_sec = opt.max_time_sec;
+    if let Some(max_time_sec) = max_time_sec {
+        log::info!("Benchmark will limit run time {} seconds", max_time_sec)
+    } else {
+        log::info!("There will be no time limit on download test");
+    }
+
+    let chunk_at_once = opt.chunk_at_once as usize;
+    if chunk_at_once < 1 {
+        return Err(anyhow!("Chunk at once must be at least 1"));
+    }
+    let num_chunks = if let Some(max_bytes) = max_bytes {
+        (max_bytes + (chunk_size - 1)) / chunk_size // Divide and round up.
+    } else {
+        u64::MAX
+    };
+
+    let sum_bytes_ = Arc::new(AtomicU64::new(0));
+    let sum_chunks_ = Arc::new(AtomicU64::new(0));
+    let sum_bytes = sum_bytes_.clone();
+    let sum_chunks = sum_chunks_.clone();
+
+    let refresh_every_sec = opt.refresh_every_sec;
+    let ts = tokio::spawn(async move {
+        let mut last_sum_bytes = 0;
+        let mut last_chunks = 0;
+        let mut last_time = Instant::now();
+        let refresh_every_seconds = refresh_every_sec;
+        log::info!("Starting download progress loop. Refresh every {refresh_every_seconds}s");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        loop {
+            let sum_bytes = sum_bytes.load(Ordering::SeqCst);
+            let sum_chunks = sum_chunks.load(Ordering::SeqCst);
+            let current_time = Instant::now();
+            let elapsed = current_time - last_time;
+            let bytes_per_sec = (sum_bytes - last_sum_bytes) as f64 / elapsed.as_secs_f64();
+            let chunks_per_sec = (sum_chunks - last_chunks) as f64 / elapsed.as_secs_f64();
+
+            last_sum_bytes = sum_bytes;
+            last_chunks = sum_chunks;
+            last_time = current_time;
+            tokio::time::sleep(Duration::from_secs_f64(refresh_every_seconds)).await;
+            log::info!(
+                "Downloaded {} bytes in {} chunks, {}/s, {:.2} chunks/s",
+                humansize::format_size(sum_bytes, humansize::DECIMAL),
+                sum_chunks,
+                humansize::format_size(bytes_per_sec as u64, humansize::DECIMAL),
+                chunks_per_sec
+            );
+            if let Some(max_time_sec) = max_time_sec {
+                if total_time_start.elapsed() > Duration::from_secs(max_time_sec as u64) {
+                    log::info!("Max time reached, stopping");
+                    break;
+                }
+            }
+        }
+    });
+    let sum_bytes = sum_bytes_.clone();
+    let sum_chunks = sum_chunks_.clone();
+
+    let ts2 = task::spawn_local(async move {
+        futures::stream::iter(0..num_chunks)
+            .map(|chunk_number| {
+                let chunk_size = if let Some(max_bytes) = max_bytes {
+                    if chunk_number == num_chunks - 1 {
+                        max_bytes - chunk_number * chunk_size
+                    } else {
+                        chunk_size
+                    }
+                } else {
+                    chunk_size
+                };
+                remote.call(model::GetChunk {
+                    offset: chunk_number * chunk_size,
+                    size: chunk_size,
+                })
+            })
+            .buffered(chunk_at_once)
+            .map_err(anyhow::Error::from)
+            .try_for_each(move |result| {
+                let sum_bytes = sum_bytes.clone();
+                let sum_chunks = sum_chunks.clone();
+                future::ready((|| {
+                    let chunk = result?;
+                    let buf = &chunk.content[..];
+                    sum_bytes.fetch_add(buf.len() as u64, Ordering::SeqCst);
+                    sum_chunks.fetch_add(1, Ordering::SeqCst);
+                    //log::debug!("Downloaded chunk: {:?}", sum_bytes.load(Ordering::SeqCst));
+                    Ok(())
+                })())
+            })
+            .await
+    });
+
+    tokio::select! {
+        _ = ts => {
+            log::info!("Download progress loop finished.");
+        }
+        _ = ts2 => {
+            log::info!("Download task finished.");
+        }
+    }
+
+    let sum_bytes = sum_bytes_.load(Ordering::SeqCst);
+    let sum_chunks = sum_chunks_.load(Ordering::SeqCst);
+    if let Some(max_bytes) = max_bytes {
+        if sum_bytes != max_bytes {
+            log::warn!("Downloaded {} bytes, expected {}", sum_bytes, max_bytes);
+        }
+    }
+    println!(
+        "Downloaded {} ({}B) in {} chunks, total time: {:.2}s",
+        humansize::format_size(sum_bytes, humansize::DECIMAL),
+        sum_bytes,
+        sum_chunks,
+        total_time_start.elapsed().as_secs_f64()
+    );
     Ok(())
 }
 
