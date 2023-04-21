@@ -6,16 +6,16 @@ use rand::Rng;
 use sha3::{Digest, Sha3_256};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::iter::repeat_with;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::{fs, io};
-use std::hash::Hash;
-use std::iter::repeat_with;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::{fs, io};
 use url::{quirks::hostname, Position, Url};
 
+use crate::rpc::BenchmarkOpt;
 use ya_core_model::gftp as model;
 use ya_core_model::identity;
 use ya_core_model::net::{RemoteEndpoint, TryRemoteEndpoint};
@@ -35,7 +35,11 @@ struct BenchmarkDescr {
 }
 impl BenchmarkDescr {
     fn new(hash: String, meta: model::GftpMetadata) -> Arc<Self> {
-        Arc::new(BenchmarkDescr { hash, meta, rng: fastrand::Rng::new() })
+        Arc::new(BenchmarkDescr {
+            hash,
+            meta,
+            rng: fastrand::Rng::new(),
+        })
     }
 
     pub fn open(name: &str) -> Result<Arc<BenchmarkDescr>> {
@@ -44,7 +48,7 @@ impl BenchmarkDescr {
         };
         let hash = {
             let mut hasher = Sha3_256::new();
-            hasher.write_all(name.as_bytes());
+            let _ = hasher.write_all(name.as_bytes());
 
             format!("{:x}", hasher.result())
         };
@@ -56,7 +60,10 @@ impl BenchmarkDescr {
         let gsb_address = model::file_bus_id(&self.hash);
         let desc = self.clone();
         let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
-            log::debug!("Received GetMetadata request. Returning metadata. {:?}", desc.meta);
+            log::debug!(
+                "Received GetMetadata request. Returning metadata. {:?}",
+                desc.meta
+            );
             future::ok(desc.meta.clone())
         });
 
@@ -80,8 +87,9 @@ impl BenchmarkDescr {
 
         log::debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
         //let mut buffer = vec![0u8; bytes_to_read];
-        let mut bytes: Vec<u8> = repeat_with(|| self.rng.u8(..)).take(bytes_to_read).collect();
-
+        let bytes: Vec<u8> = repeat_with(|| self.rng.u8(..))
+            .take(bytes_to_read)
+            .collect();
 
         Ok(model::GftpChunk {
             offset,
@@ -119,7 +127,10 @@ impl FileDesc {
         let gsb_address = model::file_bus_id(&self.hash);
         let desc = self.clone();
         let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
-            log::debug!("Received GetMetadata request. Returning metadata. {:?}", desc.meta);
+            log::debug!(
+                "Received GetMetadata request. Returning metadata. {:?}",
+                desc.meta
+            );
             future::ok(desc.meta.clone())
         });
 
@@ -243,23 +254,26 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
 // Benchmark download - client side
 // =========================================== //
 
-pub async fn download_benchmark_from_url(url: &Url, max_bytes: usize, max_time_sec: usize, chunk_at_once: usize, chunk_size: usize, refresh_every_sec: f64) -> Result<()> {
+pub async fn download_benchmark_from_url(url: &Url, opt: &BenchmarkOpt) -> Result<()> {
     let (node_id, hash) = extract_url(url)?;
-    download_benchmark(node_id, &hash, max_bytes, max_time_sec, chunk_at_once, chunk_size, refresh_every_sec).await
+    download_benchmark(node_id, &hash, opt).await
 }
 
-pub async fn download_benchmark(node_id: NodeId, hash: &str, max_bytes: usize, max_time_sec: usize, chunk_at_once: usize, chunk_size: usize, refresh_every_sec: f64) -> Result<()> {
+pub async fn download_benchmark(node_id: NodeId, hash: &str, opt: &BenchmarkOpt) -> Result<()> {
     let remote = node_id.service_transfer(&model::file_bus_id(hash));
- //   log::debug!("Creating target file {}", dst_path.display());
+    //   log::debug!("Creating target file {}", dst_path.display());
 
-   // let mut file = create_dest_file(dst_path)?;
+    // let mut file = create_dest_file(dst_path)?;
 
-    log::debug!("Loading benchmark metadata");
-    let metadata = remote.send(model::GetMetadata {}).await??;
+    //    log::debug!("Loading benchmark metadata");
+    //  let metadata = remote.send(model::GetMetadata {}).await??;
 
-    log::info!("Benchmark will attempt to download up to {}", humansize::format_size(max_bytes, humansize::DECIMAL));
+    log::info!(
+        "Benchmark will attempt to download up to {}",
+        humansize::format_size(opt.max_bytes, humansize::DECIMAL)
+    );
     let chunk_size = DEFAULT_CHUNK_SIZE;
-    let num_chunks = (metadata.file_size + (chunk_size - 1)) / chunk_size; // Divide and round up.
+    let num_chunks = (opt.max_bytes + (chunk_size - 1)) / chunk_size; // Divide and round up.
 
     let sum_bytes_ = Arc::new(AtomicUsize::new(0));
     let sum_chunks_ = Arc::new(AtomicUsize::new(0));
@@ -279,7 +293,6 @@ pub async fn download_benchmark(node_id: NodeId, hash: &str, max_bytes: usize, m
             let elapsed = current_time - last_time;
             let bytes_per_sec = (sum_bytes - last_sum_bytes) as f64 / elapsed.as_secs_f64();
             let chunks_per_sec = (sum_chunks - last_chunks) as f64 / elapsed.as_secs_f64();
-
 
             last_sum_bytes = sum_bytes;
             last_chunks = sum_chunks;

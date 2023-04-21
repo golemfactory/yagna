@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
@@ -154,6 +153,30 @@ pub enum RpcBody {
     },
 }
 
+#[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct BenchmarkOpt {
+    #[structopt()]
+    pub url: Url,
+    #[structopt(short = "b", long, default_value = "1000000000")]
+    pub max_bytes: u64,
+    #[structopt(short = "t", long, default_value = "86400")]
+    pub max_time_sec: u32,
+    #[structopt(short = "u", long, default_value = "12")]
+    pub chunk_at_once: u32,
+    #[structopt(short = "c", long, default_value = "40960")]
+    pub chunk_size: u64,
+    #[structopt(short = "s", long, default_value = "2.0")]
+    pub refresh_every_sec: f64,
+}
+
+#[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
+pub enum BenchmarkCommands {
+    /// Run at one node to enable benchmarking from other nodes
+    Publish,
+    /// Run if already enabled benchmark server on other node
+    Download(BenchmarkOpt),
+}
 
 #[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
 #[serde(tag = "method", content = "params")]
@@ -163,8 +186,9 @@ pub enum RpcRequest {
     Version {},
     /// Publishes files (blocking)
     Publish { files: Vec<PathBuf> },
-    /// Publishes endpoint for benchmark (blocking)
-    PublishBenchmark {},
+    /// Benchmark options
+    #[structopt(name = "benchmark")]
+    Benchmark(BenchmarkCommands),
     /// Stops publishing a file
     Close { urls: Vec<Url> },
     /// Downloads a file
@@ -173,11 +197,6 @@ pub enum RpcRequest {
         url: Url,
         /// Destination path
         output_file: PathBuf,
-    },
-    /// Download part of benchmark
-    DownloadBenchmark {
-        /// Source URL
-        url: Url,
     },
     /// Waits for file upload (blocking)
     Receive {
