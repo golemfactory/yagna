@@ -4,7 +4,7 @@ use crate::models::invoice::{equivalent, InvoiceXActivity, ReadObj, WriteObj};
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
@@ -249,7 +249,7 @@ impl<'c> InvoiceDao<'c> {
             let mut events = vec![InvoiceEventType::InvoiceAcceptedEvent];
 
             // Zero-amount invoices should be settled immediately.
-            let status = if amount.0 == BigDecimal::from(0) {
+            let status = if amount.0.is_zero() {
                 events.push(InvoiceEventType::InvoiceSettledEvent);
                 DocumentStatus::Settled
             } else {

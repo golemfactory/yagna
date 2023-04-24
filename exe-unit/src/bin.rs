@@ -173,7 +173,7 @@ async fn send_script(
 
     let msg = activity::Exec {
         activity_id: activity_id.unwrap_or_default(),
-        batch_id: hex::encode(&rand::random::<[u8; 16]>()),
+        batch_id: hex::encode(rand::random::<[u8; 16]>()),
         exe_script,
         timeout: None,
     };

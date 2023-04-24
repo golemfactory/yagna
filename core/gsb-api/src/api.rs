@@ -1,5 +1,5 @@
 use crate::model::{
-    GsbApiError, ServiceLinks, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
+    GsbApiError, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
 };
 use crate::service::StartBuffering;
 use crate::services::{Bind, Find, Services, Unbind};
@@ -39,19 +39,15 @@ async fn post_services(
     let response = services.send(bind).await;
     log::debug!("Service bind result: {:?}", response);
     response??;
-    let listen_on_encoded = BASE64.encode(&on);
-    let links = ServiceLinks {
-        messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
-    };
+    let services_id = BASE64.encode(&on);
+    let services_path = format!("/{services_id}");
     let service = ServiceResponse {
-        listen: ServiceListenResponse {
-            on,
-            components,
-            links,
-        },
+        listen: ServiceListenResponse { on, components },
+        services_id,
     };
     Ok(web::Json(service)
         .customize()
+        .insert_header((actix_web::http::header::LOCATION, services_path))
         .with_status(StatusCode::CREATED))
 }
 
@@ -75,6 +71,7 @@ async fn get_service_messages(
     path: web::Path<ServicePath>,
     req: HttpRequest,
     stream: web::Payload,
+    _id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     let addr = decode_addr(&path.address)?;
@@ -124,7 +121,7 @@ mod tests {
     use bytes::Bytes;
     use futures::{SinkExt, StreamExt, TryStreamExt};
     use serde::{Deserialize, Serialize};
-    use serde_json::Value;
+    use serde_json::{json, Value};
     use serial_test::serial;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -145,7 +142,7 @@ mod tests {
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
         fn component(&self) {
-            panic!("GSB API service does not use it.")
+            panic!("GSB API service does not use it.");
         }
     }
 
@@ -216,24 +213,27 @@ mod tests {
         let mut bind_resp = bind_req.await.unwrap();
         log::debug!("Bind service response: {:?}", bind_resp);
         assert_eq!(bind_resp.status(), StatusCode::CREATED);
+        let encoded_addr = BASE64.encode(service_addr);
         let body = bind_resp.body().await.unwrap();
-        let body: ServiceResponse = serde_json::de::from_slice(&body).unwrap();
-        assert_eq!(
-            body,
-            ServiceResponse {
-                listen: ServiceListenResponse {
-                    components,
-                    on: service_addr.to_string(),
-                    links: ServiceLinks {
-                        messages: format!(
-                            "{}/services/{}",
-                            GSB_API_PATH,
-                            BASE64.encode(service_addr)
-                        )
-                    },
-                }
-            }
-        );
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        let expected_body = json!({
+            "listen": {
+                "components": components,
+                "on": service_addr.to_string(),
+            },
+            "servicesId": encoded_addr
+        });
+        assert_eq!(body, expected_body);
+        let body: ServiceResponse = serde_json::value::from_value(body).unwrap();
+
+        let services_path = format!("/{encoded_addr}");
+        let location = bind_resp
+            .headers()
+            .get(actix_web::http::header::LOCATION)
+            .expect("POST response contain Location header")
+            .to_str()
+            .expect("Location header is string");
+        assert_eq!(location, services_path);
         body
     }
 
@@ -265,7 +265,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(service_addr.clone());
@@ -313,6 +313,7 @@ mod tests {
     #[actix_web::test]
     #[serial]
     async fn error_payload_test() {
+        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let mut api = dummy_api();
 
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -320,11 +321,10 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let (gsb_res, ws_res) = tokio::join!(
             async {
                 let msg = GetChunk {
@@ -391,7 +391,7 @@ mod tests {
         let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("MSG: {msg}");
         let ws_res: Value = serde_json::de::from_str(msg).unwrap();
@@ -412,7 +412,7 @@ mod tests {
         let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
         let (gsb_res, ws_res) = tokio::join!(
@@ -474,7 +474,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let _services_path = body.listen.links.messages;
+        let _services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let services_path = format!("/services/{}", BASE64.encode("no_such_service_address"));
         let ws_frames = api.ws_at(&services_path).await;
         assert!(matches!(
@@ -492,7 +492,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
 
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let services_path = format!("{services_path}_broken_base64");
         let ws_frames = api.ws_at(&services_path).await;
         assert!(matches!(
@@ -526,7 +526,7 @@ mod tests {
         let body =
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         verify_delete_service(&mut api, &service_addr).await;
@@ -552,7 +552,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
 
         let (gsb_res, ws_res) = tokio::join!(
             async {
@@ -617,7 +617,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("WS closing MSG");
@@ -692,7 +692,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("WS closing connection");
@@ -762,7 +762,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         println!("WS connect");
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
         println!("WS closing connection");
@@ -804,7 +804,7 @@ mod tests {
             verify_bind_service_response(bind_req, vec!["GetChunk".to_string()], &service_addr)
                 .await;
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        let services_path = body.listen.links.messages;
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
         println!("WS 0 connect");
         let mut ws_frames_0 = api.ws_at(&services_path).await.unwrap();
         println!("WS 1 connect");

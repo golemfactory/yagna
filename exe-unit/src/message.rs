@@ -80,7 +80,8 @@ impl From<StatePair> for SetState {
     }
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug, Message, derive_more::Display)]
+#[display(fmt = "Command: {:?} (batch = {}[{}])", command, batch_id, idx)]
 #[rtype(result = "Result<i32>")]
 pub struct ExecuteCommand {
     pub batch_id: String,
@@ -209,8 +210,9 @@ pub struct Stop {
 #[rtype(result = "Result<()>")]
 pub struct Shutdown(pub ShutdownReason);
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Default, thiserror::Error)]
 pub enum ShutdownReason {
+    #[default]
     #[error("Finished")]
     Finished,
     #[error("Interrupted by signal: {0}")]
@@ -219,10 +221,4 @@ pub enum ShutdownReason {
     UsageLimitExceeded(String),
     #[error("{0}")]
     Error(#[from] Error),
-}
-
-impl Default for ShutdownReason {
-    fn default() -> Self {
-        ShutdownReason::Finished
-    }
 }

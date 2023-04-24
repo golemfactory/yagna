@@ -93,6 +93,9 @@ impl VpnSupervisor {
 
         let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
+
+        log::info!("Creating network: {net_id} ({net_ip})");
+
         let net_gw = match network
             .gateway
             .as_ref()
@@ -142,11 +145,22 @@ impl VpnSupervisor {
         node_id: &NodeId,
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.networks.remove(network_id).ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.ownership.remove(node_id);
+        self.remove_ownership(node_id, network_id);
         self.forward(vpn, Shutdown {})
+    }
+
+    fn remove_ownership(&mut self, node_id: &NodeId, network_id: &str) {
+        if let Some(ownership) = self.ownership.get_mut(node_id) {
+            ownership.remove(network_id);
+            if ownership.is_empty() {
+                self.ownership.remove(node_id);
+            }
+        }
     }
 
     pub fn remove_node<'a>(
@@ -155,6 +169,8 @@ impl VpnSupervisor {
         network_id: &str,
         id: String,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing Node: {id} from network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.vpn(network_id)?;
         self.forward(vpn, RemoveNode { id })
@@ -248,7 +264,7 @@ impl Actor for Vpn {
             .into_actor(self)
             .spawn(ctx);
 
-        log::info!("VPN {} started", id);
+        log::info!("VPN {id} started");
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -263,7 +279,7 @@ impl Actor for Vpn {
         async move {
             let _ = typed::unbind(&vpn_url).await;
             let _ = typed::unbind(&format!("{vpn_url}/raw")).await;
-            log::info!("VPN {} stopped", id);
+            log::info!("VPN {id} stopped");
         }
         .into_actor(self)
         .wait(ctx);
@@ -288,6 +304,13 @@ impl Handler<AddAddress> for Vpn {
     type Result = <AddAddress as Message>::Result;
 
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
+        log::info!(
+            "Network: {} assigning new ip address: {} for identity: {}",
+            self.vpn.id(),
+            msg.address,
+            self.node_id
+        );
+
         let ip: IpAddr = msg.address.parse()?;
 
         let net = self.vpn.as_ref();
@@ -301,9 +324,7 @@ impl Handler<AddAddress> for Vpn {
         }
 
         self.stack_network.stack.add_address(cidr);
-
         self.vpn.add_address(&msg.address)?;
-
         Ok(())
     }
 }
@@ -332,6 +353,8 @@ impl Handler<AddNode> for Vpn {
     type Result = <AddNode as Message>::Result;
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
+        log::info!("Adding Node: {} to network: {}", msg.address, self.vpn.id());
+
         let ip = to_ip(&msg.address)?;
 
         match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
@@ -400,7 +423,8 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
+        let vpn_id = self.vpn.id();
+        log::info!("VPN {vpn_id}: connecting to {remote:?}");
 
         let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
@@ -409,7 +433,7 @@ impl Handler<Connect> for Vpn {
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let stack_connection = result?;
-                log::info!("VPN {}: connected to {:?}", id, remote);
+                log::info!("VPN {id}: connected to {remote:?}");
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
@@ -818,6 +842,42 @@ mod tests {
         supervisor.get_network(&node_id, &network.id)?;
         supervisor.remove_network(&node_id, &network.id)?;
 
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    async fn create_remove_2_networks() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network1 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+        let network2 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.1.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        assert!(supervisor.get_network(&node_id, &network1.id).is_ok());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
+
+        supervisor.remove_network(&node_id, &network1.id)?;
+
+        assert!(supervisor.get_network(&node_id, &network1.id).is_err());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
         Ok(())
     }
 }

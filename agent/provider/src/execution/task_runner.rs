@@ -261,7 +261,6 @@ impl TaskRunner {
     // =========================================== //
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
         let agreement = match self.active_agreements.get(&msg.agreement_id) {
             None => bail!("Can't create activity for not my agreement [{:?}].", msg),
@@ -488,7 +487,7 @@ impl TaskRunner {
             .get(agreement_id)
             .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
-        let agreement_file = File::create(&agreement_path).map_err(|error| {
+        let agreement_file = File::create(agreement_path).map_err(|error| {
             anyhow!(
                 "Can't create agreement file [{}]. Error: {}",
                 &agreement_path.display(),

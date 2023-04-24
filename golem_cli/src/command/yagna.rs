@@ -304,13 +304,13 @@ impl YagnaCommand {
     }
 
     pub async fn default_id(mut self) -> anyhow::Result<Id> {
-        self.cmd.args(&["--json", "id", "show"]);
+        self.cmd.args(["--json", "id", "show"]);
         let output: Result<Id, String> = self.run().await?;
         output.map_err(anyhow::Error::msg)
     }
 
     pub async fn version(mut self) -> anyhow::Result<VersionInfo> {
-        self.cmd.args(&["--json", "version", "show"]);
+        self.cmd.args(["--json", "version", "show"]);
         self.run().await
     }
 
@@ -320,12 +320,12 @@ impl YagnaCommand {
         network: &NetworkName,
         payment_driver: &PaymentDriver,
     ) -> anyhow::Result<StatusResult> {
-        self.cmd.args(&["--json", "payment", "status"]);
-        self.cmd.args(&["--account", address]);
+        self.cmd.args(["--json", "payment", "status"]);
+        self.cmd.args(["--account", address]);
 
         let payment_platform = payment_driver.platform(network)?;
-        self.cmd.args(&["--network", &network.to_string()]);
-        self.cmd.args(&["--driver", payment_platform.driver]);
+        self.cmd.args(["--network", &network.to_string()]);
+        self.cmd.args(["--driver", payment_platform.driver]);
 
         self.run().await
     }
@@ -336,23 +336,23 @@ impl YagnaCommand {
         network: &NetworkName,
         payment_driver: &PaymentDriver,
     ) -> anyhow::Result<()> {
-        self.cmd.args(&["--json", "payment", "init", "--receiver"]); // provider is a receiver
-        self.cmd.args(&["--account", address]);
+        self.cmd.args(["--json", "payment", "init", "--receiver"]); // provider is a receiver
+        self.cmd.args(["--account", address]);
 
         let payment_platform = payment_driver.platform(network)?;
-        self.cmd.args(&["--network", &network.to_string()]);
-        self.cmd.args(&["--driver", payment_platform.driver]);
+        self.cmd.args(["--network", &network.to_string()]);
+        self.cmd.args(["--driver", payment_platform.driver]);
 
         self.run().await
     }
 
     pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {
-        self.cmd.args(&["--json", "payment", "invoice", "status"]);
+        self.cmd.args(["--json", "payment", "invoice", "status"]);
         self.run().await
     }
 
     pub async fn activity_status(mut self) -> anyhow::Result<ActivityStatus> {
-        self.cmd.args(&["--json", "activity", "status"]);
+        self.cmd.args(["--json", "activity", "status"]);
         self.run().await
     }
 
@@ -369,7 +369,7 @@ impl YagnaCommand {
     pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         let mut cmd = self.cmd;
 
-        cmd.args(&["service", "run"]);
+        cmd.args(["service", "run"]);
 
         if run_cfg.debug {
             cmd.arg("--debug");

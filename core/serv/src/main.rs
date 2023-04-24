@@ -304,6 +304,7 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     Ok(drivers)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     #[structopt(flatten)]
@@ -632,7 +633,7 @@ impl ServiceCommand {
                         graceful: opts.gracefully,
                     })
                     .await?;
-                CommandOutput::object(&result)
+                CommandOutput::object(result)
             }
         }
     }
@@ -711,6 +712,7 @@ async fn main() -> Result<()> {
     match args.run_command().await {
         Ok(()) => Ok(()),
         Err(err) => {
+            //this way runtime/command error is at least possibly visible in yagna logs
             log::error!("Exiting..., error details: {:?}", err);
             Err(err)
         }

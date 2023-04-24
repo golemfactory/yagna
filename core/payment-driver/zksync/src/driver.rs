@@ -538,7 +538,7 @@ impl PaymentDriverCron for ZksyncDriver {
                     }
                 };
                 if tx.tx_type == TxType::Transfer as i32 {
-                    let tx_hash = hex::decode(&tx_hash).unwrap();
+                    let tx_hash = hex::decode(tx_hash).unwrap();
 
                     if let Err(e) = bus::notify_payment(
                         &self.get_name(),

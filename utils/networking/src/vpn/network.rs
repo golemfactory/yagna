@@ -28,7 +28,7 @@ impl<E: Clone> Networks<E> {
     }
 
     pub fn endpoint<B: AsRef<[u8]>>(&self, ip: B) -> Option<E> {
-        self.as_ref()
+        self.networks
             .values()
             .filter_map(|n| n.endpoint(ip.as_ref()))
             .next()
