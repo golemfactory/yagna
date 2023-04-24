@@ -2084,9 +2084,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.1.7"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edd12c64b0b34e081fcf5b9628c358ee224daa91404f7c8512a91c4d55bc083c"
+checksum = "f2ea2c0a0a47d3c6b8fbad5710e26be8af84e378ad0366f6cb093c51c6acc262"
 dependencies = [
  "actix-files",
  "actix-web",

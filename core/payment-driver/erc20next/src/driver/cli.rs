@@ -124,7 +124,7 @@ To be able to use mainnet Ethereum driver please send some GLM tokens and ETH fo
     Ok(result)
 }
 
-pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
+pub async fn _transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
     log::debug!("transfer: {:?}", msg);
     let network = network::network_like_to_network(msg.network);
     let token = network::get_network_token(network, None);

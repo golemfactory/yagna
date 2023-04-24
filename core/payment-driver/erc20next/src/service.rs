@@ -2,11 +2,13 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
+use std::env;
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::runtime::start_payment_engine;
 use std::sync::Arc;
+use erc20_payment_lib::misc::load_private_keys;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -38,7 +40,7 @@ impl Erc20NextService {
         log::debug!("Cron started");
 
         {
-            let private_keys = vec![];
+            let (private_keys, public_addresses) = load_private_keys(&env::var("ETH_PRIVATE_KEYS").unwrap_or_default()).unwrap();
             let receiver_accounts = vec![];
             let additional_options = AdditionalOptions {
                 keep_running: true,

@@ -5,7 +5,10 @@
 */
 // Extrnal crates
 use chrono::{Duration, Utc};
+use erc20_payment_lib::db::ops::insert_token_transfer;
 use erc20_payment_lib::runtime::PaymentRuntime;
+use erc20_payment_lib::transaction::create_token_transfer;
+use ethereum_types::H160;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -25,6 +28,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::utils::big_dec_to_u256;
 use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
@@ -174,7 +178,55 @@ impl PaymentDriver for Erc20NextDriver {
         msg: Transfer,
     ) -> Result<String, GenericError> {
         self.is_account_active(&msg.sender)?;
-        cli::transfer(&self.dao, msg).await
+        let sender = H160::from_str(&msg.sender)
+            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
+        let receiver = H160::from_str(&msg.to)
+            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
+        let amount = big_dec_to_u256(&msg.amount)?;
+        let network = msg
+            .network
+            .ok_or(GenericError::new("Network not specified".to_string()))?;
+        let chain_id = if network == "rinkeby" {
+            4
+        } else if network == "polygon" {
+            137
+        } else if network == "mumbai" {
+            80001
+        } else if network == "dev" {
+            987789
+        } else {
+            return Err(GenericError::new(format!(
+                "Unsupported network: {}",
+                network
+            )));
+        };
+        let chain_cfg = self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .get(&chain_id)
+            .ok_or(GenericError::new(format!(
+                "Cannot find chain cfg for chain {chain_id}"
+            )))?;
+
+        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
+            "Cannot find GLM address for chain {chain_id}"
+        )))?;
+
+        let payment_id = "todo".to_string();
+        let token_transfer = create_token_transfer(
+            sender,
+            receiver,
+            chain_cfg.chain_id,
+            Some(&payment_id),
+            Some(glm_address),
+            amount,
+        );
+        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+            .await
+            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
+        //cli::transfer(&self.dao, msg).await
+        Ok(payment_id)
     }
 
     async fn schedule_payment(

@@ -5,7 +5,7 @@
 */
 
 // Public
-pub const DRIVER_NAME: &str = "erc20next";
+pub const DRIVER_NAME: &str = "erc20";
 
 pub const RINKEBY_NETWORK: &str = "rinkeby";
 pub const RINKEBY_TOKEN: &str = "tGLM";
