@@ -57,7 +57,6 @@ jobs:
         continue-on-error: true
         # related to this issue: https://github.com/moby/moby/issues/23302
         run: |
-          docker network create docker_default 2>/dev/null
           docker network inspect docker_default
           sudo apt-get install -y jq
           docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
