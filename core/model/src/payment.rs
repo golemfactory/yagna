@@ -458,6 +458,8 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
+        #[strum(props(token = "tGLM"))]
+        Yatestnet,
     }
 
     /// Experimental. In future releases this might change or be removed.
@@ -479,7 +481,7 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
-        Erc20next
+        Erc20next,
     }
 
     #[derive(StructOpt, Debug, Clone)]

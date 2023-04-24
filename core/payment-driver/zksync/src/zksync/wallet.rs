@@ -290,6 +290,7 @@ fn get_rpc_addr(network: Network) -> String {
         Network::Goerli => panic!("Goerli not supported on zksync"),
         Network::Polygon => panic!("Polygon not supported on zksync"),
         Network::Mumbai => panic!("Mumbai not supported on zksync"),
+        Network::Yatestnet => panic!("Yatestnet not supported on zksync"),
     }
 }
 
@@ -302,6 +303,7 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
         Network::Goerli => panic!("Goerli not supported on zksync"),
         Network::Polygon => panic!("Polygon mainnet not supported on zksync"),
         Network::Mumbai => panic!("Polygon mumbai not supported on zksync"),
+        Network::Yatestnet => panic!("Yatestnet not supported on zksync"),
     }
 }
 

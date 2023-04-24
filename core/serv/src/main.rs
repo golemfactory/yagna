@@ -708,5 +708,11 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
-    args.run_command().await
+    match args.run_command().await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            log::error!("Exiting..., error details: {:?}", err);
+            Err(err)
+        }
+    }
 }
