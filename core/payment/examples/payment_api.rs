@@ -46,8 +46,8 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20" => Ok(Driver::Erc20),
-            "erc20next" => Ok(Driver::Erc20next),
+            "erc20legacy" => Ok(Driver::Erc20),
+            "erc20" => Ok(Driver::Erc20next),
             "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -58,8 +58,8 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20 => write!(f, "erc20"),
-            Driver::Erc20next => write!(f, "erc20next"),
+            Driver::Erc20 => write!(f, "erc20legacy"),
+            Driver::Erc20next => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
         }
     }
