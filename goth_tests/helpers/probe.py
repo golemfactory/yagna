@@ -10,34 +10,34 @@ class ProviderProbe(BaseProviderProbe):
     @step()
     async def wait_for_offer_subscribed(self):
         """Wait until the provider agent subscribes to the offer."""
-        await self.provider_agent.wait_for_log("Subscribed offer")
+        await self.provider_agent.wait_for_log("Subscribed offer", timeout=60)
 
     @step()
     async def wait_for_proposal_accepted(self):
         """Wait until the provider agent subscribes to the offer."""
-        await self.provider_agent.wait_for_log("Decided to CounterProposal")
+        await self.provider_agent.wait_for_log("Decided to CounterProposal", timeout=60)
 
     @step()
     async def wait_for_agreement_approved(self):
         """Wait until the provider agent subscribes to the offer."""
-        await self.provider_agent.wait_for_log("Decided to ApproveAgreement")
+        await self.provider_agent.wait_for_log("Decided to ApproveAgreement", timeout=60)
 
     @step()
     async def wait_for_exeunit_started(self):
         """Wait until the provider agent starts the exe-unit."""
-        await self.provider_agent.wait_for_log(r"(.*)ExeUnit initialized.*")
+        await self.provider_agent.wait_for_log(r"(.*)ExeUnit initialized.*", timeout=60)
 
     @step()
     async def wait_for_exeunit_finished(self):
         """Wait until exe-unit finishes."""
         await self.provider_agent.wait_for_log(
-            r"(.*)ExeUnit process exited with status Finished - exit status: 0(.*)"
+            r"(.*)ExeUnit process exited with status Finished - exit status: 0(.*)", timeout=60
         )
 
     @step(default_timeout=20)
     async def wait_for_exeunit_exited(self):
         """Wait until exe-unit exits."""
-        await self.provider_agent.wait_for_log(r".*ExeUnit process exited.*")
+        await self.provider_agent.wait_for_log(r".*ExeUnit process exited.*", timeout=60)
 
     @step()
     async def wait_for_agreement_terminated(self):
@@ -49,7 +49,7 @@ class ProviderProbe(BaseProviderProbe):
         versions of API without `terminate` endpoint implemented. Moreover
         Provider can terminate, because Agreements condition where broken.
         """
-        await self.provider_agent.wait_for_log(r"Agreement \[.*\] terminated by")
+        await self.provider_agent.wait_for_log(r"Agreement \[.*\] terminated by", timeout=60)
 
     @step()
     async def wait_for_agreement_cleanup(self):
@@ -57,25 +57,25 @@ class ProviderProbe(BaseProviderProbe):
 
         This can happen before or after Agreement terminated log will be printed.
         """
-        await self.provider_agent.wait_for_log(r"Agreement \[.*\] cleanup finished.")
+        await self.provider_agent.wait_for_log(r"Agreement \[.*\] cleanup finished.", timeout=60)
 
     @step()
     async def wait_for_invoice_sent(self):
         """Wait until the invoice is sent."""
-        await self.provider_agent.wait_for_log("Invoice (.+) sent")
+        await self.provider_agent.wait_for_log("Invoice (.+) sent", timeout=60)
 
     @step(default_timeout=300)
     async def wait_for_invoice_paid(self):
         """Wait until the invoice is paid."""
-        await self.provider_agent.wait_for_log("Invoice .+? for agreement .+? was paid")
+        await self.provider_agent.wait_for_log("Invoice .+? for agreement .+? was paid", timeout=60)
 
     @step()
     async def wait_for_agreement_broken(self, reason: str):
         """Wait until Provider will break Agreement."""
         pattern = rf"Breaking agreement .*, reason: {reason}"
-        await self.provider_agent.wait_for_log(pattern)
+        await self.provider_agent.wait_for_log(pattern, timeout=60)
 
     @step()
     async def wait_for_log(self, pattern: str):
         """Wait for specific log."""
-        await self.provider_agent.wait_for_log(pattern)
+        await self.provider_agent.wait_for_log(pattern, timeout=60)
