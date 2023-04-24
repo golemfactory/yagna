@@ -77,7 +77,7 @@ pub async fn get_account_gas_balance(
     }))
 }
 
-pub async fn schedule_payment(
+pub async fn _schedule_payment(
     dao: &Erc20Dao,
     msg: SchedulePayment,
 ) -> Result<String, GenericError> {

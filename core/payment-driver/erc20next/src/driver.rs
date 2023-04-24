@@ -29,7 +29,10 @@ use ya_payment_driver::{
 
 // Local uses
 use crate::erc20::utils::big_dec_to_u256;
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
+use crate::{
+    dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, MUMBAI_PLATFORM,
+    POLYGON_MAINNET_PLATFORM, RINKEBY_NETWORK, RINKEBY_PLATFORM, YATESTNET_PLATFORM,
+};
 
 mod api;
 mod cli;
@@ -238,7 +241,53 @@ impl PaymentDriver for Erc20NextDriver {
         log::debug!("schedule_payment: {:?}", msg);
 
         self.is_account_active(&msg.sender())?;
-        api::schedule_payment(&self.dao, msg).await
+        let sender = H160::from_str(&msg.sender())
+            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
+        let receiver = H160::from_str(&msg.recipient())
+            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
+        let amount = big_dec_to_u256(&msg.amount())?;
+        let network = msg.platform();
+        let chain_id = if network == RINKEBY_PLATFORM {
+            4
+        } else if network == POLYGON_MAINNET_PLATFORM {
+            137
+        } else if network == MUMBAI_PLATFORM {
+            80001
+        } else if network == YATESTNET_PLATFORM {
+            987789
+        } else {
+            return Err(GenericError::new(format!(
+                "Unsupported network: {}",
+                network
+            )));
+        };
+        let chain_cfg = self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .get(&chain_id)
+            .ok_or(GenericError::new(format!(
+                "Cannot find chain cfg for chain {chain_id}"
+            )))?;
+
+        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
+            "Cannot find GLM address for chain {chain_id}"
+        )))?;
+
+        let payment_id = "todo".to_string();
+        let token_transfer = create_token_transfer(
+            sender,
+            receiver,
+            chain_cfg.chain_id,
+            Some(&payment_id),
+            Some(glm_address),
+            amount,
+        );
+        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+            .await
+            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
+        //cli::transfer(&self.dao, msg).await
+        Ok(payment_id)
     }
 
     async fn verify_payment(
