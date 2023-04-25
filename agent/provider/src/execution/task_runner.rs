@@ -31,6 +31,10 @@ use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
 use crate::tasks::{AgreementBroken, AgreementClosed};
 
+const EXE_UNIT_DIR: &str = "exe-unit";
+const WORK_DIR: &str = "work";
+const CACHE_DIR: &str = "cache";
+
 // =========================================== //
 // Public exposed messages
 // =========================================== //
@@ -161,8 +165,8 @@ impl TaskRunner {
         data_dir: P,
     ) -> Result<TaskRunner> {
         let data_dir = data_dir.as_ref();
-        let tasks_dir = data_dir.join("exe-unit").join("work");
-        let cache_dir = data_dir.join("exe-unit").join("cache");
+        let tasks_dir = exe_unit_work_dir(data_dir);
+        let cache_dir = exe_unit_cache_dir(data_dir);
 
         log::debug!("TaskRunner config: {:?}", config);
 
@@ -513,6 +517,16 @@ impl TaskRunner {
             .map(|task| task.activity_id.to_string())
             .collect()
     }
+}
+
+pub(crate) fn exe_unit_work_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(WORK_DIR)
+}
+
+pub(crate) fn exe_unit_cache_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(CACHE_DIR)
 }
 
 fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {

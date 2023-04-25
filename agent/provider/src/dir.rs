@@ -1,6 +1,6 @@
-use crate::startup_config::{CERT_DIR, GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
+use crate::startup_config::{GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
 use anyhow::{bail, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use walkdir::WalkDir;
 
@@ -14,7 +14,7 @@ pub fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
     if check_dir && !is_provider_dir(&dir)? {
         bail!("Not a provider data directory: {}", dir.as_ref().display());
     }
-    Ok(clean_dir(dir, 2, lifetime, dry_run))
+    Ok(clean_data_dir(dir, lifetime, dry_run))
 }
 
 fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
@@ -22,7 +22,6 @@ fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
         (HARDWARE_JSON, false),
         (PRESETS_JSON, false),
         (GLOBALS_JSON, false),
-        (CERT_DIR, false),
     ];
 
     dir.as_ref()
@@ -40,12 +39,17 @@ fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
     Ok(files.iter().all(|pair| pair.1))
 }
 
-fn clean_dir<P: AsRef<Path>>(dir: P, min_depth: usize, lifetime: Duration, dry_run: bool) -> u64 {
+fn clean_data_dir<P: AsRef<Path>>(data_dir: P, lifetime: Duration, dry_run: bool) -> u64 {
+    let work_dir = crate::execution::exe_unit_work_dir(data_dir);
+    let cache_dir = crate::execution::exe_unit_cache_dir(data_dir);
+    clean_dir(work_dir, lifetime, dry_run) + clean_dir(cache_dir, lifetime, dry_run)
+}
+
+fn clean_dir<P: AsRef<Path>>(dir: P, lifetime: Duration, dry_run: bool) -> u64 {
     let mut dirs = Vec::new();
     let deadline = SystemTime::now() - lifetime;
 
     let total_bytes = WalkDir::new(dir.as_ref())
-        .min_depth(min_depth)
         .into_iter()
         .filter_map(|result| result.ok())
         .filter_map(|entry| match entry.metadata() {
