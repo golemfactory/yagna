@@ -4,6 +4,7 @@ on:
     tags:
       - v*
       - pre-rel-*
+      - preview-*
 
 env:
   rust_stable: 1.68.2
@@ -20,7 +21,7 @@ jobs:
           script: |
             let tag = context.payload.ref.replace(/.*\//, '');
             let buildNo = context.runNumber;
-            let versionName = tag.replace(/^pre-rel-/,'');
+            let versionName = tag.replace(/^pre-rel-|^preview-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
@@ -260,6 +261,7 @@ jobs:
         run: |
           TAG_NAME="${GITHUB_REF##*/}"
           TAGV_NAME="${TAG_NAME#pre-rel-}"
+          TAGV_NAME="${TAGV_NAME#preview-}"
           VERSION=${TAGV_NAME#v}
           echo "::set-output name=tagv::${TAG_NAME}"
           echo "::set-output name=version::${VERSION}"
