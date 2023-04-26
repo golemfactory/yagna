@@ -4,6 +4,8 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 use walkdir::WalkDir;
 
+/// Cleans Provider DATA_DIR and returns amount of freed disk space (in bytes).
+/// Fails if DATA_DIR does not contain Provider's config files.
 pub fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
     dir: P,
     expr: S,
@@ -94,7 +96,11 @@ fn clean_dir<P: AsRef<Path>>(dir: P, lifetime: Duration, dry_run: bool) -> u64 {
 mod tests {
     use super::clean_provider_dir;
     use crate::startup_config::{GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
-    use std::{fs::File, io::Write, path::PathBuf};
+    use std::{
+        fs::File,
+        io::Write,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn test_empty_dir_fail() {
@@ -158,10 +164,7 @@ mod tests {
         assert!(dirs.data_dir.presets_json.exists());
         assert!(dirs.work_dir.exists());
         assert!(dirs.cache_dir.exists());
-        assert!(
-            !work_dir_dir.exists(),
-            "Empty directories removed even when not expired"
-        );
+        assert!(!work_dir_dir.exists(), "Empty directory removed.");
         assert!(work_dir_file.exists());
         assert!(cache_dir_dir.exists());
         assert!(cache_dir_file.exists());
@@ -184,9 +187,9 @@ mod tests {
     fn create_data_dir_w_exe_unit() -> ExeUnitDirs {
         let data_dir = create_data_dir();
         let work_dir = crate::execution::exe_unit_work_dir(&data_dir.dir);
-        let _ = std::fs::create_dir_all(&work_dir).unwrap();
+        std::fs::create_dir_all(&work_dir).unwrap();
         let cache_dir = crate::execution::exe_unit_cache_dir(&data_dir.dir);
-        let _ = std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::create_dir_all(&cache_dir).unwrap();
         ExeUnitDirs {
             data_dir,
             cache_dir,
@@ -207,13 +210,13 @@ mod tests {
         }
     }
 
-    fn create_dir(dir: &PathBuf, name: &str) -> PathBuf {
+    fn create_dir(dir: &Path, name: &str) -> PathBuf {
         let path = dir.join(name);
         std::fs::create_dir_all(&path).unwrap();
         path
     }
 
-    fn create_file(dir: &PathBuf, name: &str, content: &str) -> PathBuf {
+    fn create_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let path = dir.join(name);
         let mut file = File::create(&path).unwrap();
         if !content.is_empty() {
