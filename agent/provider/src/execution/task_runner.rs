@@ -519,12 +519,12 @@ impl TaskRunner {
     }
 }
 
-pub(crate) fn exe_unit_work_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+pub fn exe_unit_work_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
     let data_dir = data_dir.as_ref();
     data_dir.join(EXE_UNIT_DIR).join(WORK_DIR)
 }
 
-pub(crate) fn exe_unit_cache_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+pub fn exe_unit_cache_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
     let data_dir = data_dir.as_ref();
     data_dir.join(EXE_UNIT_DIR).join(CACHE_DIR)
 }

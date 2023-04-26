@@ -1,6 +1,6 @@
 use crate::startup_config::{GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
 use anyhow::{bail, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, SystemTime};
 use walkdir::WalkDir;
 
@@ -40,8 +40,8 @@ fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
 }
 
 fn clean_data_dir<P: AsRef<Path>>(data_dir: P, lifetime: Duration, dry_run: bool) -> u64 {
-    let work_dir = crate::execution::exe_unit_work_dir(data_dir);
-    let cache_dir = crate::execution::exe_unit_cache_dir(data_dir);
+    let work_dir = crate::execution::exe_unit_work_dir(&data_dir);
+    let cache_dir = crate::execution::exe_unit_cache_dir(&data_dir);
     clean_dir(work_dir, lifetime, dry_run) + clean_dir(cache_dir, lifetime, dry_run)
 }
 
@@ -87,4 +87,45 @@ fn clean_dir<P: AsRef<Path>>(dir: P, lifetime: Duration, dry_run: bool) -> u64 {
     }
 
     total_bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs::File, path::PathBuf};
+    use crate::startup_config::{HARDWARE_JSON, PRESETS_JSON, GLOBALS_JSON};
+
+    use super::clean_provider_dir;
+
+    #[test]
+    fn test_empty_dir_fail() {
+        let dir = tempfile::tempdir().unwrap().into_path();
+        let expected = anyhow::anyhow!("Not a provider data directory: {}", dir.display());
+        let actual = clean_provider_dir(dir, "1d", true, false);
+        assert_eq!(expected.to_string(), actual.err().unwrap().to_string());
+    }
+
+    #[test]
+    fn test_data_dir_cleanup() {
+        let data_dir = create_data_dir(); 
+        let work_dir = crate::execution::exe_unit_work_dir(&data_dir);
+        std::fs::create_dir(work_dir);
+        let cache_dir = crate::execution::exe_unit_cache_dir(&data_dir);
+        std::fs::create_dir(cache_dir);
+
+        let actual = clean_provider_dir(data_dir, "1d", true, false).expect("Is ok and returns 0");
+        assert_eq!(0, actual);
+    }
+
+    fn create_data_dir() -> PathBuf {
+        let data_dir = tempfile::tempdir().unwrap().into_path();
+        create_file(&data_dir, HARDWARE_JSON);
+        create_file(&data_dir, PRESETS_JSON);
+        create_file(&data_dir, GLOBALS_JSON); 
+        data_dir
+    }
+
+    fn create_file(dir: &PathBuf, file_name: &str) {
+        let file_path = dir.join(file_name);
+        File::create(file_path).unwrap();
+    }
 }
