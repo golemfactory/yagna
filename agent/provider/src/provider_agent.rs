@@ -155,7 +155,7 @@ impl ProviderAgent {
 
         {
             log::info!("Performing disk cleanup...");
-            let freed = clean_provider_dir(&data_dir, "1d", false, false)?;
+            let freed = clean_provider_dir(&data_dir, "30d", false, false)?;
             let human_freed = bytesize::to_string(freed, false);
             log::info!("Freed {} of disk space", human_freed);
         }
