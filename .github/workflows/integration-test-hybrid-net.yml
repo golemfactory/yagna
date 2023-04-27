@@ -30,7 +30,7 @@ jobs:
 
   integration-test:
     name: Integration Tests (hybrid-net)
-    runs-on: goth
+    runs-on: [goth, ubuntu-18.04]
     needs: test_check
     defaults:
       run:
