@@ -37,6 +37,7 @@ ya-runtime-api = { version = "0.6", path = "runtime-api", features = ["server"] 
 ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
+ya-std-utils = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = ["dns", "vpn"]}
 
 actix = { version = "0.13", default-features = false }

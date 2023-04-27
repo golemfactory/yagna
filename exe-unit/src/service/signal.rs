@@ -34,7 +34,7 @@ where
 {
     let handler_ = addr.clone();
     let f = move || {
-        log::info!("Caught signal: {}", signal);
+        log::info!("Caught signal: {signal}");
         handler_.do_send(Shutdown(ShutdownReason::Interrupted(signal)));
     };
 
