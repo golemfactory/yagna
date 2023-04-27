@@ -1,4 +1,4 @@
-name: Build binaries (x86-64) hybrid-net
+name: Build binaries (x86-64) central-net
 
 on:
   push:
@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: Build binaries (x86-64) hybrid-net
+    name: Build binaries (x86-64) central-net
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -58,7 +58,7 @@ jobs:
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl
+          cargo build --features "static-openssl central-net" --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --target x86_64-unknown-linux-musl)
           (cd golem_cli && cargo build --bin golemsp -p golemsp --target x86_64-unknown-linux-musl)
           (cd agent/provider && cargo build --bin ya-provider -p ya-provider --target x86_64-unknown-linux-musl)
@@ -84,5 +84,5 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v1
         with:
-          name: Yagna ${{ runner.os }} hybrid-net
+          name: Yagna ${{ runner.os }} central-net
           path: build
