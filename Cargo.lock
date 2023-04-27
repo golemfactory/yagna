@@ -8189,6 +8189,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "sys-info",
+ "tempfile",
  "test-case",
  "thiserror",
  "tokio 1.25.0",
