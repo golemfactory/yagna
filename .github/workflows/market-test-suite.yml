@@ -1,6 +1,10 @@
 name: Market Test Suite
 
 on:
+  push:
+    branches:
+      - master
+      - release/*
   pull_request:
     branches:
       - master
@@ -49,3 +53,4 @@ jobs:
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked
+
