@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use assert_cmd::Command;
 use serde_json::Value;
 use serial_test::serial;
-use test_case::test_case;
 
 use ya_manifest_test_utils::TestResources;
 

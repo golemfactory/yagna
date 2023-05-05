@@ -2,7 +2,7 @@ use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
     RemoveResponse,
 };
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
@@ -437,21 +437,6 @@ impl X509Keystore {
             bail!("Invalid certificate");
         }
         Ok(cert.public_key()?)
-    }
-
-    fn find_issuer(&self, cert: &X509) -> anyhow::Result<X509> {
-        let store = self
-            .store
-            .read()
-            .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
-        store
-            .store
-            .objects()
-            .iter()
-            .filter_map(|cert| cert.x509())
-            .map(|cert| cert.to_owned())
-            .find(|trusted| trusted.issued(cert) == X509VerifyResult::OK)
-            .ok_or_else(|| anyhow!("Issuer certificate not found in {CERT_NAME} keystore"))
     }
 
     fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
