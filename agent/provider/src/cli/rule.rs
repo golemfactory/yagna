@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
-use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
@@ -111,8 +110,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     ..
                 } = keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
-                    permissions: vec![CertPermissions::All],
-                    whole_chain: false,
                 })?;
 
                 for cert_path in invalid {

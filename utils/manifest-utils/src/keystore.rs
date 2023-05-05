@@ -3,9 +3,8 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
 };
-use crate::policy::CertPermissions;
 use chrono::SecondsFormat;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
@@ -46,14 +45,6 @@ impl Cert {
         not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
     }
 
-    /// Permissions displayed Json value.
-    pub fn permissions(&self) -> Value {
-        match self {
-            Cert::X509(cert) => serde_json::json!(cert.permissions),
-            Cert::Golem { cert, .. } => serde_json::json!(cert.permissions),
-        }
-    }
-
     /// Subject displayed Json value.
     /// Json for X.509 certificate, 'display_name' for Golem certificate.
     pub fn subject(&self) -> Value {
@@ -87,36 +78,18 @@ trait CommonAddParams {
 }
 
 pub struct AddParams {
-    pub permissions: Vec<CertPermissions>,
     pub certs: Vec<PathBuf>,
-    pub whole_chain: bool,
 }
 
 impl AddParams {
     pub fn new(certs: Vec<PathBuf>) -> Self {
-        let permissions = vec![CertPermissions::All];
-        let whole_chain = true;
-        Self {
-            permissions,
-            certs,
-            whole_chain,
-        }
+        Self { certs }
     }
 }
 
 impl CommonAddParams for AddParams {
     fn certs(&self) -> &Vec<PathBuf> {
         &self.certs
-    }
-}
-
-impl X509AddParams for AddParams {
-    fn permissions(&self) -> &Vec<CertPermissions> {
-        &self.permissions
-    }
-
-    fn whole_chain(&self) -> bool {
-        self.whole_chain
     }
 }
 
@@ -244,17 +217,6 @@ impl CompositeKeystore {
 
     pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
         self.golem_keystore.verify_node_descriptor(cert)
-    }
-
-    //TODO delete when deleting X509 permissions feature
-    pub fn verify_permissions(
-        &self,
-        cert: &str,
-        required: Vec<CertPermissions>,
-    ) -> anyhow::Result<()> {
-        self.x509_keystore
-            .keystore
-            .verify_permissions(cert, required)
     }
 }
 

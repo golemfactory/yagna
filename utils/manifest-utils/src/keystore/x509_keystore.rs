@@ -2,7 +2,6 @@ use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
     RemoveResponse,
 };
-use crate::{policy::CertPermissions, util::format_permissions};
 use anyhow::{anyhow, bail};
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use openssl::{
@@ -26,22 +25,16 @@ use std::{
 };
 
 pub const CERT_NAME: &str = "X.509";
-pub(super) const PERMISSIONS_FILE: &str = "cert-permissions.json";
-pub(super) trait X509AddParams {
-    fn permissions(&self) -> &Vec<CertPermissions>;
-    fn whole_chain(&self) -> bool;
-}
 
 #[derive(Eq, PartialEq)]
 pub struct X509CertData {
     pub id: String,
     pub not_after: DateTime<Utc>,
     pub subject: BTreeMap<String, String>,
-    pub permissions: String,
 }
 
 impl X509CertData {
-    pub fn create(cert: &X509Ref, permissions: &Vec<CertPermissions>) -> anyhow::Result<Self> {
+    pub fn create(cert: &X509Ref) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
         let not_after = asn1_time_to_date_time(cert.not_after())?;
         let mut subject = BTreeMap::new();
@@ -49,12 +42,10 @@ impl X509CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
-        let permissions = format_permissions(permissions);
         let data = X509CertData {
             id,
             not_after,
             subject,
-            permissions,
         };
         Ok(data)
     }
@@ -99,14 +90,8 @@ impl KeystoreBuilder<X509KeystoreManager> for X509KeystoreBuilder {
     }
 
     fn build(self) -> anyhow::Result<X509KeystoreManager> {
-        let permissions = PermissionsManager::load(&self.cert_dir).map_err(|e| {
-            anyhow!(
-                "Failed to load permissions file: {}, {e}",
-                self.cert_dir.display()
-            )
-        })?;
         let keystore = self.builder.build();
-        let inner = Arc::new(RwLock::new(CertStore::new(keystore, permissions)));
+        let inner = Arc::new(RwLock::new(CertStore::new(keystore)));
         let keystore = X509Keystore { store: inner };
         let ids = keystore.certs_ids()?;
         Ok(X509KeystoreManager {
@@ -127,11 +112,7 @@ pub(super) struct X509KeystoreManager {
 impl X509KeystoreManager {
     /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
     /// Certificates already existing in `cert-dir` are skipped.
-    fn add_certs<ADD: CommonAddParams + X509AddParams>(
-        &self,
-        add: &ADD,
-        permissions_manager: &mut PermissionsManager,
-    ) -> anyhow::Result<AddX509Response> {
+    fn add_certs<ADD: CommonAddParams>(&self, add: &ADD) -> anyhow::Result<AddX509Response> {
         let mut loaded = HashMap::new();
         let mut skipped = HashMap::new();
         let mut invalid = Vec::new();
@@ -169,20 +150,6 @@ impl X509KeystoreManager {
         }
         let loaded_leaf_cert_ids = leaf_certs(&loaded);
         let skipped_leaf_cert_ids = leaf_certs(&skipped);
-        let loaded_ids = loaded.keys().map(String::as_str).collect();
-        let skipped_ids = skipped.keys().map(String::as_str).collect();
-        permissions_manager.set_many(
-            &loaded_ids,
-            &loaded_leaf_cert_ids,
-            add.permissions(),
-            add.whole_chain(),
-        );
-        permissions_manager.set_many(
-            &skipped_ids,
-            &skipped_leaf_cert_ids,
-            add.permissions(),
-            add.whole_chain(),
-        );
         let leaf_cert_ids = loaded_leaf_cert_ids
             .into_iter()
             .chain(skipped_leaf_cert_ids.into_iter())
@@ -214,10 +181,6 @@ impl X509KeystoreManager {
         }
         Ok(())
     }
-
-    pub fn permissions_manager(&self) -> PermissionsManager {
-        self.keystore.permissions_manager()
-    }
 }
 
 fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {
@@ -242,27 +205,23 @@ impl Keystore for X509KeystoreManager {
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
-        let mut permissions_manager = self.keystore.permissions_manager();
         let AddX509Response {
             loaded,
             duplicated,
             invalid,
             leaf_cert_ids,
-        } = self.add_certs(add, &mut permissions_manager)?;
+        } = self.add_certs(add)?;
 
-        permissions_manager
-            .save(&self.cert_dir)
-            .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
         let added = loaded
             .into_iter()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
+            .map(|cert| X509CertData::create(&cert))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
             .collect();
         let duplicated = duplicated
             .into_iter()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
+            .map(|cert| X509CertData::create(&cert))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
@@ -321,17 +280,9 @@ impl Keystore for X509KeystoreManager {
             }
         }
 
-        let mut permissions_manager = self.permissions_manager();
-        let leaf_cert_ids = leaf_certs(&removed);
-        let removed_ids = removed.keys().map(|s| s.as_str()).collect();
-        permissions_manager.set_many(&removed_ids, &leaf_cert_ids, &[], true);
-        permissions_manager
-            .save(&self.cert_dir)
-            .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
-
         let removed: Vec<Cert> = removed
             .into_values()
-            .map(|cert| X509CertData::create(&cert, &permissions_manager.get(&cert)))
+            .map(|cert| X509CertData::create(&cert))
             .collect::<anyhow::Result<Vec<X509CertData>>>()?
             .into_iter()
             .map(Cert::X509)
@@ -346,7 +297,6 @@ impl Keystore for X509KeystoreManager {
 
 struct CertStore {
     store: X509Store,
-    permissions: PermissionsManager,
 }
 
 #[derive(Clone)]
@@ -357,7 +307,7 @@ pub struct X509Keystore {
 impl Default for X509Keystore {
     fn default() -> Self {
         let store = X509StoreBuilder::new().expect("SSL works").build();
-        let store = CertStore::new(store, Default::default());
+        let store = CertStore::new(store);
         Self {
             store: Arc::new(RwLock::new(store)),
         }
@@ -365,21 +315,14 @@ impl Default for X509Keystore {
 }
 
 impl CertStore {
-    pub fn new(store: X509Store, permissions: PermissionsManager) -> CertStore {
-        CertStore { store, permissions }
+    pub fn new(store: X509Store) -> CertStore {
+        CertStore { store }
     }
 }
 
 impl X509Keystore {
     /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert-dir` and creates new `X509Store`.
     pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let permissions = PermissionsManager::load(&cert_dir).map_err(|e| {
-            anyhow!(
-                "Failed to load permissions file: {}, {e}",
-                cert_dir.as_ref().display()
-            )
-        })?;
-
         let mut store = X509StoreBuilder::new()?;
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {
@@ -391,7 +334,7 @@ impl X509Keystore {
                 );
             }
         }
-        let store = CertStore::new(store.build(), permissions);
+        let store = CertStore::new(store.build());
         let store = Arc::new(RwLock::new(store));
         Ok(Self { store })
     }
@@ -409,7 +352,6 @@ impl X509Keystore {
                 &mut (*inner),
                 CertStore {
                     store: X509StoreBuilder::new().unwrap().build(),
-                    permissions: Default::default(),
                 },
             )
         };
@@ -424,7 +366,7 @@ impl X509Keystore {
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .map(|cert| X509CertData::create(cert, &self.permissions_manager().get(cert)))
+            .map(|cert| X509CertData::create(cert))
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
                 Err(err) => {
@@ -497,68 +439,6 @@ impl X509Keystore {
         Ok(cert.public_key()?)
     }
 
-    pub fn verify_permissions<S: AsRef<str>>(
-        &self,
-        cert: S,
-        required: Vec<CertPermissions>,
-    ) -> anyhow::Result<()> {
-        if required.contains(&CertPermissions::All) {
-            bail!("`All` permissions shouldn't be required.")
-        }
-
-        if required.is_empty() {
-            return Ok(());
-        }
-
-        let cert_chain = Self::decode_cert_chain(cert)?;
-        // Demands do not contain certificates permissions
-        // so only first certificate in chain signer permissions are verified.
-        let cert = match cert_chain.first() {
-            Some(cert) => cert,
-            None => bail!("Unable to verify certificate permissions. No certificate."),
-        };
-        let issuer = self.find_issuer(cert)?;
-
-        self.has_permissions(&issuer, &required)
-    }
-
-    fn get_permissions(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
-        let store = self
-            .store
-            .read()
-            .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
-        Ok(store.permissions.get(cert))
-    }
-
-    fn has_permissions(
-        &self,
-        cert: &X509Ref,
-        required: &Vec<CertPermissions>,
-    ) -> anyhow::Result<()> {
-        let cert_permissions = self.get_permissions(cert)?;
-
-        if cert_permissions.contains(&CertPermissions::All)
-            && (!required.contains(&CertPermissions::UnverifiedPermissionsChain)
-                || (cert_permissions.contains(&CertPermissions::UnverifiedPermissionsChain)
-                    && required.contains(&CertPermissions::UnverifiedPermissionsChain)))
-        {
-            return Ok(());
-        }
-
-        if required
-            .iter()
-            .all(|permission| cert_permissions.contains(permission))
-        {
-            return Ok(());
-        }
-
-        bail!(
-            "Not sufficient permissions. Required: `{}`, but has only: `{}`",
-            format_permissions(required),
-            format_permissions(&cert_permissions)
-        )
-    }
-
     fn find_issuer(&self, cert: &X509) -> anyhow::Result<X509> {
         let store = self
             .store
@@ -580,10 +460,6 @@ impl X509Keystore {
             Ok(cert) => vec![cert],
             Err(_) => X509::stack_from_pem(&cert)?,
         })
-    }
-
-    pub fn permissions_manager(&self) -> PermissionsManager {
-        self.store.read().unwrap().permissions.clone()
     }
 }
 
@@ -643,69 +519,6 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
         return None;
     }
     Some(entries)
-}
-
-#[derive(Clone, Default)]
-pub struct PermissionsManager {
-    permissions: HashMap<String, Vec<CertPermissions>>,
-}
-
-impl PermissionsManager {
-    pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<PermissionsManager> {
-        let path = cert_dir.as_ref().join(PERMISSIONS_FILE);
-        let content = match std::fs::read_to_string(path) {
-            Ok(content) if !content.is_empty() => content,
-            _ => return Ok(Default::default()),
-        };
-        let permissions = serde_json::from_str(&content)?;
-        Ok(PermissionsManager { permissions })
-    }
-
-    pub fn set(&mut self, cert: &str, mut permissions: Vec<CertPermissions>) {
-        if permissions.contains(&CertPermissions::All) {
-            let supports_unverified_permissions =
-                permissions.contains(&CertPermissions::UnverifiedPermissionsChain);
-            permissions.clear();
-            permissions.push(CertPermissions::All);
-            if supports_unverified_permissions {
-                permissions.push(CertPermissions::UnverifiedPermissionsChain);
-            }
-        }
-        self.permissions.insert(cert.to_string(), permissions);
-    }
-
-    pub fn set_x509(&mut self, id: &str, permissions: Vec<CertPermissions>) {
-        self.set(id, permissions)
-    }
-
-    pub fn set_many(
-        &mut self,
-        cert_ids: &Vec<&str>,
-        leaf_cert_ids: &Vec<&str>,
-        permissions: &[CertPermissions],
-        whole_chain: bool,
-    ) {
-        let permissions = Vec::from(permissions);
-        let cert_ids = if whole_chain { cert_ids } else { leaf_cert_ids };
-        for id in cert_ids {
-            self.set_x509(id, permissions.clone());
-        }
-    }
-
-    /// If we don't have this certificate registered, it means it has no permissions,
-    /// so empty vector is returned.
-    pub fn get(&self, cert: &X509Ref) -> Vec<CertPermissions> {
-        let id = match cert_to_id(cert) {
-            Ok(id) => id,
-            Err(_) => return vec![],
-        };
-        self.permissions.get(&id).cloned().unwrap_or_default()
-    }
-
-    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(path.join(PERMISSIONS_FILE))?;
-        Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
-    }
 }
 
 impl std::fmt::Debug for X509Keystore {

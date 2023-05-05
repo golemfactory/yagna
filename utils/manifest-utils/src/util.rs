@@ -1,5 +1,3 @@
-use crate::policy::CertPermissions;
-use itertools::Itertools;
 use md5::{Digest, Md5};
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -17,14 +15,6 @@ pub enum DecodingError {
     BlobBase64(#[from] base64::DecodeError),
     #[error("invalid escaped json string: {0}")]
     BlobJsonString(#[from] snailquote::UnescapeError),
-}
-
-pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
-    if permissions.is_empty() {
-        "none".to_string()
-    } else {
-        format!("{}", permissions.iter().format("|"))
-    }
 }
 
 /// Calculates Md5 of `txt` and returns first 8 characters.
