@@ -18,15 +18,15 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-pytest = "^6.2"
-pytest-asyncio = "^0.20.2"
-pytest-rerunfailures = "^10.3"
+pytest = "^7.3.1"
+pytest-asyncio = "^0.21"
+pytest-rerunfailures = "^11.1.2"
 #goth = "^0.11"
 # to use development goth version uncomment below
-goth =  { git = "https://github.com/golemfactory/goth.git", rev = "bad4e9b0622004bc7d51fa2c6a9a517265c20267" }
+goth =  { git = "https://github.com/golemfactory/goth.git", rev = "master" }
 
 [tool.poetry.dev-dependencies]
-black = "^23.3"
+black = "^20.8b1"
 mypy = "^0.782"
 poethepoet = "^0.10.0"
 
