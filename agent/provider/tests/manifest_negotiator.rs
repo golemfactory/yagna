@@ -146,7 +146,7 @@ fn manifest_negotiator_test_manifest_with_urls(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist"}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Everyone rule didn't match whitelist ; Audited-Payload rule requires node descriptor ; Partner rule requires node descriptor ;"); // error msg
+    Some("Everyone rule didn't match whitelist ; Audited-Payload rule whole chain of cert_ids is not trusted"); // error msg
     "Rejected because everyone-whitelist is mismatching and audited-payload set to none"
 )]
 #[serial]
@@ -280,13 +280,13 @@ fn manifest_negotiator_test_with_node_identity(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist"}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Outbound rejected because: Everyone rule didn't match whitelist ; Audited-Payload rule requires node descriptor ; Partner rule requires node descriptor ;"); // error msg
+    Some("Everyone rule didn't match whitelist ;"); // error msg
     "Rejected because everyone whitelist mismatched"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none"}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("Everyone rule is disabled ; Audited-Payload rule requires node descriptor ; Partner rule requires node descriptor ;"); // error msg
+    Some("Everyone rule is disabled ; Audited-Payload rule: Invalid signature ; Partner rule requires node descriptor ;"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[serial]
