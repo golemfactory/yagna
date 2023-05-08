@@ -366,7 +366,7 @@ impl X509Keystore {
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .map(|cert| X509CertData::create(cert))
+            .map(X509CertData::create)
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
                 Err(err) => {
