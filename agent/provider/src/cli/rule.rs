@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
-use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -83,7 +82,7 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let rules = RulesManager::load_or_create(
+    let mut rules = RulesManager::load_or_create(
         &config.rules_file,
         &config.domain_whitelist_file,
         &config.cert_dir_path()?,
@@ -102,13 +101,11 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 rules.set_partner_mode(cert_id, mode)
             }
             SetOutboundRule::Partner(PartnerRuleWithCert::ImportCert { import_cert, mode }) => {
-                let mut keystore = CompositeKeystore::load(&rules.cert_dir)?;
-
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
                     ..
-                } = keystore.add_golem_cert(&AddParams {
+                } = rules.keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
                 })?;
 
