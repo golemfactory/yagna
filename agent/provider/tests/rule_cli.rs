@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     iter::FromIterator,
     path::{Path, PathBuf},
+    str::from_utf8,
 };
 
 use assert_cmd::Command;
@@ -33,12 +34,7 @@ fn rule_list_cmd_should_print_default_rules() {
           "outbound": {
             "enabled": true,
             "everyone": "none",
-            "audited-payload": {
-              "default": {
-                "mode": "all",
-                "description": "Default setting"
-              }
-            },
+            "audited-payload": {},
             "partner": {}
           }
         })
@@ -102,40 +98,14 @@ fn rule_set_should_edit_everyone_mode(mode: &str) {
     assert_eq!(&result["outbound"][rule], mode);
 }
 
-#[test_case("audited-payload", "all")]
-#[test_case("audited-payload", "none")]
-#[test_case("audited-payload", "whitelist")]
-fn rule_set_should_edit_default_modes_for_certificate_rules(rule: &str, mode: &str) {
-    let data_dir = prepare_test_dir();
-
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .env("DATA_DIR", data_dir.path().to_str().unwrap())
-        .arg("rule")
-        .arg("set")
-        .arg("outbound")
-        .arg(rule)
-        .arg("--mode")
-        .arg(mode)
-        .assert()
-        .success();
-
-    let result = list_rules_command(data_dir.path());
-
-    assert_eq!(&result["outbound"][rule]["default"]["mode"], mode);
-    assert_eq!(
-        &result["outbound"][rule]["default"]["description"],
-        "Default setting"
-    );
-}
-
 #[test_case("partner")]
+#[test_case("audited-payload")]
 fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
     let data_dir = prepare_test_dir();
 
     let cert_id = "deadbeef";
 
-    Command::cargo_bin("ya-provider")
+    let stderr = Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .env("RUST_LOG", "info") // tests asserting error may also print logs
@@ -147,15 +117,22 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
         .arg(cert_id)
         .arg("--mode")
         .arg("all")
-        .assert()
-        .stderr(format!(
-            "Error: Setting Partner mode all failed: No cert id: {cert_id} found in keystore\n"
-        ));
+        .output()
+        .unwrap()
+        .stderr;
+
+    let stderr = from_utf8(&stderr).unwrap();
+    let expected = format!("No cert id: {cert_id} found in keystore");
+
+    assert!(stderr.contains(&expected));
 }
 
 #[test_case("partner", "all")]
 #[test_case("partner", "none")]
 #[test_case("partner", "whitelist")]
+#[test_case("audited-payload", "all")]
+#[test_case("audited-payload", "none")]
+#[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
 fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
@@ -163,7 +140,7 @@ fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
     let cert_id =
         add_certificate_to_keystore(data_dir.path(), &resource_cert_dir, "foo_req.cert.pem");
 
-    Command::cargo_bin("ya-provider")
+    let stderr = Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
         .arg("rule")
@@ -174,15 +151,22 @@ fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
         .arg(&cert_id)
         .arg("--mode")
         .arg(mode)
-        .assert()
-        .stderr(
-            "Error: Failed to set partner mode for certificate 25b9430c. Partner mode can be set only for Golem certificate.\n".to_string()
-        );
+        .output()
+        .unwrap()
+        .stderr;
+
+    let stderr = from_utf8(&stderr).unwrap();
+    let expected = regex::Regex::new("Error: Failed to set .* mode for certificate 25b9430c. .* mode can be set only for Golem certificate.\n").unwrap();
+
+    assert!(expected.is_match(stderr));
 }
 
 #[test_case("partner", "all")]
 #[test_case("partner", "none")]
 #[test_case("partner", "whitelist")]
+#[test_case("audited-payload", "all")]
+#[test_case("audited-payload", "none")]
+#[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
 fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
