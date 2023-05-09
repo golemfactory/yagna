@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -7,8 +7,9 @@ use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
-use smoltcp::iface::Route;
+use smoltcp::iface::{Route, SocketHandle};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
+use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
@@ -23,10 +24,12 @@ use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::stack::{
-    self as net, EgressReceiver, IngressEvent, IngressReceiver, StackConfig,
-};
+use ya_utils_networking::vpn::stack::{self as net, EgressReceiver, IngressEvent, IngressReceiver, SocketState, StackConfig};
 use ya_utils_networking::vpn::*;
+use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
+
+
+pub type VpnSupervisorRef = RwLock<VpnSupervisor>;
 
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
@@ -201,6 +204,8 @@ pub struct Vpn {
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack_network: net::Network,
     connections: HashMap<SocketDesc, InternalConnection>,
+    listen_on : HashMap<u16, InternalTcpListener>,
+    accept_sockets : HashSet<SocketDesc>
 }
 
 impl Vpn {
@@ -214,6 +219,8 @@ impl Vpn {
             vpn,
             stack_network,
             connections: Default::default(),
+            listen_on: Default::default(),
+            accept_sockets: Default::default()
         }
     }
 }
@@ -433,6 +440,26 @@ impl Handler<Connect> for Vpn {
     }
 }
 
+#[allow(unused)]
+impl Handler<TcpListen> for Vpn {
+    type Result = ActorResponse<Self, Result<UserTcpListener>>;
+
+    fn handle(&mut self, msg: TcpListen, _: &mut Self::Context) -> Self::Result {
+        let remote = IpEndpoint::new(msg.address.into(), msg.port);
+
+        log::info!("VPN {}: listening on {:?}", self.vpn.id(), remote);
+
+        let id = self.vpn.id().clone();
+        let network = self.stack_network.clone();
+
+        let socket_handle = network.bind(msg.protocol, remote).unwrap();
+        let (_rx, _tx) = mpsc::channel::<()>(1);
+
+        ActorResponse::reply(Ok(UserTcpListener{ socket_handle }))
+    }
+}
+
+
 impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
 
@@ -540,12 +567,28 @@ impl Handler<Ingress> for Vpn {
     fn handle(&mut self, msg: Ingress, ctx: &mut Self::Context) -> Self::Result {
         match msg.event {
             IngressEvent::InboundConnection { desc } => {
-                log::debug!(
+                log::info!(
                     "[vpn] ingress: connection to {:?} ({}) from {:?}",
                     desc.local,
                     desc.protocol,
                     desc.remote
                 );
+
+                let acd = desc.clone();
+                match (desc.local, desc.remote) {
+                    (SocketEndpoint::Ip(local), SocketEndpoint::Ip(remote)) => {
+                        if let Some(connection) = self.stack_network.connections.borrow().get(&ConnectionMeta {
+                            protocol: Protocol::Tcp,
+                            local,
+                            remote,
+                        }) {
+                            log::info!("[vpn] handle={}, mete={:?}", connection.handle, connection.meta);
+                            self.accept_sockets.insert(acd);
+                        }
+                    }
+                    _ => ()
+                }
+
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Disconnected { desc } => {
@@ -555,12 +598,18 @@ impl Handler<Ingress> for Vpn {
                     desc.protocol,
                     desc.remote,
                 );
+                if self.accept_sockets.contains(&desc) {
+                    log::info!("[vpn] disconnect: {:?}", desc);
+                }
                 ctx.address()
                     .do_send(Disconnect::new(desc, DisconnectReason::SocketClosed));
 
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
+                if self.accept_sockets.contains(&desc) {
+                    log::info!("[vpn] packet: {:?} == {:?}", desc, payload);
+                }
                 ya_packet_trace::packet_trace!("Vpn::Tx::Handler<Ingress>", { &payload });
 
                 if let Some(mut connection) = self.connections.get(&desc).cloned() {
@@ -643,6 +692,11 @@ impl Handler<Shutdown> for Vpn {
 struct InternalConnection {
     pub stack_connection: stack::Connection,
     pub ingress_tx: mpsc::Sender<Vec<u8>>,
+}
+
+struct InternalTcpListener {
+    pub socket_handle : SocketHandle,
+    pub tx : mpsc::Sender<()>
 }
 
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {

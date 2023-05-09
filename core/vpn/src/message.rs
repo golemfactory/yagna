@@ -1,6 +1,8 @@
+use std::net::IpAddr;
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
+use smoltcp::iface::SocketHandle;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
     stack::{
@@ -49,6 +51,14 @@ pub struct Connect {
     pub port: u16,
 }
 
+#[derive(Message)]
+#[rtype(result = "Result<UserTcpListener>")]
+pub struct TcpListen {
+    pub protocol: Protocol,
+    pub address: IpAddr,
+    pub port: u16,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct Disconnect {
@@ -82,6 +92,10 @@ pub struct UserConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
     pub stack_connection: Connection,
+}
+
+pub struct UserTcpListener {
+    pub socket_handle : SocketHandle
 }
 
 #[derive(Clone, Debug)]

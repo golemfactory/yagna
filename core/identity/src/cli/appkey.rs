@@ -7,13 +7,15 @@ use ya_core_model::identity::IdentityInfo;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
+const ROLE_VALS: &[&str] = &["manager", "client"];
+
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 /// AppKey management
 pub enum AppKeyCommand {
     Create {
         name: String,
-        #[structopt(skip = model::DEFAULT_ROLE)]
+        #[structopt(default_value = model::DEFAULT_ROLE, long, possible_values(ROLE_VALS))]
         role: String,
         #[structopt(long)]
         id: Option<String>,

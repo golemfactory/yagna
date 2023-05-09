@@ -1,22 +1,19 @@
-use crate::network::VpnSupervisor;
-use futures::lock::Mutex;
-use std::sync::Arc;
+use crate::network::{VpnSupervisorRef};
+use actix_web::web;
+use tokio::sync::RwLock;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
-
-lazy_static::lazy_static! {
-    static ref VPN_SUPERVISOR: Arc<Mutex<VpnSupervisor>> = Default::default();
-}
 
 pub struct VpnService;
 
 impl VpnService {
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(_: &Context) -> anyhow::Result<()> {
-        let _vpn = VPN_SUPERVISOR.clone();
-        Ok(())
-    }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(_: &Context) -> actix_web::Scope {
+
+        lazy_static::lazy_static! {
+            static ref VPN_SUPERVISOR: web::Data<VpnSupervisorRef> = web::Data::new(RwLock::new(Default::default()));
+        }
+
         crate::requestor::web_scope(VPN_SUPERVISOR.clone())
     }
 }

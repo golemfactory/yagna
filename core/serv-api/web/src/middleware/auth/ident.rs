@@ -11,11 +11,35 @@ use std::pin::Pin;
 use ya_client::model::NodeId;
 use ya_core_model::appkey::AppKey;
 
+#[derive(Serialize, Debug, Clone)]
+pub enum Role {
+    Manager,
+    Client,
+    Unknown
+}
+
+impl Role {
+
+    fn for_id(role_id : &str) -> Self {
+        match role_id {
+            "manager" => Self::Manager,
+            "client" => Self::Client,
+            _ => Self::Unknown
+        }
+    }
+
+    #[inline]
+    pub fn is_manager(&self) -> bool {
+        matches!(self, Self::Manager)
+    }
+}
+
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {
     pub identity: NodeId,
     pub name: String,
-    pub role: String,
+    pub role: Role,
 }
 
 impl From<AppKey> for Identity {
@@ -23,7 +47,7 @@ impl From<AppKey> for Identity {
         Identity {
             identity: app_key.identity,
             name: app_key.name,
-            role: app_key.role,
+            role: Role::for_id(&app_key.role),
         }
     }
 }

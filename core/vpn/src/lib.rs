@@ -2,6 +2,7 @@ mod message;
 mod network;
 mod requestor;
 mod service;
+mod tunneling;
 
 pub use self::service::VpnService;
 

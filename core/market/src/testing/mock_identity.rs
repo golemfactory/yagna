@@ -6,7 +6,7 @@ use crate::identity::{IdentityApi, IdentityError};
 
 use std::collections::HashMap;
 use ya_client::model::NodeId;
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{Identity, Role};
 
 pub struct MockIdentity {
     inner: Arc<Mutex<MockIdentityInner>>,
@@ -78,7 +78,7 @@ pub fn generate_identity(name: &str) -> Identity {
 
     Identity {
         name: name.to_string(),
-        role: "manager".to_string(),
+        role: Role::Manager,
         identity: NodeId::from(random_node_id.as_bytes()),
     }
 }
