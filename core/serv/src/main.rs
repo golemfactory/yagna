@@ -1,3 +1,5 @@
+#![allow(clippy::obfuscated_if_else)]
+
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
