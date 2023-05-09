@@ -1,6 +1,10 @@
-name: Goth integration tests
+name: Goth integration tests (hybrid-net)
 
 on:
+  push:
+    branches:
+      - master
+      - release/*
   pull_request:
     branches:
       - master
@@ -25,7 +29,7 @@ jobs:
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
   integration-test:
-    name: Integration Tests
+    name: Integration Tests (hybrid-net)
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
     defaults:
@@ -87,7 +91,7 @@ jobs:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run poe goth-assets
-          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build --config-override docker-compose.compose-file=docker-compose-hybrid-net.yml
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
