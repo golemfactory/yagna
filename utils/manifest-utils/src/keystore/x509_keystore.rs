@@ -440,6 +440,23 @@ impl X509Keystore {
         Ok(cert.public_key()?)
     }
 
+    /// List fingerprints of each certificate in the certificate chain.
+    ///
+    /// Starts from the leaf certificate.
+    pub fn list_cert_chain_ids(cert: impl AsRef<str>) -> anyhow::Result<Vec<Fingerprint>> {
+        let cert_chain = Self::decode_cert_chain(cert)?;
+
+        let mut ids = Vec::default();
+        for cert in cert_chain {
+            let id = cert_to_id(&cert)?;
+            ids.push(id);
+        }
+
+        ids.reverse();
+
+        Ok(ids)
+    }
+
     fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
         let cert = crate::decode_data(cert)?;
         Ok(match X509::from_der(&cert) {
