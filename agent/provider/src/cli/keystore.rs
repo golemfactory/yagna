@@ -1,4 +1,5 @@
 use crate::cli::println_conditional;
+use crate::rules::RulesManager;
 use crate::startup_config::ProviderConfig;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
@@ -7,7 +8,6 @@ use structopt::StructOpt;
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };
-use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
@@ -65,19 +65,25 @@ impl KeystoreConfig {
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let keystore = CompositeKeystore::load(&cert_dir)?;
-    let certs_data = keystore.list();
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
+    let certs_data = rules.keystore.list();
     print_cert_list(&config, certs_data)?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
     let AddResponse {
         added, duplicated, ..
-    } = keystore.add(&add.into())?;
+    } = rules.keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
@@ -92,10 +98,13 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
 
-    let all_certs = keystore.list();
+    let all_certs = rules.keystore.list();
     let mut ids = HashSet::new();
     for remove_prefix in &remove.ids {
         let full_ids = find_ids_by_prefix(&all_certs, remove_prefix);
@@ -120,7 +129,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     }
     let remove_params = RemoveParams { ids };
 
-    let RemoveResponse { removed } = keystore.remove(&remove_params)?;
+    let RemoveResponse { removed } = rules.keystore.remove(&remove_params)?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {
