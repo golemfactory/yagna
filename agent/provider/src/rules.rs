@@ -89,24 +89,24 @@ impl RulesManager {
     }
 
     pub fn add_rules_information_to_certs(&self, certs: Vec<Cert>) -> Vec<CertWithRules> {
-        let mut result = Vec::new();
-
         let cfg = self.rulestore.config.read().unwrap();
 
-        for cert in certs {
-            let mut rules = String::new();
+        certs
+            .into_iter()
+            .map(|cert| {
+                let mut rules: Vec<String> = Vec::new();
+                if cfg.outbound.partner.contains_key(&cert.id()) {
+                    rules.push("Partner".into())
+                }
 
-            if cfg.outbound.partner.contains_key(&cert.id()) {
-                rules.push_str("Partner")
-            }
+                //TODO add Audited Payload here
 
-            result.push(CertWithRules {
-                cert: cert,
-                rules: rules,
-            });
-        }
-
-        result
+                CertWithRules {
+                    cert,
+                    rules: rules.join("|"),
+                }
+            })
+            .collect()
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
