@@ -88,6 +88,27 @@ impl RulesManager {
         }
     }
 
+    pub fn add_rules_information_to_certs(&self, certs: Vec<Cert>) -> Vec<CertWithRules> {
+        let mut result = Vec::new();
+
+        let cfg = self.rulestore.config.read().unwrap();
+
+        for cert in certs {
+            let mut rules = String::new();
+
+            if cfg.outbound.partner.contains_key(&cert.id()) {
+                rules.push_str("Partner ")
+            }
+
+            result.push(CertWithRules {
+                cert: cert,
+                rules: rules,
+            });
+        }
+
+        result
+    }
+
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
             let certs: Vec<Cert> = self
@@ -526,6 +547,12 @@ pub struct CertRules {
 pub struct CertRule {
     pub mode: Mode,
     pub description: String,
+}
+
+#[derive(PartialEq, Eq)]
+pub struct CertWithRules {
+    pub cert: Cert,
+    pub rules: String,
 }
 
 #[derive(
