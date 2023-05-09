@@ -97,7 +97,7 @@ impl RulesManager {
             let mut rules = String::new();
 
             if cfg.outbound.partner.contains_key(&cert.id()) {
-                rules.push_str("Partner ")
+                rules.push_str("Partner")
             }
 
             result.push(CertWithRules {
