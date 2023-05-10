@@ -583,3 +583,12 @@ pub struct CertWithRules {
     pub cert: Cert,
     pub outbound_rules: Vec<OutboundRule>,
 }
+
+impl CertWithRules {
+    pub fn format_outbound_rules(&self) -> String {
+        self.outbound_rules
+            .iter()
+            .map(|r| r.to_string())
+            .join(" | ")
+    }
+}
