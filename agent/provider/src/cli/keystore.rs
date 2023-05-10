@@ -224,7 +224,7 @@ impl CertTableBuilder {
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
             values
-                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), cert.cert.not_after(), cert.cert.subject(), cert.rules] });
+                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), cert.cert.not_after(), cert.cert.subject(), cert.outbound_rules.into_iter().map(|r| r.to_string()).join(" | ")] });
         }
 
         let columns = vec![
@@ -232,7 +232,7 @@ impl CertTableBuilder {
             "Type".into(),
             "Not After".into(),
             "Subject".into(),
-            "Rules".into(),
+            "Outbound Rules".into(),
         ];
 
         let table = ResponseTable { columns, values };

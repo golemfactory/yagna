@@ -94,16 +94,18 @@ impl RulesManager {
         certs
             .into_iter()
             .map(|cert| {
-                let mut rules: Vec<String> = Vec::new();
+                let mut outbound_rules: Vec<OutboundRule> = Vec::new();
                 if cfg.outbound.partner.contains_key(&cert.id()) {
-                    rules.push("Partner".into())
+                    outbound_rules.push(OutboundRule::Partner);
                 }
 
+                outbound_rules.push(OutboundRule::Partner);
+                outbound_rules.push(OutboundRule::AuditedPayload);
                 //TODO add Audited Payload here
 
                 CertWithRules {
                     cert,
-                    rules: rules.join("|"),
+                    outbound_rules,
                 }
             })
             .collect()
@@ -549,12 +551,6 @@ pub struct CertRule {
     pub description: String,
 }
 
-#[derive(PartialEq, Eq)]
-pub struct CertWithRules {
-    pub cert: Cert,
-    pub rules: String,
-}
-
 #[derive(
     StructOpt,
     Clone,
@@ -573,4 +569,19 @@ pub enum Mode {
     All,
     None,
     Whitelist,
+}
+
+#[derive(
+    PartialEq, Eq, EnumString, EnumVariantNames, Display, Debug, Clone, Serialize, Deserialize,
+)]
+pub enum OutboundRule {
+    Partner,
+    AuditedPayload,
+    Everyone,
+}
+
+#[derive(PartialEq, Eq)]
+pub struct CertWithRules {
+    pub cert: Cert,
+    pub outbound_rules: Vec<OutboundRule>,
 }
