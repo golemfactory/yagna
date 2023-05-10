@@ -99,8 +99,6 @@ impl RulesManager {
                     outbound_rules.push(OutboundRule::Partner);
                 }
 
-                outbound_rules.push(OutboundRule::Partner);
-                outbound_rules.push(OutboundRule::AuditedPayload);
                 //TODO add Audited Payload here
 
                 CertWithRules {
