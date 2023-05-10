@@ -13,7 +13,6 @@ use ya_agreement_utils::agreement::expand;
 use ya_agreement_utils::{OfferTemplate, ProposalView};
 use ya_client_model::market::proposal::State;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
-use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
@@ -297,7 +296,6 @@ fn manifest_negotiator_test_with_node_identity(
         None,
         None,
         error_msg,
-        &vec![],
         &["partner-certificate.signed.json"],
         Some(descriptor_file),
     )
@@ -358,68 +356,6 @@ fn manifest_negotiator_test_with_invalid_payload_signature(
         signature.algorithm,
         cert_b64,
         error_msg,
-    )
-}
-
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    &vec![CertPermissions::OutboundManifest],
-    None;
-    "Manifest accepted, because permissions are sufficient"
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    &vec![CertPermissions::All],
-    None;
-    "Manifest accepted, when permissions are set to `All`"
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    &vec![],
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
-    "Manifest rejected, because certificate has no permissions"
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_inter.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_inter.cert.pem")},
-    &vec![CertPermissions::OutboundManifest], // certs_permissions
-    Some("Audited-Payload rule: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
-    "Manifest rejected, because parent certificate has no permissions"
-)]
-#[test_case(
-    Signature { private_key_file: Some("foo_req.key.pem"), algorithm: Some("sha256"), certificate: Some("foo_req.cert.pem")},
-    &vec![CertPermissions::OutboundManifest, CertPermissions::UnverifiedPermissionsChain],
-    None;
-    "Manifest accepted, because permissions are sufficient (has `unverified-permissions-chain` permission)"
-)]
-#[serial]
-fn test_manifest_negotiator_certs_permissions(
-    signature: Signature,
-    provider_certs_permissions: &Vec<CertPermissions>,
-    error_msg: Option<&str>,
-) {
-    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"default": {"mode": "all", "description": ""}}}}"#;
-
-    let urls = r#"["https://domain.com"]"#;
-
-    let comp_manifest_b64 = create_comp_manifest_b64(urls);
-    let signature_b64 = signature.private_key_file.map(|signing_key| {
-        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
-    });
-    let cert_b64 = signature.certificate.map(cert_file_to_cert_b64);
-
-    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
-
-    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
-        rulestore,
-        whitelist,
-        comp_manifest_b64,
-        signature_b64,
-        signature.algorithm,
-        cert_b64,
-        error_msg,
-        provider_certs_permissions,
-        &["foo_ca-chain.cert.pem"],
-        None,
     )
 }
 
@@ -557,7 +493,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         signature_alg,
         cert_b64,
         error_msg,
-        &vec![CertPermissions::All],
         &["foo_ca-chain.cert.pem"],
         None,
     )
@@ -572,19 +507,13 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
     error_msg: Option<&str>,
-    provider_certs_permissions: &Vec<CertPermissions>,
     provider_certs: &[&str],
     node_descriptor_filename: Option<&str>,
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
-    load_certificates_from_dir(
-        &resource_cert_dir,
-        &test_cert_dir,
-        provider_certs,
-        provider_certs_permissions,
-    );
+    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, provider_certs);
 
     let node_descriptor = node_descriptor_filename.map(|node_descriptor_filename| {
         std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap()
