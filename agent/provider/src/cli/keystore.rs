@@ -4,11 +4,9 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use strum::VariantNames;
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };
-use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
@@ -38,29 +36,11 @@ pub struct Add {
         help = "Space separated list of certificate files to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
-    /// Set certificates permissions for signing certain Golem features.
-    /// If not specified, no permissions will be set for certificate.
-    /// If certificate already existed, permissions will be cleared.
-    #[structopt(
-        short,
-        long,
-        parse(try_from_str),
-        possible_values = CertPermissions::VARIANTS,
-        case_insensitive = true,
-    )]
-    permissions: Vec<CertPermissions>,
-    /// Apply permissions to all certificates in chain found in files.
-    #[structopt(short, long)]
-    whole_chain: bool,
 }
 
 impl From<Add> for AddParams {
     fn from(val: Add) -> Self {
-        AddParams {
-            certs: val.certs,
-            permissions: val.permissions,
-            whole_chain: val.whole_chain,
-        }
+        AddParams { certs: val.certs }
     }
 }
 
@@ -235,7 +215,7 @@ impl CertTableBuilder {
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
             values
-                .push(serde_json::json! { [ id_prefix, cert.type_name(), cert.not_after(), cert.subject(), cert.permissions() ] });
+                .push(serde_json::json! { [ id_prefix, cert.type_name(), cert.not_after(), cert.subject()] });
         }
 
         let columns = vec![
@@ -243,7 +223,6 @@ impl CertTableBuilder {
             "Type".into(),
             "Not After".into(),
             "Subject".into(),
-            "Permissions".into(),
         ];
 
         let table = ResponseTable { columns, values };
