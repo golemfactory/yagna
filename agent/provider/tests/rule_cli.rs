@@ -130,9 +130,6 @@ fn adding_rule_for_non_existing_certificate_should_fail(rule: &str) {
 #[test_case("partner", "all")]
 #[test_case("partner", "none")]
 #[test_case("partner", "whitelist")]
-#[test_case("audited-payload", "all")]
-#[test_case("audited-payload", "none")]
-#[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
 fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();

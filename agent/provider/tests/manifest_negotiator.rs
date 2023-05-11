@@ -280,13 +280,13 @@ fn manifest_negotiator_test_with_node_identity(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist"}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Everyone rule didn't match whitelist ;"); // error msg
+    Some("Audited-Payload rule: Invalid signature ;"); // error msg
     "Rejected because everyone whitelist mismatched"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none"}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("Everyone rule is disabled ; Audited-Payload rule: Invalid signature ; Partner rule requires node descriptor ;"); // error msg
+    Some("Audited-Payload rule: Invalid signature ;"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[serial]

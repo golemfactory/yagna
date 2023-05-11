@@ -442,7 +442,7 @@ impl X509Keystore {
 
     /// List fingerprints of each certificate in the certificate chain.
     ///
-    /// Starts from the leaf certificate.
+    /// Output is sorted from the leaf to the root certificate.
     pub fn list_cert_chain_ids(cert: impl AsRef<str>) -> anyhow::Result<Vec<Fingerprint>> {
         let cert_chain = Self::decode_cert_chain(cert)?;
 

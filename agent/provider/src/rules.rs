@@ -17,7 +17,10 @@ use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
-    keystore::{x509_keystore::X509Keystore, Cert, Keystore},
+    keystore::{
+        x509_keystore::{X509CertData, X509Keystore},
+        Cert, Keystore,
+    },
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
@@ -88,7 +91,7 @@ impl RulesManager {
         }
     }
 
-    pub fn set_audited_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+    pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
             let certs: Vec<Cert> = self
                 .keystore
@@ -108,9 +111,7 @@ impl RulesManager {
             } else {
                 let cert = &certs[0];
                 match cert {
-                    Cert::X509(_) => bail!(
-                        "Failed to set audited-payload mode for certificate {cert_id}. Audited-Payload mode can be set only for Golem certificate."
-                    ),
+                    Cert::X509(X509CertData { id, .. }) => id.clone(),
                     Cert::Golem { id, .. } => id.clone(),
                 }
             }
