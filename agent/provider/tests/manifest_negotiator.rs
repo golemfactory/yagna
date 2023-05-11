@@ -132,6 +132,42 @@ fn manifest_negotiator_test_manifest_with_urls(
 }
 
 #[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "all", "description": ""}}}}"#, // rulestore config
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because audited-payload all even if everyone-whitelist is mismatching"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "whitelist", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("Audited-Payload rule didn't match whitelist"); // error msg
+    "Rejected because everyone and audited-payload whitelist are mismatching"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "none", "description": ""}}}}"#, // rulestore config
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("Audited-Payload rule is disabled"); // error msg
+    "Rejected because everyone and audited-payload set to none"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "all", "description": ""}}}}"#, // rulestore config
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because audited-payload set to all"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
+    r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    Some("Audited-Payload rule didn't match whitelist"); // error msg
+    "Rejected because audited-payload whitelist doesn't match"
+)]
+#[test_case(
+    r#"{"outbound": {"enabled": true, "everyone": "none", "audited-payload": {"25b9430c6169c7ae66c9a7d9ec411fd9d50d4264ce4d94d47cf109a6afa6623d46ec90249c3a662adddcf17d162c61b3f07f24d240f21902ebd0e21ac0ecafd1": {"mode": "whitelist", "description": ""}}}}"#, // rulestore config
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    None; // error msg
+    "Accepted because domain is whitelisted when audited-payload set to whitelist"
+)]
+#[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all"}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     None; // error msg

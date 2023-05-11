@@ -303,7 +303,7 @@ impl RulesManager {
                 {
                     return self
                         .check_mode(&rule.mode, manifest)
-                        .map_err(|e| anyhow!("Partner {e}"));
+                        .map_err(|e| anyhow!("Audited-Payload {e}"));
                 }
             }
 
