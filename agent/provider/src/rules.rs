@@ -65,30 +65,44 @@ impl RulesManager {
 
     pub fn remove_dangling_rules(&self) -> Result<()> {
         let mut deleted_partner_rules = vec![];
+        let mut deleted_audited_payload_rules = vec![];
 
         let keystore_certs = self.keystore.list_ids();
 
-        self.rulestore
-            .config
-            .write()
-            .unwrap()
-            .outbound
-            .partner
-            .retain(|cert_id, _| {
-                keystore_certs
-                    .contains(cert_id)
-                    .not()
-                    .then(|| deleted_partner_rules.push(cert_id.clone()))
-                    .is_none()
-            });
+        let mut rulestore = self.rulestore.config.write().unwrap();
 
-        if deleted_partner_rules.is_empty() {
-            Ok(())
-        } else {
+        dbg!(&keystore_certs);
+        dbg!(&rulestore.outbound.partner);
+        dbg!(&rulestore.outbound.audited_payload);
+
+        rulestore.outbound.partner.retain(|cert_id, _| {
+            keystore_certs
+                .contains(cert_id)
+                .not()
+                .then(|| deleted_partner_rules.push(cert_id.clone()))
+                .is_none()
+        });
+
+        rulestore.outbound.audited_payload.retain(|cert_id, _| {
+            keystore_certs
+                .contains(cert_id)
+                .not()
+                .then(|| deleted_audited_payload_rules.push(cert_id.clone()))
+                .is_none()
+        });
+
+        drop(rulestore);
+
+        if !deleted_partner_rules.is_empty() {
             log::warn!("Because Keystore didn't have appriopriate certs, following Partner rules were removed: {:?}", deleted_partner_rules);
-
-            self.rulestore.save()
+            self.rulestore.save()?;
         }
+        if !deleted_audited_payload_rules.is_empty() {
+            log::warn!("Because Keystore didn't have appriopriate certs, following Audited-Payload rules were removed: {:?}", deleted_audited_payload_rules);
+            self.rulestore.save()?;
+        }
+
+        Ok(())
     }
 
     pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
