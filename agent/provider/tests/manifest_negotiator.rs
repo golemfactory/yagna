@@ -516,7 +516,8 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, provider_certs);
 
     let node_descriptor = node_descriptor_filename.map(|node_descriptor_filename| {
-        std::fs::read_to_string(resource_cert_dir.join(node_descriptor_filename)).unwrap()
+        let data = std::fs::read(resource_cert_dir.join(node_descriptor_filename)).unwrap();
+        serde_json::from_slice(&data).unwrap()
     });
     let whitelist_file = create_whitelist_file(whitelist);
     let rules_file_name = test_cert_dir.join("rules.json");
@@ -629,7 +630,7 @@ struct Payload<'a> {
     signature_b64: Option<String>,
     signature_alg_b64: Option<&'a str>,
     cert_b64: Option<String>,
-    node_descriptor: Option<String>,
+    node_descriptor: Option<serde_json::Value>,
 }
 
 fn create_demand_json(payload: Option<Payload>) -> Value {
