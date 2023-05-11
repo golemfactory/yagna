@@ -259,7 +259,7 @@ impl RulesManager {
     fn check_partner_rule(
         &self,
         manifest: &AppManifest,
-        node_descriptor: Option<String>,
+        node_descriptor: Option<serde_json::Value>,
         requestor_id: NodeId,
     ) -> Result<()> {
         let node_descriptor =
@@ -267,7 +267,7 @@ impl RulesManager {
 
         let node_descriptor = self
             .keystore
-            .verify_node_descriptor(&node_descriptor)
+            .verify_node_descriptor(node_descriptor)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
         if requestor_id != node_descriptor.node_id {
@@ -327,7 +327,7 @@ impl RulesManager {
         manifest: AppManifest,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        node_descriptor: Option<String>,
+        node_descriptor: Option<serde_json::Value>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
             log::trace!("Checking rules: outbound is disabled.");
