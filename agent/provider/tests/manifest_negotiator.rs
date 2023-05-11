@@ -487,7 +487,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         signature_alg,
         cert_b64,
         error_msg,
-        &["foo_ca-chain.cert.pem"],
+        &["foo_ca-chain.cert.pem", "foo_req.cert.pem"],
         None,
     )
 }
