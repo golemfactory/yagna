@@ -286,10 +286,6 @@ impl RulesManager {
                 )
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            self.verify_permissions(&props.cert)
-                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
-
             let cert_chain_ids = X509Keystore::list_cert_chain_ids(&props.cert)?;
             for cert_id in &cert_chain_ids {
                 if let Some(rule) = self

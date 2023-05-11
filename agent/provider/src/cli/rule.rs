@@ -89,7 +89,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             SetOutboundRule::Enable => rules.set_enabled(true),
             SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
             SetOutboundRule::AuditedPayload(RuleWithCert::CertId(CertId { cert_id, mode })) => {
-                rules.set_audited_mode(cert_id, mode)
+                rules.set_audited_payload_mode(cert_id, mode)
             }
             SetOutboundRule::AuditedPayload(RuleWithCert::ImportCert { import_cert, mode }) => {
                 let AddResponse {
@@ -98,8 +98,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     ..
                 } = rules.keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
-                    permissions: vec![CertPermissions::All],
-                    whole_chain: false,
                 })?;
 
                 for cert_path in invalid {
@@ -124,8 +122,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     ..
                 } = rules.keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
-                    permissions: vec![CertPermissions::All],
-                    whole_chain: false,
                 })?;
 
                 for cert_path in invalid {
