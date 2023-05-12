@@ -296,7 +296,7 @@ impl RulesManager {
                 let rule = if let Some(rule) = rulestore_config
                     .outbound
                     .audited_payload
-                    .get(&cert_to_id(&sig_cert)?)
+                    .get(&cert_to_id(sig_cert)?)
                 {
                     rule
                 } else if let Some(issuer) = self.keystore.x509_keystore().issuer(sig_cert)? {
@@ -316,7 +316,7 @@ impl RulesManager {
 
             let ids = sig_cert_chain
                 .iter()
-                .map(|cert| cert_to_id(&cert))
+                .map(|cert| cert_to_id(cert))
                 .collect::<Vec<_>>();
             Err(anyhow!(
                 "Audited-Payload rule whole chain of cert_ids is not trusted: {:?}",

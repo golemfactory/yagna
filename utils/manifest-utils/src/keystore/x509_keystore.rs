@@ -354,7 +354,7 @@ impl X509Keystore {
             .objects()
             .iter()
             .flat_map(X509ObjectRef::x509)
-            .find(|candidate| candidate.issued(&cert) == X509VerifyResult::OK)
+            .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK)
             .map(cert_to_id)
             .transpose()?;
 
