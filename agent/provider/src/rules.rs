@@ -88,6 +88,27 @@ impl RulesManager {
         }
     }
 
+    pub fn add_rules_information_to_certs(&self, certs: Vec<Cert>) -> Vec<CertWithRules> {
+        let cfg = self.rulestore.config.read().unwrap();
+
+        certs
+            .into_iter()
+            .map(|cert| {
+                let mut outbound_rules: Vec<OutboundRule> = Vec::new();
+                if cfg.outbound.partner.contains_key(&cert.id()) {
+                    outbound_rules.push(OutboundRule::Partner);
+                }
+
+                //TODO add Audited Payload here
+
+                CertWithRules {
+                    cert,
+                    outbound_rules,
+                }
+            })
+            .collect()
+    }
+
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
             let certs: Vec<Cert> = self
@@ -546,4 +567,26 @@ pub enum Mode {
     All,
     None,
     Whitelist,
+}
+
+#[derive(PartialEq, Eq, Display, Debug, Clone)]
+pub enum OutboundRule {
+    Partner,
+    AuditedPayload,
+    Everyone,
+}
+
+#[derive(PartialEq, Eq)]
+pub struct CertWithRules {
+    pub cert: Cert,
+    pub outbound_rules: Vec<OutboundRule>,
+}
+
+impl CertWithRules {
+    pub fn format_outbound_rules(&self) -> String {
+        self.outbound_rules
+            .iter()
+            .map(|r| r.to_string())
+            .join(" | ")
+    }
 }
