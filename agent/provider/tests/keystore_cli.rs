@@ -167,7 +167,7 @@ fn set_partner_rule(cert_dir: &Path, cert: &str) {
         .arg("outbound")
         .arg("partner")
         .arg("cert-id")
-        .arg(&cert)
+        .arg(cert)
         .arg("--mode")
         .arg("all")
         .assert()
