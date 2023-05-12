@@ -65,6 +65,7 @@ impl NegotiatorComponent for ManifestSignature {
         let node_descriptor = demand
             .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
+        //tODO
 
         if manifest.is_outbound_requested() {
             match self.rules_manager.check_outbound_rules(
