@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
+use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serial_test::serial;
 
@@ -139,6 +140,40 @@ fn verify_subject_format() {
     assert_eq!(read_subject(&result, "25b9430c"), "{\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\"}")
 }
 
+#[serial]
+#[test]
+fn verify_outbound_rules_format() {
+    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
+    add(
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
+        &resource_cert_dir,
+        &cert_dir,
+    );
+    let result = list_certificates_command(&cert_dir).unwrap();
+    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "");
+    assert_eq!(read_outbound_rules(&result, "25b9430c"), "");
+
+    set_partner_rule(&cert_dir, "cb16a2ed");
+    let result = list_certificates_command(&cert_dir).unwrap();
+    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "Partner");
+}
+
+fn set_partner_rule(cert_dir: &Path, cert: &str) {
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .args(["--cert-dir", cert_dir.to_str().unwrap()])
+        .arg("rule")
+        .arg("set")
+        .arg("outbound")
+        .arg("partner")
+        .arg("cert-id")
+        .arg(&cert)
+        .arg("--mode")
+        .arg("all")
+        .assert()
+        .success();
+}
+
 fn add_and_list(certificates: Vec<&str>) -> HashMap<String, Value> {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
     add(certificates, &resource_cert_dir, &cert_dir);
@@ -210,6 +245,10 @@ fn read_not_after(certs: &HashMap<String, Value>, id: &str) -> String {
 
 fn read_subject(certs: &HashMap<String, Value>, id: &str) -> String {
     read_field(certs, id, "Subject")
+}
+
+fn read_outbound_rules(certs: &HashMap<String, Value>, id: &str) -> String {
+    read_field(certs, id, "Outbound Rules")
 }
 
 fn read_field(certs: &HashMap<String, Value>, id: &str, field: &str) -> String {
