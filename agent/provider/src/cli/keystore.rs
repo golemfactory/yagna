@@ -1,4 +1,5 @@
 use crate::cli::println_conditional;
+use crate::rules::{CertWithRules, RulesManager};
 use crate::startup_config::ProviderConfig;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
@@ -7,7 +8,6 @@ use structopt::StructOpt;
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };
-use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
@@ -65,37 +65,46 @@ impl KeystoreConfig {
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let keystore = CompositeKeystore::load(&cert_dir)?;
-    let certs_data = keystore.list();
-    print_cert_list(&config, certs_data)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
+    let certs = rules.keystore.list();
+    print_cert_list(&config, rules.add_rules_information_to_certs(certs))?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
     let AddResponse {
         added, duplicated, ..
-    } = keystore.add(&add.into())?;
+    } = rules.keystore.add(&add.into())?;
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
-        print_cert_list(&config, added)?;
+        print_cert_list(&config, rules.add_rules_information_to_certs(added))?;
     }
 
     if !duplicated.is_empty() && !config.json {
         println!("Certificates already loaded to keystore:");
-        print_cert_list(&config, duplicated)?;
+        print_cert_list(&config, rules.add_rules_information_to_certs(duplicated))?;
     }
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let mut keystore = CompositeKeystore::load(&cert_dir)?;
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
 
-    let all_certs = keystore.list();
+    let all_certs = rules.keystore.list();
     let mut ids = HashSet::new();
     for remove_prefix in &remove.ids {
         let full_ids = find_ids_by_prefix(&all_certs, remove_prefix);
@@ -120,7 +129,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     }
     let remove_params = RemoveParams { ids };
 
-    let RemoveResponse { removed } = keystore.remove(&remove_params)?;
+    let RemoveResponse { removed } = rules.keystore.remove(&remove_params)?;
     if removed.is_empty() {
         println_conditional(&config, "No matching certificates to remove.");
         if config.json {
@@ -128,13 +137,13 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
         }
     } else {
         println!("Removed certificates:");
-        print_cert_list(&config, removed)?;
+        print_cert_list(&config, rules.add_rules_information_to_certs(removed))?;
     }
 
     Ok(())
 }
 
-fn print_cert_list(config: &ProviderConfig, certs_data: Vec<Cert>) -> anyhow::Result<()> {
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertWithRules>) -> anyhow::Result<()> {
     let mut table_builder = CertTableBuilder::new();
     for data in certs_data {
         table_builder.add(data);
@@ -153,7 +162,7 @@ fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {
 }
 
 struct CertTableBuilder {
-    entries: Vec<Cert>,
+    entries: Vec<CertWithRules>,
 }
 
 impl CertTableBuilder {
@@ -163,7 +172,7 @@ impl CertTableBuilder {
         }
     }
 
-    pub fn add(&mut self, cert: Cert) {
+    pub fn add(&mut self, cert: CertWithRules) {
         self.entries.push(cert)
     }
 
@@ -184,8 +193,8 @@ impl CertTableBuilder {
 
         let mut prefix_uses = HashMap::<String, u32>::new();
         for cert in &self.entries {
-            for len in prefix_lengths(cert.id().len()) {
-                let mut prefix = cert.id();
+            for len in prefix_lengths(cert.cert.id().len()) {
+                let mut prefix = cert.cert.id();
                 prefix.truncate(len);
 
                 *prefix_uses.entry(prefix).or_default() += 1;
@@ -194,8 +203,8 @@ impl CertTableBuilder {
 
         let mut ids = Vec::new();
         for cert in &self.entries {
-            for len in prefix_lengths(cert.id().len()) {
-                let mut prefix = cert.id();
+            for len in prefix_lengths(cert.cert.id().len()) {
+                let mut prefix = cert.cert.id();
                 prefix.truncate(len);
 
                 let usages = *prefix_uses
@@ -215,7 +224,7 @@ impl CertTableBuilder {
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
             values
-                .push(serde_json::json! { [ id_prefix, cert.type_name(), cert.not_after(), cert.subject()] });
+                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), cert.cert.not_after(), cert.cert.subject(), cert.format_outbound_rules()] });
         }
 
         let columns = vec![
@@ -223,6 +232,7 @@ impl CertTableBuilder {
             "Type".into(),
             "Not After".into(),
             "Subject".into(),
+            "Outbound Rules".into(),
         ];
 
         let table = ResponseTable { columns, values };
