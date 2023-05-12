@@ -18,7 +18,7 @@ use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
     keystore::{
-        x509_keystore::{X509CertData, X509Keystore},
+        x509_keystore::{cert_to_id, X509CertData, X509Keystore},
         Cert, Keystore,
     },
     matching::{
@@ -70,10 +70,6 @@ impl RulesManager {
         let keystore_certs = self.keystore.list_ids();
 
         let mut rulestore = self.rulestore.config.write().unwrap();
-
-        dbg!(&keystore_certs);
-        dbg!(&rulestore.outbound.partner);
-        dbg!(&rulestore.outbound.audited_payload);
 
         rulestore.outbound.partner.retain(|cert_id, _| {
             keystore_certs
@@ -286,26 +282,45 @@ impl RulesManager {
                 )
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            let cert_chain_ids = X509Keystore::list_cert_chain_ids(&props.cert)?;
-            for cert_id in &cert_chain_ids {
-                if let Some(rule) = self
-                    .rulestore
-                    .config
-                    .read()
-                    .unwrap()
+            let sig_cert_chain = X509Keystore::decode_cert_chain(&props.cert)?;
+
+            let rulestore_config = self.rulestore.config.read().unwrap();
+
+            // Rule set for certificate closes to leaf takes precedence
+            for sig_cert in sig_cert_chain.iter() {
+                // either:
+                // 1. a rule is set directly for the cert
+                // 2. an issuer for the certificate is in keystore and there's a rule for this cert
+                //
+                // otherwise continue to the next cert in chain
+                let rule = if let Some(rule) = rulestore_config
                     .outbound
                     .audited_payload
-                    .get(cert_id)
+                    .get(&cert_to_id(&sig_cert)?)
                 {
-                    return self
-                        .check_mode(&rule.mode, manifest)
-                        .map_err(|e| anyhow!("Audited-Payload {e}"));
-                }
+                    rule
+                } else if let Some(issuer) = self.keystore.x509_keystore().issuer(sig_cert)? {
+                    if let Some(rule) = rulestore_config.outbound.audited_payload.get(&issuer) {
+                        rule
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                };
+
+                return self
+                    .check_mode(&rule.mode, manifest)
+                    .map_err(|e| anyhow!("Audited-Payload {e}"));
             }
 
+            let ids = sig_cert_chain
+                .iter()
+                .map(|cert| cert_to_id(&cert))
+                .collect::<Vec<_>>();
             Err(anyhow!(
                 "Audited-Payload rule whole chain of cert_ids is not trusted: {:?}",
-                cert_chain_ids
+                ids
             ))
         } else {
             Err(anyhow!("Audited-Payload rule requires manifest signature"))

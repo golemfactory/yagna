@@ -346,6 +346,21 @@ impl X509Keystore {
         Ok(())
     }
 
+    pub fn issuer(&self, cert: &X509Ref) -> anyhow::Result<Option<Fingerprint>> {
+        let inner = self.store.read().unwrap();
+
+        let res = inner
+            .store
+            .objects()
+            .iter()
+            .flat_map(X509ObjectRef::x509)
+            .find(|candidate| candidate.issued(&cert) == X509VerifyResult::OK)
+            .map(cert_to_id)
+            .transpose()?;
+
+        Ok(res)
+    }
+
     fn replace(&self, other: X509Keystore) {
         let store = {
             let mut inner = other.store.write().unwrap();
@@ -440,24 +455,10 @@ impl X509Keystore {
         Ok(cert.public_key()?)
     }
 
-    /// List fingerprints of each certificate in the certificate chain.
+    /// Decodes certificate chain.
     ///
-    /// Output is sorted from the leaf to the root certificate.
-    pub fn list_cert_chain_ids(cert: impl AsRef<str>) -> anyhow::Result<Vec<Fingerprint>> {
-        let cert_chain = Self::decode_cert_chain(cert)?;
-
-        let mut ids = Vec::default();
-        for cert in cert_chain {
-            let id = cert_to_id(&cert)?;
-            ids.push(id);
-        }
-
-        ids.reverse();
-
-        Ok(ids)
-    }
-
-    fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
+    /// The certificates are sorted from leaf to root.
+    pub fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
         let cert = crate::decode_data(cert)?;
         Ok(match X509::from_der(&cert) {
             Ok(cert) => vec![cert],

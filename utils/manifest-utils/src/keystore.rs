@@ -3,7 +3,7 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509CertData, X509Keystore, X509KeystoreBuilder, X509KeystoreManager},
 };
 use chrono::SecondsFormat;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
@@ -213,6 +213,10 @@ impl CompositeKeystore {
         self.x509_keystore
             .keystore
             .verify_signature(cert, sig, sig_alg, data)
+    }
+
+    pub fn x509_keystore(&self) -> &X509Keystore {
+        &self.x509_keystore.keystore
     }
 
     pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
