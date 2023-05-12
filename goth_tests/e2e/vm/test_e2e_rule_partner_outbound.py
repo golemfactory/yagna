@@ -56,7 +56,7 @@ async def test_e2e_rule_partner_outbound(
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
         manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
-        node_descriptor = open(f"{runner.web_root_path}/test_e2e_rule_partner_outbound/node-descriptor.signed.json").read()
+        node_descriptor = json.loads(open(f"{runner.web_root_path}/test_e2e_rule_partner_outbound/node-descriptor.signed.json").read())
 
         # Market
         demand = (

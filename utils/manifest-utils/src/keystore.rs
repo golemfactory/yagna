@@ -215,8 +215,11 @@ impl CompositeKeystore {
             .verify_signature(cert, sig, sig_alg, data)
     }
 
-    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
-        self.golem_keystore.verify_node_descriptor(cert)
+    pub fn verify_node_descriptor(
+        &self,
+        node_descriptor: serde_json::Value,
+    ) -> anyhow::Result<ValidatedNodeDescriptor> {
+        self.golem_keystore.verify_node_descriptor(node_descriptor)
     }
 }
 
