@@ -81,8 +81,11 @@ pub(super) struct GolemKeystore {
 }
 
 impl GolemKeystore {
-    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
-        golem_certificate::validator::validate_node_descriptor_str(cert)
+    pub fn verify_node_descriptor(
+        &self,
+        node_descriptor: serde_json::Value,
+    ) -> anyhow::Result<ValidatedNodeDescriptor> {
+        golem_certificate::validator::validate_node_descriptor(node_descriptor)
             .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
     }
 }
