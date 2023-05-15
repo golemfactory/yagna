@@ -31,15 +31,21 @@ fn valid_certificate_test() {
         .expect("Signature and cert can be validated")
 }
 
-#[test_case(&[], "Unable to verify X509 certificate. No X509 certificates in keystore."; "Empty keystore failure test")]
-#[test_case(&["foo_ca.cert.pem"], "Unable to verify X509 certificate."; "Unable to verify failure test")]
+#[test_case(&[], Some("foo_req.cert.pem"), "Unable to verify X509 certificate. No X509 certificates in keystore."; "Empty keystore failure test")]
+#[test_case(&["foo_ca.cert.pem"], Some("foo_req.cert.pem"), "Unable to verify X509 certificate."; "Unable to verify failure test")]
+#[test_case(&["foo_ca.cert.pem"], None, "Unable to verify X509 certificate. No X509 certificate in payload."; "No cert in payload failure")]
+#[test_case(&[], None, "Unable to verify X509 certificate. No X509 certificate in payload."; "No cert in payload failure (when empty keystore)")]
 #[serial]
-fn cert_verification_failure_test(certificates: &[&str], expected_error_msg: &str) {
+fn cert_verification_failure_test(
+    certificates: &[&str],
+    req_cert: Option<&str>,
+    expected_error_msg: &str,
+) {
     // Having
     let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
     load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, certificates);
 
-    let request = prepare_request(resource_cert_dir);
+    let request = prepare_request_parameterized(resource_cert_dir, req_cert);
 
     // Then
     let keystore = X509Keystore::load(&test_cert_dir).expect("Can load certificates");
@@ -59,12 +65,24 @@ struct SignedRequest {
 }
 
 fn prepare_request(resource_cert_dir: PathBuf) -> SignedRequest {
+    prepare_request_parameterized(resource_cert_dir, Some("foo_req.cert.pem"))
+}
+
+fn prepare_request_parameterized(
+    resource_cert_dir: PathBuf,
+    cert_file: Option<&str>,
+) -> SignedRequest {
     let resource_dir = TestResources::test_resources_dir_path();
 
-    let mut cert = resource_cert_dir;
-    cert.push("foo_req.cert.pem");
-    let mut cert = fs::read_to_string(cert).expect("Can read certificate file");
-    cert = base64::encode(cert);
+    let cert = match cert_file {
+        Some(cert_file) => {
+            let mut cert = resource_cert_dir;
+            cert.push(cert_file);
+            let cert = fs::read_to_string(cert).expect("Can read certificate file");
+            base64::encode(cert)
+        }
+        None => "".to_string(),
+    };
 
     let mut data = resource_dir.clone();
     data.push("data.json.base64");

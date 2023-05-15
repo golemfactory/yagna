@@ -420,6 +420,10 @@ impl X509Keystore {
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
         let cert_chain = Self::decode_cert_chain(cert)?;
+        let cert = match cert_chain.last().map(Clone::clone) {
+            Some(cert) => cert,
+            None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
+        };
         let store = self
             .store
             .read()
@@ -427,10 +431,6 @@ impl X509Keystore {
         if store.store.objects().is_empty() {
             bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
         }
-        let cert = match cert_chain.last().map(Clone::clone) {
-            Some(cert) => cert,
-            None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
-        };
         let mut cert_stack = openssl::stack::Stack::new()?;
         for cert in cert_chain {
             cert_stack.push(cert).unwrap();
