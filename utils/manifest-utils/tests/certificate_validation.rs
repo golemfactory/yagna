@@ -3,6 +3,7 @@ extern crate serial_test;
 
 use std::{fs, path::PathBuf};
 
+use test_case::test_case;
 use ya_manifest_test_utils::*;
 use ya_manifest_utils::keystore::x509_keystore::X509Keystore;
 
@@ -30,12 +31,13 @@ fn valid_certificate_test() {
         .expect("Signature and cert can be validated")
 }
 
-#[test]
+#[test_case(&[], "Unable to verify X509 certificate. No X509 certificates in keystore."; "Empty keystore failure test")]
+#[test_case(&["foo_ca.cert.pem"], "Unable to verify X509 certificate."; "Unable to verify failure test")]
 #[serial]
-fn invalid_certificate_test() {
+fn cert_verification_failure_test(certificates: &[&str], expected_error_msg: &str) {
     // Having
     let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
-    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, &[]);
+    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, certificates);
 
     let request = prepare_request(resource_cert_dir);
 
@@ -43,13 +45,10 @@ fn invalid_certificate_test() {
     let keystore = X509Keystore::load(&test_cert_dir).expect("Can load certificates");
     let result =
         keystore.verify_signature(request.cert, request.sig, request.sig_alg, request.data);
-    assert!(
-        result.is_err(),
-        "Keystore has no intermediate cert - verification should fail"
-    );
+
     let err = result.expect_err("Error result");
     let msg = format!("{err:?}");
-    assert_eq!(msg, "Invalid certificate");
+    assert_eq!(msg, expected_error_msg);
 }
 
 struct SignedRequest {

@@ -394,7 +394,7 @@ impl X509Keystore {
             .ok_or_else(|| anyhow::anyhow!("Unknown signature algorithm: {}", sig_alg.as_ref()))?;
         let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
         if !(verifier.verify_oneshot(&sig, data.as_ref().as_bytes())?) {
-            return Err(anyhow::anyhow!("Invalid signature"));
+            return Err(anyhow::anyhow!("Invalid signature."));
         }
         Ok(())
     }
@@ -424,9 +424,12 @@ impl X509Keystore {
             .store
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
+        if store.store.objects().is_empty() {
+            bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
+        }
         let cert = match cert_chain.last().map(Clone::clone) {
             Some(cert) => cert,
-            None => bail!("Unable to verify certificate. No certificate."),
+            None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
         };
         let mut cert_stack = openssl::stack::Stack::new()?;
         for cert in cert_chain {
@@ -434,7 +437,7 @@ impl X509Keystore {
         }
         let mut ctx = X509StoreContext::new()?;
         if !(ctx.init(&store.store, &cert, &cert_stack, |ctx| ctx.verify_cert())?) {
-            bail!("Invalid certificate");
+            bail!("Unable to verify X509 certificate.");
         }
         Ok(cert.public_key()?)
     }
