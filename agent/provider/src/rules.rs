@@ -430,7 +430,7 @@ impl RulesManager {
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
             self.check_everyone_rule(&manifest),
             self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_descriptor.as_deref(), requestor_id),
+            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
