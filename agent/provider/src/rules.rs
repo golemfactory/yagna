@@ -278,7 +278,7 @@ impl RulesManager {
 
     fn remove_rules_not_matching_any_cert(
         rules: &mut HashMap<String, CertRule>,
-        cert_ids: &Vec<String>,
+        cert_ids: &[String],
     ) -> Vec<String> {
         let mut deleted_rules = vec![];
         rules.retain(|cert_id, _| {
