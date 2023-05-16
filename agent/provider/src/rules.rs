@@ -58,6 +58,9 @@ impl RulesManager {
             whitelist,
         };
 
+        // Config files can be modified so add verification of config correctness to make sure that:
+        // - Outbound Partner rule can be assigned only to Golem certificates
+        // - Outbound Audited Payload rule can be assigned for both Golem and X509 certificates
         manager.remove_dangling_rules()?;
 
         Ok(manager)
@@ -122,7 +125,9 @@ impl RulesManager {
                 let cert = &certs[0];
                 match cert {
                     Cert::X509(X509CertData { id, .. }) => id.clone(),
-                    Cert::Golem { id, .. } => id.clone(),
+                    Cert::Golem { .. } => bail!(
+                        "Failed to set Audited Payload mode for Golem certificate {cert_id}. Audited Payload mode is not yet supported for Golem certificates."
+                    ),
                 }
             }
         };
@@ -155,9 +160,9 @@ impl RulesManager {
                 if cfg.outbound.partner.contains_key(&cert.id()) {
                     outbound_rules.push(OutboundRule::Partner);
                 }
-
-                //TODO add Audited Payload here
-
+                if cfg.outbound.audited_payload.contains_key(&cert.id()) {
+                    outbound_rules.push(OutboundRule::AuditedPayload);
+                }
                 CertWithRules {
                     cert,
                     outbound_rules,

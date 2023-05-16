@@ -199,6 +199,10 @@ impl CompositeKeystore {
             .collect::<Vec<String>>()
     }
 
+    pub fn add_x509_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.x509_keystore.add(add)
+    }
+
     pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         self.golem_keystore.add(add)
     }

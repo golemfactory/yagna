@@ -32,12 +32,13 @@ pub enum SetOutboundRule {
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
-    AuditedPayload(RuleWithCert),
-    Partner(RuleWithCert),
+    AuditedPayload(AuditedPayloadRuleWithCert),
+    Partner(PartnerRuleWithCert),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct CertId {
+    /// Certificate id
     cert_id: String,
     #[structopt(short, long, possible_values = Mode::VARIANTS)]
     mode: Mode,
@@ -45,23 +46,25 @@ pub struct CertId {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum AuditedPayloadRuleWithCert {
+    /// Set rule for X509 certificate with given id.
     CertId(CertId),
+    /// Import and set rule for X509 certificate or X509 certificates chain (rule will be assigned to last certificate in a chain).
     ImportCert {
-        import_cert: PathBuf,
+        /// Path to X509 certificate or X509 certificates chain.
+        imported_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
-        /// When importing chain of X.509 certificates set rule to every certificate in a chain.
-        /// By default rule is assigned only to last (leaf) certificate of a chain.
-        #[structopt(short, long)]
-        whole_chain: bool,
     },
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum RuleWithCert {
+pub enum PartnerRuleWithCert {
+    /// Set rule for Golem certificate with given id.
     CertId(CertId),
+    /// Import and set rule for X509 certificate or X509 certificates chain.
     ImportCert {
-        import_cert: PathBuf,
+        /// Path to Golem certificate.
+        imported_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
@@ -88,20 +91,25 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             SetOutboundRule::Disable => rules.set_enabled(false),
             SetOutboundRule::Enable => rules.set_enabled(true),
             SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
-            SetOutboundRule::AuditedPayload(RuleWithCert::CertId(CertId { cert_id, mode })) => {
-                rules.set_audited_payload_mode(cert_id, mode)
-            }
-            SetOutboundRule::AuditedPayload(RuleWithCert::ImportCert { import_cert, mode }) => {
+            SetOutboundRule::AuditedPayload(AuditedPayloadRuleWithCert::CertId(CertId {
+                cert_id,
+                mode,
+            })) => rules.set_audited_payload_mode(cert_id, mode),
+            SetOutboundRule::AuditedPayload(AuditedPayloadRuleWithCert::ImportCert {
+                imported_cert: import_cert,
+                mode,
+            }) => {
+                // TODO change it to `rules.keystore.add` when AuditedPayload will support Golem certs.
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
                     ..
-                } = rules.keystore.add_golem_cert(&AddParams {
+                } = rules.keystore.add_x509_cert(&AddParams {
                     certs: vec![import_cert],
                 })?;
 
                 for cert_path in invalid {
-                    log::error!("Failed to import {cert_path:?}. Partner mode can be set only for Golem certificate.");
+                    log::error!("Failed to import X509 certificates from: {cert_path:?}.");
                 }
 
                 rules.keystore.reload(&rules.cert_dir)?;
@@ -112,10 +120,13 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
                 Ok(())
             }
-            SetOutboundRule::Partner(RuleWithCert::CertId(CertId { cert_id, mode })) => {
+            SetOutboundRule::Partner(PartnerRuleWithCert::CertId(CertId { cert_id, mode })) => {
                 rules.set_partner_mode(cert_id, mode)
             }
-            SetOutboundRule::Partner(RuleWithCert::ImportCert { import_cert, mode }) => {
+            SetOutboundRule::Partner(PartnerRuleWithCert::ImportCert {
+                imported_cert: import_cert,
+                mode,
+            }) => {
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
@@ -125,7 +136,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 })?;
 
                 for cert_path in invalid {
-                    log::error!("Failed to import {cert_path:?}. Partner mode can be set only for Golem certificate.");
+                    log::error!("Failed to import Golem certificates from: {cert_path:?}.");
                 }
 
                 rules.keystore.reload(&rules.cert_dir)?;

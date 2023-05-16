@@ -158,21 +158,26 @@ fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
     assert!(expected.is_match(stderr));
 }
 
-#[test_case("partner", "all")]
-#[test_case("partner", "none")]
-#[test_case("partner", "whitelist")]
 #[test_case("audited-payload", "all")]
 #[test_case("audited-payload", "none")]
 #[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
-fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str) {
+fn rule_set_should_edit_x509_certificate_rules(rule: &str, mode: &str) {
+    rule_set_should_edit_certificate_rules(rule, mode, "foo_req.cert.pem")
+}
+
+#[test_case("partner", "all")]
+#[test_case("partner", "none")]
+#[test_case("partner", "whitelist")]
+#[serial_test::serial]
+fn rule_set_should_edit_golem_certificate_rules(rule: &str, mode: &str) {
+    rule_set_should_edit_certificate_rules(rule, mode, "partner-certificate.signed.json")
+}
+
+fn rule_set_should_edit_certificate_rules(rule: &str, mode: &str, cert: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
-    let cert_id = add_certificate_to_keystore(
-        data_dir.path(),
-        &resource_cert_dir,
-        "partner-certificate.signed.json",
-    );
+    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir, cert);
 
     Command::cargo_bin("ya-provider")
         .unwrap()
