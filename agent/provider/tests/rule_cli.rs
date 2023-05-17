@@ -241,7 +241,7 @@ fn rule_set_with_import_golem_cert_should_add_cert_to_keystore_and_to_rulestore(
 #[test_case("audited-payload", "none")]
 #[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
-#[ignore] // NYI
+#[ignore] // TODO do we even still want --whole-chain param?
 fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_to_rulestore(
     rule: &str,
     mode: &str,
@@ -280,7 +280,7 @@ fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_to_rule
 #[test_case("audited-payload", "none")]
 #[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
-#[ignore] // NYI
+// #[ignore] // NYI
 fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to_rulestore(
     rule: &str,
     mode: &str,

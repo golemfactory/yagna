@@ -1,6 +1,6 @@
 use super::{
     AddParams, AddResponse, Cert, CommonAddParams, Keystore, KeystoreBuilder, RemoveParams,
-    RemoveResponse,
+    RemoveResponse, SignatureVerifier,
 };
 use anyhow::bail;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
@@ -294,6 +294,72 @@ impl Keystore for X509KeystoreManager {
     fn list(&self) -> Vec<Cert> {
         self.keystore.list().into_iter().map(Cert::X509).collect()
     }
+
+    fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
+        let cert_chain = X509Keystore::decode_cert_chain(cert)?;
+        let cert_store = self.keystore.store.clone();
+        Ok(Box::new(X509SignatureVerifier {
+            signature_alg: "sha256".into(),
+            cert_chain,
+            cert_store,
+        }))
+    }
+}
+
+struct X509SignatureVerifier {
+    signature_alg: String,
+    cert_chain: Vec<X509>,
+    cert_store: Arc<RwLock<CertStore>>,
+}
+
+impl SignatureVerifier for X509SignatureVerifier {
+    fn with_alg(&mut self, alg: &str) -> Box<&mut dyn SignatureVerifier> {
+        self.signature_alg = alg.into();
+        Box::new(self)
+    }
+
+    fn verify(&self, data: &str, signature: &str) -> anyhow::Result<Vec<String>> {
+        let sig = crate::decode_data(signature)?;
+        let cert_store = self
+            .cert_store
+            .read()
+            .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
+        let pub_key = verify_cert_chain(&cert_store, &self.cert_chain)?;
+
+        let msg_digest =
+            MessageDigest::from_name(self.signature_alg.as_ref()).ok_or_else(|| {
+                anyhow::anyhow!("Unknown signature algorithm: {}", self.signature_alg)
+            })?;
+        let mut verifier = Verifier::new(msg_digest, pub_key.as_ref())?;
+        if !(verifier.verify_oneshot(&sig, data.as_bytes())?) {
+            return Err(anyhow::anyhow!("Invalid signature."));
+        }
+
+        self.whole_cert_chain_ids(&cert_store)
+    }
+}
+
+impl X509SignatureVerifier {
+    /// List of certificate Ids starting from root-most certificate
+    fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
+        let mut cert_ids = vec![];
+        let mut current_cert = None;
+        for cert in self.cert_chain.iter().rev() {
+            current_cert = Some(cert.as_ref());
+            let cert_id = cert_to_id(cert)?;
+            cert_ids.push(cert_id);
+        }
+        if let Some(cert) = current_cert {
+            let mut previous_cert = cert;
+            while let Some(cert) = issuer(cert_store, previous_cert) {
+                let cert_id = cert_to_id(cert)?;
+                cert_ids.push(cert_id);
+                previous_cert = cert;
+            }
+        }
+        cert_ids.reverse();
+        Ok(cert_ids)
+    }
 }
 
 struct CertStore {
@@ -344,21 +410,6 @@ impl X509Keystore {
         let keystore = X509Keystore::load(&cert_dir)?;
         self.replace(keystore);
         Ok(())
-    }
-
-    pub fn issuer(&self, cert: &X509Ref) -> anyhow::Result<Option<Fingerprint>> {
-        let inner = self.store.read().unwrap();
-
-        let res = inner
-            .store
-            .objects()
-            .iter()
-            .flat_map(X509ObjectRef::x509)
-            .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK)
-            .map(cert_to_id)
-            .transpose()?;
-
-        Ok(res)
     }
 
     fn replace(&self, other: X509Keystore) {
@@ -436,26 +487,11 @@ impl X509Keystore {
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
         let cert_chain = Self::decode_cert_chain(cert)?;
-        let cert = match cert_chain.last().map(Clone::clone) {
-            Some(cert) => cert,
-            None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
-        };
-        let store = self
+        let cert_store = self
             .store
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
-        if store.store.objects().is_empty() {
-            bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
-        }
-        let mut cert_stack = openssl::stack::Stack::new()?;
-        for cert in cert_chain {
-            cert_stack.push(cert).unwrap();
-        }
-        let mut ctx = X509StoreContext::new()?;
-        if !(ctx.init(&store.store, &cert, &cert_stack, |ctx| ctx.verify_cert())?) {
-            bail!("Unable to verify X509 certificate.");
-        }
-        Ok(cert.public_key()?)
+        verify_cert_chain(&cert_store, &cert_chain)
     }
 
     /// Decodes certificate chain.
@@ -468,6 +504,39 @@ impl X509Keystore {
             Err(_) => X509::stack_from_pem(&cert)?,
         })
     }
+}
+
+fn verify_cert_chain(
+    cert_store: &CertStore,
+    cert_chain: &Vec<X509>,
+) -> anyhow::Result<PKey<Public>> {
+    let cert = match cert_chain.last().map(Clone::clone) {
+        Some(cert) => cert,
+        None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
+    };
+    if cert_store.store.objects().is_empty() {
+        bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
+    }
+    let mut cert_stack = openssl::stack::Stack::new()?;
+    for cert in cert_chain {
+        cert_stack.push(cert.clone()).unwrap();
+    }
+    let mut ctx = X509StoreContext::new()?;
+    if !(ctx.init(&cert_store.store, &cert, &cert_stack, |ctx| {
+        ctx.verify_cert()
+    })?) {
+        bail!("Unable to verify X509 certificate.");
+    }
+    Ok(cert.public_key()?)
+}
+
+fn issuer<'c>(cert_store: &'c CertStore, cert: &X509Ref) -> Option<&'c X509Ref> {
+    cert_store
+        .store
+        .objects()
+        .iter()
+        .flat_map(X509ObjectRef::x509)
+        .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(&cert))
 }
 
 fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
@@ -487,7 +556,7 @@ fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
     }
 }
 
-pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
+pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<Fingerprint> {
     let bytes = cert.digest(MessageDigest::sha512())?;
     let mut digest = String::with_capacity(bytes.len() * 2);
     for byte in bytes.iter() {

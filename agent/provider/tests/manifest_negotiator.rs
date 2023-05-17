@@ -316,13 +316,13 @@ fn manifest_negotiator_test_with_node_identity(
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "whitelist"}}"#, // rulestore config
     r#"["https://non-whitelisted.com"]"#, // compManifest.net.inet.out.urls
-    Some("Audited-Payload rule: Invalid signature ;"); // error msg
+    Some("Outbound rejected because: Everyone rule didn't match whitelist ; Audited-Payload rule: Invalid signature. ; Partner verification of node descriptor failed: Cannot verify node descriptor structure, schema is not defined ;"); // error msg
     "Rejected because everyone whitelist mismatched"
 )]
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "none"}}"#, // rulestore config
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
-    Some("Audited-Payload rule: Invalid signature ;"); // error msg
+    Some("Outbound rejected because: Everyone rule is disabled ; Audited-Payload rule: Invalid signature. ; Partner verification of node descriptor failed: Cannot verify node descriptor structure, schema is not defined ;"); // error msg
     "Rejected because everyone is set to none"
 )]
 #[serial]
