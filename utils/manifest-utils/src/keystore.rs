@@ -268,13 +268,17 @@ impl Keystore for CompositeKeystore {
     }
 
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>> {
+        let mut err_msgs = vec![];
         for keystore in self.keystores() {
             match keystore.verifier(cert) {
                 Ok(verifier) => return Ok(verifier),
-                Err(err) => log::trace!("Unable to verify cert: {err}"),
+                Err(err) => err_msgs.push(err),
             }
         }
-        anyhow::bail!("Failed to verify signature. Unable to parse certificate.")
+        let err_msgs = err_msgs
+            .iter()
+            .fold(String::new(), |s, c| s + &c.to_string() + " ; ");
+        anyhow::bail!("Failed to verify certificate: {err_msgs}.")
     }
 }
 
