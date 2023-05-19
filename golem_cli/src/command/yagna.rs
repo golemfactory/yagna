@@ -56,40 +56,40 @@ lazy_static! {
         erc20.insert(
             NetworkName::Mainnet.into(),
             PaymentPlatform {
-                platform: "erc20-mainnet-glm",
-                driver: "erc20",
+                platform: "erc20legacy-mainnet-glm",
+                driver: "erc20legacy",
                 token: "GLM",
             },
         );
         erc20.insert(
             NetworkName::Rinkeby.into(),
             PaymentPlatform {
-                platform: "erc20-rinkeby-tglm",
-                driver: "erc20",
+                platform: "erc20legacy-rinkeby-tglm",
+                driver: "erc20legacy",
                 token: "tGLM",
             },
         );
         erc20.insert(
             NetworkName::Goerli.into(),
             PaymentPlatform {
-                platform: "erc20-goerli-tglm",
-                driver: "erc20",
+                platform: "erc20legacy-goerli-tglm",
+                driver: "erc20legacy",
                 token: "tGLM",
             },
         );
         erc20.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
-                platform: "erc20-mumbai-tglm",
-                driver: "erc20",
+                platform: "erc20legacy-mumbai-tglm",
+                driver: "erc20legacy",
                 token: "tGLM",
             },
         );
         erc20.insert(
             NetworkName::Polygon.into(),
             PaymentPlatform {
-                platform: "erc20-polygon-glm",
-                driver: "erc20",
+                platform: "erc20legacy-polygon-glm",
+                driver: "erc20legacy",
                 token: "GLM",
             },
         );
@@ -104,47 +104,47 @@ lazy_static! {
         erc20next.insert(
             NetworkName::Mainnet.into(),
             PaymentPlatform {
-                platform: "erc20next-mainnet-glm",
-                driver: "erc20next",
+                platform: "erc20-mainnet-glm",
+                driver: "erc20",
                 token: "GLM",
             },
         );
         erc20next.insert(
             NetworkName::Rinkeby.into(),
             PaymentPlatform {
-                platform: "erc20next-rinkeby-tglm",
-                driver: "erc20next",
+                platform: "erc20-rinkeby-tglm",
+                driver: "erc20",
                 token: "tGLM",
             },
         );
         erc20next.insert(
             NetworkName::Goerli.into(),
             PaymentPlatform {
-                platform: "erc20next-goerli-tglm",
-                driver: "erc20next",
+                platform: "erc20-goerli-tglm",
+                driver: "erc20",
                 token: "tGLM",
             },
         );
         erc20next.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
-                platform: "erc20next-mumbai-tglm",
-                driver: "erc20next",
+                platform: "erc20-mumbai-tglm",
+                driver: "erc20",
                 token: "tGLM",
             },
         );
         erc20next.insert(
             NetworkName::Polygon.into(),
             PaymentPlatform {
-                platform: "erc20next-polygon-glm",
-                driver: "erc20next",
+                platform: "erc20-polygon-glm",
+                driver: "erc20",
                 token: "GLM",
             },
         );
 
         PaymentDriver {
             platforms: erc20next,
-            name: "erc20next",
+            name: "erc20",
         }
     };
     pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ZKSYNC_DRIVER, &ERC20_DRIVER];
