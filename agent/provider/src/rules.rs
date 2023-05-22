@@ -55,9 +55,6 @@ impl RulesManager {
             whitelist,
         };
 
-        // Config files can be modified so add verification of config correctness to make sure that:
-        // - Outbound Partner rule can be assigned only to Golem certificates
-        // - Outbound Audited Payload rule can be assigned for both Golem and X509 certificates
         manager.remove_dangling_rules()?;
 
         Ok(manager)
@@ -245,6 +242,7 @@ impl RulesManager {
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
+    /// Removes all outbound rules that are not matching any certificate in keystore.
     fn remove_dangling_rules(&self) -> Result<()> {
         let keystore_cert_ids = self.keystore.list_ids();
         let removed_rules =
