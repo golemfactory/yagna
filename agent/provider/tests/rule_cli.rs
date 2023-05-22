@@ -153,7 +153,7 @@ fn rule_set_should_fail_on_unsupported_certificate(rule: &str, mode: &str) {
         .stderr;
 
     let stderr = from_utf8(&stderr).unwrap();
-    let expected = regex::Regex::new("Error: Failed to set .* mode for certificate 25b9430c. .* mode can be set only for Golem certificate.\n").unwrap();
+    let expected = regex::Regex::new("Error: Failed to set partner mode for certificate 25b9430c. .* mode can be set only for Golem certificate.\n").unwrap();
 
     assert!(expected.is_match(stderr));
 }
@@ -241,7 +241,6 @@ fn rule_set_with_import_golem_cert_should_add_cert_to_keystore_and_to_rulestore(
 #[test_case("audited-payload", "none")]
 #[test_case("audited-payload", "whitelist")]
 #[serial_test::serial]
-// #[ignore] // NYI
 fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to_rulestore(
     rule: &str,
     mode: &str,
