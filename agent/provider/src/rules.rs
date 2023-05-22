@@ -247,30 +247,36 @@ impl RulesManager {
 
     fn remove_dangling_rules(&self) -> Result<()> {
         let keystore_cert_ids = self.keystore.list_ids();
+        let removed_rules =
+            self.remove_partner_and_audited_payload_rules_not_matching_any_cert(&keystore_cert_ids);
 
-        let mut rulestore = self.rulestore.config.write().unwrap();
-
-        let deleted_partner_rules = Self::remove_rules_not_matching_any_cert(
-            &mut rulestore.outbound.partner,
-            &keystore_cert_ids,
-        );
-        let deleted_audited_payload_rules = Self::remove_rules_not_matching_any_cert(
-            &mut rulestore.outbound.audited_payload,
-            &keystore_cert_ids,
-        );
-        // without dropping lock self.rulestore.save() will not work
-        drop(rulestore);
-
-        if deleted_partner_rules.is_empty() && deleted_audited_payload_rules.is_empty() {
+        if removed_rules.partner.is_empty() && removed_rules.partner.is_empty() {
             return Ok(());
         }
-        if !deleted_partner_rules.is_empty() {
-            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Partner rules were removed: {:?}", deleted_partner_rules);
+        if !removed_rules.partner.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Partner rules were removed: {:?}", removed_rules.partner);
         }
-        if !deleted_audited_payload_rules.is_empty() {
-            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Audited-Payload rules were removed: {:?}", deleted_audited_payload_rules);
+        if !removed_rules.audited_payload.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Audited-Payload rules were removed: {:?}", removed_rules.audited_payload);
         }
         self.rulestore.save()
+    }
+
+    fn remove_partner_and_audited_payload_rules_not_matching_any_cert(
+        &self,
+        cert_ids: &[String],
+    ) -> RemovedRules {
+        let mut rulestore = self.rulestore.config.write().unwrap();
+        let removed_partner_rules =
+            Self::remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
+        let removed_audited_payload_rules = Self::remove_rules_not_matching_any_cert(
+            &mut rulestore.outbound.audited_payload,
+            cert_ids,
+        );
+        RemovedRules {
+            partner: removed_partner_rules,
+            audited_payload: removed_audited_payload_rules,
+        }
     }
 
     fn remove_rules_not_matching_any_cert(
@@ -447,6 +453,11 @@ impl RulesManager {
             false
         }
     }
+}
+
+struct RemovedRules {
+    partner: Vec<String>,
+    audited_payload: Vec<String>,
 }
 
 fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
