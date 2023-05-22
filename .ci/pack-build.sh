@@ -11,6 +11,7 @@ not_empty() {
 
 not_empty "$GITHUB_REF" GITHUB_REF
 not_empty "$OS_NAME" OS_NAME
+not_empty "$GVMKIT_BUILD_DIR" GVMKIT_BUILD_DIR
 
 
 if [ "$OS_NAME" = "ubuntu" ]; then
@@ -43,12 +44,19 @@ generate_asset() {
   for bin in $bins; do
     cp "target/${target}release/${bin}${exe}" "$TARGET_DIR/"
   done
+
   if test -n "$lib_bins"; then
     mkdir -p "$TARGET_DIR/plugins"
     for bin in $lib_bins; do
       cp "target/${target}release/${bin}${exe}" "$TARGET_DIR/plugins"
     done
   fi
+
+  if [ $asset_type = "requestor" ]; then
+    strip -x ${GVMKIT_BUILD_DIR}/gvmkit-build${exe}
+    cp "${GVMKIT_BUILD_DIR}/gvmkit-build${exe}" "$TARGET_DIR/"
+  fi
+
   if [ "$OS_NAME" = "windows" ]; then
     echo "::set-output name=${asset_type}Artifact::golem-${asset_type}-${OS_NAME}-${TAG_NAME}.zip"
     echo "::set-output name=${asset_type}Media::application/zip"
