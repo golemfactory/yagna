@@ -245,8 +245,7 @@ impl RulesManager {
     /// Removes all outbound rules that are not matching any certificate in keystore.
     fn remove_dangling_rules(&self) -> Result<()> {
         let keystore_cert_ids = self.keystore.list_ids();
-        let removed_rules =
-            self.remove_partner_and_audited_payload_rules_not_matching_any_cert(&keystore_cert_ids);
+        let removed_rules = self.remove_rules_not_matching_any_cert(&keystore_cert_ids);
 
         if removed_rules.partner.is_empty() && removed_rules.partner.is_empty() {
             return Ok(());
@@ -260,36 +259,16 @@ impl RulesManager {
         self.rulestore.save()
     }
 
-    fn remove_partner_and_audited_payload_rules_not_matching_any_cert(
-        &self,
-        cert_ids: &[String],
-    ) -> RemovedRules {
+    fn remove_rules_not_matching_any_cert(&self, cert_ids: &[String]) -> RemovedRules {
         let mut rulestore = self.rulestore.config.write().unwrap();
         let removed_partner_rules =
-            Self::remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
-        let removed_audited_payload_rules = Self::remove_rules_not_matching_any_cert(
-            &mut rulestore.outbound.audited_payload,
-            cert_ids,
-        );
+            remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
+        let removed_audited_payload_rules =
+            remove_rules_not_matching_any_cert(&mut rulestore.outbound.audited_payload, cert_ids);
         RemovedRules {
             partner: removed_partner_rules,
             audited_payload: removed_audited_payload_rules,
         }
-    }
-
-    fn remove_rules_not_matching_any_cert(
-        rules: &mut HashMap<String, CertRule>,
-        cert_ids: &[String],
-    ) -> Vec<String> {
-        let mut deleted_rules = vec![];
-        rules.retain(|cert_id, _| {
-            cert_ids
-                .contains(cert_id)
-                .not()
-                .then(|| deleted_rules.push(cert_id.clone()))
-                .is_none()
-        });
-        deleted_rules
     }
 
     fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
@@ -453,9 +432,26 @@ impl RulesManager {
     }
 }
 
+fn remove_rules_not_matching_any_cert(
+    rules: &mut HashMap<String, CertRule>,
+    cert_ids: &[String],
+) -> Vec<String> {
+    let mut deleted_rules = vec![];
+    rules.retain(|cert_id, _| {
+        cert_ids
+            .contains(cert_id)
+            .not()
+            .then(|| deleted_rules.push(cert_id.clone()))
+            .is_none()
+    });
+    deleted_rules
+}
+
+type RemovedRulesIds = Vec<String>;
+
 struct RemovedRules {
-    partner: Vec<String>,
-    audited_payload: Vec<String>,
+    partner: RemovedRulesIds,
+    audited_payload: RemovedRulesIds,
 }
 
 fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
