@@ -3,7 +3,7 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509CertData, X509Keystore, X509KeystoreBuilder, X509KeystoreManager},
 };
 use chrono::SecondsFormat;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
@@ -115,6 +115,7 @@ pub trait Keystore: KeystoreClone + Send {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
+    fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>>;
 }
 
 trait KeystoreBuilder<K: Keystore> {
@@ -140,6 +141,14 @@ impl Clone for Box<dyn Keystore> {
     fn clone(&self) -> Box<dyn Keystore> {
         self.clone_box()
     }
+}
+
+pub trait SignatureVerifier {
+    /// Signature digest algorithm
+    fn with_alg(&mut self, alg: &str) -> Box<&mut dyn SignatureVerifier>;
+    /// Verifies `signature` of given `data`.
+    /// Returns Ids of certificates issuing signing certificate starting from root-most certificate.
+    fn verify(&self, data: &str, signature: &str) -> anyhow::Result<Vec<String>>;
 }
 
 #[derive(Clone)]
@@ -199,20 +208,16 @@ impl CompositeKeystore {
             .collect::<Vec<String>>()
     }
 
+    pub fn add_x509_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.x509_keystore.add(add)
+    }
+
     pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         self.golem_keystore.add(add)
     }
 
-    pub fn verify_x509_signature(
-        &self,
-        cert: impl AsRef<str>,
-        sig: impl AsRef<str>,
-        sig_alg: impl AsRef<str>,
-        data: impl AsRef<str>,
-    ) -> anyhow::Result<()> {
-        self.x509_keystore
-            .keystore
-            .verify_signature(cert, sig, sig_alg, data)
+    pub fn x509_keystore(&self) -> &X509Keystore {
+        &self.x509_keystore.keystore
     }
 
     pub fn verify_node_descriptor(
@@ -260,6 +265,20 @@ impl Keystore for CompositeKeystore {
 
     fn list(&self) -> Vec<Cert> {
         self.list_sorted().into_iter().collect()
+    }
+
+    fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>> {
+        let mut err_msgs = vec![];
+        for keystore in self.keystores() {
+            match keystore.verifier(cert) {
+                Ok(verifier) => return Ok(verifier),
+                Err(err) => err_msgs.push(err),
+            }
+        }
+        let err_msgs = err_msgs
+            .iter()
+            .fold(String::new(), |s, c| s + &c.to_string() + " ; ");
+        anyhow::bail!("Failed to verify certificate: {err_msgs}.")
     }
 }
 

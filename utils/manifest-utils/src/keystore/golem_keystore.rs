@@ -186,4 +186,8 @@ impl Keystore for GolemKeystore {
         }
         certificates
     }
+
+    fn verifier(&self, _: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
+        anyhow::bail!("NYI")
+    }
 }
