@@ -18,7 +18,7 @@ ya-manifest-utils = { version = "0.2" }
 ya-client = { version = "0.7", features = ['cli'] }
 ya-client-model = "0.5"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.8", features = ['activity', 'payment'] }
+ya-core-model = { version = "^0.9", features = ['activity', 'payment'] }
 ya-file-logging = "0.1"
 ya-utils-actix = "0.2"
 ya-utils-cli = "0.1"
