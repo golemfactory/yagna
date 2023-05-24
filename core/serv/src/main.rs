@@ -505,8 +505,9 @@ impl ServiceCommand {
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
                     "RUST_LOG",
-                    env::var("RUST_LOG")
-                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
+                    env::var("RUST_LOG").unwrap_or_else(|_| {
+                        "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
+                    }),
                 );
 
                 //this force_debug flag sets default log level to debug

@@ -6,10 +6,10 @@ automatic-recover = false
 [chain.rinkeby]
 chain-name = "Rinkeby"
 chain-id = 4
-rpc-endpoints = ["http://1.geth.testnet.golem.network:55555"]
+rpc-endpoints = ["http://geth.testnet.golem.network:55555"]
 currency-symbol = "tETH"
 priority-fee = 1.5111
-max-fee-per-gas = 500.0
+max-fee-per-gas = 20.0
 gas-left-warning-limit = 1000000
 transaction-timeout = 100
 token = { address = "0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE", symbol = "tGLM", max-at-once = 10 }

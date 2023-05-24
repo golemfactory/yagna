@@ -12,6 +12,7 @@ use ethereum_types::H160;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
+use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -216,7 +217,7 @@ impl PaymentDriver for Erc20NextDriver {
             "Cannot find GLM address for chain {chain_id}"
         )))?;
 
-        let payment_id = "todo".to_string();
+        let payment_id = Uuid::new_v4().to_simple().to_string();
         let token_transfer = create_token_transfer(
             sender,
             receiver,
@@ -274,7 +275,7 @@ impl PaymentDriver for Erc20NextDriver {
             "Cannot find GLM address for chain {chain_id}"
         )))?;
 
-        let payment_id = "todo".to_string();
+        let payment_id = Uuid::new_v4().to_simple().to_string();
         let token_transfer = create_token_transfer(
             sender,
             receiver,
