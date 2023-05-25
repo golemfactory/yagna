@@ -1,7 +1,7 @@
 [package]
 name = "ya-runtime-api"
 description = "Communication API between the Runtime and ExeUnit Supervisor. Provides server implementation for Runtime and client implementation for Supervisor."
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 license = "GPL-3.0"
