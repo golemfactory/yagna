@@ -1,6 +1,7 @@
 use crate::cli::println_conditional;
 use crate::rules::{CertWithRules, RulesManager};
 use crate::startup_config::ProviderConfig;
+use chrono::{DateTime, SecondsFormat, Utc};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -84,6 +85,8 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let AddResponse {
         added, duplicated, ..
     } = rules.keystore.add(&add.into())?;
+
+    log_expired_certs(added.iter().chain(duplicated.iter()));
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
@@ -223,8 +226,9 @@ impl CertTableBuilder {
 
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
+            let not_after_formatted = date_to_str(&cert.cert.not_after());
             values
-                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), cert.cert.not_after(), cert.cert.subject(), cert.format_outbound_rules()] });
+                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), not_after_formatted, cert.cert.subject(), cert.format_outbound_rules()] });
         }
 
         let columns = vec![
@@ -250,5 +254,23 @@ impl CertTable {
         let output = CommandOutput::from(self.table);
         output.print(config.json)?;
         Ok(())
+    }
+}
+
+fn date_to_str(date: &DateTime<Utc>) -> String {
+    date.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn log_expired_certs<'a>(certs: impl Iterator<Item = &'a Cert>) {
+    let now = Utc::now();
+    for cert in certs {
+        if cert.not_after() < now {
+            log::warn!(
+                "{} certificate expired on {},\nfingerprint: {}",
+                cert.type_name(),
+                date_to_str(&cert.not_after()),
+                cert.id()
+            );
+        }
     }
 }

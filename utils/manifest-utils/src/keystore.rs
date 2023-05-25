@@ -5,7 +5,7 @@ use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
     x509_keystore::{X509CertData, X509Keystore, X509KeystoreBuilder, X509KeystoreManager},
 };
-use chrono::SecondsFormat;
+use chrono::{DateTime, Utc};
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use serde_json::Value;
@@ -37,12 +37,12 @@ impl Cert {
     }
 
     /// Not_after date in RFC3339 format.
-    pub fn not_after(&self) -> String {
-        let not_after = match self {
+    pub fn not_after(&self) -> DateTime<Utc> {
+        match self {
             Cert::X509(cert) => cert.not_after,
             Cert::Golem { id: _, cert } => cert.validity_period.not_after,
-        };
-        not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
+        }
+        // not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
     }
 
     /// Subject displayed Json value.
@@ -115,6 +115,8 @@ pub trait Keystore: KeystoreClone + Send {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
+    /// Creates data signature verifier for given certificate.
+    /// Returns error if certificate is invalid.
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>>;
 }
 
