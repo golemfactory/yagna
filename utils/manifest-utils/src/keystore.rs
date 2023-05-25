@@ -149,7 +149,7 @@ pub trait SignatureVerifier {
     /// Signature digest algorithm
     fn with_alg(&mut self, alg: &str) -> Box<&mut dyn SignatureVerifier>;
     /// Verifies `signature` of given `data`.
-    /// Returns Ids of certificates issuing signing certificate starting from root-most certificate.
+    /// On success returns chain of certificates Ids (with signer Id at the end).
     fn verify(&self, data: &str, signature: &str) -> anyhow::Result<Vec<String>>;
 }
 
