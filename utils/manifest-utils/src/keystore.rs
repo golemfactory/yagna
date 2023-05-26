@@ -37,12 +37,19 @@ impl Cert {
     }
 
     /// Not_after date in RFC3339 format.
+    pub fn not_before(&self) -> DateTime<Utc> {
+        match self {
+            Cert::X509(cert) => cert.not_before,
+            Cert::Golem { id: _, cert } => cert.validity_period.not_before,
+        }
+    }
+
+    /// Not_after date in RFC3339 format.
     pub fn not_after(&self) -> DateTime<Utc> {
         match self {
             Cert::X509(cert) => cert.not_after,
             Cert::Golem { id: _, cert } => cert.validity_period.not_after,
         }
-        // not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
     }
 
     /// Subject displayed Json value.

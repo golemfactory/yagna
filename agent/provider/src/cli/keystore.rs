@@ -86,7 +86,7 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         added, duplicated, ..
     } = rules.keystore.add(&add.into())?;
 
-    log_expired_certs(added.iter().chain(duplicated.iter()));
+    log_not_valid_yet_certs(added.iter().chain(duplicated.iter()));
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
@@ -261,14 +261,14 @@ fn date_to_str(date: &DateTime<Utc>) -> String {
     date.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-fn log_expired_certs<'a>(certs: impl Iterator<Item = &'a Cert>) {
+fn log_not_valid_yet_certs<'a>(certs: impl Iterator<Item = &'a Cert>) {
     let now = Utc::now();
     for cert in certs {
-        if cert.not_after() < now {
+        if cert.not_before() > now {
             log::warn!(
-                "{} certificate expired on {},\nfingerprint: {}",
+                "{} certificate will not be valid before {},\nfingerprint: {}",
                 cert.type_name(),
-                date_to_str(&cert.not_after()),
+                date_to_str(&cert.not_before()),
                 cert.id()
             );
         }

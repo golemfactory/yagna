@@ -9,8 +9,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use golem_certificate::validator::validated_data::ValidatedCertificate;
 use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
+use golem_certificate::validator::{
+    validated_data::ValidatedCertificate, validation_checks::ValidationChecks,
+};
 
 pub const CERT_NAME: &str = "Golem";
 
@@ -64,7 +66,10 @@ fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)>
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_certificate_str(cert_content)?;
+    let cert = golem_certificate::validator::validate_certificate_str_selective(
+        cert_content,
+        ValidationChecks::All - ValidationChecks::Timestamp,
+    )?;
     let id = cert
         .certificate_chain_fingerprints
         .get(0)
@@ -126,6 +131,11 @@ impl Keystore for GolemKeystore {
                 Ok((id, cert)) => {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
+                        continue;
+                    }
+                    if cert.validity_period.not_after > chrono::Utc::now() {
+                        log::error!("Golem certificate with id: {id} expired on {}.", cert.validity_period.not_after);
+                        invalid.push(path.clone());
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);

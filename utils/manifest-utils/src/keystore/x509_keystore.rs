@@ -30,6 +30,7 @@ pub const CERT_NAME: &str = "X.509";
 #[derive(Eq, PartialEq)]
 pub struct X509CertData {
     pub id: String,
+    pub not_before: DateTime<Utc>,
     pub not_after: DateTime<Utc>,
     pub subject: BTreeMap<String, String>,
 }
@@ -37,6 +38,7 @@ pub struct X509CertData {
 impl X509CertData {
     pub fn create(cert: &X509Ref) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
+        let not_before = asn1_time_to_date_time(cert.not_before())?;
         let not_after = asn1_time_to_date_time(cert.not_after())?;
         let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
@@ -45,6 +47,7 @@ impl X509CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
         let data = X509CertData {
             id,
+            not_before,
             not_after,
             subject,
         };
@@ -126,8 +129,15 @@ impl X509KeystoreManager {
                         continue;
                     }
                     let file_certs_len = file_certs.len();
+                    let now = chrono::Utc::now();
                     for file_cert in file_certs {
                         let id = cert_to_id(&file_cert)?;
+                        let not_after =  asn1_time_to_date_time(file_cert.not_after())?;
+                        if not_after > now {
+                            log::error!("X509 certificate with id: {id} expired on {not_after}.");
+                            invalid.push(cert_path.clone());
+                            continue;
+                        }
                         if !self.ids.contains(&id) && !loaded.contains_key(&id) {
                             new_certs.push(file_cert.clone());
                             loaded.insert(id, file_cert);
