@@ -350,6 +350,7 @@ pub fn default_protocols() -> Vec<String> {
 mod tests {
     use super::*;
     use chrono::Duration;
+    use base64::{engine::general_purpose, Engine as _};
 
     #[test]
     fn serialize_manifest() {
@@ -401,6 +402,6 @@ mod tests {
         let serialized = serde_json::to_string(&manifest).unwrap();
 
         println!("{}", serialized);
-        println!("{}", base64::encode(serialized));
+        println!("{}", general_purpose::STANDARD.encode(serialized));
     }
 }
