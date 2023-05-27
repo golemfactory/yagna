@@ -1,6 +1,6 @@
 [package]
 name = "ya-manifest-utils"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -20,7 +20,7 @@ bench = false
 schema = ["schemars"]
 
 [dependencies]
-ya-agreement-utils = "0.5"
+ya-agreement-utils = "0.4.1"
 ya-utils-path = "0.1"
 ya-client-model = "0.5"
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate", rev = "ca411e003aa0ec56b49f52f193a2030b06543eff" }

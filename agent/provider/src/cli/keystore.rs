@@ -83,7 +83,10 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         &config.cert_dir_path()?,
     )?;
     let AddResponse {
-        added, duplicated, ..
+        added,
+        duplicated,
+        invalid,
+        ..
     } = rules.keystore.add(&add.into())?;
 
     log_not_valid_yet_certs(added.iter().chain(duplicated.iter()));
@@ -94,8 +97,12 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     }
 
     if !duplicated.is_empty() && !config.json {
-        println!("Certificates already loaded to keystore:");
+        println_conditional(&config, "Certificates already loaded to keystore:");
         print_cert_list(&config, rules.add_rules_information_to_certs(duplicated))?;
+    }
+
+    if !invalid.is_empty() && !config.json {
+        print_invalid_cert_files_list(&config, &invalid)?;
     }
     Ok(())
 }
@@ -154,6 +161,20 @@ fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertWithRules>) -> a
 
     table_builder.build().print(config)?;
     Ok(())
+}
+
+fn print_invalid_cert_files_list(
+    config: &ProviderConfig,
+    cert_files: &[PathBuf],
+) -> anyhow::Result<()> {
+    let columns = vec!["Invalid certificate files".into()];
+    let values = cert_files
+        .iter()
+        .flat_map(|path| path.to_str())
+        .map(|path| serde_json::json!([path]))
+        .collect();
+    let table = ResponseTable { columns, values };
+    CertTable { table }.print(config)
 }
 
 fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {

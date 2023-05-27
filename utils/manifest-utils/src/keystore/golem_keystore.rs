@@ -132,9 +132,8 @@ impl Keystore for GolemKeystore {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
-                    }
-                    if cert.validity_period.not_after > chrono::Utc::now() {
-                        log::error!("Golem certificate with id: {id} expired on {}.", cert.validity_period.not_after);
+                    } else if cert.validity_period.not_after < chrono::Utc::now() {
+                        log::error!("Expired Golem certificate {:?}.", cert.validity_period);
                         invalid.push(path.clone());
                         continue;
                     }
@@ -151,7 +150,7 @@ impl Keystore for GolemKeystore {
                     added.push(Cert::Golem { id, cert })
                 }
                 Err(err) => {
-                    log::warn!("Unable to parse Golem certificate. Err: {}", err);
+                    log::error!("Unable to parse Golem certificate. Err: {}", err);
                     invalid.push(path.clone());
                 }
             }

@@ -127,17 +127,14 @@ impl X509KeystoreManager {
                 Ok(file_certs) => {
                     if file_certs.is_empty() {
                         continue;
+                    } else if is_chain_expired(&file_certs) {
+                        log::error!("Expired X509 certificate chain: {:?}", file_certs);
+                        invalid.push(cert_path.clone());
+                        continue;
                     }
                     let file_certs_len = file_certs.len();
-                    let now = chrono::Utc::now();
                     for file_cert in file_certs {
                         let id = cert_to_id(&file_cert)?;
-                        let not_after =  asn1_time_to_date_time(file_cert.not_after())?;
-                        if not_after > now {
-                            log::error!("X509 certificate with id: {id} expired on {not_after}.");
-                            invalid.push(cert_path.clone());
-                            continue;
-                        }
                         if !self.ids.contains(&id) && !loaded.contains_key(&id) {
                             new_certs.push(file_cert.clone());
                             loaded.insert(id, file_cert);
@@ -192,6 +189,13 @@ impl X509KeystoreManager {
         }
         Ok(())
     }
+}
+
+fn is_chain_expired(cert_chain: &[X509]) -> bool {
+    let now = chrono::Utc::now();
+    cert_chain
+        .iter()
+        .any(|cert| asn1_time_to_date_time(cert.not_after()).unwrap() < now)
 }
 
 fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {

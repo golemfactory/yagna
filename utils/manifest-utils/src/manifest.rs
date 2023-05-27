@@ -349,8 +349,8 @@ pub fn default_protocols() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
     use base64::{engine::general_purpose, Engine as _};
+    use chrono::Duration;
 
     #[test]
     fn serialize_manifest() {
