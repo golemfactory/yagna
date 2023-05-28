@@ -108,16 +108,14 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
 fn test_add_and_remove_certificates() {
     let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
     add(
-        // vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
-        vec!["foo_req.cert.pem"],
-        // vec![ "partner-certificate.signed.json"],
+        vec!["foo_req.cert.pem", "partner-certificate.signed.json"],
         &resource_cert_dir,
         &cert_dir,
     );
 
     let result = list_certificates_command(&cert_dir).unwrap();
     assert!(result.contains_key("cb16a2ed"));
-    // assert!(result.contains_key("25b9430c"));
+    assert!(result.contains_key("25b9430c"));
     assert_eq!(result.len(), 2);
 
     remove(&cert_dir, vec!["cb16a2ed", "25b9430c"]);
@@ -130,34 +128,30 @@ fn test_add_and_remove_certificates() {
 #[test]
 fn test_add_not_yet_valid_golem_cert_should_succeed() {
     let result = add_and_list(vec!["golem.cert.not_yet_valid.signed.json"]);
-    assert_eq!(read_not_after(&result, "ea88cfd7"), "2187-10-31T00:00:00Z");
+    assert_eq!(read_not_after(&result, "97958fc8"), "2187-10-31T00:00:00Z");
 }
 
 #[serial]
 #[test]
 fn test_add_not_yet_valid_x509_cert_should_succeed() {
     let result = add_and_list(vec!["not_yet_valid.pem"]);
-    assert_eq!(read_not_after(&result, "f519cd14"), "2106-10-29T23:03:13Z");
+    assert_eq!(read_not_after(&result, "837961b3"), "2106-10-29T23:00:39Z");
 }
 
 #[serial]
 #[test]
 fn test_add_expired_golem_cert_should_fail() {
-    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
-    let mut cmd = add_command(
-        vec!["golem.cert.expired.signed.json"],
-        &resource_cert_dir,
-        &cert_dir,
-    );
-    cmd.assert().failure();
+    let result = add_and_list(vec!["golem.cert.expired.signed.json"]);
+    // Test uses JSON output, which returns only added certificates. In this case none.
+    assert!(result.is_empty());
 }
 
 #[serial]
 #[test]
 fn test_add_expired_x509_cert_should_fail() {
-    let (resource_cert_dir, cert_dir) = CERT_TEST_RESOURCES.init_cert_dirs();
-    let mut cmd = add_command(vec!["expired.pem"], &resource_cert_dir, &cert_dir);
-    cmd.assert().failure();
+    let result = add_and_list(vec!["expired.pem"]);
+    // Test uses JSON output, which returns only added certificates. In this case none.
+    assert_eq!(result, HashMap::new());
 }
 
 #[serial]
@@ -293,9 +287,6 @@ fn read_outbound_rules(certs: &HashMap<String, Value>, id: &str) -> String {
 }
 
 fn read_field(certs: &HashMap<String, Value>, id: &str, field: &str) -> String {
-    for id in certs {
-        println!("{:?}", id);
-    }
     let field = certs[id].get(field).unwrap();
     if field.is_string() {
         // Calling `to_string` would result in quoted string.
