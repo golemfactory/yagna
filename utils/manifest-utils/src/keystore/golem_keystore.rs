@@ -10,8 +10,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
 use golem_certificate::validator::validated_data::ValidatedCertificate;
+use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
 
 pub const CERT_NAME: &str = "Golem";
 
@@ -63,15 +63,15 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
 /// # Arguments
 /// * `cert_path` path to Golem certificate file
 /// * `timestamp` optional timestamp to verify validity
-fn read_cert(cert_path: &Path, timestamp: Option<DateTime<Utc>>) -> anyhow::Result<(String, ValidatedCertificate)> {
+fn read_cert(
+    cert_path: &Path,
+    timestamp: Option<DateTime<Utc>>,
+) -> anyhow::Result<(String, ValidatedCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_certificate_str(
-        cert_content,
-        timestamp,
-    )?;
+    let cert = golem_certificate::validator::validate_certificate_str(cert_content, timestamp)?;
     let id = cert
         .certificate_chain_fingerprints
         .get(0)
