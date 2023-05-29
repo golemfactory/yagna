@@ -674,10 +674,8 @@ fn create_demand_json(payload: Option<Payload>) -> Value {
                     "!exp": {
                         "gap-31": {
                             "v0": {
-                                "1": {
-                                    "node": {
-                                        "descriptor": p.node_descriptor
-                                    }
+                                "node": {
+                                    "descriptor": p.node_descriptor
                                 }
                             }
                         }
