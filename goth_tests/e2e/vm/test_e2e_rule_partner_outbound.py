@@ -63,7 +63,7 @@ async def test_e2e_rule_partner_outbound(
             DemandBuilder(requestor)
             .props_from_template(task_package = None)
             .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
-            .property("golem.node.descriptor", node_descriptor)
+            .property("golem.!exp.gap-31.v0.node.descriptor", node_descriptor)
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )
