@@ -22,7 +22,7 @@ pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
 pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
-pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.node.descriptor";
+pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.!exp.gap-31.v0.node.descriptor";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
