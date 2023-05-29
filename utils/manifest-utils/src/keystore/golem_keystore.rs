@@ -1,6 +1,7 @@
 use super::{Cert, Keystore, KeystoreBuilder};
 use crate::keystore::copy_file;
 use anyhow::anyhow;
+use chrono::{DateTime, Utc};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -10,9 +11,7 @@ use std::{
 };
 
 use golem_certificate::validator::validated_data::ValidatedNodeDescriptor;
-use golem_certificate::validator::{
-    validated_data::ValidatedCertificate, validation_checks::ValidationChecks,
-};
+use golem_certificate::validator::validated_data::ValidatedCertificate;
 
 pub const CERT_NAME: &str = "Golem";
 
@@ -43,7 +42,7 @@ impl GolemKeystoreBuilder {
 
 impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     fn try_with(&mut self, cert_path: &Path) -> anyhow::Result<()> {
-        let (id, cert) = read_cert(cert_path)?;
+        let (id, cert) = read_cert(cert_path, None)?;
         let file = PathBuf::from(cert_path);
         self.certificates
             .insert(id, GolemCertificateEntry { path: file, cert });
@@ -60,15 +59,18 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     }
 }
 
-// Return certificate with its id
-fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)> {
+/// Returns validated certificate with its id.
+/// # Arguments
+/// * `cert_path` path to Golem certificate file
+/// * `timestamp` optional timestamp to verify validity
+fn read_cert(cert_path: &Path, timestamp: Option<DateTime<Utc>>) -> anyhow::Result<(String, ValidatedCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_certificate_str_selective(
+    let cert = golem_certificate::validator::validate_certificate_str(
         cert_content,
-        ValidationChecks::All - ValidationChecks::Timestamp,
+        timestamp,
     )?;
     let id = cert
         .certificate_chain_fingerprints
@@ -102,7 +104,7 @@ impl Keystore for GolemKeystore {
         for dir_entry in cert_dir {
             let file = dir_entry?;
             let path = file.path();
-            match read_cert(&path) {
+            match read_cert(&path, None) {
                 Ok((id, cert)) => {
                     let cert = GolemCertificateEntry { path, cert };
                     certificates.insert(id, cert);
@@ -127,7 +129,7 @@ impl Keystore for GolemKeystore {
             .expect("Can't read Golem keystore");
         let mut leaf_cert_ids = Vec::new();
         for path in add.certs.iter() {
-            match read_cert(path.as_path()) {
+            match read_cert(path.as_path(), None) {
                 Ok((id, cert)) => {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
