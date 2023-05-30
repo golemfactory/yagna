@@ -3,6 +3,7 @@ extern crate serial_test;
 
 use std::{fs, path::PathBuf};
 
+use base64::{engine::general_purpose, Engine as _};
 use test_case::test_case;
 use ya_manifest_test_utils::*;
 use ya_manifest_utils::keystore::x509_keystore::X509Keystore;
@@ -79,7 +80,7 @@ fn prepare_request_parameterized(
             let mut cert = resource_cert_dir;
             cert.push(cert_file);
             let cert = fs::read_to_string(cert).expect("Can read certificate file");
-            base64::encode(cert)
+            general_purpose::STANDARD.encode(cert)
         }
         None => "".to_string(),
     };
