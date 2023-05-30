@@ -36,7 +36,6 @@ impl Cert {
         }
     }
 
-    /// Not_after date in RFC3339 format.
     pub fn not_before(&self) -> DateTime<Utc> {
         match self {
             Cert::X509(cert) => cert.not_before,
@@ -44,7 +43,6 @@ impl Cert {
         }
     }
 
-    /// Not_after date in RFC3339 format.
     pub fn not_after(&self) -> DateTime<Utc> {
         match self {
             Cert::X509(cert) => cert.not_after,
@@ -61,6 +59,7 @@ impl Cert {
         }
     }
 
+    /// Certificate type name
     pub fn type_name(&self) -> &str {
         match self {
             Cert::X509(_) => x509_keystore::CERT_NAME,
