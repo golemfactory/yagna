@@ -339,6 +339,56 @@ pub struct InetOut {
     pub urls: Option<Vec<Url>>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OutboundAccess {
+    Urls(Vec<Url>),
+    Unrestricted { urls: bool },
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Dupa {
+    #[serde(flatten)]
+    access: Option<OutboundAccess>,
+}
+
+#[cfg(test)]
+mod testsdupa {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn test_1() {
+        let json = json!({"urls": ["https://example.net/"]});
+        let d = Dupa {
+            access: Some(OutboundAccess::Urls(
+                [Url::parse("https://example.net/").unwrap()].into(),
+            )),
+        };
+
+        assert_eq!(serde_json::to_value(&d).unwrap(), json);
+        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
+    }
+
+    #[test]
+    fn test_2() {
+        let json = json!({"unrestricted": {"urls": true}});
+        let d = Dupa {
+            access: Some(OutboundAccess::Unrestricted { urls: true }),
+        };
+
+        assert_eq!(serde_json::to_value(&d).unwrap(), json);
+        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
+        //out.urls : List[String]
+        //out.unrestricted.urls : true
+        //out
+    }
+}
+
 pub fn default_protocols() -> Vec<String> {
     ["http", "https", "ws", "wss"]
         .iter()
