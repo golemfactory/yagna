@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Not;
 use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use strum;
@@ -341,10 +343,80 @@ pub struct InetOut {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", untagged)]
 pub enum OutboundAccess {
-    Urls(Vec<Url>),
-    Unrestricted { urls: bool },
+    Urls(Urls),
+    Unrestricted(Unrestricted),
+}
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Unrestricted {}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Urls {
+    // #[serde(flatten)]
+    urls: Vec<Url>,
+}
+
+impl Serialize for Unrestricted {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(1))?;
+
+        map.serialize_entry("unrestricted", &HashMap::from([("urls", true)]))?;
+
+        map.end()
+    }
+}
+
+struct UnrestrictedVisitor;
+
+impl<'de> serde::de::Visitor<'de> for UnrestrictedVisitor {
+    type Value = Unrestricted;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("command string or a json string with a command object")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        println!("visit map");
+
+        if let Some((k, v)) = map.next_entry::<String, HashMap<String, bool>>()? {
+            if k == "unrestricted".to_string() {
+                if let Some(value) = v.get("urls") {
+                    if *value == true {
+                        return Ok(Unrestricted {});
+                    }
+                }
+
+                todo!()
+            } else {
+                println!("No urls");
+                todo!()
+            }
+        } else {
+            println!("No entry");
+            todo!()
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Unrestricted {
+    fn deserialize<D>(deserializer: D) -> Result<Unrestricted, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        println!("DESERIALIZE MAP");
+        deserializer.deserialize_map(UnrestrictedVisitor)
+    }
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -365,9 +437,9 @@ mod testsdupa {
     fn test_1() {
         let json = json!({"urls": ["https://example.net/"]});
         let d = Dupa {
-            access: Some(OutboundAccess::Urls(
-                [Url::parse("https://example.net/").unwrap()].into(),
-            )),
+            access: Some(OutboundAccess::Urls(Urls {
+                urls: [Url::parse("https://example.net/").unwrap()].into(),
+            })),
         };
 
         assert_eq!(serde_json::to_value(&d).unwrap(), json);
@@ -378,14 +450,19 @@ mod testsdupa {
     fn test_2() {
         let json = json!({"unrestricted": {"urls": true}});
         let d = Dupa {
-            access: Some(OutboundAccess::Unrestricted { urls: true }),
+            access: Some(OutboundAccess::Unrestricted(Unrestricted {})),
         };
 
         assert_eq!(serde_json::to_value(&d).unwrap(), json);
         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-        //out.urls : List[String]
-        //out.unrestricted.urls : true
-        //out
+    }
+
+    #[test]
+    fn test_3() {
+        let json = json!({"unrestricted": {"urls": false}});
+        let d = Dupa { access: None };
+
+        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
     }
 }
 
