@@ -1992,6 +1992,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "errno"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bcfec3a70f97c962c307b2d2c56e358cf1d00b558d74262b5f929ee8cc7e73a"
+dependencies = [
+ "errno-dragonfly",
+ "libc",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "errno-dragonfly"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2132,7 +2143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ef1a30ae415c3a691a4f41afddc2dbcd6d70baf338368d85ebc1e8ed92cedb9"
 dependencies = [
  "cfg-if 1.0.0",
- "rustix",
+ "rustix 0.36.8",
  "windows-sys 0.45.0",
 ]
 
@@ -2543,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -3258,7 +3269,7 @@ checksum = "22e18b0a45d56fe973d6db23972bf5bc46f988a4a2385deac9cc29572f09daef"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes",
- "rustix",
+ "rustix 0.36.8",
  "windows-sys 0.45.0",
 ]
 
@@ -3441,6 +3452,12 @@ name = "linux-raw-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef53942eb7bf7ff43a617b3e2c1c4a5ecf5944a7c1bc12d7ee39bbb15e5c1519"
 
 [[package]]
 name = "local-channel"
@@ -5299,6 +5316,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_syscall"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567664f262709473930a4bf9e51bf2ebf3348f2e748ccc50dea20646858f8f29"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "redox_users"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5530,7 +5556,21 @@ dependencies = [
  "errno 0.2.8",
  "io-lifetimes",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.1.4",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "rustix"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b24138615de35e32031d041a09032ef3487a616d901ca4db224e7d557efae2"
+dependencies = [
+ "bitflags",
+ "errno 0.3.1",
+ "io-lifetimes",
+ "libc",
+ "linux-raw-sys 0.3.8",
  "windows-sys 0.45.0",
 ]
 
@@ -6588,16 +6628,15 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.3.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
+checksum = "b9fbec84f381d5795b08656e4912bec604d162bff9291d6189a78f4c8ab87998"
 dependencies = [
  "cfg-if 1.0.0",
  "fastrand",
- "libc",
- "redox_syscall 0.2.16",
- "remove_dir_all",
- "winapi 0.3.9",
+ "redox_syscall 0.3.5",
+ "rustix 0.37.3",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -7717,13 +7756,13 @@ version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a3e1820f08b8513f676f7ab6c1f99ff312fb97b553d30ff4dd86f9f15728aa7"
 dependencies = [
- "windows_aarch64_gnullvm",
- "windows_aarch64_msvc",
- "windows_i686_gnu",
- "windows_i686_msvc",
- "windows_x86_64_gnu",
- "windows_x86_64_gnullvm",
- "windows_x86_64_msvc",
+ "windows_aarch64_gnullvm 0.42.1",
+ "windows_aarch64_msvc 0.42.1",
+ "windows_i686_gnu 0.42.1",
+ "windows_i686_msvc 0.42.1",
+ "windows_x86_64_gnu 0.42.1",
+ "windows_x86_64_gnullvm 0.42.1",
+ "windows_x86_64_msvc 0.42.1",
 ]
 
 [[package]]
@@ -7732,7 +7771,16 @@ version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75283be5efb2831d37ea142365f009c02ec203cd29a3ebecbc093d52315b66d0"
 dependencies = [
- "windows-targets",
+ "windows-targets 0.42.1",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
+dependencies = [
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -7741,13 +7789,28 @@ version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e2522491fbfcd58cc84d47aeb2958948c4b8982e9a2d8a2a35bbaed431390e7"
 dependencies = [
- "windows_aarch64_gnullvm",
- "windows_aarch64_msvc",
- "windows_i686_gnu",
- "windows_i686_msvc",
- "windows_x86_64_gnu",
- "windows_x86_64_gnullvm",
- "windows_x86_64_msvc",
+ "windows_aarch64_gnullvm 0.42.1",
+ "windows_aarch64_msvc 0.42.1",
+ "windows_i686_gnu 0.42.1",
+ "windows_i686_msvc 0.42.1",
+ "windows_x86_64_gnu 0.42.1",
+ "windows_x86_64_gnullvm 0.42.1",
+ "windows_x86_64_msvc 0.42.1",
+]
+
+[[package]]
+name = "windows-targets"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b1eb6f0cd7c80c79759c929114ef071b87354ce476d9d94271031c0497adfd5"
+dependencies = [
+ "windows_aarch64_gnullvm 0.48.0",
+ "windows_aarch64_msvc 0.48.0",
+ "windows_i686_gnu 0.48.0",
+ "windows_i686_msvc 0.48.0",
+ "windows_x86_64_gnu 0.48.0",
+ "windows_x86_64_gnullvm 0.48.0",
+ "windows_x86_64_msvc 0.48.0",
 ]
 
 [[package]]
@@ -7757,10 +7820,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9864e83243fdec7fc9c5444389dcbbfd258f745e7853198f365e3c4968a608"
 
 [[package]]
+name = "windows_aarch64_gnullvm"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91ae572e1b79dba883e0d315474df7305d12f569b400fcf90581b06062f7e1bc"
+
+[[package]]
 name = "windows_aarch64_msvc"
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c8b1b673ffc16c47a9ff48570a9d85e25d265735c503681332589af6253c6c7"
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2ef27e0d7bdfcfc7b868b317c1d32c641a6fe4629c171b8928c7b08d98d7cf3"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -7769,10 +7844,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3887528ad530ba7bdbb1faa8275ec7a1155a45ffa57c37993960277145d640"
 
 [[package]]
+name = "windows_i686_gnu"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622a1962a7db830d6fd0a69683c80a18fda201879f0f447f065a3b7467daa241"
+
+[[package]]
 name = "windows_i686_msvc"
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf4d1122317eddd6ff351aa852118a2418ad4214e6613a50e0191f7004372605"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4542c6e364ce21bf45d69fdd2a8e455fa38d316158cfd43b3ac1c5b1b19f8e00"
 
 [[package]]
 name = "windows_x86_64_gnu"
@@ -7781,16 +7868,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1040f221285e17ebccbc2591ffdc2d44ee1f9186324dd3e84e99ac68d699c45"
 
 [[package]]
+name = "windows_x86_64_gnu"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca2b8a661f7628cbd23440e50b05d705db3686f894fc9580820623656af974b1"
+
+[[package]]
 name = "windows_x86_64_gnullvm"
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "628bfdf232daa22b0d64fdb62b09fcc36bb01f05a3939e20ab73aaf9470d0463"
 
 [[package]]
+name = "windows_x86_64_gnullvm"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7896dbc1f41e08872e9d5e8f8baa8fdd2677f29468c4e156210174edc7f7b953"
+
+[[package]]
 name = "windows_x86_64_msvc"
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "447660ad36a13288b1db4d4248e857b510e8c3a225c822ba4fb748c0aafecffd"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winreg"
@@ -7886,6 +7991,20 @@ dependencies = [
 [[package]]
 name = "ya-agreement-utils"
 version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ed1538aa108bb3d1a87ec91c5abc9414e2032e390f9e583aaa8d1ae543f6a0d"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "thiserror",
+ "ya-client-model",
+]
+
+[[package]]
+name = "ya-agreement-utils"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7948,7 +8067,7 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "git-version",
  "metrics 0.12.1",
@@ -7958,7 +8077,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bigdecimal 0.2.2",
  "bitflags",
@@ -8094,12 +8213,12 @@ dependencies = [
  "tokio-util 0.7.7",
  "url",
  "winapi 0.3.9",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.4.1",
  "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-manifest-utils",
- "ya-packet-trace",
+ "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
@@ -8222,7 +8341,7 @@ dependencies = [
  "base64 0.13.1",
  "openssl",
  "tar",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.4.1",
  "ya-manifest-utils",
 ]
 
@@ -8255,7 +8374,7 @@ dependencies = [
  "test-case 3.1.0",
  "thiserror",
  "url",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.4.1",
  "ya-client-model",
  "ya-manifest-test-utils",
  "ya-utils-path",
@@ -8301,7 +8420,7 @@ dependencies = [
  "thiserror",
  "tokio 1.25.0",
  "uuid 0.8.2",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.5.0",
  "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
@@ -8330,7 +8449,7 @@ dependencies = [
  "semver 0.11.0",
  "serde_json",
  "thiserror",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.4.1",
 ]
 
 [[package]]
@@ -8387,7 +8506,7 @@ dependencies = [
  "url",
  "ya-client-model",
  "ya-core-model",
- "ya-packet-trace",
+ "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-relay-client",
  "ya-sb-proto",
  "ya-sb-router",
@@ -8401,7 +8520,18 @@ dependencies = [
 [[package]]
 name = "ya-packet-trace"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-packet-trace#cf7583725930df57298088caa6d0f468037909da"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a9e5444475d519a584d2adaf6f281cb3deeb0ceb41503db28be4d081afb714c"
+dependencies = [
+ "chrono",
+ "fxhash",
+ "log",
+]
+
+[[package]]
+name = "ya-packet-trace"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-packet-trace#bcd1a2f2921f058783c7b6594204db539602a621"
 dependencies = [
  "chrono",
  "fxhash",
@@ -8440,7 +8570,7 @@ dependencies = [
  "tokio 1.25.0",
  "uint 0.7.1",
  "uuid 0.8.2",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.5.0",
  "ya-client",
  "ya-client-model",
  "ya-core-model",
@@ -8559,6 +8689,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "sys-info",
  "tempdir",
+ "tempfile",
  "test-case 2.2.2",
  "thiserror",
  "tokio 1.25.0",
@@ -8566,7 +8697,7 @@ dependencies = [
  "url",
  "walkdir",
  "winapi 0.3.9",
- "ya-agreement-utils",
+ "ya-agreement-utils 0.5.0",
  "ya-client",
  "ya-client-model",
  "ya-compile-time-utils",
@@ -8584,8 +8715,9 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-client"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=9d958f3c68b337a16dc7a13dd09772cb5c079667#9d958f3c68b337a16dc7a13dd09772cb5c079667"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48d0c86cd2a4430f08bc60aeeccabcf9448b5e08189b3d2bdce36bb3d67910e0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8598,7 +8730,7 @@ dependencies = [
  "tokio 1.25.0",
  "tokio-stream",
  "url",
- "ya-packet-trace",
+ "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-relay-core",
  "ya-relay-proto",
  "ya-relay-stack",
@@ -8606,9 +8738,9 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-core"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a32521e0c31afc839265e88aadba475a773731732b275edcca2f6ea8bcbf18"
+checksum = "323db96bf4ba4e671dee28d2776fba25e5e8ec61f16a0ffbdfc2647b357fc7c9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8656,8 +8788,9 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-stack"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=9d958f3c68b337a16dc7a13dd09772cb5c079667#9d958f3c68b337a16dc7a13dd09772cb5c079667"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e75d44b70bb97ef73b62b8545212533fc417cc8eb7edec8a9e0c6d7b1bd0e644"
 dependencies = [
  "derive_more",
  "futures 0.3.26",
@@ -8686,7 +8819,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
@@ -8842,7 +8975,7 @@ dependencies = [
  "tokio-util 0.7.7",
  "url",
  "uuid 0.8.2",
- "ya-packet-trace",
+ "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-sb-proto",
  "ya-sb-util",
 ]
@@ -9076,7 +9209,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-net",
- "ya-packet-trace",
+ "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -9125,7 +9258,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "actix-rt",
  "actix-service",

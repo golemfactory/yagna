@@ -10,9 +10,9 @@ test-suite = []
 bcast-singleton = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.4.1" }
+ya-agreement-utils = { version = "0.5.0" }
 ya-client = "0.7"
-ya-core-model = { version = "^0.8", features = ["market", "net"] }
+ya-core-model = { version = "^0.9", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
 ya-market-resolver = "0.2"
 ya-net = "0.3"
