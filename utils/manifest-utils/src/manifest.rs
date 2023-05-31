@@ -343,17 +343,12 @@ pub struct InetOut {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", untagged)]
-pub enum OutboundAccess {
-    Urls(Urls),
-    Unrestricted(Unrestricted),
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Unrestricted {}
+pub enum OutboundAccess {
+    Urls(Vec<Url>),
+    Unrestricted,
+}
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -363,78 +358,49 @@ pub struct Urls {
     urls: Vec<Url>,
 }
 
-impl Serialize for Unrestricted {
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OutboundAccessIntermediate {
+    Urls(Vec<Url>),
+    Unrestricted { urls: bool },
+}
+
+impl Serialize for OutboundAccess {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(1))?;
-
-        map.serialize_entry("unrestricted", &HashMap::from([("urls", true)]))?;
-
-        map.end()
-    }
-}
-
-struct UnrestrictedVisitor;
-
-impl<'de> serde::de::Visitor<'de> for UnrestrictedVisitor {
-    type Value = Unrestricted;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("command string or a json string with a command object")
-    }
-
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::MapAccess<'de>,
-    {
-        println!("visit map");
-
-        if let Some((k, v)) = map.next_entry::<String, HashMap<String, bool>>()? {
-            if k == "unrestricted".to_string() {
-                if let Some(value) = v.get("urls") {
-                    if *value == true {
-                        return Ok(Unrestricted {});
-                    }
+        let intermediate = {
+            match self {
+                OutboundAccess::Urls(urls) => OutboundAccessIntermediate::Urls(urls.to_vec()),
+                OutboundAccess::Unrestricted => {
+                    OutboundAccessIntermediate::Unrestricted { urls: true }
                 }
-
-                todo!()
-            } else {
-                println!("No urls");
-                todo!()
             }
-        } else {
-            println!("No entry");
-            todo!()
-        }
+        };
+        intermediate.serialize(serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for Unrestricted {
-    fn deserialize<D>(deserializer: D) -> Result<Unrestricted, D::Error>
+impl<'de> Deserialize<'de> for OutboundAccess {
+    fn deserialize<D>(deserializer: D) -> Result<OutboundAccess, D::Error>
     where
         D: Deserializer<'de>,
     {
-        println!("DESERIALIZE");
-        // deserializer.deserialize_map(UnrestrictedVisitor)
-        #[derive(Deserialize)]
-        pub struct X {
-            pub unrestricted: Y,
-        }
-        #[derive(Deserialize)]
-        pub struct Y {
-            pub urls: bool,
-        }
+        let intermediate = OutboundAccessIntermediate::deserialize(deserializer)?;
 
-        let x = X::deserialize(deserializer)?;
-
-        if x.unrestricted.urls {
-            Ok(Unrestricted {})
-        } else {
-            Err(serde::de::Error::custom(
-                "unrestricted.urls: false is not valid",
-            ))
+        match intermediate {
+            OutboundAccessIntermediate::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
+            OutboundAccessIntermediate::Unrestricted { urls } => {
+                if urls {
+                    Ok(OutboundAccess::Unrestricted)
+                } else {
+                    Err(serde::de::Error::custom(
+                        "unrestricted.urls: false is not valid",
+                    ))
+                }
+            }
         }
     }
 }
@@ -457,9 +423,9 @@ mod testsdupa {
     fn test_1() {
         let json = json!({"urls": ["https://example.net/"]});
         let d = Dupa {
-            access: Some(OutboundAccess::Urls(Urls {
-                urls: [Url::parse("https://example.net/").unwrap()].into(),
-            })),
+            access: Some(OutboundAccess::Urls(
+                [Url::parse("https://example.net/").unwrap()].into(),
+            )),
         };
 
         assert_eq!(serde_json::to_value(&d).unwrap(), json);
@@ -470,7 +436,7 @@ mod testsdupa {
     fn test_2() {
         let json = json!({"unrestricted": {"urls": true}});
         let d = Dupa {
-            access: Some(OutboundAccess::Unrestricted(Unrestricted {})),
+            access: Some(OutboundAccess::Unrestricted),
         };
 
         assert_eq!(serde_json::to_value(&d).unwrap(), json);
