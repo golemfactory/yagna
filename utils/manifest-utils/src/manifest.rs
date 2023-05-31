@@ -348,48 +348,50 @@ pub enum OutboundAccess {
     Unrestricted,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum OutboundAccessIntermediate {
-    Urls(Vec<Url>),
-    Unrestricted { urls: bool },
-}
+mod outbound_access_serde_utils {
+    use super::*;
 
-//TODO Rafał impl FROM's
-
-impl Serialize for OutboundAccess {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let intermediate = {
-            match self {
-                OutboundAccess::Urls(urls) => OutboundAccessIntermediate::Urls(urls.to_vec()),
-                OutboundAccess::Unrestricted => {
-                    OutboundAccessIntermediate::Unrestricted { urls: true }
-                }
-            }
-        };
-        intermediate.serialize(serializer)
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    enum OutboundAccessIntermediate {
+        Urls(Vec<Url>),
+        Unrestricted { urls: bool },
     }
-}
 
-impl<'de> Deserialize<'de> for OutboundAccess {
-    fn deserialize<D>(deserializer: D) -> Result<OutboundAccess, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let intermediate = OutboundAccessIntermediate::deserialize(deserializer)?;
+    impl Serialize for OutboundAccess {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let intermediate = {
+                match self {
+                    OutboundAccess::Urls(urls) => OutboundAccessIntermediate::Urls(urls.to_vec()),
+                    OutboundAccess::Unrestricted => {
+                        OutboundAccessIntermediate::Unrestricted { urls: true }
+                    }
+                }
+            };
+            intermediate.serialize(serializer)
+        }
+    }
 
-        match intermediate {
-            OutboundAccessIntermediate::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
-            OutboundAccessIntermediate::Unrestricted { urls } => {
-                if urls {
-                    Ok(OutboundAccess::Unrestricted)
-                } else {
-                    Err(serde::de::Error::custom(
-                        "'unrestricted.urls: false' is not valid",
-                    ))
+    impl<'de> Deserialize<'de> for OutboundAccess {
+        fn deserialize<D>(deserializer: D) -> Result<OutboundAccess, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let intermediate = OutboundAccessIntermediate::deserialize(deserializer)?;
+
+            match intermediate {
+                OutboundAccessIntermediate::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
+                OutboundAccessIntermediate::Unrestricted { urls } => {
+                    if urls {
+                        Ok(OutboundAccess::Unrestricted)
+                    } else {
+                        Err(serde::de::Error::custom(
+                            "'unrestricted.urls: false' is not valid",
+                        ))
+                    }
                 }
             }
         }
