@@ -388,7 +388,12 @@ impl FromStr for ScriptValidator {
 
 #[derive(Clone)]
 pub struct UrlValidator {
-    inner: Arc<HashSet<(Protocol, IpAddr, u16)>>,
+    inner: Arc<AllowedAccess>,
+}
+
+enum AllowedAccess {
+    Urls(HashSet<(Protocol, IpAddr, u16)>),
+    Unrestricted,
 }
 
 impl ManifestValidator for UrlValidator {
@@ -406,32 +411,35 @@ impl ManifestValidator for UrlValidator {
             return futures::future::ok(None).boxed_local();
         }
 
-        let urls = manifest
-            .comp_manifest
-            .as_ref()
-            .and_then(|c| c.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.clone());
+        if let Some(access) = manifest.get_outbound_access() {
+            match access {
+                ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                    let mut set = Self::DEFAULT_ADDRESSES
+                        .iter()
+                        .map(|(proto, ip, port)| (*proto, IpAddr::from(*ip), *port))
+                        .collect::<HashSet<_, _>>();
 
-        let mut set = Self::DEFAULT_ADDRESSES
-            .iter()
-            .map(|(proto, ip, port)| (*proto, IpAddr::from(*ip), *port))
-            .collect::<HashSet<_, _>>();
+                    async move {
+                        let ips = resolve_ips(urls.iter()).await?;
 
-        async move {
-            let ips = match urls {
-                Some(urls) => resolve_ips(urls.iter()).await?,
-                None => return Ok(None),
-            };
+                        set.extend(ips.into_iter());
 
-            set.extend(ips.into_iter());
-
-            Ok(Some(Self {
-                inner: Arc::new(set),
-            }))
+                        Ok(Some(Self {
+                            inner: Arc::new(AllowedAccess::Urls(set)),
+                        }))
+                    }
+                    .boxed_local()
+                }
+                ya_manifest_utils::OutboundAccess::Unrestricted => async move {
+                    Ok(Some(Self {
+                        inner: Arc::new(AllowedAccess::Unrestricted),
+                    }))
+                }
+                .boxed_local(),
+            }
+        } else {
+            async move { Ok(None) }.boxed_local()
         }
-        .boxed_local()
     }
 }
 
@@ -446,12 +454,18 @@ impl UrlValidator {
     ];
 
     pub fn validate(&self, proto: Protocol, ip: IpAddr, port: u16) -> Result<(), ValidationError> {
-        self.inner
-            .contains(&(proto, ip, port))
-            .then_some(())
-            .ok_or_else(|| {
-                ValidationError::Url(format!("address not allowed: {}:{} ({})", ip, port, proto))
-            })
+        match self.inner.as_ref() {
+            AllowedAccess::Urls(urls) => urls
+                .contains(&(proto, ip, port))
+                .then_some(())
+                .ok_or_else(|| {
+                    ValidationError::Url(format!(
+                        "address not allowed: {}:{} ({})",
+                        ip, port, proto
+                    ))
+                }),
+            AllowedAccess::Unrestricted => Ok(()),
+        }
     }
 }
 
