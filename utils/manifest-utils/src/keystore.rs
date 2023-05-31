@@ -3,10 +3,9 @@ pub mod x509_keystore;
 
 use self::{
     golem_keystore::{GolemKeystore, GolemKeystoreBuilder},
-    x509_keystore::{X509AddParams, X509CertData, X509KeystoreBuilder, X509KeystoreManager},
+    x509_keystore::{X509CertData, X509Keystore, X509KeystoreBuilder, X509KeystoreManager},
 };
-use crate::policy::CertPermissions;
-use chrono::SecondsFormat;
+use chrono::{DateTime, Utc};
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use serde_json::Value;
@@ -37,20 +36,17 @@ impl Cert {
         }
     }
 
-    /// Not_after date in RFC3339 format.
-    pub fn not_after(&self) -> String {
-        let not_after = match self {
-            Cert::X509(cert) => cert.not_after,
-            Cert::Golem { id: _, cert } => cert.validity_period.not_after,
-        };
-        not_after.to_rfc3339_opts(SecondsFormat::Secs, true)
+    pub fn not_before(&self) -> DateTime<Utc> {
+        match self {
+            Cert::X509(cert) => cert.not_before,
+            Cert::Golem { id: _, cert } => cert.validity_period.not_before,
+        }
     }
 
-    /// Permissions displayed Json value.
-    pub fn permissions(&self) -> Value {
+    pub fn not_after(&self) -> DateTime<Utc> {
         match self {
-            Cert::X509(cert) => serde_json::json!(cert.permissions),
-            Cert::Golem { cert, .. } => serde_json::json!(cert.permissions),
+            Cert::X509(cert) => cert.not_after,
+            Cert::Golem { id: _, cert } => cert.validity_period.not_after,
         }
     }
 
@@ -63,6 +59,7 @@ impl Cert {
         }
     }
 
+    /// Certificate type name
     pub fn type_name(&self) -> &str {
         match self {
             Cert::X509(_) => x509_keystore::CERT_NAME,
@@ -87,36 +84,18 @@ trait CommonAddParams {
 }
 
 pub struct AddParams {
-    pub permissions: Vec<CertPermissions>,
     pub certs: Vec<PathBuf>,
-    pub whole_chain: bool,
 }
 
 impl AddParams {
     pub fn new(certs: Vec<PathBuf>) -> Self {
-        let permissions = vec![CertPermissions::All];
-        let whole_chain = true;
-        Self {
-            permissions,
-            certs,
-            whole_chain,
-        }
+        Self { certs }
     }
 }
 
 impl CommonAddParams for AddParams {
     fn certs(&self) -> &Vec<PathBuf> {
         &self.certs
-    }
-}
-
-impl X509AddParams for AddParams {
-    fn permissions(&self) -> &Vec<CertPermissions> {
-        &self.permissions
-    }
-
-    fn whole_chain(&self) -> bool {
-        self.whole_chain
     }
 }
 
@@ -142,6 +121,9 @@ pub trait Keystore: KeystoreClone + Send {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
+    /// Creates data signature verifier for given certificate.
+    /// Returns error if certificate is invalid.
+    fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>>;
 }
 
 trait KeystoreBuilder<K: Keystore> {
@@ -167,6 +149,14 @@ impl Clone for Box<dyn Keystore> {
     fn clone(&self) -> Box<dyn Keystore> {
         self.clone_box()
     }
+}
+
+pub trait SignatureVerifier {
+    /// Signature digest algorithm
+    fn with_alg(&mut self, alg: &str) -> Box<&mut dyn SignatureVerifier>;
+    /// Verifies `signature` of given `data`.
+    /// On success returns chain of certificates Ids (with signer Id at the end).
+    fn verify(&self, data: &str, signature: &str) -> anyhow::Result<Vec<String>>;
 }
 
 #[derive(Clone)]
@@ -226,35 +216,23 @@ impl CompositeKeystore {
             .collect::<Vec<String>>()
     }
 
+    pub fn add_x509_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
+        self.x509_keystore.add(add)
+    }
+
     pub fn add_golem_cert(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
         self.golem_keystore.add(add)
     }
 
-    pub fn verify_x509_signature(
-        &self,
-        cert: impl AsRef<str>,
-        sig: impl AsRef<str>,
-        sig_alg: impl AsRef<str>,
-        data: impl AsRef<str>,
-    ) -> anyhow::Result<()> {
-        self.x509_keystore
-            .keystore
-            .verify_signature(cert, sig, sig_alg, data)
+    pub fn x509_keystore(&self) -> &X509Keystore {
+        &self.x509_keystore.keystore
     }
 
-    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
-        self.golem_keystore.verify_node_descriptor(cert)
-    }
-
-    //TODO delete when deleting X509 permissions feature
-    pub fn verify_permissions(
+    pub fn verify_node_descriptor(
         &self,
-        cert: &str,
-        required: Vec<CertPermissions>,
-    ) -> anyhow::Result<()> {
-        self.x509_keystore
-            .keystore
-            .verify_permissions(cert, required)
+        node_descriptor: serde_json::Value,
+    ) -> anyhow::Result<ValidatedNodeDescriptor> {
+        self.golem_keystore.verify_node_descriptor(node_descriptor)
     }
 }
 
@@ -295,6 +273,20 @@ impl Keystore for CompositeKeystore {
 
     fn list(&self) -> Vec<Cert> {
         self.list_sorted().into_iter().collect()
+    }
+
+    fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>> {
+        let mut err_msgs = vec![];
+        for keystore in self.keystores() {
+            match keystore.verifier(cert) {
+                Ok(verifier) => return Ok(verifier),
+                Err(err) => err_msgs.push(err),
+            }
+        }
+        let err_msgs = err_msgs
+            .iter()
+            .fold(String::new(), |s, c| s + &c.to_string() + " ; ");
+        anyhow::bail!("Failed to verify certificate: {err_msgs}.")
     }
 }
 
