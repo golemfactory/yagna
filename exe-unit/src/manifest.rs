@@ -223,7 +223,7 @@ impl ScriptValidator {
         iter: impl IntoIterator<Item = &'a ExeScriptCommand>,
     ) -> Result<(), ValidationError> {
         iter.into_iter()
-            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))
+            .try_for_each(|cmd| self.validate_command(&self.inner, cmd))
     }
 
     fn validate_command(

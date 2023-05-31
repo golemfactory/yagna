@@ -246,7 +246,7 @@ impl TaskManager {
     }
 
     fn add_new_agreement(&mut self, msg: &NewAgreement) -> anyhow::Result<TaskInfo> {
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.tasks.new_agreement(&agreement_id)?;
 
         let props = TaskInfo::from(&msg.agreement)
@@ -340,12 +340,7 @@ impl Handler<NewAgreement> for TaskManager {
             actx.runner.send(msg.clone()).await??;
             actx.payments.send(msg.clone()).await??;
 
-            finish_transition(
-                &actx.myself,
-                &msg.agreement.agreement_id,
-                AgreementState::Initialized,
-            )
-            .await
+            finish_transition(&actx.myself, &msg.agreement.id, AgreementState::Initialized).await
         }
         .into_actor(self)
         .map(

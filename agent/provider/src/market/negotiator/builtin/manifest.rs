@@ -1,24 +1,20 @@
-use std::collections::HashSet;
 use std::ops::Not;
 
-use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::matching::domain::SharedDomainMatchers;
-use ya_manifest_utils::matching::Matcher;
-use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
-    DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
-    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY, DEMAND_MANIFEST_PROPERTY,
+    DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;
+use crate::provider_agent::AgentNegotiatorsConfig;
+use crate::rules::{ManifestSignatureProps, RulesManager};
 
-#[derive(Default)]
 pub struct ManifestSignature {
     enabled: bool,
-    keystore: Keystore,
-    whitelist_matcher: SharedDomainMatchers,
+    rules_manager: RulesManager,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -28,35 +24,60 @@ impl NegotiatorComponent for ManifestSignature {
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         if self.enabled.not() {
-            log::trace!("Manifest signature verification disabled.");
+            log::trace!("Manifest verification disabled.");
             return acceptance(offer);
         }
 
-        let demand = match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
-            Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
-                Ok(manifest) => DemandWithManifest {
-                    demand,
-                    manifest_encoded,
-                    manifest,
+        let (manifest, manifest_encoded) =
+            match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+                Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
+                    Ok(manifest) => (manifest, manifest_encoded),
+                    Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
                 },
-                Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
-            },
-            Err(Error::NoKey(_)) => return acceptance(offer),
-            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+                Err(Error::NoKey(_)) => return acceptance(offer),
+                Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+            };
+
+        let manifest_sig = {
+            if demand
+                .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
+                .is_ok()
+            {
+                let sig = demand.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
+                log::trace!("sig_hex: {sig}");
+                let sig_alg: String =
+                    demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
+                log::trace!("sig_alg: {sig_alg}");
+                let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+                log::trace!("cert: {cert}");
+                log::trace!("encoded_manifest: {manifest_encoded}");
+                Some(ManifestSignatureProps {
+                    sig,
+                    sig_alg,
+                    cert,
+                    manifest_encoded,
+                })
+            } else {
+                None
+            }
         };
 
-        if demand.has_signature() {
-            match demand.verify_signature(&self.keystore) {
-                Ok(()) => match demand.verify_permissions(&self.keystore) {
-                    Ok(_) => acceptance(offer),
-                    Err(e) => rejection(format!("certificate permissions verification: {e}")),
-                },
-                Err(e) => rejection(format!("failed to verify manifest signature: {e}")),
+        let node_descriptor = demand
+            .get_property::<String>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
+            .ok();
+
+        if manifest.is_outbound_requested() {
+            match self.rules_manager.check_outbound_rules(
+                manifest,
+                demand.issuer,
+                manifest_sig,
+                node_descriptor,
+            ) {
+                crate::rules::CheckRulesResult::Accept => acceptance(offer),
+                crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
             }
-        } else if demand.requires_signature(&self.whitelist_matcher) {
-            rejection("manifest requires signature but it has none".to_string())
         } else {
-            log::trace!("No signature required. No signature provided.");
+            log::trace!("Outbound is not requested.");
             acceptance(offer)
         }
     }
@@ -81,8 +102,8 @@ impl NegotiatorComponent for ManifestSignature {
     }
 }
 
-impl From<PolicyConfig> for ManifestSignature {
-    fn from(config: PolicyConfig) -> Self {
+impl ManifestSignature {
+    pub fn new(config: &PolicyConfig, agent_negotiators_cfg: AgentNegotiatorsConfig) -> Self {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
@@ -99,108 +120,11 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matchers.clone();
-        let keystore = config.trusted_keys.unwrap_or_default();
         ManifestSignature {
             enabled,
-            keystore,
-            whitelist_matcher,
+            rules_manager: agent_negotiators_cfg.rules_manager,
         }
     }
-}
-
-struct DemandWithManifest<'demand> {
-    demand: &'demand ProposalView,
-    manifest_encoded: String,
-    manifest: AppManifest,
-}
-
-impl<'demand> DemandWithManifest<'demand> {
-    fn has_signature(&self) -> bool {
-        self.demand
-            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
-            .is_ok()
-    }
-
-    fn requires_signature(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
-        let features = self.manifest.features();
-        if features.is_empty() {
-            log::debug!("No features in demand. Signature not required.");
-            return false;
-        // Inet is the only feature
-        } else if features.contains(&Feature::Inet) && features.len() == 1 {
-            if let Some(urls) = self
-                .manifest
-                .comp_manifest
-                .as_ref()
-                .and_then(|comp| comp.net.as_ref())
-                .and_then(|net| net.inet.as_ref())
-                .and_then(|inet| inet.out.as_ref())
-                .and_then(|out| out.urls.as_ref())
-            {
-                let matcher = whitelist_matcher.read().unwrap();
-                let non_whitelisted_urls: Vec<&str> = urls
-                    .iter()
-                    .flat_map(Url::host_str)
-                    .filter(|domain| matcher.matches(domain).not())
-                    .collect();
-                if non_whitelisted_urls.is_empty() {
-                    log::debug!("Demand does not require signature. Every URL on whitelist");
-                    return false;
-                }
-                log::debug!(
-                    "Demand requires signature. Non whitelisted URLs: {:?}",
-                    non_whitelisted_urls
-                );
-                return true;
-            }
-        }
-        log::debug!("Demand requires signature.");
-        true
-    }
-
-    fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
-        let sig = self
-            .demand
-            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
-        log::trace!("sig_hex: {}", sig);
-        let sig_alg: String = self
-            .demand
-            .get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
-        log::trace!("sig_alg: {}", sig_alg);
-        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
-        log::trace!("cert: {}", cert);
-        log::trace!("manifest: {}", &self.manifest_encoded);
-        keystore.verify_signature(cert, sig, sig_alg, &self.manifest_encoded)
-    }
-
-    fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
-        let mut required = required_permissions(&self.manifest.features());
-        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
-
-        if self
-            .demand
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
-            .is_ok()
-        {
-            // Verification of certificate permissions defined in demand is NYI.
-            // To make Provider accept Demand containig Certificates Permissions it is required to
-            // add Certificate with "unverified-permissions-chain" permission into the keystore.
-            required.push(CertPermissions::UnverifiedPermissionsChain);
-        }
-
-        keystore.verify_permissions(&cert, required)
-    }
-}
-
-fn required_permissions(features: &HashSet<Feature>) -> Vec<CertPermissions> {
-    features
-        .iter()
-        .filter_map(|feature| match feature {
-            Feature::Inet => Some(CertPermissions::OutboundManifest),
-            _ => None,
-        })
-        .collect()
 }
 
 fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
@@ -218,29 +142,49 @@ fn acceptance(offer: ProposalView) -> anyhow::Result<NegotiationResult> {
 mod tests {
     use super::*;
     use structopt::StructOpt;
+    use tempdir::TempDir;
 
-    fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
+    fn build_policy<S: AsRef<str>>(args: S) -> (ManifestSignature, TempDir) {
+        let tempdir = TempDir::new("test_dir").unwrap();
+        let rules_file = tempdir.path().join("rules.json");
+        let whitelist_file = tempdir.path().join("whitelist.json");
+        let cert_dir = tempdir.path().join("cert_dir");
+
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        PolicyConfig::from_iter(arguments).into()
+
+        (
+            ManifestSignature::new(
+                &PolicyConfig::from_iter(arguments),
+                AgentNegotiatorsConfig {
+                    rules_manager: RulesManager::load_or_create(
+                        &rules_file,
+                        &whitelist_file,
+                        &cert_dir,
+                    )
+                    .unwrap(),
+                },
+            ),
+            tempdir,
+        )
     }
 
     #[test]
     fn parse_signature_policy() {
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-disable-component all \
             --policy-trust-property property=value1,value2",
         );
         assert!(!policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property property=value1,value2",
         );
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}",
@@ -248,7 +192,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
@@ -257,7 +201,7 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
@@ -265,26 +209,26 @@ mod tests {
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(&format!(
+        let (policy, _tmpdir) = build_policy(format!(
             "TEST \
             --policy-trust-property {}",
             CAPABILITIES_PROPERTY
         ));
         assert!(!policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-trust-property property=value1,value2",
         );
         assert!(policy.enabled);
 
-        let policy = build_policy(
+        let (policy, _tmpdir) = build_policy(
             "TEST \
             --policy-trust-property property",
         );
         assert!(policy.enabled);
 
-        let policy = build_policy("TEST");
+        let (policy, _tmpdir) = build_policy("TEST");
         assert!(policy.enabled);
     }
 }

@@ -38,7 +38,7 @@ impl NegotiatorComponent for MaxAgreements {
         } else {
             log::info!(
                 "'MaxAgreements' negotiator: Reject proposal [{}] due to limit.",
-                demand.agreement_id, // TODO: Should be just `id`, but I reuse AgreementView struct.
+                demand.id,
             );
             Ok(NegotiationResult::Reject {
                 message: format!(

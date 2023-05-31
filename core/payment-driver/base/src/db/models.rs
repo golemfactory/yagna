@@ -97,20 +97,15 @@ pub struct PaymentEntity {
     pub network: Network,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Eq, Debug, Clone, Copy, FromPrimitive)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Eq, Debug, Clone, Copy, FromPrimitive, Default)]
 #[sql_type = "Integer"]
 pub enum Network {
-    Mainnet = 1,    //Main Ethereum chain
-    Rinkeby = 4,    //Rinkeby is Ethereum testnet
-    Goerli = 5,     //Goerli is another Ethereum testnet
+    Mainnet = 1, //Main Ethereum chain
+    #[default]
+    Rinkeby = 4, //Rinkeby is Ethereum testnet
+    Goerli = 5,  //Goerli is another Ethereum testnet
     Mumbai = 80001, //Mumbai is testnet for Polygon network
-    Polygon = 137,  //Polygon is Polygon production network
-}
-
-impl Default for Network {
-    fn default() -> Self {
-        Network::Rinkeby
-    }
+    Polygon = 137, //Polygon is Polygon production network
 }
 
 impl FromStr for Network {

@@ -31,7 +31,7 @@ impl<'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
     pub fn equals(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, *value), // enhanced string comparison
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, value), // enhanced string comparison
             PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,

@@ -2,7 +2,6 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
-use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -15,7 +14,7 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_manifest_utils::{manifest, Feature, Keystore};
+use ya_manifest_utils::{manifest, Feature};
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
@@ -28,9 +27,8 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{
-    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
-};
+use crate::rules::RulesManager;
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
@@ -67,55 +65,9 @@ impl GlobalsManager {
     }
 }
 
-/// Stores current whitelist state.
-/// Starts and stops whitelist config file monitor.
-struct WhitelistManager {
-    state: DomainWhitelistState,
-    monitor: Option<FileMonitor>,
-}
-
-impl WhitelistManager {
-    fn try_new(whitelist_file: &Path) -> anyhow::Result<Self> {
-        let patterns = DomainPatterns::load_or_create(whitelist_file)?;
-        let state = DomainWhitelistState::try_new(patterns)?;
-        Ok(Self {
-            state,
-            monitor: None,
-        })
-    }
-
-    fn spawn_monitor(&mut self, whitelist_file: &Path) -> anyhow::Result<()> {
-        let state = self.state.clone();
-        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
-            Ok(patterns) => {
-                match DomainsMatcher::try_from(&patterns) {
-                    Ok(matcher) => {
-                        *state.matchers.write().unwrap() = matcher;
-                        *state.patterns.lock().unwrap() = patterns;
-                    }
-                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
-                };
-            }
-            Err(e) => log::warn!(
-                "Error updating whitelist configuration from {:?}: {:?}",
-                p,
-                e
-            ),
-        };
-        let monitor = FileMonitor::spawn(whitelist_file, FileMonitor::on_modified(handler))?;
-        self.monitor = Some(monitor);
-        Ok(())
-    }
-
-    fn get_state(&self) -> DomainWhitelistState {
-        self.state.clone()
-    }
-
-    fn stop(&mut self) {
-        if let Some(monitor) = &mut self.monitor {
-            monitor.stop();
-        }
-    }
+#[derive(Clone)]
+pub struct AgentNegotiatorsConfig {
+    pub rules_manager: RulesManager,
 }
 
 pub struct ProviderAgent {
@@ -128,9 +80,10 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
+    rulestore_monitor: FileMonitor,
     keystore_monitor: FileMonitor,
+    whitelist_monitor: FileMonitor,
     net_api: NetApi,
-    domain_whitelist: WhitelistManager,
 }
 
 impl ProviderAgent {
@@ -183,13 +136,16 @@ impl ProviderAgent {
             .unwrap_or_else(|| app_name.to_string());
 
         let cert_dir = config.cert_dir_path()?;
-        let keystore = load_keystore(&cert_dir)?;
+
+        let rules_manager = RulesManager::load_or_create(
+            &config.rules_file,
+            &config.domain_whitelist_file,
+            &cert_dir,
+        )?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
-        let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
-        policy_config.trusted_keys = Some(keystore.clone());
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -210,12 +166,12 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
-        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
-        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
-        policy_config.domain_patterns = domain_whitelist.get_state();
+        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
+            rules_manager.spawn_file_monitors()?;
 
-        let market = ProviderMarket::new(api.market, args.market).start();
+        let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
+
+        let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =
@@ -232,9 +188,10 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
+            rulestore_monitor,
             keystore_monitor,
+            whitelist_monitor,
             net_api,
-            domain_whitelist,
         })
     }
 
@@ -294,7 +251,7 @@ impl ProviderAgent {
         exeunit_desc: ExeUnitDesc,
     ) -> anyhow::Result<CreateOffer> {
         let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-            "linear" => Box::new(LinearPricingOffer::default()),
+            "linear" => Box::<LinearPricingOffer>::default(),
             other => return Err(anyhow!("Unsupported pricing model: {}", other)),
         };
         let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
@@ -408,20 +365,6 @@ impl ProviderAgent {
     }
 }
 
-fn load_keystore(cert_dir: &PathBuf) -> anyhow::Result<Keystore> {
-    let keystore = match Keystore::load(cert_dir) {
-        Ok(keystore) => {
-            log::info!("Trusted key store loaded from {}", cert_dir.display());
-            keystore
-        }
-        Err(err) => {
-            log::error!("Failed to load keystore: {}", err);
-            Default::default()
-        }
-    };
-    Ok(keystore)
-}
-
 fn get_prices(
     pricing_model: &dyn PricingOffer,
     preset: &Preset,
@@ -477,25 +420,6 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
         let delay = DEFAULT.checked_sub(elapsed).unwrap_or(ZERO);
         tokio::time::sleep(delay).await;
     }
-}
-
-fn spawn_keystore_monitor<P: AsRef<Path>>(
-    path: P,
-    keystore: Keystore,
-) -> Result<FileMonitor, Error> {
-    let cert_dir = path.as_ref().to_path_buf();
-    let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
-        Ok(()) => {
-            log::info!("Trusted keystore updated from {}", p.display());
-        }
-        Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
-    };
-    let monitor = FileMonitor::spawn_with(
-        path,
-        FileMonitor::on_modified(handler),
-        FileMonitorConfig::silent(),
-    )?;
-    Ok(monitor)
 }
 
 impl Actor for ProviderAgent {
@@ -591,7 +515,8 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
-        self.domain_whitelist.stop();
+        self.rulestore_monitor.stop();
+        self.whitelist_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -718,7 +643,7 @@ mod tests {
 
         let preset = Preset {
             pricing_model: "linear".to_string(),
-            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            usage_coeffs: std::collections::BTreeMap::from([("test_coefficient".to_string(), 1.0)]),
             ..Default::default()
         };
 

@@ -405,6 +405,16 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
+    // OK when invoice.amount is greater than or equal to agreement.amount_accepted
+    if invoice.amount < agreement.total_amount_accepted.0 {
+        let msg = format!(
+            "Invoice is smaller than agreement.total_amount_accepted. \
+            invoice_id={}, invoice_amount={}, total_amount_accepted={}",
+            &invoice_id, &invoice.amount, &agreement.total_amount_accepted
+        );
+        log::warn!("{}", msg);
+        return response::bad_request(&msg);
+    }
     let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
 
     log::trace!(
@@ -451,6 +461,7 @@ async fn accept_invoice(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
+            // Skip calling SchedulePayment for 0 amount invoices
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;

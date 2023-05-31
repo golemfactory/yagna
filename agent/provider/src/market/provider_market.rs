@@ -32,6 +32,7 @@ use super::Preset;
 use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
+use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
@@ -115,6 +116,7 @@ pub struct ProviderMarket {
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
+    agent_negotiators_cfg: Arc<AgentNegotiatorsConfig>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<NewAgreement>,
@@ -137,13 +139,18 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
+    pub fn new(
+        api: MarketProviderApi,
+        config: MarketConfig,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
+    ) -> ProviderMarket {
         ProviderMarket {
-            api: Arc::new(api),
             negotiator: Arc::new(NegotiatorAddr::default()),
-            config: Arc::new(config),
+            api: Arc::new(api),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
+            config: Arc::new(config),
+            agent_negotiators_cfg: Arc::new(agent_negotiators_cfg),
             agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
@@ -180,7 +187,7 @@ impl ProviderMarket {
     // =========================================== //
 
     fn on_agreement_approved(&mut self, msg: NewAgreement, _ctx: &mut Context<Self>) -> Result<()> {
-        log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
+        log::info!("Got approved agreement [{}].", msg.agreement.id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
     }
@@ -381,8 +388,8 @@ async fn process_agreement(
     );
 
     let config = ctx.config;
-    let agreement = AgreementView::try_from(agreement)
-        .map_err(|e| anyhow!("Invalid agreement. Error: {}", e))?;
+    let agreement =
+        AgreementView::try_from(agreement).map_err(|e| anyhow!("Invalid agreement. Error: {e}"))?;
 
     let action = ctx
         .negotiator
@@ -390,16 +397,14 @@ async fn process_agreement(
         .await
         .map_err(|e| {
             anyhow!(
-                "Negotiator error while processing agreement [{}]. Error: {}",
-                agreement.agreement_id,
-                e
+                "Negotiator error while processing agreement [{}]. Error: {e}",
+                agreement.id,
             )
         })?;
 
     log::info!(
-        "Decided to {} [{}] for subscription [{}].",
-        action,
-        agreement.agreement_id,
+        "Decided to {action} [{}] for subscription [{}].",
+        agreement.id,
         subscription.preset.name
     );
 
@@ -420,7 +425,7 @@ async fn process_agreement(
             let result = ctx
                 .api
                 .approve_agreement(
-                    &agreement.agreement_id,
+                    &agreement.id,
                     Some(config.session_id.clone()),
                     Some(config.agreement_approve_timeout),
                 )
@@ -429,14 +434,13 @@ async fn process_agreement(
             if let Err(error) = result {
                 // Notify negotiator, that we couldn't approve.
                 let msg = AgreementFinalized {
-                    id: agreement.agreement_id.clone(),
+                    id: agreement.id.clone(),
                     result: AgreementResult::ApprovalFailed,
                 };
                 let _ = ctx.market.send(msg).await;
                 return Err(anyhow!(
-                    "Failed to approve agreement [{}]. Error: {}",
-                    agreement.agreement_id,
-                    error
+                    "Failed to approve agreement [{}]. Error: {error}",
+                    agreement.id,
                 ));
             }
 
@@ -444,9 +448,7 @@ async fn process_agreement(
             // Notify outside world about agreement for further processing.
         }
         AgreementResponse::RejectAgreement { reason, .. } => {
-            ctx.api
-                .reject_agreement(&agreement.agreement_id, &reason)
-                .await?;
+            ctx.api.reject_agreement(&agreement.id, &reason).await?;
         }
     };
     Ok(())
@@ -592,7 +594,8 @@ impl Actor for ProviderMarket {
             ctx.spawn(collect_agreement_events(actx).into_actor(self)),
         );
 
-        self.negotiator = factory::create_negotiator(ctx.address(), &self.config);
+        self.negotiator =
+            factory::create_negotiator(ctx.address(), &self.config, &self.agent_negotiators_cfg);
     }
 }
 
@@ -671,7 +674,11 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::debug!("Offer created: {}", offer.display());
+            log::info!(
+                "Offer for preset: {} = {}",
+                msg.preset.name,
+                offer.display()
+            );
 
             log::info!("Subscribing to events... [{}]", msg.preset.name);
 
@@ -869,8 +876,7 @@ impl Handler<Unsubscribe> for ProviderMarket {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
                 std::mem::take(&mut self.subscriptions)
-                    .into_iter()
-                    .map(|(k, _)| k)
+                    .into_keys()
                     .collect::<Vec<_>>()
             }
             OfferKind::WithPresets(preset_names) => {

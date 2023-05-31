@@ -1,10 +1,6 @@
 name: SGX Unit Tests
 
 on:
-  push:
-    branches:
-      - master
-      - release/*
   pull_request:
     branches:
       - master
@@ -12,7 +8,7 @@ on:
       - sgx/*
 
 env:
-  rust_stable: 1.64.0
+  rust_stable: 1.68.2
 
 jobs:
   build:

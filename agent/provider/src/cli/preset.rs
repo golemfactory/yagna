@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anyhow::{anyhow, bail, Result};
 use dialoguer::{Input, Select};
@@ -131,10 +131,10 @@ impl PresetUpdater {
 
     pub fn update_metrics(&mut self, config: &ProviderConfig) -> Result<()> {
         let registry = config.registry()?;
-        let mut usage_coeffs: HashMap<String, f64> = Default::default();
+        let mut usage_coeffs: BTreeMap<String, f64> = Default::default();
         let exe_unit_desc = registry.find_exeunit(&self.preset.exeunit_name)?;
 
-        fn get_usage(m: &HashMap<String, f64>, k1: &str, k2: &str) -> f64 {
+        fn get_usage(m: &BTreeMap<String, f64>, k1: &str, k2: &str) -> f64 {
             m.get(k1)
                 .cloned()
                 .unwrap_or_else(|| m.get(k2).cloned().unwrap_or(0.))

@@ -386,7 +386,7 @@ impl TaskRunner {
         log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
 
         // Agreement waits for first create activity event.
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }
@@ -491,7 +491,7 @@ impl TaskRunner {
             .get(agreement_id)
             .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
-        let agreement_file = File::create(&agreement_path).map_err(|error| {
+        let agreement_file = File::create(agreement_path).map_err(|error| {
             anyhow!(
                 "Can't create agreement file [{}]. Error: {}",
                 &agreement_path.display(),
@@ -644,7 +644,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                     _ => anyhow::bail!("offer template: invalid usage vector format"),
                 }
 
-                log::info!("offer-template: {} = {:?}", preset.name, template);
+                log::debug!("offer-template: {} = {:?}", preset.name, template);
                 result.insert(preset.name, template);
             }
             Ok(result)

@@ -1,10 +1,6 @@
 name: Goth integration tests (hybrid-net)
 
 on:
-  push:
-    branches:
-      - master
-      - release/*
   pull_request:
     branches:
       - master
@@ -34,7 +30,7 @@ jobs:
     needs: test_check
     defaults:
       run:
-        working-directory: './goth_tests'
+        working-directory: "./goth_tests"
 
     steps:
       - name: Checkout
@@ -45,16 +41,18 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8.0'
+          python-version: "3.8.0"
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v7
         with:
           poetry-version: 1.2.2
-          working-directory: './goth_tests'
+          working-directory: "./goth_tests"
 
       - name: Install dependencies
-        run: poetry install --no-root
+        run: |
+          poetry config experimental.new-installer false
+          poetry install --no-root
 
       - name: Disconnect Docker containers from default network
         continue-on-error: true
@@ -81,7 +79,7 @@ jobs:
           workflow: binaries-x86-64-hybrid-net.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
           workflow_conclusion: success
-          name: 'Yagna Linux hybrid-net'
+          name: "Yagna Linux hybrid-net"
           path: /tmp/yagna-build
 
       - name: Run test suite

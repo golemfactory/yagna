@@ -84,7 +84,7 @@ impl GlobalsState {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::File::create(&path)?;
+            std::fs::File::create(path)?;
             let state = Self::default();
             state.save(path)?;
             Ok(state)

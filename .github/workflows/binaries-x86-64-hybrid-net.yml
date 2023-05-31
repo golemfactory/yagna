@@ -1,17 +1,13 @@
 name: Build binaries (x86-64) hybrid-net
 
 on:
-  push:
-    branches:
-      - master
-      - release/*
   pull_request:
     branches:
       - master
       - release/*
 
 env:
-  rust_stable: 1.64.0
+  rust_stable: 1.68.2
 
 jobs:
   build:

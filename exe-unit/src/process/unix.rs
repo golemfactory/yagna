@@ -55,7 +55,6 @@ impl Process {
 
         std::fs::read_dir("/proc/")
             .expect("no /proc mountpoint")
-            .into_iter()
             .filter_map(|res| res.ok())
             .filter_map(|entry| i32::from_str(&entry.file_name().to_string_lossy()).ok())
             .filter_map(|pid| Process::info(pid).ok())
@@ -258,7 +257,7 @@ impl From<libc::rusage> for Usage {
 
 pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
     let mut usage = mem::MaybeUninit::<libc::rusage>::uninit();
-    let ret = unsafe { libc::getrusage(resource as i32, usage.as_mut_ptr()) };
+    let ret = unsafe { libc::getrusage(resource, usage.as_mut_ptr()) };
     match ret {
         0 => Ok(Usage::from(unsafe { usage.assume_init() })),
         _ => Err(SystemError::from(nix::Error::last())),

@@ -17,17 +17,12 @@ use ya_service_bus::RpcEndpoint;
 
 const FILE_CHUNK_SIZE: usize = 40960;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum NodeOrAlias {
     Node(NodeId),
     Alias(String),
+    #[default]
     DefaultNode,
-}
-
-impl Default for NodeOrAlias {
-    fn default() -> Self {
-        NodeOrAlias::DefaultNode
-    }
 }
 
 impl std::str::FromStr for NodeOrAlias {

@@ -255,6 +255,12 @@ async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>
             .unwrap_or_else(|_| "error".to_string());
         log::trace!("[inet] runtime -> inet packet {} B, {}", packet.len(), desc);
 
+        ya_packet_trace::packet_trace_maybe!("exe-unit::inet_endpoint_egress_handler", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
+
+        log::trace!("[inet] runtime -> inet packet {} B, {desc}", packet.len());
+
         router.network.receive(packet);
         router.network.poll();
 
@@ -293,6 +299,10 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
+                ya_packet_trace::packet_trace_maybe!("exe-unit::inet_ingress_handler", {
+                    &ya_packet_trace::try_extract_from_ip_frame(&payload)
+                });
+
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
@@ -760,7 +770,7 @@ impl ConnectionState {
 /// to source of connection inside runtime.
 /// This way runtime doesn't have to wait until timeout.
 ///
-/// Some errors `Unrouteable` don't have enough information to recover from this.  
+/// Some errors `Unrouteable` don't have enough information to recover from this.
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyingError {
     #[error("Proxy error: {error} for connection: {meta:?}")]
