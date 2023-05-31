@@ -1,11 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Not;
 use std::string::ToString;
 
-use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use semver::Version;
-use serde::ser::{SerializeMap, SerializeSeq};
 use serde::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -115,14 +113,15 @@ impl AppManifest {
 
     /// Returns empty vector if there is no outbound requested
     pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
-        self.comp_manifest
-            .as_ref()
-            .and_then(|comp| comp.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.as_ref())
-            .cloned()
-            .unwrap_or_default()
+        // self.comp_manifest
+        //     .as_ref()
+        //     .and_then(|comp| comp.net.as_ref())
+        //     .and_then(|net| net.inet.as_ref())
+        //     .and_then(|inet| inet.out.as_ref())
+        //     .and_then(|out| out.urls.as_ref())
+        //     .cloned()
+        //     .unwrap_or_default()
+        todo!()
     }
 
     pub fn is_outbound_requested(&self) -> bool {
@@ -327,7 +326,7 @@ pub struct Inet {
 /// Applies constraints to networking.
 /// Currently, outgoing requests to the public Internet network are covered.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InetOut {
     /// List of allowed outbound protocols.
@@ -338,33 +337,25 @@ pub struct InetOut {
     // whether urls were specified
     /// List of allowed external URLs that outbound requests can be sent to.
     /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub urls: Option<Vec<Url>>,
+    #[serde(skip_serializing_if = "Option::is_none", flatten)]
+    pub access: Option<OutboundAccess>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(PartialEq, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
 pub enum OutboundAccess {
     Urls(Vec<Url>),
     Unrestricted,
 }
 
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Urls {
-    // #[serde(flatten)]
-    urls: Vec<Url>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OutboundAccessIntermediate {
     Urls(Vec<Url>),
     Unrestricted { urls: bool },
 }
+
+//TODO Rafał impl FROM's
 
 impl Serialize for OutboundAccess {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -397,7 +388,7 @@ impl<'de> Deserialize<'de> for OutboundAccess {
                     Ok(OutboundAccess::Unrestricted)
                 } else {
                     Err(serde::de::Error::custom(
-                        "unrestricted.urls: false is not valid",
+                        "'unrestricted.urls: false' is not valid",
                     ))
                 }
             }
@@ -405,52 +396,44 @@ impl<'de> Deserialize<'de> for OutboundAccess {
     }
 }
 
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Dupa {
-    #[serde(flatten)]
-    access: Option<OutboundAccess>,
-}
+// #[cfg(test)]
+// mod testsdupa {
+//     use serde_json::json;
 
-#[cfg(test)]
-mod testsdupa {
-    use serde_json::json;
+//     use super::*;
 
-    use super::*;
+//     #[test]
+//     fn test_1() {
+//         let json = json!({"urls": ["https://example.net/"]});
+//         let d = Dupa {
+//             access: Some(OutboundAccess::Urls(
+//                 [Url::parse("https://example.net/").unwrap()].into(),
+//             )),
+//         };
 
-    #[test]
-    fn test_1() {
-        let json = json!({"urls": ["https://example.net/"]});
-        let d = Dupa {
-            access: Some(OutboundAccess::Urls(
-                [Url::parse("https://example.net/").unwrap()].into(),
-            )),
-        };
+//         assert_eq!(serde_json::to_value(&d).unwrap(), json);
+//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
+//     }
 
-        assert_eq!(serde_json::to_value(&d).unwrap(), json);
-        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-    }
+//     #[test]
+//     fn test_2() {
+//         let json = json!({"unrestricted": {"urls": true}});
+//         let d = Dupa {
+//             access: Some(OutboundAccess::Unrestricted),
+//         };
 
-    #[test]
-    fn test_2() {
-        let json = json!({"unrestricted": {"urls": true}});
-        let d = Dupa {
-            access: Some(OutboundAccess::Unrestricted),
-        };
+//         assert_eq!(serde_json::to_value(&d).unwrap(), json);
+//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
+//     }
 
-        assert_eq!(serde_json::to_value(&d).unwrap(), json);
-        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-    }
+//     #[test]
+//     fn test_3() {
+//         let json = json!({"unrestricted": {"urls": false}});
+//         let d = Dupa { access: None };
 
-    #[test]
-    fn test_3() {
-        let json = json!({"unrestricted": {"urls": false}});
-        let d = Dupa { access: None };
-
-        assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-    }
-}
+//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
+//     }
+// }
 
 pub fn default_protocols() -> Vec<String> {
     ["http", "https", "ws", "wss"]
@@ -504,7 +487,7 @@ mod tests {
                     inet: Some(Inet {
                         out: Some(InetOut {
                             protocols: default_protocols(),
-                            urls: None,
+                            access: None,
                         }),
                     }),
                 }),
@@ -515,5 +498,62 @@ mod tests {
 
         println!("{}", serialized);
         println!("{}", base64::encode(serialized));
+    }
+
+    mod outbound_access_serde {
+        use super::*;
+
+        #[test]
+        fn access_is_none() {
+            let json = serde_json::json!({ "protocols": default_protocols(),
+            });
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: None,
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn access_is_urls() {
+            let json = serde_json::json!({ "protocols": default_protocols(),
+            "urls": ["https://example.net/"]});
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: Some(OutboundAccess::Urls(
+                    [Url::parse("https://example.net/").unwrap()].into(),
+                )),
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn access_is_unrestricted() {
+            let json = serde_json::json!({ "protocols": default_protocols(),
+            "unrestricted": { "urls": true}});
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: Some(OutboundAccess::Unrestricted),
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn json_access_has_invalid_value() {
+            let json = serde_json::json!({ "protocols": default_protocols(),
+            "unrestricted": { "urls": false}});
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: None,
+            };
+
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
     }
 }
