@@ -396,45 +396,6 @@ impl<'de> Deserialize<'de> for OutboundAccess {
     }
 }
 
-// #[cfg(test)]
-// mod testsdupa {
-//     use serde_json::json;
-
-//     use super::*;
-
-//     #[test]
-//     fn test_1() {
-//         let json = json!({"urls": ["https://example.net/"]});
-//         let d = Dupa {
-//             access: Some(OutboundAccess::Urls(
-//                 [Url::parse("https://example.net/").unwrap()].into(),
-//             )),
-//         };
-
-//         assert_eq!(serde_json::to_value(&d).unwrap(), json);
-//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-//     }
-
-//     #[test]
-//     fn test_2() {
-//         let json = json!({"unrestricted": {"urls": true}});
-//         let d = Dupa {
-//             access: Some(OutboundAccess::Unrestricted),
-//         };
-
-//         assert_eq!(serde_json::to_value(&d).unwrap(), json);
-//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-//     }
-
-//     #[test]
-//     fn test_3() {
-//         let json = json!({"unrestricted": {"urls": false}});
-//         let d = Dupa { access: None };
-
-//         assert_eq!(serde_json::from_value::<Dupa>(json).unwrap(), d);
-//     }
-// }
-
 pub fn default_protocols() -> Vec<String> {
     ["http", "https", "ws", "wss"]
         .iter()
