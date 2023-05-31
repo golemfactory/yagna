@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Not;
 use std::string::ToString;
 
+use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -348,6 +349,7 @@ pub enum OutboundAccess {
     Urls(Urls),
     Unrestricted(Unrestricted),
 }
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -414,8 +416,26 @@ impl<'de> Deserialize<'de> for Unrestricted {
     where
         D: Deserializer<'de>,
     {
-        println!("DESERIALIZE MAP");
-        deserializer.deserialize_map(UnrestrictedVisitor)
+        println!("DESERIALIZE");
+        // deserializer.deserialize_map(UnrestrictedVisitor)
+        #[derive(Deserialize)]
+        pub struct X {
+            pub unrestricted: Y,
+        }
+        #[derive(Deserialize)]
+        pub struct Y {
+            pub urls: bool,
+        }
+
+        let x = X::deserialize(deserializer)?;
+
+        if x.unrestricted.urls {
+            Ok(Unrestricted {})
+        } else {
+            Err(serde::de::Error::custom(
+                "unrestricted.urls: false is not valid",
+            ))
+        }
     }
 }
 
