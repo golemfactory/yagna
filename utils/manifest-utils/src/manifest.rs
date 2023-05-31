@@ -353,7 +353,7 @@ mod outbound_access_serde_utils {
 
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    enum OutboundAccessIntermediate {
+    enum Representation {
         Urls(Vec<Url>),
         Unrestricted { urls: bool },
     }
@@ -363,15 +363,13 @@ mod outbound_access_serde_utils {
         where
             S: Serializer,
         {
-            let intermediate = {
+            let repr = {
                 match self {
-                    OutboundAccess::Urls(urls) => OutboundAccessIntermediate::Urls(urls.to_vec()),
-                    OutboundAccess::Unrestricted => {
-                        OutboundAccessIntermediate::Unrestricted { urls: true }
-                    }
+                    OutboundAccess::Urls(urls) => Representation::Urls(urls.to_vec()),
+                    OutboundAccess::Unrestricted => Representation::Unrestricted { urls: true },
                 }
             };
-            intermediate.serialize(serializer)
+            repr.serialize(serializer)
         }
     }
 
@@ -380,11 +378,11 @@ mod outbound_access_serde_utils {
         where
             D: Deserializer<'de>,
         {
-            let intermediate = OutboundAccessIntermediate::deserialize(deserializer)?;
+            let repr = Representation::deserialize(deserializer)?;
 
-            match intermediate {
-                OutboundAccessIntermediate::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
-                OutboundAccessIntermediate::Unrestricted { urls } => {
+            match repr {
+                Representation::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
+                Representation::Unrestricted { urls } => {
                     if urls {
                         Ok(OutboundAccess::Unrestricted)
                     } else {
