@@ -111,21 +111,24 @@ impl AppManifest {
             })
     }
 
-    /// Returns empty vector if there is no outbound requested
-    pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
-        // self.comp_manifest
-        //     .as_ref()
-        //     .and_then(|comp| comp.net.as_ref())
-        //     .and_then(|net| net.inet.as_ref())
-        //     .and_then(|inet| inet.out.as_ref())
-        //     .and_then(|out| out.urls.as_ref())
-        //     .cloned()
-        //     .unwrap_or_default()
-        todo!()
+    pub fn get_outbound_access(&self) -> Option<OutboundAccess> {
+        self.comp_manifest
+            .as_ref()
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .and_then(|out| out.access.as_ref())
+            .cloned()
     }
 
     pub fn is_outbound_requested(&self) -> bool {
-        self.get_outbound_requested_urls().is_empty().not()
+        match self.get_outbound_access() {
+            Some(access) => match access {
+                OutboundAccess::Urls(urls) => urls.is_empty().not(),
+                OutboundAccess::Unrestricted => true,
+            },
+            None => false,
+        }
     }
 
     pub fn features(&self) -> HashSet<Feature> {

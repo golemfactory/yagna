@@ -22,7 +22,7 @@ use ya_manifest_utils::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    AppManifest, CompositeKeystore,
+    AppManifest, CompositeKeystore, OutboundAccess,
 };
 
 #[derive(Clone)]
@@ -336,7 +336,9 @@ impl RulesManager {
 
         self::verify_golem_permissions(
             &node_descriptor.permissions,
-            &manifest.get_outbound_requested_urls(),
+            manifest
+                .get_outbound_access()
+                .ok_or(anyhow!("Outbound is not requested"))?,
         )
         .map_err(|e| anyhow!("Partner {e}"))?;
 
@@ -367,7 +369,11 @@ impl RulesManager {
         match mode {
             Mode::All => Ok(()),
             Mode::Whitelist => {
-                if self.whitelist_matching(manifest) {
+                if self.whitelist_matching(
+                    manifest
+                        .get_outbound_access()
+                        .ok_or(anyhow!("Outbound is not requested"))?,
+                ) {
                     log::trace!("Whitelist matched");
 
                     Ok(())
@@ -411,23 +417,27 @@ impl RulesManager {
         }
     }
 
-    fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
-        let urls = manifest.get_outbound_requested_urls();
-        let matcher = self.whitelist.matchers.read().unwrap();
-        let non_whitelisted_urls: Vec<&str> = urls
-            .iter()
-            .flat_map(Url::host_str)
-            .filter(|domain| matcher.matches(domain).not())
-            .collect();
+    fn whitelist_matching(&self, outbound_access: OutboundAccess) -> bool {
+        match outbound_access {
+            ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                let matcher = self.whitelist.matchers.read().unwrap();
+                let non_whitelisted_urls: Vec<&str> = urls
+                    .iter()
+                    .flat_map(Url::host_str)
+                    .filter(|domain| matcher.matches(domain).not())
+                    .collect();
 
-        if non_whitelisted_urls.is_empty() {
-            true
-        } else {
-            log::debug!(
-                "Whitelist. Non whitelisted URLs: {:?}",
-                non_whitelisted_urls
-            );
-            false
+                if non_whitelisted_urls.is_empty() {
+                    true
+                } else {
+                    log::debug!(
+                        "Whitelist. Non whitelisted URLs: {:?}",
+                        non_whitelisted_urls
+                    );
+                    false
+                }
+            }
+            ya_manifest_utils::OutboundAccess::Unrestricted => false,
         }
     }
 }
@@ -454,7 +464,10 @@ struct RemovedRules {
     audited_payload: RemovedRulesIds,
 }
 
-fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
+fn verify_golem_permissions(
+    cert_permissions: &Permissions,
+    outbound_access: OutboundAccess,
+) -> Result<()> {
     match cert_permissions {
         Permissions::All => Ok(()),
         Permissions::Object(details) => match &details.outbound {
@@ -465,10 +478,15 @@ fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Ur
                 golem_certificate::schemas::permissions::OutboundPermissions::Urls(
                     permitted_urls,
                 ) => {
-                    for requested_url in requested_urls {
-                        if permitted_urls.contains(requested_url).not() {
-                            anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
-                        }
+                    match outbound_access {
+                        OutboundAccess::Urls(requested_urls) => {
+                            for requested_url in requested_urls {
+                                if permitted_urls.contains(&requested_url).not() {
+                                    anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
+                                }
+                            }
+                        },
+                        OutboundAccess::Unrestricted => anyhow::bail!("Manifest tries to use Unrestricted access, but certificate allows only for specific urls"),
                     }
                     Ok(())
                 }
