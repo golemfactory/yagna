@@ -337,9 +337,8 @@ pub struct InetOut {
     #[serde(default = "default_protocols")]
     pub protocols: Vec<String>,
     // keep the option here to retain information on
-    // whether urls were specified
-    /// List of allowed external URLs that outbound requests can be sent to.
-    /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
+    // whether outbound access is specified
+    /// Outbound access
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
     pub access: Option<OutboundAccess>,
 }
@@ -347,17 +346,24 @@ pub struct InetOut {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(PartialEq, Clone, Debug)]
 pub enum OutboundAccess {
+    /// List of allowed external URLs that outbound requests can be sent to.
+    /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
     Urls(Vec<Url>),
+    /// Every URL is allowed for outbound connection
     Unrestricted,
 }
 
 mod outbound_access_serde_utils {
     use super::*;
 
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     enum Representation {
+        /// List of allowed external URLs that outbound requests can be sent to.
+        /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
         Urls(Vec<Url>),
+        /// Every URL is allowed for outbound connection
         Unrestricted { urls: bool },
     }
 
