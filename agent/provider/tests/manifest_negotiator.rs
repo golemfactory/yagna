@@ -309,7 +309,7 @@ fn manifest_negotiator_rejected_because_whitelist_doesnt_allow_unrestricted_acce
     let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
 
     manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
-        &rulestore,
+        rulestore,
         whitelist,
         comp_manifest_b64,
         None,
