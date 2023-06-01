@@ -301,6 +301,52 @@ fn manifest_negotiator_test_with_node_identity(
     )
 }
 
+#[test]
+#[serial]
+fn manifest_negotiator_rejected_because_whitelist_doesnt_allow_unrestricted_access() {
+    let rulestore = r#"{"outbound": {"enabled": true, "everyone": "whitelist"}}"#;
+    let comp_manifest_b64 = create_comp_manifest_unrestricted_b64();
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        &rulestore,
+        whitelist,
+        comp_manifest_b64,
+        None,
+        None,
+        None,
+        Some("Everyone rule didn't match whitelist"),
+        &[],
+        None,
+    )
+}
+
+#[test]
+#[serial]
+fn manifest_negotiator_with_node_identity_rejected_because_descriptor_doesnt_allow_unrestricted_access(
+) {
+    let partner_rule = r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#;
+
+    let rulestore = format!(
+        r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "none", "description": ""}}}}, "partner": {{ {} }}}}}}"#,
+        partner_rule
+    );
+    let comp_manifest_b64 = create_comp_manifest_unrestricted_b64();
+    let whitelist = r#"{ "patterns": [{ "domain": "domain.com", "match": "strict" }] }"#;
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
+        &rulestore,
+        whitelist,
+        comp_manifest_b64,
+        None,
+        None,
+        None,
+        Some("Partner Manifest tries to use Unrestricted access, but certificate allows only for specific urls"),
+        &["partner-certificate.signed.json"],
+        Some("node-descriptor-happy-path.signed.json"),
+    )
+}
+
 #[test_case(
     r#"{"outbound": {"enabled": true, "everyone": "all"}}"#, // rulestore config
     &["https://domain.com"], // compManifest.net.inet.out.urls
@@ -610,6 +656,31 @@ fn create_comp_manifest_b64(urls: &[&str]) -> String {
                     "out": {
                         "protocols": ["https"],
                         "urls": urls
+                    }
+                }
+            }
+        }
+    });
+    base64::encode(serde_json::to_string(&manifest).unwrap())
+}
+
+fn create_comp_manifest_unrestricted_b64() -> String {
+    let manifest = json!({
+        "version": "0.1.0",
+        "createdAt": "2022-09-07T02:57:00.000000Z",
+        "expiresAt": "2100-01-01T00:01:00.000000Z",
+        "metadata": { "name": "App", "version": "0.1.0" },
+        "payload": [],
+        "compManifest": {
+            "version": "0.1.0",
+            "script": { "commands": [], "match": "regex" },
+            "net": {
+                "inet": {
+                    "out": {
+                        "protocols": ["https"],
+                        "unrestricted": {
+                            "urls": true
+                        }
                     }
                 }
             }
