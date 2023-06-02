@@ -22,7 +22,7 @@ use ya_manifest_utils::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    AppManifest, CompositeKeystore, OutboundAccess,
+    CompositeKeystore, OutboundAccess,
 };
 
 #[derive(Clone)]
@@ -271,16 +271,16 @@ impl RulesManager {
         }
     }
 
-    fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
+    fn check_everyone_rule(&self, access: &OutboundAccess) -> Result<()> {
         let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
 
-        self.check_mode(mode, manifest)
+        self.check_mode(mode, access)
             .map_err(|e| anyhow!("Everyone {e}"))
     }
 
     fn check_audited_payload_rule(
         &self,
-        manifest: &AppManifest,
+        access: &OutboundAccess,
         manifest_sig: Option<ManifestSignatureProps>,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
@@ -299,7 +299,7 @@ impl RulesManager {
             for cert_id in cert_chain_ids.iter().rev() {
                 if let Some(rule) = rulestore_config.outbound.audited_payload.get(cert_id) {
                     return self
-                        .check_mode(&rule.mode, manifest)
+                        .check_mode(&rule.mode, access)
                         .map_err(|e| anyhow!("Audited-Payload {e}"));
                 }
             }
@@ -315,7 +315,7 @@ impl RulesManager {
 
     fn check_partner_rule(
         &self,
-        manifest: &AppManifest,
+        access: &OutboundAccess,
         node_descriptor: Option<serde_json::Value>,
         requestor_id: NodeId,
     ) -> Result<()> {
@@ -334,13 +334,8 @@ impl RulesManager {
             ));
         }
 
-        self::verify_golem_permissions(
-            &node_descriptor.permissions,
-            manifest
-                .get_outbound_access()
-                .ok_or(anyhow!("Outbound is not requested"))?,
-        )
-        .map_err(|e| anyhow!("Partner {e}"))?;
+        self::verify_golem_permissions(&node_descriptor.permissions, access)
+            .map_err(|e| anyhow!("Partner {e}"))?;
 
         for cert_id in node_descriptor.certificate_chain_fingerprints.iter() {
             if let Some(rule) = self
@@ -353,7 +348,7 @@ impl RulesManager {
                 .get(cert_id)
             {
                 return self
-                    .check_mode(&rule.mode, manifest)
+                    .check_mode(&rule.mode, access)
                     .map_err(|e| anyhow!("Partner {e}"));
             }
         }
@@ -363,17 +358,13 @@ impl RulesManager {
         ))
     }
 
-    fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
+    fn check_mode(&self, mode: &Mode, access: &OutboundAccess) -> Result<()> {
         log::trace!("Checking mode: {mode}");
 
         match mode {
             Mode::All => Ok(()),
             Mode::Whitelist => {
-                if self.whitelist_matching(
-                    manifest
-                        .get_outbound_access()
-                        .ok_or(anyhow!("Outbound is not requested"))?,
-                ) {
+                if self.whitelist_matching(access) {
                     log::trace!("Whitelist matched");
 
                     Ok(())
@@ -387,7 +378,7 @@ impl RulesManager {
 
     pub fn check_outbound_rules(
         &self,
-        manifest: AppManifest,
+        access: OutboundAccess,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
         node_descriptor: Option<serde_json::Value>,
@@ -399,9 +390,9 @@ impl RulesManager {
         }
 
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
-            self.check_everyone_rule(&manifest),
-            self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
+            self.check_everyone_rule(&access),
+            self.check_audited_payload_rule(&access, manifest_sig),
+            self.check_partner_rule(&access, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
@@ -417,7 +408,7 @@ impl RulesManager {
         }
     }
 
-    fn whitelist_matching(&self, outbound_access: OutboundAccess) -> bool {
+    fn whitelist_matching(&self, outbound_access: &OutboundAccess) -> bool {
         match outbound_access {
             ya_manifest_utils::OutboundAccess::Urls(urls) => {
                 let matcher = self.whitelist.matchers.read().unwrap();
@@ -466,7 +457,7 @@ struct RemovedRules {
 
 fn verify_golem_permissions(
     cert_permissions: &Permissions,
-    outbound_access: OutboundAccess,
+    outbound_access: &OutboundAccess,
 ) -> Result<()> {
     match cert_permissions {
         Permissions::All => Ok(()),

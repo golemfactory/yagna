@@ -120,16 +120,6 @@ impl AppManifest {
             .map(|out| out.access.clone())
     }
 
-    pub fn is_outbound_requested(&self) -> bool {
-        match self.get_outbound_access() {
-            Some(access) => match access {
-                OutboundAccess::Urls(urls) => urls.is_empty().not(),
-                OutboundAccess::Unrestricted => true,
-            },
-            None => false,
-        }
-    }
-
     pub fn features(&self) -> HashSet<Feature> {
         let mut features = HashSet::new();
 
@@ -337,17 +327,25 @@ pub struct InetOut {
     pub protocols: Vec<String>,
     /// Outbound access
     #[serde(flatten)]
-    #[schemars(with = "outbound_access::Representation")]
+    #[cfg_attr(feature = "schema", schemars(with = "outbound_access::Representation"))]
     pub access: OutboundAccess,
 }
 
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(PartialEq, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
 pub enum OutboundAccess {
     Urls(Vec<Url>),
     Unrestricted,
 }
+
+impl OutboundAccess {
+    pub fn is_outbound_requested(&self) -> bool {
+        match self {
+            OutboundAccess::Urls(urls) => urls.is_empty().not(),
+            OutboundAccess::Unrestricted => true,
+        }
+    }
+}
+
 mod outbound_access {
     use super::*;
 
