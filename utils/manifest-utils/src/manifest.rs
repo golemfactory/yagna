@@ -342,7 +342,7 @@ pub struct InetOut {
     // whether outbound access is specified
     /// Outbound access
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
-    #[schemars(schema_with = "make_custom_schema")]
+    #[schemars(schema_with = "outbound_access::make_custom_schema")]
     pub access: Option<OutboundAccess>,
 }
 
@@ -350,32 +350,35 @@ pub struct InetOut {
 #[derive(PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum OutboundAccess {
-    /// List of allowed external URLs that outbound requests can be sent to.
-    /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
     Urls(Vec<Url>),
-    /// Every URL is allowed for outbound connection
     Unrestricted,
 }
-use schemars::JsonSchema;
-fn make_custom_schema(gen: &mut SchemaGenerator) -> Schema {
-    <outbound_access_serde_utils::Representation>::json_schema(gen).into()
-}
-mod outbound_access_serde_utils {
+mod outbound_access {
     use super::*;
+
+    use schemars::JsonSchema;
+
+    pub fn make_custom_schema(gen: &mut SchemaGenerator) -> Schema {
+        <outbound_access::Representation>::json_schema(gen).into()
+    }
 
     #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase", untagged)]
-    pub enum Representation {
+    enum Representation {
+        /// List of allowed external URLs that outbound requests can be sent to.
+        /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
         Urls { urls: Vec<Url> },
+        /// Every URL is allowed for outbound connection
         Unrestricted { unrestricted: Unrestricted },
     }
 
     #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct Unrestricted {
-        pub urls: bool,
+    struct Unrestricted {
+        /// only "true" value is valid in "unrestricted" case
+        urls: bool,
     }
 
     impl Serialize for OutboundAccess {
