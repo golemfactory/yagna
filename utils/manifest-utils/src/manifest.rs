@@ -335,8 +335,6 @@ pub struct InetOut {
     /// Supports "http", "https", "ws", and "wss".
     #[serde(default = "default_protocols")]
     pub protocols: Vec<String>,
-    // keep the option here to retain information on
-    // whether outbound access is specified
     /// Outbound access
     #[serde(flatten)]
     #[schemars(with = "outbound_access::Representation")]
@@ -358,9 +356,10 @@ mod outbound_access {
     #[serde(rename_all = "camelCase", rename = "OutboundAccess", untagged)] //Untagged is used here to bypass "schemars" adding "additionalProperties: false" when using enum
     pub enum Representation {
         /// List of allowed external URLs that outbound requests can be sent to.
+        /// Empty list means no outbound access is requested.
         /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
         Urls { urls: Vec<Url> },
-        /// Every URL is allowed for outbound connection
+        /// Every URL is allowed for outbound connection.
         Unrestricted { unrestricted: Unrestricted },
     }
 
@@ -368,7 +367,7 @@ mod outbound_access {
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Unrestricted {
-        /// only "true" value is valid in "unrestricted" case
+        /// Only "true" value is valid in "unrestricted" case.
         urls: bool,
     }
 
