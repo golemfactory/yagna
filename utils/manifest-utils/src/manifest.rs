@@ -117,7 +117,7 @@ impl AppManifest {
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| Some(out.access.clone()))
+            .map(|out| out.access.clone())
     }
 
     pub fn is_outbound_requested(&self) -> bool {
