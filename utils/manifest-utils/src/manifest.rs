@@ -360,10 +360,7 @@ mod outbound_access_serde_utils {
     #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     enum Representation {
-        /// List of allowed external URLs that outbound requests can be sent to.
-        /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
         Urls(Vec<Url>),
-        /// Every URL is allowed for outbound connection
         Unrestricted { urls: bool },
     }
 
