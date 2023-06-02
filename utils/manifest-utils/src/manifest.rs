@@ -3,6 +3,8 @@ use std::ops::Not;
 use std::string::ToString;
 
 use chrono::{DateTime, Utc};
+use schemars::gen::SchemaGenerator;
+use schemars::schema::{Schema, SchemaObject};
 use semver::Version;
 use serde::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -340,11 +342,13 @@ pub struct InetOut {
     // whether outbound access is specified
     /// Outbound access
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
+    #[schemars(schema_with = "make_custom_schema")]
     pub access: Option<OutboundAccess>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(PartialEq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub enum OutboundAccess {
     /// List of allowed external URLs that outbound requests can be sent to.
     /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
@@ -352,16 +356,26 @@ pub enum OutboundAccess {
     /// Every URL is allowed for outbound connection
     Unrestricted,
 }
-
+use schemars::JsonSchema;
+fn make_custom_schema(gen: &mut SchemaGenerator) -> Schema {
+    <outbound_access_serde_utils::Representation>::json_schema(gen).into()
+}
 mod outbound_access_serde_utils {
     use super::*;
 
     #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
     #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", untagged)]
+    pub enum Representation {
+        Urls { urls: Vec<Url> },
+        Unrestricted { unrestricted: Unrestricted },
+    }
+
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+    #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    enum Representation {
-        Urls(Vec<Url>),
-        Unrestricted { urls: bool },
+    pub struct Unrestricted {
+        pub urls: bool,
     }
 
     impl Serialize for OutboundAccess {
@@ -371,8 +385,12 @@ mod outbound_access_serde_utils {
         {
             let repr = {
                 match self {
-                    OutboundAccess::Urls(urls) => Representation::Urls(urls.to_vec()),
-                    OutboundAccess::Unrestricted => Representation::Unrestricted { urls: true },
+                    OutboundAccess::Urls(urls) => Representation::Urls {
+                        urls: urls.to_vec(),
+                    },
+                    OutboundAccess::Unrestricted => Representation::Unrestricted {
+                        unrestricted: Unrestricted { urls: true },
+                    },
                 }
             };
             repr.serialize(serializer)
@@ -387,9 +405,9 @@ mod outbound_access_serde_utils {
             let repr = Representation::deserialize(deserializer)?;
 
             match repr {
-                Representation::Urls(urls) => Ok(OutboundAccess::Urls(urls)),
-                Representation::Unrestricted { urls } => {
-                    if urls {
+                Representation::Urls { urls } => Ok(OutboundAccess::Urls(urls)),
+                Representation::Unrestricted { unrestricted } => {
+                    if unrestricted.urls {
                         Ok(OutboundAccess::Unrestricted)
                     } else {
                         Err(serde::de::Error::custom(
