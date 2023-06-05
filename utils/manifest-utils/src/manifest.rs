@@ -518,8 +518,10 @@ mod tests {
 
         #[test]
         fn json_access_has_invalid_value() {
-            let json = serde_json::json!({ "protocols": default_protocols(),
-            "unrestricted": { "urls": false}});
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": false }
+            });
 
             assert!(serde_json::from_value::<InetOut>(json).is_err());
         }
