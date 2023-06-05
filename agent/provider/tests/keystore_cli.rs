@@ -126,6 +126,36 @@ fn test_add_and_remove_certificates() {
 
 #[serial]
 #[test]
+fn test_add_not_yet_valid_golem_cert_should_succeed() {
+    let result = add_and_list(vec!["golem.cert.not_yet_valid.signed.json"]);
+    assert_eq!(read_not_after(&result, "97958fc8"), "2187-10-31T00:00:00Z");
+}
+
+#[serial]
+#[test]
+fn test_add_not_yet_valid_x509_cert_should_succeed() {
+    let result = add_and_list(vec!["not_yet_valid.pem"]);
+    assert_eq!(read_not_after(&result, "837961b3"), "2106-10-29T23:00:39Z");
+}
+
+#[serial]
+#[test]
+fn test_add_expired_golem_cert_should_fail() {
+    let result = add_and_list(vec!["golem.cert.expired.signed.json"]);
+    // Test uses JSON output, which returns only added certificates. In this case none.
+    assert!(result.is_empty());
+}
+
+#[serial]
+#[test]
+fn test_add_expired_x509_cert_should_fail() {
+    let result = add_and_list(vec!["expired.pem"]);
+    // Test uses JSON output, which returns only added certificates. In this case none.
+    assert_eq!(result, HashMap::new());
+}
+
+#[serial]
+#[test]
 fn verify_not_after_date_format() {
     let result = add_and_list(vec!["foo_req.cert.pem", "partner-certificate.signed.json"]);
     assert_eq!(read_not_after(&result, "cb16a2ed"), "2025-01-01T00:00:00Z");
@@ -181,6 +211,11 @@ fn add_and_list(certificates: Vec<&str>) -> HashMap<String, Value> {
 }
 
 fn add(certificates: Vec<&str>, resource_cert_dir: &Path, cert_dir: &Path) {
+    let mut command = add_command(certificates, resource_cert_dir, cert_dir);
+    command.assert().success();
+}
+
+fn add_command(certificates: Vec<&str>, resource_cert_dir: &Path, cert_dir: &Path) -> Command {
     let mut command = Command::cargo_bin("ya-provider").unwrap();
     command
         .args(["--cert-dir", cert_dir.to_str().unwrap()])
@@ -192,8 +227,8 @@ fn add(certificates: Vec<&str>, resource_cert_dir: &Path, cert_dir: &Path) {
             command.arg(resource_cert_dir.join(certificate));
         }
     }
-
-    command.arg("--json").assert().success();
+    command.arg("--json");
+    command
 }
 
 fn remove(cert_dir: &Path, certificate_ids: Vec<&str>) {

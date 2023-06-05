@@ -30,6 +30,7 @@ pub const CERT_NAME: &str = "X.509";
 #[derive(Eq, PartialEq)]
 pub struct X509CertData {
     pub id: String,
+    pub not_before: DateTime<Utc>,
     pub not_after: DateTime<Utc>,
     pub subject: BTreeMap<String, String>,
 }
@@ -37,6 +38,7 @@ pub struct X509CertData {
 impl X509CertData {
     pub fn create(cert: &X509Ref) -> anyhow::Result<Self> {
         let id = cert_to_id(cert)?;
+        let not_before = asn1_time_to_date_time(cert.not_before())?;
         let not_after = asn1_time_to_date_time(cert.not_after())?;
         let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
@@ -45,6 +47,7 @@ impl X509CertData {
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
         let data = X509CertData {
             id,
+            not_before,
             not_after,
             subject,
         };
@@ -124,6 +127,10 @@ impl X509KeystoreManager {
                 Ok(file_certs) => {
                     if file_certs.is_empty() {
                         continue;
+                    } else if is_chain_expired(&file_certs) {
+                        log::error!("Expired X509 certificate chain: {:?}", file_certs);
+                        invalid.push(cert_path.clone());
+                        continue;
                     }
                     let file_certs_len = file_certs.len();
                     for file_cert in file_certs {
@@ -182,6 +189,13 @@ impl X509KeystoreManager {
         }
         Ok(())
     }
+}
+
+fn is_chain_expired(cert_chain: &[X509]) -> bool {
+    let now = chrono::Utc::now();
+    cert_chain
+        .iter()
+        .any(|cert| asn1_time_to_date_time(cert.not_after()).unwrap() < now)
 }
 
 fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {

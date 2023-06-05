@@ -1,6 +1,7 @@
 use crate::cli::println_conditional;
 use crate::rules::{CertWithRules, RulesManager};
 use crate::startup_config::ProviderConfig;
+use chrono::{DateTime, SecondsFormat, Utc};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -82,8 +83,13 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         &config.cert_dir_path()?,
     )?;
     let AddResponse {
-        added, duplicated, ..
+        added,
+        duplicated,
+        invalid,
+        ..
     } = rules.keystore.add(&add.into())?;
+
+    log_not_valid_yet_certs(added.iter().chain(duplicated.iter()));
 
     if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
@@ -91,8 +97,12 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     }
 
     if !duplicated.is_empty() && !config.json {
-        println!("Certificates already loaded to keystore:");
+        println_conditional(&config, "Certificates already loaded to keystore:");
         print_cert_list(&config, rules.add_rules_information_to_certs(duplicated))?;
+    }
+
+    if !invalid.is_empty() && !config.json {
+        print_invalid_cert_files_list(&config, &invalid)?;
     }
     Ok(())
 }
@@ -151,6 +161,20 @@ fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertWithRules>) -> a
 
     table_builder.build().print(config)?;
     Ok(())
+}
+
+fn print_invalid_cert_files_list(
+    config: &ProviderConfig,
+    cert_files: &[PathBuf],
+) -> anyhow::Result<()> {
+    let columns = vec!["Invalid certificate files".into()];
+    let values = cert_files
+        .iter()
+        .flat_map(|path| path.to_str())
+        .map(|path| serde_json::json!([path]))
+        .collect();
+    let table = ResponseTable { columns, values };
+    CertTable { table }.print(config)
 }
 
 fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {
@@ -223,8 +247,9 @@ impl CertTableBuilder {
 
         let mut values = Vec::new();
         for (id_prefix, cert) in ids.into_iter().zip(self.entries.into_iter()) {
+            let not_after_formatted = date_to_str(&cert.cert.not_after());
             values
-                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), cert.cert.not_after(), cert.cert.subject(), cert.format_outbound_rules()] });
+                .push(serde_json::json! { [ id_prefix, cert.cert.type_name(), not_after_formatted, cert.cert.subject(), cert.format_outbound_rules()] });
         }
 
         let columns = vec![
@@ -250,5 +275,23 @@ impl CertTable {
         let output = CommandOutput::from(self.table);
         output.print(config.json)?;
         Ok(())
+    }
+}
+
+fn date_to_str(date: &DateTime<Utc>) -> String {
+    date.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn log_not_valid_yet_certs<'a>(certs: impl Iterator<Item = &'a Cert>) {
+    let now = Utc::now();
+    for cert in certs {
+        if cert.not_before() > now {
+            log::warn!(
+                "{} certificate will not be valid before {},\nfingerprint: {}",
+                cert.type_name(),
+                date_to_str(&cert.not_before()),
+                cert.id()
+            );
+        }
     }
 }

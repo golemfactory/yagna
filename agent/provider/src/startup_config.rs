@@ -243,7 +243,7 @@ pub enum Commands {
     Keystore(KeystoreConfig),
     /// Manage domain whitelist
     Whitelist(WhitelistConfig),
-    /// Clean up disk space
+    /// Free up disk space by removing old exe-unit files
     Clean(CleanConfig),
     /// Manage Rule config
     Rule(RuleCommand),
