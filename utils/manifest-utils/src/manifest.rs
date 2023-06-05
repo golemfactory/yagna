@@ -482,8 +482,7 @@ mod tests {
 
         #[test]
         fn access_is_none() {
-            let json = serde_json::json!({ "protocols": default_protocols(),
-            });
+            let json = serde_json::json!({ "protocols": default_protocols() });
             assert!(serde_json::from_value::<InetOut>(json).is_err());
         }
 
