@@ -503,8 +503,10 @@ mod tests {
 
         #[test]
         fn access_is_unrestricted() {
-            let json = serde_json::json!({ "protocols": default_protocols(),
-            "unrestricted": { "urls": true}});
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": true }
+            });
             let inet_out = InetOut {
                 protocols: default_protocols(),
                 access: OutboundAccess::Unrestricted,
