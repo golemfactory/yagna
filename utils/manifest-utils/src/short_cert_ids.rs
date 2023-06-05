@@ -2,17 +2,9 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-pub struct Input<T> {
-    pub data: T,
-    pub long_cert_id: String,
-}
+type ShortId = String;
 
-pub struct Output<T> {
-    pub data: T,
-    pub short_cert_id: String,
-}
-
-pub fn shorten_cert_ids<T>(input: Vec<Input<T>>) -> Vec<Output<T>> {
+pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<ShortId> {
     const DIGEST_PREFIX_LENGTHS: [usize; 3] = [8, 32, 128];
 
     // hard-code support for the use of the entire signature, regardless of its size,
@@ -28,9 +20,9 @@ pub fn shorten_cert_ids<T>(input: Vec<Input<T>>) -> Vec<Output<T>> {
     };
 
     let mut prefix_uses = HashMap::<String, u32>::new();
-    for cert in &input {
-        for len in prefix_lengths(cert.long_cert_id.len()) {
-            let mut prefix = cert.long_cert_id.clone();
+    for long_id in long_ids {
+        for len in prefix_lengths(long_id.len()) {
+            let mut prefix = long_id.to_string();
             prefix.truncate(len);
 
             *prefix_uses.entry(prefix).or_default() += 1;
@@ -38,9 +30,9 @@ pub fn shorten_cert_ids<T>(input: Vec<Input<T>>) -> Vec<Output<T>> {
     }
 
     let mut ids = Vec::new();
-    for cert in &input {
-        for len in prefix_lengths(cert.long_cert_id.len()) {
-            let mut prefix = cert.long_cert_id.clone();
+    for long_id in long_ids {
+        for len in prefix_lengths(long_id.len()) {
+            let mut prefix = long_id.to_string();
             prefix.truncate(len);
 
             let usages = *prefix_uses
@@ -57,13 +49,5 @@ pub fn shorten_cert_ids<T>(input: Vec<Input<T>>) -> Vec<Output<T>> {
         }
     }
 
-    let mut values = Vec::new();
-    for (id_prefix, cert) in ids.into_iter().zip(input) {
-        values.push(Output {
-            data: cert.data,
-            short_cert_id: id_prefix,
-        })
-    }
-
-    values
+    ids
 }

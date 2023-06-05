@@ -1,4 +1,4 @@
-use crate::rules::CertRule;
+use crate::rules::{CertRule, OutboundRule};
 use crate::{
     rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
-use ya_manifest_utils::short_cert_ids::{shorten_cert_ids, Input};
+use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -174,6 +174,12 @@ struct RulesTable {
     table: ResponseTable,
 }
 
+struct Dupa {
+    cert_id: String,
+    rule: OutboundRule,
+    cert_rule: CertRule,
+}
+
 impl RulesTable {
     fn new() -> Self {
         let columns = vec![
@@ -222,6 +228,35 @@ impl RulesTable {
         }
     }
 
+    fn add_cert_rules(
+        &mut self,
+        audited_payload: &HashMap<String, CertRule>,
+        partner: &HashMap<String, CertRule>,
+    ) {
+        let rules: Vec<_> = audited_payload
+            .iter()
+            .map(|(cert_id, cert_rule)| Dupa {
+                cert_id: cert_id.clone(),
+                rule: OutboundRule::AuditedPayload,
+                cert_rule: cert_rule.clone(),
+            })
+            .chain(partner.iter().map(|(cert_id, cert_rule)| Dupa {
+                cert_id: cert_id.clone(),
+                rule: OutboundRule::Partner,
+                cert_rule: cert_rule.clone(),
+            }))
+            .collect();
+
+        let long_ids: Vec<String> = rules.iter().map(|e| e.cert_id.clone()).collect();
+
+        let short_ids = shorten_cert_ids(&long_ids);
+
+        for (entry, short_id) in rules.into_iter().zip(short_ids) {
+            let row = serde_json::json! {[ entry.rule, entry.cert_rule.mode, short_id, entry.cert_rule.description ]};
+            self.table.values.push(row);
+        }
+    }
+
     pub fn print(self) -> Result<()> {
         let output = CommandOutput::Table {
             columns: self.table.columns,
@@ -243,8 +278,9 @@ impl From<RulesManager> for RulesTable {
 
         table.with_header(outbound.enabled);
         table.add_everyone(&outbound.everyone);
-        table.add_audited_payload(&outbound.audited_payload);
-        table.add_partner(&outbound.partner);
+        table.add_cert_rules(&outbound.audited_payload, &outbound.partner);
+        // table.add_audited_payload(&outbound.audited_payload);
+        // table.add_partner(&outbound.partner);
 
         table
     }

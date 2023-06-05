@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use ya_manifest_utils::keystore::{
     AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
 };
-use ya_manifest_utils::short_cert_ids::{self, shorten_cert_ids, Input};
+use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 /// Manage trusted keys
@@ -203,21 +203,14 @@ impl CertTableBuilder {
     }
 
     pub fn build(self) -> CertTable {
-        let input = self
-            .entries
-            .into_iter()
-            .map(|e| Input {
-                long_cert_id: e.cert.id().clone(),
-                data: e,
-            })
-            .collect();
+        let long_ids: Vec<String> = self.entries.iter().map(|e| e.cert.id()).collect();
 
-        let output = shorten_cert_ids(input);
+        let short_ids = shorten_cert_ids(&long_ids);
         let mut values = vec![];
-        for x in output {
-            let not_after_formatted = date_to_str(&x.data.cert.not_after());
+        for (entry, short_id) in self.entries.into_iter().zip(short_ids) {
+            let not_after_formatted = date_to_str(&entry.cert.not_after());
             values
-                .push(serde_json::json! { [ x.short_cert_id, x.data.cert.type_name(), not_after_formatted, x.data.cert.subject(), x.data.format_outbound_rules()] });
+                .push(serde_json::json! { [ short_id, entry.cert.type_name(), not_after_formatted, entry.cert.subject(), entry.format_outbound_rules()] });
         }
 
         let columns = vec![
