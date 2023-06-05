@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
+use ya_manifest_utils::short_cert_ids::{shorten_cert_ids, Input};
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
