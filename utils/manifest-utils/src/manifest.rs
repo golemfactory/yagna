@@ -488,8 +488,10 @@ mod tests {
 
         #[test]
         fn access_is_urls() {
-            let json = serde_json::json!({ "protocols": default_protocols(),
-            "urls": ["https://example.net/"]});
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "urls": [ "https://example.net/" ]
+            });
             let inet_out = InetOut {
                 protocols: default_protocols(),
                 access: OutboundAccess::Urls([Url::parse("https://example.net/").unwrap()].into()),
