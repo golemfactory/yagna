@@ -411,15 +411,17 @@ impl ManifestValidator for UrlValidator {
             return futures::future::ok(None).boxed_local();
         }
 
-        if let Some(access) = manifest.get_outbound_access() {
-            match access {
-                ya_manifest_utils::OutboundAccess::Urls(urls) => {
-                    let mut set = Self::DEFAULT_ADDRESSES
-                        .iter()
-                        .map(|(proto, ip, port)| (*proto, IpAddr::from(*ip), *port))
-                        .collect::<HashSet<_, _>>();
+        let access = manifest.get_outbound_access();
 
-                    async move {
+        async move {
+            if let Some(access) = access {
+                match access {
+                    ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                        let mut set = Self::DEFAULT_ADDRESSES
+                            .iter()
+                            .map(|(proto, ip, port)| (*proto, IpAddr::from(*ip), *port))
+                            .collect::<HashSet<_, _>>();
+
                         let ips = resolve_ips(urls.iter()).await?;
 
                         set.extend(ips.into_iter());
@@ -428,18 +430,15 @@ impl ManifestValidator for UrlValidator {
                             inner: Arc::new(AllowedAccess::Urls(set)),
                         }))
                     }
-                    .boxed_local()
-                }
-                ya_manifest_utils::OutboundAccess::Unrestricted => async move {
-                    Ok(Some(Self {
+                    ya_manifest_utils::OutboundAccess::Unrestricted => Ok(Some(Self {
                         inner: Arc::new(AllowedAccess::Unrestricted),
-                    }))
+                    })),
                 }
-                .boxed_local(),
+            } else {
+                Ok(None)
             }
-        } else {
-            async move { Ok(None) }.boxed_local()
         }
+        .boxed_local()
     }
 }
 
