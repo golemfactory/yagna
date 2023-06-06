@@ -132,12 +132,12 @@ async fn wait_for_glm(address: H160, network: Network) -> Result<(), GenericErro
     Err(GenericError::new(msg))
 }
 
-async fn faucet_donate(address: H160, _network: Network) -> Result<(), GenericError> {
+async fn faucet_donate(address: H160, network: Network) -> Result<(), GenericError> {
     // TODO: Reduce timeout to 20-30 seconds when transfer is used.
     let client = awc::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .finish();
-    let faucet_url = resolve_faucet_url().await?;
+    let faucet_url = resolve_faucet_url(network).await?;
     let request_url = format!("{}/0x{:x}", faucet_url, address);
     let request_url = resolver::try_resolve_dns_record(&request_url).await;
     debug!("Faucet request url: {}", request_url);
@@ -155,7 +155,7 @@ async fn faucet_donate(address: H160, _network: Network) -> Result<(), GenericEr
     Ok(())
 }
 
-async fn resolve_faucet_url() -> Result<String, GenericError> {
+async fn resolve_faucet_url(network : Network) -> Result<String, GenericError> {
     match env::var(FAUCET_ADDR_ENVAR) {
         Ok(addr) => Ok(addr),
         _ => {
@@ -163,7 +163,14 @@ async fn resolve_faucet_url() -> Result<String, GenericError> {
                 .await
                 .unwrap_or_else(|_| DEFAULT_ETH_FAUCET_HOST.to_string());
 
-            Ok(format!("http://{}:4000/donate", faucet_host))
+            let port = match network {
+                Network::Mumbai => 4002,
+                Network::Goerli => 4001,
+                Network::Rinkeby => 4000,
+                _ => return Err(GenericError::new("faucet not defined"))
+            };
+
+            Ok(format!("http://{faucet_host}:{port}/donate"))
         }
     }
 }
