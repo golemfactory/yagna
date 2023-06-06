@@ -521,7 +521,7 @@ pub mod local {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
             assert_eq!("erc20", a.driver());
-            assert_eq!("rinkeby", a.network());
+            assert_eq!("goerli", a.network());
             assert_eq!("tGLM", a.token());
         }
     }
