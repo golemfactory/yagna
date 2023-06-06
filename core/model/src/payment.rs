@@ -490,7 +490,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
         pub network: NetworkName,
     }
 
