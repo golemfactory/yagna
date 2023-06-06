@@ -57,9 +57,9 @@ mod tests {
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
-    #[test_case(vec!["1", "2"], vec!["1", "2"]; "two short ids")]
-    #[test_case(vec!["-------------------------------11", "-------------------------------22"], vec!["-------------------------------1", "-------------------------------2"]; "two long ids resulting in 32 char")]
+    #[test_case(vec!["--1", "--2"], vec!["--1", "--2"]; "two short ids")]
     #[test_case(vec!["-------11111111111111111111111111", "-------22222222222222222222222222"], vec!["-------1", "-------2"]; "two long ids resulting in 8 char")]
+    #[test_case(vec!["-------------------------------11", "-------------------------------22"], vec!["-------------------------------1", "-------------------------------2"]; "two long ids resulting in 32 char")]
     fn test(input: Vec<&str>, expected_output: Vec<&str>) {
         let input: Vec<String> = input.into_iter().map(String::from).collect();
         let output = shorten_cert_ids(&input);
