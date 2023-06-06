@@ -7,11 +7,7 @@
             "notAfter": "2025-01-01T00:00:00Z"
         },
         "permissions": {
-            "outbound": {
-                "unrestricted": {
-                    "urls": true
-                }
-            }
+            "outbound": "unrestricted"
         }
     }
 }

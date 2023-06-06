@@ -7,11 +7,7 @@
       "notAfter": "2025-01-01T00:00:00Z"
     },
     "permissions": {
-      "outbound": {
-        "unrestricted": {
-          "urls": true
-        }
-      }
+      "outbound": "unrestricted"
     }
   },
   "signature": {
@@ -19,7 +15,7 @@
       "hash": "sha512",
       "encryption": "EdDSA"
     },
-    "value": "e38155f5c9499f8a2d3e5ffe2a34d8ee83441a54017653056cbd7213e3dce8c1fc6662ff2f4b8f2947a2b78162793168929a328922cc4e189701bc4e7d4b4a0e",
+    "value": "79b5b6a7b6300c7335158ccfd5f5573e62bfe59bfb93e58019b5cca23f92a5c63a28b94bfcb1733fb9bd36aa676d86f94551b36fcad8e41c751c1f5ead05f600",
     "signer": {
       "$schema": "https://golem.network/schemas/v1/certificate.schema.json",
       "certificate": {
