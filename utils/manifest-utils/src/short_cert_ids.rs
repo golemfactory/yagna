@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-type ShortId = String;
-
-pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<ShortId> {
+pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<String> {
     const DIGEST_PREFIX_LENGTHS: [usize; 3] = [8, 32, 128];
 
     // hard-code support for the use of the entire signature, regardless of its size,
@@ -50,4 +48,22 @@ pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<ShortId> {
     }
 
     ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+    use test_case::test_case;
+
+    #[test_case(vec!["1", "2"], vec!["1", "2"]; "two short ids")]
+    #[test_case(vec!["-------------------------------11", "-------------------------------22"], vec!["-------------------------------1", "-------------------------------2"]; "two long ids resulting in 32 char")]
+    #[test_case(vec!["-------11111111111111111111111111", "-------22222222222222222222222222"], vec!["-------1", "-------2"]; "two long ids resulting in 8 char")]
+    fn test(input: Vec<&str>, expected_output: Vec<&str>) {
+        let input: Vec<String> = input.into_iter().map(String::from).collect();
+        let output = shorten_cert_ids(&input);
+
+        assert_eq!(output, expected_output);
+    }
 }

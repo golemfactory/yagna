@@ -50,6 +50,7 @@ schemars = { version = "0.8", features = [
 ], optional = true }
 
 [dev-dependencies]
+pretty_assertions = "1.0"
 tempfile = "3"
 anyhow = "1.0"
 serial_test = "2"
