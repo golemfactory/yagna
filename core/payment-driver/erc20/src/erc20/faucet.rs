@@ -155,7 +155,7 @@ async fn faucet_donate(address: H160, network: Network) -> Result<(), GenericErr
     Ok(())
 }
 
-async fn resolve_faucet_url(network : Network) -> Result<String, GenericError> {
+async fn resolve_faucet_url(network: Network) -> Result<String, GenericError> {
     match env::var(FAUCET_ADDR_ENVAR) {
         Ok(addr) => Ok(addr),
         _ => {
@@ -167,7 +167,7 @@ async fn resolve_faucet_url(network : Network) -> Result<String, GenericError> {
                 Network::Mumbai => 4002,
                 Network::Goerli => 4001,
                 Network::Rinkeby => 4000,
-                _ => return Err(GenericError::new("faucet not defined"))
+                _ => return Err(GenericError::new("faucet not defined")),
             };
 
             Ok(format!("http://{faucet_host}:{port}/donate"))
