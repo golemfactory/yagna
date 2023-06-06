@@ -57,7 +57,7 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
     let address = msg.address();
     let network = network::network_like_to_network(msg.network());
     let result = match network {
-        Network::Rinkeby => {
+        Network::Rinkeby | Network::Goerli => {
             let address = utils::str_to_addr(&address)?;
             log::info!(
                 "Handling fund request. network={}, address={}",
@@ -70,15 +70,6 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
-        Network::Goerli => format!(
-            r#"Your Goerli Polygon address is {}.
-
-Goerli GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
-
-To be able to use Goerli Polygon network, please send some GLM tokens and MATIC for gas to this address.
-"#,
-            address
-        ),
         Network::Mumbai => format!(
             r#"Your Mumbai Polygon address is {}.
 
