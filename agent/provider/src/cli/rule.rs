@@ -250,7 +250,6 @@ impl From<RulesManager> for RulesTable {
 
         table.with_header(outbound.enabled);
         table.add_everyone(&outbound.everyone);
-        // table.add_cert_rules(&outbound.audited_payload, &outbound.partner);
         table.add_audited_payload(&outbound.audited_payload);
         table.add_partner(&outbound.partner);
 
