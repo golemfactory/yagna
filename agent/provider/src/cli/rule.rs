@@ -174,12 +174,6 @@ struct RulesTable {
     table: ResponseTable,
 }
 
-struct Dupa {
-    cert_id: String,
-    rule: OutboundRule,
-    cert_rule: CertRule,
-}
-
 impl RulesTable {
     fn new() -> Self {
         let columns = vec![
@@ -214,45 +208,23 @@ impl RulesTable {
     }
 
     fn add_audited_payload(&mut self, audited_payload: &HashMap<String, CertRule>) {
-        for (cert_id, rule) in audited_payload.iter() {
-            let row =
-                serde_json::json! {[ "Audited-Payload", rule.mode, cert_id, rule.description ]};
+        let rules: Vec<_> = audited_payload.iter().collect();
+        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
+        let short_ids = shorten_cert_ids(&long_ids);
+
+        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
+            let row = serde_json::json! {[ OutboundRule::AuditedPayload, rule.mode, short_id, rule.description ]};
             self.table.values.push(row);
         }
     }
 
     fn add_partner(&mut self, partner: &HashMap<String, CertRule>) {
-        for (cert_id, rule) in partner.iter() {
-            let row = serde_json::json! {[ "Partner", rule.mode, cert_id, rule.description ]};
-            self.table.values.push(row);
-        }
-    }
-
-    fn add_cert_rules(
-        &mut self,
-        audited_payload: &HashMap<String, CertRule>,
-        partner: &HashMap<String, CertRule>,
-    ) {
-        let rules: Vec<_> = audited_payload
-            .iter()
-            .map(|(cert_id, cert_rule)| Dupa {
-                cert_id: cert_id.clone(),
-                rule: OutboundRule::AuditedPayload,
-                cert_rule: cert_rule.clone(),
-            })
-            .chain(partner.iter().map(|(cert_id, cert_rule)| Dupa {
-                cert_id: cert_id.clone(),
-                rule: OutboundRule::Partner,
-                cert_rule: cert_rule.clone(),
-            }))
-            .collect();
-
-        let long_ids: Vec<String> = rules.iter().map(|e| e.cert_id.clone()).collect();
-
+        let rules: Vec<_> = partner.iter().collect();
+        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
         let short_ids = shorten_cert_ids(&long_ids);
 
-        for (entry, short_id) in rules.into_iter().zip(short_ids) {
-            let row = serde_json::json! {[ entry.rule, entry.cert_rule.mode, short_id, entry.cert_rule.description ]};
+        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
+            let row = serde_json::json! {[ OutboundRule::Partner, rule.mode, short_id, rule.description ]};
             self.table.values.push(row);
         }
     }
@@ -278,9 +250,9 @@ impl From<RulesManager> for RulesTable {
 
         table.with_header(outbound.enabled);
         table.add_everyone(&outbound.everyone);
-        table.add_cert_rules(&outbound.audited_payload, &outbound.partner);
-        // table.add_audited_payload(&outbound.audited_payload);
-        // table.add_partner(&outbound.partner);
+        // table.add_cert_rules(&outbound.audited_payload, &outbound.partner);
+        table.add_audited_payload(&outbound.audited_payload);
+        table.add_partner(&outbound.partner);
 
         table
     }
