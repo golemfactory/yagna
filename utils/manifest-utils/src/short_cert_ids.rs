@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<String> {
-    const DIGEST_PREFIX_LENGTHS: [usize; 3] = [8, 32, 128];
+const DIGEST_PREFIX_LENGTHS: [usize; 3] = [8, 32, 128];
 
+/// This function takes unique list of long id's
+/// and produces unique list of shortened id's with the same order.
+pub fn shorten_cert_ids(long_ids: &[String]) -> Vec<String> {
     // hard-code support for the use of the entire signature, regardless of its size,
     // ensure all prefixes are no longer than the signature, and remove duplicates.
     //
@@ -57,7 +59,6 @@ mod tests {
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
-    #[test_case(vec!["1", "1", "2"], vec!["1", "1", "2"]; "duplicated entries")]
     #[test_case(vec!["--1", "--2"], vec!["--1", "--2"]; "two short ids")]
     #[test_case(vec!["-------11111111111111111111111111", "-------22222222222222222222222222"], vec!["-------1", "-------2"]; "two long ids resulting in 8 char")]
     #[test_case(vec!["-------11111111111111111111111111", "-------22222222222222222222222222", "--3"], vec!["-------1", "-------2", "--3"]; "two long ids and one short resulting in 8 char")]
