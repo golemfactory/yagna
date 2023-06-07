@@ -141,7 +141,7 @@ proxy!(
     disconnect,
     |client: Client, msg: Disconnect| async move {
         let node_id = msg.0;
-        client.transport.session_layer.disconnect_node(node_id).await
+        client.transport.session_layer.disconnect(node_id).await
     }
 );
 proxy!(
@@ -157,7 +157,7 @@ proxy!(
 proxy!(
     GetRemoteId(SocketAddr) -> Option<NodeId>,
     remote_id,
-    |client: Client, msg: GetRemoteId| async move { todo!() }
+    |client: Client, msg: GetRemoteId| async move { client.transport.session_layer.remote_id(&msg.0).await }
 );
 proxy!(
     GetNodeId -> NodeId,
