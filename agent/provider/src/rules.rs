@@ -627,7 +627,7 @@ pub enum Mode {
     Whitelist,
 }
 
-#[derive(PartialEq, Eq, Display, Debug, Clone)]
+#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
 pub enum OutboundRule {
     Partner,
     AuditedPayload,

@@ -8358,6 +8358,7 @@ dependencies = [
  "log",
  "md-5",
  "openssl",
+ "pretty_assertions",
  "regex",
  "schemars",
  "semver 1.0.16",

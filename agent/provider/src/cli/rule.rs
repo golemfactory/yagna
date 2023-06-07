@@ -1,4 +1,4 @@
-use crate::rules::CertRule;
+use crate::rules::{CertRule, OutboundRule};
 use crate::{
     rules::{Mode, RulesManager},
     startup_config::ProviderConfig,
@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
+use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -207,16 +208,23 @@ impl RulesTable {
     }
 
     fn add_audited_payload(&mut self, audited_payload: &HashMap<String, CertRule>) {
-        for (cert_id, rule) in audited_payload.iter() {
-            let row =
-                serde_json::json! {[ "Audited-Payload", rule.mode, cert_id, rule.description ]};
+        let rules: Vec<_> = audited_payload.iter().collect();
+        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
+        let short_ids = shorten_cert_ids(&long_ids);
+
+        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
+            let row = serde_json::json! {[ OutboundRule::AuditedPayload, rule.mode, short_id, rule.description ]};
             self.table.values.push(row);
         }
     }
 
     fn add_partner(&mut self, partner: &HashMap<String, CertRule>) {
-        for (cert_id, rule) in partner.iter() {
-            let row = serde_json::json! {[ "Partner", rule.mode, cert_id, rule.description ]};
+        let rules: Vec<_> = partner.iter().collect();
+        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
+        let short_ids = shorten_cert_ids(&long_ids);
+
+        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
+            let row = serde_json::json! {[ OutboundRule::Partner, rule.mode, short_id, rule.description ]};
             self.table.values.push(row);
         }
     }
