@@ -1,0 +1,47 @@
+{
+    "version": "0.1.0",
+    "createdAt": "2023-06-01T12:00:00.000000Z",
+    "expiresAt": "2100-01-01T00:01:00.000000Z",
+    "metadata": {
+        "name": "outbound testing utility",
+        "description": "Used by the test_e2e_outbound_perf goth test in yagna",
+        "version": "0.1.0"
+    },
+    "payload": [
+        {
+            "platform": {
+                "arch": "x86_64",
+                "os": "linux"
+            },
+            "urls": [
+                "http://yacn2.dev.golem.network:8000/docker-outbound-test-v5-latest-3b2d8f2052.gvmi"
+            ],
+            "hash": "sha3:9fbc07c722a966302ed4af7d6f4efaa5a33e886ba051fe83a3a0e203"
+        }
+    ],
+    "compManifest": {
+        "version": "0.1.0",
+        "script": {
+            "commands": [
+                "run .*outbound-bench.*",
+                "run .*iperf3.*",
+                "run .*entrypoint.sh.*",
+                "transfer .*output.json"
+            ],
+            "match": "regex"
+        },
+        "net": {
+            "inet": {
+                "out": {
+                    "protocols": [
+                        "http",
+                        "https"
+                    ],
+                    "unrestricted": {
+                        "urls": true
+                    }
+                }
+            }
+        }
+    }
+}
