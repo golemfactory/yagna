@@ -7,10 +7,11 @@ use url::Url;
 #[derive(
     StructOpt, EnumString, EnumVariantNames, IntoStaticStr, Copy, Clone, Eq, PartialEq, Debug,
 )]
-#[strum(serialize_all = "lowercase")]
+#[strum(serialize_all = "kebab-case")]
 pub enum NetType {
     Central,
     Hybrid,
+    HybridV2,
 }
 
 #[derive(StructOpt, Clone)]
