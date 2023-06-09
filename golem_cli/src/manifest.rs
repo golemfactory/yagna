@@ -35,13 +35,40 @@ pub async fn manifest_bundle(command: ManifestBundleCommand) -> Result<i32> {
 }
 
 pub async fn add_manifest_bundle(path: String) -> Result<i32> {
-    add_certs(&path).await?;
     add_whitelisted_domains(&path).await?;
+    add_rules(&path).await?;
 
     Ok(0)
 }
 
-async fn add_certs(path: &String) -> Result<()> {
+async fn add_rules(path: &String) -> Result<()> {
+    add_audited_payload_rule(path).await?;
+    add_partner_rule(path).await?;
+
+    Ok(())
+}
+
+async fn add_partner_rule(path: &String) -> Result<()> {
+    let cert_directory = format!("{path}/golem-certs");
+    let directory = fs::read_dir(cert_directory)?;
+    let certs = directory
+        // canonicalize first to resolve symlinks
+        .map(|path| path.and_then(|p| p.path().canonicalize()))
+        // this will ignore paths that has errors (for example broken symlinks)
+        .filter(|path| path.as_ref().map(|p| p.is_file()).unwrap_or(false))
+        .map(|path| path.unwrap())
+        .collect::<Vec<_>>();
+
+    for cert in certs {
+        let cmd = YaCommand::new()?;
+        let provider = cmd.ya_provider()?;
+        provider.set_partner_rule(&cert).await?;
+    }
+
+    Ok(())
+}
+
+async fn add_audited_payload_rule(path: &String) -> Result<()> {
     let cert_directory = format!("{path}/certs");
     let directory = fs::read_dir(cert_directory)?;
     let certs = directory
@@ -52,9 +79,13 @@ async fn add_certs(path: &String) -> Result<()> {
         .map(|path| path.unwrap())
         .collect::<Vec<_>>();
 
-    let cmd = YaCommand::new()?;
-    let provider = cmd.ya_provider()?;
-    provider.add_certs(certs).await
+    for cert in certs {
+        let cmd = YaCommand::new()?;
+        let provider = cmd.ya_provider()?;
+        provider.set_audited_payload_rule(&cert).await?;
+    }
+
+    Ok(())
 }
 
 async fn add_whitelisted_domains(path: &String) -> Result<()> {
