@@ -1,7 +1,6 @@
 use anyhow::Context;
 use serde::Deserialize;
 use std::ffi::OsStr;
-use std::path::Path;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -303,35 +302,20 @@ impl YaProviderCommand {
             .spawn()?)
     }
 
-    pub async fn set_audited_payload_rule(self, cert: &Path) -> anyhow::Result<()> {
+    pub async fn set_cert_rule(self, cert: &str, rule: &str) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(["rule", "set", "outbound", "audited-payload", "import-cert"])
-            .arg(cert)
-            .args(["--mode", "all"])
-            .stderr(Stdio::piped())
-            .stdout(Stdio::null())
-            .stdin(Stdio::null())
-            .output()
-            .await
-            .context("failed setting audited-payload rule")?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            let output = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("{}", output))
-        }
-    }
-
-    pub async fn set_partner_rule(self, cert: &Path) -> anyhow::Result<()> {
-        let mut cmd = self.cmd;
-
-        let output = cmd
-            .args(["rule", "set", "outbound", "partner", "import-cert"])
-            .arg(cert)
-            .args(["--mode", "all"])
+            .args([
+                "rule",
+                "set",
+                "outbound",
+                rule,
+                "import-cert",
+                cert,
+                "--mode",
+                "all",
+            ])
             .stderr(Stdio::piped())
             .stdout(Stdio::null())
             .stdin(Stdio::null())
