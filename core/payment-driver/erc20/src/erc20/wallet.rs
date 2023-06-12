@@ -362,7 +362,7 @@ pub async fn send_transactions(
                     tx.tx_id,
                     network,
                     e
-                 );
+                );
                 if e.to_string().contains("nonce too low") {
                     if tx.tmp_onchain_txs.filter(|v| !v.is_empty()).is_some() && tx.resent_times < 5
                     {
