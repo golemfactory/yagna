@@ -36,16 +36,10 @@ pub async fn manifest_bundle(command: ManifestBundleCommand) -> Result<i32> {
 
 pub async fn add_manifest_bundle(path: String) -> Result<i32> {
     add_whitelisted_domains(&path).await?;
-    set_rules(&path).await?;
+    set_audited_payload_rules(&path).await?;
+    set_partner_rules(&path).await?;
 
     Ok(0)
-}
-
-async fn set_rules(path: &String) -> Result<()> {
-    set_audited_payload_rules(path).await?;
-    set_partner_rules(path).await?;
-
-    Ok(())
 }
 
 async fn set_partner_rules(path: &String) -> Result<()> {
