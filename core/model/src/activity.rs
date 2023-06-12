@@ -4,6 +4,7 @@
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::net::IpAddr;
 
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
@@ -149,23 +150,23 @@ impl RpcMessage for GetUsage {
 pub enum VpnControl {
     AddNodes {
         network_id: String,
-        nodes: HashMap<String, String>, // IP -> NodeId
+        nodes: HashMap<IpAddr, NodeId>, // IP -> NodeId
     },
     RemoveNodes {
         network_id: String,
-        node_ids: HashSet<String>,
+        node_ids: HashSet<NodeId>,
     },
 }
 
 impl VpnControl {
-    pub fn add_node(network_id: String, node_ip: String, node_id: String) -> Self {
+    pub fn add_node(network_id: String, node_ip: IpAddr, node_id: NodeId) -> Self {
         VpnControl::AddNodes {
             network_id,
             nodes: vec![(node_ip, node_id)].into_iter().collect(),
         }
     }
 
-    pub fn remove_node(network_id: String, node_id: String) -> Self {
+    pub fn remove_node(network_id: String, node_id: NodeId) -> Self {
         VpnControl::RemoveNodes {
             network_id,
             node_ids: vec![(node_id)].into_iter().collect(),

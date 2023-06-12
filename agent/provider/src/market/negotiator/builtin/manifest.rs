@@ -63,7 +63,7 @@ impl NegotiatorComponent for ManifestSignature {
         };
 
         let node_descriptor = demand
-            .get_property::<String>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
+            .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
 
         if manifest.is_outbound_requested() {

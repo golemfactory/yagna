@@ -1,5 +1,4 @@
-use ya_client_model::node_id::ParseError;
-use ya_client_model::NodeId;
+use ya_client_model::{NodeId, ParseError};
 use ya_service_bus::{typed as bus, RpcMessage};
 
 use serde::{Deserialize, Serialize};

@@ -1,9 +1,10 @@
-use std::net::IpAddr;
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
 use smoltcp::iface::SocketHandle;
+use std::net::{IpAddr, Ipv4Addr};
 use ya_client_model::net::*;
+use ya_client_model::NodeId;
 use ya_utils_networking::vpn::{
     stack::{
         connection::{Connection, ConnectionMeta},
@@ -19,7 +20,7 @@ pub struct GetAddresses;
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct AddAddress {
-    pub address: String,
+    pub address: Ipv4Addr,
 }
 
 #[derive(Debug, Message)]
@@ -29,14 +30,14 @@ pub struct GetNodes;
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct AddNode {
-    pub id: String,
-    pub address: String,
+    pub id: NodeId,
+    pub address: IpAddr,
 }
 
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct RemoveNode {
-    pub id: String,
+    pub id: NodeId,
 }
 
 #[derive(Debug, Message)]
@@ -95,7 +96,7 @@ pub struct UserConnection {
 }
 
 pub struct UserTcpListener {
-    pub socket_handle : SocketHandle
+    pub socket_handle: SocketHandle,
 }
 
 #[derive(Clone, Debug)]

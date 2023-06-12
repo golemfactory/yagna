@@ -1,6 +1,6 @@
 [package]
 name = "ya-agreement-utils"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -13,7 +13,7 @@ keywords=["golem", "yagna"]
 default = []
 
 [dependencies]
-ya-client-model = "0.5"
+ya-client-model = { workspace=true }
 
 chrono = "0.4"
 regex = "1.5.4"

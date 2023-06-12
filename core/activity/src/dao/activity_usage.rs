@@ -4,7 +4,7 @@ use diesel::prelude::*;
 
 use std::convert::TryInto;
 
-use ya_client_model::activity::activity_usage::ActivityUsage;
+use ya_client_model::activity::ActivityUsage;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::dao::{DaoError, Result};

@@ -1,8 +1,9 @@
-use crate::vpn::common::{hton, to_ip, to_octets};
+use crate::vpn::common::{hton, to_octets};
 use crate::vpn::Error;
 use ipnet::IpNet;
 use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
+use ya_core_model::NodeId;
 
 #[derive(Clone)]
 pub struct DuoEndpoint<E> {
@@ -76,7 +77,7 @@ pub struct Network<E> {
     network: IpNet,
     pub(self) addresses: BTreeSet<IpAddr>,
     pub(self) endpoints: HashMap<Box<[u8]>, E>, // IP bytes (BE) -> remote endpoint
-    nodes: HashMap<String, BTreeSet<IpAddr>>,   // Node id -> Vec<IP bytes (BE)>
+    nodes: HashMap<NodeId, BTreeSet<IpAddr>>,   // Node id -> Vec<IP bytes (BE)>
 }
 
 impl<E> Network<E> {
@@ -102,12 +103,11 @@ impl<E> Network<E> {
         &self.endpoints
     }
 
-    pub fn nodes(&self) -> &HashMap<String, BTreeSet<IpAddr>> {
+    pub fn nodes(&self) -> &HashMap<NodeId, BTreeSet<IpAddr>> {
         &self.nodes
     }
 
-    pub fn add_address(&mut self, ip: &str) -> Result<(), Error> {
-        let ip = to_ip(ip)?;
+    pub fn add_address(&mut self, ip: IpAddr) -> Result<(), Error> {
         if !self.network.contains(&ip) {
             return Err(Error::NetAddr(ip.to_string()));
         }
@@ -115,31 +115,31 @@ impl<E> Network<E> {
         Ok(())
     }
 
-    pub fn add_node<F>(&mut self, ip_addr: IpAddr, id: &str, endpoint_fn: F) -> Result<(), Error>
+    pub fn add_node<F>(&mut self, ip_addr: IpAddr, id: &NodeId, endpoint_fn: F) -> Result<(), Error>
     where
-        F: Fn(&str, &str) -> E,
+        F: Fn(&NodeId, &str) -> E,
     {
         if !self.network.contains(&ip_addr) {
             return Err(Error::NetAddr(ip_addr.to_string()));
         }
 
-        let node_id = id.to_string();
+        let node_id = id;
         let ip: Box<[u8]> = hton(ip_addr);
 
         if self.endpoints.contains_key(&ip) {
             return Err(Error::IpAddrTaken(ip_addr));
         }
 
-        self.endpoints.insert(ip, endpoint_fn(&node_id, &self.id));
+        self.endpoints.insert(ip, endpoint_fn(node_id, &self.id));
         self.nodes
-            .entry(node_id)
+            .entry(*node_id)
             .or_insert_with(Default::default)
             .insert(ip_addr);
 
         Ok(())
     }
 
-    pub fn remove_node(&mut self, node_id: &str) {
+    pub fn remove_node(&mut self, node_id: &NodeId) {
         if let Some(addrs) = self.nodes.remove(node_id) {
             addrs.into_iter().for_each(|a| {
                 self.endpoints.remove(&to_octets(a));

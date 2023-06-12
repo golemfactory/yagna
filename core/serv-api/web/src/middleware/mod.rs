@@ -1,4 +1,4 @@
 pub mod auth;
 pub mod cors;
 
-pub use auth::{ident::Identity, Auth, AuthMiddleware, ident::Role};
+pub use auth::{ident::Identity, ident::Role, Auth, AuthMiddleware};

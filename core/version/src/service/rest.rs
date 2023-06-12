@@ -1,6 +1,6 @@
 use crate::db::dao::ReleaseDAO;
 
-use ya_client::model::ErrorMessage;
+use ya_client_model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
 use actix_web::web::Data;

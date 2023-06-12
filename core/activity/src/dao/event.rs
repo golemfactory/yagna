@@ -9,7 +9,7 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 
 use crate::dao::Result;
 use crate::db::{models::ActivityEventType, schema};
-use ya_client_model::activity::provider_event::ProviderEventType;
+use ya_client_model::activity::ProviderEventType;
 use ya_client_model::NodeId;
 use ya_persistence::types::AdaptTimestamp;
 

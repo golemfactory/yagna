@@ -22,7 +22,7 @@ pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
 pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
-pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.node.descriptor";
+pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.!exp.gap-31.v0.node.descriptor";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
@@ -349,6 +349,7 @@ pub fn default_protocols() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{engine::general_purpose, Engine as _};
     use chrono::Duration;
 
     #[test]
@@ -401,6 +402,6 @@ mod tests {
         let serialized = serde_json::to_string(&manifest).unwrap();
 
         println!("{}", serialized);
-        println!("{}", base64::encode(serialized));
+        println!("{}", general_purpose::STANDARD.encode(serialized));
     }
 }

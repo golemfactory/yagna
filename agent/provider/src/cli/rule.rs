@@ -9,8 +9,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -34,17 +32,13 @@ pub enum SetOutboundRule {
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
-    AuditedPayload {
-        #[structopt(long)]
-        cert_id: Option<String>,
-        #[structopt(short, long, possible_values = Mode::VARIANTS)]
-        mode: Mode,
-    },
+    AuditedPayload(AuditedPayloadRuleWithCert),
     Partner(PartnerRuleWithCert),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct CertId {
+    /// Certificate id
     cert_id: String,
     #[structopt(short, long, possible_values = Mode::VARIANTS)]
     mode: Mode,
@@ -52,23 +46,25 @@ pub struct CertId {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum AuditedPayloadRuleWithCert {
+    /// Set rule for X509 certificate with given id.
     CertId(CertId),
+    /// Import and set rule for X509 certificate or X509 certificates chain (rule will be assigned to last certificate in a chain).
     ImportCert {
-        import_cert: PathBuf,
+        /// Path to X509 certificate or X509 certificates chain.
+        imported_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
-        /// When importing chain of X.509 certificates set rule to every certificate in a chain.
-        /// By default rule is assigned only to last (leaf) certificate of a chain.
-        #[structopt(short, long)]
-        whole_chain: bool,
     },
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum PartnerRuleWithCert {
+    /// Set rule for Golem certificate with given id.
     CertId(CertId),
+    /// Import and set rule for X509 certificate or X509 certificates chain.
     ImportCert {
-        import_cert: PathBuf,
+        /// Path to Golem certificate.
+        imported_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
@@ -84,7 +80,7 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let rules = RulesManager::load_or_create(
+    let mut rules = RulesManager::load_or_create(
         &config.rules_file,
         &config.domain_whitelist_file,
         &config.cert_dir_path()?,
@@ -95,28 +91,52 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             SetOutboundRule::Disable => rules.set_enabled(false),
             SetOutboundRule::Enable => rules.set_enabled(true),
             SetOutboundRule::Everyone { mode } => rules.set_everyone_mode(mode),
-            SetOutboundRule::AuditedPayload { cert_id, mode } => match cert_id {
-                Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
-                None => rules.set_default_audited_payload_mode(mode),
-            },
-            SetOutboundRule::Partner(PartnerRuleWithCert::CertId(CertId { cert_id, mode })) => {
-                rules.set_partner_mode(cert_id, mode)
-            }
-            SetOutboundRule::Partner(PartnerRuleWithCert::ImportCert { import_cert, mode }) => {
-                let mut keystore = CompositeKeystore::load(&rules.cert_dir)?;
-
+            SetOutboundRule::AuditedPayload(AuditedPayloadRuleWithCert::CertId(CertId {
+                cert_id,
+                mode,
+            })) => rules.set_audited_payload_mode(cert_id, mode),
+            SetOutboundRule::AuditedPayload(AuditedPayloadRuleWithCert::ImportCert {
+                imported_cert: import_cert,
+                mode,
+            }) => {
+                // TODO change it to `rules.keystore.add` when AuditedPayload will support Golem certs.
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
                     ..
-                } = keystore.add_golem_cert(&AddParams {
+                } = rules.keystore.add_x509_cert(&AddParams {
                     certs: vec![import_cert],
-                    permissions: vec![CertPermissions::All],
-                    whole_chain: false,
                 })?;
 
                 for cert_path in invalid {
-                    log::error!("Failed to import {cert_path:?}. Partner mode can be set only for Golem certificate.");
+                    log::error!("Failed to import X509 certificates from: {cert_path:?}.");
+                }
+
+                rules.keystore.reload(&rules.cert_dir)?;
+
+                for cert_id in leaf_cert_ids {
+                    rules.set_audited_payload_mode(cert_id, mode.clone())?;
+                }
+
+                Ok(())
+            }
+            SetOutboundRule::Partner(PartnerRuleWithCert::CertId(CertId { cert_id, mode })) => {
+                rules.set_partner_mode(cert_id, mode)
+            }
+            SetOutboundRule::Partner(PartnerRuleWithCert::ImportCert {
+                imported_cert: import_cert,
+                mode,
+            }) => {
+                let AddResponse {
+                    invalid,
+                    leaf_cert_ids,
+                    ..
+                } = rules.keystore.add_golem_cert(&AddParams {
+                    certs: vec![import_cert],
+                })?;
+
+                for cert_path in invalid {
+                    log::error!("Failed to import Golem certificates from: {cert_path:?}.");
                 }
 
                 rules.keystore.reload(&rules.cert_dir)?;
@@ -186,9 +206,12 @@ impl RulesTable {
         self.table.values.push(row);
     }
 
-    fn add_audited_payload(&mut self, rule: &CertRule) {
-        let row = serde_json::json! {[ "Audited payload", rule.mode, "", rule.description ]};
-        self.table.values.push(row);
+    fn add_audited_payload(&mut self, audited_payload: &HashMap<String, CertRule>) {
+        for (cert_id, rule) in audited_payload.iter() {
+            let row =
+                serde_json::json! {[ "Audited-Payload", rule.mode, cert_id, rule.description ]};
+            self.table.values.push(row);
+        }
     }
 
     fn add_partner(&mut self, partner: &HashMap<String, CertRule>) {
@@ -219,7 +242,7 @@ impl From<RulesManager> for RulesTable {
 
         table.with_header(outbound.enabled);
         table.add_everyone(&outbound.everyone);
-        table.add_audited_payload(&outbound.audited_payload.default);
+        table.add_audited_payload(&outbound.audited_payload);
         table.add_partner(&outbound.partner);
 
         table

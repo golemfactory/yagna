@@ -15,16 +15,15 @@ use ya_core_model::appkey::AppKey;
 pub enum Role {
     Manager,
     Client,
-    Unknown
+    Unknown,
 }
 
 impl Role {
-
-    fn for_id(role_id : &str) -> Self {
+    fn for_id(role_id: &str) -> Self {
         match role_id {
             "manager" => Self::Manager,
             "client" => Self::Client,
-            _ => Self::Unknown
+            _ => Self::Unknown,
         }
     }
 
@@ -33,7 +32,6 @@ impl Role {
         matches!(self, Self::Manager)
     }
 }
-
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {

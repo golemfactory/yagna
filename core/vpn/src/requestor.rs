@@ -1,16 +1,16 @@
 #![allow(clippy::let_unit_value)]
 
 use crate::message::*;
-use crate::network::{VpnSupervisorRef};
+use crate::network::VpnSupervisorRef;
 use actix_web::{web, HttpResponse, Responder, ResponseError};
 use serde::{Deserialize, Serialize};
 use ya_client_model::net::*;
-use ya_client_model::ErrorMessage;
+use ya_client_model::p2p::NET_API_V2_NET_PATH;
+use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
-use ya_utils_networking::vpn::{Error as VpnError};
+use ya_utils_networking::vpn::Error as VpnError;
 
 type Result<T> = std::result::Result<T, ApiError>;
-
 
 const API_ROOT_PATH: &str = "/net-api";
 
@@ -18,13 +18,11 @@ mod connect_tcp;
 mod listen_tcp;
 
 pub fn web_scope(vpn_sup: web::Data<VpnSupervisorRef>) -> actix_web::Scope {
-    let api_v1_subpath = api_subpath(NET_API_V1_VPN_PATH);
-    let api_v2_subpath = api_subpath(NET_API_V2_VPN_PATH);
+    let api_v1_subpath = api_subpath(NET_API_PATH);
 
     web::scope(API_ROOT_PATH)
         .app_data(vpn_sup)
         .service(vpn_web_scope(api_v1_subpath))
-        .service(vpn_web_scope(api_v2_subpath))
 }
 
 fn api_subpath(path: &str) -> &str {
@@ -48,10 +46,7 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
 
 /// Retrieves existing virtual private networks.
 #[actix_web::get("/net")]
-async fn get_networks(
-    vpn_sup: web::Data<VpnSupervisorRef>,
-    identity: Identity,
-) -> impl Responder {
+async fn get_networks(vpn_sup: web::Data<VpnSupervisorRef>, identity: Identity) -> impl Responder {
     let networks = {
         let supervisor = vpn_sup.read().await;
         supervisor.get_networks(&identity.identity)
@@ -192,8 +187,6 @@ async fn remove_node(
     Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-
-
 #[derive(thiserror::Error, Debug)]
 enum ApiError {
     #[error("VPN communication error: {0:?}")]
@@ -233,10 +226,8 @@ struct PathNetwork {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct PathNetworkNode {
     net_id: String,
-    node_id: String,
+    node_id: NodeId,
 }
-
-
 
 #[test]
 fn test_to_detect_breaking_ya_client_const_changes() {

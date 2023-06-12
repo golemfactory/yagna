@@ -1,6 +1,6 @@
 [package]
 name = "ya-core-model"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -35,7 +35,7 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-ya-client-model = "0.5"
+ya-client-model = {  workspace = true }
 ya-service-bus = "0.6.1"
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }

@@ -1,5 +1,5 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -7,6 +7,7 @@ use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
+use ipnet::IpNet;
 use smoltcp::iface::{Route, SocketHandle};
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use tokio::sync::RwLock;
@@ -24,10 +25,11 @@ use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::stack::{self as net, EgressReceiver, IngressEvent, IngressReceiver, SocketState, StackConfig};
-use ya_utils_networking::vpn::*;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
-
+use ya_utils_networking::vpn::stack::{
+    self as net, EgressReceiver, IngressEvent, IngressReceiver, SocketState, StackConfig,
+};
+use ya_utils_networking::vpn::*;
 
 pub type VpnSupervisorRef = RwLock<VpnSupervisor>;
 
@@ -85,7 +87,13 @@ impl VpnSupervisor {
         node_id: NodeId,
         network: ya_client_model::net::NewNetwork,
     ) -> Result<ya_client_model::net::Network> {
-        let net = to_net(&network.ip, network.mask.as_ref())?;
+        let prefix_len =
+            ipnet::ipv4_mask_to_prefix(network.mask).map_err(|e| Error::Other(e.to_string()))?;
+
+        let net =
+            IpNet::new(network.ip.into(), prefix_len).map_err(|e| Error::Other(e.to_string()))?;
+
+        //    to_net(&network.ip, network.mask.as_ref())?;
         let node_ip = IpCidr::new(
             net.hosts()
                 .next()
@@ -96,13 +104,11 @@ impl VpnSupervisor {
 
         let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
-        let net_gw = match network
-            .gateway
-            .as_ref()
-            .map(|g| IpAddr::from_str(g))
-            .transpose()?
-        {
-            Some(gw) => gw,
+
+        log::info!("Creating network: {net_id} ({net_ip})");
+
+        let net_gw = match network.gateway {
+            Some(gw) => gw.into(),
             None => net
                 .hosts()
                 .next()
@@ -125,9 +131,9 @@ impl VpnSupervisor {
 
         let network = ya_client_model::net::Network {
             id: net_id.clone(),
-            ip: net_ip.to_string(),
-            mask: net.netmask().to_string(),
-            gateway: net_gw.to_string(),
+            ip: convert_to_ipv4(net.addr())?,
+            mask: convert_to_ipv4(net.netmask())?,
+            gateway: Some(convert_to_ipv4(net_gw)?),
         };
 
         self.networks.insert(net_id.clone(), actor);
@@ -145,19 +151,32 @@ impl VpnSupervisor {
         node_id: &NodeId,
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.networks.remove(network_id).ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.ownership.remove(node_id);
+        self.remove_ownership(node_id, network_id);
         self.forward(vpn, Shutdown {})
+    }
+
+    fn remove_ownership(&mut self, node_id: &NodeId, network_id: &str) {
+        if let Some(ownership) = self.ownership.get_mut(node_id) {
+            ownership.remove(network_id);
+            if ownership.is_empty() {
+                self.ownership.remove(node_id);
+            }
+        }
     }
 
     pub fn remove_node<'a>(
         &mut self,
         node_id: &NodeId,
         network_id: &str,
-        id: String,
+        id: NodeId,
     ) -> Result<BoxFuture<'a, Result<()>>> {
+        log::info!("Removing Node: {id} from network: {network_id}");
+
         self.owner(node_id, network_id)?;
         let vpn = self.vpn(network_id)?;
         self.forward(vpn, RemoveNode { id })
@@ -204,8 +223,8 @@ pub struct Vpn {
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack_network: net::Network,
     connections: HashMap<SocketDesc, InternalConnection>,
-    listen_on : HashMap<u16, InternalTcpListener>,
-    accept_sockets : HashSet<SocketDesc>
+    listen_on: HashMap<u16, InternalTcpListener>,
+    accept_sockets: HashSet<SocketDesc>,
 }
 
 impl Vpn {
@@ -220,7 +239,7 @@ impl Vpn {
             stack_network,
             connections: Default::default(),
             listen_on: Default::default(),
-            accept_sockets: Default::default()
+            accept_sockets: Default::default(),
         }
     }
 }
@@ -255,7 +274,7 @@ impl Actor for Vpn {
             .into_actor(self)
             .spawn(ctx);
 
-        log::info!("VPN {} started", id);
+        log::info!("VPN {id} started");
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -270,7 +289,7 @@ impl Actor for Vpn {
         async move {
             let _ = typed::unbind(&vpn_url).await;
             let _ = typed::unbind(&format!("{vpn_url}/raw")).await;
-            log::info!("VPN {} stopped", id);
+            log::info!("VPN {id} stopped");
         }
         .into_actor(self)
         .wait(ctx);
@@ -286,7 +305,11 @@ impl Handler<GetAddresses> for Vpn {
             .stack
             .addresses()
             .into_iter()
-            .map(|ip| ya_client_model::net::Address { ip: ip.to_string() })
+            .filter_map(|ip| {
+                Some(ya_client_model::net::Address {
+                    ip: convert_to_ipv4(ip.address().into()).ok()?,
+                })
+            })
             .collect())
     }
 }
@@ -295,7 +318,14 @@ impl Handler<AddAddress> for Vpn {
     type Result = <AddAddress as Message>::Result;
 
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
-        let ip: IpAddr = msg.address.parse()?;
+        log::info!(
+            "Network: {} assigning new ip address: {} for identity: {}",
+            self.vpn.id(),
+            msg.address,
+            self.node_id
+        );
+
+        let ip: IpAddr = msg.address.into();
 
         let net = self.vpn.as_ref();
         if !net.contains(&ip) {
@@ -308,9 +338,7 @@ impl Handler<AddAddress> for Vpn {
         }
 
         self.stack_network.stack.add_address(cidr);
-
-        self.vpn.add_address(&msg.address)?;
-
+        self.vpn.add_address(msg.address.into())?;
         Ok(())
     }
 }
@@ -326,8 +354,9 @@ impl Handler<GetNodes> for Vpn {
             .flat_map(|(id, ips)| {
                 ips.iter()
                     .map(|ip| ya_client_model::net::Node {
+                        activity_id: None,
                         id: id.clone(),
-                        ip: ip.to_string(),
+                        ip: ip.clone(),
                     })
                     .collect::<Vec<_>>()
             })
@@ -339,7 +368,9 @@ impl Handler<AddNode> for Vpn {
     type Result = <AddNode as Message>::Result;
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
-        let ip = to_ip(&msg.address)?;
+        log::info!("Adding Node: {} to network: {}", msg.address, self.vpn.id());
+
+        let ip = msg.address;
 
         match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
             Ok(_) | Err(Error::IpAddrTaken(_)) => {}
@@ -407,7 +438,8 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
+        let vpn_id = self.vpn.id();
+        log::info!("VPN {vpn_id}: connecting to {remote:?}");
 
         let id = self.vpn.id().clone();
         let network = self.stack_network.clone();
@@ -416,7 +448,7 @@ impl Handler<Connect> for Vpn {
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let stack_connection = result?;
-                log::info!("VPN {}: connected to {:?}", id, remote);
+                log::info!("VPN {id}: connected to {remote:?}");
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
@@ -455,10 +487,9 @@ impl Handler<TcpListen> for Vpn {
         let socket_handle = network.bind(msg.protocol, remote).unwrap();
         let (_rx, _tx) = mpsc::channel::<()>(1);
 
-        ActorResponse::reply(Ok(UserTcpListener{ socket_handle }))
+        ActorResponse::reply(Ok(UserTcpListener { socket_handle }))
     }
 }
-
 
 impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
@@ -577,16 +608,25 @@ impl Handler<Ingress> for Vpn {
                 let acd = desc.clone();
                 match (desc.local, desc.remote) {
                     (SocketEndpoint::Ip(local), SocketEndpoint::Ip(remote)) => {
-                        if let Some(connection) = self.stack_network.connections.borrow().get(&ConnectionMeta {
-                            protocol: Protocol::Tcp,
-                            local,
-                            remote,
-                        }) {
-                            log::info!("[vpn] handle={}, mete={:?}", connection.handle, connection.meta);
+                        if let Some(connection) =
+                            self.stack_network
+                                .connections
+                                .borrow()
+                                .get(&ConnectionMeta {
+                                    protocol: Protocol::Tcp,
+                                    local,
+                                    remote,
+                                })
+                        {
+                            log::info!(
+                                "[vpn] handle={}, mete={:?}",
+                                connection.handle,
+                                connection.meta
+                            );
                             self.accept_sockets.insert(acd);
                         }
                     }
-                    _ => ()
+                    _ => (),
                 }
 
                 ActorResponse::reply(Ok(()))
@@ -695,8 +735,8 @@ struct InternalConnection {
 }
 
 struct InternalTcpListener {
-    pub socket_handle : SocketHandle,
-    pub tx : mpsc::Sender<()>
+    pub socket_handle: SocketHandle,
+    pub tx: mpsc::Sender<()>,
 }
 
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
@@ -771,7 +811,7 @@ fn gsb_local_url(net_id: &str) -> String {
     format!("/public/vpn/{}", net_id)
 }
 
-fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint> {
+fn gsb_remote_url(node_id: &NodeId, net_id: &str) -> network::DuoEndpoint<Endpoint> {
     network::DuoEndpoint {
         tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
         udp: typed::service(format!("/udp/net/{}/vpn/{}/raw", node_id, net_id)),
@@ -847,6 +887,13 @@ fn create_stack_network(
     Ok(net::Network::new("vpn", config, stack))
 }
 
+fn convert_to_ipv4(addr: IpAddr) -> Result<Ipv4Addr> {
+    match addr {
+        IpAddr::V4(v4) => Ok(v4),
+        _ => Err(Error::NetAddrMismatch(addr)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::network::VpnSupervisor;
@@ -872,6 +919,42 @@ mod tests {
         supervisor.get_network(&node_id, &network.id)?;
         supervisor.remove_network(&node_id, &network.id)?;
 
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    async fn create_remove_2_networks() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network1 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+        let network2 = supervisor
+            .create_network(
+                node_id,
+                NewNetwork {
+                    ip: "10.1.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        assert!(supervisor.get_network(&node_id, &network1.id).is_ok());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
+
+        supervisor.remove_network(&node_id, &network1.id)?;
+
+        assert!(supervisor.get_network(&node_id, &network1.id).is_err());
+        assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
         Ok(())
     }
 }

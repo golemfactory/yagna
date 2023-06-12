@@ -1,18 +1,18 @@
 use std::time::{Duration, Instant};
 
 use actix::prelude::*;
-use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use ya_service_api_web::middleware::Identity;
-use ya_utils_networking::vpn::Protocol;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
+use ya_utils_networking::vpn::Protocol;
 
 use crate::message::*;
-use crate::network::{VpnSupervisorRef};
+use crate::network::VpnSupervisorRef;
 
 use super::Result;
 
@@ -80,7 +80,7 @@ impl VpnWebSocket {
         // so we have to make a temporary copy. This incurs no runtime overhead on builds
         // without the feature packet-trace-enable.
         #[cfg(feature = "packet-trace-enable")]
-            let data_trace = data.clone();
+        let data_trace = data.clone();
 
         ya_packet_trace::packet_trace!("VpnWebSocket::Tx::1", { &data_trace });
 
@@ -89,14 +89,14 @@ impl VpnWebSocket {
             data,
             meta: self.meta,
         })
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                if result.is_err() {
-                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
-                }
-            })
-            .wait(ctx);
+        .into_actor(self)
+        .map(move |result, this, ctx| {
+            if result.is_err() {
+                log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
+                let _ = ctx.address().do_send(Shutdown {});
+            }
+        })
+        .wait(ctx);
 
         ya_packet_trace::packet_trace!("VpnWebSocket::Tx::2", { &data_trace });
     }

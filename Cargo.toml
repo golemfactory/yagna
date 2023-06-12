@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.11.0"
+version = "0.12.1"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -33,7 +33,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.8" }
+ya-core-model = { version = "^0.9" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
@@ -60,8 +60,8 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7"
-ya-client-model = "0.5"
+ya-client = { workspace=true }
+ya-client-model = { workspace=true }
 
 gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
@@ -217,6 +217,11 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro"
 ]
+[workspace.dependencies]
+
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "prek/tunneling" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "prek/tunneling" }
+ya-core-model = { version = "^0.9", path="core/model" }
 
 [patch.crates-io]
 ## SERVICES
@@ -249,23 +254,16 @@ ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev 
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
 
+
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "prek/tunneling" }
 #ya-service-bus = { path = "../ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
 #ya-sb-router = { path = "../ya-service-bus/crates/router" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
-## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "ab03db316d6fb122038899c394b749d4d5eda6f9" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "ab03db316d6fb122038899c394b749d4d5eda6f9" }
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
-
 ## RELAY and networking stack
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "cc3e39b776e8851c05a50a40019e7d2d9edb6c5e" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "cc3e39b776e8851c05a50a40019e7d2d9edb6c5e" }
-
-#ya-relay-stack = { path = "../ya-relay/crates/stack" }
-#ya-relay-client = { path = "../ya-relay/client" }
+#ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "9d958f3c68b337a16dc7a13dd09772cb5c079667" }
+#ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "9d958f3c68b337a16dc7a13dd09772cb5c079667" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }

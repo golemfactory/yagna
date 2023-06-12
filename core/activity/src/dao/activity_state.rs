@@ -6,7 +6,7 @@ use diesel::QueryableByName;
 use std::{convert::TryInto, time::Duration};
 use tokio::time::sleep;
 
-use ya_client_model::activity::activity_state::{ActivityState, StatePair};
+use ya_client_model::activity::{ActivityState, StatePair};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::{DaoError, Result};
