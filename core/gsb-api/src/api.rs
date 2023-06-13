@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::model::{
     GsbApiError, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
 };

@@ -141,7 +141,7 @@ pub(crate) fn reply_eos(request_id: impl ToString) -> GsbMessage {
 mod tests {
     use std::iter::FromIterator;
 
-    use crate::hybrid::codec::{decode_message, encode_message};
+    use crate::hybrid_v2::codec::{decode_message, encode_message};
 
     #[test]
     fn encode_message_compat() {
