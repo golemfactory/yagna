@@ -1,6 +1,5 @@
 use anyhow::Context;
 use serde::Deserialize;
-use std::ffi::OsStr;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -302,29 +301,26 @@ impl YaProviderCommand {
             .spawn()?)
     }
 
-    pub async fn add_certs<I, S>(self, certs: I) -> anyhow::Result<()>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<OsStr>,
-    {
+    pub async fn set_cert_rule(self, cert: &str, rule: &str) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
         let output = cmd
             .args([
-                "keystore",
-                "add",
-                "-p",
-                "outbound-manifest",
-                "unverified-permissions-chain",
-                "-w",
+                "rule",
+                "set",
+                "outbound",
+                rule,
+                "import-cert",
+                cert,
+                "--mode",
+                "all",
             ])
-            .args(certs)
             .stderr(Stdio::piped())
             .stdout(Stdio::null())
             .stdin(Stdio::null())
             .output()
             .await
-            .context("failed adding certificates")?;
+            .context("failed setting partner rule")?;
 
         if output.status.success() {
             Ok(())

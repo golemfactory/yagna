@@ -582,7 +582,7 @@ impl Default for RulesConfig {
         Self {
             outbound: OutboundConfig {
                 enabled: true,
-                everyone: Mode::None,
+                everyone: Mode::Whitelist,
                 audited_payload: HashMap::new(),
                 partner: HashMap::new(),
             },
