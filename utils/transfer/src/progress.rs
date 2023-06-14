@@ -13,16 +13,17 @@ pub fn wrap_with_progress_reporting<F>(mut source: Stream, ctx: &TransferContext
 where
     F: Fn(u64, u64) -> () + Send + 'static,
 {
-    let (stream, tx, abort_reg) = Stream::create(1);
+    let (stream, tx, abort_reg) = Stream::create(0);
     let mut txc = tx.clone();
     let state = ctx.state.clone();
 
     spawn_local(async move {
         let fut = async move {
+            let mut offset = state.offset();
             while let Some(result) = source.next().await {
                 if let Ok(data) = result.as_ref() {
                     let data_len = data.as_ref().len() as u64;
-                    let offset = state.offset() + data_len as u64;
+                    offset += data_len as u64;
                     report(offset, state.size().unwrap_or(0));
                 }
                 txc.send(result).await?;
