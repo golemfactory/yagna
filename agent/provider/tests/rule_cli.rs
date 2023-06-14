@@ -33,7 +33,7 @@ fn rule_list_cmd_should_print_default_rules() {
         json!({
           "outbound": {
             "enabled": true,
-            "everyone": "none",
+            "everyone": "whitelist",
             "audited-payload": {},
             "partner": {}
           }
