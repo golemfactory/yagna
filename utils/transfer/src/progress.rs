@@ -9,6 +9,7 @@ type Stream = TransferStream<TransferData, Error>;
 /// Wraps a stream to report progress.
 /// The `report` function is called with the current offset and the total size.
 /// The total size is 0 if the size is unknown. (For example, when the source is a directory.)
+/// The reporting function should not block as it will block the transfer.
 pub fn wrap_stream_with_progress_reporting<F>(mut source: Stream, ctx: &TransferContext, report: F) -> Stream
 where
     F: Fn(u64, u64) -> () + Send + 'static,
@@ -46,6 +47,7 @@ type Sink = TransferSink<TransferData, Error>;
 /// Wraps a sink to report progress.
 /// The `report` function is called with the current offset and the total size.
 /// The total size is 0 if the size is unknown. (For example, when the source is a directory.)
+/// The reporting function should not block as it will block the transfer.
 pub fn wrap_sink_progress_reporting<F>(mut dest: Sink, ctx: &TransferContext, report: F) -> Sink
 where
     F: Fn(u64, u64) -> () + Send + 'static,

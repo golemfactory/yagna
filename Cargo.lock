@@ -1394,6 +1394,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossterm"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a84cda67535339806297f1b331d6dd6320470d2a0fe65381e79ee9e156dd3d13"
+dependencies = [
+ "bitflags",
+ "crossterm_winapi",
+ "libc",
+ "mio 0.8.6",
+ "parking_lot 0.12.1",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "crossterm_winapi"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2656,7 +2672,7 @@ dependencies = [
  "bigdecimal 0.2.2",
  "byte-unit",
  "chrono",
- "crossterm",
+ "crossterm 0.23.2",
  "directories",
  "dotenv",
  "env_logger 0.7.1",
@@ -7445,7 +7461,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags",
  "chrono",
- "rustc_version 0.2.3",
+ "rustc_version 0.4.0",
 ]
 
 [[package]]
@@ -9041,6 +9057,7 @@ dependencies = [
  "async-compression",
  "awc",
  "bytes 1.4.0",
+ "crossterm 0.26.1",
  "env_logger 0.7.1",
  "futures 0.3.26",
  "gftp",
