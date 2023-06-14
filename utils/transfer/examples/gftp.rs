@@ -86,12 +86,16 @@ async fn main() -> Result<(), Error> {
     let ctx = TransferContext::default();
     let source = gftp_provider.source(&src_url, &ctx);
     let source_with_progress =
-        ya_transfer::wrap_with_progress_reporting(source, &ctx, |progress, size| {
-            log::info!("Progress: {} / {}", progress, size);
+        ya_transfer::wrap_stream_with_progress_reporting(source, &ctx, |progress, size| {
+            log::info!("Progress source: {} / {}", progress, size);
         });
     let dest = file_provider.destination(&dest_url, &ctx);
+    let dest_with_progress =
+        ya_transfer::wrap_sink_progress_reporting(dest, &ctx, |progress, size| {
+            log::info!("Progress dest: {} / {}", progress, size);
+        });
 
-    transfer(source_with_progress, dest).await?;
+    transfer(source_with_progress, dest_with_progress).await?;
 
     log::info!(
         "Transfer complete, comparing hashes of {:?} vs {:?}",
@@ -109,12 +113,16 @@ async fn main() -> Result<(), Error> {
     let ctx = TransferContext::default();
     let source = file_provider.source(&src_url, &ctx);
     let source_with_progress =
-        ya_transfer::wrap_with_progress_reporting(source, &ctx, |progress, size| {
-            log::info!("Progress: {} / {}", progress, size);
+        ya_transfer::wrap_stream_with_progress_reporting(source, &ctx, |progress, size| {
+            log::info!("Progress source: {} / {}", progress, size);
         });
     let dest = gftp_provider.destination(&dest_url, &ctx);
+    let dest_with_progress =
+        ya_transfer::wrap_sink_progress_reporting(dest, &ctx, |progress, size| {
+            log::info!("Progress dest: {} / {}", progress, size);
+        });
 
-    transfer(source_with_progress, dest).await?;
+    transfer(source_with_progress, dest_with_progress).await?;
 
     log::info!(
         "Transfer complete, comparing hashes of {:?} vs {:?}",

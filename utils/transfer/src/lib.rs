@@ -32,7 +32,7 @@ pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
-pub use crate::progress::wrap_with_progress_reporting;
+pub use crate::progress::*;
 
 use ya_client_model::activity::TransferArgs;
 
