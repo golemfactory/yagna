@@ -1,13 +1,10 @@
-use actix_rt::System;
-use futures::channel::oneshot;
-use gftp::open_for_upload;
-use rand::Rng;
+use rand::RngCore;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::{env, thread};
+use std::env;
 use tempdir::TempDir;
 use url::Url;
 use ya_transfer::error::Error;
@@ -27,12 +24,13 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
         .expect("rnd file");
 
     let mut rng = rand::thread_rng();
+    let mut input: Vec<u8> = vec![0; chunk_size];
 
     for _ in 0..chunk_count {
-        let input: Vec<u8> = (0..chunk_size).map(|_| rng.gen_range(0..=255u8)).collect();
+        rng.fill_bytes(&mut input);
 
         hasher.input(&input);
-        let _ = file_src.write(&input).unwrap();
+        file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
@@ -78,29 +76,22 @@ async fn main() -> Result<(), Error> {
 
     let gftp_provider = GftpTransferProvider::default();
     let file_provider = FileTransferProvider::default();
-    let (tx, rx) = oneshot::channel();
 
-    let path_th = path.clone();
-    thread::spawn(move || {
-        System::new().block_on(async move {
-            let url = gftp::publish(&path_th).await.unwrap();
-            log::info!("Publishing file at {:?}", url);
-            tx.send(url).unwrap();
-            actix_rt::signal::ctrl_c().await.unwrap();
-        })
-    });
-
-    let src_url = rx.await.unwrap();
+    let src_url = gftp::publish(&path).await.unwrap();
     let dest_url = Url::parse(&format!("file://{}", path_dl.to_str().unwrap()))?;
-
-    let ctx = TransferContext::default();
-    let dest = file_provider.destination(&dest_url, &ctx);
-    let source = gftp_provider.source(&src_url, &ctx);
-
+    log::info!("Publishing file at {}", src_url);
     log::info!("Sharing file at {:?}", src_url.path());
     log::info!("Expecting file at {:?}", dest_url.path());
 
-    transfer(source, dest).await?;
+    let ctx = TransferContext::default();
+    let source = gftp_provider.source(&src_url, &ctx);
+    let source_with_progress =
+        ya_transfer::wrap_with_progress_reporting(source, &ctx, |progress, size| {
+            log::info!("Progress: {} / {}", progress, size);
+        });
+    let dest = file_provider.destination(&dest_url, &ctx);
+
+    transfer(source_with_progress, dest).await?;
 
     log::info!(
         "Transfer complete, comparing hashes of {:?} vs {:?}",
@@ -109,29 +100,21 @@ async fn main() -> Result<(), Error> {
     );
     assert_eq!(hash, hash_file(&path_dl));
 
-    let (tx, rx) = oneshot::channel();
-
-    let path_th = path_up.clone();
-    thread::spawn(move || {
-        System::new().block_on(async move {
-            let url = open_for_upload(&path_th).await.unwrap();
-            log::info!("Awaiting upload at {:?}", url);
-            tx.send(url).unwrap();
-            actix_rt::signal::ctrl_c().await.unwrap();
-        })
-    });
-
     let src_url = Url::parse(&format!("file://{}", path_dl.to_str().unwrap()))?;
-    let dest_url = rx.await.unwrap();
-
-    let ctx = TransferContext::default();
-    let dest = gftp_provider.destination(&dest_url, &ctx);
-    let source = file_provider.source(&src_url, &ctx);
-
+    let dest_url = gftp::open_for_upload(&path_up).await.unwrap();
+    log::info!("Awaiting upload at {}", dest_url);
     log::info!("Sharing file at {:?}", src_url.path());
     log::info!("Expecting file at {:?}", dest_url.path());
 
-    transfer(source, dest).await?;
+    let ctx = TransferContext::default();
+    let source = file_provider.source(&src_url, &ctx);
+    let source_with_progress =
+        ya_transfer::wrap_with_progress_reporting(source, &ctx, |progress, size| {
+            log::info!("Progress: {} / {}", progress, size);
+        });
+    let dest = gftp_provider.destination(&dest_url, &ctx);
+
+    transfer(source_with_progress, dest).await?;
 
     log::info!(
         "Transfer complete, comparing hashes of {:?} vs {:?}",

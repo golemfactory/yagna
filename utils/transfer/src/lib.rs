@@ -4,6 +4,7 @@ mod file;
 mod gftp;
 mod http;
 mod location;
+mod progress;
 mod retry;
 mod traverse;
 
@@ -31,6 +32,7 @@ pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
+pub use crate::progress::wrap_with_progress_reporting;
 
 use ya_client_model::activity::TransferArgs;
 
