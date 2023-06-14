@@ -241,7 +241,7 @@ pub enum Commands {
     /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
     Keystore(KeystoreConfig),
-    /// Domain Whitelist allows to accept Demands with Computation Payload Manifests 
+    /// Domain Whitelist allows to accept Demands with Computation Payload Manifests
     /// which declare usage of Outbound Network but arrive with no signature.
     Whitelist(WhitelistConfig),
     /// Free up disk space by removing old exe-unit files
