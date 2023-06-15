@@ -16,7 +16,7 @@ pub fn wrap_stream_with_progress_reporting<F>(
     report: F,
 ) -> Stream
 where
-    F: Fn(u64, u64) -> () + Send + 'static,
+    F: Fn(u64, u64) + Send + 'static,
 {
     let (stream, tx, abort_reg) = Stream::create(0);
     let mut txc = tx.clone();
@@ -28,7 +28,7 @@ where
             while let Some(result) = source.next().await {
                 if let Ok(data) = result.as_ref() {
                     let data_len = data.as_ref().len() as u64;
-                    offset += data_len as u64;
+                    offset += data_len;
                     report(offset, state.size().unwrap_or(0));
                 }
                 txc.send(result).await?;
@@ -58,7 +58,7 @@ pub fn wrap_sink_with_progress_reporting<F>(
     report: F,
 ) -> Sink
 where
-    F: Fn(u64, u64) -> () + Send + 'static,
+    F: Fn(u64, u64) + Send + 'static,
 {
     let (mut sink, mut rx, res_tx) = Sink::create(0);
     let state = ctx.state.clone();
@@ -69,12 +69,12 @@ where
             let mut offset = state.offset();
             while let Some(result) = rx.next().await {
                 let data = result?;
-                let bytes_len = data.as_ref().len() as u64;
-                offset += bytes_len;
+                let data_len = data.as_ref().len() as u64;
+                offset += data_len;
                 report(offset, state.size().unwrap_or(0));
 
                 dest.send(data).await?;
-                if bytes_len == 0 {
+                if data_len == 0 {
                     break;
                 }
             }

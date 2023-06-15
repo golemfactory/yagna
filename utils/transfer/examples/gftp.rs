@@ -32,7 +32,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
         rng.fill_bytes(&mut input);
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        file_src.write_all(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()
