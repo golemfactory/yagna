@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::{TransferStream, abortable_stream, TransferSink, abortable_sink};
+use crate::{abortable_sink, abortable_stream, TransferSink, TransferStream};
 use crate::{TransferContext, TransferData};
 use futures::{SinkExt, StreamExt, TryFutureExt};
 use tokio::task::spawn_local;
@@ -10,7 +10,11 @@ type Stream = TransferStream<TransferData, Error>;
 /// The `report` function is called with the current offset and the total size.
 /// The total size is 0 if the size is unknown. (For example, when the source is a directory.)
 /// The reporting function should not block as it will block the transfer.
-pub fn wrap_stream_with_progress_reporting<F>(mut source: Stream, ctx: &TransferContext, report: F) -> Stream
+pub fn wrap_stream_with_progress_reporting<F>(
+    mut source: Stream,
+    ctx: &TransferContext,
+    report: F,
+) -> Stream
 where
     F: Fn(u64, u64) -> () + Send + 'static,
 {
@@ -28,7 +32,7 @@ where
                     report(offset, state.size().unwrap_or(0));
                 }
                 txc.send(result).await?;
-            };
+            }
             Ok::<(), Error>(())
         }
         .map_err(|error| {
@@ -48,7 +52,11 @@ type Sink = TransferSink<TransferData, Error>;
 /// The `report` function is called with the current offset and the total size.
 /// The total size is 0 if the size is unknown. (For example, when the source is a directory.)
 /// The reporting function should not block as it will block the transfer.
-pub fn wrap_sink_progress_reporting<F>(mut dest: Sink, ctx: &TransferContext, report: F) -> Sink
+pub fn wrap_sink_with_progress_reporting<F>(
+    mut dest: Sink,
+    ctx: &TransferContext,
+    report: F,
+) -> Sink
 where
     F: Fn(u64, u64) -> () + Send + 'static,
 {

@@ -1,12 +1,12 @@
+use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use rand::RngCore;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
+use std::env;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::env;
 use std::time::Instant;
-use crossterm::{QueueableCommand, cursor, terminal, ExecutableCommand};
 use tempdir::TempDir;
 use url::Url;
 use ya_transfer::error::Error;
@@ -68,14 +68,27 @@ fn progress_to_stdout(start_offset: u64, start_time: Instant, progress: u64, siz
         }
     };
     let (percent, total_size) = if size > 0 {
-        (format!("{:.2}", 100.0 * progress as f64 / size as f64), size.to_string())
+        (
+            format!("{:.2}", 100.0 * progress as f64 / size as f64),
+            size.to_string(),
+        )
     } else {
         ("--".into(), "unknown".into())
     };
 
     let mut stdout = std::io::stdout();
-    stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine)).ok();
-    stdout.write_all(format!("{} / {} ({:.2} {}) {}%", progress, total_size, speed, unit, percent).as_bytes()).ok();
+    stdout
+        .queue(terminal::Clear(terminal::ClearType::CurrentLine))
+        .ok();
+    stdout
+        .write_all(
+            format!(
+                "{} / {} ({:.2} {}) {}%",
+                progress, total_size, speed, unit, percent
+            )
+            .as_bytes(),
+        )
+        .ok();
     stdout.queue(cursor::RestorePosition).ok();
     stdout.flush().ok();
 }
@@ -124,7 +137,7 @@ async fn main() -> Result<(), Error> {
     let start_offset = ctx.state.offset();
     let start_time = Instant::now();
     let dest_with_progress =
-        ya_transfer::wrap_sink_progress_reporting(dest, &ctx, move |progress, size| {
+        ya_transfer::wrap_sink_with_progress_reporting(dest, &ctx, move |progress, size| {
             progress_to_stdout(start_offset, start_time, progress, size);
             // could also log progress:
             // log::info!("Transfer progress {} / {} ({:.2}%)", progress, size, 100.0 * progress as f64 / size as f64);
