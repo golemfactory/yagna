@@ -54,7 +54,7 @@ fn hash_file(path: &Path) -> HashOutput {
 }
 
 // processing progress updates must not panic or the transfer will be aborted
-fn progress_to_stdout(start_offset: u64, start_time: Instant, progress: u64, size: u64) {
+fn progress_to_stdout(start_offset: u64, start_time: Instant, progress: u64, size: Option<u64>) {
     let elapsed = start_time.elapsed();
     let elapsed_secs = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 * 1e-9;
     let (speed, unit) = {
@@ -67,10 +67,10 @@ fn progress_to_stdout(start_offset: u64, start_time: Instant, progress: u64, siz
             (raw_speed, "B/s")
         }
     };
-    let (percent, total_size) = if size > 0 {
+    let (percent, total_size) = if let Some(total_bytes) = size {
         (
-            format!("{:.2}", 100.0 * progress as f64 / size as f64),
-            size.to_string(),
+            format!("{:.2}", 100.0 * progress as f64 / total_bytes as f64),
+            total_bytes.to_string(),
         )
     } else {
         ("--".into(), "unknown".into())
