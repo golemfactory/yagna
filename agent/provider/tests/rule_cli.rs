@@ -281,17 +281,16 @@ fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> 
         .map(|(_id, value)| &value["mode"])
 }
 
-#[test]
+#[test_case("audited-payload", "foo_ca.cert.pem")]
+#[test_case("partner", "partner-certificate.signed.json")]
 #[serial_test::serial]
-fn removing_cert_should_also_remove_its_rule() {
+fn removing_cert_should_also_remove_its_rule(rule: &str, cert: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
-
-    let rule = "partner";
 
     let cert_id = add_certificate_to_keystore(
         data_dir.path(),
         &resource_cert_dir,
-        "partner-certificate.signed.json",
+        cert,
     );
 
     Command::cargo_bin("ya-provider")
