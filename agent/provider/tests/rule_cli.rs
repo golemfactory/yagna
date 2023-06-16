@@ -287,11 +287,7 @@ fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> 
 fn removing_cert_should_also_remove_its_rule(rule: &str, cert: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
-    let cert_id = add_certificate_to_keystore(
-        data_dir.path(),
-        &resource_cert_dir,
-        cert,
-    );
+    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir, cert);
 
     Command::cargo_bin("ya-provider")
         .unwrap()
