@@ -8819,9 +8819,9 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "derive_more",
  "educe",
@@ -8845,7 +8845,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8875,12 +8874,12 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
  "derive_more",
  "futures 0.3.28",
+ "hex",
  "prost 0.10.4",
  "prost-build 0.10.4",
  "rand 0.8.5",
@@ -8893,7 +8892,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-server"
 version = "0.2.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -8920,7 +8918,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
 dependencies = [
  "derive_more",
  "futures 0.3.28",
