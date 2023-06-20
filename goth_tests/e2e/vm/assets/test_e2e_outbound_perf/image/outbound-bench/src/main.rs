@@ -12,7 +12,9 @@ use serde_json::Value;
 use tokio::task::JoinSet;
 
 fn test_roundtrip(mib_per_s: f32, stream: &impl Fn() -> TcpStream) -> anyhow::Result<bool> {
-    let mib: usize = (mib_per_s * 10.0) as usize;
+    const MAX_TIME_SECS: f32 = 10.0;
+
+    let mib: usize = (mib_per_s * MAX_TIME_SECS) as usize;
     let mut data = vec![0u8; mib * 1024 * 1024];
     rand::thread_rng().fill_bytes(&mut data);
 
@@ -28,8 +30,7 @@ fn test_roundtrip(mib_per_s: f32, stream: &impl Fn() -> TcpStream) -> anyhow::Re
         Ok(data_recv)
     });
 
-    let timeout_s = (mib as f32) / mib_per_s;
-    thread::sleep(Duration::from_secs_f32(timeout_s));
+    thread::sleep(Duration::from_secs_f32(MAX_TIME_SECS));
 
     if !read_handle.is_finished() {
         return Ok(false);
@@ -57,6 +58,27 @@ fn test_stress(mib_per_s: f32, stream: &impl Fn() -> TcpStream) -> anyhow::Resul
     Ok(true)
 }
 
+/// make iperf3 output conform to actual JSON
+///
+/// iperf3 --json actually outputs several json objects
+/// concatenated, which will be (correctly) rejected by serde_json
+/// due to trailing input. This function takes the first of the several
+/// objects which contains everything we care about.
+fn sanitize_iper3_output(text: &str) -> String {
+    let mut first_json = String::new();
+    let mut lines = text.lines();
+    first_json.push_str(lines.next().unwrap());
+    for line in lines {
+        if line.starts_with('{') {
+            break;
+        } else {
+            first_json.push_str(line);
+        }
+    }
+
+    first_json
+}
+
 fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
     let mut iperf3 = process::Command::new("iperf3")
         .arg("-p")
@@ -73,19 +95,9 @@ fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
     iperf3.wait()?;
 
     let log_text = std::fs::read_to_string("iperf.log")?;
+    let json_text = sanitize_iper3_output(&log_text);
 
-    let mut first_json = String::new();
-    let mut lines = log_text.lines();
-    first_json.push_str(lines.next().unwrap());
-    for line in lines {
-        if line.starts_with('{') {
-            break;
-        } else {
-            first_json.push_str(line);
-        }
-    }
-
-    let json: Value = serde_json::from_str(&first_json)?;
+    let json: Value = serde_json::from_str(&json_text)?;
 
     let bits_per_second = move || -> Option<f64> {
         json.as_object()?
@@ -110,13 +122,8 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
     ];
 
     let mut requests_to_run = Vec::new();
-    for request in requests {
-        for _ in 0..(total_reqs / requests.len()) {
-            requests_to_run.push(request);
-        }
-    }
-    while requests_to_run.len() < total_reqs {
-        requests_to_run.push(requests[0]);
+    for i in 0..total_reqs {
+        requests_to_run.push(requests[i % requests.len()]);
     }
 
     requests_to_run.shuffle(&mut rand::thread_rng());
