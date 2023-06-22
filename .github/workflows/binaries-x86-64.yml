@@ -43,6 +43,15 @@ jobs:
           target: x86_64-unknown-linux-musl
           override: true
 
+      - name: Set build target for cache key
+        run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+
       - name: Check lockfile
         uses: actions-rs/cargo@v1
         with:
