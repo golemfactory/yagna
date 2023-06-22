@@ -516,9 +516,11 @@ impl Rulestore {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
+            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
+            log::debug!("Loaded rules: {:#?}", config);
 
             Ok(Self {
-                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                config: Arc::new(RwLock::new(config)),
                 path: rules_file.to_path_buf(),
             })
         } else {
