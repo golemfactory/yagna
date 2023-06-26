@@ -11,7 +11,7 @@ use actix_http::ws::CloseCode;
 use actix_http::ws::{CloseReason, ProtocolError};
 use actix_web_actors::ws::{self, WebsocketContext};
 
-use flexbuffers::{BuilderOptions, MapReader, Reader};
+use flexbuffers::{BuilderOptions, Reader};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use service::Service;
@@ -59,14 +59,12 @@ impl WsResponse {
     pub(crate) fn try_new(
         response_key: &str,
         id: &str,
-        payload: &MapReader<&[u8]>,
+        payload: &Reader<&[u8]>,
     ) -> Result<WsResponse, String> {
         let mut response_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-        let mut response_map_builder = response_builder.start_map();
-        let response_map_field_builder = response_map_builder.start_map(response_key);
-        match flexbuffer_util::clone_map(response_map_field_builder, payload) {
+        let response_map_builder = response_builder.start_map();
+        match flexbuffer_util::clone_field(response_map_builder, payload, response_key) {
             Ok(_) => {
-                response_map_builder.end_map();
                 let response = WsResponse {
                     id: id.to_string(),
                     response: WsResponseMsg::Message(response_builder.view().to_vec()),
@@ -197,10 +195,10 @@ fn read_ws_response(buffer: &bytes::Bytes) -> Result<WsResponse, String> {
         .map_err(|err| format!("Missing root map. Err: {err}"))?;
     let id = flexbuffer_util::read_string(&response, "id")
         .map_err(|err| format!("Missing response id. Err: {err}"))?;
-    if let Ok(error_payload) = flexbuffer_util::read_map(&response, "error", false) {
+    if let Ok(error_payload) = flexbuffer_util::read_field(&response, "error", false) {
         WsResponse::try_new("Err", &id, &error_payload)
             .map_err(|err| format!("Failed to read error payload. Id: {id}. Err: {err}"))
-    } else if let Ok(payload) = flexbuffer_util::read_map(&response, "payload", true) {
+    } else if let Ok(payload) = flexbuffer_util::read_field(&response, "payload", true) {
         WsResponse::try_new("Ok", &id, &payload)
             .map_err(|err| format!("Failed to read payload. Id: {id}. Err: {err}"))
     } else {
@@ -236,6 +234,7 @@ impl Handler<WsRequest> for WsMessagesHandler {
         let payload_map_builder = request_map_builder.start_map("payload");
 
         let payload = Reader::get_root(&*request.payload).unwrap(); //TODO handle error
+        // flexbuffer_util::clone_field(payload_map_builder, &payload).unwrap(); //TODO handle error
         let payload_map = payload.as_map(); //TODO check type before as_map
         flexbuffer_util::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
         request_map_builder.end_map();
@@ -403,15 +402,32 @@ mod flexbuffer_util {
         }
     }
 
-    pub(crate) fn read_map<'a>(
+    pub(crate) fn read_field<'a>(
         reader: &MapReader<&'a [u8]>,
         key: &str,
         allow_empty: bool,
-    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+    ) -> anyhow::Result<Reader<&'a [u8]>> {
         match reader.index(key) {
-            Ok(reader) => as_map(&reader, allow_empty),
+            Ok(reader) => {
+                if reader.length() > 0 || allow_empty {
+                    return Ok(reader);
+                }
+                anyhow::bail!("Empty response field {key}");
+            }
             Err(err) => anyhow::bail!("Failed to find response field: {}. Err: {}", key, err),
         }
+    }
+
+    pub(crate) fn clone_field(
+        builder: MapBuilder,
+        reader: &Reader<&[u8]>,
+        key: &str,
+    ) -> Result<(), flexbuffers::ReaderError> {
+        let mut pusher = FlexMapPusher { builder, key };
+        let value_type = reader.flexbuffer_type();
+        pusher = push(reader, value_type, pusher)?;
+        pusher.end();
+        Ok(())
     }
 
     pub(crate) fn clone_map(

@@ -123,8 +123,6 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use serde_json::{json, Value};
     use serial_test::serial;
-    use std::collections::HashMap;
-    use std::io::Write;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use test_case::test_case;
@@ -304,22 +302,10 @@ mod tests {
                     }
                     msg => panic!("Unexpected msg: {:?}", msg),
                 };
-                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 let ws_res = TestWsResponse {
                     id: ws_req.id,
                     payload: (),
                 };
-                // let ws_res = serde_json::json!({
-                //     "id": "0",
-                //     "payload": null,
-                // });
-                // let ws_res = serde_json::json!({
-                //     "id": "0",
-                //     "payload": {
-                //         "Ok": {},
-                //     },
-                // });
-                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 let ws_res = flexbuffers::to_vec(ws_res).unwrap();
                 ws_frames
                     .send(ws::Message::Binary(Bytes::from(ws_res)))
@@ -328,8 +314,9 @@ mod tests {
         );
 
         ws_res.unwrap();
-        let gsb_res = gsb_res.unwrap().unwrap();
-        assert_eq!(gsb_res, ());
+        gsb_res
+            .expect("Response is unit type")
+            .expect("Response is ok");
 
         verify_delete_service(&mut api, &service_addr).await;
     }
