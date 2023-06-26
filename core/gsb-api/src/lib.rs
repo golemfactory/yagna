@@ -234,7 +234,6 @@ impl Handler<WsRequest> for WsMessagesHandler {
         let payload_map_builder = request_map_builder.start_map("payload");
 
         let payload = Reader::get_root(&*request.payload).unwrap(); //TODO handle error
-        // flexbuffer_util::clone_field(payload_map_builder, &payload).unwrap(); //TODO handle error
         let payload_map = payload.as_map(); //TODO check type before as_map
         flexbuffer_util::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
         request_map_builder.end_map();
