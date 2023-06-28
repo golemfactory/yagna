@@ -41,7 +41,7 @@ impl GsbApiService {
 pub(crate) type GsbError = ya_service_bus::Error;
 
 #[derive(Message, Serialize, Deserialize, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "anyhow::Result<()>")]
 struct WsRequest {
     id: String,
     component: String,
@@ -49,7 +49,7 @@ struct WsRequest {
 }
 
 #[derive(Message, Debug)]
-#[rtype(result = "Result<(), anyhow::Error>")]
+#[rtype(result = "anyhow::Result<()>")]
 pub(crate) struct WsResponse {
     pub id: String,
     pub response: WsResponseMsg,
@@ -373,10 +373,7 @@ mod flexbuffer_util {
         }
     }
 
-    pub(crate) fn read_string(
-        reader: &MapReader<&[u8]>,
-        key: &str,
-    ) -> Result<String, anyhow::Error> {
+    pub(crate) fn read_string(reader: &MapReader<&[u8]>, key: &str) -> anyhow::Result<String> {
         match reader.index(key) {
             Ok(field) => match field.get_str() {
                 Ok(txt) => Ok(txt.to_string()),
@@ -389,7 +386,7 @@ mod flexbuffer_util {
     pub(crate) fn as_map<'a>(
         reader: &Reader<&'a [u8]>,
         allow_empty: bool,
-    ) -> Result<MapReader<&'a [u8]>, anyhow::Error> {
+    ) -> anyhow::Result<MapReader<&'a [u8]>> {
         match reader.get_map() {
             Ok(map) => {
                 if allow_empty || !map.is_empty() {
