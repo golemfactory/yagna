@@ -77,15 +77,6 @@ TODO - add faucet
 "#,
             address
         ),
-        Network::Goerli => format!(
-            r#"Your Goerli Polygon address is {}.
-
-Goerli GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
-
-To be able to use Goerli Polygon network, please send some GLM tokens and MATIC for gas to this address.
-"#,
-            address
-        ),
         Network::Mumbai => format!(
             r#"Your Mumbai Polygon address is {}.
 

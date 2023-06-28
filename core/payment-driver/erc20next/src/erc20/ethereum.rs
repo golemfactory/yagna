@@ -539,7 +539,7 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
             "http://geth.testnet.golem.network:55555",
         ),
         Network::Goerli => {
-            collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.goerli.mudit.blog")
+            collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.ankr.com/eth_goerli")
         }
         Network::Polygon => collect_rpc_addr_from(
             "POLYGON_GETH_ADDR",
