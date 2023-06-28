@@ -1,5 +1,4 @@
 use crate::schema::pay_agreement;
-use crate::DEFAULT_PAYMENT_PLATFORM;
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
 use ya_client_model::market::Agreement;
@@ -39,7 +38,7 @@ impl WriteObj {
         let payment_platform = demand_properties
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
-            .unwrap_or(DEFAULT_PAYMENT_PLATFORM)
+            .expect("/golem/com/payment/chosen-platform not provided")
             .to_owned();
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())

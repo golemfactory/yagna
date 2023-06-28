@@ -23,7 +23,6 @@ use crate::accounts::{init_account, Account};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
-use crate::DEFAULT_PAYMENT_PLATFORM;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -49,7 +48,7 @@ async fn create_allocation(
     let payment_platform = allocation
         .payment_platform
         .clone()
-        .unwrap_or_else(|| DEFAULT_PAYMENT_PLATFORM.to_string());
+        .expect("payment platform not provided");
     let address = allocation
         .address
         .clone()
