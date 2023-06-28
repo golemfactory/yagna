@@ -9,12 +9,15 @@ fn check_cert_perm(data_dir: &DataDir) -> anyhow::Result<()> {
         .get_or_create()?
         .join("cert-dir/cert-permissions.json");
     if cert_perm_dir.exists() && cert_perm_dir.is_file() {
-        let bytes = std::fs::read(cert_perm_dir)?;
+        let bytes = std::fs::read(&cert_perm_dir)?;
         if bytes != DEFAULT_CONTENTS {
             println!("Warning: User-modified cert-permissions were detected.");
             println!("         They are now superseded by outbound rules.");
+            println!("         Please migrate your permissions to outbound rules manually.");
             println!("         Currently the file contains:");
             println!("{}", std::str::from_utf8(&bytes)?);
+        } else {
+            std::fs::remove_file(&cert_perm_dir)?;
         }
     }
 

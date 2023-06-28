@@ -1,6 +1,10 @@
-name: Goth integration tests
+name: Goth integration tests (hybrid-net)
 
 on:
+  push:
+    branches:
+      - master
+      - release/*
   pull_request:
     branches:
       - master
@@ -25,7 +29,7 @@ jobs:
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
   integration-test:
-    name: Integration Tests
+    name: Integration Tests (hybrid-net)
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
     defaults:
@@ -44,7 +48,7 @@ jobs:
           python-version: "3.8.0"
 
       - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v7
+        uses: Gr1N/setup-poetry@v8
         with:
           poetry-version: 1.2.2
           working-directory: "./goth_tests"

@@ -1,6 +1,10 @@
 name: Unit Tests
 
 on:
+  push:
+    branches:
+      - master
+      - release/*
   pull_request:
     branches:
       - master
@@ -30,6 +34,11 @@ jobs:
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1

@@ -60,7 +60,13 @@ lazy_static! {
                 .unwrap_or_else(|_| "0x33af15c79d64b85ba14aaffaa4577949104b22e8".to_string())
         )
         .unwrap(),
-        glm_faucet_address: None,
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("GOERLI_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or_else(|_| "0xCCA41b09C1F50320bFB41BD6822BD0cdBDC7d85C".to_string())
+            )
+            .unwrap()
+        ),
         required_confirmations: {
             match env::var("ERC20_GOERLI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,

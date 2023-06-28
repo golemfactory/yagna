@@ -1,6 +1,10 @@
 name: SGX Unit Tests
 
 on:
+  push:
+    branches:
+      - master
+      - release/*
   pull_request:
     branches:
       - master

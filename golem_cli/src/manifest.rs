@@ -35,40 +35,42 @@ pub async fn manifest_bundle(command: ManifestBundleCommand) -> Result<i32> {
 }
 
 pub async fn add_manifest_bundle(path: String) -> Result<i32> {
-    add_certs(&path).await?;
     add_whitelisted_domains(&path).await?;
+    set_audited_payload_rules(&path).await?;
+    set_partner_rules(&path).await?;
 
     Ok(0)
 }
 
-async fn add_certs(path: &String) -> Result<()> {
-    let cert_directory = format!("{path}/certs");
-    let directory = fs::read_dir(cert_directory)?;
-    let certs = directory
-        // canonicalize first to resolve symlinks
-        .map(|path| path.and_then(|p| p.path().canonicalize()))
-        // this will ignore paths that has errors (for example broken symlinks)
-        .filter(|path| path.as_ref().map(|p| p.is_file()).unwrap_or(false))
-        .map(|path| path.unwrap())
-        .collect::<Vec<_>>();
+async fn set_partner_rules(path: &String) -> Result<()> {
+    let certs = get_files_from_directory(&format!("{path}/golem-certs"))?;
 
-    let cmd = YaCommand::new()?;
-    let provider = cmd.ya_provider()?;
-    provider.add_certs(certs).await
+    for cert in certs {
+        let cmd = YaCommand::new()?;
+        let provider = cmd.ya_provider()?;
+        provider.set_cert_rule(&cert, "partner").await?;
+    }
+
+    Ok(())
+}
+
+async fn set_audited_payload_rules(path: &String) -> Result<()> {
+    let certs = get_files_from_directory(&format!("{path}/certs"))?;
+
+    for cert in certs {
+        let cmd = YaCommand::new()?;
+        let provider = cmd.ya_provider()?;
+        provider.set_cert_rule(&cert, "audited-payload").await?;
+    }
+
+    Ok(())
 }
 
 async fn add_whitelisted_domains(path: &String) -> Result<()> {
-    let whitelist_directory = format!("{path}/whitelist");
-    let directory = fs::read_dir(whitelist_directory)?;
-    let whitelists = directory
-        // canonicalize first to resolve symlinks
-        .map(|path| path.and_then(|p| p.path().canonicalize()))
-        // this will ignore paths that has errors (for example broken symlinks)
-        .filter(|path| path.as_ref().map(|p| p.is_file()).unwrap_or(false))
-        .map(|path| path.unwrap());
+    let whitelists = get_files_from_directory(&format!("{path}/whitelist"))?;
 
     for whitelist in whitelists {
-        extend_whitelist(whitelist.as_path()).await?;
+        extend_whitelist(Path::new(&whitelist)).await?;
     }
 
     Ok(())
@@ -92,4 +94,15 @@ async fn extend_whitelist(path: &Path) -> Result<()> {
     provider
         .extend_whitelist(whitelist_type.to_string(), entries)
         .await
+}
+
+fn get_files_from_directory(path: &String) -> Result<Vec<String>> {
+    let directory = fs::read_dir(path)?;
+    directory
+        // canonicalize first to resolve symlinks
+        .map(|path| path.and_then(|p| p.path().canonicalize()))
+        // this will ignore paths that has errors (for example broken symlinks)
+        .filter(|path| path.as_ref().map(|p| p.is_file()).unwrap_or(false))
+        .map(|path| Ok(path?.to_string_lossy().to_string()))
+        .collect()
 }

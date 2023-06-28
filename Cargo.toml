@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.11.0"
+version = "0.12.2"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -42,7 +42,7 @@ erc20_payment_lib = { version = "=0.1.9" }
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.8" }
+ya-core-model = { version = "^0.9" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
@@ -70,7 +70,7 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7"
+ya-client = "0.7.1"
 ya-client-model = "0.5"
 
 gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
@@ -273,11 +273,8 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
 
 ## RELAY and networking stack
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "9d958f3c68b337a16dc7a13dd09772cb5c079667" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "9d958f3c68b337a16dc7a13dd09772cb5c079667" }
-
-#ya-relay-stack = { path = "../ya-relay/crates/stack" }
-#ya-relay-client = { path = "../ya-relay/client" }
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }

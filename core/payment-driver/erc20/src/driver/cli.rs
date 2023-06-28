@@ -57,7 +57,7 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
     let address = msg.address();
     let network = network::network_like_to_network(msg.network());
     let result = match network {
-        Network::Rinkeby => {
+        Network::Rinkeby | Network::Goerli => {
             let address = utils::str_to_addr(&address)?;
             log::info!(
                 "Handling fund request. network={}, address={}",

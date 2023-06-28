@@ -338,9 +338,13 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         let frame = event.payload.into_vec();
 
         let desc = dispatch_desc(&frame)
-            .map(|desc| format!("{desc}"))
+            .map(|desc| format!("{desc:?}"))
             .unwrap_or_else(|_| "error".to_string());
-        log::trace!("[inet] egress -> runtime packet {} B, {desc}", frame.len());
+        log::trace!(
+            "[inet] egress -> runtime packet {} B, {}",
+            frame.len(),
+            desc
+        );
 
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {e}");
@@ -602,7 +606,7 @@ impl Proxy {
 
         print_sockets(&network);
 
-        log::debug!("[inet] connect to {desc}, using handle: {handle}");
+        log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
 
         let (ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
