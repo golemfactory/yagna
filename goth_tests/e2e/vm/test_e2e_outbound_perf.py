@@ -57,6 +57,31 @@ async def test_e2e_outbound_perf(
 ):
     """Test successful flow requesting a task using outbound network feature. X.509 cert negotiation scenario."""
 
+    # Test external api request just one Requestor and one Provider
+    nodes = [
+        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
+        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
+    ]
+
+    assets_root = Path(__file__).parent / "assets"
+    node_types = [
+       {"name": "Requestor", "class": "goth.runner.probe.RequestorProbe"},
+       {
+         "name": "VM-Wasm-Provider",
+         "class": "goth_tests.helpers.probe.ProviderProbe",
+         "mount": [
+              {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
+              {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
+              {"read-write": "~/.local/share/ya-provider/vm-images", "destination": "/root/.local/share/ya-provider/exe-unit/cache"},
+              {"read-write": f"{assets_root}/test_e2e_rule_partner_outbound/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
+         ],
+         "privileged-mode": True,
+       },
+    ]
+
+    config_overrides.append(("nodes", nodes))
+    config_overrides.append(("node-types", node_types))
+
     goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
@@ -78,17 +103,12 @@ async def test_e2e_outbound_perf(
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
         manifest = open(f"{runner.web_root_path}/test_e2e_outbound_perf/image/manifest.json").read()
-        signature = open(f"{runner.web_root_path}/test_e2e_outbound_perf/outbound_signature.sha256.base64").read()
-        certificate = open(f"{runner.web_root_path}/test_e2e_outbound_perf/outbound_certificate.cert").read()
 
         # Market
         demand = (
             DemandBuilder(requestor)
             .props_from_template(task_package = None)
             .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
-            .property("golem.srv.comp.payload.sig", signature)
-            .property("golem.srv.comp.payload.sig.algorithm", "sha256")
-            .property("golem.srv.comp.payload.cert", base64.b64encode(certificate.encode()).decode())
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )
