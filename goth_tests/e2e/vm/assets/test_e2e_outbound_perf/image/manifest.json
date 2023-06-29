@@ -14,9 +14,9 @@
                 "os": "linux"
             },
             "urls": [
-                "http://yacn2.dev.golem.network:8000/docker-outbound-test-v5-latest-3b2d8f2052.gvmi"
+                "http://yacn2.dev.golem.network:8000/docker-docker-outbound-test-v6-latest-6cf4c3d3eb.gvmi"
             ],
-            "hash": "sha3:9fbc07c722a966302ed4af7d6f4efaa5a33e886ba051fe83a3a0e203"
+            "hash": "sha3:192dc5f794fbe98665b017723dcb79aeff0de7f61e6aec9ef61df838"
         }
     ],
     "compManifest": {
