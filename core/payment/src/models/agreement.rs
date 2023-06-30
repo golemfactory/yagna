@@ -72,13 +72,13 @@ pub type ReadObj = WriteObj;
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
+    use crate::models::agreement::WriteObj;
     use chrono::{Duration, Utc};
     use serde_json::json;
-    use ya_client_model::market::{Agreement, Demand, Offer};
+    use std::ops::Add;
     use ya_client_model::market::agreement::State;
+    use ya_client_model::market::{Agreement, Demand, Offer};
     use ya_persistence::types::Role;
-    use crate::models::agreement::WriteObj;
 
     fn mock_agreement_with_demand_properties(properties: serde_json::Value) -> Agreement {
         let demand = Demand::new(
@@ -86,7 +86,7 @@ mod tests {
             "()".to_string(),
             "demand_id".to_string(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         let offer = Offer::new(
@@ -94,7 +94,7 @@ mod tests {
             "()".to_string(),
             "offer_id".to_string(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         Agreement::new(
@@ -119,8 +119,8 @@ mod tests {
     #[test]
     fn create_agreement_with_valid_chosen_platform() {
         let agreement = mock_agreement_with_demand_properties(json!({
-                "golem.com.payment.chosen-platform": "test-network"
-            }));
+            "golem.com.payment.chosen-platform": "test-network"
+        }));
         let role: Role = Role::Provider;
 
         let result = WriteObj::new(agreement, role);
