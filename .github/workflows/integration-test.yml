@@ -32,6 +32,9 @@ jobs:
     name: Integration Tests (hybrid-net)
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
+    strategy:
+      matrix:
+        group: [1, 2, 3, 4, 5]
     defaults:
       run:
         working-directory: "./goth_tests"
@@ -91,7 +94,7 @@ jobs:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run poe goth-assets
-          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 5 --group ${{ matrix.group }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
