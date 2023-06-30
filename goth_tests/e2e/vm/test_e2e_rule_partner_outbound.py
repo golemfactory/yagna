@@ -42,25 +42,7 @@ async def test_e2e_rule_partner_outbound(
         {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
     ]
 
-    assets_root = Path(__file__).parent / "assets";
-    node_types = [
-       {"name": "Requestor", "class": "goth.runner.probe.RequestorProbe"},
-       {
-         "name": "VM-Wasm-Provider",
-         "class": "goth_tests.helpers.probe.ProviderProbe",
-         "mount": [
-              {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
-              {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
-              {"read-write": "~/.local/share/ya-provider/vm-images", "destination": "/root/.local/share/ya-provider/exe-unit/cache"},
-              {"read-write": f"{assets_root}/test_e2e_rule_partner_outbound/provider/cert-dir", "destination": "/root/.local/share/ya-provider/cert-dir"},
-              {"read-write": f"{assets_root}/test_e2e_rule_partner_outbound/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
-         ],
-         "privileged-mode": True,
-       },
-    ]
-
     config_overrides.append(("nodes", nodes))
-    config_overrides.append(("node-types", node_types))
 
     goth_config = load_yaml(default_config, config_overrides)
 
