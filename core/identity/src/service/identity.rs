@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use chrono::Utc;
-use ethsign::{KeyFile, Protected, PublicKey};
+use ethsign::{KeyFile, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
 
@@ -290,7 +290,7 @@ impl IdentityService {
     pub async fn unlock(
         &mut self,
         node_id: NodeId,
-        password: Protected,
+        password: String,
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
@@ -392,6 +392,14 @@ impl IdentityService {
         key.to_pub_key().map_err(model::Error::new_err_msg)
     }
 
+    pub async fn get_private_key(
+        &mut self,
+        key_id: model::GetPrivateKey,
+    ) -> Result<[u8; 32], model::Error> {
+        let key = self.get_key_by_id(&key_id.0)?;
+        key.to_private_key().map_err(model::Error::new_err_msg)
+    }
+
     pub async fn get_key_file(
         &mut self,
         key_id: model::GetKeyFile,
@@ -481,7 +489,7 @@ impl IdentityService {
                 let result = this
                     .lock()
                     .await
-                    .unlock(unlock.node_id, unlock.password.into())
+                    .unlock(unlock.node_id, unlock.password)
                     .await;
                 if result.is_ok() {
                     let _ = unlock_sender
@@ -518,6 +526,11 @@ impl IdentityService {
                     .await
                     .map(|key| key.bytes().to_vec())
             }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPrivateKey| {
+            let this = this.clone();
+            async move { this.lock().await.get_private_key(node_id).await }
         });
         let this = me;
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {

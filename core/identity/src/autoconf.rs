@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::env;
 
 use ethsign::*;
@@ -13,14 +14,15 @@ const ENV_AUTOCONF_PK: &str = "YAGNA_AUTOCONF_ID_SECRET";
 const ENV_AUTOCONF_APP_KEY: &str = "YAGNA_AUTOCONF_APPKEY";
 
 pub fn preconfigured_identity(password: Protected) -> anyhow::Result<Option<IdentityKey>> {
-    let secret_hex: Vec<u8> = match env::var(ENV_AUTOCONF_PK) {
+    let secret_raw: [u8; 32] = match env::var(ENV_AUTOCONF_PK) {
         Ok(v) => v
-            .from_hex()
-            .with_context(|| format!("Failed to parse identity from {}", ENV_AUTOCONF_PK))?,
+            .from_hex::<Vec<u8>>()
+            .with_context(|| format!("Failed to parse identity from {}", ENV_AUTOCONF_PK))?
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Wrong length {}", ENV_AUTOCONF_PK))?,
         Err(_) => return Ok(None),
     };
-    let secret = SecretKey::from_raw(&secret_hex)?;
-    Ok(Some(IdentityKey::from_secret(None, secret, password)))
+    Ok(Some(IdentityKey::from_secret(None, secret_raw, password)?))
 }
 
 pub fn preconfigured_node_id() -> anyhow::Result<Option<NodeId>> {

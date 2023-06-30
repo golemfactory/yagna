@@ -10,3 +10,4 @@ mod autoconf;
 pub mod dao;
 mod db;
 mod id_key;
+mod keystore;

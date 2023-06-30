@@ -151,6 +151,11 @@ pub enum IdentityCommand {
         /// Identity alias to export
         node_or_alias: Option<NodeOrAlias>,
 
+        /// Export using unencrypted private key format,
+        /// easier to use later, but less secure
+        #[structopt(long = "plain")]
+        plain: bool,
+
         /// File path where identity will be written. Defaults to `stdout`
         #[structopt(long = "file-path")]
         file_path: Option<PathBuf>,
@@ -371,13 +376,21 @@ impl IdentityCommand {
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,
+                plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let key_file = bus::service(identity::BUS_ID)
-                    .send(identity::GetKeyFile(node_id))
-                    .await?
-                    .map_err(anyhow::Error::msg)?;
-
+                let key_file = if *plain {
+                    let private_key = bus::service(identity::BUS_ID)
+                        .send(identity::GetPrivateKey(node_id))
+                        .await?
+                        .map_err(anyhow::Error::msg)?;
+                    hex::encode(private_key)
+                } else {
+                    bus::service(identity::BUS_ID)
+                        .send(identity::GetKeyFile(node_id))
+                        .await?
+                        .map_err(anyhow::Error::msg)?
+                };
                 match file_path {
                     Some(file) => {
                         if file.is_file() {

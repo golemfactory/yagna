@@ -237,6 +237,16 @@ impl RpcMessage for GetPubKey {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GetPrivateKey(pub NodeId);
+
+impl RpcMessage for GetPrivateKey {
+    const ID: &'static str = "GetPrivateKey";
+    type Item = [u8; 32];
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetKeyFile(pub NodeId);
 
 impl RpcMessage for GetKeyFile {
