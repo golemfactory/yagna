@@ -69,3 +69,61 @@ impl WriteObj {
 }
 
 pub type ReadObj = WriteObj;
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Add;
+    use chrono::{Duration, Utc};
+    use serde_json::json;
+    use ya_client_model::market::{Agreement, Demand, Offer};
+    use ya_client_model::market::agreement::State;
+    use ya_persistence::types::Role;
+    use crate::models::agreement::WriteObj;
+
+    fn mock_agreement_with_demand_properties(properties: serde_json::Value) -> Agreement {
+        let demand = Demand::new(
+            properties,
+            "()".to_string(),
+            "demand_id".to_string(),
+            Default::default(),
+            Default::default()
+        );
+
+        let offer = Offer::new(
+            json!({}),
+            "()".to_string(),
+            "offer_id".to_string(),
+            Default::default(),
+            Default::default()
+        );
+
+        Agreement::new(
+            "agreement_id".to_string(),
+            demand,
+            offer,
+            Utc::now().add(Duration::days(1)),
+            State::Proposal,
+            Utc::now(),
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "Offer property golem.com.payment.chosen-platform does not exist")]
+    fn cannot_create_agreement_without_chosen_platform() {
+        let agreement = mock_agreement_with_demand_properties(json!({}));
+        let role: Role = Role::Provider;
+
+        WriteObj::new(agreement, role);
+    }
+
+    #[test]
+    fn create_agreement_with_valid_chosen_platform() {
+        let agreement = mock_agreement_with_demand_properties(json!({
+                "golem.com.payment.chosen-platform": "test-network"
+            }));
+        let role: Role = Role::Provider;
+
+        let result = WriteObj::new(agreement, role);
+        assert_eq!(result.payment_platform, "test-network");
+    }
+}
