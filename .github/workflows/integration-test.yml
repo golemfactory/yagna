@@ -22,8 +22,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: "Build binaries (x86-64) (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          intervalSeconds: 60
-          timeoutSeconds: 7200
+          intervalSeconds: 30
+          timeoutSeconds: 3600
 
       - name: Fail if build was not a success ( ubuntu )
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
