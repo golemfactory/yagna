@@ -39,7 +39,7 @@ async def test_e2e_rule_partner_outbound(
     # Test external api request just one Requestor and one Provider
     nodes = [
         {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
+        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0"},
     ]
 
     config_overrides.append(("nodes", nodes))

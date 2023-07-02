@@ -57,8 +57,6 @@ nodes:
 
   - name: "provider-1"
     type: "VM-Wasm-Provider"
-    use-proxy: True
 
   - name: "provider-2"
     type: "VM-Wasm-Provider"
-    use-proxy: True
