@@ -337,23 +337,30 @@ version = "0.15.0"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
-python-versions = ">=3.8,<4.0"
+python-versions = "^3.8"
+develop = false
 
 [package.dependencies]
 aiohttp = "3.7.4"
-ansicolors = ">=1.1.0,<2.0.0"
-docker = ">=5.0,<6.0"
-docker-compose = ">=1.29,<2.0"
-dpath = ">=2.0,<3.0"
+ansicolors = "^1.1.0"
+docker = "^5.0"
+docker-compose = "^1.29"
+dpath = "^2.0"
 func_timeout = "4.3.5"
-ghapi = ">=0.1.16,<0.2.0"
+ghapi = "^0.1.16"
 markupsafe = "2.0.1"
-mitmproxy = ">=5.3,<6.0"
-pyyaml = ">=5.4,<6.0"
-transitions = ">=0.8,<0.9"
-typing_extensions = ">=3.10.0,<4.0.0"
-urllib3 = ">=1.26,<2.0"
-ya-aioclient = ">=0.6,<0.7"
+mitmproxy = "^5.3"
+pyyaml = "^5.4"
+transitions = "^0.8"
+typing_extensions = "^3.10.0"
+urllib3 = "^1.26"
+ya-aioclient = "^0.6"
+
+[package.source]
+type = "git"
+url = "https://github.com/golemfactory/goth.git"
+reference = "b3a08bb281b38c64224e69cefd9d822cce0770da"
+resolved_reference = "b3a08bb281b38c64224e69cefd9d822cce0770da"
 
 [[package]]
 name = "h11"
@@ -1083,7 +1090,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "bf3937e61238fb0e7deba8b7cfd0543a5c1d81ef7d8e0205b9c0243e056ad2eb"
+content-hash = "af9605dd0c4f73291e8bd4e33131a4ff6343fd88aa1636ea45046e30af59e1bf"
 
 [metadata.files]
 aiohttp = [
@@ -1481,10 +1488,7 @@ ghapi = [
     {file = "ghapi-0.1.23-py3-none-any.whl", hash = "sha256:492b5f82b5d4844a0297c8ae6afda638432cee6c74b0bd0a0458b35d19b92b5e"},
     {file = "ghapi-0.1.23.tar.gz", hash = "sha256:93fa097e394d743c6702e217d588a4123696f62d055f2acc495166676843d59f"},
 ]
-goth = [
-    {file = "goth-0.15.0-py3-none-any.whl", hash = "sha256:518ca3dcbcbaa417967be3dd53a3eae844b6bb35c4952c87e9d6ca749386bf28"},
-    {file = "goth-0.15.0.tar.gz", hash = "sha256:ee370e7627bf010434b93cf432bf83e8e4ed07e836e92404a3110c3e0dabf0c6"},
-]
+goth = []
 h11 = [
     {file = "h11-0.14.0-py3-none-any.whl", hash = "sha256:e3fe4ac4b851c468cc8363d500db52c2ead036020723024a109d37346efaa761"},
     {file = "h11-0.14.0.tar.gz", hash = "sha256:8f19fbbe99e72420ff35c00b27a34cb9937e902a8b810e2c88300c6f0a3b699d"},
