@@ -28,8 +28,8 @@ jobs:
       - name: Fail if build was not a success ( ubuntu )
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
-  integration-test:
-    name: Integration Tests (hybrid-net)
+  integration-test-groups:
+    name: Integration Tests (hybrid-net) group
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
     strategy:
@@ -115,3 +115,12 @@ jobs:
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
         run: poetry env remove python3.8
+
+  integration-test:
+    name: Integration Tests (hybrid-net)
+    runs-on: ubuntu-latest
+    needs: [integration-test-groups]
+    steps:
+      - name: Check status
+        if: needs.integration-test-groups.result != 'success'
+        run: exit 1
