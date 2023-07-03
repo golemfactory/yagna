@@ -16,7 +16,7 @@
             "urls": [
                 "http://yacn2.dev.golem.network:8000/docker-docker-outbound-test-v6-latest-6cf4c3d3eb.gvmi"
             ],
-            "hash": "sha3:192dc5f794fbe98665b017723dcb79aeff0de7f61e6aec9ef61df838"
+            "hash": "sha3:6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7"
         }
     ],
     "compManifest": {
