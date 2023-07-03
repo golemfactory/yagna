@@ -39,7 +39,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '4']}},
+        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '0' ]}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
