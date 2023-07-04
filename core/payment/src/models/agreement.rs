@@ -38,7 +38,7 @@ impl WriteObj {
         let payment_platform = demand_properties
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
-            .expect("Offer property golem.com.payment.chosen-platform does not exist")
+            .expect("Demand property golem.com.payment.chosen-platform does not exist")
             .to_owned();
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
