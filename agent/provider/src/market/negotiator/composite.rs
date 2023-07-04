@@ -18,6 +18,7 @@ use crate::market::negotiator::common::{
 };
 use crate::market::negotiator::factory::CompositeNegotiatorConfig;
 use crate::market::negotiator::{NegotiatorComponent, ProposalView};
+use crate::market::negotiator::builtin::demand_validation::DemandValidation;
 use crate::market::ProviderMarket;
 use crate::provider_agent::AgentNegotiatorsConfig;
 
@@ -33,6 +34,10 @@ impl CompositeNegotiator {
         agent_negotiators_cfg: AgentNegotiatorsConfig,
     ) -> anyhow::Result<CompositeNegotiator> {
         let components = NegotiatorsPack::default()
+            .add_component(
+                "Validation",
+                Box::new(DemandValidation::new(&config.validation_config))
+            )
             .add_component(
                 "LimitAgreements",
                 Box::new(MaxAgreements::new(&config.limit_agreements_config)),

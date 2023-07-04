@@ -11,6 +11,14 @@ use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
 use crate::provider_agent::AgentNegotiatorsConfig;
 
+/// Configuration for Validation Negotiator.
+#[derive(StructOpt, Clone, Debug)]
+pub struct ValidationNegotiatorConfig {
+    // #[structopt(long, default_values_t = vec!["golem.com.payment.chosen-platform"])]
+    #[structopt(long, default_value = "golem.com.payment.chosen-platform")]
+    pub required_fields: Vec<String>,
+}
+
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct LimitAgreementsNegotiatorConfig {
@@ -58,6 +66,8 @@ pub struct PaymentTimeoutConfig {
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct CompositeNegotiatorConfig {
+    #[structopt(flatten)]
+    pub validation_config: ValidationNegotiatorConfig,
     #[structopt(flatten)]
     pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
     #[structopt(flatten)]
