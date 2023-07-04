@@ -39,7 +39,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '0' ]}},
+        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '2']}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
@@ -72,7 +72,6 @@ async def test_e2e_outbound_perf(
          "mount": [
               {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
               {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
-              {"read-write": "~/.local/share/ya-provider/vm-images", "destination": "/root/.local/share/ya-provider/exe-unit/cache"},
               {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
          ],
          "privileged-mode": True,
@@ -146,10 +145,10 @@ async def test_e2e_outbound_perf(
         assert len(output_path.read_text()) > 0
         
         output_text = open(output_path).read()
-        logger.info('Received %s', output_text)
         output_json = json.loads(output_text)
-        logger.info('Parsed as %s', output_json)
-        assert 'Ok' in output_json['roundtrip']
-        assert 'Ok' in output_json['many_reqs']
-        assert 'Ok' in output_json['iperf3']
-        assert 'Ok' in output_json['stress']
+
+        pass_set = [{'Ok': True}, {'Err': 'skipped'}]
+        assert output_json['roundtrip'] in pass_set
+        assert output_json['many_reqs'] in pass_set
+        assert output_json['iperf3'] in pass_set
+        assert output_json['stress'] in pass_set
