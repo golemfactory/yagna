@@ -1,6 +1,6 @@
 use ya_agreement_utils::OfferDefinition;
 
-use crate::market::negotiator::factory::{ValidationNegotiatorConfig};
+use crate::market::negotiator::factory::ValidationNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
 };
@@ -13,7 +13,11 @@ pub struct DemandValidation {
 impl DemandValidation {
     pub fn new(config: &ValidationNegotiatorConfig) -> DemandValidation {
         DemandValidation {
-            required_fields: config.required_fields.iter().map(|x| x.to_string()).collect(),
+            required_fields: config
+                .required_fields
+                .iter()
+                .map(|x| x.to_string())
+                .collect(),
         }
     }
 }
@@ -24,8 +28,13 @@ impl NegotiatorComponent for DemandValidation {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        let missing_fields = self.required_fields.iter().cloned().filter(|x| !demand.pointer(x).is_some()).collect::<Vec<String>>();
-        if missing_fields.len()==0 {
+        let missing_fields = self
+            .required_fields
+            .iter()
+            .cloned()
+            .filter(|x| !demand.pointer(x).is_some())
+            .collect::<Vec<String>>();
+        if missing_fields.len() == 0 {
             Ok(NegotiationResult::Ready { offer })
         } else {
             log::info!(
@@ -34,9 +43,7 @@ impl NegotiatorComponent for DemandValidation {
                 missing_fields.join(",")
             );
             Ok(NegotiationResult::Reject {
-                message: format!(
-                    "Missing fields: {}", missing_fields.join(",")
-                ),
+                message: format!("Missing fields: {}", missing_fields.join(",")),
                 is_final: false,
             })
         }

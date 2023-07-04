@@ -1,9 +1,9 @@
+pub mod demand_validation;
 pub mod expiration;
 pub mod manifest;
 pub mod max_agreements;
 pub mod note_interval;
 pub mod payment_timeout;
-pub mod demand_validation;
 
 pub use expiration::LimitExpiration;
 pub use manifest::ManifestSignature;
