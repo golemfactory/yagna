@@ -36,6 +36,6 @@ RUN a=$(getent hosts host.docker.internal | awk '{ print $1 }') \
     && [[ -n "$a" ]] && HOST_ADDR=$a || HOST_ADDR="172.19.0.1" \
     && sed -i "s/{HOST_ADDR}/$HOST_ADDR/" /etc/nginx/nginx.conf
 
-RUN sed -i -E "s/(server_name *)localhost/\1127.0.0.1/g" /etc/nginx/conf.d/default.conf
+RUN sed -i -E "s/(server_name *localhost)/\1 127.0.0.1/g" /etc/nginx/conf.d/default.conf
 
 RUN sed -i -E "s|(access_log )[^;]*;|\1/dev/stdout;|g" /etc/nginx/nginx.conf
