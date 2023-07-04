@@ -803,6 +803,17 @@ packaging = ">=17.1"
 pytest = ">=5.3"
 
 [[package]]
+name = "pytest-split"
+version = "0.8.1"
+description = "Pytest plugin which splits the test suite to equally sized sub suites based on test execution time."
+category = "main"
+optional = false
+python-versions = ">=3.7.1,<4.0"
+
+[package.dependencies]
+pytest = ">=5,<8"
+
+[[package]]
 name = "python-dateutil"
 version = "2.8.2"
 description = "Extensions to the standard Python datetime module"
@@ -1072,7 +1083,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "45399ad6d9040061f4899a61507ae40b53dfb17526428c9bd02a9f0292aaa660"
+content-hash = "bf3937e61238fb0e7deba8b7cfd0543a5c1d81ef7d8e0205b9c0243e056ad2eb"
 
 [metadata.files]
 aiohttp = [
@@ -1886,6 +1897,10 @@ pytest-asyncio = [
 pytest-rerunfailures = [
     {file = "pytest-rerunfailures-10.3.tar.gz", hash = "sha256:d8244d799f89a6edb5e57301ddaeb3b6f10d6691638d51e80b371311592e28c6"},
     {file = "pytest_rerunfailures-10.3-py3-none-any.whl", hash = "sha256:6be6f96510bf94b54198bf15bc5568fe2cdff88e83875912e22d29810acf65ff"},
+]
+pytest-split = [
+    {file = "pytest_split-0.8.1-py3-none-any.whl", hash = "sha256:74b110ea091bd147cc1c5f9665a59506e5cedfa66f96a89fb03e4ab447c2c168"},
+    {file = "pytest_split-0.8.1.tar.gz", hash = "sha256:2d88bd3dc528689a7a3f58fc12ea165c3aa62e90795e420dfad920afe5612d6d"},
 ]
 python-dateutil = [
     {file = "python-dateutil-2.8.2.tar.gz", hash = "sha256:0123cacc1627ae19ddf3c27a5de5bd67ee4586fbdd6440d9748f8abb483d3e86"},
