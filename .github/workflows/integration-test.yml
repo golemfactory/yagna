@@ -48,7 +48,7 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.8"
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v8
@@ -113,7 +113,7 @@ jobs:
         # Python version below should agree with the version set up by this job.
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
-        run: poetry env remove python3.10
+        run: poetry env remove python3.8
 
   integration-test:
     name: Integration Tests (hybrid-net)
