@@ -1,6 +1,6 @@
 use ya_agreement_utils::OfferDefinition;
 
-use crate::market::negotiator::factory::ValidationNegotiatorConfig;
+use crate::market::negotiator::factory::DemandValidationNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
 };
@@ -11,7 +11,7 @@ pub struct DemandValidation {
 }
 
 impl DemandValidation {
-    pub fn new(config: &ValidationNegotiatorConfig) -> DemandValidation {
+    pub fn new(config: &DemandValidationNegotiatorConfig) -> DemandValidation {
         DemandValidation {
             required_fields: config
                 .required_fields
@@ -38,7 +38,7 @@ impl NegotiatorComponent for DemandValidation {
             Ok(NegotiationResult::Ready { offer })
         } else {
             log::info!(
-                "'ValidationNegotiator' negotiator: Reject proposal [{}] due to missing fields: {}",
+                "'DemandValidation' negotiator: Reject proposal [{}] due to missing fields: {}",
                 demand.id,
                 missing_fields.join(",")
             );

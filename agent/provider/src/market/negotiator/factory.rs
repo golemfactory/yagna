@@ -13,7 +13,7 @@ use crate::provider_agent::AgentNegotiatorsConfig;
 
 /// Configuration for Validation Negotiator.
 #[derive(StructOpt, Clone, Debug)]
-pub struct ValidationNegotiatorConfig {
+pub struct DemandValidationNegotiatorConfig {
     #[structopt(long, default_value = "golem.com.payment.chosen-platform")]
     pub required_fields: Vec<String>,
 }
@@ -66,7 +66,7 @@ pub struct PaymentTimeoutConfig {
 #[derive(StructOpt, Clone, Debug)]
 pub struct CompositeNegotiatorConfig {
     #[structopt(flatten)]
-    pub validation_config: ValidationNegotiatorConfig,
+    pub validation_config: DemandValidationNegotiatorConfig,
     #[structopt(flatten)]
     pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
     #[structopt(flatten)]
