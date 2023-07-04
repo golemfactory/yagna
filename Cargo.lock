@@ -741,12 +741,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
-name = "base64ct"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
-
-[[package]]
 name = "bellman_ce"
 version = "0.3.2"
 source = "git+https://github.com/matter-labs/bellman?branch=beta#416f79d3f93fc855fb96bb61bfe73d2472e95548"
@@ -1788,7 +1782,6 @@ checksum = "8168378f4e5023e7218c89c891c0fd8ecdb5e5e4f18cb78f38cf245dd021e76f"
 dependencies = [
  "block-buffer 0.10.3",
  "crypto-common",
- "subtle",
 ]
 
 [[package]]
@@ -2642,14 +2635,14 @@ dependencies = [
 
 [[package]]
 name = "golem-certificate"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-certificate?rev=0d2a4b00f242743ab997e7bde8e6f42b4fc1f45c#0d2a4b00f242743ab997e7bde8e6f42b4fc1f45c"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d2a95278fbde2e90fdbd44ab54e2723344e7c20d7c08c837c60f9f07c2e5f51"
 dependencies = [
  "anyhow",
  "chrono",
  "ed25519-dalek",
  "hex",
- "pbkdf2 0.11.0",
  "rand 0.7.3",
  "ryu-js",
  "serde",
@@ -2891,15 +2884,6 @@ checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
 dependencies = [
  "crypto-mac 0.11.1",
  "digest 0.9.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
-dependencies = [
- "digest 0.10.6",
 ]
 
 [[package]]
@@ -4357,9 +4341,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.48"
+version = "0.10.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518915b97df115dd36109bfa429a48b8f737bd05508cf9588977b599648926d2"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -4398,11 +4382,10 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.83"
+version = "0.9.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "666416d899cf077260dac8698d60a60b435a46d57e82acb1be3d0dad87284e5b"
+checksum = "374533b0e45f3a7ced10fcaeccca020e66656bc03dac384f852e4e5a7a8104a6"
 dependencies = [
- "autocfg 1.1.0",
  "cc",
  "libc",
  "openssl-src",
@@ -4444,7 +4427,7 @@ dependencies = [
  "ethereum-types 0.11.0",
  "hmac 0.10.1",
  "lazy_static",
- "pbkdf2 0.6.0",
+ "pbkdf2",
  "ripemd160",
  "rustc-hex",
  "scrypt",
@@ -4566,17 +4549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "password-hash"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7676374caaee8a325c9e7a2ae557f216c5563a171d6997b0ef8a65af35147700"
-dependencies = [
- "base64ct",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4601,18 +4573,6 @@ dependencies = [
  "rand_core 0.5.1",
  "sha2 0.9.9",
  "subtle",
-]
-
-[[package]]
-name = "pbkdf2"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
-dependencies = [
- "digest 0.10.6",
- "hmac 0.12.1",
- "password-hash",
- "sha2 0.10.6",
 ]
 
 [[package]]
@@ -5755,7 +5715,7 @@ checksum = "8da492dab03f925d977776a0b7233d7b934d6dc2b94faead48928e2e9bacedb9"
 dependencies = [
  "base64 0.13.1",
  "hmac 0.10.1",
- "pbkdf2 0.6.0",
+ "pbkdf2",
  "rand 0.7.3",
  "rand_core 0.5.1",
  "salsa20",
@@ -6018,12 +5978,10 @@ dependencies = [
 
 [[package]]
 name = "serde_json_canonicalizer"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28fd9aa79419940c7c6c32285b77ad3d30ca98a251da11783a1da9fee7c23145"
+checksum = "b8a4c2ea923e1d3d2c03bd1299b7061e015f3bd9dab5a47b34283df9d8ab36a1"
 dependencies = [
- "anyhow",
- "itoa 1.0.6",
  "ryu-js",
  "serde",
  "serde_json",
