@@ -32,9 +32,9 @@ impl NegotiatorComponent for DemandValidation {
             .required_fields
             .iter()
             .cloned()
-            .filter(|x| !demand.pointer(x).is_some())
+            .filter(|x| demand.pointer(x).is_none())
             .collect::<Vec<String>>();
-        if missing_fields.len() == 0 {
+        if missing_fields.is_empty() {
             Ok(NegotiationResult::Ready { offer })
         } else {
             log::info!(
