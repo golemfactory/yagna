@@ -2,8 +2,7 @@
 
 use std::convert::TryFrom;
 
-use anyhow::{anyhow, Context};
-use eth_keystore::KeystoreError;
+use anyhow::Context;
 use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, PublicKey, SecretKey};
 use rand::Rng;
@@ -11,13 +10,12 @@ use ya_client_model::NodeId;
 
 use crate::dao::identity::Identity;
 use crate::dao::Error;
-use crate::keystore::decrypt_key;
 
 pub struct IdentityKey {
     id: NodeId,
     alias: Option<String>,
     key_file: KeyFile,
-    secret: Option<[u8; 32]>,
+    secret: Option<SecretKey>,
 }
 
 impl IdentityKey {
@@ -37,29 +35,22 @@ impl IdentityKey {
 
     pub fn to_pub_key(&self) -> Result<PublicKey, Error> {
         match &self.secret {
-            Some(secret) => SecretKey::from_raw(secret)
-                .map_err(|err| Error::internal(format!("Failed to create secret key: {}", err)))
-                .map(|secret| secret.public()),
+            Some(secret) => Ok(secret.public()),
             None => Err(Error::internal("key locked")),
         }
     }
 
-    pub fn to_key_file(&self) -> Result<String, Error> {
+    pub fn to_key_file(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(&self.key_file)
-            .map_err(|err| Error::Internal(format!("Failed to serialize key file: {}", err)))
     }
 
     pub fn to_private_key(&self) -> Result<[u8; 32], Error> {
         let str = self
             .to_key_file()
             .map_err(|err| Error::Internal(format!("Failed to serialize key file: {}", err)))?;
-        if !self.is_locked() {
-            if let Some(secret) = &self.secret {
-                Ok(*secret)
-            } else {
-                decrypt_key(&str, "")
-                    .map_err(|err| Error::Internal(format!("Failed to decrypt key file: {}", err)))
-            }
+
+        if let Some(secret) = &self.secret {
+            Ok(secret.private())
         } else {
             Err(Error::Internal(
                 "Private key inaccessible, unlock it first".to_string(),
@@ -71,11 +62,10 @@ impl IdentityKey {
         self.secret.is_none()
     }
 
-    pub fn unlock(&mut self, password: String) -> Result<bool, Error> {
-        let key_file_str = self.to_key_file()?;
-        let secret = match decrypt_key(&key_file_str, &password) {
+    pub fn unlock(&mut self, password: Protected) -> Result<bool, Error> {
+        let secret = match self.key_file.to_secret_key(&password) {
             Ok(secret) => secret,
-            Err(KeystoreError::MacMismatch) => return Ok(false),
+            Err(ethsign::Error::InvalidPassword) => return Ok(false),
             Err(e) => return Err(Error::internal(e)),
         };
         self.secret = Some(secret);
@@ -85,10 +75,7 @@ impl IdentityKey {
     /// Sign given 32-byte message with the key.
     pub fn sign(&self, data: &[u8]) -> Option<Vec<u8>> {
         let s = match &self.secret {
-            Some(secret) => match SecretKey::from_raw(secret) {
-                Ok(s) => s,
-                Err(_) => return None,
-            },
+            Some(secret) => secret,
             None => return None,
         };
         s.sign(data).ok().map(|s| {
@@ -105,8 +92,6 @@ impl IdentityKey {
     pub fn lock(&mut self, new_password: Option<String>) -> anyhow::Result<()> {
         if let Some(new_password) = new_password {
             if let Some(secret) = self.secret.take() {
-                let secret = SecretKey::from_raw(&secret)
-                    .map_err(|err| anyhow!("Failed to create secret key: {}", err))?;
                 let crypto = secret.to_crypto(&Protected::new(new_password), KEY_ITERATIONS)?;
                 self.key_file.crypto = crypto;
             } else {
@@ -118,21 +103,15 @@ impl IdentityKey {
         Ok(())
     }
 
-    pub fn from_secret(
-        alias: Option<String>,
-        secret_raw: [u8; 32],
-        password: Protected,
-    ) -> Result<Self, Error> {
-        let secret = SecretKey::from_raw(&secret_raw)
-            .map_err(|err| Error::internal(format!("Failed to create secret key: {}", err)))?;
+    pub fn from_secret(alias: Option<String>, secret: SecretKey, password: Protected) -> Self {
         let key_file = key_file_from_secret(&secret, password);
         let id = NodeId::from(secret.public().address().as_ref());
-        Ok(IdentityKey {
+        IdentityKey {
             id,
             alias,
             key_file,
-            secret: Some(secret_raw),
-        })
+            secret: Some(secret),
+        }
     }
 }
 
@@ -143,7 +122,7 @@ impl TryFrom<Identity> for IdentityKey {
         let key_file: KeyFile = serde_json::from_str(&value.key_file_json)?;
         let id = value.identity_id;
         let alias = value.alias;
-        let secret = decrypt_key(&value.key_file_json, "").ok();
+        let secret = key_file.to_secret_key(&Protected::new("")).ok();
         Ok(IdentityKey {
             id,
             alias,
@@ -161,21 +140,21 @@ pub fn default_password() -> Protected {
 }
 
 pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
-    let (secret_raw, key_file, secret) = generate_new_secret(password);
+    let (key_file, secret) = generate_new_secret(password);
     let id = NodeId::from(secret.public().address().as_ref());
     IdentityKey {
         id,
         alias,
         key_file,
-        secret: Some(secret_raw),
+        secret: Some(secret),
     }
 }
 
-fn generate_new_secret(password: Protected) -> ([u8; 32], KeyFile, SecretKey) {
+fn generate_new_secret(password: Protected) -> (KeyFile, SecretKey) {
     let random_bytes: [u8; 32] = rand::thread_rng().gen();
     let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
     let key_file = key_file_from_secret(&secret, password);
-    (random_bytes, key_file, secret)
+    (key_file, secret)
 }
 
 fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
@@ -188,7 +167,7 @@ fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
 }
 
 pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
-    let (_, key_file, _) = generate_new_secret(password);
+    let (key_file, _) = generate_new_secret(password);
 
     serde_json::to_string(&key_file).context("serialize keyfile")
 }

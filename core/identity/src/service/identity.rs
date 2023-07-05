@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use chrono::Utc;
-use ethsign::{KeyFile, PublicKey};
+use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
 
@@ -290,7 +290,7 @@ impl IdentityService {
     pub async fn unlock(
         &mut self,
         node_id: NodeId,
-        password: String,
+        password: Protected,
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
@@ -489,7 +489,7 @@ impl IdentityService {
                 let result = this
                     .lock()
                     .await
-                    .unlock(unlock.node_id, unlock.password)
+                    .unlock(unlock.node_id, unlock.password.into())
                     .await;
                 if result.is_ok() {
                     let _ = unlock_sender
