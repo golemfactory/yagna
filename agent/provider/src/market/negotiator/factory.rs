@@ -11,7 +11,7 @@ use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
 use crate::provider_agent::AgentNegotiatorsConfig;
 
-/// Configuration for Validation Negotiator.
+/// Configuration for Demand Validation Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct DemandValidationNegotiatorConfig {
     #[structopt(long, default_value = "golem.com.payment.chosen-platform")]

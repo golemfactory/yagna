@@ -108,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Offer property golem.com.payment.chosen-platform does not exist")]
+    #[should_panic(expected = "Demand property golem.com.payment.chosen-platform does not exist")]
     fn cannot_create_agreement_without_chosen_platform() {
         let agreement = mock_agreement_with_demand_properties(json!({}));
         let role: Role = Role::Provider;
