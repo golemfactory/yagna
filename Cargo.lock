@@ -2192,7 +2192,7 @@ dependencies = [
 [[package]]
 name = "ethsign"
 version = "0.10.0"
-source = "git+https://github.com/golemfactory/ethsign.git?rev=f309de4077d99db5143ac485cedcfc808156b625#f309de4077d99db5143ac485cedcfc808156b625"
+source = "git+https://github.com/golemfactory/ethsign.git?rev=38ac0f349d58c80d6751e671343a552ac53ba3ca#38ac0f349d58c80d6751e671343a552ac53ba3ca"
 dependencies = [
  "ethsign-crypto",
  "rand 0.8.5",
@@ -2205,7 +2205,7 @@ dependencies = [
 [[package]]
 name = "ethsign-crypto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ethsign.git?rev=f309de4077d99db5143ac485cedcfc808156b625#f309de4077d99db5143ac485cedcfc808156b625"
+source = "git+https://github.com/golemfactory/ethsign.git?rev=38ac0f349d58c80d6751e671343a552ac53ba3ca#38ac0f349d58c80d6751e671343a552ac53ba3ca"
 dependencies = [
  "aes 0.8.3",
  "ctr 0.9.2",
