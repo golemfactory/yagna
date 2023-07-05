@@ -384,7 +384,7 @@ impl IdentityCommand {
                         .send(identity::GetPrivateKey(node_id))
                         .await?
                         .map_err(anyhow::Error::msg)?;
-                    hex::encode(private_key)
+                    rustc_hex::ToHex::to_hex::<String>(private_key.as_slice())
                 } else {
                     bus::service(identity::BUS_ID)
                         .send(identity::GetKeyFile(node_id))
