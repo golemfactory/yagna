@@ -14,7 +14,7 @@ use crate::provider_agent::AgentNegotiatorsConfig;
 /// Configuration for Demand Validation Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct DemandValidationNegotiatorConfig {
-    #[structopt(long, default_value = "golem.com.payment.chosen-platform")]
+    #[structopt(long, default_value = "/golem/com/payment/chosen-platform")]
     pub required_fields: Vec<String>,
 }
 
