@@ -174,7 +174,8 @@ pub struct SignCommand {
     node_or_alias: Option<NodeOrAlias>,
 }
 
-pub fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
+//local function to decrypt keystore (for export key command)
+fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
     let key_file: KeyFile = serde_json::from_str(key_file_json)?;
     let empty_pass = Protected::new::<Vec<u8>>("".into());
     let secret = match key_file.to_secret_key(&empty_pass) {
@@ -421,15 +422,14 @@ impl IdentityCommand {
                     let private_key = to_private_key(&key_file);
                     let decrypted_key = match private_key {
                         Ok(key) => rustc_hex::ToHex::to_hex::<String>(key.as_slice()),
-                        Err(e) => {
-                            anyhow::bail!("Failed to parse key file: {}", e);
-                        }
+                        Err(e) => anyhow::bail!(e),
                     };
                     key_file = decrypted_key;
                 }
+
                 match file_path {
                     Some(file) => {
-                        if file.is_file() {
+                        if file.exists() {
                             anyhow::bail!("File already exists")
                         }
 
