@@ -392,14 +392,6 @@ impl IdentityService {
         key.to_pub_key().map_err(model::Error::new_err_msg)
     }
 
-    pub async fn get_private_key(
-        &mut self,
-        key_id: model::GetPrivateKey,
-    ) -> Result<[u8; 32], model::Error> {
-        let key = self.get_key_by_id(&key_id.0)?;
-        key.to_private_key().map_err(model::Error::new_err_msg)
-    }
-
     pub async fn get_key_file(
         &mut self,
         key_id: model::GetKeyFile,
@@ -526,11 +518,6 @@ impl IdentityService {
                     .await
                     .map(|key| key.bytes().to_vec())
             }
-        });
-        let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPrivateKey| {
-            let this = this.clone();
-            async move { this.lock().await.get_private_key(node_id).await }
         });
         let this = me;
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {

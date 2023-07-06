@@ -1,9 +1,10 @@
 /// Identity management CLI parser and runner
 use std::cmp::Reverse;
+use std::convert::TryInto;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use ethsign::Protected;
+use anyhow::{anyhow, Context, Result};
+use ethsign::{KeyFile, Protected};
 use rustc_hex::ToHex;
 use sha2::Digest;
 use structopt::*;
@@ -171,6 +172,38 @@ pub struct SignCommand {
 
     /// NodeId or key
     node_or_alias: Option<NodeOrAlias>,
+}
+
+pub fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
+    let key_file: KeyFile = serde_json::from_str(key_file_json)?;
+    let empty_pass = Protected::new::<Vec<u8>>("".into());
+    let secret = match key_file.to_secret_key(&empty_pass) {
+        Ok(secret) => secret,
+        Err(ethsign::Error::InvalidPassword) => {
+            let password: Protected = rpassword::read_password_from_tty(Some("Password: "))
+                .map_err(|e| anyhow!("Failed to read password: {}", e))?
+                .into();
+            match key_file.to_secret_key(&password) {
+                Ok(secret) => secret,
+                Err(ethsign::Error::InvalidPassword) => {
+                    return Err(anyhow!("Invalid password"));
+                }
+                Err(e) => return Err(anyhow!(e)),
+            }
+        }
+        Err(e) => return Err(anyhow!(e)),
+    };
+
+    // HACK, due to hidden secret key data we have to use this little hack to extract private key
+    let pass = Protected::new::<Vec<u8>>("hack".into());
+
+    secret
+        .to_crypto(&pass, 1)
+        .map_err(|err| anyhow!("Failed to encrypt private key: {}", err))?
+        .decrypt(&pass)
+        .map_err(|err| anyhow!("Failed to decrypt private key: {}", err))?
+        .try_into()
+        .map_err(|_| anyhow!("Wrong key length after decryption"))
 }
 
 impl IdentityCommand {
@@ -379,18 +412,21 @@ impl IdentityCommand {
                 plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let key_file = if *plain {
-                    let private_key = bus::service(identity::BUS_ID)
-                        .send(identity::GetPrivateKey(node_id))
-                        .await?
-                        .map_err(anyhow::Error::msg)?;
-                    rustc_hex::ToHex::to_hex::<String>(private_key.as_slice())
-                } else {
-                    bus::service(identity::BUS_ID)
-                        .send(identity::GetKeyFile(node_id))
-                        .await?
-                        .map_err(anyhow::Error::msg)?
-                };
+                let mut key_file = bus::service(identity::BUS_ID)
+                    .send(identity::GetKeyFile(node_id))
+                    .await?
+                    .map_err(anyhow::Error::msg)?;
+
+                if *plain {
+                    let private_key = to_private_key(&key_file);
+                    let decrypted_key = match private_key {
+                        Ok(key) => rustc_hex::ToHex::to_hex::<String>(key.as_slice()),
+                        Err(e) => {
+                            anyhow::bail!("Failed to parse key file: {}", e);
+                        }
+                    };
+                    key_file = decrypted_key;
+                }
                 match file_path {
                     Some(file) => {
                         if file.is_file() {

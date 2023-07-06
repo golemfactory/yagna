@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
@@ -10,6 +10,7 @@ use ya_client_model::NodeId;
 
 use crate::dao::identity::Identity;
 use crate::dao::Error;
+use crate::db::schema::identity::key_file_json;
 
 pub struct IdentityKey {
     id: NodeId,
@@ -49,11 +50,31 @@ impl IdentityKey {
             .to_key_file()
             .map_err(|err| Error::Internal(format!("Failed to serialize key file: {}", err)))?;
 
-        if let Some(secret) = &self.secret {
-            Ok(secret.private())
+        if !self.is_locked() {
+            let empty_pass = Protected::new::<Vec<u8>>("".into());
+            let secret = match self.key_file.to_secret_key(&empty_pass) {
+                Ok(secret) => secret,
+                Err(ethsign::Error::InvalidPassword) => {
+                    return Err(Error::Internal(
+                        "You can export private key only for account without password".to_string(),
+                    ))
+                }
+                Err(e) => return Err(Error::internal(e)),
+            };
+
+            // HACK, due to hidden secret key data we have to use this little hack to extract private key
+            let pass = Protected::new::<Vec<u8>>("hack".into());
+
+            secret
+                .to_crypto(&pass, 1)
+                .map_err(|err| Error::Internal(format!("Failed to encrypt private key: {}", err)))?
+                .decrypt(&pass)
+                .map_err(|err| Error::Internal(format!("Failed to decrypt private key: {}", err)))?
+                .try_into()
+                .map_err(|_| Error::Internal(format!("Wrong key length after decryption")))
         } else {
             Err(Error::Internal(
-                "Private key inaccessible, unlock it first".to_string(),
+                "Private key inaccessible when account is locked, unlock it first".to_string(),
             ))
         }
     }
