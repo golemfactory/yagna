@@ -45,10 +45,11 @@ async fn create_allocation(
     // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
-    let payment_platform = allocation
-        .payment_platform
-        .clone()
-        .expect("payment platform not provided");
+    let payment_platform = match &allocation.payment_platform {
+        Some(platform) => platform.clone(),
+        None => return response::bad_request(&"payment platform must be provided"),
+    };
+
     let address = allocation
         .address
         .clone()
