@@ -45,40 +45,6 @@ impl IdentityKey {
         serde_json::to_string_pretty(&self.key_file)
     }
 
-    pub fn to_private_key(&self) -> Result<[u8; 32], Error> {
-        let str = self
-            .to_key_file()
-            .map_err(|err| Error::Internal(format!("Failed to serialize key file: {}", err)))?;
-
-        if !self.is_locked() {
-            let empty_pass = Protected::new::<Vec<u8>>("".into());
-            let secret = match self.key_file.to_secret_key(&empty_pass) {
-                Ok(secret) => secret,
-                Err(ethsign::Error::InvalidPassword) => {
-                    return Err(Error::Internal(
-                        "You can export private key only for account without password".to_string(),
-                    ))
-                }
-                Err(e) => return Err(Error::internal(e)),
-            };
-
-            // HACK, due to hidden secret key data we have to use this little hack to extract private key
-            let pass = Protected::new::<Vec<u8>>("hack".into());
-
-            secret
-                .to_crypto(&pass, 1)
-                .map_err(|err| Error::Internal(format!("Failed to encrypt private key: {}", err)))?
-                .decrypt(&pass)
-                .map_err(|err| Error::Internal(format!("Failed to decrypt private key: {}", err)))?
-                .try_into()
-                .map_err(|_| Error::Internal(format!("Wrong key length after decryption")))
-        } else {
-            Err(Error::Internal(
-                "Private key inaccessible when account is locked, unlock it first".to_string(),
-            ))
-        }
-    }
-
     pub fn is_locked(&self) -> bool {
         self.secret.is_none()
     }
