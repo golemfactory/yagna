@@ -12,13 +12,8 @@ pub struct DemandValidation {
 
 impl DemandValidation {
     pub fn new(config: &DemandValidationNegotiatorConfig) -> DemandValidation {
-        DemandValidation {
-            required_fields: config
-                .required_fields
-                .iter()
-                .map(|x| x.to_string())
-                .collect(),
-        }
+        let required_fields = config.required_fields.clone();
+        Self { required_fields }
     }
 }
 
@@ -31,8 +26,8 @@ impl NegotiatorComponent for DemandValidation {
         let missing_fields = self
             .required_fields
             .iter()
-            .cloned()
             .filter(|x| demand.pointer(x).is_none())
+            .cloned()
             .collect::<Vec<String>>();
         if missing_fields.is_empty() {
             Ok(NegotiationResult::Ready { offer })
