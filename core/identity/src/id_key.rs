@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
@@ -10,7 +10,6 @@ use ya_client_model::NodeId;
 
 use crate::dao::identity::Identity;
 use crate::dao::Error;
-use crate::db::schema::identity::key_file_json;
 
 pub struct IdentityKey {
     id: NodeId,
