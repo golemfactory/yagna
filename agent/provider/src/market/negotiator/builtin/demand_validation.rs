@@ -70,12 +70,12 @@ impl NegotiatorComponent for DemandValidation {
 }
 
 #[cfg(test)]
-mod test_demand_validation_negotiator {
+mod tests {
     use super::*;
     use chrono::Utc;
     use serde_json::json;
     use ya_agreement_utils::agreement::expand;
-    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate, ServiceInfo};
+    use ya_agreement_utils::{OfferTemplate};
     use ya_client_model::market::proposal::State;
 
     fn config() -> DemandValidationNegotiatorConfig {
@@ -87,10 +87,10 @@ mod test_demand_validation_negotiator {
         }
     }
 
-    fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
+    fn properties_to_proposal(properties: serde_json::Value) -> ProposalView {
         ProposalView {
             content: OfferTemplate {
-                properties: expand(value),
+                properties: expand(properties),
                 constraints: "()".to_string(),
             },
             id: "proposalId".to_string(),
@@ -100,56 +100,23 @@ mod test_demand_validation_negotiator {
         }
     }
 
-    fn example_offer() -> OfferDefinition {
-        OfferDefinition {
-            node_info: NodeInfo::with_name("nodeInfoName"),
-            srv_info: ServiceInfo::new(InfNodeInfo::default(), serde_json::Value::Null),
-            com_info: Default::default(),
-            offer: OfferTemplate::default(),
-        }
-    }
-
-    trait ToProposal {
-        fn to_proposal(self) -> ProposalView;
-    }
-
-    impl ToProposal for OfferDefinition {
-        fn to_proposal(self) -> ProposalView {
-            let template = self.into_template();
-            ProposalView {
-                content: OfferTemplate {
-                    properties: expand(template.properties),
-                    constraints: template.constraints,
-                },
-                id: "proposalId".to_string(),
-                issuer: Default::default(),
-                state: State::Initial,
-                timestamp: Utc::now(),
-            }
-        }
-    }
-
     /// Negotiator accepts demand if all of the required fields exist
     #[test]
     fn test_required_fields_exist() {
         let config = config();
         let mut negotiator = DemandValidation::new(&config);
 
-        let offer_proposal = negotiator
-            .fill_template(example_offer())
-            .unwrap()
-            .to_proposal();
-
+        let offer = properties_to_proposal(json!({}));
         let demand = properties_to_proposal(json!({
             "golem.com.freebies": "mug",
             "golem.com.payment.address": "0x123",
         }));
 
         let expected_result = NegotiationResult::Ready {
-            offer: offer_proposal.clone(),
+            offer: offer.clone(),
         };
         assert_eq!(
-            negotiator.negotiate_step(&demand, offer_proposal).unwrap(),
+            negotiator.negotiate_step(&demand, offer).unwrap(),
             expected_result
         );
     }
@@ -160,11 +127,7 @@ mod test_demand_validation_negotiator {
         let config = config();
         let mut negotiator = DemandValidation::new(&config);
 
-        let offer_proposal = negotiator
-            .fill_template(example_offer())
-            .unwrap()
-            .to_proposal();
-
+        let offer = properties_to_proposal(json!({}));
         let demand = properties_to_proposal(json!({
             "golem.com.freebies": "mug",
         }));
@@ -174,7 +137,7 @@ mod test_demand_validation_negotiator {
             is_final: false,
         };
         assert_eq!(
-            negotiator.negotiate_step(&demand, offer_proposal).unwrap(),
+            negotiator.negotiate_step(&demand, offer).unwrap(),
             expected_result
         );
     }
