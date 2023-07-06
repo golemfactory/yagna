@@ -1,3 +1,4 @@
+use crate::error::DbError;
 use crate::schema::pay_agreement;
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
@@ -24,7 +25,7 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
-    pub fn new(agreement: Agreement, role: Role) -> Self {
+    pub fn new(agreement: Agreement, role: Role) -> Result<Self, DbError> {
         let provider_id = *agreement.provider_id();
         let requestor_id = *agreement.requestor_id();
         let (owner_id, peer_id) = match &role {
@@ -38,8 +39,8 @@ impl WriteObj {
         let payment_platform = demand_properties
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
-            .expect("Demand property golem.com.payment.chosen-platform does not exist")
-            .to_owned();
+            .map(ToOwned::to_owned)
+            .map_err(|_| DbError::Query("Missing golem.com.payment.chosen-platform".to_string()))?;
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
@@ -51,7 +52,7 @@ impl WriteObj {
             .map(ToOwned::to_owned)
             .unwrap_or_else(|_| requestor_id.to_string().to_lowercase());
 
-        Self {
+        Ok(Self {
             id: agreement.agreement_id,
             owner_id,
             role,
@@ -64,7 +65,7 @@ impl WriteObj {
             total_amount_scheduled: Default::default(),
             total_amount_paid: Default::default(),
             app_session_id: agreement.app_session_id,
-        }
+        })
     }
 }
 
@@ -108,12 +109,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Demand property golem.com.payment.chosen-platform does not exist")]
     fn cannot_create_agreement_without_chosen_platform() {
         let agreement = mock_agreement_with_demand_properties(json!({}));
         let role: Role = Role::Provider;
 
-        WriteObj::new(agreement, role);
+        let result = WriteObj::new(agreement, role);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -124,6 +125,6 @@ mod tests {
         let role: Role = Role::Provider;
 
         let result = WriteObj::new(agreement, role);
-        assert_eq!(result.payment_platform, "test-network");
+        assert_eq!(result.unwrap().payment_platform, "test-network");
     }
 }
