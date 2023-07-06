@@ -75,7 +75,7 @@ mod tests {
     use chrono::Utc;
     use serde_json::json;
     use ya_agreement_utils::agreement::expand;
-    use ya_agreement_utils::{OfferTemplate};
+    use ya_agreement_utils::OfferTemplate;
     use ya_client_model::market::proposal::State;
 
     fn config() -> DemandValidationNegotiatorConfig {
