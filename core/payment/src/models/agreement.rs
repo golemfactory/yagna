@@ -113,7 +113,7 @@ mod tests {
         let agreement = mock_agreement_with_demand_properties(json!({}));
         let role: Role = Role::Provider;
 
-        let result = WriteObj::new(agreement, role);
+        let result = WriteObj::try_new(agreement, role);
         assert!(result.is_err());
     }
 
