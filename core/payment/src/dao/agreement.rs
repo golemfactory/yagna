@@ -198,7 +198,8 @@ impl<'a> AgreementDao<'a> {
                 return Ok(());
             }
 
-            let agreement = WriteObj::new(agreement, role)?;
+            let agreement = WriteObj::try_new(agreement, role)
+                .map_err(|err| DbError::Query(err))?;
             diesel::insert_into(dsl::pay_agreement)
                 .values(agreement)
                 .execute(conn)?;
