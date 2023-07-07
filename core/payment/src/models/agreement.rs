@@ -25,7 +25,7 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
-    pub fn new(agreement: Agreement, role: Role) -> Result<Self, DbError> {
+    pub fn try_new(agreement: Agreement, role: Role) -> Result<Self, String> {
         let provider_id = *agreement.provider_id();
         let requestor_id = *agreement.requestor_id();
         let (owner_id, peer_id) = match &role {
