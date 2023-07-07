@@ -40,7 +40,7 @@ impl WriteObj {
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .map_err(|_| DbError::Query("Missing golem.com.payment.chosen-platform".to_string()))?;
+            .map_err(|_| "Missing golem.com.payment.chosen-platform".into())?;
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
