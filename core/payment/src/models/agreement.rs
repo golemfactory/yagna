@@ -124,7 +124,7 @@ mod tests {
         }));
         let role: Role = Role::Provider;
 
-        let result = WriteObj::new(agreement, role);
+        let result = WriteObj::try_new(agreement, role);
         assert_eq!(result.unwrap().payment_platform, "test-network");
     }
 }
