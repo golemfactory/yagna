@@ -1,4 +1,3 @@
-use crate::error::DbError;
 use crate::schema::pay_agreement;
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
@@ -40,7 +39,7 @@ impl WriteObj {
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .map_err(|_| "Missing golem.com.payment.chosen-platform".into())?;
+            .map_err(|_| "Missing golem.com.payment.chosen-platform".to_string())?;
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
