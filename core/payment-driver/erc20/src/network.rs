@@ -74,10 +74,9 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
 }
 
 pub fn network_token_to_platform(
-    network: Option<DbNetwork>,
+    network: DbNetwork,
     token: Option<String>,
 ) -> Result<String, GenericError> {
-    let network = network.unwrap_or(*RINKEBY_DB_NETWORK);
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
     let network_config = match network_config {
         Some(nc) => nc,
