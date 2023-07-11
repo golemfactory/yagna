@@ -7,18 +7,21 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
-    DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM,
+    DEFAULT_NETWORK,
+    // DEFAULT_PLATFORM, DEFAULT_TOKEN,
+    MAINNET_NETWORK,
+    MAINNET_PLATFORM,
     MAINNET_TOKEN,
 };
 
 lazy_static::lazy_static! {
     pub static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
-        DEFAULT_NETWORK.to_string() => Network {
-            default_token: DEFAULT_TOKEN.to_string(),
-            tokens: hashmap! {
-                DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
-            }
-        },
+        // DEFAULT_NETWORK.to_string() => Network {
+        //     default_token: DEFAULT_TOKEN.to_string(),
+        //     tokens: hashmap! {
+        //         DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
+        //     }
+        // },
         MAINNET_NETWORK.to_string() => Network {
             default_token: MAINNET_TOKEN.to_string(),
             tokens: hashmap! {
@@ -32,7 +35,7 @@ lazy_static::lazy_static! {
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
     match platform.as_str() {
-        DEFAULT_PLATFORM => Ok((*DEFAULT_DB_NETWORK, DEFAULT_TOKEN.to_owned())),
+        // DEFAULT_PLATFORM => Ok((*DEFAULT_DB_NETWORK, DEFAULT_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
         other => Err(GenericError::new(format!(
             "Unable to find network for platform: {}",

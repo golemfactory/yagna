@@ -35,7 +35,7 @@ use crate::{
             convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
-    RINKEBY_NETWORK,
+    GOERLI_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
 
@@ -73,7 +73,7 @@ pub async fn account_gas_balance(
 pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let address = msg.address();
-    let network = msg.network().unwrap_or_else(|| RINKEBY_NETWORK.to_string());
+    let network = msg.network().unwrap_or_else(|| GOERLI_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(GenericError::new)?;
 
     // Validate address and that checking balance of GLM and ETH works.

@@ -18,12 +18,12 @@ use crate::{
 
 lazy_static::lazy_static! {
     pub static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
-        RINKEBY_NETWORK.to_string() => Network {
-            default_token: RINKEBY_TOKEN.to_string(),
-            tokens: hashmap! {
-                RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
-            }
-        },
+        // RINKEBY_NETWORK.to_string() => Network {
+        //     default_token: RINKEBY_TOKEN.to_string(),
+        //     tokens: hashmap! {
+        //         RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
+        //     }
+        // },
         GOERLI_NETWORK.to_string() => Network {
             default_token: GOERLI_TOKEN.to_string(),
             tokens: hashmap! {
@@ -131,11 +131,17 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
     }
 }
 
-pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
-    // Fetch network config, safe as long as all DbNetwork entries are in SUPPORTED_NETWORKS
-    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
-    // TODO: Check if token in network.tokens
-    token.unwrap_or_else(|| network_config.default_token.clone())
+pub fn get_network_token(
+    network: DbNetwork,
+    token: Option<String>,
+) -> Result<String, GenericError> {
+    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
+    match network_config {
+        Some(network_config) => Ok(token.unwrap_or_else(|| network_config.default_token.clone())),
+        None => token.is_some().then(|| token.unwrap()).ok_or_else(|| {
+            GenericError::new(format!("Network {} is not supported", network.to_string()))
+        }),
+    }
 }
 
 pub fn network_like_to_network(network_like: Option<String>) -> DbNetwork {

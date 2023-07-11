@@ -52,10 +52,24 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
     let text = fs::read(accounts_path).await?;
     let accounts: Vec<Account> = serde_json::from_slice(&text)?;
 
+    let mut successful = 0;
+    let mut all = 0;
     for account in accounts {
-        init_account(account).await?;
+        all += 1;
+        match init_account(account).await {
+            Ok(_) => {
+                successful += 1;
+            }
+            Err(e) => {
+                log::error!("Failed to initialize payment account: {}", e);
+            }
+        }
     }
-    log::debug!("Payment accounts initialized.");
+    log::debug!(
+        "Successfully initialized {} / {}  payment accounts.",
+        successful,
+        all
+    );
     Ok(())
 }
 

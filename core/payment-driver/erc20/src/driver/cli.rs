@@ -38,7 +38,21 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
         .map_err(GenericError::new)??;
 
     let network = network::network_like_to_network(msg.network());
-    let token = network::get_network_token(network, msg.token());
+    let token = match network::get_network_token(network, msg.token()) {
+        Ok(token) => token,
+        Err(e) => {
+            return Err(GenericError::new(format!(
+                "Failed to initialise payment account. mode={:?}, address={}, driver={}, network={}, token={}: {}",
+                mode,
+                &msg.address(),
+                DRIVER_NAME,
+                network,
+                msg.token().unwrap_or_else(||"".to_string()),
+                e
+            )));
+        }
+    };
+
     bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
 
     log::info!(
@@ -111,7 +125,7 @@ To be able to use mainnet Ethereum driver please send some GLM tokens and ETH fo
 pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
     log::debug!("transfer: {:?}", msg);
     let network = network::network_like_to_network(msg.network);
-    let token = network::get_network_token(network, None);
+    let token = network::get_network_token(network, None)?;
     let sender = msg.sender;
     let sender_h160 = utils::str_to_addr(&sender)?;
     let recipient = msg.to;
