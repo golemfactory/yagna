@@ -302,6 +302,7 @@ impl ExeUnitsRegistry {
             anyhow::bail!("No runtimes available");
         }
         let working_dir = exe_unit_work_dir(data_dir);
+        std::fs::create_dir_all(&working_dir)?;
         for (name, desc) in self.descriptors.iter() {
             log::info!("Testing runtime [{}]", name);
             test_runtime(desc, &working_dir)
