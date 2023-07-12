@@ -61,7 +61,7 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
                 successful += 1;
             }
             Err(e) => {
-                log::error!("Failed to initialize payment account: {}", e);
+                log::error!("{}", e);
             }
         }
     }

@@ -18,12 +18,6 @@ use crate::{
 
 lazy_static::lazy_static! {
     pub static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
-        // RINKEBY_NETWORK.to_string() => Network {
-        //     default_token: RINKEBY_TOKEN.to_string(),
-        //     tokens: hashmap! {
-        //         RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
-        //     }
-        // },
         GOERLI_NETWORK.to_string() => Network {
             default_token: GOERLI_TOKEN.to_string(),
             tokens: hashmap! {
@@ -146,7 +140,7 @@ pub fn get_network_token(
 
 pub fn network_like_to_network(network_like: Option<String>) -> DbNetwork {
     match network_like {
-        Some(n) => DbNetwork::from_str(&n).unwrap_or(*RINKEBY_DB_NETWORK),
-        None => *RINKEBY_DB_NETWORK,
+        Some(n) => DbNetwork::from_str(&n).unwrap_or(*GOERLI_DB_NETWORK),
+        None => *GOERLI_DB_NETWORK,
     }
 }

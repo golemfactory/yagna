@@ -42,7 +42,7 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
         Ok(token) => token,
         Err(e) => {
             return Err(GenericError::new(format!(
-                "Failed to initialise payment account. mode={:?}, address={}, driver={}, network={}, token={}: {}",
+                "Failed to initialize payment account. mode={:?}, address={}, driver={}, network={}, token={}: {}",
                 mode,
                 &msg.address(),
                 DRIVER_NAME,
