@@ -75,9 +75,20 @@ pub fn network_token_to_platform(
     Ok(platform.to_string())
 }
 
-pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
+pub fn get_network_token(
+    network: DbNetwork,
+    token: Option<String>,
+) -> Result<String, GenericError> {
     // Fetch network config, safe as long as all DbNetwork entries are in SUPPORTED_NETWORKS
-    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
+    // let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
     // TODO: Check if token in network.tokens
-    token.unwrap_or_else(|| network_config.default_token.clone())
+    // token.unwrap_or_else(|| network_config.default_token.clone())
+
+    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
+    match network_config {
+        Some(network_config) => Ok(token.unwrap_or_else(|| network_config.default_token.clone())),
+        None => token.is_some().then(|| token.unwrap()).ok_or_else(|| {
+            GenericError::new(format!("Network {} is not supported", network.to_string()))
+        }),
+    }
 }

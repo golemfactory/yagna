@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -52,23 +53,17 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
     let text = fs::read(accounts_path).await?;
     let accounts: Vec<Account> = serde_json::from_slice(&text)?;
 
-    let mut successful = 0;
-    let mut all = 0;
-    for account in accounts {
-        all += 1;
-        match init_account(account).await {
-            Ok(_) => {
-                successful += 1;
-            }
-            Err(e) => {
-                log::error!("{}", e);
-            }
-        }
-    }
+    let init_results = join_all(
+        accounts
+            .into_iter()
+            .map(|account| async move { init_account(account).await.is_ok() }),
+    )
+    .await;
+
     log::debug!(
         "Successfully initialized {} / {}  payment accounts.",
-        successful,
-        all
+        init_results.iter().filter(|&r| *r == true).count(),
+        init_results.len()
     );
     Ok(())
 }

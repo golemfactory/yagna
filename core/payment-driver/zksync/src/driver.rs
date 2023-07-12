@@ -267,7 +267,7 @@ impl PaymentDriver for ZksyncDriver {
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
-        );
+        )?;
         bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(
