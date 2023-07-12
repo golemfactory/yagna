@@ -513,7 +513,7 @@ impl PaymentDriverCron for ZksyncDriver {
                 }
 
                 // TODO: Add token support
-                let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
+                let platform = network_token_to_platform(network, None).unwrap(); // TODO: Catch error?
                 let details = match wallet::verify_tx(tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {

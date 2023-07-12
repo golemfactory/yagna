@@ -47,7 +47,7 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
                 &msg.address(),
                 DRIVER_NAME,
                 network,
-                msg.token().unwrap_or_else(||"".to_string()),
+                msg.token().unwrap_or_default(),
                 e
             )));
         }

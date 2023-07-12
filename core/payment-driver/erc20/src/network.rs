@@ -71,17 +71,7 @@ pub fn network_token_to_platform(
     network: DbNetwork,
     token: Option<String>,
 ) -> Result<String, GenericError> {
-    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
-    let network_config = match network_config {
-        Some(nc) => nc,
-        None => {
-            return Err(GenericError::new(format!(
-                "Unable to find platform for network={}",
-                network
-            )))
-        }
-    };
-
+    let network_config = get_network_config(&network)?;
     let token = token.unwrap_or_else(|| network_config.default_token.clone());
     let platform = network_config.tokens.get(&token);
     let platform = match platform {
@@ -129,18 +119,24 @@ pub fn get_network_token(
     network: DbNetwork,
     token: Option<String>,
 ) -> Result<String, GenericError> {
-    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
-    match network_config {
-        Some(network_config) => Ok(token.unwrap_or_else(|| network_config.default_token.clone())),
-        None => token.is_some().then(|| token.unwrap()).ok_or_else(|| {
-            GenericError::new(format!("Network {} is not supported", network.to_string()))
-        }),
-    }
+    let network_config = get_network_config(&network)?;
+    Ok(token.unwrap_or_else(|| network_config.default_token.clone()))
 }
 
 pub fn network_like_to_network(network_like: Option<String>) -> DbNetwork {
     match network_like {
         Some(n) => DbNetwork::from_str(&n).unwrap_or(*GOERLI_DB_NETWORK),
         None => *GOERLI_DB_NETWORK,
+    }
+}
+
+pub fn get_network_config(network: &DbNetwork) -> Result<&Network, GenericError> {
+    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
+    match network_config {
+        Some(network_config) => Ok(network_config),
+        None => Err(GenericError::new(format!(
+            "Network {} is not supported",
+            network
+        ))),
     }
 }

@@ -62,7 +62,7 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
 
     log::debug!(
         "Successfully initialized {} / {}  payment accounts.",
-        init_results.iter().filter(|&r| *r == true).count(),
+        init_results.iter().filter(|&r| *r).count(),
         init_results.len()
     );
     Ok(())
