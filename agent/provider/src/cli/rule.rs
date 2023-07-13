@@ -104,6 +104,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
+                    duplicated,
                     ..
                 } = rules.keystore.add_x509_cert(&AddParams {
                     certs: vec![import_cert],
@@ -114,6 +115,10 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 }
 
                 rules.keystore.reload(&rules.cert_dir)?;
+
+                if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
+                    log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
+                }
 
                 for cert_id in leaf_cert_ids {
                     rules.set_audited_payload_mode(cert_id, mode.clone())?;
@@ -131,6 +136,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 let AddResponse {
                     invalid,
                     leaf_cert_ids,
+                    duplicated,
                     ..
                 } = rules.keystore.add_golem_cert(&AddParams {
                     certs: vec![import_cert],
@@ -141,6 +147,10 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 }
 
                 rules.keystore.reload(&rules.cert_dir)?;
+
+                if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
+                    log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
+                }
 
                 for cert_id in leaf_cert_ids {
                     rules.set_partner_mode(cert_id, mode.clone())?;
