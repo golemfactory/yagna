@@ -190,6 +190,7 @@ impl RulesManager {
             let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
             let handler = move |p: PathBuf| {
+                // Reload also keystore to avoid file-monitor race when doing `import-cert`
                 match manager.keystore.reload(&cert_dir) {
                     Ok(()) => {
                         log::info!("Trusted keystore updated because rulestore changed");
