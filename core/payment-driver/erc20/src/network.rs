@@ -18,6 +18,12 @@ use crate::{
 
 lazy_static::lazy_static! {
     pub static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
+        RINKEBY_NETWORK.to_string() => Network {
+            default_token: RINKEBY_TOKEN.to_string(),
+            tokens: hashmap! {
+                RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
+            }
+        },
         GOERLI_NETWORK.to_string() => Network {
             default_token: GOERLI_TOKEN.to_string(),
             tokens: hashmap! {
