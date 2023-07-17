@@ -63,7 +63,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let mode = msg.mode();
     let address = msg.address().clone();
-    let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
+    let network = msg.network().unwrap_or_default();
     let network = Network::from_str(&network).map_err(GenericError::new)?;
 
     if mode.contains(AccountMode::SEND) {
