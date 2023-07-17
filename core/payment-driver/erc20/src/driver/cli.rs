@@ -7,6 +7,7 @@
 use chrono::Utc;
 
 // Workspace uses
+use ya_payment_driver::driver::PaymentDriver;
 use ya_payment_driver::{
     bus,
     db::models::Network,
@@ -32,10 +33,14 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
         driver.is_account_active(&address)?
     }
 
-    wallet::init_wallet(&msg)
-        .timeout(Some(30))
-        .await
-        .map_err(GenericError::new)??;
+    wallet::init_wallet(
+        msg.address(),
+        msg.network()
+            .unwrap_or_else(|| driver.get_default_network()),
+    )
+    .timeout(Some(30))
+    .await
+    .map_err(GenericError::new)??;
 
     let network = network::network_like_to_network(msg.network());
     let token = match network::get_network_token(network, msg.token()) {

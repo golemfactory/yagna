@@ -21,7 +21,7 @@ use web3::types::{H160, H256, U256, U64};
 // Workspace uses
 use ya_payment_driver::{
     db::models::{Network, TransactionEntity, TxType},
-    model::{GenericError, Init, PaymentDetails},
+    model::{GenericError, PaymentDetails},
 };
 
 // Local uses
@@ -35,7 +35,6 @@ use crate::{
             convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
-    GOERLI_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
 
@@ -70,10 +69,8 @@ pub async fn account_gas_balance(
     Ok(balance)
 }
 
-pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
-    log::debug!("init_wallet. msg={:?}", msg);
-    let address = msg.address();
-    let network = msg.network().unwrap_or_default();
+pub async fn init_wallet(address: String, network: String) -> Result<(), GenericError> {
+    log::debug!("init_wallet. address={}, network={}", address, network);
     let network = Network::from_str(&network).map_err(GenericError::new)?;
 
     // Validate address and that checking balance of GLM and ETH works.
