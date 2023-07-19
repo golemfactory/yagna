@@ -32,6 +32,8 @@ pub enum CounterProposalError {
     RemoteInternal(#[from] RemoteProposalError),
     #[error(transparent)]
     CallerParse(#[from] CallerParseError),
+    #[error("Timeout while sending counter Proposal")]
+    Timeout,
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
