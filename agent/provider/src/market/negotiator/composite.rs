@@ -13,6 +13,7 @@ use super::builtin::{
 };
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
+use crate::market::negotiator::builtin::demand_validation::DemandValidation;
 use crate::market::negotiator::common::{
     reason_with_extra, AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
 };
@@ -33,6 +34,10 @@ impl CompositeNegotiator {
         agent_negotiators_cfg: AgentNegotiatorsConfig,
     ) -> anyhow::Result<CompositeNegotiator> {
         let components = NegotiatorsPack::default()
+            .add_component(
+                "Validation",
+                Box::new(DemandValidation::new(&config.validation_config)),
+            )
             .add_component(
                 "LimitAgreements",
                 Box::new(MaxAgreements::new(&config.limit_agreements_config)),
