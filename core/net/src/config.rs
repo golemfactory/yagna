@@ -4,12 +4,24 @@ use strum::VariantNames;
 use strum::{EnumString, EnumVariantNames, IntoStaticStr};
 use url::Url;
 
+// TODO: Remove compilation flag.
 #[derive(
-    StructOpt, EnumString, EnumVariantNames, IntoStaticStr, Copy, Clone, Eq, PartialEq, Debug,
+    StructOpt,
+    EnumString,
+    EnumVariantNames,
+    IntoStaticStr,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Debug,
+    Default,
 )]
 #[strum(serialize_all = "lowercase")]
 pub enum NetType {
+    #[cfg_attr(feature = "central-net", default)]
     Central,
+    #[cfg_attr(not(feature = "central-net"), default)]
     Hybrid,
 }
 
@@ -33,23 +45,5 @@ impl Config {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         Config::from_iter_safe(&[""])
-    }
-}
-
-/// TODO: Remove compilation flag.
-///  This conditional compilation is hack to make Goth integration tests work.
-///  Current solution in Goth is to build separate binary with compilation flag.
-///  This is only temporary for transition period, to make this PR as small as possible.
-#[cfg(feature = "central-net")]
-impl Default for NetType {
-    fn default() -> Self {
-        NetType::Central
-    }
-}
-
-#[cfg(not(feature = "central-net"))]
-impl Default for NetType {
-    fn default() -> Self {
-        NetType::Hybrid
     }
 }

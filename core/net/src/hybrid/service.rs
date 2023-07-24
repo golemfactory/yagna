@@ -352,7 +352,7 @@ fn bind_local_bus<F>(
         .right_future()
     };
 
-    let client = base_client.clone();
+    let client = base_client;
     let stream = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver)(caller, addr) {
             Ok(id) => id,

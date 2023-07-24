@@ -118,7 +118,7 @@ pub(crate) fn bind_service(base_client: Client) {
         .map_err(status_err)
     });
 
-    let find_node_client = base_client.clone();
+    let find_node_client = base_client;
     let _ = bus::bind(model::BUS_ID, move |find: model::FindNode| {
         let client = find_node_client.clone();
         async move {
