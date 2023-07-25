@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if)]
 use std::hash::Hash;
 use std::mem;
 use std::ptr;
