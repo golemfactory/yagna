@@ -35,9 +35,9 @@ path = "core/serv/src/main.rs"
 # this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
-libsqlite3-sys = { version = "=0.22.2", features = ["bundled"] }
-#erc20_payment_lib = { path = "../../scx1332/rust_erc20_payment/crates/erc20_payment_lib" }
-erc20_payment_lib = { version = "=0.1.9" }
+libsqlite3-sys = { version = "0.24.2", features = ["bundled"] }
+erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
+#erc20_payment_lib = { version = "=0.1.9" }
 
 [dependencies]
 ya-activity = "0.4"
@@ -300,6 +300,8 @@ ya-provider = { path = "agent/provider" }
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
+
+diesel = { git = "https://github.com/scx1332/diesel.git", rev = "7dc75d7ec20c0e17280292fc88195ef67c0f64e2" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

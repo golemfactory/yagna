@@ -42,7 +42,6 @@ impl Erc20NextService {
         {
             let (private_keys, _public_addresses) =
                 load_private_keys(&env::var("ETH_PRIVATE_KEYS").unwrap_or_default()).unwrap();
-            let receiver_accounts = vec![];
             let additional_options = AdditionalOptions {
                 keep_running: true,
                 generate_tx_only: false,
@@ -63,7 +62,6 @@ impl Erc20NextService {
             log::warn!("Starting payment engine: {:#?}", config);
             let pr = start_payment_engine(
                 &private_keys,
-                &receiver_accounts,
                 "db.sqlite",
                 config,
                 None,
