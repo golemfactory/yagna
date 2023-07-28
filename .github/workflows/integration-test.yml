@@ -93,7 +93,6 @@ jobs:
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-assets
           poetry run poe goth-tests --splits 2 --group ${{ matrix.group }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Upload test logs
