@@ -87,7 +87,9 @@ async fn get_service_messages(
         log::debug!("No old WS connection");
     }
     let handler = WsMessagesHandler { service };
-    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
+    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream)
+        .protocols(&["gsb+flexbuffers"])
+        .start_with_addr()?;
     Ok(resp)
 }
 
