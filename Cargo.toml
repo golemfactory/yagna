@@ -218,6 +218,11 @@ members = [
     "test-utils/test-framework/framework-macro"
 ]
 
+[workspace.dependencies]
+rand = "0.8.5"
+url = "2.3.1"
+trust-dns-resolver = "0.22"
+
 [patch.crates-io]
 ## SERVICES
 ya-identity = { path = "core/identity" }
