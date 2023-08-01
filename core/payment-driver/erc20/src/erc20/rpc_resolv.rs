@@ -3,6 +3,7 @@ use anyhow::Context;
 use futures::prelude::*;
 use rand::prelude::*;
 use rand::thread_rng;
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -20,18 +21,29 @@ pub struct RpcResolver {
 
 impl RpcResolver {
     pub fn new() -> Self {
-        let network_resolvers = Arc::new(Mutex::new(Default::default()));
+        let network_resolvers = Arc::new(Mutex::new(BTreeMap::new()));
         Self { network_resolvers }
     }
 
-    pub async fn clients_for(&self, network: Network) -> impl Stream<Item = Web3<Http>> {
+    pub async fn clients_for(
+        &self,
+        network: Network,
+    ) -> anyhow::Result<impl Stream<Item = Web3<Http>>> {
         let n = {
-            let mut g = self.network_resolvers.lock().unwrap();
-            g.entry(network)
-                .or_insert_with(|| NetworkResolver::from_env(network).unwrap())
-                .clone()
+            let mut g = self
+                .network_resolvers
+                .lock()
+                .expect("RpcResolver mutex poisoned");
+            match g.entry(network) {
+                Entry::Occupied(v) => v.get().clone(),
+                Entry::Vacant(v) => {
+                    let network_resolver = NetworkResolver::from_env(network)?;
+                    v.insert(network_resolver.clone());
+                    network_resolver
+                }
+            }
         };
-        n.clients().await
+        Ok(n.clients().await)
     }
 }
 
@@ -241,7 +253,7 @@ mod integration_test {
     #[cfg_attr(not(feature = "integration"), ignore)]
     async fn test_resolver(network: Network) {
         let resolver = NetworkResolver::from_env(network).unwrap();
-        eprintln!("starting check for: {}", network.to_string());
+        eprintln!("starting check for: {}", network);
         let cnt = AtomicUsize::new(0);
         resolver
             .clients()
