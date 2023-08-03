@@ -15,7 +15,8 @@ lazy_static = "1.4"
 log = "0.4"
 regex = "1"
 
-ya-relay-stack = { version = "0.5.0", optional = true }
+#ya-relay-stack = { version = "0.5.0", optional = true }
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay", rev = "f7eaae8212180b03b61fe0268ef32c153418fb0f", optional = true }
 
 anyhow = { version = "1.0", optional = true }
 trust-dns-resolver = { workspace=true, optional = true }
