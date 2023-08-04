@@ -22,6 +22,7 @@ Provider application consists of following components:
 - ExeUnit Runtime: This component is the implementation-specific part of the execution environment.
 
 ![Provider agent ExeUnits interaction](./provider-exe-unit-architecture.svg)
+<!-- Image source (private): https://miro.com/app/board/o9J_lFQXrEc=/ -->
 
 ### Communication
 
