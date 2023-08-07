@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused)]
+
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::{IpAddr, SocketAddr};
@@ -10,7 +13,9 @@ use anyhow::{anyhow, bail};
 use ya_core_model::net::local as model;
 use ya_core_model::net::local::FindNodeResponse;
 use ya_core_model::NodeId;
-use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
+use ya_relay_client::metrics::ChannelMetrics;
+use ya_relay_client::model::{SessionDesc, SocketDesc, SocketState};
+use ya_relay_client::Client;
 
 lazy_static::lazy_static! {
     static ref ADDRESS: Arc<RwLock<Option<Addr<ClientActor >>>> = Default::default();
@@ -118,7 +123,7 @@ proxy!(
     connect,
     |client: Client, msg: Connect| async move {
         if msg.0.reliable_channel {
-            let _ = client.forward(msg.0.node).await?;
+            let _ = client.forward_reliable(msg.0.node).await?;
         }
 
         if msg.0.transfer_channel {
@@ -132,34 +137,27 @@ proxy!(
     }
 );
 proxy!(
-    Disconnect(NodeId) -> anyhow::Result<()>,
+    Disconnect(NodeId) -> Result<(), SessionError>,
     disconnect,
     |client: Client, msg: Disconnect| async move {
         let node_id = msg.0;
-        let node = client.sessions.get_node(node_id).await?;
-
-        if node.is_p2p() {
-            client.sessions.close_session(node.session).await?;
-        } else {
-            client.sessions.remove_node(node_id).await;
-        }
-        Ok(())
+        client.transport.session_layer.disconnect(node_id).await
     }
 );
 proxy!(
     GetAlias(NodeId) -> Option<NodeId>,
     get_alias,
-    |client: Client, msg: GetAlias| async move { client.sessions.alias(&msg.0).await }
+    |client: Client, msg: GetAlias| async move { client.transport.session_layer.default_id(msg.0).await }
 );
 proxy!(
     IsP2p(NodeId) -> bool,
     is_p2p,
-    |client: Client, msg: IsP2p| async move { client.sessions.is_p2p(&msg.0).await }
+    |client: Client, msg: IsP2p| async move { client.transport.session_layer.is_p2p(msg.0).await }
 );
 proxy!(
     GetRemoteId(SocketAddr) -> Option<NodeId>,
     remote_id,
-    |client: Client, msg: GetRemoteId| async move { client.sessions.remote_id(&msg.0).await }
+    |client: Client, msg: GetRemoteId| async move { client.transport.session_layer.remote_id(&msg.0).await }
 );
 proxy!(
     GetNodeId -> NodeId,
