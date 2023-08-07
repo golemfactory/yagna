@@ -22,12 +22,12 @@ use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
 use ya_core_model::{identity, net, NodeId};
-use ya_relay_client::channels::ForwardReceiver;
+use ya_relay_client::channels::{ForwardReceiver, ForwardSender};
 use ya_relay_client::codec::forward::PrefixedStream;
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::model::TransportType;
 use ya_relay_client::proto::Payload;
-use ya_relay_client::{Client, ClientBuilder, FailFast};
+use ya_relay_client::{Client, ClientBuilder, FailFast, GenericSender};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
@@ -1026,7 +1026,7 @@ impl State {
             .with(|c| c.borrow().clone())
             .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-        Ok(match transport {
+        Ok::<_, anyhow::Error>(match transport {
             TransportType::Unreliable => client.forward_unreliable(remote_id).await?,
             TransportType::Reliable => client.forward_reliable(remote_id).await?.framed(),
             TransportType::Transfer => client.forward_transfer(remote_id).await?.framed(),
