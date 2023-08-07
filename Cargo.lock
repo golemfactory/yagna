@@ -8539,6 +8539,7 @@ dependencies = [
  "ya-core-model",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-relay-client",
+ "ya-relay-proto",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-sb-util",

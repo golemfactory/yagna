@@ -12,7 +12,7 @@ use std::task::Poll;
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::LocalBoxStream;
-use futures::{FutureExt, SinkExt, Stream, StreamExt};
+use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -23,11 +23,10 @@ use ya_core_model::net::local::{
 };
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::channels::{ForwardReceiver, ForwardSender};
-use ya_relay_client::codec::forward::PrefixedStream;
 use ya_relay_client::crypto::CryptoProvider;
-use ya_relay_client::model::TransportType;
-use ya_relay_client::proto::Payload;
+use ya_relay_client::model::{Payload, TransportType};
 use ya_relay_client::{Client, ClientBuilder, FailFast, GenericSender};
+use ya_relay_proto::codec::forward::PrefixedStream;
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
@@ -720,7 +719,7 @@ fn inbound_handler(
     transport: TransportType,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
-    StreamExt::for_each(rx, move |payload: &[u8]| {
+    StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
         log::trace!(
             "local bus handler -> inbound message ({} B) from [{remote_id}]",
