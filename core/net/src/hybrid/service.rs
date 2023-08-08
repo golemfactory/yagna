@@ -22,11 +22,10 @@ use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
 use ya_core_model::{identity, net, NodeId};
-use ya_relay_client::channels::{ForwardReceiver, ForwardSender};
+use ya_relay_client::channels::{ForwardReceiver, ForwardSender, PrefixedStream};
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::model::{Payload, TransportType};
 use ya_relay_client::{Client, ClientBuilder, FailFast, GenericSender};
-use ya_relay_proto::codec::forward::PrefixedStream;
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;

@@ -19,7 +19,6 @@ ya-client-model = "0.5"
 ya-core-model = { version = "^0.9", features = ["net", "identity"] }
 
 ya-relay-client = "0.6"
-ya-relay-proto = "0.4"
 #ya-relay-client = { path = "../../../ya-relay/client" }
 
 ya-sb-proto = { version = "0.6.1" }
