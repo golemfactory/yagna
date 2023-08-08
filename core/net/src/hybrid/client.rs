@@ -13,10 +13,10 @@ use anyhow::{anyhow, bail};
 use ya_core_model::net::local as model;
 use ya_core_model::net::local::FindNodeResponse;
 use ya_core_model::NodeId;
-use ya_relay_client::error::SessionError;
 use ya_relay_client::metrics::ChannelMetrics;
 use ya_relay_client::model::{SessionDesc, SocketDesc, SocketState};
 use ya_relay_client::Client;
+use ya_relay_client::SessionError;
 
 lazy_static::lazy_static! {
     static ref ADDRESS: Arc<RwLock<Option<Addr<ClientActor >>>> = Default::default();
