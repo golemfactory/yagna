@@ -125,7 +125,7 @@ pub async fn start_network(
     counter!("net.connections.p2p", 0);
     counter!("net.connections.relay", 0);
 
-    log::info!("Starting network (hybrid v2) with identity: {default_id}");
+    log::info!("Starting network (hybrid) with identity: {default_id}");
 
     let broadcast_size = config.broadcast_size;
     let crypto = IdentityCryptoProvider::new(default_id);
