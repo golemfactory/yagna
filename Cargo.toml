@@ -259,11 +259,8 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
 
 ## RELAY and networking stack
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "76646b6d3856b00b91de533fe10f739059fa322e" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "76646b6d3856b00b91de533fe10f739059fa322e" }
-## TODO: We shouldn't reference `ya-relay-core` and `ya-relay-proto` directly
-# ya-relay-core = { git = "https://github.com/golemfactory/ya-relay.git", rev = "506a678ef65893e9c0d857e4d7b8f84999790928" }
-# ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "506a678ef65893e9c0d857e4d7b8f84999790928" }
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "a309e05ed1a9da0e74fd959c4d1f23b4be03bedf" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "a309e05ed1a9da0e74fd959c4d1f23b4be03bedf" }
 
 #ya-relay-stack = { path = "../ya-relay/crates/stack" }
 #ya-relay-client = { path = "../ya-relay/client" }
