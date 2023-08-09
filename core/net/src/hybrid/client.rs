@@ -142,23 +142,23 @@ proxy!(
     disconnect,
     |client: Client, msg: Disconnect| async move {
         let node_id = msg.0;
-        client.transport.session_layer.disconnect(node_id).await
+        client.disconnect(node_id).await
     }
 );
 proxy!(
     GetAlias(NodeId) -> Option<NodeId>,
     get_alias,
-    |client: Client, msg: GetAlias| async move { client.transport.session_layer.default_id(msg.0).await }
+    |client: Client, msg: GetAlias| async move { client.default_id(msg.0).await }
 );
 proxy!(
     IsP2p(NodeId) -> bool,
     is_p2p,
-    |client: Client, msg: IsP2p| async move { client.transport.session_layer.is_p2p(msg.0).await }
+    |client: Client, msg: IsP2p| async move { client.is_p2p(msg.0).await }
 );
 proxy!(
     GetRemoteId(SocketAddr) -> Option<NodeId>,
     remote_id,
-    |client: Client, msg: GetRemoteId| async move { client.transport.session_layer.remote_id(&msg.0).await }
+    |client: Client, msg: GetRemoteId| async move { client.remote_id(&msg.0).await }
 );
 proxy!(
     GetNodeId -> NodeId,
