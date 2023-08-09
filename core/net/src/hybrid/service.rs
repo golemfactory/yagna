@@ -22,10 +22,10 @@ use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
 use ya_core_model::{identity, net, NodeId};
-use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
+use ya_relay_client::channels::{ForwardReceiver, ForwardSender, PrefixedStream};
 use ya_relay_client::crypto::CryptoProvider;
-use ya_relay_client::proto::Payload;
-use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
+use ya_relay_client::model::{Payload, TransportType};
+use ya_relay_client::{Client, ClientBuilder, FailFast, GenericSender};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
@@ -50,7 +50,7 @@ const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Payload>;
-type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
+type NetSinkKind = ForwardSender;
 type NetSinkKey = (NodeId, TransportType);
 
 lazy_static::lazy_static! {
@@ -124,7 +124,7 @@ pub async fn start_network(
     counter!("net.connections.p2p", 0);
     counter!("net.connections.relay", 0);
 
-    log::info!("Starting network (hybrid) with identity: {}", default_id);
+    log::info!("Starting network (hybrid) with identity: {default_id}");
 
     let broadcast_size = config.broadcast_size;
     let crypto = IdentityCryptoProvider::new(default_id);
@@ -231,7 +231,7 @@ async fn build_client(
         .crypto(crypto)
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration)
-        .connect()
+        .connect(FailFast::Yes)
         .build()
         .await
 }
@@ -513,7 +513,7 @@ fn forward_bus_to_net(
 
         match state.forward_sink(remote_id, transport).await {
             Ok(mut sink) => {
-                let _ = sink.send(msg).await.map_err(|_| {
+                let _ = sink.send(msg.into()).await.map_err(|_| {
                     let err = "Net: error sending message: session closed".to_string();
                     handler_reply_service_err(request_id, err, tx);
                 });
@@ -566,7 +566,7 @@ fn push_bus_to_net(
 
         match state.forward_sink(remote_id, transport).await {
             Ok(mut sink) => {
-                let _ = sink.send(msg).await.map_err(|_| {
+                let _ = sink.send(msg.into()).await.map_err(|_| {
                     log::debug!("Net: error sending message: session closed");
                 });
             }
@@ -881,7 +881,7 @@ fn handle_request(
 
             //stream.forward(sink).await?;
             while let Some(item) = stream.next().await {
-                sink.send(item?).await.ok();
+                sink.send(item?.into()).await.ok();
                 log::debug!("Handled request: {request_id_sent} from: {caller_id}");
             }
 
@@ -1024,22 +1024,11 @@ impl State {
             .with(|c| c.borrow().clone())
             .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-        let forward: NetSinkKind = match transport {
-            TransportType::Unreliable => client.forward_unreliable(remote_id).await?.into(),
-            TransportType::Reliable => PrefixedSink::new(client.forward(remote_id).await?).into(),
-            TransportType::Transfer => {
-                PrefixedSink::new(client.forward_transfer(remote_id).await?).into()
-            }
-        };
-
-        // FIXME: yagna daemon doesn't handle connections; ya-relay-client does
-        // if client.sessions.has_p2p_connection(remote_id).await {
-        //     counter!("net.connections.p2p", 1)
-        // } else {
-        //     counter!("net.connections.relay", 1)
-        // };
-
-        Ok(forward)
+        Ok::<_, anyhow::Error>(match transport {
+            TransportType::Unreliable => client.forward_unreliable(remote_id).await?,
+            TransportType::Reliable => client.forward_reliable(remote_id).await?.framed(),
+            TransportType::Transfer => client.forward_transfer(remote_id).await?.framed(),
+        })
     }
 
     fn get_public_service(&self, addr: &str) -> Option<String> {

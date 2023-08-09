@@ -11,7 +11,6 @@ use url::Url;
 pub enum NetType {
     Central,
     Hybrid,
-    HybridV2,
 }
 
 #[derive(StructOpt, Clone)]
