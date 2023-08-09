@@ -1945,15 +1945,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "log",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
@@ -2772,15 +2763,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
-name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
-dependencies = [
- "ahash 0.8.3",
-]
-
-[[package]]
 name = "hdrhistogram"
 version = "6.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3523,15 +3505,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mach2"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0d1830bcd151a6fc4aea1369af235b36c1528fe976b8ff678683c9995eade8"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "managed"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3712,24 +3685,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "metrics-exporter-prometheus"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a4964177ddfdab1e3a2b37aec7cf320e14169abb0ed73999f558136409178d5"
-dependencies = [
- "base64 0.21.2",
- "hyper 0.14.26",
- "indexmap",
- "ipnet",
- "metrics 0.21.0",
- "metrics-util 0.15.0",
- "quanta 0.11.1",
- "thiserror",
- "tokio 1.28.2",
- "tracing",
-]
-
-[[package]]
 name = "metrics-macros"
 version = "0.1.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3786,7 +3741,7 @@ checksum = "bbe930460a6c336b8f873dcfb28da3f805fd0dbadbea7beaf3042c7fb1d9fcd3"
 dependencies = [
  "hdrhistogram",
  "metrics-core",
- "metrics-util 0.3.2",
+ "metrics-util",
  "serde_json",
 ]
 
@@ -3798,7 +3753,7 @@ checksum = "4bfe24ad8285ef8b239232135a65f89cc5fa4690bbfaf8907f4bef38f8b08eba"
 dependencies = [
  "hdrhistogram",
  "metrics-core",
- "metrics-util 0.3.2",
+ "metrics-util",
 ]
 
 [[package]]
@@ -3809,7 +3764,7 @@ checksum = "83f66811013592560efc75d75a92d6e2f415a11b52f085e51d9fb4d1edec6335"
 dependencies = [
  "hdrhistogram",
  "metrics-core",
- "metrics-util 0.3.2",
+ "metrics-util",
  "serde_yaml 0.8.26",
 ]
 
@@ -3830,7 +3785,7 @@ dependencies = [
  "metrics-observer-json",
  "metrics-observer-prometheus",
  "metrics-observer-yaml",
- "metrics-util 0.3.2",
+ "metrics-util",
  "parking_lot 0.10.2",
  "quanta 0.3.2",
 ]
@@ -3843,21 +3798,6 @@ checksum = "277619f040719a5a23d75724586d5601286e8fa53451cfaaca3b8c627c2c2378"
 dependencies = [
  "crossbeam-epoch 0.8.2",
  "serde",
-]
-
-[[package]]
-name = "metrics-util"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "111cb375987443c3de8d503580b536f77dc8416d32db62d9456db5d93bd7ac47"
-dependencies = [
- "crossbeam-epoch 0.9.14",
- "crossbeam-utils 0.8.15",
- "hashbrown 0.13.2",
- "metrics 0.21.0",
- "num_cpus",
- "quanta 0.11.1",
- "sketches-ddsketch",
 ]
 
 [[package]]
@@ -5068,22 +5008,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quanta"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a17e662a7a8291a865152364c20c7abc5e60486ab2001e8ec10b24862de0b9ab"
-dependencies = [
- "crossbeam-utils 0.8.15",
- "libc",
- "mach2",
- "once_cell",
- "raw-cpuid",
- "wasi 0.11.0+wasi-snapshot-preview1",
- "web-sys",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5347,15 +5271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
 dependencies = [
  "rand_core 0.6.4",
-]
-
-[[package]]
-name = "raw-cpuid"
-version = "10.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c297679cb867470fa8c9f67dbba74a78d78e3e98d7cf2b08d6d71540f797332"
-dependencies = [
- "bitflags",
 ]
 
 [[package]]
@@ -6445,12 +6360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sketches-ddsketch"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68a406c1882ed7f29cd5e248c9848a80e7cb6ae0fea82346d2746f2f941c07e1"
-
-[[package]]
 name = "slab"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6606,6 +6515,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "strum"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
+
+[[package]]
 name = "strum_macros"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6628,6 +6543,19 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad8d03b598d3d0fff69bf533ee3ef19b8eeb342729596df84bcc7e1f96ec4059"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -8819,18 +8747,20 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ce4a2a97b75156a991b7e7836238ee8f60312508#ce4a2a97b75156a991b7e7836238ee8f60312508"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "derive_more",
  "educe",
- "env_logger 0.8.4",
  "futures 0.3.28",
  "humantime 2.1.0",
  "log",
  "metrics 0.21.0",
  "num_cpus",
+ "strum 0.25.0",
+ "strum_macros 0.25.2",
  "thiserror",
  "tokio 1.28.2",
  "tokio-stream",
@@ -8838,14 +8768,13 @@ dependencies = [
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-server",
  "ya-relay-stack",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ce4a2a97b75156a991b7e7836238ee8f60312508#ce4a2a97b75156a991b7e7836238ee8f60312508"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8875,12 +8804,13 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ce4a2a97b75156a991b7e7836238ee8f60312508#ce4a2a97b75156a991b7e7836238ee8f60312508"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
  "derive_more",
  "futures 0.3.28",
+ "hex",
  "prost 0.10.4",
  "prost-build 0.10.4",
  "rand 0.8.5",
@@ -8891,36 +8821,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-relay-server"
-version = "0.2.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
-dependencies = [
- "actix-rt",
- "anyhow",
- "chrono",
- "dotenv",
- "env_logger 0.8.4",
- "futures 0.3.28",
- "governor",
- "humantime 2.1.0",
- "itertools 0.10.5",
- "log",
- "metrics 0.21.0",
- "metrics-exporter-prometheus",
- "rand 0.8.5",
- "structopt",
- "thiserror",
- "tokio 1.28.2",
- "tokio-util 0.7.8",
- "url",
- "ya-relay-core",
- "ya-relay-proto",
-]
-
-[[package]]
 name = "ya-relay-stack"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=29c860046ecc4419f0ed068da909adbd959a37ed#29c860046ecc4419f0ed068da909adbd959a37ed"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ce4a2a97b75156a991b7e7836238ee8f60312508#ce4a2a97b75156a991b7e7836238ee8f60312508"
 dependencies = [
  "derive_more",
  "futures 0.3.28",
@@ -8940,8 +8843,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "306a73f6ce2286987c9da25bc0c2ef81f4f0b2b58bb8d9aeedc34d27407603ff"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ce4a2a97b75156a991b7e7836238ee8f60312508#ce4a2a97b75156a991b7e7836238ee8f60312508"
 dependencies = [
  "bytes 1.4.0",
  "derive_more",
