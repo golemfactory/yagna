@@ -362,12 +362,28 @@ impl OfferBuilder for ExeUnitDesc {
 }
 
 async fn test_runtime(exeunit_desc: &ExeUnitDesc, working_dir: &Path) -> anyhow::Result<()> {
-    let result = ExeUnitInstance::run_with_output(
+    if exeunit_desc.name == "wasmtime" {
+        return test_runtime_wasi(exeunit_desc, working_dir).await;
+    }
+
+    ExeUnitInstance::run_with_output(
         &exeunit_desc.supervisor_path,
         working_dir,
         ExeUnitsRegistry::exeunit_args(exeunit_desc, vec!["test".into()])?,
     )
+    .await?;
+    Ok(())
+}
+
+/// Workaround: ya-runtime-wasi doesn't implement `test` command.
+async fn test_runtime_wasi(exeunit_desc: &ExeUnitDesc, working_dir: &Path) -> anyhow::Result<()> {
+    let result = ExeUnitInstance::run_with_output(
+        &exeunit_desc.supervisor_path,
+        working_dir,
+        ExeUnitsRegistry::exeunit_args(exeunit_desc, vec!["--help".into()])?,
+    )
     .await;
+
     if let Err(err) = result {
         let message = err.to_string();
         if !message.contains("--help") {
