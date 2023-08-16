@@ -1712,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "diesel"
 version = "1.4.8"
-source = "git+https://github.com/scx1332/diesel.git?rev=7dc75d7ec20c0e17280292fc88195ef67c0f64e2#7dc75d7ec20c0e17280292fc88195ef67c0f64e2"
+source = "git+https://github.com/golemfactory/yagna-diesel-patch.git?rev=a512c66d520a9066dd9a4d1416f9109019b39563#a512c66d520a9066dd9a4d1416f9109019b39563"
 dependencies = [
  "bigdecimal 0.1.2",
  "byteorder",
