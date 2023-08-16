@@ -291,7 +291,7 @@ ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
-diesel = { git = "https://github.com/scx1332/diesel.git", rev = "7dc75d7ec20c0e17280292fc88195ef67c0f64e2"}
+diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563"}
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
