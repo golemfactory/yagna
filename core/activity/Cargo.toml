@@ -25,7 +25,7 @@ futures = "0.3"
 hex = "0.4"
 metrics="0.12"
 lazy_static = "1.4"
-libsqlite3-sys = { version = "*", features = ["bundled"] }
+libsqlite3-sys = { workspace = true }
 log = "0.4"
 mime = "0.3.16"
 r2d2 = "0.8"

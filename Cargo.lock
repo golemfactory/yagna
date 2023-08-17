@@ -1689,8 +1689,7 @@ dependencies = [
 [[package]]
 name = "diesel"
 version = "1.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b28135ecf6b7d446b43e27e225622a038cc4e2930a1022f51cdb97ada19b8e4d"
+source = "git+https://github.com/golemfactory/yagna-diesel-patch.git?rev=a512c66d520a9066dd9a4d1416f9109019b39563#a512c66d520a9066dd9a4d1416f9109019b39563"
 dependencies = [
  "bigdecimal 0.1.2",
  "byteorder",

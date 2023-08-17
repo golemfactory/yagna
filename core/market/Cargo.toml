@@ -41,7 +41,7 @@ env_logger = { version = "0.7" }
 futures = "0.3"
 humantime = "2"
 lazy_static = "1.4"
-libsqlite3-sys = { version = "*", features = ["bundled"] }
+libsqlite3-sys = { workspace = true }
 log = "0.4"
 metrics="0.12"
 num-derive = "0.3"
