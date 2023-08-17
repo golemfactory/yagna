@@ -168,7 +168,7 @@ assets = [
     ],
 ]
 [workspace.dependencies]
-libsqlite3-sys = { version = "0.22.0", features = ["bundled"] }
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 
 [workspace]
 members = [
