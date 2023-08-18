@@ -132,7 +132,7 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
     let src_url = TransferUrl::parse(&args.url, "http")?;
     let dst_url = TransferUrl::parse(&dst_path.display().to_string(), "file")?;
     let src = Rc::new(UnreliableHttpProvider::new(args.interval));
-    let dst = Rc::new(FileTransferProvider::default());
+    let dst = Rc::new(FileTransferProvider);
     let ctx = TransferContext::default();
 
     let mut retry = Retry::new(i32::MAX);
