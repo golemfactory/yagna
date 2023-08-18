@@ -590,7 +590,7 @@ async fn test_rest_agreement_rejected() {
     );
     let req = actix_web::test::TestRequest::post()
         .uri(&url)
-        .set_json(&Some(gen_reason("Not-interested")))
+        .set_json(Some(gen_reason("Not-interested")))
         .to_request();
     let app = network.get_rest_app(PROV_NAME).await;
     let resp = actix_web::test::call_service(&app, req).await;
@@ -652,7 +652,7 @@ async fn test_rest_agreement_cancelled() {
     );
     let req = actix_web::test::TestRequest::post()
         .uri(&url)
-        .set_json(&Some(gen_reason("Changed my mind")))
+        .set_json(Some(gen_reason("Changed my mind")))
         .to_request();
     let app = network.get_rest_app(REQ_NAME).await;
     let resp = actix_web::test::call_service(&app, req).await;
