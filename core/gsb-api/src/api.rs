@@ -126,7 +126,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use test_case::test_case;
-    use ya_core_model::gftp::{GetChunk, GftpChunk};
+    use ya_core_model::gftp::{GetChunk, GftpChunk, UploadChunk};
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
@@ -253,6 +253,72 @@ mod tests {
             StatusCode::OK,
             "Can delete service, but got {delete_resp:?}"
         );
+    }
+
+    #[actix_web::test]
+    #[serial]
+    async fn upload_chunk_test() {
+        let mut api = dummy_api();
+
+        let service_number = SERVICE_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let service_addr = format!("{SERVICE_ADDR}_{service_number}");
+
+        let bind_req = api
+            .post(format!("/{}/{}", GSB_API_PATH, "services"))
+            .send_json(&ServiceRequest {
+                listen: ServiceListenRequest {
+                    components: vec!["UploadChunk".to_string()],
+                    on: service_addr.clone(),
+                },
+            });
+
+        let body =
+            verify_bind_service_response(bind_req, vec!["UploadChunk".to_string()], &service_addr)
+                .await;
+
+        let services_path = format!("gsb-api/v1/services/{}", body.services_id);
+        let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+
+        let gsb_endpoint = ya_service_bus::typed::service(service_addr.clone());
+
+        let (gsb_res, ws_res) = tokio::join!(
+            async {
+                gsb_endpoint
+                    .call(UploadChunk {
+                        chunk: GftpChunk {
+                            offset: 0,
+                            content: vec![1, 2, 3],
+                        },
+                    })
+                    .await
+            },
+            async {
+                println!("WS sleep");
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let ws_req = ws_frames.next().await;
+                let ws_req = match ws_req {
+                    Some(Ok(Frame::Binary(ws_req))) => {
+                        flexbuffers::from_slice::<TestWsRequest<UploadChunk>>(&ws_req).unwrap()
+                    }
+                    msg => panic!("Unexpected msg: {:?}", msg),
+                };
+                let ws_res = TestWsResponse {
+                    id: ws_req.id,
+                    payload: (),
+                };
+                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+                ws_frames
+                    .send(ws::Message::Binary(Bytes::from(ws_res)))
+                    .await
+            }
+        );
+
+        ws_res.unwrap();
+        gsb_res
+            .expect("Response is unit type")
+            .expect("Response is ok");
+
+        verify_delete_service(&mut api, &service_addr).await;
     }
 
     #[actix_web::test]
