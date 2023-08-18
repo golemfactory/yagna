@@ -73,23 +73,9 @@ impl RuntimeProcess {
     }
 
     pub fn offer_template(binary: PathBuf, mut args: Vec<String>) -> Result<OfferTemplate, Error> {
-        let current_path = std::env::current_dir();
         args.push("offer-template".to_string());
 
-        log::info!(
-            "Executing {:?} with {:?} from path {:?}",
-            binary,
-            args,
-            current_path
-        );
-
-        let child = std::process::Command::new(binary.clone())
-            .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-
-        let result = child.wait_with_output()?;
+        let result = Self::run_cmd(binary.clone(), args)?;
         match result.status.success() {
             true => {
                 let stdout = vec_to_string(result.stdout).unwrap_or_default();
@@ -106,6 +92,30 @@ impl RuntimeProcess {
                 Ok(OfferTemplate::default())
             }
         }
+    }
+
+    pub fn test(binary: PathBuf, mut args: Vec<String>) -> Result<std::process::Output, Error> {
+        args.push("test".to_string());
+        Ok(Self::run_cmd(binary, args)?)
+    }
+
+    fn run_cmd(binary: PathBuf, args: Vec<String>) -> std::io::Result<std::process::Output> {
+        let current_path = std::env::current_dir();
+
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            binary,
+            args,
+            current_path
+        );
+
+        let child = std::process::Command::new(binary)
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        child.wait_with_output()
     }
 
     fn args(&self) -> Result<CommandArgs, Error> {
