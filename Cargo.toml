@@ -24,7 +24,7 @@ packet-trace-enable = [
     "ya-vpn/packet-trace-enable",
     "ya-file-logging/packet-trace-enable",
     "ya-net/packet-trace-enable",
-    "ya-service-bus/packet-trace-enable"
+    "ya-service-bus/packet-trace-enable",
 ]
 
 [[bin]]
@@ -35,7 +35,7 @@ path = "core/serv/src/main.rs"
 # this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
-libsqlite3-sys = { version = "0.24.2", features = ["bundled"] }
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.1.9" }
 
@@ -179,8 +179,6 @@ assets = [
         "644",
     ],
 ]
-[workspace.dependencies]
-libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 
 [workspace]
 members = [
@@ -229,7 +227,7 @@ members = [
     "utils/fd-metrics",
     "core/metrics",
     "test-utils/test-framework",
-    "test-utils/test-framework/framework-macro"
+    "test-utils/test-framework/framework-macro",
 ]
 
 [patch.crates-io]
@@ -259,10 +257,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68" }
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68" }
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68" }
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68" }
 
 #ya-service-bus = { path = "../ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
@@ -302,13 +300,11 @@ ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 
-diesel = { git = "https://github.com/scx1332/diesel.git", rev = "7dc75d7ec20c0e17280292fc88195ef67c0f64e2" }
-
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
-diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563"}
+diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
