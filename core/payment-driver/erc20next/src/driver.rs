@@ -4,12 +4,10 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use chrono::{Duration, Utc};
 use erc20_payment_lib::db::ops::insert_token_transfer;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use erc20_payment_lib::transaction::create_token_transfer;
 use ethereum_types::H160;
-use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -20,7 +18,6 @@ use ya_payment_driver::{
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
-    db::models::Network,
     driver::{
         async_trait, BigDecimal, IdentityError, IdentityEvent, Network as NetworkConfig,
         PaymentDriver,
@@ -30,14 +27,10 @@ use ya_payment_driver::{
 
 // Local uses
 use crate::erc20::utils::big_dec_to_u256;
-use crate::{
-    dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, MUMBAI_PLATFORM,
-    POLYGON_MAINNET_PLATFORM, RINKEBY_NETWORK, RINKEBY_PLATFORM, YATESTNET_PLATFORM,
-};
+use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
 mod cli;
-mod cron;
 
 lazy_static::lazy_static! {
     static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
@@ -57,19 +50,13 @@ lazy_static::lazy_static! {
 
 pub struct Erc20NextDriver {
     active_accounts: AccountsRc,
-    dao: Erc20Dao,
-    sendout_lock: Mutex<()>,
-    confirmation_lock: Mutex<()>,
     payment_runtime: PaymentRuntime,
 }
 
 impl Erc20NextDriver {
-    pub fn new(db: DbExecutor, pr: PaymentRuntime) -> Self {
+    pub fn new(pr: PaymentRuntime) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
-            dao: Erc20Dao::new(db),
-            sendout_lock: Default::default(),
-            confirmation_lock: Default::default(),
             payment_runtime: pr,
         }
     }
@@ -92,6 +79,58 @@ impl Erc20NextDriver {
                 &address
             ))),
         }
+    }
+
+    async fn do_transfer(
+        &self,
+        sender: &str,
+        to: &str,
+        amount: &BigDecimal,
+        network: &str,
+    ) -> Result<String, GenericError> {
+        self.is_account_active(sender)?;
+        let sender = H160::from_str(sender)
+            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
+        let receiver = H160::from_str(to)
+            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
+        let amount = big_dec_to_u256(amount)?;
+
+        let chain_id = self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .values()
+            .find(|chain_setup| &chain_setup.network == network)
+            .ok_or_else(|| GenericError::new(format!("Unsupported network: {}", network)))?
+            .chain_id;
+
+        let chain_cfg = self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .get(&chain_id)
+            .ok_or(GenericError::new(format!(
+                "Cannot find chain cfg for chain {chain_id}"
+            )))?;
+
+        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
+            "Cannot find GLM address for chain {chain_id}"
+        )))?;
+
+        let payment_id = Uuid::new_v4().to_simple().to_string();
+        let token_transfer = create_token_transfer(
+            sender,
+            receiver,
+            chain_cfg.chain_id,
+            Some(&payment_id),
+            Some(glm_address),
+            amount,
+        );
+        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+            .await
+            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
+
+        Ok(payment_id)
     }
 }
 
@@ -172,7 +211,8 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: Fund,
     ) -> Result<String, GenericError> {
-        cli::fund(&self.dao, msg).await
+        log::info!("FUND = Not Implemented: {:?}", msg);
+        Ok("NOT_IMPLEMENTED".to_string())
     }
 
     async fn transfer(
@@ -181,56 +221,12 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError> {
-        self.is_account_active(&msg.sender)?;
-        let sender = H160::from_str(&msg.sender)
-            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
-        let receiver = H160::from_str(&msg.to)
-            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
-        let amount = big_dec_to_u256(&msg.amount)?;
         let network = msg
             .network
             .ok_or(GenericError::new("Network not specified".to_string()))?;
-        let chain_id = if network == "rinkeby" {
-            4
-        } else if network == "polygon" {
-            137
-        } else if network == "mumbai" {
-            80001
-        } else if network == "dev" {
-            987789
-        } else {
-            return Err(GenericError::new(format!(
-                "Unsupported network: {}",
-                network
-            )));
-        };
-        let chain_cfg = self
-            .payment_runtime
-            .setup
-            .chain_setup
-            .get(&chain_id)
-            .ok_or(GenericError::new(format!(
-                "Cannot find chain cfg for chain {chain_id}"
-            )))?;
 
-        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
-            "Cannot find GLM address for chain {chain_id}"
-        )))?;
-
-        let payment_id = Uuid::new_v4().to_simple().to_string();
-        let token_transfer = create_token_transfer(
-            sender,
-            receiver,
-            chain_cfg.chain_id,
-            Some(&payment_id),
-            Some(glm_address),
-            amount,
-        );
-        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+        self.do_transfer(&msg.sender, &msg.to, &msg.amount, &network)
             .await
-            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
-        //cli::transfer(&self.dao, msg).await
-        Ok(payment_id)
     }
 
     async fn schedule_payment(
@@ -239,56 +235,14 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
-        log::debug!("schedule_payment: {:?}", msg);
-
-        self.is_account_active(&msg.sender())?;
-        let sender = H160::from_str(&msg.sender())
-            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
-        let receiver = H160::from_str(&msg.recipient())
-            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
-        let amount = big_dec_to_u256(&msg.amount())?;
-        let network = msg.platform();
-        let chain_id = if network == RINKEBY_PLATFORM {
-            4
-        } else if network == POLYGON_MAINNET_PLATFORM {
-            137
-        } else if network == MUMBAI_PLATFORM {
-            80001
-        } else if network == YATESTNET_PLATFORM {
-            987789
-        } else {
-            return Err(GenericError::new(format!(
-                "Unsupported network: {}",
-                network
-            )));
-        };
-        let chain_cfg = self
-            .payment_runtime
-            .setup
-            .chain_setup
-            .get(&chain_id)
-            .ok_or(GenericError::new(format!(
-                "Cannot find chain cfg for chain {chain_id}"
-            )))?;
-
-        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
-            "Cannot find GLM address for chain {chain_id}"
+        let platform = msg.platform();
+        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+            "Malformed platform string: {}",
+            msg.platform()
         )))?;
 
-        let payment_id = Uuid::new_v4().to_simple().to_string();
-        let token_transfer = create_token_transfer(
-            sender,
-            receiver,
-            chain_cfg.chain_id,
-            Some(&payment_id),
-            Some(glm_address),
-            amount,
-        );
-        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), &network)
             .await
-            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
-        //cli::transfer(&self.dao, msg).await
-        Ok(payment_id)
     }
 
     async fn verify_payment(
@@ -313,20 +267,9 @@ impl PaymentDriver for Erc20NextDriver {
         &self,
         _db: DbExecutor,
         _caller: String,
-        msg: ShutDown,
+        _msg: ShutDown,
     ) -> Result<(), GenericError> {
-        self.send_out_payments().await;
-        // HACK: Make sure that send-out job did complete. It might have just been running in another thread (cron). In such case .send_out_payments() would not block.
-        self.sendout_lock.lock().await;
-        let timeout = Duration::from_std(msg.timeout)
-            .map_err(|e| GenericError::new(format!("Invalid shutdown timeout: {}", e)))?;
-        let deadline = Utc::now() + timeout - Duration::seconds(1);
-        while {
-            self.confirm_payments().await; // Run it at least once
-            Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
-        } {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
+        // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
     }
 }
@@ -334,53 +277,11 @@ impl PaymentDriver for Erc20NextDriver {
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20NextDriver {
     async fn confirm_payments(&self) {
-        let guard = match self.confirmation_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 confirmation job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
-        log::trace!("Running ERC-20 confirmation job...");
-        for network_key in self.get_networks().keys() {
-            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
-        }
-        log::trace!("ERC-20 confirmation job complete.");
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+        // no-op, handled by erc20_payment_lib internally
     }
 
     async fn send_out_payments(&self) {
-        let guard = match self.sendout_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 send-out job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
-
-        log::trace!("Running ERC-20 send-out job...");
-        'outer: for network_key in self.get_networks().keys() {
-            let network = Network::from_str(network_key).unwrap();
-            // Process payment rows
-            let accounts = self.active_accounts.borrow().list_accounts();
-            for node_id in accounts {
-                if let Err(e) =
-                    cron::process_payments_for_account(&self.dao, &node_id, network).await
-                {
-                    log::error!(
-                        "Cron: processing payment for account [{}] failed with error: {}",
-                        node_id,
-                        e
-                    );
-                    continue 'outer;
-                };
-            }
-            // Process transaction rows
-            cron::process_transactions(&self.dao, network).await;
-        }
-        log::trace!("ERC-20 send-out job complete.");
-
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+        // no-op, handled by erc20_payment_lib internally
     }
 
     fn sendout_interval(&self) -> std::time::Duration {

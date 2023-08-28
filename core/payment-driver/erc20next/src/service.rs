@@ -49,7 +49,7 @@ impl Erc20NextService {
             };
             log::warn!("Loading config");
             let config_str = include_str!("../config-payments.toml");
-            let config = match config::Config::load("config-payments.toml") {
+            let config = match config::Config::load("config-payments.toml").await {
                 Ok(config) => config,
                 Err(err) => {
                     log::warn!(
@@ -66,11 +66,12 @@ impl Erc20NextService {
                 config,
                 None,
                 Some(additional_options),
+                None,
             )
             .await
             .unwrap();
             log::warn!("Payment engine started - outside task");
-            let driver = Erc20NextDriver::new(db.clone(), pr);
+            let driver = Erc20NextDriver::new(pr);
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
             bus::bind_service(&db, driver_rc.clone()).await?;
