@@ -19,7 +19,7 @@ use ya_payment_driver::{
 use ya_service_api_interfaces::Provider;
 
 // Local uses
-use crate::driver::Erc20NextDriver;
+use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
 
 pub struct Erc20NextService;
 
@@ -46,6 +46,8 @@ impl Erc20NextService {
                 keep_running: true,
                 generate_tx_only: false,
                 skip_multi_contract_check: false,
+                contract_use_direct_method: false,
+                contract_use_unpacked_method: false,
             };
             log::warn!("Loading config");
             let config_str = include_str!("../config-payments.toml");
@@ -60,12 +62,15 @@ impl Erc20NextService {
             };
 
             log::warn!("Starting payment engine: {:#?}", config);
+            let signer = IdentitySigner::new();
             let pr = start_payment_engine(
                 &private_keys,
                 "db.sqlite",
                 config,
+                signer,
                 None,
                 Some(additional_options),
+                None,
                 None,
             )
             .await
