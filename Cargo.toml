@@ -10,12 +10,11 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['erc20-driver', 'erc20next-driver', 'zksync-driver', 'gftp/bin']
+default = ['erc20-driver', 'erc20next-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 erc20next-driver = ['ya-erc20next-driver']
-zksync-driver = ['ya-zksync-driver']
 tos = []
 framework-test = []
 # Temporary to make goth integration tests work
@@ -48,7 +47,6 @@ ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
 ya-erc20-driver = { version = "0.4", optional = true }
 ya-erc20next-driver = { version = "0.4", optional = true }
-ya-zksync-driver = { version = "0.3", optional = true }
 ya-identity = "0.3"
 ya-market = "0.4"
 ya-metrics = "0.2"
@@ -196,7 +194,6 @@ members = [
     "core/payment-driver/dummy",
     "core/payment-driver/erc20",
     "core/payment-driver/erc20next",
-    "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/derive",
@@ -243,7 +240,6 @@ ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-erc20next-driver = { path = "core/payment-driver/erc20next" }
-ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
 ya-gsb-api = { path = "core/gsb-api" }
@@ -302,7 +298,6 @@ ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
-web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563" }
 
