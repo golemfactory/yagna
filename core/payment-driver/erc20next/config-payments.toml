@@ -19,14 +19,14 @@ block-explorer-url = "https://rinkeby.etherscan.io"
 [chain.goerli]
 chain-name = "Goerli"
 chain-id = 5
-rpc-endpoints = ["https://ethereum-goerli-rpc.allthatnode.com",
-    "https://rpc.goerli.mudit.blog",
+rpc-endpoints = [
+    "https://ethereum-goerli-rpc.allthatnode.com",
     "https://rpc.slock.it/goerli",
-    "https://www.ethercluster.com/goerli",
-    "https://rpc.ankr.com/eth_goerli"]
+    "https://rpc.ankr.com/eth_goerli",
+]
 currency-symbol = "tETH"
 priority-fee = 1.5111
-max-fee-per-gas = 500.0
+max-fee-per-gas = 10.0
 gas-left-warning-limit = 1000000
 transaction-timeout = 100
 token = { address = "0x33af15c79d64b85ba14aaffaa4577949104b22e8", symbol = "tGLM" }
@@ -37,7 +37,9 @@ block-explorer-url = "https://goerli.etherscan.io"
 [chain.mumbai]
 chain-name = "Mumbai testnet"
 chain-id = 80001
-rpc-endpoints = ["https://rpc-mumbai.maticvigil.com/v1/fd04db1066cae0f44d3461ae6d6a7cbbdd46e4a5"]
+rpc-endpoints = [
+    "https://rpc-mumbai.maticvigil.com/v1/fd04db1066cae0f44d3461ae6d6a7cbbdd46e4a5",
+]
 # rpc-endpoints = ["http://127.0.0.1:8545"]
 currency-symbol = "tMATIC"
 priority-fee = 1.5111
