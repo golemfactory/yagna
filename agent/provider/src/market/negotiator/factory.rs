@@ -99,7 +99,7 @@ pub fn create_negotiator(
             )
             .unwrap(),
         ),
-        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::default()),
+        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator),
         _ => Default::default(),
     };
     Arc::new(negotiator)
@@ -107,6 +107,6 @@ pub fn create_negotiator(
 
 impl Default for NegotiatorAddr {
     fn default() -> Self {
-        NegotiatorAddr::from(AcceptAllNegotiator::default())
+        NegotiatorAddr::from(AcceptAllNegotiator)
     }
 }
