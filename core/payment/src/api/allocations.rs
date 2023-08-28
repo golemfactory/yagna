@@ -81,6 +81,7 @@ async fn create_allocation(
         };
 
         if let Err(e) = init_account(acc).await {
+            log::error!("Error initializing account: {:?}", e);
             return response::server_error(&e);
         }
     }

@@ -155,6 +155,16 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
+pub async fn get_pubkey(node_id: NodeId) -> Result<Vec<u8>, GenericError> {
+    let pubkey = service(identity::BUS_ID)
+        .send(identity::GetPubKey(node_id))
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+
+    Ok(pubkey)
+}
+
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
