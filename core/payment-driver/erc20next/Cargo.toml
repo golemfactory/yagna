@@ -1,6 +1,6 @@
 [package]
-name = "ya-zksync-driver"
-version = "0.3.0"
+name = "ya-erc20next-driver"
+version = "0.4.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -10,26 +10,35 @@ default = []
 [dependencies]
 async-trait = "0.1"
 anyhow = "1.0"
-awc = { version = "3.0", features = ["openssl"] }
+awc = { version = "3", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
+ethsign = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
-ethereum-types = "0.10"
+derive_more = "0.99"
+ethabi = "18.0"
+ethereum-types = "0.14.1"
+ethereum-tx-sign = "3.1"
 futures = "0.3"
 hex = "0.4"
 lazy_static = "1.4"
-log = "0.4.17"
+log = "0.4"
 maplit = "1.0"
-metrics-macros = "=0.1.0-alpha.5"
 num-bigint = { version = "0.3", features = ["serde"] }
+num-traits = "0.2"
 rlp = "0.5"
 serde = "1.0"
 serde_json = "^1.0"
-tiny-keccak = "1.4.2"
+sha3 = "0.8"
+thiserror = "1.0"
+tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "1", features = ["full"] }
-tokio-compat-02 = "0.2"
+tokio-util = { version = "0.7.8", features = ["rt"] }
 uuid = { version = "0.8", features = ["v4"] }
-zksync = { git = "https://github.com/matter-labs/zksync", rev = "0e28e238f71b3be128e4a760b0147e7c62d8dee5"}
-zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "0e28e238f71b3be128e4a760b0147e7c62d8dee5"}
+web3 = { version = "0.19.0", default-features = false, features = [
+    "http-tls",
+    "signing",
+    "ws-tls-tokio",
+] }
 
 ## yagna dependencies
 ya-payment-driver = "0.3"
@@ -37,6 +46,7 @@ ya-client-model = "0.5"
 ya-service-api-interfaces = "0.2"
 ya-utils-futures = "0.2"
 ya-utils-networking = "0.2"
+erc20_payment_lib = { workspace = true }
 
 [dev-dependencies]
 actix-rt = "2.7"
