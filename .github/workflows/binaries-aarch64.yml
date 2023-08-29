@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 jobs:
