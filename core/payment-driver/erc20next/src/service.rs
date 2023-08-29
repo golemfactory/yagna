@@ -63,6 +63,9 @@ impl Erc20NextService {
 
             log::warn!("Starting payment engine: {:#?}", config);
             let signer = IdentitySigner::new();
+
+            let (sender, recv) = tokio::sync::mpsc::channel(16);
+
             let pr = start_payment_engine(
                 &private_keys,
                 "db.sqlite",
@@ -70,15 +73,18 @@ impl Erc20NextService {
                 signer,
                 None,
                 Some(additional_options),
-                None,
+                Some(sender),
                 None,
             )
             .await
             .unwrap();
+
             log::warn!("Payment engine started - outside task");
-            let driver = Erc20NextDriver::new(pr);
+            let driver = Erc20NextDriver::new(pr, recv);
+
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
+
             bus::bind_service(&db, driver_rc.clone()).await?;
 
             log::info!("Successfully connected Erc20NextService to gsb.");

@@ -4,12 +4,14 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::db::ops::insert_token_transfer;
-use erc20_payment_lib::runtime::PaymentRuntime;
+use erc20_payment_lib::runtime::{DriverEventContent, PaymentRuntime};
 use erc20_payment_lib::transaction::create_token_transfer;
+use erc20_payment_lib::{db::ops::insert_token_transfer, runtime::DriverEvent};
 use ethereum_types::H160;
 use std::collections::HashMap;
 use std::str::FromStr;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 // Workspace uses
@@ -51,13 +53,15 @@ lazy_static::lazy_static! {
 pub struct Erc20NextDriver {
     active_accounts: AccountsRc,
     payment_runtime: PaymentRuntime,
+    events: Mutex<Receiver<DriverEvent>>,
 }
 
 impl Erc20NextDriver {
-    pub fn new(pr: PaymentRuntime) -> Self {
+    pub fn new(payment_runtime: PaymentRuntime, events: Receiver<DriverEvent>) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
-            payment_runtime: pr,
+            payment_runtime,
+            events: Mutex::new(events),
         }
     }
 
@@ -277,7 +281,53 @@ impl PaymentDriver for Erc20NextDriver {
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20NextDriver {
     async fn confirm_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
+        let mut events = self.events.lock().await;
+        while let Ok(event) = events.try_recv() {
+            if let DriverEventContent::TransferFinished(tx) = event.content {
+                let chain_id = tx.chain_id;
+                let network_name = &self
+                    .payment_runtime
+                    .setup
+                    .chain_setup
+                    .get(&chain_id)
+                    .unwrap_or_else(|| panic!("Missing configuration for chain_id {chain_id}"))
+                    .network;
+
+                let networks = self.get_networks();
+                let network = networks.get(network_name).unwrap_or_else(|| {
+                    panic!("Network {network_name} not supported by Erc20NextDriver")
+                });
+                let platform = network
+                    .tokens
+                    .get(&network.default_token)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Network {} doesn't specify platform for default token {}",
+                            network_name, network.default_token
+                        )
+                    })
+                    .as_str();
+
+                let token_amount = tx.token_amount;
+
+                bus::notify_payment(
+                    &self.get_name(),
+                    platform,
+                    vec![tx.payment_id.unwrap()],
+                    &PaymentDetails {
+                        recipient: tx.receiver_addr,
+                        sender: tx.from_addr,
+                        amount: BigDecimal::from_str(&token_amount).unwrap_or_else(|_| {
+                            panic!("malformed tx.token_amount: {}", token_amount)
+                        }),
+                        date: tx.paid_date,
+                    },
+                    tx.tx_id.unwrap_or(0xDEADBEEF).to_le_bytes().to_vec(),
+                )
+                .await
+                .ok();
+            }
+        }
     }
 
     async fn send_out_payments(&self) {
