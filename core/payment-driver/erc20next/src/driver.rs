@@ -100,7 +100,7 @@ impl Erc20NextDriver {
             .setup
             .chain_setup
             .values()
-            .find(|chain_setup| &chain_setup.network == network)
+            .find(|chain_setup| chain_setup.network == network)
             .ok_or_else(|| GenericError::new(format!("Unsupported network: {}", network)))?
             .chain_id;
 
@@ -236,12 +236,12 @@ impl PaymentDriver for Erc20NextDriver {
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
 
-        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), &network)
+        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), network)
             .await
     }
 
