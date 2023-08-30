@@ -36,14 +36,14 @@ mod cli;
 
 lazy_static::lazy_static! {
     static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
+            std::env::var("ERC20NEXT_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(30),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
+            std::env::var("ERC20NEXT_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(30),
@@ -284,6 +284,8 @@ impl PaymentDriverCron for Erc20NextDriver {
         let mut events = self.events.lock().await;
         while let Ok(event) = events.try_recv() {
             if let DriverEventContent::TransferFinished(tx) = event.content {
+                log::info!("Received event TransferFinished: {:#?}", tx);
+
                 let chain_id = tx.chain_id;
                 let network_name = &self
                     .payment_runtime
@@ -308,21 +310,29 @@ impl PaymentDriverCron for Erc20NextDriver {
                     })
                     .as_str();
 
-                let token_amount = tx.token_amount;
+                let payment_details = PaymentDetails {
+                    recipient: tx.receiver_addr,
+                    sender: tx.from_addr,
+                    amount: BigDecimal::from_str(&tx.token_amount).unwrap_or_else(|_| {
+                        panic!("malformed tx.token_amount: {}", tx.token_amount)
+                    }),
+                    date: tx.paid_date,
+                };
+
+                let confirmation = tx.tx_id.unwrap_or(0xDEADBEEF).to_le_bytes().to_vec();
+
+                log::info!("name = {}", &self.get_name());
+                log::info!("platform = {}", platform);
+                log::info!("order_id = {}", tx.payment_id.as_ref().unwrap());
+                log::info!("payment_details = {:#?}", payment_details);
+                log::info!("confirmation = {:x?}", confirmation);
 
                 bus::notify_payment(
                     &self.get_name(),
                     platform,
                     vec![tx.payment_id.unwrap()],
-                    &PaymentDetails {
-                        recipient: tx.receiver_addr,
-                        sender: tx.from_addr,
-                        amount: BigDecimal::from_str(&token_amount).unwrap_or_else(|_| {
-                            panic!("malformed tx.token_amount: {}", token_amount)
-                        }),
-                        date: tx.paid_date,
-                    },
-                    tx.tx_id.unwrap_or(0xDEADBEEF).to_le_bytes().to_vec(),
+                    &payment_details,
+                    confirmation,
                 )
                 .await
                 .ok();
