@@ -51,7 +51,7 @@ impl Erc20NextService {
             };
             log::warn!("Loading config");
             let config_str = include_str!("../config-payments.toml");
-            let config = match config::Config::load("config-payments.toml").await {
+            let mut config = match config::Config::load("config-payments.toml").await {
                 Ok(config) => config,
                 Err(err) => {
                     log::warn!(
@@ -60,6 +60,21 @@ impl Erc20NextService {
                     config::Config::load_from_str(config_str).unwrap()
                 }
             };
+
+            let env_overrides = [
+                ("goerli", "GOERLI_GETH_ADDR"),
+                ("polygon", "POLYGON_GETH_ADDR"),
+                ("mumbai", "MUMBAI_GETH_ADDR"),
+            ];
+
+            for env_override in env_overrides {
+                if let Ok(addr) = env::var(env_override.1) {
+                    log::info!("Geth addr override: {addr}");
+                    if let Some(goerli_conf) = config.chain.get_mut(env_override.0) {
+                        goerli_conf.rpc_endpoints = vec![addr];
+                    }
+                }
+            }
 
             log::warn!("Starting payment engine: {:#?}", config);
             let signer = IdentitySigner::new();
