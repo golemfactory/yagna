@@ -2,12 +2,13 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
-use std::env;
+use std::{env, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::start_payment_engine;
+use ethereum_types::H160;
 use std::sync::Arc;
 
 // Workspace uses
@@ -62,16 +63,27 @@ impl Erc20NextService {
             };
 
             let env_overrides = [
-                ("goerli", "GOERLI_GETH_ADDR"),
-                ("polygon", "POLYGON_GETH_ADDR"),
-                ("mumbai", "MUMBAI_GETH_ADDR"),
+                ("goerli", "GOERLI_GETH_ADDR", "GOERLI_TGLM_CONTRACT_ADDRESS"),
+                (
+                    "polygon",
+                    "POLYGON_GETH_ADDR",
+                    "POLYGON_GLM_CONTRACT_ADDRESS",
+                ),
             ];
 
             for env_override in env_overrides {
-                if let Ok(addr) = env::var(env_override.1) {
-                    log::info!("Geth addr override: {addr}");
-                    if let Some(goerli_conf) = config.chain.get_mut(env_override.0) {
+                log::info!("Checking overrides for {}", env_override.0);
+                if let Some(goerli_conf) = config.chain.get_mut(env_override.0) {
+                    if let Ok(addr) = env::var(env_override.1) {
+                        log::info!("Geth addr: {addr}");
+
                         goerli_conf.rpc_endpoints = vec![addr];
+                    }
+                    if let Ok(addr) = env::var(env_override.2) {
+                        log::info!("Token addr: {addr}");
+
+                        goerli_conf.token.as_mut().unwrap().address =
+                            H160::from_str(&addr).unwrap();
                     }
                 }
             }
