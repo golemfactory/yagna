@@ -3,6 +3,7 @@ use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde_json::value::Value::Null;
 use ya_client_model::NodeId;
@@ -162,12 +163,83 @@ async fn get_allocation(
     }
 }
 
+fn amend_allocation_fields(
+    old_allocation: Allocation,
+    new_allocation: NewAllocation,
+) -> Allocation {
+    Allocation {
+        allocation_id: old_allocation.allocation_id.clone(),
+        address: new_allocation
+            .address
+            .unwrap_or_else(|| old_allocation.address.clone()),
+        payment_platform: new_allocation
+            .payment_platform
+            .unwrap_or_else(|| old_allocation.payment_platform.clone()),
+        total_amount: new_allocation.total_amount.clone(),
+        spent_amount: old_allocation.spent_amount.clone(),
+        remaining_amount: new_allocation.total_amount - &old_allocation.spent_amount,
+        timestamp: old_allocation.timestamp,
+        timeout: new_allocation.timeout.or(old_allocation.timeout),
+        make_deposit: new_allocation.make_deposit,
+    }
+}
+
 async fn amend_allocation(
     db: Data<DbExecutor>,
     path: Path<params::AllocationId>,
-    body: Json<Allocation>,
+    body: Json<NewAllocation>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let allocation_id = path.allocation_id.clone();
+    let node_id = id.identity;
+    let new_allocation: NewAllocation = body.into_inner();
+    let dao: AllocationDao = db.as_dao();
+
+    let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
+        Ok(AllocationStatus::Active(allocation)) => allocation,
+        Ok(AllocationStatus::Gone) => {
+            return response::gone(&format!(
+                "Allocation {} has been already released",
+                allocation_id
+            ))
+        }
+        Ok(AllocationStatus::NotFound) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    let amended_allocation = amend_allocation_fields(current_allocation.clone(), new_allocation);
+
+    if amended_allocation.remaining_amount < BigDecimal::from(0) {
+        return response::bad_request(
+            &"Amended allocation would be smaller than the amount already spent",
+        );
+    }
+
+    let validate_msg = ValidateAllocation {
+        platform: amended_allocation.payment_platform.clone(),
+        address: amended_allocation.address.clone(),
+        amount: amended_allocation.total_amount.clone() - &current_allocation.total_amount,
+    };
+    match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
+        Ok(true) => {}
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Err(Error::Rpc(RpcMessageError::ValidateAllocation(
+                           ValidateAllocationError::AccountNotRegistered,
+                       ))) => return response::bad_request(&"Account not registered"),
+        Err(e) => return response::server_error(&e),
+    }
+
+    match dao.replace(amended_allocation, node_id).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return response::server_error(
+                &"Allocation not present despite preconditions being already ensured",
+            )
+        }
+        Err(e) => return response::server_error(&e),
+    }
+
+    get_allocation(db, path, id).await
 }
 
 async fn release_allocation(
