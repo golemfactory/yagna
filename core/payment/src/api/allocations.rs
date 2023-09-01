@@ -215,10 +215,20 @@ async fn amend_allocation(
         );
     }
 
+    // If the amended allocation keeps the payment platform, we only need to ensure having
+    // (new total amount - old total amount). On the other hand, if the payment platform changes,
+    // we must validate the entire amount.
+    let amount_to_validate =
+        if amended_allocation.payment_platform == current_allocation.payment_platform {
+            amended_allocation.total_amount.clone() - &current_allocation.total_amount
+        } else {
+            amended_allocation.total_amount.clone()
+        };
+
     let validate_msg = ValidateAllocation {
         platform: amended_allocation.payment_platform.clone(),
         address: amended_allocation.address.clone(),
-        amount: amended_allocation.total_amount.clone() - &current_allocation.total_amount,
+        amount: amount_to_validate,
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
