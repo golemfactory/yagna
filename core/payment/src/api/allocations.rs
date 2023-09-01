@@ -10,6 +10,7 @@ use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
+use ya_client_model::payment::allocation::AllocationUpdate;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
     ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
@@ -165,70 +166,71 @@ async fn get_allocation(
 
 fn amend_allocation_fields(
     old_allocation: Allocation,
-    new_allocation: NewAllocation,
-) -> Allocation {
-    Allocation {
-        allocation_id: old_allocation.allocation_id.clone(),
-        address: new_allocation
-            .address
-            .unwrap_or_else(|| old_allocation.address.clone()),
-        payment_platform: new_allocation
-            .payment_platform
-            .unwrap_or_else(|| old_allocation.payment_platform.clone()),
-        total_amount: new_allocation.total_amount.clone(),
-        spent_amount: old_allocation.spent_amount.clone(),
-        remaining_amount: new_allocation.total_amount - &old_allocation.spent_amount,
-        timestamp: old_allocation.timestamp,
-        timeout: new_allocation.timeout.or(old_allocation.timeout),
-        make_deposit: new_allocation.make_deposit,
+    update: AllocationUpdate,
+) -> Result<Allocation, &'static str> {
+    let total_amount = update
+        .total_amount
+        .unwrap_or_else(|| old_allocation.total_amount.clone());
+    let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
+
+    if remaining_amount < 0 {
+        return Err("New allocation would be smaller than the already spent amount");
     }
+    if let Some(timeout) = update.timeout {
+        if timeout < chrono::offset::Utc::now() {
+            return Err("New allocation timeout is in the past");
+        }
+    }
+
+    Ok(Allocation {
+        total_amount,
+        remaining_amount,
+        timeout: update.timeout.or(old_allocation.timeout),
+        ..old_allocation
+    })
 }
 
 async fn amend_allocation(
     db: Data<DbExecutor>,
     path: Path<params::AllocationId>,
-    body: Json<NewAllocation>,
+    body: Json<AllocationUpdate>,
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
-    let new_allocation: NewAllocation = body.into_inner();
+    let new_allocation: AllocationUpdate = body.into_inner();
     let dao: AllocationDao = db.as_dao();
 
     let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
         Ok(AllocationStatus::Active(allocation)) => allocation,
         Ok(AllocationStatus::Gone) => {
             return response::gone(&format!(
-                "Allocation {} has been already released",
-                allocation_id
+                "Allocation {allocation_id} has been already released",
             ))
         }
         Ok(AllocationStatus::NotFound) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
 
-    let amended_allocation = amend_allocation_fields(current_allocation.clone(), new_allocation);
-
-    if amended_allocation.remaining_amount < BigDecimal::from(0) {
-        return response::bad_request(
-            &"Amended allocation would be smaller than the amount already spent",
-        );
-    }
-
-    // If the amended allocation keeps the payment platform, we only need to ensure having
-    // (new total amount - old total amount). On the other hand, if the payment platform changes,
-    // we must validate the entire amount.
-    let amount_to_validate =
-        if amended_allocation.payment_platform == current_allocation.payment_platform {
-            amended_allocation.total_amount.clone() - &current_allocation.total_amount
-        } else {
-            amended_allocation.total_amount.clone()
+    let amended_allocation =
+        match amend_allocation_fields(current_allocation.clone(), new_allocation) {
+            Ok(allocation) => allocation,
+            Err(e) => return response::bad_request(&e),
         };
+
+    // validation will take into account all existing allocation, including the one
+    // being currently modified. This means we only need to validate the increase.
+    let amount_to_validate =
+        amended_allocation.total_amount.clone() - &current_allocation.total_amount;
 
     let validate_msg = ValidateAllocation {
         platform: amended_allocation.payment_platform.clone(),
         address: amended_allocation.address.clone(),
-        amount: amount_to_validate,
+        amount: if &amount_to_validate > &BigDecimal::from(0) {
+            amount_to_validate
+        } else {
+            0.into()
+        },
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
