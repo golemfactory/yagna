@@ -5932,9 +5932,9 @@ dependencies = [
 
 [[package]]
 name = "serde_qs"
-version = "0.8.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7715380eec75f029a4ef7de39a9200e0a63823176b759d055b613f5a87df6a6"
+checksum = "0431a35568651e363364210c91983c1da5eb29404d9f0928b67d4ebcfa7d330c"
 dependencies = [
  "percent-encoding",
  "serde",
@@ -7335,7 +7335,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.3.2",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -7921,9 +7921,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0b90678d1068fc53bd898b32d5990eec77fdf5b1585f59267258863e727a1b5"
+version = "0.7.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=76f4b6c98ca8c3ce73bae2dc66531906dd985b2d#76f4b6c98ca8c3ce73bae2dc66531906dd985b2d"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7931,11 +7930,10 @@ dependencies = [
  "chrono",
  "envy",
  "futures 0.3.28",
- "heck 0.3.3",
+ "heck 0.4.1",
  "hex",
  "log",
  "mime",
- "rand 0.6.5",
  "serde",
  "serde_json",
  "serde_qs",
@@ -8168,7 +8166,7 @@ dependencies = [
  "actix-web-actors",
  "anyhow",
  "awc",
- "base64 0.21.2",
+ "base64 0.11.0",
  "bytes 1.4.0",
  "ctor",
  "env_logger 0.10.0",
@@ -9455,8 +9453,3 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "ya-client"
-version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=76f4b6c98ca8c3ce73bae2dc66531906dd985b2d#76f4b6c98ca8c3ce73bae2dc66531906dd985b2d"
