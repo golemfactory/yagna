@@ -173,7 +173,7 @@ fn amend_allocation_fields(
         .unwrap_or_else(|| old_allocation.total_amount.clone());
     let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
 
-    if remaining_amount < 0 {
+    if remaining_amount < BigDecimal::from(0) {
         return Err("New allocation would be smaller than the already spent amount");
     }
     if let Some(timeout) = update.timeout {
