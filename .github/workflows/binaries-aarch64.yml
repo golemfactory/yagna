@@ -12,6 +12,9 @@ on:
       - payments-dev
       - release/*
 
+env:
+  rust_stable: 1.71.1
+
 jobs:
   build:
     name: Build binaries (aarch64)
@@ -22,10 +25,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup toolchain
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           target: aarch64-unknown-linux-musl
           override: true
 
