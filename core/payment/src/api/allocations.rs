@@ -10,7 +10,6 @@ use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
-use ya_client_model::payment::allocation::AllocationUpdate;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
     ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
