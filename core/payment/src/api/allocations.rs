@@ -226,7 +226,7 @@ async fn amend_allocation(
     let validate_msg = ValidateAllocation {
         platform: amended_allocation.payment_platform.clone(),
         address: amended_allocation.address.clone(),
-        amount: if &amount_to_validate > &BigDecimal::from(0) {
+        amount: if amount_to_validate > BigDecimal::from(0) {
             amount_to_validate
         } else {
             0.into()
