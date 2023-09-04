@@ -30,13 +30,12 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
-use ya_zksync_driver as zksync;
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
     Erc20,
-    Zksync,
+    Erc20next,
 }
 
 impl FromStr for Driver {
@@ -45,8 +44,8 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20" => Ok(Driver::Erc20),
-            "zksync" => Ok(Driver::Zksync),
+            "erc20legacy" => Ok(Driver::Erc20),
+            "erc20" => Ok(Driver::Erc20next),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -56,8 +55,8 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20 => write!(f, "erc20"),
-            Driver::Zksync => write!(f, "zksync"),
+            Driver::Erc20 => write!(f, "erc20legacy"),
+            Driver::Erc20next => write!(f, "erc20"),
         }
     }
 }
@@ -108,7 +107,7 @@ pub async fn start_erc20_driver(
     Ok(())
 }
 
-pub async fn start_zksync_driver(
+pub async fn start_erc20_next_driver(
     db: &DbExecutor,
     requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
@@ -116,7 +115,8 @@ pub async fn start_zksync_driver(
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    zksync::PaymentDriverService::gsb(db).await?;
+    erc20::PaymentDriverService::gsb(db).await?;
+
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
@@ -257,9 +257,10 @@ async fn main() -> anyhow::Result<()> {
             start_erc20_driver(&db, requestor_account).await?;
             erc20::DRIVER_NAME
         }
-        Driver::Zksync => {
-            start_zksync_driver(&db, requestor_account).await?;
-            zksync::DRIVER_NAME
+        Driver::Erc20next => {
+            //start_erc20next_driver(&db, requestor_account).await?;
+            //erc20next::DRIVER_NAME
+            todo!()
         }
     };
     bus::service(driver_bus_id(driver_name))

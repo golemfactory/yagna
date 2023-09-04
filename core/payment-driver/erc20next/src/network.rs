@@ -82,36 +82,6 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
     }
 }
 
-pub fn network_token_to_platform(
-    network: Option<DbNetwork>,
-    token: Option<String>,
-) -> Result<String, GenericError> {
-    let network = network.unwrap_or(*RINKEBY_DB_NETWORK);
-    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
-    let network_config = match network_config {
-        Some(nc) => nc,
-        None => {
-            return Err(GenericError::new(format!(
-                "Unable to find platform for network={}",
-                network
-            )))
-        }
-    };
-
-    let token = token.unwrap_or_else(|| network_config.default_token.clone());
-    let platform = network_config.tokens.get(&token);
-    let platform = match platform {
-        Some(p) => p,
-        None => {
-            return Err(GenericError::new(format!(
-                "Unable to find platform for token={}",
-                token
-            )))
-        }
-    };
-    Ok(platform.to_string())
-}
-
 pub fn platform_to_currency(platform: String) -> Result<(String, String), GenericError> {
     match platform.as_str() {
         RINKEBY_PLATFORM => Ok((
