@@ -31,7 +31,7 @@ impl Erc20NextService {
         log::debug!("Environment variables validated");
 
         // Init database
-        init(&db).await.map_err(GenericError::new)?;
+        init(db).await.map_err(GenericError::new)?;
         log::debug!("Database initialised");
 
         // Start cron
@@ -110,7 +110,7 @@ impl Erc20NextService {
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
 
-            bus::bind_service(&db, driver_rc.clone()).await?;
+            bus::bind_service(db, driver_rc.clone()).await?;
 
             log::info!("Successfully connected Erc20NextService to gsb.");
             Ok(())
