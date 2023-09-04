@@ -2,7 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
-use std::{env, str::FromStr};
+use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
@@ -17,7 +17,6 @@ use ya_payment_driver::{
     dao::{init, DbExecutor},
     model::GenericError,
 };
-use ya_service_api_interfaces::Provider;
 
 // Local uses
 use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
@@ -25,14 +24,13 @@ use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
 pub struct Erc20NextService;
 
 impl Erc20NextService {
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+    pub async fn gsb(db: &DbExecutor, path: PathBuf) -> anyhow::Result<()> {
         log::debug!("Connecting Erc20NextService to gsb...");
 
         // TODO: Read and validate env
         log::debug!("Environment variables validated");
 
         // Init database
-        let db: DbExecutor = context.component();
         init(&db).await.map_err(GenericError::new)?;
         log::debug!("Database initialised");
 
@@ -52,7 +50,7 @@ impl Erc20NextService {
             };
             log::warn!("Loading config");
             let config_str = include_str!("../config-payments.toml");
-            let mut config = match config::Config::load("config-payments.toml").await {
+            let mut config = match config::Config::load(path.join("config-payments.toml")).await {
                 Ok(config) => config,
                 Err(err) => {
                     log::warn!(
@@ -95,7 +93,7 @@ impl Erc20NextService {
 
             let pr = start_payment_engine(
                 &private_keys,
-                "db.sqlite",
+                &path.join("db.sqlite"),
                 config,
                 signer,
                 None,

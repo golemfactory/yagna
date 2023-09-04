@@ -10,6 +10,7 @@ use rand::Rng;
 
 use std::convert::TryInto;
 use std::io::Write;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_erc20next_driver as erc20next;
 use ya_net::Config;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils, PaymentService};
@@ -109,13 +111,14 @@ pub async fn start_erc20_driver(
 
 pub async fn start_erc20_next_driver(
     db: &DbExecutor,
+    path: PathBuf,
     requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    erc20::PaymentDriverService::gsb(db).await?;
+    erc20next::PaymentDriverService::gsb(db, path).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));

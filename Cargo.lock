@@ -1891,7 +1891,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.1.9"
-source = "git+https://github.com/golemfactory/erc20_payment_lib#5c3744ef423fd36d84fe561b1e7e38c096c7c50d"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=51154917b0d583dd368f1a5c3883666ee8fac98e#51154917b0d583dd368f1a5c3883666ee8fac98e"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -1904,6 +1904,7 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "log",
+ "percent-encoding",
  "rand 0.8.5",
  "rust_decimal",
  "rustc-hex",
@@ -7299,7 +7300,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.3.2",
  "chrono",
- "rustc_version 0.2.3",
+ "rustc_version 0.4.0",
 ]
 
 [[package]]
