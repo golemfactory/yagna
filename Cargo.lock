@@ -1825,6 +1825,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
+name = "duration-string"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fcc1d9ae294a15ed05aeae8e11ee5f2b3fe971c077d45a42fb20825fba6ee13"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2650,8 +2659,8 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "structopt",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum",
+ "strum_macros",
  "tokio 1.32.0",
  "url",
  "ya-client",
@@ -5656,7 +5665,6 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -5667,6 +5675,16 @@ checksum = "97d03ceae636d0fed5bae6a7f4f664354c5f4fcedf6eef053fef17e49f837d0a"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.4.2",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
+dependencies = [
+ "secp256k1-sys 0.8.1",
+ "serde",
 ]
 
 [[package]]
@@ -5683,6 +5701,15 @@ name = "secp256k1-sys"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "957da2573cde917463ece3570eab4a0b3f19de6f1646cde62e6fd3868f566036"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
 ]
@@ -6408,29 +6435,11 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.19.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89a286a7e3b5720b9a477b23253bc50debac207c8d21505f8e70b36792f11b5"
-
-[[package]]
-name = "strum"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 dependencies = [
- "strum_macros 0.24.3",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.19.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e61bb0be289045cb80bfce000512e32d09f8337e54c186725da381377ad1f8d5"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "strum_macros",
 ]
 
 [[package]]
@@ -7948,21 +7957,21 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70a4a2f46bc12b1c747495c7911a844e7dc2c879826993426d568b9b594c26a1"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=40895b19effc18b39736ad37faf90fdd1ebe7675#40895b19effc18b39736ad37faf90fdd1ebe7675"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "diesel",
+ "duration-string",
  "hex",
  "openssl",
  "rand 0.8.5",
- "secp256k1 0.19.0",
+ "secp256k1 0.27.0",
  "serde",
  "serde_json",
- "strum 0.19.5",
- "strum_macros 0.19.4",
+ "strum",
+ "strum_macros",
  "thiserror",
 ]
 
@@ -7989,8 +7998,8 @@ dependencies = [
  "serde",
  "serde_bytes",
  "structopt",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum",
+ "strum_macros",
  "thiserror",
  "ya-client-model",
  "ya-service-bus",
@@ -8270,7 +8279,7 @@ dependencies = [
  "shlex 1.1.0",
  "snailquote",
  "structopt",
- "strum 0.24.1",
+ "strum",
  "tar",
  "tempfile",
  "test-case 3.1.0",
@@ -8317,8 +8326,8 @@ dependencies = [
  "serial_test 0.5.1",
  "sha3 0.8.2",
  "structopt",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum",
+ "strum_macros",
  "thiserror",
  "tokio 1.32.0",
  "uuid 0.8.2",
@@ -8399,7 +8408,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
- "strum 0.24.1",
+ "strum",
  "test-case 2.2.2",
  "thiserror",
  "tokio 1.32.0",
@@ -8587,8 +8596,8 @@ dependencies = [
  "shlex 1.1.0",
  "signal-hook",
  "structopt",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum",
+ "strum_macros",
  "sys-info",
  "tempdir",
  "tempfile",
@@ -8813,8 +8822,8 @@ dependencies = [
  "proc-macro2",
  "quote",
  "structopt",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum",
+ "strum_macros",
  "syn 1.0.109",
  "ya-service-api-interfaces",
 ]

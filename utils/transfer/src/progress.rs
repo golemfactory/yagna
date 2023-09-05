@@ -13,10 +13,10 @@ type Stream = TransferStream<TransferData, Error>;
 pub fn wrap_stream_with_progress_reporting<F>(
     mut source: Stream,
     ctx: &TransferContext,
-    report: F,
+    mut report: F,
 ) -> Stream
 where
-    F: Fn(u64, Option<u64>) + Send + 'static,
+    F: FnMut(u64, Option<u64>) + Send + 'static,
 {
     let (stream, tx, abort_reg) = Stream::create(0);
     let mut txc = tx.clone();
@@ -55,10 +55,10 @@ type Sink = TransferSink<TransferData, Error>;
 pub fn wrap_sink_with_progress_reporting<F>(
     mut dest: Sink,
     ctx: &TransferContext,
-    report: F,
+    mut report: F,
 ) -> Sink
 where
-    F: Fn(u64, Option<u64>) + Send + 'static,
+    F: FnMut(u64, Option<u64>) + Send + 'static,
 {
     let (mut sink, mut rx, res_tx) = Sink::create(0);
     let state = ctx.state.clone();

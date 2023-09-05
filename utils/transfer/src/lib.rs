@@ -11,7 +11,7 @@ mod traverse;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
@@ -58,6 +58,24 @@ where
     S: TransferProvider<TransferData, Error> + ?Sized,
     D: TransferProvider<TransferData, Error> + ?Sized,
 {
+    transfer_with_progress_report(src, src_url, dst, dst_url, ctx, None::<fn(u64, Option<u64>)>, None::<fn(Error, Duration)>).await
+}
+
+pub async fn transfer_with_progress_report<S, D, P, R>(
+    src: impl AsRef<S>,
+    src_url: &TransferUrl,
+    dst: impl AsRef<D>,
+    dst_url: &TransferUrl,
+    ctx: &TransferContext,
+    report_progress: Option<P>,
+    mut report_retry: Option<R>,
+) -> Result<(), Error>
+where
+    S: TransferProvider<TransferData, Error> + ?Sized,
+    D: TransferProvider<TransferData, Error> + ?Sized,
+    P: FnMut(u64, Option<u64>) + Clone + Send + 'static,
+    R: FnMut(Error, Duration) + Send + 'static,
+{
     let src = src.as_ref();
     let dst = dst.as_ref();
 
@@ -69,7 +87,14 @@ where
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
             let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
-            let sink = dst.destination(&dst_url.url, ctx);
+            let sink = {
+                let dst = dst.destination(&dst_url.url, ctx);
+                if let Some(report) = report_progress.as_ref() {
+                    wrap_sink_with_progress_reporting(dst, ctx, report.clone())
+                } else {
+                    dst
+                }
+            };
 
             transfer(stream, sink).await?;
             Ok::<_, Error>(())
@@ -79,8 +104,17 @@ where
             Ok(val) => return Ok(val),
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
-                    log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
-                    tokio::time::sleep(delay).await;
+                    log::warn!("Retrying in {delay:?} because: {err}");
+                    let delay_start = Instant::now();
+                    if let Some(report_retry) = report_retry.as_mut() {
+                        report_retry(err, delay);
+                    }
+                    let elapsed = Instant::now().saturating_duration_since(delay_start);
+                    if elapsed > delay {
+                        log::warn!("Sending retry event took longer than planned delay: {elapsed:?} > {delay:?}");
+                    } else {
+                        tokio::time::sleep(delay.saturating_sub(elapsed)).await;
+                    }
                 }
                 None => return Err(err),
             },

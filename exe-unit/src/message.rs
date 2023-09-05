@@ -5,6 +5,7 @@ use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
+use ya_client_model::activity::runtime_event::DeployProgress;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use ya_client_model::activity;
@@ -150,6 +151,12 @@ impl RuntimeEvent {
 
     pub fn stderr(batch_id: String, idx: usize, out: CommandOutput) -> Self {
         let kind = activity::RuntimeEventKind::StdErr(out);
+        let event = activity::RuntimeEvent::new(batch_id, idx, kind);
+        Self::Process(event)
+    }
+
+    pub fn deploy_progress(batch_id: String, idx: usize, progress: DeployProgress) -> Self {
+        let kind = activity::RuntimeEventKind::DeployProgressUpdate(progress);
         let event = activity::RuntimeEvent::new(batch_id, idx, kind);
         Self::Process(event)
     }

@@ -3,14 +3,18 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::{Mutex, Arc};
+use std::time::Duration;
 
 use actix::prelude::*;
+use futures::SinkExt;
 use futures::future::Abortable;
 use url::Url;
+use ya_client_model::activity::runtime_event::DeployProgress;
 
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
-use crate::message::Shutdown;
+use crate::message::{Shutdown, RuntimeEvent};
 use crate::util::cache::Cache;
 use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
@@ -37,9 +41,19 @@ impl AddVolumes {
     }
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug, Default, Message)]
 #[rtype(result = "Result<Option<PathBuf>>")]
-pub struct DeployImage;
+pub struct DeployImage {
+    pub update_details: Option<DeployImageUpdateDetails>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DeployImageUpdateDetails {
+    pub batch_id: String,
+    pub idx: usize,
+    pub event_tx: futures::channel::mpsc::Sender<crate::message::RuntimeEvent>,
+    pub interval: Duration,
+}
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "()")]
@@ -233,7 +247,7 @@ impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, Result<Option<PathBuf>>>;
 
     #[allow(unused_variables)]
-    fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, mut cmd: DeployImage, ctx: &mut Self::Context) -> Self::Result {
         let image = match self.task_package.as_ref() {
             Some(image) => image,
             None => return ActorResponse::reply(Ok(None)),
@@ -257,16 +271,82 @@ impl Handler<DeployImage> for TransferService {
             };
 
             let handles = self.abort_handles.clone();
+
+            let progress: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
+            let total: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
+
             let fut = async move {
                 if path.exists() {
                     log::info!("Deploying cached image: {:?}", path);
+                    if let Some(update_details) = cmd.update_details.as_mut() {
+                        let event = RuntimeEvent::deploy_progress(update_details.batch_id.clone(), update_details.idx, DeployProgress::DeployFromCache);
+                        let _ = update_details.event_tx.send(event).await;
+                    }
                     return Ok(Some(path));
+                }
+
+                let progress_update = Arc::downgrade(&progress);
+                let total_update = Arc::downgrade(&total);
+
+                let retry_progress = Arc::downgrade(&progress);
+
+                if let Some(update_details) = cmd.update_details.as_ref() {
+                    let mut update_details = update_details.clone();
+                    tokio::task::spawn(async move {
+                        let progress = progress;
+                        let update_interval = Duration::from_secs(1);
+                        while Arc::weak_count(&progress) > 0 {
+                            let progress = match progress.lock() {
+                                Ok(v) => v.clone(),
+                                Err(_) => None,
+                            };
+                            if let Some(progress) = progress {
+                                let total = match total.lock() {
+                                    Ok(v) => v.clone(),
+                                    Err(_) => None,
+                                };
+                                let progress = DeployProgress::DownloadProgress(progress, total);
+                                let event = RuntimeEvent::deploy_progress(update_details.batch_id.clone(), update_details.idx, progress);
+                                let _ = update_details.event_tx.send(event).await;
+                            }
+                            tokio::time::sleep(update_details.interval).await;
+                        }
+                    });
                 }
 
                 let (abort, reg) = Abort::new_pair();
                 {
                     let ctx = Default::default();
-                    let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
+                    let report_progress = cmd.update_details.as_ref().map(|_| move |progress: u64, total: Option<u64>| {
+                        if let Some(progress_container) = progress_update.upgrade() {
+                            let mut progress_container = progress_container.lock().unwrap();
+                            let _ = progress_container.insert(progress);
+                        }
+                        if let Some(size) = total {
+                            if let Some(total_container) = total_update.upgrade() {
+                                let mut total_container = total_container.lock().unwrap();
+                                let _ = total_container.insert(size);
+                            }
+                        }
+                    });
+                    let report_retry = cmd.update_details.clone().map(|mut details|
+                        move |err: ya_transfer::error::Error, delay: Duration| {
+                            if let Some(progress_container) = retry_progress.upgrade() {
+                                let mut progress_container = progress_container.lock().unwrap();
+                                let _ = progress_container.insert(0);
+                            }
+                            let progress = DeployProgress::DownloadRetry(err.to_string(), delay);
+                            let event = RuntimeEvent::deploy_progress(details.batch_id.clone(), details.idx, progress);
+                            let _ = futures::executor::block_on(details.event_tx.send(event));
+                        }
+                    );
+                    if let Some(update_details) = cmd.update_details.as_mut() {
+                        let progress = DeployProgress::DownloadingImage;
+                        let event = RuntimeEvent::deploy_progress(update_details.batch_id.clone(), update_details.idx, progress);
+                        let _ = update_details.event_tx.send(event).await;
+                    }
+
+                    let retry = transfer_with_progress_report(src, &src_url, dst, &dst_url, &ctx, report_progress, report_retry);
 
                     let _guard = AbortHandleGuard::register(handles, abort);
                     Ok::<_, Error>(
@@ -278,7 +358,14 @@ impl Handler<DeployImage> for TransferService {
                                     let _ = std::fs::remove_file(&path_tmp);
                                 }
                                 err
-                            })?,
+                            })
+                            .map(|_| async {
+                                if let Some(update_details) = cmd.update_details.as_mut() {
+                                    let progress = DeployProgress::DownloadFinished;
+                                    let event = RuntimeEvent::deploy_progress(update_details.batch_id.clone(), update_details.idx, progress);
+                                    let _ = update_details.event_tx.send(event).await;
+                                }
+                            })?.await,
                     )
                 }?;
 

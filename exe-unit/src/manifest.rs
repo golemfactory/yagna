@@ -510,6 +510,7 @@ mod tests {
             ExeScriptCommand::Deploy {
                 net: Default::default(),
                 hosts: Default::default(),
+                progress_update_interval: Default::default(),
             },
             ExeScriptCommand::Start {
                 args: Default::default(),

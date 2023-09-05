@@ -24,7 +24,7 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
+use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService, DeployImageUpdateDetails};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
@@ -309,8 +309,18 @@ impl<R: Runtime> RuntimeRef<R> {
                 };
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { net, hosts } => {
-                let task_package = transfer_service.send(DeployImage {}).await??;
+            ExeScriptCommand::Deploy { net, hosts, progress_update_interval } => {
+                let msg = DeployImage {
+                    update_details: progress_update_interval.map(|interval_string| {
+                        DeployImageUpdateDetails {
+                            batch_id: runtime_cmd.batch_id.clone(),
+                            idx: runtime_cmd.idx,
+                            event_tx: runtime_cmd.tx.clone(),
+                            interval: interval_string.into(),
+                        }
+                    })
+                };
+                let task_package = transfer_service.send(msg).await??;
                 runtime
                     .send(UpdateDeployment {
                         task_package,

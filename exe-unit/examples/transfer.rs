@@ -232,12 +232,12 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     log::warn!("[>>] Deployment with hash verification");
-    addr.send(DeployImage {}).await??;
+    addr.send(DeployImage::default()).await??;
     log::warn!("Deployment complete");
 
     println!();
     log::warn!("[>>] Deployment from cache");
-    addr.send(DeployImage {}).await??;
+    addr.send(DeployImage::default()).await??;
     log::warn!("Deployment from cache complete");
 
     println!();
