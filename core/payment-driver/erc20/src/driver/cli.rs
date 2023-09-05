@@ -89,15 +89,7 @@ To be able to use Mumbai Polygon network, please send some GLM tokens and MATIC 
         Network::Polygon => format!(
             r#"Your mainnet Polygon address is {}.
 
-To fund your wallet and be able to pay for your activities on Golem head to
-the https://chat.golem.network, join the #funding channel and type /terms
-and follow instructions to request GLMs.
-
-Mind that to be eligible you have to run your app at least once on testnet -
-- we will verify if that is true so we can avoid people requesting "free GLMs".
-
-You will also need some MATIC for gas. You can acquire them by visiting
-  https://macncheese.finance/matic-polygon-mainnet-faucet.php
+Automatically obtaining funds for the Polygon network is not supported.
 "#,
             address
         ),
