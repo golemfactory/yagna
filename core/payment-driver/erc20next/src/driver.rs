@@ -8,6 +8,7 @@ use erc20_payment_lib::db::ops::insert_token_transfer;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use erc20_payment_lib::transaction::create_token_transfer;
 use ethereum_types::H160;
+use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -26,7 +27,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::erc20::utils::big_dec_to_u256;
+use crate::{erc20::utils::big_dec_to_u256, network::platform_to_currency};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
@@ -172,7 +173,29 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
-        api::get_account_balance(msg).await
+        let platform = msg.platform();
+        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+            "Malformed platform string: {}",
+            msg.platform()
+        )))?;
+
+        let address_str = msg.address();
+        let address = H160::from_str(&address_str).map_err(|e| {
+            GenericError::new(format!(
+                "{} isn't a valid H160 address: {}",
+                address_str,
+                e.to_string()
+            ))
+        })?;
+
+        let balance = self
+            .payment_runtime
+            .get_token_balance(network.to_string(), address)
+            .await
+            .map_err(|e| GenericError::new(e.to_string()))?;
+        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
+
+        Ok(BigDecimal::new(balance_int, 18))
     }
 
     async fn get_account_gas_balance(
@@ -181,7 +204,36 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError> {
-        api::get_account_gas_balance(msg).await
+        let platform = msg.platform();
+        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+            "Malformed platform string: {}",
+            msg.platform()
+        )))?;
+
+        let address_str = msg.address();
+        let address = H160::from_str(&address_str).map_err(|e| {
+            GenericError::new(format!(
+                "{} isn't a valid H160 address: {}",
+                address_str,
+                e.to_string()
+            ))
+        })?;
+
+        let balance = self
+            .payment_runtime
+            .get_gas_balance(network.to_string(), address)
+            .await
+            .map_err(|e| GenericError::new(e.to_string()))?;
+        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
+        let balance = BigDecimal::new(balance_int, 18);
+
+        let (currency_short_name, currency_long_name) = platform_to_currency(platform)?;
+
+        Ok(Some(GasDetails {
+            currency_long_name,
+            currency_short_name,
+            balance,
+        }))
     }
 
     fn get_name(&self) -> String {
