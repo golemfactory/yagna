@@ -4,9 +4,7 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::db::ops::insert_token_transfer;
-use erc20_payment_lib::runtime::PaymentRuntime;
-use erc20_payment_lib::transaction::create_token_transfer;
+use erc20_payment_lib::runtime::{PaymentRuntime, TransferType};
 use ethereum_types::H160;
 use num_bigint::BigInt;
 use std::collections::HashMap;
@@ -96,38 +94,17 @@ impl Erc20NextDriver {
             .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
         let amount = big_dec_to_u256(amount)?;
 
-        let chain_id = self
-            .payment_runtime
-            .setup
-            .chain_setup
-            .values()
-            .find(|chain_setup| &chain_setup.network == network)
-            .ok_or_else(|| GenericError::new(format!("Unsupported network: {}", network)))?
-            .chain_id;
-
-        let chain_cfg = self
-            .payment_runtime
-            .setup
-            .chain_setup
-            .get(&chain_id)
-            .ok_or(GenericError::new(format!(
-                "Cannot find chain cfg for chain {chain_id}"
-            )))?;
-
-        let glm_address = chain_cfg.glm_address.ok_or(GenericError::new(format!(
-            "Cannot find GLM address for chain {chain_id}"
-        )))?;
-
         let payment_id = Uuid::new_v4().to_simple().to_string();
-        let token_transfer = create_token_transfer(
-            sender,
-            receiver,
-            chain_cfg.chain_id,
-            Some(&payment_id),
-            Some(glm_address),
-            amount,
-        );
-        let _res = insert_token_transfer(&self.payment_runtime.conn, &token_transfer)
+
+        self.payment_runtime
+            .transfer(
+                network,
+                sender,
+                receiver,
+                TransferType::Token,
+                amount,
+                &payment_id,
+            )
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
