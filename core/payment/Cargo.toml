@@ -32,7 +32,7 @@ futures = "0.3"
 hex = "0.4"
 metrics="0.12"
 lazy_static = "1.4"
-libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+libsqlite3-sys = { workspace = true }
 log = "0.4"
 num-bigint = "0.3"
 r2d2 = "0.8"

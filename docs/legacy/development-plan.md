@@ -85,7 +85,7 @@ Bugs should be reported in GitHub Issues.
 ### Technology Stack
 
 The programming language used in this project will be Rust (https://www.rust-lang.org/).
-The 1.68.2 stable version of Rust compiler (`rustc`) should compile all source code without errors.
+The 1.71.1 stable version of Rust compiler (`rustc`) should compile all source code without errors.
 
 For HTTP client/server code, Actix Web 1.0 (https://actix.rs) will be used.
 
