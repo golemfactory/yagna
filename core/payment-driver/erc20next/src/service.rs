@@ -2,12 +2,12 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
-use std::env;
+use std::{env, path::Path};
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::misc::load_private_keys;
-use erc20_payment_lib::runtime::start_payment_engine;
+use erc20_payment_lib::runtime::PaymentRuntime;
 use std::sync::Arc;
 
 // Workspace uses
@@ -63,9 +63,9 @@ impl Erc20NextService {
 
             log::warn!("Starting payment engine: {:#?}", config);
             let signer = IdentitySigner::new();
-            let pr = start_payment_engine(
+            let pr = PaymentRuntime::new(
                 &private_keys,
-                "db.sqlite",
+                Path::new("db.sqlite"),
                 config,
                 signer,
                 None,
