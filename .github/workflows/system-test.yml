@@ -6,6 +6,9 @@ on:
       - master
       - payments-dev
       - release/*
+  push:
+    branches:
+      - kek/enable-tests2
 
 env:
   rust_stable: 1.71.1
