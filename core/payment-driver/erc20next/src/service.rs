@@ -64,7 +64,7 @@ impl Erc20NextService {
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
-                    chain.rpc_endpoints = addr.split(",").map(ToOwned::to_owned).collect();
+                    chain.rpc_endpoints = addr.split(',').map(ToOwned::to_owned).collect();
                     log::info!(
                         "{} rpc endpoints set to {:?}",
                         network,
