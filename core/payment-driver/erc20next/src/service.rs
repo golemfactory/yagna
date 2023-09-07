@@ -7,7 +7,7 @@ use std::{env, path::PathBuf, str::FromStr};
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::misc::load_private_keys;
-use erc20_payment_lib::runtime::start_payment_engine;
+use erc20_payment_lib::runtime::PaymentRuntime;
 use ethereum_types::H160;
 use std::sync::Arc;
 
@@ -113,7 +113,7 @@ impl Erc20NextService {
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
-            let pr = start_payment_engine(
+            let pr = PaymentRuntime::new(
                 &private_keys,
                 &path.join("db.sqlite"),
                 config,

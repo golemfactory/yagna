@@ -232,7 +232,7 @@ fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
 fn find_node_to_output(response: model::FindNodeResponse) -> anyhow::Result<CommandOutput> {
     let naive = NaiveDateTime::from_timestamp_opt(response.seen.into(), 0)
         .context("Failed on out-of-range number of seconds")?;
-    let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+    let seen: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive, Utc);
 
     CommandOutput::object(serde_json::json!({
         "identities": response.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
