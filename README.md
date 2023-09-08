@@ -10,7 +10,6 @@ Official Rust implementation of Golem. Golem is a network of nodes that implemen
   <br/>A flexible, open-source platform for democratised access to digital resources.
 </a>
 </h5>
-
 </p>
 <p align="center">
     <a href="https://github.com/golemfactory/yagna/workflows/CI/badge.svg" alt="CI">
