@@ -4,9 +4,8 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::runtime::{DriverEventContent, PaymentRuntime};
+use erc20_payment_lib::runtime::{DriverEventContent, PaymentRuntime, DriverEvent};
 use erc20_payment_lib::transaction::create_token_transfer;
-use erc20_payment_lib::{db::ops::insert_token_transfer, runtime::DriverEvent};
 use ethereum_types::H160;
 use std::collections::HashMap;
 use std::str::FromStr;

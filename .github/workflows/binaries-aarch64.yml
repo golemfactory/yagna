@@ -16,6 +16,9 @@ on:
 env:
   rust_stable: 1.71.1
 
+env:
+  rust_stable: 1.71.1
+
 jobs:
   build:
     name: Build binaries (aarch64)
