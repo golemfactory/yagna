@@ -4,88 +4,19 @@
 // Extrnal crates
 // use lazy_static::lazy_static;
 // use num_bigint::BigInt;
-use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
     driver::BigDecimal,
-    model::{
-        GasDetails, GenericError, GetAccountBalance, GetAccountGasBalance, SchedulePayment,
-        ValidateAllocation, VerifyPayment,
-    },
+    model::{GenericError, ValidateAllocation, VerifyPayment},
 };
 
 // Local uses
 use crate::{
-    dao::Erc20Dao,
     driver::PaymentDetails,
     erc20::{utils, wallet},
     network,
 };
-
-// lazy_static! {
-//     static ref MAX_ALLOCATION_SURCHARGE: BigDecimal =
-//         match std::env::var("MAX_ALLOCATION_SURCHARGE").map(|s| s.parse()) {
-//             Ok(Ok(x)) => x,
-//             _ => BigDecimal::from(200),
-//         };
-//
-//     // Environment variable will be replaced by allocation parameter in PAY-82
-//     static ref TRANSACTIONS_PER_ALLOCATION: BigInt =
-//         match std::env::var("TRANSACTIONS_PER_ALLOCATION").map(|s| s.parse()) {
-//             Ok(Ok(x)) => x,
-//             _ => BigInt::from(10),
-//         };
-// }
-
-pub async fn get_account_balance(msg: GetAccountBalance) -> Result<BigDecimal, GenericError> {
-    log::debug!("get_account_balance: {:?}", msg);
-    let (network, _) = network::platform_to_network_token(msg.platform())?;
-    let address = utils::str_to_addr(&msg.address())?;
-    // TODO implement token
-    let balance = wallet::account_balance(address, network).await?;
-
-    log::info!(
-        "get_account_balance() - account={}, balance={}",
-        &msg.address(),
-        &balance
-    );
-    Ok(balance)
-}
-
-pub async fn get_account_gas_balance(
-    msg: GetAccountGasBalance,
-) -> Result<Option<GasDetails>, GenericError> {
-    log::debug!("get_account_gas_balance: {:?}", msg);
-    let (currency_short_name, currency_long_name) = network::platform_to_currency(msg.platform())?;
-    let (network, _) = network::platform_to_network_token(msg.platform())?;
-
-    let address = utils::str_to_addr(&msg.address())?;
-
-    let balance = wallet::account_gas_balance(address, network).await?;
-
-    log::info!(
-        "get_account_gas_balance() - account={}, balance={}, currency {}",
-        &msg.address(),
-        &balance,
-        currency_long_name
-    );
-    Ok(Some(GasDetails {
-        currency_short_name,
-        currency_long_name,
-        balance,
-    }))
-}
-
-pub async fn _schedule_payment(
-    dao: &Erc20Dao,
-    msg: SchedulePayment,
-) -> Result<String, GenericError> {
-    let order_id = Uuid::new_v4().to_string();
-    dao.insert_payment(&order_id, &msg).await?;
-    log::info!("schedule_payment()");
-    Ok(order_id)
-}
 
 pub async fn verify_payment(msg: VerifyPayment) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_payment: {:?}", msg);
