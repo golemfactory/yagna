@@ -156,7 +156,7 @@ impl PaymentDriver for Erc20NextDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
@@ -166,7 +166,7 @@ impl PaymentDriver for Erc20NextDriver {
             GenericError::new(format!(
                 "{} isn't a valid H160 address: {}",
                 address_str,
-                e.to_string()
+                e
             ))
         })?;
 
@@ -187,7 +187,7 @@ impl PaymentDriver for Erc20NextDriver {
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError> {
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
@@ -197,7 +197,7 @@ impl PaymentDriver for Erc20NextDriver {
             GenericError::new(format!(
                 "{} isn't a valid H160 address: {}",
                 address_str,
-                e.to_string()
+                e
             ))
         })?;
 
