@@ -282,11 +282,37 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn validate_allocation(
         &self,
-        _db: DbExecutor,
-        _caller: String,
+        db: DbExecutor,
+        caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        api::validate_allocation(msg).await
+        log::info!("Validate_allocation: {:?}", msg);
+        let account_balance = self
+            .get_account_balance(
+                db,
+                caller,
+                GetAccountBalance::new(msg.address, msg.platform.clone()),
+            )
+            .await?;
+
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .filter(|allocation| allocation.payment_platform == msg.platform)
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+        );
+
+        Ok(msg.amount <= account_balance - total_allocated_amount)
     }
 
     async fn shut_down(
