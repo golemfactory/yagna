@@ -163,11 +163,7 @@ impl PaymentDriver for Erc20NextDriver {
 
         let address_str = msg.address();
         let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!(
-                "{} isn't a valid H160 address: {}",
-                address_str,
-                e
-            ))
+            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
         })?;
 
         let balance = self
@@ -194,11 +190,7 @@ impl PaymentDriver for Erc20NextDriver {
 
         let address_str = msg.address();
         let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!(
-                "{} isn't a valid H160 address: {}",
-                address_str,
-                e
-            ))
+            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
         })?;
 
         let balance = self
