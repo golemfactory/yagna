@@ -115,7 +115,7 @@ impl Erc20NextService {
 
             let pr = PaymentRuntime::new(
                 &private_keys,
-                &path.join("db.sqlite"),
+                &path.join("erc20next.sqlite"),
                 config,
                 signer,
                 None,
