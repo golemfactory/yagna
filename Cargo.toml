@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.12.2"
+version = "0.12.3"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -167,8 +167,6 @@ assets = [
         "644",
     ],
 ]
-[workspace.dependencies]
-libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 
 [workspace]
 members = [
@@ -218,6 +216,12 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro"
 ]
+
+[workspace.dependencies]
+rand = "0.8.5"
+url = "2.3.1"
+trust-dns-resolver = "0.22"
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 
 [patch.crates-io]
 ## SERVICES
