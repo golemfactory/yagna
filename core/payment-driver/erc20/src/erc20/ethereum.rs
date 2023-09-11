@@ -1,6 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
+use futures::prelude::*;
 use std::collections::HashMap;
+use std::pin::pin;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
@@ -199,12 +201,19 @@ async fn get_next_nonce_pending_with(
 pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
 where
     F: FnMut(Web3<Http>) -> R,
-    R: futures::Future<Output = Result<T, ClientError>>,
+    R: Future<Output = Result<T, ClientError>>,
 {
-    let clients = get_clients(network).await?;
+    lazy_static! {
+        static ref RESOLVER: super::rpc_resolv::RpcResolver = super::rpc_resolv::RpcResolver::new();
+    };
+
+    let mut clients = pin!(RESOLVER
+        .clients_for(network)
+        .await
+        .map_err(GenericError::new)?);
     let mut last_err: Option<ClientError> = None;
 
-    for client in clients {
+    while let Some(client) = clients.next().await {
         match f(client).await {
             Ok(result) => return Ok(result),
             Err(ClientError::Web3(e)) => match e {

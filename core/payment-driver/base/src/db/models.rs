@@ -97,7 +97,19 @@ pub struct PaymentEntity {
     pub network: Network,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Eq, Debug, Clone, Copy, FromPrimitive, Default)]
+#[derive(
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    Clone,
+    Copy,
+    FromPrimitive,
+    Default,
+)]
 #[sql_type = "Integer"]
 pub enum Network {
     Mainnet = 1, //Main Ethereum chain
