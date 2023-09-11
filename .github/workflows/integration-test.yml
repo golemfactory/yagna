@@ -31,7 +31,6 @@ jobs:
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
     runs-on: [goth, ubuntu-18.04]
-    needs: test_check
     strategy:
       matrix:
         group: [1, 2]
