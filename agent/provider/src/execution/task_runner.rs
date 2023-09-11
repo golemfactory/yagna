@@ -8,10 +8,10 @@ use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
-use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{fs, iter};
 use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
@@ -128,6 +128,13 @@ pub struct TaskRunnerConfig {
     pub process_termination_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10s")]
     pub exeunit_state_retry_interval: Duration,
+    /// Removes directory content after each `Activity` is destroyed.
+    #[structopt(long, env)]
+    pub auto_cleanup_activity: bool,
+    /// Removes directory content after `Agreement` is terminated.
+    /// Use this option to save disk space. Shouldn't be used when debugging.
+    #[structopt(long, env)]
+    pub auto_cleanup_agreement: bool,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }
@@ -408,6 +415,10 @@ impl TaskRunner {
         })
     }
 
+    fn agreement_dir(&self, agreement_id: &str) -> PathBuf {
+        self.tasks_dir.secure_join(agreement_id)
+    }
+
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
@@ -416,10 +427,7 @@ impl TaskRunner {
         agreement_id: &str,
         requestor_pub_key: Option<&str>,
     ) -> Result<Task> {
-        let working_dir = self
-            .tasks_dir
-            .secure_join(agreement_id)
-            .secure_join(activity_id);
+        let working_dir = self.agreement_dir(agreement_id).secure_join(activity_id);
 
         create_dir_all(&working_dir).map_err(|error| {
             anyhow!(
@@ -795,6 +803,10 @@ impl Handler<AgreementClosed> for TaskRunner {
 
         self.active_agreements.remove(&agreement_id);
 
+        if self.config.auto_cleanup_agreement {
+            fs::remove_dir_all(&self.agreement_dir(&agreement_id)).ok();
+        }
+
         // All activities should be destroyed by now, so it is only sanity call.
         let remove_future = async move {
             remove_remaining_tasks(activities, agreement_id, myself).await;
@@ -806,21 +818,19 @@ impl Handler<AgreementClosed> for TaskRunner {
 }
 
 impl Handler<AgreementBroken> for TaskRunner {
-    type Result = ActorResponse<Self, Result<(), Error>>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id;
-        let myself = ctx.address();
-        let activities = self.list_activities(&agreement_id);
-
-        self.active_agreements.remove(&agreement_id);
-
-        let remove_future = async move {
-            remove_remaining_tasks(activities, agreement_id, myself).await;
-            Ok(())
-        };
-
-        ActorResponse::r#async(remove_future.into_actor(self))
+        // We don't distinguish between `AgreementClosed` and `AgreementBroken`.
+        let addr = ctx.address();
+        async move {
+            addr.send(AgreementClosed {
+                agreement_id: msg.agreement_id,
+                send_terminate: false,
+            })
+            .await?
+        }
+        .boxed_local()
     }
 }
 
