@@ -32,6 +32,9 @@ jobs:
     name: Integration Tests (hybrid-net) group
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
+    strategy:
+      matrix:
+        group: [1, 2]
     defaults:
       run:
         working-directory: "./goth_tests"
@@ -86,32 +89,11 @@ jobs:
           name: "Yagna Linux"
           path: /tmp/yagna-build
 
-      - name: Run test suite 1/4
+      - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 4 --group 1 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 2/4
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 4 --group 2 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 3/4
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 4 --group 3 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 4/4
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 4 --group 4 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 2 --group ${{ matrix.group }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
