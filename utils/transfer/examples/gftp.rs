@@ -117,7 +117,7 @@ async fn main() -> Result<(), Error> {
     let path_up = temp_dir.path().join("rnd3");
 
     let gftp_provider = GftpTransferProvider::default();
-    let file_provider = FileTransferProvider::default();
+    let file_provider = FileTransferProvider;
 
     let src_url = gftp::publish(&path).await.unwrap();
     let dest_url = Url::parse(&format!("file://{}", path_dl.to_str().unwrap()))?;
