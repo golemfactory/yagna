@@ -86,60 +86,32 @@ jobs:
           name: "Yagna Linux"
           path: /tmp/yagna-build
 
-      - name: Run test suite 1/8
+      - name: Run test suite 1/4
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 8 --group 1 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 4 --group 1 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
-      - name: Run test suite 2/8
+      - name: Run test suite 2/4
         if: always()
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 8 --group 2 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 4 --group 2 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
-      - name: Run test suite 3/8
+      - name: Run test suite 3/4
         if: always()
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 8 --group 3 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 4 --group 3 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
-      - name: Run test suite 4/8
+      - name: Run test suite 4/4
         if: always()
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 8 --group 4 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 5/8
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 8 --group 5 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 6/8
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 8 --group 6 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 7/8
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 8 --group 7 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
-
-      - name: Run test suite 8/8
-        if: always()
-        env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run poe goth-tests --splits 8 --group 8 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --splits 4 --group 4 --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
