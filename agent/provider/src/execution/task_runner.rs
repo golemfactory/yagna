@@ -106,7 +106,7 @@ pub struct TerminateActivity {
     pub message: String,
 }
 
-/// Called when process exited. There are 3 reasons for process to exit:
+/// Called when process exited. There are 2 reasons for process to exit:
 /// - We got DestroyActivity event and killed process.
 /// - ExeUnit crashed.
 #[derive(Message)]
@@ -376,6 +376,19 @@ impl TaskRunner {
             msg.agreement_id,
             msg.activity_id
         );
+
+        if self.config.auto_cleanup_activity {
+            let workdir = self
+                .agreement_dir(&msg.agreement_id)
+                .secure_join(&msg.activity_id);
+            log::info!(
+                "Cleaning directory {} for agreement [{}], activity [{}].",
+                workdir.display(),
+                msg.agreement_id,
+                msg.activity_id
+            );
+            fs::remove_dir_all(workdir).ok();
+        }
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
@@ -804,7 +817,13 @@ impl Handler<AgreementClosed> for TaskRunner {
         self.active_agreements.remove(&agreement_id);
 
         if self.config.auto_cleanup_agreement {
-            fs::remove_dir_all(&self.agreement_dir(&agreement_id)).ok();
+            let workdir = self.agreement_dir(&agreement_id);
+            log::info!(
+                "Cleaning directory {} for agreement [{}].",
+                workdir.display(),
+                agreement_id
+            );
+            fs::remove_dir_all(workdir).ok();
         }
 
         // All activities should be destroyed by now, so it is only sanity call.
