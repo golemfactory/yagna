@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - release/*
+      - gpu-hardening-master
 
 env:
   rust_stable: 1.71.1

@@ -5,10 +5,12 @@ on:
     branches:
       - master
       - release/*
+      - gpu-hardening-master
   pull_request:
     branches:
       - master
       - release/*
+      - gpu-hardening-master
 
 jobs:
   test_check:
