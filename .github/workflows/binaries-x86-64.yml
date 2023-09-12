@@ -70,6 +70,7 @@ jobs:
       - name: Build binaries
         run: |
           cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
       - name: Copy binaries
         shell: bash
