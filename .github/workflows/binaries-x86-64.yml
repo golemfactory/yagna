@@ -51,6 +51,7 @@ jobs:
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: "payment-dev-x86-64"
           save-if: ${{ github.ref == 'refs/heads/payments-dev' }}
 
 
