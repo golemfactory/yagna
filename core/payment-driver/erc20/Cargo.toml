@@ -14,7 +14,7 @@ anyhow = "1.0"
 awc = { version = "3", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
-derive_more = "0.99"
+derive_more = { workspace = true }
 ethabi = "18.0"
 ethereum-types = "0.14.1"
 ethereum-tx-sign = "3.1"
@@ -39,8 +39,8 @@ web3 = { version = "0.19.0", default-features = false, features = [
     "ws-tls-tokio",
 ] }
 rand = { workspace = true }
-url = { workspace=true }
-trust-dns-resolver = { workspace=true, default-features = false }
+url = { workspace = true }
+trust-dns-resolver = { workspace = true, default-features = false }
 ## yagna dependencies
 ya-payment-driver = "0.3"
 ya-client-model = "0.5"
