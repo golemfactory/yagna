@@ -10,4 +10,5 @@ pub mod wallet;
 mod config;
 pub mod eth_utils;
 mod gasless_transfer;
+mod rpc_resolv;
 pub mod transaction;
