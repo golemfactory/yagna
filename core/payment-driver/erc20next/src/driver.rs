@@ -245,6 +245,12 @@ impl PaymentDriver for Erc20NextDriver {
             GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
         })?;
 
+        log::debug!(
+            "Getting balance for network: {}, address: {}",
+            network.to_string(),
+            address_str
+        );
+
         let balance = self
             .payment_runtime
             .get_token_balance(network.to_string(), address)
