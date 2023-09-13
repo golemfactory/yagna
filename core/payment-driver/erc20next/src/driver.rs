@@ -328,8 +328,21 @@ impl PaymentDriver for Erc20NextDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20NextDriver {
+    fn sendout_interval(&self) -> std::time::Duration {
+        *TX_SENDOUT_INTERVAL
+    }
+
+    fn confirmation_interval(&self) -> std::time::Duration {
+        *TX_CONFIRMATION_INTERVAL
+    }
+
+    async fn send_out_payments(&self) {
+        // no-op, handled by erc20_payment_lib internally
+    }
+
     async fn confirm_payments(&self) {
         let mut events = self.events.lock().await;
+        log::info!("Job confirm_payments started");
         while let Ok(event) = events.try_recv() {
             if let DriverEventContent::TransferFinished(tx) = event.content {
                 log::info!("Received event TransferFinished: {:#?}", tx);
@@ -386,17 +399,6 @@ impl PaymentDriverCron for Erc20NextDriver {
                 .ok();
             }
         }
-    }
-
-    async fn send_out_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
-    }
-
-    fn sendout_interval(&self) -> std::time::Duration {
-        *TX_SENDOUT_INTERVAL
-    }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
+        log::info!("Job confirm_payments finished");
     }
 }
