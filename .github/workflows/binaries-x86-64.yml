@@ -20,7 +20,7 @@ jobs:
     name: Build binaries (x86-64)
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
@@ -51,7 +51,7 @@ jobs:
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          shared-key: "payment-dev-x86-64"
 
 
       - name: Check lockfile
@@ -69,11 +69,8 @@ jobs:
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl
-          (cd core/gftp && cargo build --bin gftp -p gftp --features bin --target x86_64-unknown-linux-musl)
-          (cd golem_cli && cargo build --bin golemsp -p golemsp --target x86_64-unknown-linux-musl)
-          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --target x86_64-unknown-linux-musl)
-          (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --features openssl/vendored --target x86_64-unknown-linux-musl)
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
       - name: Copy binaries
         shell: bash

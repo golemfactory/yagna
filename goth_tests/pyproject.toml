@@ -13,15 +13,22 @@ repository = "https://github.com/golemfactory/yagna"
 documentation = "https://handbook.golem.network"
 readme = "README.md"
 
+# Uncomment to enable pulling packages from test.pypi.org
+# [[tool.poetry.source]]
+# name = "testpypi"
+# url = "https://test.pypi.org/simple/"
+# default = false
+# secondary = true
+
 [tool.poetry.dependencies]
 python = "^3.8.0"
 pytest = "^6.2"
 pytest-asyncio = "^0.20.2"
 pytest-rerunfailures = "^10.3"
 pytest-split = "^0.8.1"
-# goth = "^0.15.0"
+goth = "0.15.1"
 # to use development goth version uncomment below
-goth = { git = "https://github.com/golemfactory/goth.git", rev = "70b98f2346321f520c9d82f49346fbe806c24ca5" }
+# goth =  { git = "https://github.com/golemfactory/goth.git", rev = "f399163b9f3882cca4ca4152c06aed57b916ca67" }
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
