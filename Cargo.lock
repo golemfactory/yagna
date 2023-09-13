@@ -1870,7 +1870,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.1.9"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9b6d23a5d8844f26a98abed5f2d85b7a96d8cbb2#9b6d23a5d8844f26a98abed5f2d85b7a96d8cbb2"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=ee0798b0073f0de9f291ff1b751fa8a996aa63ac#ee0798b0073f0de9f291ff1b751fa8a996aa63ac"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -1883,7 +1883,6 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "log",
- "percent-encoding",
  "rand 0.8.5",
  "rust_decimal",
  "rustc-hex",
