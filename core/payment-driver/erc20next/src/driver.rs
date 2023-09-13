@@ -340,6 +340,8 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
+        log::debug!("schedule_payment: {:?}", msg);
+
         let platform = msg.platform();
         let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
