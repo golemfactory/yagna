@@ -4,8 +4,10 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use erc20_payment_lib::db::model::{TokenTransferDao, TxDao};
 use erc20_payment_lib::runtime::{DriverEvent, DriverEventContent, PaymentRuntime, TransferType};
 use ethereum_types::H160;
+use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -27,7 +29,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::erc20::utils::big_dec_to_u256;
+use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
@@ -114,6 +116,83 @@ impl Erc20NextDriver {
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
         Ok(payment_id)
+    }
+
+    async fn _confirm_payments(
+        &self,
+        token_transfer: &TokenTransferDao,
+        tx: &TxDao,
+    ) -> Result<(), GenericError> {
+        log::info!("Received event TransferFinished: {:#?}", token_transfer);
+
+        let chain_id = token_transfer.chain_id;
+        let network_name = &self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .get(&chain_id)
+            .ok_or(GenericError::new(format!(
+                "Missing configuration for chain_id {chain_id}"
+            )))?
+            .network;
+
+        let networks = self.get_networks();
+        let network = networks.get(network_name).ok_or(GenericError::new(format!(
+            "Network {network_name} not supported by Erc20NextDriver"
+        )))?;
+        let platform = network
+            .tokens
+            .get(&network.default_token)
+            .ok_or(GenericError::new(format!(
+                "Network {} doesn't specify platform for default token {}",
+                network_name, network.default_token
+            )))?
+            .as_str();
+
+        let Ok(tx_token_amount) = U256::from_dec_str(&token_transfer.token_amount) else {
+            return Err(GenericError::new(format!("Malformed token_transfer.token_amount: {}", token_transfer.token_amount)));
+        };
+        let Ok(tx_token_amount) = u256_to_big_dec(tx_token_amount) else {
+            return Err(GenericError::new(format!("Cannot convert to big decimal tx_token_amount: {}", tx_token_amount)));
+        };
+        let payment_details = PaymentDetails {
+            recipient: token_transfer.receiver_addr.clone(),
+            sender: token_transfer.from_addr.clone(),
+            amount: tx_token_amount,
+            date: token_transfer.paid_date,
+        };
+
+        let tx_hash = tx.tx_hash.clone().ok_or(GenericError::new(format!(
+            "Missing tx_hash in tx_dao: {:?}",
+            tx
+        )))?;
+        if tx_hash.len() != 66 {
+            return Err(GenericError::new(format!(
+                "Malformed tx_hash, length should be 66: {:?}",
+                tx_hash
+            )));
+        };
+        let transaction_hash = hex::decode(&tx_hash[2..]).map_err(|err| {
+            GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
+        })?;
+
+        log::info!("name = {}", &self.get_name());
+        log::info!("platform = {}", platform);
+        log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_details = {:#?}", payment_details);
+        log::info!("confirmation = {:x?}", transaction_hash);
+
+        let Some(payment_id) = &token_transfer.payment_id else {
+            return Err(GenericError::new("token_transfer.payment_id is null"));
+        };
+        bus::notify_payment(
+            &self.get_name(),
+            platform,
+            vec![payment_id.clone()],
+            &payment_details,
+            transaction_hash,
+        )
+        .await
     }
 }
 
@@ -342,63 +421,34 @@ impl PaymentDriverCron for Erc20NextDriver {
 
     async fn confirm_payments(&self) {
         let mut events = self.events.lock().await;
-        log::info!("Job confirm_payments started");
         while let Ok(event) = events.try_recv() {
-            if let DriverEventContent::TransferFinished(tx) = event.content {
-                log::info!("Received event TransferFinished: {:#?}", tx);
-
-                let chain_id = tx.chain_id;
-                let network_name = &self
-                    .payment_runtime
-                    .setup
-                    .chain_setup
-                    .get(&chain_id)
-                    .unwrap_or_else(|| panic!("Missing configuration for chain_id {chain_id}"))
-                    .network;
-
-                let networks = self.get_networks();
-                let network = networks.get(network_name).unwrap_or_else(|| {
-                    panic!("Network {network_name} not supported by Erc20NextDriver")
-                });
-                let platform = network
-                    .tokens
-                    .get(&network.default_token)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Network {} doesn't specify platform for default token {}",
-                            network_name, network.default_token
-                        )
-                    })
-                    .as_str();
-
-                let payment_details = PaymentDetails {
-                    recipient: tx.receiver_addr,
-                    sender: tx.from_addr,
-                    amount: BigDecimal::from_str(&tx.token_amount).unwrap_or_else(|_| {
-                        panic!("malformed tx.token_amount: {}", tx.token_amount)
-                    }),
-                    date: tx.paid_date,
-                };
-
-                let confirmation = tx.tx_id.unwrap_or(0xDEADBEEF).to_le_bytes().to_vec();
-
-                log::info!("name = {}", &self.get_name());
-                log::info!("platform = {}", platform);
-                log::info!("order_id = {}", tx.payment_id.as_ref().unwrap());
-                log::info!("payment_details = {:#?}", payment_details);
-                log::info!("confirmation = {:x?}", confirmation);
-
-                bus::notify_payment(
-                    &self.get_name(),
-                    platform,
-                    vec![tx.payment_id.unwrap()],
-                    &payment_details,
-                    confirmation,
-                )
-                .await
-                .ok();
+            if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
+                match self
+                    ._confirm_payments(
+                        &transfer_finished.token_transfer_dao,
+                        &transfer_finished.tx_dao,
+                    )
+                    .await
+                {
+                    Ok(_) => log::info!(
+                        "Payment confirmed: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default()
+                    ),
+                    Err(e) => log::error!(
+                        "Error confirming payment: {}, error: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default(),
+                        e
+                    ),
+                }
             }
         }
-        log::info!("Job confirm_payments finished");
     }
 }
