@@ -25,7 +25,7 @@ services:
             - "16001-16100:6001-6100"
 
     ethereum:
-        image: docker.pkg.github.com/golemfactory/gnt2/gnt2-docker-yagna:2c6027dbcf7f
+        image: docker.pkg.github.com/golemfactory/gnt2/gnt2-docker-yagna:f417b721f07e
         ports:
             - "8545:8545"
     
