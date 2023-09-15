@@ -318,7 +318,7 @@ impl Handler<AddAddress> for Vpn {
             return Err(Error::NetAddrMismatch(ip));
         }
 
-        let cidr = IpCidr::new(IpAddress::from(ip), net.prefix_len());
+        let cidr = smoltcp::wire::IpCidr::new(IpAddress::from(ip), net.prefix_len());
         if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
             return Err(Error::IpAddrNotAllowed(ip));
         }
@@ -788,10 +788,6 @@ fn create_ethernet_addr(ip: IpCidr) -> Result<EthernetAddress> {
         IpAddress::Ipv6(ip6) => Ok(EthernetAddress([
             0xA0, 0x13, ip6.0[12], ip6.0[13], ip6.0[14], ip6.0[15],
         ])),
-        _ => Err(Error::Other(format!(
-            "Could not create ethernet addr from ip: {:?}",
-            ip
-        ))),
     }
 }
 
