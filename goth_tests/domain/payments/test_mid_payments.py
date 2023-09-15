@@ -88,7 +88,7 @@ async def test_mid_agreement_payments(
         await provider.wait_for_exeunit_started()
 
         for i in range(0, ITERATION_COUNT):
-            await asyncio.sleep(PAYMENT_TIMEOUT_SEC + 5)
+            await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
             payments = await provider.api.payment.get_payments(after_timestamp=ts)
             for payment in payments:
                 amount += float(payment.amount)
