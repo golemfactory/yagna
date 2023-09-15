@@ -11,7 +11,7 @@ on:
       - release/*
 
 env:
-  rust_stable: 1.68.2
+  rust_stable: 1.71.1
 
 jobs:
   build:
@@ -34,6 +34,11 @@ jobs:
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1

@@ -106,6 +106,8 @@ enum Command {
     },
     /// Print an offer template in JSON format
     OfferTemplate,
+    /// Run runtime's test command
+    Test,
 }
 
 #[derive(structopt::StructOpt, Debug)]
@@ -245,6 +247,16 @@ async fn run() -> anyhow::Result<()> {
             let args = cli.runtime_arg.clone();
             let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary, args)?;
             println!("{}", serde_json::to_string(&offer_template)?);
+            return Ok(());
+        }
+        Command::Test => {
+            let args = cli.runtime_arg.clone();
+            let output = ExeUnit::<RuntimeProcess>::test(cli.binary, args)?;
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                bail!("Test failed");
+            }
             return Ok(());
         }
     };

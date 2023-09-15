@@ -18,7 +18,7 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
-from goth.runner.probe import RequestorProbe
+from goth.runner.probe import Probe, RequestorProbe
 
 from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
@@ -41,6 +41,7 @@ async def test_e2e_rule_partner_outbound_unrestricted(
         {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
         {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
     ]
+
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(default_config, config_overrides)

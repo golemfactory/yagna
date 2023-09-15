@@ -187,16 +187,29 @@ impl RulesManager {
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
+            let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
-            let handler = move |p: PathBuf| match manager.rulestore.reload() {
-                Ok(()) => {
-                    log::info!("rulestore updated from {}", p.display());
-
-                    if let Err(e) = manager.remove_dangling_rules() {
-                        log::warn!("Error removing unnecessary rules: {e}");
+            let handler = move |p: PathBuf| {
+                // Reload also keystore to avoid file-monitor race when doing `import-cert`
+                match manager.keystore.reload(&cert_dir) {
+                    Ok(()) => {
+                        log::info!("Trusted keystore updated because rulestore changed");
+                    }
+                    Err(e) => {
+                        log::warn!("Error updating trusted keystore when rulestore changed: {e}")
                     }
                 }
-                Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+
+                match manager.rulestore.reload() {
+                    Ok(()) => {
+                        log::info!("rulestore updated from {}", p.display());
+
+                        if let Err(e) = manager.remove_dangling_rules() {
+                            log::warn!("Error removing unnecessary rules: {e}");
+                        }
+                    }
+                    Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+                }
             };
             FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))?
         };
@@ -516,9 +529,11 @@ impl Rulestore {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
+            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
+            log::debug!("Loaded rules: {:#?}", config);
 
             Ok(Self {
-                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                config: Arc::new(RwLock::new(config)),
                 path: rules_file.to_path_buf(),
             })
         } else {

@@ -100,6 +100,11 @@ impl<R: Runtime> ExeUnit<R> {
         Ok(supervisor_template.patch(runtime_template))
     }
 
+    pub fn test(binary: PathBuf, args: Vec<String>) -> Result<std::process::Output> {
+        use crate::runtime::process::RuntimeProcess;
+        RuntimeProcess::test(binary, args)
+    }
+
     fn report_usage(&mut self, context: &mut Context<Self>) {
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
             return;
