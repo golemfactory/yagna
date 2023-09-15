@@ -1113,7 +1113,6 @@ fn conv_ip_addr(addr: IpAddress) -> Result<IpAddr> {
     match addr {
         IpAddress::Ipv4(ipv4) => Ok(IpAddr::V4(ipv4.into())),
         IpAddress::Ipv6(ipv6) => Ok(IpAddr::V6(ipv6.into())),
-        _ => Err(NetError::EndpointInvalid(IpEndpoint::from((addr, 0)).into()).into()),
     }
 }
 
