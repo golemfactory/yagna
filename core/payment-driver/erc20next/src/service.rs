@@ -63,6 +63,7 @@ impl Erc20NextService {
                 let priority_fee_env = format!("{prefix}_PRIORITY_FEE");
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
+                let confirmations = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
                     chain.rpc_endpoints = addr.split(',').map(ToOwned::to_owned).collect();
@@ -103,6 +104,19 @@ impl Erc20NextService {
                         Err(e) => {
                             log::warn!(
                                 "Value {addr} for {token_addr_env} is not valid H160 address: {e}"
+                            );
+                        }
+                    };
+                }
+                if let Ok(confirmations) = env::var(&confirmations) {
+                    match confirmations.parse::<u64>() {
+                        Ok(parsed) => {
+                            log::info!("{network} required confirmations set to {parsed}");
+                            chain.confirmation_blocks = parsed;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Value {confirmations} for {confirmations} is not valid u64: {e}"
                             );
                         }
                     };
