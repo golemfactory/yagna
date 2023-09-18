@@ -40,6 +40,8 @@ node-types:
     environment:
       - "ERC20_SENDOUT_INTERVAL_SECS=1"
       - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+      - "ERC20NEXT_SENDOUT_INTERVAL_SECS=1"
+      - "ERC20NEXT_CONFIRMATION_INTERVAL_SECS=1"
 
   - name: "Provider"
     class: "goth_tests.helpers.probe.ProviderProbe"
@@ -55,6 +57,7 @@ node-types:
       - "DEBIT_NOTE_INTERVAL=3s"
       - "PAYMENT_TIMEOUT=5s"
       - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+      - "ERC20NEXT_CONFIRMATION_INTERVAL_SECS=1"
 
 nodes:
 
