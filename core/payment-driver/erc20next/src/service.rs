@@ -12,7 +12,7 @@ use ethereum_types::H160;
 use std::sync::Arc;
 
 // Workspace uses
-use ya_payment_driver::cron::PaymentDriverCron;
+use ya_payment_driver::cron::Cron;
 use ya_payment_driver::{
     bus,
     dao::{init, DbExecutor},
@@ -34,10 +34,6 @@ impl Erc20NextService {
         // Init database
         init(db).await.map_err(GenericError::new)?;
         log::debug!("Database initialised");
-
-        // Start cron
-        //Cron::new(driver_rc.clone());
-        log::debug!("Cron started");
 
         {
             let (private_keys, _public_addresses) =
@@ -146,14 +142,12 @@ impl Erc20NextService {
 
             driver.load_active_accounts().await;
             let driver_rc = Arc::new(driver);
-            let driver_rc_ = driver_rc.clone();
-            tokio::task::spawn_local(async move {
-                loop {
-                    driver_rc_.confirm_payments().await;
-                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                }
-            });
+
             bus::bind_service(db, driver_rc.clone()).await?;
+
+            // Start cron
+            Cron::new(driver_rc);
+            log::debug!("Cron started");
 
             log::info!("Successfully connected Erc20NextService to gsb.");
             Ok(())
