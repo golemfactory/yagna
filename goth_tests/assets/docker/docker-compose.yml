@@ -24,13 +24,6 @@ services:
             # we map them to ports 16001-16100 on the host.
             - "16001-16100:6001-6100"
 
-    ethereum-rinkeby:
-        image: docker.pkg.github.com/golemfactory/gnt2/gnt2-docker-yagna:a93c126e8255
-        ports:
-            - "8545:8545"
-        environment:
-            - GANACHE_CHAIN_ID=4
-
     ethereum-mainnet:
         image: docker.pkg.github.com/golemfactory/gnt2/gnt2-docker-yagna:a93c126e8255
         ports:
@@ -50,7 +43,7 @@ services:
         ports:
             - "8548:8545"
         environment:
-            - GANACHE_CHAIN_ID=5
+            - GANACHE_CHAIN_ID=137
 
     outbound-test:
         # A service running a TCP sink, echo and iperf3 servers
