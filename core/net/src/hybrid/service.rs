@@ -231,7 +231,7 @@ async fn build_client(
         .crypto(crypto)
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration)
-        .connect(FailFast::Yes)
+        .connect(FailFast::No)
         .build()
         .await
 }
