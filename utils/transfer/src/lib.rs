@@ -58,7 +58,16 @@ where
     S: TransferProvider<TransferData, Error> + ?Sized,
     D: TransferProvider<TransferData, Error> + ?Sized,
 {
-    transfer_with_progress_report(src, src_url, dst, dst_url, ctx, None::<fn(u64, Option<u64>)>, None::<fn(Error, Duration)>).await
+    transfer_with_progress_report(
+        src,
+        src_url,
+        dst,
+        dst_url,
+        ctx,
+        None::<fn(u64, Option<u64>)>,
+        None::<fn(Error, Duration)>,
+    )
+    .await
 }
 
 pub async fn transfer_with_progress_report<S, D, P, R>(

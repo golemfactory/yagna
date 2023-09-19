@@ -24,7 +24,9 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService, DeployImageUpdateDetails};
+use crate::service::transfer::{
+    AddVolumes, DeployImage, DeployImageUpdateDetails, TransferResource, TransferService,
+};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
@@ -309,16 +311,25 @@ impl<R: Runtime> RuntimeRef<R> {
                 };
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { net, hosts, progress_update_interval } => {
+            ExeScriptCommand::Deploy {
+                net,
+                hosts,
+                progress,
+                hostname,
+                volumes,
+                env,
+                ..
+            } => {
                 let msg = DeployImage {
-                    update_details: progress_update_interval.map(|interval_string| {
-                        DeployImageUpdateDetails {
+                    update_details: progress
+                        .as_ref()
+                        .and_then(|progress| progress.update_interval)
+                        .map(|interval_string| DeployImageUpdateDetails {
                             batch_id: runtime_cmd.batch_id.clone(),
                             idx: runtime_cmd.idx,
                             event_tx: runtime_cmd.tx.clone(),
                             interval: interval_string.into(),
-                        }
-                    })
+                        }),
                 };
                 let task_package = transfer_service.send(msg).await??;
                 runtime
@@ -326,6 +337,9 @@ impl<R: Runtime> RuntimeRef<R> {
                         task_package,
                         networks: Some(net.clone()),
                         hosts: Some(hosts.clone()),
+                        hostname: hostname.clone(),
+                        volumes: Some(volumes.clone()),
+                        env: Some(env.clone()),
                         ..Default::default()
                     })
                     .await??;

@@ -7900,7 +7900,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=40895b19effc18b39736ad37faf90fdd1ebe7675#40895b19effc18b39736ad37faf90fdd1ebe7675"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=560ac2011b7f890d6051dc33d6e156d784b895b4#560ac2011b7f890d6051dc33d6e156d784b895b4"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",

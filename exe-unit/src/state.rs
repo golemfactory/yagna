@@ -13,8 +13,8 @@ use tokio::sync::broadcast;
 
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::*;
 use ya_client_model::activity::runtime_event::DeployProgress;
+use ya_client_model::activity::*;
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::Error as NetError;
@@ -169,9 +169,13 @@ impl Batch {
                 let message = match progress {
                     DeployProgress::DeployFromCache => "Deploying from cached image".to_string(),
                     DeployProgress::DownloadingImage => "Download image to deploy".to_string(),
-                    DeployProgress::DownloadProgress(progress, total) => format!("Image download progress {progress} b / {total:?} b"),
+                    DeployProgress::DownloadProgress(progress, total) => {
+                        format!("Image download progress {progress} b / {total:?} b")
+                    }
                     DeployProgress::DownloadError(err) => format!("Image download failed {err}"),
-                    DeployProgress::DownloadRetry(err, delay) => format!("Image download failed {err} will be retried in {delay:?}"),
+                    DeployProgress::DownloadRetry(err, delay) => {
+                        format!("Image download failed {err} will be retried in {delay:?}")
+                    }
                     DeployProgress::DownloadFinished => "Image download finished".to_string(),
                 };
                 let state = self.state(idx)?;
@@ -400,6 +404,9 @@ pub(crate) struct Deployment {
     pub task_package: Option<PathBuf>,
     pub networks: HashMap<String, DeploymentNetwork>,
     pub hosts: HashMap<String, String>,
+    pub env: HashMap<String, String>,
+    pub hostname: Option<String>,
+    pub volumes: Vec<String>,
 }
 
 #[derive(Clone, Debug)]

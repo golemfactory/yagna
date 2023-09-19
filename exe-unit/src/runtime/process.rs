@@ -456,6 +456,15 @@ impl Handler<UpdateDeployment> for RuntimeProcess {
         if let Some(hosts) = msg.hosts {
             self.deployment.hosts.extend(hosts.into_iter());
         }
+        if let Some(vols) = msg.volumes {
+            self.deployment.volumes = vols;
+        }
+        if let Some(env) = msg.env {
+            self.deployment.env = env;
+        }
+        if let Some(hostname) = msg.hostname {
+            self.deployment.hostname = Some(hostname);
+        }
         Ok(())
     }
 }

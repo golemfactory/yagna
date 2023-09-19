@@ -4,7 +4,6 @@ use futures::prelude::*;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use sha3::{Digest, Sha3_256};
-use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -195,7 +194,7 @@ pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
 }
 
 async fn chunk_uploaded(
-    file: Arc<Mutex<File>>,
+    file: Arc<Mutex<fs::File>>,
     msg: model::UploadChunk,
 ) -> Result<(), model::Error> {
     let mut file = file.lock().await;
@@ -219,7 +218,7 @@ async fn chunk_uploaded(
 }
 
 async fn upload_finished(
-    file: Arc<Mutex<File>>,
+    file: Arc<Mutex<fs::File>>,
     msg: model::UploadFinished,
 ) -> Result<(), model::Error> {
     let mut file = file.lock().await;
@@ -268,7 +267,7 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
             let remote = remote.clone();
             async move {
                 let chunk = chunk?;
-                Ok::<_, anyhow::Error>(remote.call(model::UploadChunk { chunk }).await??)
+                Ok::<_, Error>(remote.call(model::UploadChunk { chunk }).await??)
             }
         })
         .buffered(3)
@@ -276,7 +275,7 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
         .await?;
 
     log::debug!("Computing file hash.");
-    let hash = hash_file_sha256(&mut File::open(path)?)?;
+    let hash = hash_file_sha256(&mut fs::File::open(path)?)?;
 
     log::debug!("File [{}] has hash [{}].", path.display(), &hash);
     remote
@@ -293,9 +292,8 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
 fn get_chunks(
     file_path: &Path,
     chunk_size: u64,
-) -> Result<impl Iterator<Item = Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error>
-{
-    let mut file = OpenOptions::new().read(true).open(file_path)?;
+) -> Result<impl Iterator<Item = Result<model::GftpChunk, io::Error>> + 'static, io::Error> {
+    let mut file = fs::OpenOptions::new().read(true).open(file_path)?;
 
     let file_size = file.metadata()?.len();
     let n_chunks = (file_size + chunk_size - 1) / chunk_size;
@@ -361,14 +359,14 @@ fn ensure_dir_exists(file_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_dest_file(file_path: &Path) -> Result<File> {
+fn create_dest_file(file_path: &Path) -> Result<fs::File> {
     ensure_dir_exists(file_path).with_context(|| {
         format!(
             "Can't create destination directory for file: [{}].",
             file_path.display()
         )
     })?;
-    OpenOptions::new()
+    fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)

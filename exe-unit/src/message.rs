@@ -5,12 +5,12 @@ use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
-use ya_client_model::activity::runtime_event::DeployProgress;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use ya_client_model::activity;
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
+use ya_client_model::activity::runtime_event::DeployProgress;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
@@ -176,6 +176,9 @@ pub struct UpdateDeployment {
     pub runtime_mode: Option<RuntimeMode>,
     pub networks: Option<Vec<Network>>,
     pub hosts: Option<HashMap<String, String>>,
+    pub hostname: Option<String>,
+    pub volumes: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Message)]
