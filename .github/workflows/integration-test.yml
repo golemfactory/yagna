@@ -35,6 +35,7 @@ jobs:
     runs-on: [goth, ubuntu-18.04]
     needs: test_check
     strategy:
+      fail-fast: false
       matrix:
         group: [1, 2]
     defaults:
