@@ -20,6 +20,10 @@ docker-compose:
     # branch: ...
     # commit-hash: ...
     # release-tag: ...
+  artifacts:
+    - name: "ya-runtime-vm"
+      use-prerelease: true
+      release-tag: "v0.4.0-ITL"
 
   compose-log-patterns:
     ethereum: ".*Wallets supplied."
