@@ -1,4 +1,4 @@
-/// Yagna identity management
+#![allow(clippy::arc_with_non_send_sync)]
 
 #[macro_use]
 extern crate diesel;

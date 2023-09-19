@@ -17,7 +17,7 @@ impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
                     let batch_id = event.batch_id.clone();
                     self.state.last_batch = Some(batch_id.clone());
 
-                    if let Err(err) = batch.handle_event(event) {
+                    if let Err(err) = batch.handle_event(*event) {
                         log::error!("Batch {} event error: {}", batch_id, err);
                     }
                 }

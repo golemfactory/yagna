@@ -4,8 +4,7 @@
     All interactions with the bus from the driver should go through this mod.
 */
 
-// External crates
-use std::sync::Arc;
+use std::rc::Rc;
 
 // Workspace uses
 use ya_client_model::payment::driver_details::DriverDetails;
@@ -26,7 +25,7 @@ use crate::driver::PaymentDriver;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
     db: &DbExecutor,
-    driver: Arc<Driver>,
+    driver: Rc<Driver>,
 ) -> anyhow::Result<()> {
     log::debug!("Binding payment driver service to service bus...");
     let bus_id = driver_bus_id(driver.get_name());

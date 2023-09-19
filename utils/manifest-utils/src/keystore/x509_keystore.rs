@@ -160,7 +160,7 @@ impl X509KeystoreManager {
         let skipped_leaf_cert_ids = leaf_certs(&skipped);
         let leaf_cert_ids = loaded_leaf_cert_ids
             .into_iter()
-            .chain(skipped_leaf_cert_ids.into_iter())
+            .chain(skipped_leaf_cert_ids)
             .map(str::to_string)
             .collect();
         let loaded = loaded.into_values().collect();

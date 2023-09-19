@@ -2,13 +2,13 @@
     Manage PaymentDriver tasks to be ran on set intervals.
 */
 
+use std::rc::Rc;
 // Extrernal crates
 use actix::AsyncContext;
 use actix::{
     prelude::{Addr, Context},
     Actor,
 };
-use std::sync::Arc;
 use std::time::Duration;
 
 pub use async_trait::async_trait;
@@ -22,11 +22,11 @@ pub trait PaymentDriverCron {
 }
 
 pub struct Cron<D: PaymentDriverCron + 'static> {
-    driver: Arc<D>,
+    driver: Rc<D>,
 }
 
 impl<D: PaymentDriverCron + 'static> Cron<D> {
-    pub fn new(driver: Arc<D>) -> Addr<Self> {
+    pub fn new(driver: Rc<D>) -> Addr<Self> {
         log::trace!("Creating Cron for PaymentDriver.");
         let me = Self { driver };
         me.start()

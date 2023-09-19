@@ -1,3 +1,6 @@
+#![allow(clippy::useless_vec)]
+#![allow(clippy::arc_with_non_send_sync)]
+
 /*
     Payment driver for yagna using zksync.
 

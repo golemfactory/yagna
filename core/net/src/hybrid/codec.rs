@@ -160,7 +160,7 @@ mod tests {
         ya_sb_proto::codec::GsbMessageEncoder
             .encode(msg.clone(), &mut buf)
             .unwrap();
-        let encoded_orig = Vec::from_iter(buf.into_iter());
+        let encoded_orig = Vec::from_iter(buf);
 
         assert_eq!(encoded_orig, encoded);
         assert_eq!(decode_message(encoded.as_slice()).unwrap().unwrap(), msg);

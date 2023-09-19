@@ -113,7 +113,7 @@ impl ExecuteCommand {
 
 #[derive(Clone, Debug)]
 pub enum RuntimeEvent {
-    Process(activity::RuntimeEvent),
+    Process(Box<activity::RuntimeEvent>),
     State {
         name: String,
         value: Option<serde_json::Value>,
@@ -127,7 +127,7 @@ pub enum RuntimeEvent {
 impl RuntimeEvent {
     pub fn started(batch_id: String, idx: usize, command: ExeScriptCommand) -> Self {
         let kind = activity::RuntimeEventKind::Started { command };
-        Self::Process(activity::RuntimeEvent::new(batch_id, idx, kind))
+        Self::Process(Box::new(activity::RuntimeEvent::new(batch_id, idx, kind)))
     }
 
     pub fn finished(
@@ -140,25 +140,25 @@ impl RuntimeEvent {
             return_code,
             message,
         };
-        Self::Process(activity::RuntimeEvent::new(batch_id, idx, kind))
+        Self::Process(Box::new(activity::RuntimeEvent::new(batch_id, idx, kind)))
     }
 
     pub fn stdout(batch_id: String, idx: usize, out: CommandOutput) -> Self {
         let kind = activity::RuntimeEventKind::StdOut(out);
         let event = activity::RuntimeEvent::new(batch_id, idx, kind);
-        Self::Process(event)
+        Self::Process(Box::new(event))
     }
 
     pub fn stderr(batch_id: String, idx: usize, out: CommandOutput) -> Self {
         let kind = activity::RuntimeEventKind::StdErr(out);
         let event = activity::RuntimeEvent::new(batch_id, idx, kind);
-        Self::Process(event)
+        Self::Process(Box::new(event))
     }
 
     pub fn deploy_progress(batch_id: String, idx: usize, progress: DeployProgress) -> Self {
         let kind = activity::RuntimeEventKind::DeployProgressUpdate(progress);
         let event = activity::RuntimeEvent::new(batch_id, idx, kind);
-        Self::Process(event)
+        Self::Process(Box::new(event))
     }
 }
 

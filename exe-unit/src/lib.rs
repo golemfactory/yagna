@@ -1,3 +1,6 @@
+#![allow(clippy::useless_vec)]
+#![allow(clippy::arc_with_non_send_sync)]
+
 #[macro_use]
 extern crate derive_more;
 

@@ -120,7 +120,7 @@ fn parse_prop() {
             r#""hash:sha3:aabb:http://repo.some.network:8000/some-image-ddee0011.gvmi\n""#
         ),
         Ok(Literal::Str(
-            r#"hash:sha3:aabb:http://repo.some.network:8000/some-image-ddee0011.gvmi\n"#
+            r"hash:sha3:aabb:http://repo.some.network:8000/some-image-ddee0011.gvmi\n"
         ))
     )
 }

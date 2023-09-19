@@ -448,7 +448,6 @@ pub async fn get_tx_on_chain_status(
             if let Some(t) = transaction {
                 res.gas_price = Some(t.gas_price);
             }
-        } else {
         }
     } else {
         let transaction = get_tx_from_network(tx_hash, network).await?;

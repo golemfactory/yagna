@@ -46,7 +46,7 @@ tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.8"
 
 bytes = { version = "1" }
-ethsign = { version = "0.8" }
+ethsign = { workspace = true }
 tokio-util = { version = "0.7" }
 url = { version = "2.2" }
 prost = { version = "0.10" }

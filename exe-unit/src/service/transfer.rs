@@ -1,15 +1,20 @@
+#![allow(unused_imports)]
+
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+#[cfg(not(feature = "sgx"))]
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use actix::prelude::*;
 use futures::future::Abortable;
+#[cfg(not(feature = "sgx"))]
 use futures::SinkExt;
 use url::Url;
+#[cfg(not(feature = "sgx"))]
 use ya_client_model::activity::runtime_event::DeployProgress;
 
 use crate::deploy::ContainerVolume;
@@ -246,7 +251,7 @@ macro_rules! actor_try {
 impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, Result<Option<PathBuf>>>;
 
-    #[allow(unused_variables)]
+    #[allow(unused_variables, unused_mut)]
     fn handle(&mut self, mut cmd: DeployImage, ctx: &mut Self::Context) -> Self::Result {
         let image = match self.task_package.as_ref() {
             Some(image) => image,

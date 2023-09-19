@@ -27,7 +27,7 @@ pub(crate) struct Account {
 
 pub(crate) async fn init_account(account: Account) -> anyhow::Result<()> {
     log::debug!("Initializing payment account {:?}...", account);
-    let mut mode = AccountMode::NONE;
+    let mut mode = AccountMode::empty();
     mode.set(AccountMode::SEND, account.send);
     mode.set(AccountMode::RECV, account.receive);
     bus::service(driver_bus_id(account.driver))

@@ -2,8 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
-// Extrernal crates
-use std::sync::Arc;
+use std::rc::Rc;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -34,7 +33,7 @@ impl Erc20Service {
         // Load driver
         let driver = Erc20Driver::new(db.clone());
         driver.load_active_accounts().await;
-        let driver_rc = Arc::new(driver);
+        let driver_rc = Rc::new(driver);
         bus::bind_service(&db, driver_rc.clone()).await?;
         log::debug!("Driver loaded");
 

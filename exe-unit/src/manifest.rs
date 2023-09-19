@@ -44,7 +44,7 @@ impl ManifestContext {
         let features = {
             let mut features = Self::build_default_features(agreement);
             if let Some(ref manifest) = manifest {
-                features.extend(manifest.features().into_iter());
+                features.extend(manifest.features());
             }
             features
         };
@@ -100,7 +100,7 @@ impl ManifestContext {
     }
 
     pub fn add_validators(&mut self, iter: impl IntoIterator<Item = (Validator, Box<dyn Any>)>) {
-        self.validators.write().unwrap().extend(iter.into_iter());
+        self.validators.write().unwrap().extend(iter);
     }
 
     pub fn validator<T: ManifestValidator + 'static>(&self) -> Option<T> {
@@ -424,7 +424,7 @@ impl ManifestValidator for UrlValidator {
 
                         let ips = resolve_ips(urls.iter()).await?;
 
-                        set.extend(ips.into_iter());
+                        set.extend(ips);
 
                         Ok(Some(Self {
                             inner: Arc::new(AllowedAccess::Urls(set)),

@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use ethsign::{PublicKey, Signature};
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
 
 use ya_core_model::{identity, NodeId};
-use ya_relay_client::crypto::{Crypto, CryptoProvider};
+use ya_relay_client::crypto::{Crypto, CryptoProvider, PublicKey, Signature};
 use ya_service_bus::RpcEndpoint;
 
 #[derive(Clone)]

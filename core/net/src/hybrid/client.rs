@@ -70,6 +70,7 @@ macro_rules! proxy {
             type Result = $ty;
         }
 
+        #[allow(clippy::all)]
         impl Handler<$ident> for ClientActor {
             type Result = ResponseFuture<$ty>;
 
@@ -94,6 +95,7 @@ macro_rules! proxy {
             type Result = $ty;
         }
 
+        #[allow(clippy::all)]
         impl Handler<$ident> for ClientActor {
             type Result = ResponseFuture<$ty>;
 
