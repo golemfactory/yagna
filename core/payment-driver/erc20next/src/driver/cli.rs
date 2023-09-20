@@ -10,10 +10,9 @@ use ya_payment_driver::{
     bus,
     model::{AccountMode, GenericError, Init},
 };
-use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
-use crate::{driver::Erc20NextDriver, erc20::wallet, network, DRIVER_NAME};
+use crate::{driver::Erc20NextDriver, network, DRIVER_NAME};
 
 pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
@@ -24,11 +23,6 @@ pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericErro
     if mode.contains(AccountMode::SEND) {
         driver.is_account_active(&address)?
     }
-
-    wallet::init_wallet(&msg)
-        .timeout(Some(30))
-        .await
-        .map_err(GenericError::new)??;
 
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());

@@ -98,12 +98,11 @@ impl IdentitySigner {
             let addr = bus::get_pubkey(node_id).await.map_err(|e| SignerError {
                 message: e.to_string(),
             })?;
-            let address = ethsign::PublicKey::from_slice(&addr)
+            let address = *ethsign::PublicKey::from_slice(&addr)
                 .map_err(|_| SignerError {
                     message: "Public address from bus::get_pubkey is invalid".to_string(),
                 })?
-                .address()
-                .clone();
+                .address();
 
             if address == pub_address.as_bytes() {
                 return Ok(node_id);

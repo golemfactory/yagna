@@ -4,11 +4,15 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::runtime::{PaymentRuntime, TransferType};
+use erc20_payment_lib::db::model::{TokenTransferDao, TxDao};
+use erc20_payment_lib::runtime::{DriverEvent, DriverEventContent, PaymentRuntime, TransferType};
 use ethereum_types::H160;
+use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 // Workspace uses
@@ -25,7 +29,8 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{erc20::utils::big_dec_to_u256, network::platform_to_currency};
+use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
+use crate::network::platform_to_currency;
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
@@ -33,14 +38,14 @@ mod cli;
 
 lazy_static::lazy_static! {
     static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
+            std::env::var("ERC20NEXT_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(30),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
+            std::env::var("ERC20NEXT_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(30),
@@ -50,13 +55,15 @@ lazy_static::lazy_static! {
 pub struct Erc20NextDriver {
     active_accounts: AccountsRc,
     payment_runtime: PaymentRuntime,
+    events: Mutex<Receiver<DriverEvent>>,
 }
 
 impl Erc20NextDriver {
-    pub fn new(pr: PaymentRuntime) -> Self {
+    pub fn new(payment_runtime: PaymentRuntime, events: Receiver<DriverEvent>) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
-            payment_runtime: pr,
+            payment_runtime,
+            events: Mutex::new(events),
         }
     }
 
@@ -110,6 +117,83 @@ impl Erc20NextDriver {
 
         Ok(payment_id)
     }
+
+    async fn _confirm_payments(
+        &self,
+        token_transfer: &TokenTransferDao,
+        tx: &TxDao,
+    ) -> Result<(), GenericError> {
+        log::info!("Received event TransferFinished: {:#?}", token_transfer);
+
+        let chain_id = token_transfer.chain_id;
+        let network_name = &self
+            .payment_runtime
+            .setup
+            .chain_setup
+            .get(&chain_id)
+            .ok_or(GenericError::new(format!(
+                "Missing configuration for chain_id {chain_id}"
+            )))?
+            .network;
+
+        let networks = self.get_networks();
+        let network = networks.get(network_name).ok_or(GenericError::new(format!(
+            "Network {network_name} not supported by Erc20NextDriver"
+        )))?;
+        let platform = network
+            .tokens
+            .get(&network.default_token)
+            .ok_or(GenericError::new(format!(
+                "Network {} doesn't specify platform for default token {}",
+                network_name, network.default_token
+            )))?
+            .as_str();
+
+        let Ok(tx_token_amount) = U256::from_dec_str(&token_transfer.token_amount) else {
+            return Err(GenericError::new(format!("Malformed token_transfer.token_amount: {}", token_transfer.token_amount)));
+        };
+        let Ok(tx_token_amount) = u256_to_big_dec(tx_token_amount) else {
+            return Err(GenericError::new(format!("Cannot convert to big decimal tx_token_amount: {}", tx_token_amount)));
+        };
+        let payment_details = PaymentDetails {
+            recipient: token_transfer.receiver_addr.clone(),
+            sender: token_transfer.from_addr.clone(),
+            amount: tx_token_amount,
+            date: token_transfer.paid_date,
+        };
+
+        let tx_hash = tx.tx_hash.clone().ok_or(GenericError::new(format!(
+            "Missing tx_hash in tx_dao: {:?}",
+            tx
+        )))?;
+        if tx_hash.len() != 66 {
+            return Err(GenericError::new(format!(
+                "Malformed tx_hash, length should be 66: {:?}",
+                tx_hash
+            )));
+        };
+        let transaction_hash = hex::decode(&tx_hash[2..]).map_err(|err| {
+            GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
+        })?;
+
+        log::info!("name = {}", &self.get_name());
+        log::info!("platform = {}", platform);
+        log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_details = {:#?}", payment_details);
+        log::info!("confirmation = {:x?}", transaction_hash);
+
+        let Some(payment_id) = &token_transfer.payment_id else {
+            return Err(GenericError::new("token_transfer.payment_id is null"));
+        };
+        bus::notify_payment(
+            &self.get_name(),
+            platform,
+            vec![payment_id.clone()],
+            &payment_details,
+            transaction_hash,
+        )
+        .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -151,19 +235,21 @@ impl PaymentDriver for Erc20NextDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
 
         let address_str = msg.address();
         let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!(
-                "{} isn't a valid H160 address: {}",
-                address_str,
-                e.to_string()
-            ))
+            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
         })?;
+
+        log::debug!(
+            "Getting balance for network: {}, address: {}",
+            network.to_string(),
+            address_str
+        );
 
         let balance = self
             .payment_runtime
@@ -182,18 +268,14 @@ impl PaymentDriver for Erc20NextDriver {
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError> {
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
 
         let address_str = msg.address();
         let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!(
-                "{} isn't a valid H160 address: {}",
-                address_str,
-                e.to_string()
-            ))
+            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
         })?;
 
         let balance = self
@@ -264,13 +346,15 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
+        log::debug!("schedule_payment: {:?}", msg);
+
         let platform = msg.platform();
-        let network = platform.split("-").nth(1).ok_or(GenericError::new(format!(
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
             msg.platform()
         )))?;
 
-        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), &network)
+        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), network)
             .await
     }
 
@@ -285,11 +369,37 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn validate_allocation(
         &self,
-        _db: DbExecutor,
-        _caller: String,
+        db: DbExecutor,
+        caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        api::validate_allocation(msg).await
+        log::info!("Validate_allocation: {:?}", msg);
+        let account_balance = self
+            .get_account_balance(
+                db,
+                caller,
+                GetAccountBalance::new(msg.address, msg.platform.clone()),
+            )
+            .await?;
+
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .filter(|allocation| allocation.payment_platform == msg.platform)
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+        );
+
+        Ok(msg.amount <= account_balance - total_allocated_amount)
     }
 
     async fn shut_down(
@@ -305,19 +415,48 @@ impl PaymentDriver for Erc20NextDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20NextDriver {
-    async fn confirm_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
-    }
-
-    async fn send_out_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
-    }
-
     fn sendout_interval(&self) -> std::time::Duration {
         *TX_SENDOUT_INTERVAL
     }
 
     fn confirmation_interval(&self) -> std::time::Duration {
         *TX_CONFIRMATION_INTERVAL
+    }
+
+    async fn send_out_payments(&self) {
+        // no-op, handled by erc20_payment_lib internally
+    }
+
+    async fn confirm_payments(&self) {
+        let mut events = self.events.lock().await;
+        while let Ok(event) = events.try_recv() {
+            if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
+                match self
+                    ._confirm_payments(
+                        &transfer_finished.token_transfer_dao,
+                        &transfer_finished.tx_dao,
+                    )
+                    .await
+                {
+                    Ok(_) => log::info!(
+                        "Payment confirmed: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default()
+                    ),
+                    Err(e) => log::error!(
+                        "Error confirming payment: {}, error: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default(),
+                        e
+                    ),
+                }
+            }
+        }
     }
 }

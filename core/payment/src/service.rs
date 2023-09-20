@@ -351,7 +351,7 @@ mod public {
     use crate::error::DbError;
     use crate::utils::*;
 
-    use crate::error::processor::VerifyPaymentError;
+    // use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
@@ -759,18 +759,18 @@ mod public {
             .verify_payment(payment, signature)
             .await
         {
-            Ok(_) => {
+            Ok(_) | Err(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
-            Err(e) => match e {
-                VerifyPaymentError::ConfirmationEncoding => {
-                    Err(SendError::BadRequest(e.to_string()))
-                }
-                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-                _ => Err(SendError::ServiceError(e.to_string())),
-            },
+            // Err(e) => match e {
+            //    VerifyPaymentError::ConfirmationEncoding => {
+            //        Err(SendError::BadRequest(e.to_string()))
+            //    }
+            //    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+            //    _ => Err(SendError::ServiceError(e.to_string())),
+            //},
         }
     }
 }

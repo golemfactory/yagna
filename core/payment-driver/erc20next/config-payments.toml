@@ -3,19 +3,6 @@ service-sleep = 1
 process-sleep = 1
 automatic-recover = false
 
-[chain.rinkeby]
-chain-name = "Rinkeby"
-chain-id = 4
-rpc-endpoints = ["http://geth.testnet.golem.network:55555"]
-currency-symbol = "tETH"
-priority-fee = 1.5111
-max-fee-per-gas = 20.0
-gas-left-warning-limit = 1000000
-transaction-timeout = 100
-token = { address = "0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE", symbol = "tGLM", max-at-once = 10 }
-confirmation-blocks = 1
-block-explorer-url = "https://rinkeby.etherscan.io"
-
 [chain.goerli]
 chain-name = "Goerli"
 chain-id = 5
@@ -30,7 +17,7 @@ max-fee-per-gas = 10.0
 gas-left-warning-limit = 1000000
 transaction-timeout = 100
 token = { address = "0x33af15c79d64b85ba14aaffaa4577949104b22e8", symbol = "tGLM" }
-multi-contract = { address = "0x7777784f803a7bf1d7f115f849d29ce5706da64a", max-at-once = 10 }
+# multi-contract = { address = "0x7777784f803a7bf1d7f115f849d29ce5706da64a", max-at-once = 10 }
 confirmation-blocks = 1
 block-explorer-url = "https://goerli.etherscan.io"
 

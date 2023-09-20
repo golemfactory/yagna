@@ -534,7 +534,7 @@ async fn get_tx_receipt_with(
         .await
         .map_err(Into::into)
 }
-
+/*
 fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
     match network {
         Network::Mainnet => {
@@ -598,7 +598,7 @@ async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> 
 
     Ok(clients)
 }
-
+*/
 fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
         Network::Mainnet => *config::MAINNET_CONFIG,

@@ -168,8 +168,10 @@ impl Agreement {
             agreement_id: self.id.into_client(),
             demand,
             offer,
-            valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
-            approved_date: self.approved_ts.map(|d| DateTime::<Utc>::from_utc(d, Utc)),
+            valid_to: DateTime::<Utc>::from_naive_utc_and_offset(self.valid_to, Utc),
+            approved_date: self
+                .approved_ts
+                .map(|d| DateTime::<Utc>::from_naive_utc_and_offset(d, Utc)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
             app_session_id: self.session_id,

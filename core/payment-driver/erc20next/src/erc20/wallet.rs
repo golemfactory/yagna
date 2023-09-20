@@ -18,7 +18,7 @@ use web3::types::{H160, H256, U256, U64};
 // Workspace uses
 use ya_payment_driver::{
     db::models::{Network, TransactionEntity, TxType},
-    model::{GenericError, Init, PaymentDetails},
+    model::{GenericError, PaymentDetails},
 };
 
 // Local uses
@@ -32,54 +32,8 @@ use crate::{
             convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
-    RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
-
-pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
-    let balance_com = ethereum::get_glm_balance(address, network).await?;
-
-    let balance = u256_to_big_dec(balance_com)?;
-    log::debug!(
-        "account_balance. address={}, network={}, balance={}",
-        address,
-        &network,
-        &balance
-    );
-
-    Ok(balance)
-}
-
-pub async fn account_gas_balance(
-    address: H160,
-    network: Network,
-) -> Result<BigDecimal, GenericError> {
-    let balance_com = ethereum::get_balance(address, network).await?;
-    let balance = u256_to_big_dec(balance_com)?;
-
-    log::debug!(
-        "account_gas_balance. address={}, network={}, balance={}",
-        address,
-        &network,
-        &balance
-    );
-
-    Ok(balance)
-}
-
-pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
-    log::debug!("init_wallet. msg={:?}", msg);
-    let address = msg.address();
-    let network = msg.network().unwrap_or_else(|| RINKEBY_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(GenericError::new)?;
-
-    // Validate address and that checking balance of GLM and ETH works.
-    let h160_addr = str_to_addr(&address)?;
-    let _glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
-    let _eth_balance = ethereum::get_balance(h160_addr, network).await?;
-
-    Ok(())
-}
 
 pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {

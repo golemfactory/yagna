@@ -426,6 +426,7 @@ impl PaymentProcessor {
             .send(driver::SignPayment(payment.clone()))
             .await??;
 
+        log::warn!("####### payment: {:?},  signature {:?}", payment, signature);
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
         let msg = SendPayment::new(payment, signature);
 
@@ -437,7 +438,8 @@ impl PaymentProcessor {
                 .call(msg)
                 .map(|res| match res {
                     Ok(Ok(_)) => (),
-                    err => log::error!("Error sending payment message to provider: {:?}", err),
+                    Err(err) => log::error!("Error sending payment message to provider: {:?}", err),
+                    Ok(Err(err)) => log::error!("Provider rejected payment: {:?}", err),
                 }),
         );
         // TODO: Implement re-sending mechanism in case SendPayment fails

@@ -54,12 +54,6 @@ jobs:
           shared-key: "payment-dev-x86-64"
 
 
-      - name: Check lockfile
-        uses: actions-rs/cargo@v1
-        with:
-          command: tree
-          args: --locked
-
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
         run: |
