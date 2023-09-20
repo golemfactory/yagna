@@ -82,10 +82,11 @@ impl RuntimeProcess {
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
                     log::error!(
-                        "Invalid offer template [{}]: {:?}. stdout: {}",
+                        "Invalid offer template [{}]: {:?}. stdout: {}, binary stdout: {:?}",
                         binary.display(),
                         e,
-                        stdout
+                        stdout,
+                        result.stdout
                     );
                     Error::Other(msg)
                 })?)
