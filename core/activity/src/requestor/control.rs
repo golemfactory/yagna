@@ -227,7 +227,7 @@ async fn await_results(
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: None, //query.timeout,
+        timeout: query.timeout,
         command_index: query.command_index,
     };
 
@@ -235,8 +235,8 @@ async fn await_results(
         .to(*agreement.provider_id())
         .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        //.timeout(timeout_margin(query.timeout))
-        .await??;
+        .timeout(timeout_margin(query.timeout))
+        .await???;
 
     Ok::<_, Error>(web::Json(results))
 }
