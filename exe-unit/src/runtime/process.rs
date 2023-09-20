@@ -78,6 +78,7 @@ impl RuntimeProcess {
         let result = Self::run_cmd(binary.clone(), args)?;
         match result.status.success() {
             true => {
+                let message_bin = result.stdout.clone();
                 let stdout = vec_to_string(result.stdout).unwrap_or_default();
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
@@ -86,7 +87,7 @@ impl RuntimeProcess {
                         binary.display(),
                         e,
                         stdout,
-                        result.stdout
+                        message_bin
                     );
                     Error::Other(msg)
                 })?)
