@@ -27,8 +27,8 @@ readme = "README.md"
 python = "^3.10.1"
 pytest = "^7.4"
 pytest-asyncio = "0.21"
-# pytest-rerunfailures = "^10.3"
-# pytest-split = "^0.8.1"
+pytest-rerunfailures = "^10.3"
+pytest-split = "^0.8.1"
 # goth = "0.15.3"
 # to use development goth version uncomment below
 goth =  { git = "https://github.com/golemfactory/goth.git", rev = "1aa00bf9706de9464af5b06cd44416b54455f0ae" }
