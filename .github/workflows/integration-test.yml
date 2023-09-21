@@ -58,7 +58,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry config experimental.new-installer false
           poetry install --no-root
 
       - name: Disconnect Docker containers from default network
