@@ -46,7 +46,7 @@ jobs:
       - name: Setup cache
         continue-on-error: true
         run:
-          cp -r /opt/yagna_cache/target target
+          cp -rp /opt/yagna_cache/target target
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
