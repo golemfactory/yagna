@@ -224,7 +224,7 @@ impl DriverRegistry {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         let driver_details = self.get_driver(&driver)?;
-        let network_name = network.unwrap_or_else(|| driver_details.default_network.to_owned());
+        let network_name = network.unwrap_or_default();
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,

@@ -32,7 +32,7 @@ jobs:
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth, ubuntu-18.04]
+    runs-on: [goth2, ubuntu-22.04]
     needs: test_check
     strategy:
       fail-fast: false
@@ -51,17 +51,16 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.8.0"
+          python-version: "3.10"
 
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v8
         with:
-          poetry-version: 1.2.2
+          poetry-version: 1.6.1
           working-directory: "./goth_tests"
 
       - name: Install dependencies
         run: |
-          poetry config experimental.new-installer false
           poetry install --no-root
 
       - name: Disconnect Docker containers from default network
@@ -116,7 +115,7 @@ jobs:
         # Python version below should agree with the version set up by this job.
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
-        run: poetry env remove python3.8
+        run: poetry env remove --all
 
   integration-test:
     name: Integration Tests (hybrid-net)
