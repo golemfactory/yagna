@@ -88,20 +88,6 @@ lazy_static! {
             }
         }
     };
-    pub static ref YATESTNET_CONFIG: EnvConfiguration = EnvConfiguration {
-        glm_contract_address: utils::str_to_addr(
-            &env::var("YATESTNET_TGLM_CONTRACT_ADDRESS")
-                .unwrap_or_else(|_| "0x3b80bF85867eE9b079322802A734c074e093328E".to_string())
-        )
-        .unwrap(),
-        glm_faucet_address: None,
-        required_confirmations: {
-            match env::var("YATESTNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
-                Ok(Ok(x)) => x,
-                _ => 3,
-            }
-        }
-    };
     pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("POLYGON_GLM_CONTRACT_ADDRESS")

@@ -2,6 +2,7 @@
 use actix_web::{web, Responder};
 use ya_client_model::activity::{ActivityState, ProviderEvent};
 use ya_client_model::market::Role;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -47,8 +48,8 @@ async fn get_events(
             query.after_timestamp,
             query.max_events,
         )
-        //.timeout(query.timeout)
-        .await? //?
+        .timeout(query.timeout)
+        .await??
         .into_iter()
         .collect::<Vec<ProviderEvent>>();
 

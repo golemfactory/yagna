@@ -331,23 +331,6 @@ pub async fn send_transactions(
     Ok(())
 }
 
-// TODO: calculate fee. Below commented out reference to zkSync implementation
-// pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
-//     // let token = get_network_token(network, None);
-//     // let wallet = get_wallet(&address, network).await?;
-//     // let tx_fee = wallet
-//     //     .provider
-//     //     .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
-//     //     .await
-//     //     .map_err(GenericError::new)?
-//     //     .total_fee;
-//     // let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
-//     //
-//     // log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
-//     // Ok(tx_fee_bigdec)
-//     todo!();
-// }
-
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_tx. hash={}", tx_hash);
     let hex_hash = H256::from_str(&tx_hash[2..]).map_err(|err| {
