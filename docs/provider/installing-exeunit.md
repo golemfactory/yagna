@@ -49,7 +49,7 @@ There are 2 events in logs that you should look for:
 [2023-08-04 16:09:07.285482 +00:00] INFO [runtime/src/vmrt.rs:141] Executing command: Command { std: "/home/nieznanysprawiciel/.local/lib/yagna/plugins/ya-runtime-vm/runtime/vmrt" "-m" "128M" "-nographic" "-vga" "none" "-kernel" "vmlinuz-virt" "-initrd" "initramfs.cpio.gz" "-enable-kvm" "-cpu" "host" "-smp" "1" "-append" "console=ttyS0 panic=1" "-device" "virtio-serial" "-device" "virtio-rng-pci" "-chardev" "socket,path=/tmp/d62a8ed8399249a3bc01e251ccfb7a98.sock,server=on,wait=off,id=manager_cdev" "-device" "virtserialport,chardev=manager_cdev,name=manager_port" "-drive" "file=/home/nieznanysprawiciel/.local/lib/yagna/plugins/ya-runtime-vm/runtime/self-test.gvmi,cache=unsafe,readonly=on,format=raw,if=virtio" "-no-reboot" "-net" "none" "-chardev" "socket,path=/tmp/d62a8ed8399249a3bc01e251ccfb7a98_vpn.sock,server,wait=off,id=vpn_cdev" "-device" "virtserialport,chardev=vpn_cdev,name=vpn_port" "-chardev" "socket,path=/tmp/d62a8ed8399249a3bc01e251ccfb7a98_inet.sock,server,wait=off,id=inet_cdev" "-device" "virtserialport,chardev=inet_cdev,name=inet_port", kill_on_drop: false }
 [2023-08-04 16:09:07.285876 +00:00] INFO [runtime/src/guest_agent_comm.rs:459] Waiting for Guest Agent socket ...
 ```
-If there is no error message than self-test execution passed.
+If there is no error message then self-test execution passed.
 
 #### Publishing Offer on market
 
