@@ -27,6 +27,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
+      - name: Extract branch name
+        shell: bash
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        id: extract_branch
+
       - name: Musl
         run: |
           sudo apt-get -y install musl musl-tools
@@ -46,7 +51,7 @@ jobs:
       - name: Setup cache
         continue-on-error: true
         run:
-          cp -rp /opt/yagna_cache/target target
+          cp -rp /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target target
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
@@ -84,6 +89,7 @@ jobs:
 
       - name: Save cache
         run: |
-          sudo mkdir -p /opt/yagna_cache
-          sudo chown -R $USER /opt/yagna_cache
-          rsync -a --delete target/ /opt/yagna_cache/target
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          sudo mkdir -p "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}"
+          sudo chown -R $USER "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}"
+          rsync -a --delete target/ "/opt/yagna_cache/target/${{ steps.extract_branch.outputs.branch }}"
