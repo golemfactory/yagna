@@ -458,8 +458,6 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
-        #[strum(props(token = "tGLM"))]
-        Yatestnet,
     }
 
     /// Experimental. In future releases this might change or be removed.
