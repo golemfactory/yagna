@@ -123,9 +123,11 @@ jobs:
         run: |
           poetry install --no-root
 
-      - name: Remove Docker containers
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -a
 
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
@@ -165,10 +167,11 @@ jobs:
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
         run: poetry env remove --all
 
-      - name: Remove Docker containers
+      - name: Cleanup Docker
         if: always()
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
+        run: |
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -a
 
   integration-test:
     name: Integration Tests (hybrid-net)
