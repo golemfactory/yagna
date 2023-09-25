@@ -241,7 +241,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     .map(|payment| payment.order_id.clone())
                     .collect();
 
-                let platform = match network::network_token_to_platform(Some(network), None) {
+                let platform = match network::network_token_to_platform(network, None) {
                     Ok(platform) => platform,
                     Err(e) => {
                         log::error!(

@@ -32,7 +32,7 @@ jobs:
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth, ubuntu-22.04]
+    runs-on: [goth2, ubuntu-22.04]
     needs: test_check
     strategy:
       fail-fast: false
@@ -59,12 +59,11 @@ jobs:
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v8
         with:
-          poetry-version: 1.2.2
+          poetry-version: 1.6.1
           working-directory: "./goth_tests"
 
       - name: Install dependencies
         run: |
-          poetry config experimental.new-installer false
           poetry install --no-root
 
       - name: Disconnect Docker containers from default network
