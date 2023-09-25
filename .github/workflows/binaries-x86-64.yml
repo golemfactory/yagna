@@ -48,9 +48,15 @@ jobs:
       - name: Set build target for cache key
         run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
 
+      - name: Remove cache if needed
+        continue-on-error: true
+        run:
+
       - name: Setup cache
         continue-on-error: true
         run:
+          # Uncomment line if you want need to clear cache
+          #rm -fr /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target
           cp -rp /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target target
 
       - name: Install openssl ( Windows only )
@@ -90,6 +96,4 @@ jobs:
       - name: Save cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          sudo mkdir -p "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}"
-          sudo chown -R $USER "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}"
-          rsync -a --delete target/ "/opt/yagna_cache/target/${{ steps.extract_branch.outputs.branch }}"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/target/${{ steps.extract_branch.outputs.branch }}"
