@@ -21,7 +21,6 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
       - name: Checkout
@@ -56,15 +55,8 @@ jobs:
         continue-on-error: true
         run:
           # Uncomment line if you want need to clear cache
-          #rm -fr /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target
+          #rm -rf /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target
           cp -rp /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target target
-
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
 
       - name: Build binaries
         run: |
