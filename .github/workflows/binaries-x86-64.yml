@@ -23,6 +23,9 @@ jobs:
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
+      - name: Clean runner data
+        run: sudo rm -rf ${{ github.workspace }}/*
+
       - name: Checkout
         uses: actions/checkout@v1
 
