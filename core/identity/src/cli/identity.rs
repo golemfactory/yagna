@@ -1,9 +1,10 @@
 /// Identity management CLI parser and runner
 use std::cmp::Reverse;
+use std::convert::TryInto;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use ethsign::Protected;
+use anyhow::{anyhow, Context, Result};
+use ethsign::{KeyFile, Protected};
 use rustc_hex::ToHex;
 use sha2::Digest;
 use structopt::*;
@@ -151,6 +152,11 @@ pub enum IdentityCommand {
         /// Identity alias to export
         node_or_alias: Option<NodeOrAlias>,
 
+        /// Export using unencrypted private key format,
+        /// easier to use later, but less secure
+        #[structopt(long = "plain")]
+        plain: bool,
+
         /// File path where identity will be written. Defaults to `stdout`
         #[structopt(long = "file-path")]
         file_path: Option<PathBuf>,
@@ -166,6 +172,39 @@ pub struct SignCommand {
 
     /// NodeId or key
     node_or_alias: Option<NodeOrAlias>,
+}
+
+//local function to decrypt keystore (for export key command)
+fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
+    let key_file: KeyFile = serde_json::from_str(key_file_json)?;
+    let empty_pass = Protected::new::<Vec<u8>>("".into());
+    let secret = match key_file.to_secret_key(&empty_pass) {
+        Ok(secret) => secret,
+        Err(ethsign::Error::InvalidPassword) => {
+            let password: Protected = rpassword::read_password_from_tty(Some("Password: "))
+                .map_err(|e| anyhow!("Failed to read password: {}", e))?
+                .into();
+            match key_file.to_secret_key(&password) {
+                Ok(secret) => secret,
+                Err(ethsign::Error::InvalidPassword) => {
+                    return Err(anyhow!("Invalid password"));
+                }
+                Err(e) => return Err(anyhow!(e)),
+            }
+        }
+        Err(e) => return Err(anyhow!(e)),
+    };
+
+    // HACK, due to hidden secret key data we have to use this little hack to extract private key
+    let pass = Protected::new::<Vec<u8>>("hack".into());
+
+    secret
+        .to_crypto(&pass, 1)
+        .map_err(|err| anyhow!("Failed to encrypt private key: {}", err))?
+        .decrypt(&pass)
+        .map_err(|err| anyhow!("Failed to decrypt private key: {}", err))?
+        .try_into()
+        .map_err(|_| anyhow!("Wrong key length after decryption"))
 }
 
 impl IdentityCommand {
@@ -371,16 +410,26 @@ impl IdentityCommand {
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,
+                plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let key_file = bus::service(identity::BUS_ID)
+                let mut key_file = bus::service(identity::BUS_ID)
                     .send(identity::GetKeyFile(node_id))
                     .await?
                     .map_err(anyhow::Error::msg)?;
 
+                if *plain {
+                    let private_key = to_private_key(&key_file);
+                    let decrypted_key = match private_key {
+                        Ok(key) => rustc_hex::ToHex::to_hex::<String>(key.as_slice()),
+                        Err(e) => anyhow::bail!(e),
+                    };
+                    key_file = decrypted_key;
+                }
+
                 match file_path {
                     Some(file) => {
-                        if file.is_file() {
+                        if file.exists() {
                             anyhow::bail!("File already exists")
                         }
 

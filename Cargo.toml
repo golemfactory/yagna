@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.12.2"
+version = "0.12.3"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -168,7 +168,6 @@ assets = [
     ],
 ]
 
-
 [workspace]
 members = [
     "agent/provider",
@@ -217,6 +216,12 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro"
 ]
+
+[workspace.dependencies]
+rand = "0.8.5"
+url = "2.3.1"
+trust-dns-resolver = "0.22"
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 
 [patch.crates-io]
 ## SERVICES
@@ -290,6 +295,8 @@ ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
+
+diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563"}
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
