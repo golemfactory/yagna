@@ -22,11 +22,7 @@ jobs:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
+    runs-on: [yagna-builder, ubuntu-22.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v1
