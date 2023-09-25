@@ -44,10 +44,8 @@ jobs:
         run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
 
       - name: Setup cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "payment-dev-x86-64"
-
+        run:
+          cp -r /opt/yagna_cache/target target
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
@@ -83,3 +81,9 @@ jobs:
         with:
           name: Yagna ${{ runner.os }}
           path: build
+
+      - name: Save cache
+        run: |
+          sudo mkdir -p /opt/yagna_cache
+          sudo chown -R $USER /opt/yagna_cache
+          rsync -a --delete target/ /opt/yagna_cache/target
