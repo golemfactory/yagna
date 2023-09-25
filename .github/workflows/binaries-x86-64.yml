@@ -27,9 +27,8 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Extract branch name
-        shell: bash
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
         id: extract_branch
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
 
       - name: Musl
         run: |
@@ -44,19 +43,16 @@ jobs:
           target: x86_64-unknown-linux-musl
           override: true
 
-      - name: Set build target for cache key
-        run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
+      - name: Set build target for cache
+        id: setup_cache_target
+        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
-      - name: Remove cache if needed
-        continue-on-error: true
-        run:
-
-      - name: Setup cache
+      - name: Load local cache
         continue-on-error: true
         run:
           # Uncomment line if you want need to clear cache
-          #rm -rf /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target
-          cp -rp /opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/target target
+          #rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target" target
 
       - name: Build binaries
         run: |
@@ -85,7 +81,7 @@ jobs:
           name: Yagna ${{ runner.os }}
           path: build
 
-      - name: Save cache
+      - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/target/${{ steps.extract_branch.outputs.branch }}"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
