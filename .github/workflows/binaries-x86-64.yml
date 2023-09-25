@@ -44,6 +44,7 @@ jobs:
         run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
 
       - name: Setup cache
+        continue-on-error: true
         run:
           cp -r /opt/yagna_cache/target target
 
