@@ -29,8 +29,7 @@ jobs:
 
       - name: Musl
         run: |
-          sudo apt-get install musl musl-tools
-
+          sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
       - name: Install Rust ${{ env.rust_stable }}

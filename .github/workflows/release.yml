@@ -66,8 +66,7 @@ jobs:
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
-          sudo apt-get install musl musl-tools
-
+          sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
       - name: Get upload url
