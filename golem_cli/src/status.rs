@@ -13,7 +13,6 @@ use ya_core_model::NodeId;
 use crate::appkey;
 use crate::command::{
     NetworkGroup, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER, NETWORK_GROUP_MAP,
-    ZKSYNC_DRIVER,
 };
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
@@ -248,7 +247,7 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         let net_to_check = net.parse()?;
         let platform = ERC20_DRIVER
             .platform(&net_to_check)
-            .or_else(|_e| ZKSYNC_DRIVER.platform(&net_to_check))?;
+            .or_else(|_e| ERC20_DRIVER.platform(&net_to_check))?;
         let platform_property =
             &format!("golem.com.payment.platform.{}.address", platform.platform,);
         if latest_offer.properties.get(platform_property).is_some() {

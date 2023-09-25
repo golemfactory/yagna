@@ -65,7 +65,6 @@ If there is no error message than self-test execution passed.
     "golem.com.payment.debit-notes.accept-timeout?": 240,
     "golem.com.payment.platform.erc20-mainnet-glm.address": "0xf98bb0842a7e744beedd291c98e7cd2c9b27f300",
     "golem.com.payment.platform.erc20-polygon-glm.address": "0xf98bb0842a7e744beedd291c98e7cd2c9b27f300",
-    "golem.com.payment.platform.zksync-mainnet-glm.address": "0xf98bb0842a7e744beedd291c98e7cd2c9b27f300",
     "golem.com.pricing.model": "linear",
     "golem.com.pricing.model.linear.coeffs": [
       0.00002777777777777778,
