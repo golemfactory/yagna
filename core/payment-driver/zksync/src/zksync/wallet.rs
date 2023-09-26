@@ -42,7 +42,7 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .await
         .map_err(GenericError::new)?;
     // TODO: implement tokens, replace None
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
     let balance_com = acc_info
         .committed
         .balances
@@ -63,7 +63,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let mode = msg.mode();
     let address = msg.address().clone();
-    let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
+    let network = msg.network().unwrap_or_default();
     let network = Network::from_str(&network).map_err(GenericError::new)?;
 
     if mode.contains(AccountMode::SEND) {
@@ -91,7 +91,7 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = Network::from_str(&network).map_err(GenericError::new)?;
     let wallet = get_wallet(&msg.sender(), network).await?;
 
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
     let balance = get_balance(&wallet, &token).await?;
     let unlock_fee = get_unlock_fee(&wallet, &token).await?;
     let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
@@ -134,7 +134,7 @@ pub async fn enter(msg: Enter) -> Result<String, GenericError> {
 }
 
 pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
     let wallet = get_wallet(address, network).await?;
     let tx_fee = wallet
         .provider
@@ -184,7 +184,7 @@ pub async fn make_transfer(
 
     let sender = details.sender.clone();
     let wallet = get_wallet(&sender, network).await?;
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
 
     let balance = get_balance(&wallet, &token).await?;
     log::debug!("balance before transfer={}", balance);
@@ -346,7 +346,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
         .map_err(GenericError::new)?
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
-        let token = get_network_token(network, None);
+        let token = get_network_token(network, None)?;
         let balance = get_balance(wallet, &token).await?;
         let unlock_fee = get_unlock_fee(wallet, &token).await?;
         if unlock_fee > balance {
@@ -389,7 +389,7 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     amount: Option<BigDecimal>,
     recipient: Option<String>,
 ) -> Result<SyncTransactionHandle<P>, GenericError> {
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
     let balance = get_balance(&wallet, &token).await?;
     info!(
         "Wallet funded with {} {} available for withdrawal",
@@ -505,7 +505,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     network: Network,
     amount: BigDecimal,
 ) -> Result<H256, GenericError> {
-    let token = get_network_token(network, None);
+    let token = get_network_token(network, None)?;
     let amount = base_utils::big_dec_to_u256(&amount);
     let address = wallet.address();
 

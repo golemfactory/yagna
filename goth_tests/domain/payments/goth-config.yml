@@ -26,8 +26,9 @@ docker-compose:
         release-tag: "v0.4.0-ITL"
 
   compose-log-patterns:
-    ethereum: ".*Wallets supplied."
-    zksync: ".*Running on http://.*:3030/.*"
+    ethereum-mainnet: ".*Wallets supplied."
+    ethereum-goerli: ".*Wallets supplied."
+    ethereum-polygon: ".*Wallets supplied."
 
 
 key-dir: "../../assets/keys"
