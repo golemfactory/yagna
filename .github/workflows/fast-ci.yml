@@ -38,7 +38,6 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
       - name: Checkout
@@ -64,19 +63,12 @@ jobs:
         id: setup_cache_target
         run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
-
       - name: Load local cache
         continue-on-error: true
         run:
           # Uncomment line if you want need to clear cache
-          #rm -rf "/opt/yagna_cache/unit_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
-          cp -rp "/opt/yagna_cache/unit_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target" target
+          #rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target" target
 
       - name: Unit tests
         uses: actions-rs/cargo@v1
@@ -87,7 +79,7 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/unit_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
 
   market_tests:
     name: Market Tests
@@ -95,7 +87,6 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
       - name: Checkout
@@ -121,19 +112,12 @@ jobs:
         id: setup_cache_target
         run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
-
       - name: Load local cache
         continue-on-error: true
         run:
           # Uncomment line if you want need to clear cache
-          #rm -rf "/opt/yagna_cache/market_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
-          cp -rp "/opt/yagna_cache/market_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target" target
+          #rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target" target
 
       - name: Unit tests
         uses: actions-rs/cargo@v1
@@ -144,4 +128,4 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/market_tests/${{ steps.extract_branch.outputs.branch }}/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
