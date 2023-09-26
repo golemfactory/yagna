@@ -1,4 +1,4 @@
-name: Build binaries (aarch64)
+name: Build binaries ARM (aarch64)
 
 on:
   push:
