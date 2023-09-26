@@ -152,6 +152,11 @@ assets = [
         "755",
     ],
     [
+        "target/release/golemsp",
+        "usr/bin/",
+        "755",
+    ],
+    [
         "README.md",
         "usr/share/doc/yagna/",
         "644",

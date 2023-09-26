@@ -267,7 +267,7 @@ impl PaymentDriver for ZksyncDriver {
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
-        );
+        )?;
         bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(
@@ -513,7 +513,7 @@ impl PaymentDriverCron for ZksyncDriver {
                 }
 
                 // TODO: Add token support
-                let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
+                let platform = network_token_to_platform(network, None).unwrap(); // TODO: Catch error?
                 let details = match wallet::verify_tx(tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {
