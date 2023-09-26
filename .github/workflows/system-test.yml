@@ -7,7 +7,7 @@ on:
         description: 'Profile (unused right now)'
         required: true
         default: 'debug'
-  pull_request:
+  push:
     branches:
       - master
       - release/*
