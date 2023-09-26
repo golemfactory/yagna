@@ -11,10 +11,8 @@ on:
     branches:
       - master
       - release/*
-  pull_request:
-    branches:
-      - master
-      - release/*
+      - '**/all-tests'
+
 
 jobs:
   test_check:

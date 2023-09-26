@@ -7,10 +7,11 @@ on:
         description: 'Profile (unused right now)'
         required: true
         default: 'debug'
-  pull_request:
+  push:
     branches:
       - master
       - release/*
+      - '**/all-tests'
 
 env:
   rust_stable: 1.71.1
