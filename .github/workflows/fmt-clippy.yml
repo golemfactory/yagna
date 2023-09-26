@@ -19,7 +19,7 @@ on:
 env:
   rust_stable: 1.71.1
 
-jobs: 
+jobs:
   check_format:
     name: Check formatting
     runs-on: [ubuntu-latest]
@@ -41,6 +41,7 @@ jobs:
         with:
           command: tree
           args: --locked
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
