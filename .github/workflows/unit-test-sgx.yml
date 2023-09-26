@@ -1,6 +1,12 @@
 name: SGX Unit Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
