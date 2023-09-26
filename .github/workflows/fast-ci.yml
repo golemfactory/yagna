@@ -26,7 +26,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: "Build binaries (x86-64)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          intervalSeconds: 10
+          intervalSeconds: 30
           timeoutSeconds: 3600
 
       - name: Fail if build was not a success ( ubuntu )
