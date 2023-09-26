@@ -1,6 +1,12 @@
 name: System Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   pull_request:
     branches:
       - master
