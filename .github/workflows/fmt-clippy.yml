@@ -19,7 +19,7 @@ on:
 env:
   rust_stable: 1.71.1
 
-jobs:
+jobs: 
   check_format:
     name: Check formatting
     runs-on: [ubuntu-latest]
