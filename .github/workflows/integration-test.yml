@@ -11,10 +11,9 @@ on:
     branches:
       - master
       - release/*
-  pull_request:
-    branches:
-      - master
-      - release/*
+      - '**/all-tests'
+      - '**/integration-tests'
+
 
 jobs:
   test_check:
@@ -26,7 +25,7 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build binaries (x86-64) (ubuntu-latest)"
+          checkName: "Build binaries (x86-64)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           intervalSeconds: 30
           timeoutSeconds: 3600
