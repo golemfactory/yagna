@@ -1,4 +1,4 @@
-name: Unit Tests
+name: Check code integrity (lock, fmt, clippy)
 
 on:
   workflow_dispatch:
@@ -11,23 +11,18 @@ on:
     branches:
       - master
       - release/*
-      - '**/all-tests'
+  pull_request:
+    branches:
+      - master
+      - release/*
 
 env:
   rust_stable: 1.71.1
 
 jobs:
-  build:
-    name: Unit Tests
-    env:
-      # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
-
+  check_format:
+    name: Check formatting
+    runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -40,8 +35,6 @@ jobs:
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1
@@ -60,16 +53,3 @@ jobs:
         with:
           command: clippy
           args: --all-targets --all-features --workspace -- -D warnings
-
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
-
-      - name: Unit tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --exclude=["./agent/provider/src/market"] --locked

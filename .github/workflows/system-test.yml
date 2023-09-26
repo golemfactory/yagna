@@ -11,6 +11,7 @@ on:
     branches:
       - master
       - release/*
+      - '**/all-tests'
 
 env:
   rust_stable: 1.71.1
