@@ -12,6 +12,7 @@ on:
       - master
       - release/*
       - '**/all-tests'
+      - '**/integration-tests'
 
 
 jobs:
