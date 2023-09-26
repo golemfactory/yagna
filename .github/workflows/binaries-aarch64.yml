@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - master
+      - '**/all-tests'
       - payments-dev
       - release/*
-  pull_request:
-    branches:
-      - master
-      - payments-dev
-      - release/*
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch name'
+        required: true
+        default: 'master'
 
 env:
   rust_stable: 1.71.1
