@@ -14,7 +14,6 @@ on:
       - '**/all-tests'
       - '**/integration-tests'
 
-
 jobs:
   test_check:
     name: Check test results
