@@ -1,10 +1,17 @@
 name: System Tests
 
 on:
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
+  push:
     branches:
       - master
       - release/*
+      - '**/all-tests'
 
 env:
   rust_stable: 1.71.1
