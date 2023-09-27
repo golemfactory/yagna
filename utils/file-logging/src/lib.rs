@@ -3,13 +3,13 @@ use chrono::format::strftime::StrftimeItems;
 use chrono::format::DelayedFormat;
 use chrono::{DateTime, Local};
 use flexi_logger::{
-    style, AdaptiveFormat, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
+    style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, Logger, Naming, Record,
 };
 use std::env;
 use std::path::Path;
 
-pub use flexi_logger::{Age, LoggerHandle};
+pub use flexi_logger::LoggerHandle;
 
 #[allow(clippy::useless_conversion)]
 fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems> {
