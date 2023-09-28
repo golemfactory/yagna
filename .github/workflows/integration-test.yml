@@ -63,7 +63,7 @@ jobs:
       - name: Install poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
-          ln -s $HOME/.poetry/bin/poetry /usr/local/bin/poetry
+          ln -s $HOME/.poetry/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
