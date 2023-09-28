@@ -1,4 +1,4 @@
-name: PRs to master
+name: Clone master branch
 on:
   push:
     branches:
