@@ -13,6 +13,7 @@ use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
 use serde::Deserialize;
 use std::cell::RefCell;
+use std::env;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
@@ -102,12 +103,14 @@ where
             } else {
                 //use lazy static to not call env var on every request
                 lazy_static::lazy_static! {
-                    static ref DISABLE_APPKEY_SECURITY : bool = std::env::var("YAGNA_DEV_DISABLE_APPKEY_SECURITY").map(|f|f == "1").unwrap_or(false);
+                    static ref DISABLE_APPKEY_SECURITY: bool = std::env::var("YAGNA_DEV_DISABLE_APPKEY_SECURITY")
+                        .map(|f| f == "1")
+                        .unwrap_or(false);
                 }
                 if *DISABLE_APPKEY_SECURITY {
                     //dev path
                     log::warn!("AppKey security is disabled. Not for production!");
-                    Some("no_security_appkey".to_string())
+                    env::var("YAGNA_AUTOCONF_APPKEY").ok()
                 } else {
                     //Normal path
                     None
