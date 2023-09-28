@@ -1,15 +1,21 @@
 name: Build binaries (x86-64)
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
-      - payments-dev
       - release/*
+      - '**/all-tests'
+      - '**/integration-tests'
   pull_request:
     branches:
       - master
-      - payments-dev
       - release/*
 
 env:
@@ -21,20 +27,21 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
+    runs-on: [yagna-builder, ubuntu-22.04]
     steps:
+      - name: Clean runner data
+        run: sudo rm -rf ${{ github.workspace }}/*
+
       - name: Checkout
         uses: actions/checkout@v1
 
+      - name: Extract branch name
+        id: extract_branch
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
       - name: Musl
         run: |
-          sudo apt-get install musl musl-tools
-
+          sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
       - name: Install Rust ${{ env.rust_stable }}
@@ -45,26 +52,20 @@ jobs:
           target: x86_64-unknown-linux-musl
           override: true
 
-      - name: Set build target for cache key
-        run: echo "CARGO_BUILD_TARGET=x86_64-unknown-linux-musl" >> $GITHUB_ENV
+      - name: Set build target for cache
+        id: setup_cache_target
+        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
-      - name: Setup cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "payment-dev-x86-64"
-
-
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
+      - name: Load local cache
+        continue-on-error: true
+        run:
+          # Uncomment line if you want need to clear cache
+          # rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target" target
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p ya-exe-unit -p gftp -p golemsp -p ya-provider
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
       - name: Copy binaries
         shell: bash
@@ -88,3 +89,9 @@ jobs:
         with:
           name: Yagna ${{ runner.os }}
           path: build
+
+      - name: Save local cache
+        run: |
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
+
