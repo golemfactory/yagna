@@ -54,16 +54,16 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      # - name: Configure Python
-      #   uses: actions/setup-python@v4
-      #   with:
-      #  python-version: "3.10"
+      - name: Configure Python
+        continue-on-error: true
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-      #- name: Configure Poetry
-      #  uses: Gr1N/setup-poetry@v8
-      #  with:
-      #    poetry-version: 1.6.1
-      #    working-directory: "./goth_tests"
+      - name: Install poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          export PATH="$HOME/.local/bin:$PATH"
 
       - name: Install dependencies
         run: |
