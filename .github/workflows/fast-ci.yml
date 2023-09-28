@@ -3,13 +3,7 @@ name: Yagna tests (unit + integration)
 on:
   push:
     branches:
-      - master
-      - payments-dev
-      - release/*
-  pull_request:
-    branches:
-      - master
-      - release/*
+      - '**/fast-unit-tests'
 
 env:
   rust_stable: 1.71.1
