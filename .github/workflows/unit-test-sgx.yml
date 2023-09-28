@@ -12,7 +12,10 @@ on:
       - master
       - release/*
       - '**/all-tests'
-
+  pull_request:
+    branches:
+      - master
+      - release/*
 
 env:
   rust_stable: 1.71.1

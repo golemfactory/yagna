@@ -13,6 +13,10 @@ on:
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
+  pull_request:
+    branches:
+      - master
+      - release/*
 
 jobs:
   test_check:
