@@ -17,7 +17,7 @@ jobs:
       - name: Merge master to master_clone
         run: |
             git fetch --unshallow
-            git checkout master_clone
+            git checkout master-fast
             git pull
-            git merge master -m "Auto-merge master to master_clone"
+            git merge master -m "Auto-merge master to master-fast"
             git push
