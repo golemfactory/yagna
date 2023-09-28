@@ -10,7 +10,7 @@ jobs:
       - name: Checkout with admin privileges
         uses: actions/checkout@v4
         with:
-        - ssh-key: ${{secrets.ACTIONS_SSH_SECRET}}
+          ssh-key: ${{secrets.ACTIONS_SSH_SECRET}}
 
       - name: Set Git config
         run: |
