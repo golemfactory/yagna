@@ -62,9 +62,8 @@ jobs:
 
       - name: Install poetry
         run: |
-          rm -rf $HOME/.poetry
           curl -sSL https://install.python-poetry.org | python3 -
-          ln -sf $HOME/.poetry/bin/poetry /usr/bin/poetry
+          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
