@@ -2,7 +2,7 @@
 name = "ya-file-logging"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0"

@@ -1,14 +1,18 @@
 name: Market Test Suite
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
       - release/*
-  pull_request:
-    branches:
-      - master
-      - release/*
+      - '**/all-tests'
+
 
 env:
   rust_stable: 1.71.1
