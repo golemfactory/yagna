@@ -17,7 +17,7 @@ jobs:
             git config --local user.email "actions@github.com"
             git config --local user.name "Github Actions"
 
-      - name: Merge master to master_clone
+      - name: Merge master to master-fast
         run: |
             git fetch --unshallow
             git checkout master-fast
