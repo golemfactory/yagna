@@ -1,0 +1,23 @@
+name: PRs to master
+on:
+  push:
+    branches:
+      - master
+jobs:
+  clone-master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Git config
+        run: |
+            git config --local user.email "actions@github.com"
+            git config --local user.name "Github Actions"
+
+      - name: Merge master to master_clone
+        run: |
+            git fetch --unshallow
+            git checkout master_clone
+            git pull
+            git merge master -m "Auto-merge master to master_clone"
+            git push
