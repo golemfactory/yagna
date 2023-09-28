@@ -7,6 +7,7 @@ use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -246,6 +247,14 @@ impl VpnWebSocket {
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        // packet tracing is also done when the packet data is no longer available,
+        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+        // without the feature packet-trace-enable.
+        #[cfg(feature = "packet-trace-enable")]
+        let data_trace = data.clone();
+
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::1", { &data_trace });
+
         let vpn = self.vpn.clone();
         vpn.send(Packet {
             data,
@@ -259,6 +268,8 @@ impl VpnWebSocket {
             }
         })
         .wait(ctx);
+
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::2", { &data_trace });
     }
 }
 
@@ -275,7 +286,10 @@ impl Actor for VpnWebSocket {
             }
         });
 
-        ctx.add_stream(self.vpn_rx.take().unwrap());
+        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
+            ya_packet_trace::packet_trace!("VpnWebSocket::Rx", { &packet });
+            packet
+        }));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -334,18 +348,18 @@ impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         match self {
             Self::Vpn(err) => match err {
-                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
+                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(err)),
                 VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
                 VpnError::Forbidden => HttpResponse::Forbidden().finish(),
                 VpnError::Cancelled => {
-                    HttpResponse::InternalServerError().json(ErrorMessage::new(&err))
+                    HttpResponse::InternalServerError().json(ErrorMessage::new(err))
                 }
-                _ => HttpResponse::BadRequest().json(ErrorMessage::new(&err)),
+                _ => HttpResponse::BadRequest().json(ErrorMessage::new(err)),
             },
             Self::ChannelError(_) | Self::WebError(_) => {
-                HttpResponse::BadRequest().json(ErrorMessage::new(&self))
+                HttpResponse::BadRequest().json(ErrorMessage::new(self))
             }
         }
     }

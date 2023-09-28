@@ -106,6 +106,8 @@ enum Command {
     },
     /// Print an offer template in JSON format
     OfferTemplate,
+    /// Run runtime's test command
+    Test,
 }
 
 #[derive(structopt::StructOpt, Debug)]
@@ -173,7 +175,7 @@ async fn send_script(
 
     let msg = activity::Exec {
         activity_id: activity_id.unwrap_or_default(),
-        batch_id: hex::encode(&rand::random::<[u8; 16]>()),
+        batch_id: hex::encode(rand::random::<[u8; 16]>()),
         exe_script,
         timeout: None,
     };
@@ -185,8 +187,21 @@ async fn send_script(
     }
 }
 
+#[cfg(feature = "packet-trace-enable")]
+fn init_packet_trace() -> anyhow::Result<()> {
+    use ya_packet_trace::{set_write_target, WriteTarget};
+
+    let write = std::fs::File::create("./exe-unit.trace")?;
+    set_write_target(WriteTarget::Write(Box::new(write)));
+
+    Ok(())
+}
+
 async fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+
+    #[cfg(feature = "packet-trace-enable")]
+    init_packet_trace()?;
 
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
@@ -232,6 +247,16 @@ async fn run() -> anyhow::Result<()> {
             let args = cli.runtime_arg.clone();
             let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary, args)?;
             println!("{}", serde_json::to_string(&offer_template)?);
+            return Ok(());
+        }
+        Command::Test => {
+            let args = cli.runtime_arg.clone();
+            let output = ExeUnit::<RuntimeProcess>::test(cli.binary, args)?;
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                bail!("Test failed");
+            }
             return Ok(());
         }
     };

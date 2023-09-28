@@ -12,11 +12,6 @@ use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
-#[structopt(
-    rename_all = "kebab-case",
-    help = "Domain Whitelist allows to accept Demands with Computation Payload Manifests 
-which declare usage of Outbound Network but arrive with no signature."
-)]
 pub enum WhitelistConfig {
     /// List domain whitelist patterns
     List,

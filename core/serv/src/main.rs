@@ -1,3 +1,5 @@
+#![allow(clippy::obfuscated_if_else)]
+
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
@@ -18,6 +20,7 @@ use structopt::{clap, StructOpt};
 use url::Url;
 use ya_activity::service::Activity as ActivityService;
 use ya_file_logging::start_logger;
+use ya_gsb_api::GsbApiService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
@@ -29,7 +32,7 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, Identity},
+    middleware::{auth, cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -48,6 +51,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -258,6 +262,8 @@ enum Services {
     Payment(PaymentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
+    #[enable(gsb, rest)]
+    GsbApi(GsbApiService),
 }
 
 #[cfg(not(any(
@@ -293,6 +299,7 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     Ok(drivers)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     #[structopt(flatten)]
@@ -442,6 +449,9 @@ struct ServiceCommandOpts {
     /// If set to empty string, then logging to files is disabled.
     #[structopt(long, env = "YAGNA_LOG_DIR")]
     log_dir: Option<PathBuf>,
+
+    #[structopt(flatten)]
+    cors: CorsConfig,
 }
 
 #[cfg(unix)]
@@ -484,6 +494,7 @@ impl ServiceCommand {
                 max_rest_timeout,
                 log_dir,
                 debug,
+                cors,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
@@ -552,6 +563,7 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
+                let cors = AppKeyCors::new(cors).await?;
 
                 tokio::task::spawn_local(async move {
                     ya_net::hybrid::send_bcast_new_neighbour().await
@@ -560,7 +572,8 @@ impl ServiceCommand {
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
+                        .wrap(auth::Auth::new(cors.cache()))
+                        .wrap(cors.cors())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
@@ -570,21 +583,27 @@ impl ServiceCommand {
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?
+                .run();
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
-                gsb::bind(model::BUS_ID, move |_request: model::ShutdownRequest| {
-                    log::warn!("ShutdownRequest not supported after migrating to new actix.");
-                    // actix_rt::spawn(async move {
-                    //     actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
-                    //     actix_rt::System::current().stop()
-                    // });
-
-                    async move { Ok(()) }
-                });
+                {
+                    let server_handle = server.handle();
+                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
+                        log::info!(
+                            "ShutdownRequest {}",
+                            request.graceful.then_some("graceful").unwrap_or("")
+                        );
+                        let server_handle = server_handle.clone();
+                        async move {
+                            server_handle.stop(request.graceful).await;
+                            Ok(())
+                        }
+                    });
+                }
 
                 tokio::spawn(async {
                     loop {
@@ -596,7 +615,7 @@ impl ServiceCommand {
                     }
                 });
 
-                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
+                future::try_join(server, sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
@@ -615,7 +634,7 @@ impl ServiceCommand {
                         graceful: opts.gracefully,
                     })
                     .await?;
-                CommandOutput::object(&result)
+                CommandOutput::object(result)
             }
         }
     }
@@ -691,5 +710,12 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
-    args.run_command().await
+    match args.run_command().await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            //this way runtime/command error is at least possibly visible in yagna logs
+            log::error!("Exiting..., error details: {:?}", err);
+            Err(err)
+        }
+    }
 }

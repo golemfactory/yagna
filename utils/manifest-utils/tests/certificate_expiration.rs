@@ -1,6 +1,7 @@
 use utils::*;
+use ya_manifest_utils::keystore::x509_keystore::X509Keystore;
 
-use ya_manifest_utils::Keystore;
+use base64::{engine::general_purpose, Engine as _};
 
 #[test]
 fn accept_not_expired_certificate() {
@@ -22,7 +23,7 @@ fn accept_not_expired_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
@@ -33,8 +34,8 @@ fn accept_not_expired_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )
@@ -61,7 +62,7 @@ fn not_accept_expired_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
@@ -72,8 +73,8 @@ fn not_accept_expired_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )
@@ -100,7 +101,7 @@ fn not_accept_not_ready_certificate() {
         &test_cert_dir.path().join("self_signed.pem"),
     );
 
-    let sut = Keystore::load(&test_cert_dir).unwrap();
+    let sut = X509Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
@@ -111,8 +112,8 @@ fn not_accept_not_ready_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )
@@ -149,7 +150,7 @@ mod utils {
     }
 
     pub fn write_cert_to_file(cert: &X509Ref, file_path: &Path) {
-        let mut file = File::create(&file_path).unwrap();
+        let mut file = File::create(file_path).unwrap();
         file.write_all(&cert.to_pem().unwrap()).unwrap();
     }
 

@@ -18,29 +18,30 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
-from goth.runner.probe import RequestorProbe
+from goth.runner.probe import Probe, RequestorProbe
 
 from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
-logger = logging.getLogger("goth.test.e2e_outbound")
+logger = logging.getLogger("goth.test.rule_partner_outbound")
 
 
 @pytest.mark.asyncio
-async def test_e2e_outbound(
+async def test_e2e_rule_partner_outbound_unrestricted(
     common_assets: Path,
     default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test successful flow requesting a outbound curl task with goth REST API client."""
+    """Test successful flow requesting a task using outbound network feature. Partner rule negotiation scenario."""
 
     # Test external api request just one Requestor and one Provider
     nodes = [
-        {"name": "requestor", "type": "Requestor"},
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
+        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
+        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
     ]
+
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(default_config, config_overrides)
@@ -55,18 +56,15 @@ async def test_e2e_outbound(
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
-        manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
-        signature = open(f"{runner.web_root_path}/outbound_signature.sha256.base64").read()
-        certificate = open(f"{runner.web_root_path}/outbound_certificate.cert").read()
+        manifest = open(f"{runner.web_root_path}/outbound_manifest_unrestricted.json").read()
+        node_descriptor = json.loads(open(f"{runner.web_root_path}/test_e2e_rule_partner_outbound/node-descriptor-unrestricted.signed.json").read())
 
         # Market
         demand = (
             DemandBuilder(requestor)
             .props_from_template(task_package = None)
             .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
-            .property("golem.srv.comp.payload.sig", signature)
-            .property("golem.srv.comp.payload.sig.algorithm", "sha256")
-            .property("golem.srv.comp.payload.cert", base64.b64encode(certificate.encode()).decode())
+            .property("golem.!exp.gap-31.v0.node.descriptor", node_descriptor)
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )

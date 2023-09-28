@@ -222,6 +222,8 @@ impl ComInfo {
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -238,21 +240,19 @@ mod test {
             offer: OfferTemplate::default(),
         };
 
-        let offer = serde_json::to_string_pretty(&offer.into_json()).unwrap();
+        let offer = serde_json::to_value(offer.into_json()).unwrap();
 
-        let expected_offer = r#"
-{
-  "golem.com": null,
-  "golem.inf.mem.gib": 5.0,
-  "golem.inf.storage.gib": 50.0,
-  "golem.node.id.name": "dany",
-  "golem.node.net.is-public": false,
-  "golem.runtime.wasm.wasi.version@v": "0.9.0",
-  "golem.srv.caps.multi-activity": false,
-  "golem.srv.caps.payload-manifest": true
-}
-"#;
+        let expected_offer = json!({
+            "golem.com": null,
+            "golem.inf.mem.gib": 5.0,
+            "golem.inf.storage.gib": 50.0,
+            "golem.node.id.name": "dany",
+            "golem.node.net.is-public": false,
+            "golem.runtime.wasm.wasi.version@v": "0.9.0",
+            "golem.srv.caps.multi-activity": false,
+            "golem.srv.caps.payload-manifest": true
+        });
 
-        assert_eq!(expected_offer.trim(), offer)
+        assert_eq!(expected_offer, offer)
     }
 }

@@ -3,30 +3,26 @@ pub mod ident;
 pub mod resolver;
 
 pub use crate::middleware::auth::ident::Identity;
-use crate::middleware::auth::resolver::AppKeyResolver;
+pub use crate::middleware::auth::resolver::AppKeyCache;
+
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::{Error, ErrorUnauthorized, ParseError};
-use actix_web::HttpMessage;
+use actix_web::{web, HttpMessage};
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
-use futures::lock::Mutex;
+use serde::Deserialize;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::task::{Context, Poll};
-use ya_service_api_cache::AutoResolveCache;
-
-pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 pub struct Auth {
-    cache: Arc<Mutex<Cache>>,
+    pub(crate) cache: AppKeyCache,
 }
 
-impl Default for Auth {
-    fn default() -> Self {
-        let cache = Arc::new(Mutex::new(Cache::default()));
+impl Auth {
+    pub fn new(cache: AppKeyCache) -> Auth {
         Auth { cache }
     }
 }
@@ -53,7 +49,7 @@ where
 
 pub struct AuthMiddleware<S> {
     service: Rc<RefCell<S>>,
-    cache: Arc<Mutex<Cache>>,
+    cache: AppKeyCache,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
@@ -70,9 +66,24 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct QueryAuth {
+            auth_token: String,
+        }
+
         let header = parse_auth::<Bearer, _>(&req)
             .ok()
-            .map(|b| b.token().to_string());
+            .map(|b| b.token().to_string())
+            .or_else(|| {
+                if Some("websocket".as_bytes()) == req.headers().get("upgrade").map(AsRef::as_ref) {
+                    web::Query::<QueryAuth>::from_query(req.query_string())
+                        .ok()
+                        .map(|q| q.into_inner().auth_token)
+                } else {
+                    None
+                }
+            });
 
         let cache = self.cache.clone();
         let service = self.service.clone();
@@ -103,30 +114,21 @@ where
                 }
             };
             match header {
-                Some(key) => {
-                    let cached = cache.lock().await.get(&key);
-                    let resolved = match cached {
-                        Some(opt) => opt,
-                        None => cache.lock().await.resolve(&key).await,
-                    };
-
-                    match resolved {
-                        Some(app_key) => {
-                            req.extensions_mut().insert(Identity::from(app_key));
-                            let fut = { service.borrow_mut().call(req) };
-                            Ok(fut.await?)
-                        }
-                        None => {
-                            log::debug!(
-                                "{} {} Invalid application key: {}",
-                                req.method(),
-                                req.path(),
-                                key
-                            );
-                            Err(ErrorUnauthorized("Invalid application key"))
-                        }
+                Some(key) => match cache.get_appkey(&key) {
+                    Some(app_key) => {
+                        req.extensions_mut().insert(Identity::from(app_key));
+                        let fut = { service.borrow_mut().call(req) };
+                        Ok(fut.await?)
                     }
-                }
+                    None => {
+                        log::debug!(
+                            "{} {} Invalid application key: {key}",
+                            req.method(),
+                            req.path(),
+                        );
+                        Err(ErrorUnauthorized("Invalid application key"))
+                    }
+                },
                 None => {
                     log::debug!("Missing application key");
                     Err(ErrorUnauthorized("Missing application key"))
@@ -136,7 +138,7 @@ where
     }
 }
 
-fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
+pub(crate) fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
     let header = msg
         .headers()
         .get(actix_web::http::header::AUTHORIZATION)

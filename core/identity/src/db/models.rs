@@ -29,6 +29,7 @@ pub struct AppKey {
     pub key: String,
     pub identity_id: NodeId,
     pub created_date: NaiveDateTime,
+    pub allow_origins: Option<String>,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -36,4 +37,20 @@ pub struct AppKey {
 pub struct Role {
     pub id: i32,
     pub name: String,
+}
+
+impl AppKey {
+    pub fn to_core_model(self, role: Role) -> ya_core_model::appkey::AppKey {
+        ya_core_model::appkey::AppKey {
+            name: self.name,
+            key: self.key,
+            role: role.name,
+            identity: self.identity_id,
+            created_date: self.created_date,
+            allow_origins: self
+                .allow_origins
+                .map(|allowed| serde_json::from_str(&allowed).unwrap_or(vec![]))
+                .unwrap_or(vec![]),
+        }
+    }
 }

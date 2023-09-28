@@ -1,6 +1,6 @@
 [package]
 name = "golemsp"
-description = "User friedly CLI for running Golem Provider"
+description = "User friendly CLI for running Golem Provider"
 version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 ya-client = { version = "0.7", features = ['cli'] }
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.8", features=["payment", "version"] }
+ya-core-model = { version = "^0.9", features=["payment", "version"] }
 ya-provider = "0.3"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.2", features = ["lock"] }
@@ -27,7 +27,7 @@ futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
 names = "0.10.0"
-prettytable-rs = "0.8.0"
+prettytable-rs = "0.10.0"
 promptly = "0.3.0"
 rustyline="6.3.0"
 serde = { version = "1.0", features = ["derive"] }

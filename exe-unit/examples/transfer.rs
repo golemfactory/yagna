@@ -371,8 +371,8 @@ async fn main() -> anyhow::Result<()> {
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(&addr, "container:/input", "container:/extract", args).await?;
     log::warn!("Transfer complete");
-    verify_hash(&hash, &work_dir.join("vol-3"), "rnd-1");
-    verify_hash(&hash, &work_dir.join("vol-3"), "rnd-4");
+    verify_hash(&hash, work_dir.join("vol-3"), "rnd-1");
+    verify_hash(&hash, work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
     transfer(

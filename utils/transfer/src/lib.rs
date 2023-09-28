@@ -4,6 +4,7 @@ mod file;
 mod gftp;
 mod http;
 mod location;
+mod progress;
 mod retry;
 mod traverse;
 
@@ -29,6 +30,7 @@ pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
+pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_progress_reporting};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
@@ -349,7 +351,8 @@ impl TransferState {
     }
 
     pub fn delay(&self, err: &Error) -> Option<Duration> {
-        (*self.inner.borrow_mut())
+        self.inner
+            .borrow_mut()
             .retry
             .as_mut()
             .and_then(|r| r.delay(err))
@@ -389,10 +392,10 @@ where
     pub fn try_new(stream: S, alg: &str, hash: Vec<u8>) -> Result<Self, Error> {
         let hasher: Box<dyn DynDigest> = match alg {
             "sha3" => match hash.len() * 8 {
-                224 => Box::new(Sha3_224::default()),
-                256 => Box::new(Sha3_256::default()),
-                384 => Box::new(Sha3_384::default()),
-                512 => Box::new(Sha3_512::default()),
+                224 => Box::<Sha3_224>::default(),
+                256 => Box::<Sha3_256>::default(),
+                384 => Box::<Sha3_384>::default(),
+                512 => Box::<Sha3_512>::default(),
                 len => {
                     return Err(Error::UnsupportedDigestError(format!(
                         "Unsupported digest {} of length {}: {}",
@@ -449,7 +452,7 @@ where
                     } else {
                         return Poll::Ready(Some(Err(Error::InvalidHashError {
                             expected: hex::encode(&self.hash),
-                            hash: hex::encode(&result),
+                            hash: hex::encode(result),
                         })));
                     }
                 }

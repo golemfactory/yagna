@@ -31,6 +31,10 @@ use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
 use crate::tasks::{AgreementBroken, AgreementClosed};
 
+const EXE_UNIT_DIR: &str = "exe-unit";
+const WORK_DIR: &str = "work";
+const CACHE_DIR: &str = "cache";
+
 // =========================================== //
 // Public exposed messages
 // =========================================== //
@@ -161,8 +165,8 @@ impl TaskRunner {
         data_dir: P,
     ) -> Result<TaskRunner> {
         let data_dir = data_dir.as_ref();
-        let tasks_dir = data_dir.join("exe-unit").join("work");
-        let cache_dir = data_dir.join("exe-unit").join("cache");
+        let tasks_dir = exe_unit_work_dir(data_dir);
+        let cache_dir = exe_unit_cache_dir(data_dir);
 
         log::debug!("TaskRunner config: {:?}", config);
 
@@ -261,7 +265,6 @@ impl TaskRunner {
     // =========================================== //
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
         let agreement = match self.active_agreements.get(&msg.agreement_id) {
             None => bail!("Can't create activity for not my agreement [{:?}].", msg),
@@ -383,7 +386,7 @@ impl TaskRunner {
         log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
 
         // Agreement waits for first create activity event.
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }
@@ -488,7 +491,7 @@ impl TaskRunner {
             .get(agreement_id)
             .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
-        let agreement_file = File::create(&agreement_path).map_err(|error| {
+        let agreement_file = File::create(agreement_path).map_err(|error| {
             anyhow!(
                 "Can't create agreement file [{}]. Error: {}",
                 &agreement_path.display(),
@@ -513,6 +516,16 @@ impl TaskRunner {
             .map(|task| task.activity_id.to_string())
             .collect()
     }
+}
+
+pub fn exe_unit_work_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(WORK_DIR)
+}
+
+pub fn exe_unit_cache_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(CACHE_DIR)
 }
 
 fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
@@ -631,7 +644,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                     _ => anyhow::bail!("offer template: invalid usage vector format"),
                 }
 
-                log::info!("offer-template: {} = {:?}", preset.name, template);
+                log::debug!("offer-template: {} = {:?}", preset.name, template);
                 result.insert(preset.name, template);
             }
             Ok(result)

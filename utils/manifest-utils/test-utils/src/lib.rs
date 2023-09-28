@@ -1,19 +1,14 @@
-use std::fs::{self, File};
-use std::str;
-use std::sync::Once;
-use std::{collections::HashSet, path::PathBuf};
-
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
+use std::fs::{self, File};
+use std::str;
+use std::sync::Once;
+use std::{collections::HashSet, path::PathBuf};
 use tar::Archive;
-
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::{
-    util::{self, CertBasicData, CertBasicDataVisitor},
-    KeystoreLoadResult, KeystoreRemoveResult,
-};
+use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore, RemoveParams, RemoveResponse};
+use ya_manifest_utils::CompositeKeystore;
 
 static INIT: Once = Once::new();
 
@@ -22,9 +17,8 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
-    certs_permissions: &Vec<CertPermissions>,
-) -> KeystoreLoadResult {
-    let cert_paths: Vec<PathBuf> = certfile_names
+) -> AddResponse {
+    let certs: Vec<PathBuf> = certfile_names
         .iter()
         .map(|certfile_name| {
             let mut cert_path = resource_cert_dir.clone();
@@ -32,56 +26,20 @@ pub fn load_certificates_from_dir(
             cert_path
         })
         .collect();
-    let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    let mut permissions = keystore_manager.permissions_manager();
+    let mut keystore = CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
 
-    let certs = keystore_manager
-        .load_certs(&cert_paths)
-        .expect("Can load certificates");
+    let add_params = AddParams { certs };
 
-    permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
-    permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
-    permissions
-        .save(test_cert_dir)
-        .expect("Should be able to save permissions file.");
-
-    certs
+    keystore.add(&add_params).expect("Can load certificates")
 }
 
-pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
-    let keystore_manager =
-        util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    keystore_manager
-        .remove_certs(&slice_to_set(cert_ids))
+pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> RemoveResponse {
+    let mut keystore = CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
+    keystore
+        .remove(&RemoveParams {
+            ids: slice_to_set(cert_ids),
+        })
         .expect("Can load certificates")
-}
-
-#[derive(Default)]
-pub struct TestCertDataVisitor {
-    expected: HashSet<String>,
-    actual: HashSet<String>,
-}
-
-impl TestCertDataVisitor {
-    #[allow(dead_code)]
-    pub fn new(expected: &[&str]) -> Self {
-        Self {
-            expected: expected.iter().map(|s| s.to_string()).collect(),
-            ..Default::default()
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn test(&self) {
-        assert_eq!(self.expected, self.actual)
-    }
-}
-
-impl CertBasicDataVisitor for TestCertDataVisitor {
-    fn accept(&mut self, cert_data: CertBasicData) {
-        self.actual.insert(cert_data.id);
-    }
 }
 
 pub struct TestResources {
@@ -97,7 +55,7 @@ impl TestResources {
                 fs::remove_dir_all(&resource_cert_dir).expect("Can delete test cert resources dir");
             }
             fs::create_dir_all(&resource_cert_dir).expect("Can create temp dir");
-            self.unpack_cert_resources(&resource_cert_dir);
+            Self::unpack_cert_resources(&resource_cert_dir);
         });
         let store_cert_dir = self.store_cert_dir_path();
         if store_cert_dir.exists() {
@@ -136,17 +94,17 @@ impl TestResources {
         base64::encode(signature)
     }
 
-    fn unpack_cert_resources(&self, cert_resources_dir: &PathBuf) {
-        let mut cert_archive = self.test_resources_dir_path();
+    pub fn unpack_cert_resources(cert_resources_dir: &PathBuf) {
+        let mut cert_archive = Self::test_resources_dir_path();
         cert_archive.push("certificates.tar");
         let cert_archive = File::open(cert_archive).expect("Can open cert archive file");
         let mut cert_archive = Archive::new(cert_archive);
         cert_archive
             .unpack(cert_resources_dir)
-            .expect("Can unack cert archive");
+            .expect("Can unpack cert archive");
     }
 
-    pub fn test_resources_dir_path(&self) -> PathBuf {
+    pub fn test_resources_dir_path() -> PathBuf {
         let mut test_resources = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_resources.push("resources/test");
         test_resources
