@@ -15,7 +15,7 @@ on:
   pull_request:
     branches:
       - master
-      - master_clone
+      - master-fast
       - release/*
       - p2p-stability
 
