@@ -41,6 +41,7 @@ jobs:
     runs-on: [goth2, ubuntu-22.04]
     needs: test_check
     strategy:
+      fail-fast: false
       matrix:
         group: [1, 2]
     defaults:
@@ -68,21 +69,11 @@ jobs:
         run: |
           poetry install --no-root
 
-      - name: Disconnect Docker containers from default network
-        continue-on-error: true
-        # related to this issue: https://github.com/moby/moby/issues/23302
+      - name: Cleanup Docker
+        if: always()
         run: |
-          docker network inspect docker_default
-          sudo apt-get install -y jq
-          docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
-
-      - name: Remove Docker containers
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
-
-      - name: Restart Docker daemon
-        # related to this issue: https://github.com/moby/moby/issues/23302
-        run: sudo systemctl restart docker
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
@@ -121,6 +112,12 @@ jobs:
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
         run: poetry env remove --all
+
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
   integration-test:
     name: Integration Tests (hybrid-net)
