@@ -3,7 +3,7 @@ name: Build binaries (x86-64)
 on:
   workflow_dispatch:
     inputs:
-      profile:
+      rust_flags:
         description: 'Rust flags'
         required: true
         default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
@@ -11,6 +11,11 @@ on:
         description: 'Rust version'
         required: true
         default: '1.71.1'
+      strip_binaries:
+        description: 'Strip binaries'
+        required: true
+        default: 'true'
+        possible_values: ['true', 'false']
   push:
     branches:
       - master
@@ -18,10 +23,6 @@ on:
       - p2p-stability
       - '**/all-tests'
       - '**/integration-tests'
-    inputs:
-      profile:
-        default: 'dev'
-      rust_version:
   pull_request:
     branches:
       - master
@@ -32,7 +33,7 @@ jobs:
   build:
     name: Build binaries (x86-64)
     env:
-      RUSTFLAGS: ${{ github.event.inputs.profile || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
+      RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
     runs-on: [ yagna-builder, ubuntu-22.04 ]
     steps:
       - name: Checkout
@@ -72,10 +73,14 @@ jobs:
         run: |
           cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
-      - name: Copy and strip target binaries
+      - name: Move target binaries
         run: |
           mkdir build
           mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+
+      - name: Strip binaries
+        if: ${{ github.event.inputs.strip_binaries != 'false' }}
+        run: |
           strip -x build/*
 
       - name: Upload binaries
