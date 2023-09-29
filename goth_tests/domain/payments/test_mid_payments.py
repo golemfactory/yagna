@@ -20,8 +20,8 @@ logger = logging.getLogger("goth.test.mid_payments")
 
 DEBIT_NOTE_INTERVAL_SEC = 2
 PAYMENT_TIMEOUT_SEC = 5
-ITERATION_COUNT = 4
-
+ITERATION_COUNT = 10
+ITERATION_STOP_JOB = 4
 
 def build_demand(
     requestor: RequestorProbe,
@@ -68,6 +68,7 @@ async def test_mid_agreement_payments(
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
     ts = datetime.now(timezone.utc)
     amount = 0.0
+    number_of_payments = 0
 
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
@@ -88,18 +89,20 @@ async def test_mid_agreement_payments(
         await provider.wait_for_exeunit_started()
 
         for i in range(0, ITERATION_COUNT):
-            if i == ITERATION_COUNT - 1:
-                await asyncio.sleep(PAYMENT_TIMEOUT_SEC + 10)
-            else:
-                await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
+            await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
 
             payments = await provider.api.payment.get_payments(after_timestamp=ts)
             for payment in payments:
+                number_of_payments += 1
                 amount += float(payment.amount)
+                print(f"Received payment: amount {payment.amount}."
+                      f" Total amount {amount}. Number of payments {number_of_payments}")
                 ts = payment.timestamp if payment.timestamp > ts else ts
+
             # prevent new debit notes in the last iteration
-            if i == ITERATION_COUNT - 2:
+            if i == ITERATION_STOP_JOB:
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
 
         assert round(stats.amount, 9) == round(amount, 9)
+        assert number_of_payments > 2
