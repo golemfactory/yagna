@@ -79,6 +79,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |db, dr, c, m| async move { dr.verify_signature(db, c, m).await }
         )
         .bind_with_processor(
+            move |db, dr, c, m| async move { dr.status(db, c, m).await }
+        )
+        .bind_with_processor(
             move |db, dr, c, m| async move { dr.shut_down(db, c, m).await }
         );
 

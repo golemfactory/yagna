@@ -14,6 +14,7 @@ use std::str::FromStr;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -400,6 +401,60 @@ impl PaymentDriver for Erc20NextDriver {
         );
 
         Ok(msg.amount <= account_balance - total_allocated_amount)
+    }
+
+    async fn status(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: DriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, GenericError> {
+        use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
+
+        // Map chain-id to network
+        let chain_id_to_net = |id: i64| {
+            self.payment_runtime
+                .setup
+                .chain_setup
+                .get(&id)
+                .unwrap()
+                .network
+                .clone()
+        };
+
+        // check if network matches the filter
+        let network_filter = |net_candidate: &str| {
+            msg.network
+                .as_ref()
+                .map(|net| net == net_candidate)
+                .unwrap_or(true)
+        };
+
+        Ok(self
+            .payment_runtime
+            .get_status()
+            .await
+            .into_iter()
+            .flat_map(|prop| match prop {
+                LibStatusProperty::InvalidChainId { chain_id } => {
+                    Some(DriverStatusProperty::InvalidChainId {
+                        driver: DRIVER_NAME.into(),
+                        chain_id,
+                    })
+                }
+                LibStatusProperty::NoGas {
+                    chain_id,
+                    missing_gas,
+                } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                        needed_gas_est: missing_gas.unwrap_or_default().to_string(),
+                    })
+                }
+            })
+            .collect())
     }
 
     async fn shut_down(

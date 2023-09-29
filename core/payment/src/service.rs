@@ -4,8 +4,9 @@ use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
+use ya_core_model::payment::local::BUS_ID as PAYMENT_BUS_ID;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::typed::{service, ServiceBinder};
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     log::debug!("Binding payment service to service bus");
@@ -22,8 +23,11 @@ mod local {
     use crate::dao::*;
     use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
-    use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
-    use ya_core_model::payment::local::*;
+    use ya_client_model::payment::{Account, DocumentStatus, DriverDetails, DriverStatusProperty};
+    use ya_core_model::{
+        driver::{driver_bus_id, DriverStatus},
+        payment::local::*,
+    };
     use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
@@ -42,6 +46,7 @@ mod local {
             .bind_with_processor(validate_allocation)
             .bind_with_processor(release_allocations)
             .bind_with_processor(get_drivers)
+            .bind_with_processor(payment_driver_status)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -324,6 +329,48 @@ mod local {
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, NoError> {
         Ok(processor.lock().await.get_drivers().await)
+    }
+
+    async fn payment_driver_status(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: PaymentDriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, PaymentDriverStatusError> {
+        let drivers = match &msg.driver {
+            Some(driver) => vec![driver.clone()],
+            None => {
+                // Unwrap is provably safe because NoError can't be instanciated
+                match service(PAYMENT_BUS_ID).call(GetDrivers {}).await {
+                    Ok(drivers) => drivers,
+                    Err(e) => return Err(PaymentDriverStatusError::Internal(e.to_string())),
+                }
+                .unwrap()
+                .into_iter()
+                .map(|(driver_name, _)| driver_name)
+                .collect()
+            }
+        };
+
+        let mut status_props = Vec::new();
+        for driver in drivers {
+            let result = match service(driver_bus_id(driver))
+                .call(DriverStatus {
+                    network: msg.network.clone(),
+                })
+                .await
+            {
+                Ok(result) => result,
+                Err(e) => return Err(PaymentDriverStatusError::NoDriver),
+            };
+
+            match result {
+                Ok(status) => status_props.extend(status),
+                Err(e) => return Err(PaymentDriverStatusError::Internal(e.to_string())),
+            }
+        }
+
+        Ok(status_props)
     }
 
     async fn shut_down(

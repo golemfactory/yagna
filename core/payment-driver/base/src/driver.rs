@@ -6,6 +6,7 @@
 use ethsign::Signature;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 
@@ -131,6 +132,15 @@ pub trait PaymentDriver {
         };
 
         Ok(pub_key.address() == &msg.payment.payer_id.into_array())
+    }
+
+    async fn status(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        _msg: DriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, GenericError> {
+        Ok(Vec::default())
     }
 
     async fn shut_down(

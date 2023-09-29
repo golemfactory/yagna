@@ -144,7 +144,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("")]
-    pub struct NoError {} // This is needed because () doesn't implement Display
+    pub enum NoError {} // This is needed because () doesn't implement Display
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterDriver {
@@ -411,6 +411,27 @@ pub mod local {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
         type Error = NoError;
+    }
+
+    // ********************* STATUS ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum PaymentDriverStatusError {
+        #[error("Requested driver not registered")]
+        NoDriver,
+        #[error("Internal error: {0}")]
+        Internal(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PaymentDriverStatus {
+        pub driver: Option<String>,
+        pub network: Option<String>,
+    }
+
+    impl RpcMessage for PaymentDriverStatus {
+        const ID: &'static str = "PaymentDriverStatus";
+        type Item = Vec<DriverStatusProperty>;
+        type Error = PaymentDriverStatusError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
