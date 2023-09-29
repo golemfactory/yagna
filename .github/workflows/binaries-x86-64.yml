@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Build profile'
+        description: 'Rust flags'
         required: true
-        default: 'debug'
+        default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
       rust_version:
         description: 'Rust version'
         required: true
@@ -20,7 +20,7 @@ on:
       - '**/integration-tests'
     inputs:
       profile:
-        default: 'debug'
+        default: 'dev'
       rust_version:
   pull_request:
     branches:
@@ -32,8 +32,7 @@ jobs:
   build:
     name: Build binaries (x86-64)
     env:
-      # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      RUSTFLAGS: ${{ github.event.inputs.profile || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
       - name: Checkout
@@ -43,7 +42,6 @@ jobs:
         id: variables
         run: |
           echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "build_profile=${{ github.event.inputs.profile || 'debug' }}" >> $GITHUB_OUTPUT
           echo "rust_version=${{ github.event.inputs.rust_version || '1.71.1' }}" >> $GITHUB_OUTPUT
 
       - name: Musl
@@ -63,7 +61,7 @@ jobs:
         run:
           # Uncomment line if you want need to clear cache
           # rm -rf "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target"
-          cp -rp "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target" target
+          cp -rp "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/binaries_x86/target" target
 
       - name: Build binaries
         run: |
@@ -72,7 +70,7 @@ jobs:
       - name: Copy and strip target binaries
         run: |
           mkdir build
-          cp target/x86_64-unknown-linux-musl/${{ steps.variables.outputs.build_profile }}/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+          mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
           strip -x build/*
 
       - name: Upload binaries
@@ -84,5 +82,5 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/binaries_x86/target"
 
