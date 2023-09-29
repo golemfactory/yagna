@@ -35,7 +35,7 @@ jobs:
         run: sudo rm -rf ${{ github.workspace }}/*
 
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Extract branch name
         id: extract_branch
@@ -47,12 +47,10 @@ jobs:
           musl-gcc -v
 
       - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
         with:
-          toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
-          target: x86_64-unknown-linux-musl
-          override: true
+          targets: x86_64-unknown-linux-musl
 
       - name: Set build target for cache
         id: setup_cache_target
@@ -87,7 +85,7 @@ jobs:
           fi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: Yagna ${{ runner.os }}
           path: build
