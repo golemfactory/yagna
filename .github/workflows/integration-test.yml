@@ -80,6 +80,7 @@ jobs:
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
+        if: github.event_name != 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: binaries-x86-64.yml
@@ -87,6 +88,13 @@ jobs:
           workflow_conclusion: success
           name: "Yagna Linux"
           path: /tmp/yagna-build
+
+      - name: Download artifact from given url
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          rm -rf /tmp/yagna-build
+          curl -L ${{ github.event.inputs.artifacts }} -o /tmp/yagna-build.zip
+          unzip /tmp/yagna-build.zip -d /tmp/yagna-build
 
       - name: Run test suite
         env:
