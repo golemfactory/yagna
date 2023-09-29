@@ -7,6 +7,7 @@ use futures::prelude::*;
 use prettytable::{format, row, Table};
 use strum::VariantNames;
 
+use ya_client::model::payment::DriverStatusProperty;
 use ya_core_model::payment::local::{NetworkName, StatusResult};
 use ya_core_model::NodeId;
 
@@ -69,6 +70,8 @@ pub async fn run() -> Result</*exit code*/ i32> {
     let (config, is_running) =
         future::try_join(cmd.ya_provider()?.get_config(), is_yagna_running()).await?;
 
+    let mut driver_ok = true;
+
     let status = {
         let mut table = Table::new();
         let format = format::FormatBuilder::new().padding(1, 1).build();
@@ -118,6 +121,51 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 }
             };
             table.add_row(row!["VM", status]);
+        }
+
+        if is_running {
+            let status_properties = cmd.yagna()?.payment_driver_status(None, None, None).await?;
+
+            table.add_empty_row();
+
+            if status_properties.is_empty() {
+                table.add_row(row!["Driver", Style::new().fg(Colour::Green).paint("Ok")]);
+            } else {
+                driver_ok = false;
+                let msg = if status_properties.len() == 1 {
+                    "1 Issue".to_string()
+                } else {
+                    format!("{} Issues", status_properties.len())
+                };
+
+                table.add_row(row!["Driver", Style::new().fg(Colour::Red).paint(&msg)]);
+                for prop in status_properties {
+                    use DriverStatusProperty::*;
+                    table.add_row(row![
+                        match &prop {
+                            InsufficientGas { network, .. }
+                            | InsufficientToken { network, .. }
+                            | CantSign { network, .. }
+                            | TxStuck { network, .. }
+                            | RpcError { network, .. } => network.clone(),
+                            InvalidChainId { .. } => "N/A".to_string(),
+                        },
+                        match &prop {
+                            InsufficientGas { .. } => "Insufficent Gas".to_string(),
+                            InsufficientToken { .. } => "Insufficient Token".to_string(),
+                            InvalidChainId { chain_id, .. } =>
+                                format!("Invalid Chain-Id {chain_id}"),
+                            CantSign { address, .. } => format!(
+                                "Can't Sign {}..{}",
+                                &address[0..6],
+                                &address[address.len() - 4..]
+                            ),
+                            TxStuck { .. } => "Tx Stuck".to_string(),
+                            RpcError { .. } => "RPC Error".to_string(),
+                        }
+                    ]);
+                }
+            }
         }
 
         table
@@ -227,6 +275,9 @@ pub async fn run() -> Result</*exit code*/ i32> {
     table.printstd();
     if let Some(msg) = kvm_status.problem() {
         println!("\n VM problem: {}", msg);
+    }
+    if !driver_ok {
+        println!("\n Payment Driver issues detected, run yagna payment status for details");
     }
     Ok(0)
 }

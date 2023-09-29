@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
 use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
+use ya_client::model::payment::DriverStatusProperty;
 
 use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
@@ -298,6 +299,29 @@ impl YagnaCommand {
         let payment_platform = payment_driver.platform(network)?;
         self.cmd.args(["--network", &network.to_string()]);
         self.cmd.args(["--driver", payment_platform.driver]);
+
+        self.run().await
+    }
+
+    pub async fn payment_driver_status(
+        mut self,
+        address: Option<&str>,
+        network: Option<&NetworkName>,
+        payment_driver: Option<&PaymentDriver>,
+    ) -> anyhow::Result<Vec<DriverStatusProperty>> {
+        self.cmd.args(["--json", "payment", "driver-status"]);
+        if let Some(address) = address {
+            self.cmd.args(["--account", address]);
+        }
+
+        if let Some(network) = network {
+            self.cmd.args(["--network", &network.to_string()]);
+
+            if let Some(payment_driver) = payment_driver {
+                let payment_platform = payment_driver.platform(network)?;
+                self.cmd.args(["--driver", payment_platform.driver]);
+            }
+        }
 
         self.run().await
     }
