@@ -3,8 +3,8 @@ name: Goth integration tests (hybrid-net)
 on:
   workflow_dispatch:
     inputs:
-      artifacts:
-        description: 'Binaries zip file url'
+      workflow_number:
+        description: 'Id of workflow binaries-x86-64 to get binaries from'
         required: true
   push:
     branches:
@@ -89,12 +89,14 @@ jobs:
           name: "Yagna Linux"
           path: /tmp/yagna-build
 
-      - name: Download artifact from given url
+      - name: Download artifact from given run id
         if: github.event_name == 'workflow_dispatch'
-        run: |
-          rm -rf /tmp/yagna-build
-          curl -L ${{ github.event.inputs.artifacts }} -o /tmp/yagna-build.zip
-          unzip /tmp/yagna-build.zip -d /tmp/yagna-build
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{github.event.inputs.workflow_number}}
+          workflow_conclusion: success
+          name: "Yagna Linux"
+          path: /tmp/yagna-build
 
       - name: Run test suite
         env:
