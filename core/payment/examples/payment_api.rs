@@ -261,9 +261,8 @@ async fn main() -> anyhow::Result<()> {
             erc20::DRIVER_NAME
         }
         Driver::Erc20next => {
-            //start_erc20next_driver(&db, requestor_account).await?;
-            //erc20next::DRIVER_NAME
-            todo!()
+            start_erc20_next_driver(&db, "./".into(), requestor_account).await?;
+            erc20next::DRIVER_NAME
         }
     };
     bus::service(driver_bus_id(driver_name))
