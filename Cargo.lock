@@ -1072,9 +1072,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.30"
+version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defd4e7873dbddba6c7c91e199c7fcb946abc4a6a4ac3195400bcfb01b5de877"
+checksum = "7f2c685bad3eb3d45a01354cedb7d5faa66194d1d58ba6e267a8de788f79db38"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -7691,7 +7691,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=20590d867dff7bb0662b5fc2abc6b6417cc47fe5#20590d867dff7bb0662b5fc2abc6b6417cc47fe5"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e#2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7715,7 +7715,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=20590d867dff7bb0662b5fc2abc6b6417cc47fe5#20590d867dff7bb0662b5fc2abc6b6417cc47fe5"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e#2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
