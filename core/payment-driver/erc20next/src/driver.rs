@@ -129,13 +129,11 @@ impl Erc20NextDriver {
         let chain_id = token_transfer.chain_id;
         let network_name = &self
             .payment_runtime
-            .setup
-            .chain_setup
-            .get(&chain_id)
+            .network_name(chain_id)
             .ok_or(GenericError::new(format!(
                 "Missing configuration for chain_id {chain_id}"
             )))?
-            .network;
+            .to_string();
 
         let networks = self.get_networks();
         let network = networks.get(network_name).ok_or(GenericError::new(format!(
@@ -412,15 +410,7 @@ impl PaymentDriver for Erc20NextDriver {
         use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
-        let chain_id_to_net = |id: i64| {
-            self.payment_runtime
-                .setup
-                .chain_setup
-                .get(&id)
-                .unwrap()
-                .network
-                .clone()
-        };
+        let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
 
         // check if network matches the filter
         let network_filter = |net_candidate: &str| {
