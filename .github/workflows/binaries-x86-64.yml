@@ -62,7 +62,7 @@ jobs:
         run:
           # Uncomment line if you want need to clear cache
           # rm -rf "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target"
-          cp -rp "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target" target
+          rsync -a --ignore-errors "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target" target
 
       - name: Build binaries
         run: |
