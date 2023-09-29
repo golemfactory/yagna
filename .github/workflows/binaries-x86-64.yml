@@ -60,7 +60,6 @@ jobs:
 
       - name: Load local cache
         id: cache_action
-        continue-on-error: true
         env:
           cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
         run:
