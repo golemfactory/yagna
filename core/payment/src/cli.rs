@@ -42,6 +42,8 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(long, help = "Display account balance for the given time period")]
         last: Option<humantime::Duration>,
+        #[structopt(long, help = "Show exact balances instead of rounding")]
+        precise: bool,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -151,7 +153,11 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account, last } => {
+            PaymentCli::Status {
+                account,
+                last,
+                precise,
+            } => {
                 let address = resolve_address(account.address()).await?;
                 let timestamp = last
                     .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
@@ -171,9 +177,30 @@ impl PaymentCli {
                 }
 
                 let gas_info = match status.gas {
-                    Some(details) => format!("{} {}", details.balance, details.currency_short_name),
+                    Some(details) => {
+                        if precise {
+                            format!("{} {}", details.balance, details.currency_short_name)
+                        } else {
+                            format!("{:.4} {}", details.balance, details.currency_short_name)
+                        }
+                    }
                     None => "N/A".to_string(),
                 };
+
+                let token_info = if precise {
+                    format!("{} {}", status.amount, status.token)
+                } else {
+                    format!("{:.4} {}", status.amount, status.token)
+                };
+
+                let driver_status_props = bus::service(pay::BUS_ID)
+                    .call(pay::PaymentDriverStatus {
+                        driver: Some(account.driver()),
+                        network: Some(account.network()),
+                    })
+                    .await??;
+
+                log::info!("{:#?}", driver_status_props);
 
                 Ok(ResponseTable {
                     columns: vec![
@@ -188,7 +215,7 @@ impl PaymentCli {
                     values: vec![
                         serde_json::json! {[
                             format!("driver: {}", status.driver),
-                            format!("{} {}", status.amount, status.token),
+                            token_info,
                             format!("{} {}", status.reserved, status.token),
                             "accepted",
                             format!("{} {}", status.incoming.accepted.total_amount, status.token),
