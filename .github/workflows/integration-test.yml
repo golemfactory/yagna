@@ -38,7 +38,7 @@ jobs:
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth2, ubuntu-22.04]
+    runs-on: [goth2, ubuntu-22.10]
     needs: test_check
     strategy:
       fail-fast: false
@@ -55,15 +55,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        uses: actions/setup-python@v2
+        continue-on-error: true
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v8
-        with:
-          poetry-version: 1.6.1
-          working-directory: "./goth_tests"
+      - name: Install poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
