@@ -47,8 +47,9 @@ jobs:
           musl-gcc -v
 
       - name: Install Rust ${{ env.rust_stable }}
-        uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-musl
 
