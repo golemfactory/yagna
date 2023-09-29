@@ -6,6 +6,7 @@ use flexi_logger::{
     style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, Logger, Naming, Record,
 };
+use std::env;
 use std::path::Path;
 
 pub use flexi_logger::LoggerHandle;
@@ -61,14 +62,85 @@ fn log_format_color(
     )
 }
 
-fn set_logging_to_files(logger: Logger, log_dir: &Path) -> Logger {
+#[derive(Debug)]
+struct FileLogConfig<'a> {
+    dir: &'a Path,
+    keep_compressed: usize,
+    keep_uncompressed: usize,
+    rotate_age: Age,
+    rotate_size: Option<u64>,
+}
+
+impl<'a> FileLogConfig<'a> {
+    fn with_env(dir: &'a Path, messages: &mut Vec<(log::Level, String)>) -> Self {
+        let mut config = Self::new(dir);
+
+        if let Ok(uncompressed) = env::var("LOG_FILES_UNCOMPRESSED") {
+            match uncompressed.parse::<usize>() {
+                Ok(n) => config.keep_uncompressed = n,
+                Err(e) => messages.push((log::Level::Error, format!(
+                    "LOG_FILES_UNCOMPRESSED ({uncompressed}) doesn't contain a valid nonnegative integer: {e}"
+                ))),
+            }
+        }
+        if let Ok(compressed) = env::var("LOG_FILES_COMPRESSED") {
+            match compressed.parse::<usize>() {
+                Ok(n) => config.keep_compressed = n,
+                Err(e) => messages.push((log::Level::Error, format!(
+                    "LOG_FILES_COMPRESSED ({compressed}) doesn't contain a valid nonnegative integer: {e}"
+                ))),
+            }
+        }
+        if let Ok(age) = env::var("LOG_ROTATE_AGE") {
+            match age.to_ascii_lowercase().as_str() {
+                "day" => config.rotate_age = Age::Day,
+                "hour" => config.rotate_age = Age::Hour,
+                _ => messages.push((
+                    log::Level::Error,
+                    format!("LOG_ROTATE_AGE ({age}) is neither DAY nor HOUR nor unset"),
+                )),
+            }
+        }
+        if let Ok(size) = env::var("LOG_ROTATE_SIZE") {
+            match size.parse::<u64>() {
+                Ok(n) => config.rotate_size = Some(n),
+                Err(e) => messages.push((
+                    log::Level::Error,
+                    format!(
+                        "LOG_ROTATE_SIZE ({size}) doesn't contain a valid positive integer: {e}"
+                    ),
+                )),
+            }
+        }
+
+        config
+    }
+
+    fn new(dir: &'a Path) -> Self {
+        FileLogConfig {
+            dir,
+            keep_compressed: 10,
+            keep_uncompressed: 1,
+            rotate_age: Age::Day,
+            rotate_size: None,
+        }
+    }
+}
+
+fn set_logging_to_files(logger: Logger, config: FileLogConfig) -> Logger {
+    let rotate_criterion = if let Some(rotate_size) = config.rotate_size {
+        Criterion::AgeOrSize(config.rotate_age, rotate_size)
+    } else {
+        Criterion::Age(config.rotate_age)
+    };
+
     logger
         .log_to_file()
-        .directory(log_dir)
+        .directory(config.dir)
         .rotate(
-            Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
+            rotate_criterion,
             Naming::Timestamps,
-            Cleanup::KeepLogAndCompressedFiles(1, 10),
+            Cleanup::KeepLogAndCompressedFiles(config.keep_uncompressed, config.keep_compressed),
         )
         .print_message()
         .duplicate_to_stderr(Duplicate::All)
@@ -95,12 +167,26 @@ pub fn start_logger(
 
     let log_spec = log_spec_builder.finalize();
     let mut logger = Logger::with(log_spec).format(log_format);
+
+    let mut messages = Vec::new();
     if let Some(log_dir) = log_dir {
-        logger = set_logging_to_files(logger, log_dir);
+        let config = FileLogConfig::with_env(log_dir, &mut messages);
+        messages.push((
+            log::Level::Info,
+            format!("Logging configuration: {config:#?}"),
+        ));
+
+        logger = set_logging_to_files(logger, config);
     }
     logger = logger
         .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
         .set_palette("9;11;2;7;8".to_string());
 
-    Ok(logger.start()?)
+    let handle = logger.start()?;
+
+    for (level, text) in messages {
+        log::log!(level, "{text}");
+    }
+
+    Ok(handle)
 }
