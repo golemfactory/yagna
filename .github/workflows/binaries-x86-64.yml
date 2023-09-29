@@ -43,8 +43,8 @@ jobs:
         id: variables
         run: |
           echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "build_profile=${{ github.event.inputs.profile || debug }}" >> $GITHUB_OUTPUT
-          echo "rust_version=${{ github.event.inputs.rust_version || 1.71.1 }}" >> $GITHUB_OUTPUT
+          echo "build_profile=${{ github.event.inputs.profile || 'debug' }}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.71.1' }}" >> $GITHUB_OUTPUT
 
       - name: Musl
         run: |
