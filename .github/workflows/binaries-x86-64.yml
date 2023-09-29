@@ -62,7 +62,7 @@ jobs:
         id: cache_action
         env:
           cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
-        run:
+        run: |
           # Uncomment line if you want need to clear cache
           # rm -rf "$cache_dir"
           cp -rp "$cache_dir" target || echo "No local cache found"
