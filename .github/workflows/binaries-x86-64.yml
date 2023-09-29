@@ -18,6 +18,10 @@ on:
       - p2p-stability
       - '**/all-tests'
       - '**/integration-tests'
+    inputs:
+      profile:
+        default: 'debug'
+      rust_version:
   pull_request:
     branches:
       - master
@@ -32,59 +36,44 @@ jobs:
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
     runs-on: [yagna-builder, ubuntu-22.04]
     steps:
-      - name: Clean runner data
-        run: sudo rm -rf ${{ github.workspace }}/*
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract branch name
-        id: extract_branch
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      - name: Set input variables
+        id: variables
+        run: |
+          echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          echo "build_profile=${{ github.event.inputs.profile || debug }}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || 1.71.1 }}" >> $GITHUB_OUTPUT
 
       - name: Musl
         run: |
           sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
-      - name: Install Rust ${{ github.event.inputs.rust_version }}
+      - name: Install Rust ${{ steps.variables.outputs.rust_version }}
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ github.event.inputs.rust_version }}
+          toolchain: ${{ steps.variables.outputs.rust_version }}
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-musl
-
-      - name: Set build target for cache
-        id: setup_cache_target
-        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
       - name: Load local cache
         continue-on-error: true
         run:
           # Uncomment line if you want need to clear cache
-          # rm -rf "/opt/yagna_cache/${{ github.event.inputs.rust_version }}/${{ github.event.inputs.build_profile }}/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
-          cp -rp "/opt/yagna_cache/${{ github.event.inputs.rust_version }}/${{ github.event.inputs.build_profile }}/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target" target
+          # rm -rf "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target"
+          cp -rp "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target" target
 
       - name: Build binaries
         run: |
-          cargo build --profile ${{ github.event.inputs.build_profile }} --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
+          cargo build --profile ${{ steps.variables.outputs.build_profile }} --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
-      - name: Copy binaries
-        shell: bash
+      - name: Copy and strip target binaries
         run: |
           mkdir build
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp target/debug/{yagna,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target/debug/{yagna,gftp}.exe build
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
+          cp target/x86_64-unknown-linux-musl/${{ steps.variables.outputs.build_profile }}/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+          strip -x build/*
 
       - name: Upload binaries
         uses: actions/upload-artifact@v3
@@ -95,5 +84,5 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ github.event.inputs.rust_version }}/${{ github.event.inputs.build_profile }}/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.build_profile }}/${{ steps.variables.outputs.branch }}/binaries_x86/target"
 
