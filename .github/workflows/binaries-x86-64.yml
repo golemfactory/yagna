@@ -58,11 +58,15 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Load local cache
+        id: cache_action
         continue-on-error: true
+        env:
+          cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
         run:
           # Uncomment line if you want need to clear cache
-          # rm -rf "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target"
-          rsync -a --ignore-errors "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target" target
+          # rm -rf "$cache_dir"
+          mkdir -p "$cache_dir" && cp -rp "$cache_dir" target
+
 
       - name: Build binaries
         run: |
@@ -83,5 +87,5 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target"
+          rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
 
