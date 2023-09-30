@@ -39,7 +39,7 @@ jobs:
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth2, ubuntu-22.10]
+    runs-on: [goth2]
     needs: test_check
     strategy:
       fail-fast: false
