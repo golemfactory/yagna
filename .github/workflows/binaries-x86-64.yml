@@ -3,10 +3,19 @@ name: Build binaries (x86-64)
 on:
   workflow_dispatch:
     inputs:
-      profile:
-        description: 'Profile (unused right now)'
+      rust_flags:
+        description: 'Rust flags'
         required: true
-        default: 'debug'
+        default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
+      rust_version:
+        description: 'Rust version'
+        required: true
+        default: '1.71.1'
+      strip_binaries:
+        description: 'Strip binaries'
+        required: true
+        default: 'true'
+        possible_values: ['true', 'false']
   push:
     branches:
       - master
@@ -20,74 +29,61 @@ on:
       - release/*
       - p2p-stability
 
-env:
-  rust_stable: 1.71.1
-
 jobs:
   build:
     name: Build binaries (x86-64)
     env:
-      # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-    runs-on: [yagna-builder, ubuntu-22.04]
+      RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
+    runs-on: [ yagna-builder, ubuntu-22.04 ]
     steps:
-      - name: Clean runner data
-        run: sudo rm -rf ${{ github.workspace }}/*
-
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
-      - name: Extract branch name
-        id: extract_branch
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      - name: Set input variables
+        id: variables
+        run: |
+          echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.71.1' }}" >> $GITHUB_OUTPUT
+          echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
 
       - name: Musl
         run: |
           sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust ${{ steps.variables.outputs.rust_version }}
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ steps.variables.outputs.rust_version }}
           components: rustfmt, clippy
-          target: x86_64-unknown-linux-musl
-          override: true
-
-      - name: Set build target for cache
-        id: setup_cache_target
-        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
+          targets: x86_64-unknown-linux-musl
 
       - name: Load local cache
-        continue-on-error: true
-        run:
+        id: cache_action
+        env:
+          cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
+        run: |
           # Uncomment line if you want need to clear cache
-          # rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
-          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target" target
+          # rm -rf "$cache_dir"
+          cp -rp "$cache_dir" target || echo "No local cache found"
+          echo "cache_dir=$cache_dir" >> $GITHUB_OUTPUT
 
       - name: Build binaries
         run: |
           cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
-      - name: Copy binaries
-        shell: bash
+      - name: Move target binaries
         run: |
           mkdir build
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp target/debug/{yagna,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target/debug/{yagna,gftp}.exe build
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
+          mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+
+      - name: Strip binaries
+        if: ${{ github.event.inputs.strip_binaries != 'false' }}
+        run: |
+          strip -x build/*
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: Yagna ${{ runner.os }}
           path: build
@@ -95,5 +91,4 @@ jobs:
       - name: Save local cache
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
-          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
-
+          rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
