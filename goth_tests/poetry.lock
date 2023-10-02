@@ -861,7 +861,7 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.15.3"
+version = "0.15.4"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
@@ -888,8 +888,8 @@ ya-aioclient = "^0.6"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "a3475d0aee8f0a2a2eea145dc80dd17b9ffd1301"
-resolved_reference = "a3475d0aee8f0a2a2eea145dc80dd17b9ffd1301"
+reference = "ba6cfe964e5f787092f56292db457f25db1f3000"
+resolved_reference = "ba6cfe964e5f787092f56292db457f25db1f3000"
 
 [[package]]
 name = "h11"
@@ -2343,4 +2343,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1"
-content-hash = "4ddd1fbe0fc7d864cd6d7f6ec741dc8930e6c5a50ecb21220eba0796b3a805df"
+content-hash = "a00541ab01d795cf54989514dcb21a54aa9b04614e84deabcc232ada2fcbc3bb"
