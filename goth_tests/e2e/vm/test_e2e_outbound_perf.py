@@ -96,9 +96,7 @@ async def test_e2e_outbound_perf(
             if 'outbound-test' in info.aliases:
                 server_addr = info.address
                 break
-        print(runner.get_container_info().values())
-
-        assert(server_addr is not None, f"Can't find container `outbound-test` {runner.get_container_info().values()}")
+        assert(server_addr is not None, "Can't find container `outbound-test`")
         logger.info("outbound-test container found at %s", server_addr)
 
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
