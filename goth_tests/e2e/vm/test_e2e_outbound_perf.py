@@ -97,7 +97,6 @@ async def test_e2e_outbound_perf(
                 print(f"  -- {info.aliases}")
                 if 'outbound-test' in info.aliases:
                     server_addr = info.address
-                    break
                 await asyncio.sleep(1)
         assert(server_addr is not None, "Can't find container `outbound-test`")
         logger.info("outbound-test container found at %s", server_addr)
