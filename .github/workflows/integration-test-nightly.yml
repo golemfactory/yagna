@@ -41,7 +41,7 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix-json) }}
       fail-fast: false
-    runs-on: [goth]
+    runs-on: [goth2]
     name: Integration Tests (nightly) @ ${{ matrix.branch }}
     defaults:
       run:
