@@ -91,8 +91,9 @@ async def test_e2e_outbound_perf(
 
     async with runner(goth_config.containers):
         server_addr = None
-        print(runner.get_container_info().values())
+        print("Runner starting")
         for info in runner.get_container_info().values():
+            print(f"  {info.aliases}")
             if 'outbound-test' in info.aliases:
                 server_addr = info.address
                 break
