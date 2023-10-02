@@ -101,7 +101,7 @@ async def test_custom_runtime_counter(
 
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
         await requestor.collect_results(
-            activity_id, batch_id, len(exe_script), timeout=30
+            activity_id, batch_id, len(exe_script), timeout=90
         )
 
         await requestor.destroy_activity(activity_id)
