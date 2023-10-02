@@ -1,5 +1,5 @@
 """End to end tests for requesting VM tasks using goth REST API client."""
-
+import asyncio
 import json
 import logging
 import os
