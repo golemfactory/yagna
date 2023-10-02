@@ -54,35 +54,25 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Configure Python
-        uses: actions/setup-python@v2
+        continue-on-error: true
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.8.0'
+          python-version: "3.10"
 
-      - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v8
-        with:
-          poetry-version: 1.2.2
+      - name: Install poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
-          poetry config experimental.new-installer false
           poetry install --no-root
 
-      - name: Disconnect Docker containers from default network
-        continue-on-error: true
-        # related to this issue: https://github.com/moby/moby/issues/23302
+      - name: Cleanup Docker
+        if: always()
         run: |
-          docker network inspect docker_default
-          sudo apt-get install -y jq
-          docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
-
-      - name: Remove Docker containers
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
-
-      - name: Restart Docker daemon
-        # related to this issue: https://github.com/moby/moby/issues/23302
-        run: sudo systemctl restart docker
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
@@ -117,7 +107,7 @@ jobs:
         # Python version below should agree with the version set up by this job.
         # In the future we'll be able to use the `--all` flag here to remove envs for
         # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
-        run: poetry env remove python3.8
+        run: poetry env remove --all
 
       - name: Send Discord notification on failure
         uses: Ilshidur/action-discord@0.3.2
