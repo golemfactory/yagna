@@ -3,10 +3,9 @@ name: Goth integration tests (hybrid-net)
 on:
   workflow_dispatch:
     inputs:
-      profile:
-        description: 'Profile (unused right now)'
+      workflow_number:
+        description: 'Id of workflow binaries-x86-64 to get binaries from'
         required: true
-        default: 'debug'
   push:
     branches:
       - master
@@ -24,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for build to succeed ( ubuntu )
+        if: github.event_name != 'workflow_dispatch'
         uses: tomchv/wait-my-workflow@v1.1.0
         id: wait-for-build-ubu
         with:
@@ -34,6 +34,7 @@ jobs:
           timeoutSeconds: 3600
 
       - name: Fail if build was not a success ( ubuntu )
+        if: github.event_name != 'workflow_dispatch'
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
   integration-test-groups:
@@ -79,10 +80,20 @@ jobs:
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
+        if: github.event_name != 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: binaries-x86-64.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
+          workflow_conclusion: success
+          name: "Yagna Linux"
+          path: /tmp/yagna-build
+
+      - name: Download artifact from given run id
+        if: github.event_name == 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{github.event.inputs.workflow_number}}
           workflow_conclusion: success
           name: "Yagna Linux"
           path: /tmp/yagna-build
