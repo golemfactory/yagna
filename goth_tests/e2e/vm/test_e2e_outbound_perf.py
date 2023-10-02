@@ -91,12 +91,14 @@ async def test_e2e_outbound_perf(
 
     async with runner(goth_config.containers):
         server_addr = None
-        print("Runner starting")
-        for info in runner.get_container_info().values():
-            print(f"  {info.aliases}")
-            if 'outbound-test' in info.aliases:
-                server_addr = info.address
-                break
+        for i in range(0, 5):
+            print("Runner starting {}/5".format(i))
+            for info in runner.get_container_info().values():
+                print(f"  -- {info.aliases}")
+                if 'outbound-test' in info.aliases:
+                    server_addr = info.address
+                    break
+                await asyncio.sleep(1)
         assert(server_addr is not None, "Can't find container `outbound-test`")
         logger.info("outbound-test container found at %s", server_addr)
 
