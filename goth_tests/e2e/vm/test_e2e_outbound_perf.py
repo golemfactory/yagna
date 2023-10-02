@@ -1,4 +1,5 @@
 """End to end tests for requesting VM tasks using goth REST API client."""
+
 import json
 import logging
 import os
