@@ -1,11 +1,18 @@
 name: Goth integration tests (hybrid-net)
 
 on:
+  workflow_dispatch:
+    inputs:
+      workflow_number:
+        description: 'Id of workflow binaries-x86-64 to get binaries from'
+        required: true
   push:
     branches:
       - master
       - release/*
       - gpu-hardening-master
+      - '**/all-tests'
+      - '**/integration-tests'
   pull_request:
     branches:
       - master
@@ -18,23 +25,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for build to succeed ( ubuntu )
+        if: github.event_name != 'workflow_dispatch'
         uses: tomchv/wait-my-workflow@v1.1.0
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build binaries (x86-64) (ubuntu-latest)"
+          checkName: "Build binaries (x86-64)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           intervalSeconds: 30
           timeoutSeconds: 3600
 
       - name: Fail if build was not a success ( ubuntu )
+        if: github.event_name != 'workflow_dispatch'
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth2, ubuntu-22.04]
+    runs-on: [goth2]
     needs: test_check
     strategy:
+      fail-fast: false
       matrix:
         group: [1, 2]
     defaults:
@@ -48,44 +58,46 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        uses: actions/setup-python@v2
+        continue-on-error: true
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v8
-        with:
-          poetry-version: 1.6.1
-          working-directory: "./goth_tests"
+      - name: Install poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
           poetry install --no-root
 
-      - name: Disconnect Docker containers from default network
-        continue-on-error: true
-        # related to this issue: https://github.com/moby/moby/issues/23302
+      - name: Cleanup Docker
+        if: always()
         run: |
-          docker network inspect docker_default
-          sudo apt-get install -y jq
-          docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
-
-      - name: Remove Docker containers
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
-
-      - name: Restart Docker daemon
-        # related to this issue: https://github.com/moby/moby/issues/23302
-        run: sudo systemctl restart docker
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
       - name: Log in to GitHub Docker repository
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
+        run: |
+          rm -rf ~/.docker/config.json
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
+        if: github.event_name != 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: binaries-x86-64.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
+          workflow_conclusion: success
+          name: "Yagna Linux"
+          path: /tmp/yagna-build
+
+      - name: Download artifact from given run id
+        if: github.event_name == 'workflow_dispatch'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{github.event.inputs.workflow_number}}
           workflow_conclusion: success
           name: "Yagna Linux"
           path: /tmp/yagna-build
@@ -111,10 +123,13 @@ jobs:
       # Only relevant for self-hosted runners
       - name: Remove Poetry virtual env
         if: always()
-        # Python version below should agree with the version set up by this job.
-        # In the future we'll be able to use the `--all` flag here to remove envs for
-        # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
         run: poetry env remove --all
+
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
   integration-test:
     name: Integration Tests (hybrid-net)

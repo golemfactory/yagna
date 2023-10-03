@@ -1,0 +1,26 @@
+name: Clone master branch
+on:
+  push:
+    branches:
+      - master
+jobs:
+  clone-master:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with admin privileges
+        uses: actions/checkout@v4
+        with:
+          ssh-key: ${{secrets.ACTIONS_SSH_SECRET}}
+
+      - name: Set Git config
+        run: |
+            git config --local user.email "actions@github.com"
+            git config --local user.name "Github Actions"
+
+      - name: Merge master to master-fast
+        run: |
+            git fetch --unshallow
+            git checkout master-fast
+            git pull
+            git merge master -m "Auto-merge master to master-fast"
+            git push

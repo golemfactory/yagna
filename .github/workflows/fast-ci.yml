@@ -1,0 +1,127 @@
+## This test makes sense if we have separate runner (currently we have only one)
+
+name: Yagna tests (unit + integration)
+
+on:
+  push:
+    branches:
+      - '**/fast-unit-tests'
+
+env:
+  rust_stable: 1.71.1
+
+jobs:
+  test_check:
+    name: Check test results
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for build to succeed ( ubuntu )
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-build-ubu
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Build binaries (x86-64)"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          intervalSeconds: 30
+          timeoutSeconds: 3600
+
+      - name: Fail if build was not a success ( ubuntu )
+        run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
+
+  unit_tests:
+    name: Unit Tests
+    needs: test_check
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+    runs-on: [yagna-builder, ubuntu-22.04]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt, clippy
+
+      - name: Extract branch name
+        id: extract_branch
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Check lockfile
+        uses: actions-rs/cargo@v1
+        with:
+          command: tree
+          args: --locked
+
+      - name: Set build target for cache
+        id: setup_cache_target
+        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
+
+      - name: Load local cache
+        continue-on-error: true
+        run:
+          # Uncomment line if you want need to clear cache
+          #rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target" target
+
+      - name: Unit tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --workspace --exclude=["./agent/provider/src/market"] --locked
+
+      - name: Save local cache
+        run: |
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/unit_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
+
+  market_tests:
+    name: Market Tests
+    needs: unit_tests
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+    runs-on: [yagna-builder, ubuntu-22.04]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt, clippy
+
+      - name: Extract branch name
+        id: extract_branch
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Check lockfile
+        uses: actions-rs/cargo@v1
+        with:
+          command: tree
+          args: --locked
+
+      - name: Set build target for cache
+        id: setup_cache_target
+        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
+
+      - name: Load local cache
+        continue-on-error: true
+        run:
+          # Uncomment line if you want need to clear cache
+          #rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target" target
+
+      - name: Unit tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --tests -p ya-market --features ya-market/test-suite --locked
+
+      - name: Save local cache
+        run: |
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/market_tests/${{ steps.setup_cache_target.outputs.build_target }}/target"
