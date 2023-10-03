@@ -96,7 +96,7 @@ async def test_mid_agreement_payments(
                 number_of_payments += 1
                 amount += float(payment.amount)
                 logger.info(f"Received payment: amount {payment.amount}."
-                      f" Total amount {amount}. Number of payments {number_of_payments}")
+                            f" Total amount {amount}. Number of payments {number_of_payments}")
                 ts = payment.timestamp if payment.timestamp > ts else ts
 
             # prevent new debit notes in the last iteration
