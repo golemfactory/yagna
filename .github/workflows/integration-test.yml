@@ -74,7 +74,8 @@ jobs:
         if: always()
         run: |
           c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
+          docker container rm --force $(docker container list --format '{{.Image}} {{.ID}}' | grep -E 'yagna|proxy|test|golem' | cut -d ' ' -f2)
+          docker image rm --force $(docker images --format '{{.Repository}} {{.ID}}' | grep -E 'yagna|proxy|test|golem' | cut -d ' ' -f2)
 
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
@@ -128,7 +129,8 @@ jobs:
         if: always()
         run: |
           c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
+          docker container rm --force $(docker container list --format '{{.Image}} {{.ID}}' | grep -E 'yagna|proxy|test|golem' | cut -d ' ' -f2)
+          docker image rm --force $(docker images --format '{{.Repository}} {{.ID}}' | grep -E 'yagna|proxy|test|golem' | cut -d ' ' -f2)
 
   integration-test:
     name: Integration Tests (hybrid-net)
