@@ -22,7 +22,7 @@ docker-compose:
     artifacts:
       - name: "ya-runtime-vm"
         use-prerelease: true
-        release-tag: "pre-rel-v0.4.0-ITL-rc5"
+        release-tag: "ITL"
 
   compose-log-patterns:
     ethereum-mainnet: ".*Wallets supplied."
