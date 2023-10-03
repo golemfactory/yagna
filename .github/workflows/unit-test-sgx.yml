@@ -1,15 +1,21 @@
 name: SGX Unit Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
       - release/*
+      - '**/all-tests'
   pull_request:
     branches:
       - master
       - release/*
-      - sgx/*
 
 env:
   rust_stable: 1.72.1
