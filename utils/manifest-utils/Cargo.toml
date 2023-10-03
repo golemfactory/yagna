@@ -23,6 +23,7 @@ schema = ["schemars"]
 ya-agreement-utils = "0.4.1"
 ya-utils-path = "0.1"
 ya-client-model = "0.5"
+golem-certificate = "0.1.1"
 
 regex = "1.5"
 serde = "1.0"
@@ -30,7 +31,7 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 thiserror = "1.0"
 anyhow = { version = "1.0" }
-base64 = { version = "0.13" }
+base64 = { version = "0.21" }
 chrono = { version = "0.4", features = ["serde"] }
 hex = { version = "0.4" }
 itertools = "0.10"
@@ -49,10 +50,12 @@ schemars = { version = "0.8", features = [
 ], optional = true }
 
 [dev-dependencies]
+pretty_assertions = "1.0"
 tempfile = "3"
 anyhow = "1.0"
-serial_test = "0.9"
+serial_test = "2"
 shlex = "1.1"
 tar = "0.4"
-test-case = "2.2"
+test-case = "3.1"
 ya-manifest-test-utils = "0.1"
+openssl = { version = "0.10", features = ["vendored"] }

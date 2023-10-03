@@ -1,3 +1,5 @@
+#![allow(clippy::obfuscated_if_else)]
+
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
@@ -297,6 +299,7 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     Ok(drivers)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     #[structopt(flatten)]
@@ -580,21 +583,27 @@ impl ServiceCommand {
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?
+                .run();
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
-                gsb::bind(model::BUS_ID, move |_request: model::ShutdownRequest| {
-                    log::warn!("ShutdownRequest not supported after migrating to new actix.");
-                    // actix_rt::spawn(async move {
-                    //     actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
-                    //     actix_rt::System::current().stop()
-                    // });
-
-                    async move { Ok(()) }
-                });
+                {
+                    let server_handle = server.handle();
+                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
+                        log::info!(
+                            "ShutdownRequest {}",
+                            request.graceful.then_some("graceful").unwrap_or("")
+                        );
+                        let server_handle = server_handle.clone();
+                        async move {
+                            server_handle.stop(request.graceful).await;
+                            Ok(())
+                        }
+                    });
+                }
 
                 tokio::spawn(async {
                     loop {
@@ -606,7 +615,7 @@ impl ServiceCommand {
                     }
                 });
 
-                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
+                future::try_join(server, sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
@@ -625,7 +634,7 @@ impl ServiceCommand {
                         graceful: opts.gracefully,
                     })
                     .await?;
-                CommandOutput::object(&result)
+                CommandOutput::object(result)
             }
         }
     }
@@ -701,5 +710,12 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
-    args.run_command().await
+    match args.run_command().await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            //this way runtime/command error is at least possibly visible in yagna logs
+            log::error!("Exiting..., error details: {:?}", err);
+            Err(err)
+        }
+    }
 }

@@ -7,6 +7,7 @@
 use chrono::Utc;
 
 // Workspace uses
+use ya_payment_driver::driver::PaymentDriver;
 use ya_payment_driver::{
     bus,
     db::models::Network,
@@ -32,13 +33,31 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
         driver.is_account_active(&address)?
     }
 
-    wallet::init_wallet(&msg)
-        .timeout(Some(30))
-        .await
-        .map_err(GenericError::new)??;
+    wallet::init_wallet(
+        msg.address(),
+        msg.network()
+            .unwrap_or_else(|| driver.get_default_network()),
+    )
+    .timeout(Some(30))
+    .await
+    .map_err(GenericError::new)??;
 
     let network = network::network_like_to_network(msg.network());
-    let token = network::get_network_token(network, msg.token());
+    let token = match network::get_network_token(network, msg.token()) {
+        Ok(token) => token,
+        Err(e) => {
+            return Err(GenericError::new(format!(
+                "Failed to initialize payment account. mode={:?}, address={}, driver={}, network={}, token={}: {}",
+                mode,
+                &msg.address(),
+                DRIVER_NAME,
+                network,
+                msg.token().unwrap_or_default(),
+                e
+            )));
+        }
+    };
+
     bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
 
     log::info!(
@@ -57,7 +76,7 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
     let address = msg.address();
     let network = network::network_like_to_network(msg.network());
     let result = match network {
-        Network::Rinkeby => {
+        Network::Rinkeby | Network::Goerli => {
             let address = utils::str_to_addr(&address)?;
             log::info!(
                 "Handling fund request. network={}, address={}",
@@ -70,15 +89,6 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
-        Network::Goerli => format!(
-            r#"Your Goerli Polygon address is {}.
-
-Goerli GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
-
-To be able to use Goerli Polygon network, please send some GLM tokens and MATIC for gas to this address.
-"#,
-            address
-        ),
         Network::Mumbai => format!(
             r#"Your Mumbai Polygon address is {}.
 
@@ -120,7 +130,7 @@ To be able to use mainnet Ethereum driver please send some GLM tokens and ETH fo
 pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
     log::debug!("transfer: {:?}", msg);
     let network = network::network_like_to_network(msg.network);
-    let token = network::get_network_token(network, None);
+    let token = network::get_network_token(network, None)?;
     let sender = msg.sender;
     let sender_h160 = utils::str_to_addr(&sender)?;
     let recipient = msg.to;

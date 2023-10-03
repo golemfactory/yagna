@@ -1,6 +1,5 @@
 use anyhow::Context;
 use serde::Deserialize;
-use std::ffi::OsStr;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -36,7 +35,7 @@ impl YaProviderCommand {
     pub async fn get_config(mut self) -> anyhow::Result<ProviderConfig> {
         let output = self
             .cmd
-            .args(&["--json", "config", "get"])
+            .args(["--json", "config", "get"])
             .stderr(Stdio::inherit())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -54,17 +53,17 @@ impl YaProviderCommand {
     ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
-        cmd.args(&["--json", "config", "set"]);
+        cmd.args(["--json", "config", "set"]);
 
         if let Some(node_name) = &config.node_name {
-            cmd.arg("--node-name").arg(&node_name);
+            cmd.arg("--node-name").arg(node_name);
         }
 
         if let Some(account) = &config.account {
-            cmd.args(&["--account", &account.to_string()]);
+            cmd.args(["--account", &account.to_string()]);
         }
         for n in NETWORK_GROUP_MAP[network_group].iter() {
-            cmd.args(&["--payment-network", &n.to_string()]);
+            cmd.args(["--payment-network", &n.to_string()]);
         }
 
         log::debug!("executing: {:?}", cmd);
@@ -89,7 +88,7 @@ impl YaProviderCommand {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(&["--json", "preset", "list"])
+            .args(["--json", "preset", "list"])
             .stderr(Stdio::inherit())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -104,7 +103,7 @@ impl YaProviderCommand {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(&["--json", "exe-unit", "list"])
+            .args(["--json", "exe-unit", "list"])
             .stderr(Stdio::inherit())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -123,7 +122,7 @@ impl YaProviderCommand {
         usage_coeffs: &UsageDef,
     ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
-        cmd.args(&["preset", "create", "--no-interactive"]);
+        cmd.args(["preset", "create", "--no-interactive"]);
         preset_command(&mut cmd, name, exeunit_name, usage_coeffs);
         let output = cmd
             .stderr(Stdio::piped())
@@ -168,7 +167,7 @@ impl YaProviderCommand {
         cpu_per_sec: Option<f64>,
     ) -> anyhow::Result<()> {
         let cmd = &mut self.cmd;
-        cmd.args(&["preset", "update", "--no-interactive"]);
+        cmd.args(["preset", "update", "--no-interactive"]);
         cmd.arg("--pricing").arg("linear");
         if let Some(cpu) = cpu_per_sec {
             cmd.arg("--price").arg(format!("CPU={}", cpu));
@@ -209,7 +208,7 @@ impl YaProviderCommand {
         usage_coeffs: &UsageDef,
     ) -> anyhow::Result<()> {
         let cmd = &mut self.cmd;
-        cmd.args(&["preset", "update", "--no-interactive"]);
+        cmd.args(["preset", "update", "--no-interactive"]);
         preset_command(cmd, name, exeunit_name, usage_coeffs);
         cmd.arg("--").arg(name);
         self.exec_no_output()
@@ -220,7 +219,7 @@ impl YaProviderCommand {
     pub async fn active_presets(self) -> anyhow::Result<Vec<String>> {
         let mut cmd = self.cmd;
         let output = cmd
-            .args(&["--json", "preset", "active"])
+            .args(["--json", "preset", "active"])
             .stderr(Stdio::piped())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -244,7 +243,7 @@ impl YaProviderCommand {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(&[
+            .args([
                 "--json",
                 "preset",
                 if activate { "activate" } else { "deactivate" },
@@ -268,7 +267,7 @@ impl YaProviderCommand {
     }
 
     pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
-        self.cmd.args(&["run"]).env("YAGNA_APPKEY", app_key);
+        self.cmd.args(["run"]).env("YAGNA_APPKEY", app_key);
 
         for nn in NETWORK_GROUP_MAP[&run_cfg.account.network].iter() {
             self.cmd.arg("--payment-network").arg(nn.to_string());
@@ -302,29 +301,26 @@ impl YaProviderCommand {
             .spawn()?)
     }
 
-    pub async fn add_certs<I, S>(self, certs: I) -> anyhow::Result<()>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<OsStr>,
-    {
+    pub async fn set_cert_rule(self, cert: &str, rule: &str) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(&[
-                "keystore",
-                "add",
-                "-p",
-                "outbound-manifest",
-                "unverified-permissions-chain",
-                "-w",
+            .args([
+                "rule",
+                "set",
+                "outbound",
+                rule,
+                "import-cert",
+                cert,
+                "--mode",
+                "all",
             ])
-            .args(certs)
             .stderr(Stdio::piped())
             .stdout(Stdio::null())
             .stdin(Stdio::null())
             .output()
             .await
-            .context("failed adding certificates")?;
+            .context("failed setting partner rule")?;
 
         if output.status.success() {
             Ok(())
@@ -342,7 +338,7 @@ impl YaProviderCommand {
         let mut cmd = self.cmd;
 
         let output = cmd
-            .args(&["whitelist", "add", "-t"])
+            .args(["whitelist", "add", "-t"])
             .arg(whitelist_type)
             .arg("-p")
             .args(entries)

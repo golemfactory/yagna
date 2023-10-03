@@ -1,65 +1,58 @@
-use anyhow::anyhow;
+use crate::cli::println_conditional;
+use crate::rules::{CertWithRules, RulesManager};
+use crate::startup_config::ProviderConfig;
+use chrono::{DateTime, SecondsFormat, Utc};
 use std::collections::HashSet;
 use std::path::PathBuf;
-
+use std::vec;
 use structopt::StructOpt;
-use strum::VariantNames;
-
-use ya_manifest_utils::policy::CertPermissions;
-use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
-use ya_manifest_utils::KeystoreLoadResult;
+use ya_manifest_utils::keystore::{
+    AddParams, AddResponse, Cert, Keystore, RemoveParams, RemoveResponse,
+};
+use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
 use ya_utils_cli::{CommandOutput, ResponseTable};
-
-use crate::cli::println_conditional;
-use crate::startup_config::ProviderConfig;
 
 /// Manage trusted keys
 ///
-/// Keystore stores X.509 certificates.
-/// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+/// Keystore stores Golem and X.509 certificates.
+/// X.509 certificates are supported in PEM or DER formats and PEM certificate chains.
+/// Certificates allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
 /// Certificate gets validated against certificates loaded into the keystore.
 /// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
-    /// List trusted X.509 certificates
+    /// List trusted certificates
     List,
-    /// Add new trusted X.509 certificates
+    /// Add new trusted certificates
     Add(Add),
-    /// Remove trusted X.509 certificates
+    /// Remove trusted certificates
     Remove(Remove),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct Add {
-    /// Paths to X.509 certificates or certificates chains
+    /// Paths to certificates or certificate chains
     #[structopt(
         parse(from_os_str),
-        help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
+        help = "Space separated list of certificate files to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
-    /// Set certificates permissions for signing certain Golem features.
-    /// If not specified, no permissions will be set for certificate.
-    /// If certificate already existed, permissions will be cleared.
-    #[structopt(
-        short,
-        long,
-        parse(try_from_str),
-        possible_values = CertPermissions::VARIANTS,
-        case_insensitive = true,
-    )]
-    permissions: Vec<CertPermissions>,
-    /// Apply permissions to all certificates in chain found in files.
-    #[structopt(short, long)]
-    whole_chain: bool,
+}
+
+impl From<Add> for AddParams {
+    fn from(val: Add) -> Self {
+        AddParams { certs: val.certs }
+    }
 }
 
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
-    #[structopt(help = "Space separated list of X.509 certificates' ids. 
-To find certificate id use `keystore list` command.")]
+    #[structopt(help = "Space separated list of certificates' ids. 
+To find certificate id use `keystore list` command. You may use some prefix
+of the id as long as it is unique.")]
     ids: Vec<String>,
 }
 
@@ -74,81 +67,163 @@ impl KeystoreConfig {
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let table = CertTable::new();
-    let table = util::visit_certificates(&cert_dir, table)?;
-    table.print(&config)?;
+    let rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
+    let certs = rules.keystore.list();
+    print_cert_list(&config, rules.add_rules_information_to_certs(certs))?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
+    let AddResponse {
+        added,
+        duplicated,
+        invalid,
+        ..
+    } = rules.keystore.add(&add.into())?;
 
-    let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
+    log_not_valid_yet_certs(added.iter().chain(duplicated.iter()));
 
-    permissions_manager.set_many(
-        &loaded.iter().chain(skipped.iter()).cloned().collect(),
-        add.permissions,
-        add.whole_chain,
-    );
-
-    if !loaded.is_empty() {
+    if !added.is_empty() {
         println_conditional(&config, "Added certificates:");
-        let certs_data = util::to_cert_data(&loaded, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+        print_cert_list(&config, rules.add_rules_information_to_certs(added))?;
     }
 
-    if !skipped.is_empty() && !config.json {
-        println!("Certificates already loaded to keystore:");
-        let certs_data = util::to_cert_data(&skipped, &permissions_manager)?;
-        print_cert_list(&config, certs_data)?;
+    if !duplicated.is_empty() && !config.json {
+        println_conditional(&config, "Certificates already loaded to keystore:");
+        print_cert_list(&config, rules.add_rules_information_to_certs(duplicated))?;
     }
 
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+    if !invalid.is_empty() && !config.json {
+        print_invalid_cert_files_list(&config, &invalid)?;
+    }
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
-    let cert_dir = config.cert_dir_path()?;
-    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
-    let mut permissions_manager = keystore_manager.permissions_manager();
-    let ids: HashSet<String> = remove.ids.into_iter().collect();
-    match keystore_manager.remove_certs(&ids)? {
-        util::KeystoreRemoveResult::NothingToRemove => {
-            println_conditional(&config, "No matching certificates to remove.");
+    let mut rules = RulesManager::load_or_create(
+        &config.rules_file,
+        &config.domain_whitelist_file,
+        &config.cert_dir_path()?,
+    )?;
+
+    let all_certs = rules.keystore.list();
+    let mut ids = HashSet::new();
+    for remove_prefix in &remove.ids {
+        let full_ids = find_ids_by_prefix(&all_certs, remove_prefix);
+
+        if full_ids.is_empty() {
+            ids.insert(remove_prefix.clone()); //won't match anyway
+        } else if full_ids.len() == 1 {
+            ids.insert(full_ids[0].clone());
+        } else {
+            println_conditional(
+                &config,
+                &format!(
+                    "Prefix '{remove_prefix}' isn't unique, consider using full certificate id"
+                ),
+            );
             if config.json {
                 print_cert_list(&config, Vec::new())?;
             }
-        }
-        util::KeystoreRemoveResult::Removed { removed } => {
-            permissions_manager.set_many(&removed, vec![], true);
 
-            println!("Removed certificates:");
-            let certs_data = util::to_cert_data(&removed, &permissions_manager)?;
-            print_cert_list(&config, certs_data)?;
+            return Ok(());
         }
-    };
+    }
+    let remove_params = RemoveParams { ids };
 
-    permissions_manager
-        .save(&cert_dir)
-        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
+    let RemoveResponse { removed } = rules.keystore.remove(&remove_params)?;
+    if removed.is_empty() {
+        println_conditional(&config, "No matching certificates to remove.");
+        if config.json {
+            print_cert_list(&config, Vec::new())?;
+        }
+    } else {
+        println!("Removed certificates:");
+        print_cert_list(&config, rules.add_rules_information_to_certs(removed))?;
+    }
+
     Ok(())
 }
 
-fn print_cert_list(
-    config: &ProviderConfig,
-    certs_data: Vec<util::CertBasicData>,
-) -> anyhow::Result<()> {
-    let mut table = CertTable::new();
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<CertWithRules>) -> anyhow::Result<()> {
+    let mut table_builder = CertTableBuilder::new();
     for data in certs_data {
-        table.add(data);
+        table_builder.add(data);
     }
-    table.print(config)?;
+
+    table_builder.build().print(config)?;
     Ok(())
+}
+
+fn print_invalid_cert_files_list(
+    config: &ProviderConfig,
+    cert_files: &[PathBuf],
+) -> anyhow::Result<()> {
+    let columns = vec!["Invalid certificate files".into()];
+    let values = cert_files
+        .iter()
+        .flat_map(|path| path.to_str())
+        .map(|path| serde_json::json!([path]))
+        .collect();
+    let table = ResponseTable { columns, values };
+    CertTable { table }.print(config)
+}
+
+fn find_ids_by_prefix(certs: &[Cert], prefix: &str) -> Vec<String> {
+    certs
+        .iter()
+        .map(|cert| cert.id())
+        .filter(|id| id.starts_with(prefix))
+        .collect()
+}
+
+struct CertTableBuilder {
+    entries: Vec<CertWithRules>,
+}
+
+impl CertTableBuilder {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, cert: CertWithRules) {
+        self.entries.push(cert)
+    }
+
+    pub fn build(self) -> CertTable {
+        let long_ids: Vec<String> = self.entries.iter().map(|e| e.cert.id()).collect();
+
+        let short_ids = shorten_cert_ids(&long_ids);
+        let mut values = vec![];
+        for (entry, short_id) in self.entries.into_iter().zip(short_ids) {
+            let not_after_formatted = date_to_str(&entry.cert.not_after());
+            values
+                .push(serde_json::json! { [ short_id, entry.cert.type_name(), not_after_formatted, entry.cert.subject(), entry.format_outbound_rules()] });
+        }
+
+        let columns = vec![
+            "ID".into(),
+            "Type".into(),
+            "Not After".into(),
+            "Subject".into(),
+            "Outbound Rules".into(),
+        ];
+
+        let table = ResponseTable { columns, values };
+
+        CertTable { table }
+    }
 }
 
 struct CertTable {
@@ -156,32 +231,27 @@ struct CertTable {
 }
 
 impl CertTable {
-    pub fn new() -> Self {
-        let columns = vec![
-            "ID".to_string(),
-            "Not After".to_string(),
-            "Subject".to_string(),
-            "Permissions".to_string(),
-        ];
-        let values = vec![];
-        let table = ResponseTable { columns, values };
-        Self { table }
-    }
-
     pub fn print(self, config: &ProviderConfig) -> anyhow::Result<()> {
         let output = CommandOutput::from(self.table);
         output.print(config.json)?;
         Ok(())
     }
-
-    pub fn add(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
-        self.table.values.push(row)
-    }
 }
 
-impl CertBasicDataVisitor for CertTable {
-    fn accept(&mut self, data: CertBasicData) {
-        self.add(data)
+fn date_to_str(date: &DateTime<Utc>) -> String {
+    date.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn log_not_valid_yet_certs<'a>(certs: impl Iterator<Item = &'a Cert>) {
+    let now = Utc::now();
+    for cert in certs {
+        if cert.not_before() > now {
+            log::warn!(
+                "{} certificate will not be valid before {},\nfingerprint: {}",
+                cert.type_name(),
+                date_to_str(&cert.not_before()),
+                cert.id()
+            );
+        }
     }
 }

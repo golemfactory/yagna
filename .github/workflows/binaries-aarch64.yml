@@ -1,10 +1,24 @@
 name: Build binaries (aarch64)
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
+  push:
+    branches:
+      - master
+      - release/*
+      - '**/all-tests'
   pull_request:
     branches:
       - master
       - release/*
+
+env:
+  rust_stable: 1.71.1
 
 jobs:
   build:
@@ -19,7 +33,7 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           target: aarch64-unknown-linux-musl
           override: true
 

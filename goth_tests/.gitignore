@@ -1,4 +1,6 @@
 .mypy_cache
 .pytest_cache
 __pycache__
-/assets
+e2e/vm/assets/test_e2e_rule_partner_outbound/golem-certificate
+e2e/vm/assets/test_e2e_rule_partner_outbound/partner-certificate.signed.json
+e2e/vm/assets/test_e2e_rule_partner_outbound/partner-keypair.key

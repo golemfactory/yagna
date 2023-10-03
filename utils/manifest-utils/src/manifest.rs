@@ -4,6 +4,7 @@ use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
+use serde::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use strum;
@@ -22,9 +23,7 @@ pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
 pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
-pub const DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY: &str =
-    "golem.srv.comp.payload.cert.permissions";
-pub const DEMAND_MANIFEST_NODE_IDENTITY_PROPERTY: &str = "golem.node.identity";
+pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.!exp.gap-31.v0.node.descriptor";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
@@ -112,20 +111,13 @@ impl AppManifest {
             })
     }
 
-    /// Returns empty vector if there is no outbound requested
-    pub fn get_outbound_requested_urls(&self) -> Vec<Url> {
+    pub fn get_outbound_access(&self) -> Option<OutboundAccess> {
         self.comp_manifest
             .as_ref()
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.as_ref())
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    pub fn is_outbound_requested(&self) -> bool {
-        self.get_outbound_requested_urls().is_empty().not()
+            .map(|out| out.access.clone())
     }
 
     pub fn features(&self) -> HashSet<Feature> {
@@ -287,21 +279,17 @@ impl<'de> Deserialize<'de> for Command {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum ArgMatch {
     /// Byte-to-byte argument equality (default).
     #[strum(ascii_case_insensitive)]
+    #[default]
     Strict,
     /// Treat argument as regular expression.
     /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
     /// w/o the support for look around and backreferences (among others).
     #[strum(ascii_case_insensitive)]
     Regex,
-}
-
-impl Default for ArgMatch {
-    fn default() -> Self {
-        ArgMatch::Strict
-    }
 }
 
 /// # Net
@@ -330,19 +318,97 @@ pub struct Inet {
 /// Applies constraints to networking.
 /// Currently, outgoing requests to the public Internet network are covered.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InetOut {
     /// List of allowed outbound protocols.
     /// Supports "http", "https", "ws", and "wss".
     #[serde(default = "default_protocols")]
     pub protocols: Vec<String>,
-    // keep the option here to retain information on
-    // whether urls were specified
-    /// List of allowed external URLs that outbound requests can be sent to.
-    /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub urls: Option<Vec<Url>>,
+    /// Outbound access
+    #[serde(flatten)]
+    #[cfg_attr(feature = "schema", schemars(with = "outbound_access::Representation"))]
+    pub access: OutboundAccess,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum OutboundAccess {
+    Urls(Vec<Url>),
+    Unrestricted,
+}
+
+impl OutboundAccess {
+    pub fn is_outbound_requested(&self) -> bool {
+        match self {
+            OutboundAccess::Urls(urls) => urls.is_empty().not(),
+            OutboundAccess::Unrestricted => true,
+        }
+    }
+}
+
+mod outbound_access {
+    use super::*;
+
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", rename = "OutboundAccess", untagged)] //Untagged is used here to bypass "schemars" adding "additionalProperties: false" when using enum
+    pub enum Representation {
+        /// List of allowed external URLs that outbound requests can be sent to.
+        /// Empty list means no outbound access is requested.
+        /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
+        Urls { urls: Vec<Url> },
+        /// Every URL is allowed for outbound connection.
+        Unrestricted { unrestricted: Unrestricted },
+    }
+
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Unrestricted {
+        /// Only "true" value is valid in "unrestricted" case.
+        urls: bool,
+    }
+
+    impl Serialize for OutboundAccess {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let repr = {
+                match self {
+                    OutboundAccess::Urls(urls) => Representation::Urls {
+                        urls: urls.to_vec(),
+                    },
+                    OutboundAccess::Unrestricted => Representation::Unrestricted {
+                        unrestricted: Unrestricted { urls: true },
+                    },
+                }
+            };
+            repr.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for OutboundAccess {
+        fn deserialize<D>(deserializer: D) -> Result<OutboundAccess, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let repr = Representation::deserialize(deserializer)?;
+
+            match repr {
+                Representation::Urls { urls } => Ok(OutboundAccess::Urls(urls)),
+                Representation::Unrestricted { unrestricted } => {
+                    if unrestricted.urls {
+                        Ok(OutboundAccess::Unrestricted)
+                    } else {
+                        Err(serde::de::Error::custom(
+                            "'unrestricted.urls: false' is not valid",
+                        ))
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub fn default_protocols() -> Vec<String> {
@@ -355,6 +421,7 @@ pub fn default_protocols() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{engine::general_purpose, Engine as _};
     use chrono::Duration;
 
     #[test]
@@ -397,7 +464,7 @@ mod tests {
                     inet: Some(Inet {
                         out: Some(InetOut {
                             protocols: default_protocols(),
-                            urls: None,
+                            access: OutboundAccess::Urls(vec![]),
                         }),
                     }),
                 }),
@@ -407,6 +474,56 @@ mod tests {
         let serialized = serde_json::to_string(&manifest).unwrap();
 
         println!("{}", serialized);
-        println!("{}", base64::encode(serialized));
+        println!("{}", general_purpose::STANDARD.encode(serialized));
+    }
+
+    mod outbound_access_serde {
+        use super::*;
+
+        #[test]
+        fn access_is_none() {
+            let json = serde_json::json!({ "protocols": default_protocols() });
+            assert!(serde_json::from_value::<InetOut>(json).is_err());
+        }
+
+        #[test]
+        fn access_is_urls() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "urls": [ "https://example.net/" ]
+            });
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: OutboundAccess::Urls([Url::parse("https://example.net/").unwrap()].into()),
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn access_is_unrestricted() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": true }
+            });
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: OutboundAccess::Unrestricted,
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn json_access_has_invalid_value() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": false }
+            });
+
+            assert!(serde_json::from_value::<InetOut>(json).is_err());
+        }
     }
 }
