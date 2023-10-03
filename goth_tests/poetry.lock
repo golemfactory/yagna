@@ -832,7 +832,7 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.15.4"
+version = "0.15.6"
 description = "Golem Test Harness - integration testing framework"
 optional = false
 python-versions = "^3.10.1"
