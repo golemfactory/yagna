@@ -74,7 +74,7 @@ jobs:
         if: always()
         run: |
           c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
+          docker system prune -af --filter "until=12h"
 
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
@@ -128,7 +128,7 @@ jobs:
         if: always()
         run: |
           c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
+          docker system prune -af --filter "until=12h"
 
   integration-test:
     name: Integration Tests (hybrid-net)
