@@ -76,8 +76,8 @@ jobs:
           c=$(docker ps -q) && [[ $c ]] && docker kill $c
           docker system prune -af
 
-      - name: Log in to GitHub Docker repository
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
+      # - name: Log in to GitHub Docker repository
+      #   run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
         if: github.event_name != 'workflow_dispatch'
