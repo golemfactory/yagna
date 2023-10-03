@@ -29,7 +29,9 @@ pytest = "^7.4"
 pytest-asyncio = "0.21"
 pytest-rerunfailures = "^10.3"
 pytest-split = "^0.8.1"
-goth = "0.15.6"
+# goth = "0.15.3"
+# to use development goth version uncomment below
+goth =  { git = "https://github.com/golemfactory/goth.git", rev = "0845cad9a4d590b06849c6888db7f060788eb7d7" }
 
 [tool.poetry.dev-dependencies]
 black = "21.7b0"
