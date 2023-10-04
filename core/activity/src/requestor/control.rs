@@ -224,18 +224,20 @@ async fn await_results(
     query: web::Query<QueryTimeoutCommandIndex>,
     id: Identity,
 ) -> Result<impl Responder> {
+
+    log::debug!("Requested timeout: {:?}", query.timeout);
+    let timeout = query.timeout.unwrap_or(0.0) + 30.0;
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: query.timeout,
+        timeout: Some(timeout),
         command_index: query.command_index,
     };
-
     let results = ya_net::from(id.identity)
         .to(*agreement.provider_id())
         .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(Some(timeout)))
         .await???;
 
     Ok::<_, Error>(web::Json(results))
