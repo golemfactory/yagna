@@ -83,7 +83,7 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
-          name: Yagna ${{ runner.os }}
+          name: yagna-binaries
           path: build
 
       - name: Save local cache
@@ -136,10 +136,9 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
-        if: github.event_name != 'workflow_dispatch'
-        uses: dawidd6/action-download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
-          name: "Yagna Linux"
+          name: yagna-binaries
           path: /tmp/yagna-build
 
       - name: Run test suite
