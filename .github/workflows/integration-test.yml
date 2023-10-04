@@ -94,8 +94,7 @@ jobs:
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
     runs-on: [goth2]
-    depends-on: build
-    needs: test_check
+    needs: build
     strategy:
       fail-fast: false
       matrix:
