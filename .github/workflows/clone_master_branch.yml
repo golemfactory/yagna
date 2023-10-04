@@ -25,3 +25,7 @@ jobs:
             git pull
             git merge master -m "Auto-merge master to master-fast"
             git push
+
+      - name: Assert if branch master-fast contains exactly same files as master
+        run: |
+          [[ $(git diff origin/master-fast origin/master | wc -c) -eq 0 ]] || false
