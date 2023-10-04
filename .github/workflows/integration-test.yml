@@ -16,6 +16,16 @@ on:
         required: true
         default: 'true'
         possible_values: ['true', 'false']
+  push:
+    branches:
+      - master
+      - release/*
+      - '**/all-tests'
+      - '**/integration-tests'
+  pull_request:
+    branches:
+      - master
+      - release/*
 
 jobs:
   build:
