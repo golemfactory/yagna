@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Wait for build to succeed ( ubuntu )
         if: github.event_name != 'workflow_dispatch'
-        uses: tomchv/wait-my-workflow@v1.1.0
+        uses: golemfactory/wait-my-workflow@v1.1.1
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
