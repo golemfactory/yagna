@@ -106,7 +106,7 @@ impl Discovery {
     async fn send_bcast_offers(&self) {
         // `...offer_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
-it             std::mem::take(&mut *self.inner.offer_sending_queue.lock().await);
+            std::mem::take(&mut *self.inner.offer_sending_queue.lock().await);
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
