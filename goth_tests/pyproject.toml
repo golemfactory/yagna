@@ -27,7 +27,6 @@ readme = "README.md"
 python = "^3.10.1"
 pytest = "^7.4"
 pytest-asyncio = "0.21"
-pytest-rerunfailures = "^10.3"
 pytest-split = "^0.8.1"
 goth = "0.15.6"
 # to use development goth version uncomment below
@@ -40,6 +39,6 @@ poethepoet = "^0.22"
 
 [tool.poe.tasks]
 codestyle = "black --check --diff ."
-goth-tests = "pytest -W ignore::DeprecationWarning -svx . --reruns 3 --only-rerun AssertionError --only-rerun TimeoutError --only-rerun ApiException --only-rerun goth.runner.exceptions.TemporalAssertionError --only-rerun urllib.error.URLError --only-rerun goth.runner.exceptions.CommandError"
+goth-tests = "pytest -W ignore::DeprecationWarning -svx ."
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
