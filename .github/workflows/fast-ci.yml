@@ -1,3 +1,5 @@
+## This test makes sense if we have separate runner (currently we have only one)
+
 name: Yagna tests (unit + integration)
 
 on:
