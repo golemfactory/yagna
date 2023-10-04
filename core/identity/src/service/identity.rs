@@ -389,13 +389,20 @@ impl IdentityService {
         drop_id: model::DropId,
     ) -> Result<model::IdentityInfo, model::Error> {
         match self.ids.get(&drop_id.node_id) {
-            None => Err(model::Error::new_err_msg(
-                "identity not found: {drop_id.node_id}",
-            )),
+            None => Err(model::Error::NodeNotFound(Box::new(drop_id.node_id))),
             Some(id) => {
                 let removed = to_info(&self.default_key, id);
-                self.ids.remove(&drop_id.node_id);
-                Ok(removed)
+                match self
+                    .db
+                    .as_dao::<IdentityDao>()
+                    .mark_deleted(drop_id.node_id.to_string())
+                    .await
+                {
+                    Ok(_) => Ok(removed),
+                    Err(_) => Err(model::Error::new_err_msg(
+                        "Failed to mark identity as deleted",
+                    )),
+                }
             }
         }
     }
@@ -545,7 +552,14 @@ impl IdentityService {
             let this = this.clone();
             async move {
                 log::trace!("Dropping identity: {:?}", node_id);
-                this.lock().await.drop_id(node_id).await
+                let mut guard = this.lock().await;
+                match guard.drop_id(node_id).await {
+                    Ok(id) => {
+                        guard.ids.remove(&id.node_id);
+                        Ok(id)
+                    }
+                    Err(err) => Err(err),
+                }
             }
         });
     }

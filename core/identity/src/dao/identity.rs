@@ -54,6 +54,18 @@ impl<'c> IdentityDao<'c> {
         Ok(())
     }
 
+    pub async fn mark_deleted(&self, identity_id: String) -> Result<()> {
+        self.with_transaction(move |conn| {
+            Ok(
+                diesel::update(s::identity::table.filter(s::identity::identity_id.eq(identity_id)))
+                    .set(s::identity::is_deleted.eq(true))
+                    .execute(conn)?,
+            )
+        })
+        .await?;
+        Ok(())
+    }
+
     pub async fn list_identities(&self) -> Result<Vec<Identity>> {
         use crate::db::schema::identity::dsl::*;
         readonly_transaction(self.pool, |conn| {
