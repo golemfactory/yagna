@@ -384,6 +384,22 @@ impl IdentityService {
         Ok(model::Ack {})
     }
 
+    pub async fn drop_id(
+        &mut self,
+        drop_id: model::DropId,
+    ) -> Result<model::IdentityInfo, model::Error> {
+        match self.ids.get(&drop_id.node_id) {
+            None => Err(model::Error::new_err_msg(
+                "identity not found: {drop_id.node_id}",
+            )),
+            Some(id) => {
+                let removed = to_info(&self.default_key, id);
+                self.ids.remove(&drop_id.node_id);
+                Ok(removed)
+            }
+        }
+    }
+
     pub async fn get_pub_key(
         &mut self,
         key_id: model::GetPubKey,
@@ -519,10 +535,18 @@ impl IdentityService {
                     .map(|key| key.bytes().to_vec())
             }
         });
-        let this = me;
+        let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
             let this = this.clone();
             async move { this.lock().await.get_key_file(node_id).await }
+        });
+        let this = me;
+        let _ = bus::bind(model::BUS_ID, move |node_id: model::DropId| {
+            let this = this.clone();
+            async move {
+                log::trace!("Dropping identity: {:?}", node_id);
+                this.lock().await.drop_id(node_id).await
+            }
         });
     }
 }

@@ -18,6 +18,7 @@ where
     M: BroadcastMessage + Send + Sync + Unpin + 'static,
     S: ToString + 'static,
 {
+    log::trace!("Broadcasting message: from {}", caller.to_string());
     // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
     bus::service(net::local::BUS_ID)
         .send_as(caller, SendBroadcastMessage::new(message))
