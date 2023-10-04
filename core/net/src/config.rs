@@ -26,7 +26,7 @@ pub struct Config {
     pub broadcast_size: u32,
     #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
     pub session_expiration: Duration,
-    #[structopt(env = "YA_NET_SESSION_REQUEST_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "3s")]
+    #[structopt(env = "YA_NET_SESSION_REQUEST_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "60s")]
     pub session_request_timeout: Duration,
 }
 

@@ -19,10 +19,13 @@ docker-compose:
     # branch: ...
     # commit-hash: ...
     # release-tag: ...
-    # artifacts:
-    #   - name: "ya-runtime-vm"
-    #     use-prerelease: true
-    #     release-tag: "v0.3.0"
+    artifacts:
+      - name: "ya-relay"
+        use-prerelease: true
+        release-tag: "pre-rel-v0.2.3-rc4"
+      - name: "ya-runtime-vm"
+        use-prerelease: true
+        release-tag: "v0.3.0"
 
   compose-log-patterns:
     ethereum-mainnet: ".*Wallets supplied."
