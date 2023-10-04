@@ -34,7 +34,7 @@ jobs:
     name: Build binaries (x86-64)
     env:
       RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
-    runs-on: [ yagna-builder, ubuntu-22.04 ]
+    runs-on: [ yagna-builder ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,4 +92,3 @@ jobs:
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
           rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
-
