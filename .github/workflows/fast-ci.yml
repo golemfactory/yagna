@@ -11,30 +11,13 @@ env:
   rust_stable: 1.71.1
 
 jobs:
-  test_check:
-    name: Check test results
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for build to succeed ( ubuntu )
-        uses: golemfactory/wait-my-workflow@v1.1.1
-        id: wait-for-build-ubu
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build binaries (x86-64)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          intervalSeconds: 30
-          timeoutSeconds: 3600
-
-      - name: Fail if build was not a success ( ubuntu )
-        run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
-
   unit_tests:
     name: Unit Tests
     needs: test_check
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-    runs-on: [yagna-builder, ubuntu-22.04]
+    runs-on: [yagna-builder]
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -83,7 +66,7 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-    runs-on: [yagna-builder, ubuntu-22.04]
+    runs-on: [yagna-builder]
     steps:
       - name: Checkout
         uses: actions/checkout@v1
