@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
 use trust_dns_resolver::config;
 use trust_dns_resolver::TokioAsyncResolver;
 
