@@ -39,7 +39,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '2']}},
+        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.1', '5', '2']}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
@@ -135,9 +135,11 @@ async def test_e2e_outbound_perf(
         activity_id = await requestor.create_activity(agreement_id)
         await provider.wait_for_exeunit_started()
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
+        logger.info("Collecting %d results", num_commands)
         await requestor.collect_results(
             activity_id, batch_id, num_commands, timeout=300
         )
+        logger.info("Collected results %d", num_commands)
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
@@ -149,6 +151,6 @@ async def test_e2e_outbound_perf(
 
         pass_set = [{'Ok': True}, {'Err': 'skipped'}]
         assert output_json['roundtrip'] in pass_set
-        assert output_json['many_reqs'] in pass_set
         assert output_json['iperf3'] in pass_set
         assert output_json['stress'] in pass_set
+        assert output_json['many_reqs'] in pass_set
