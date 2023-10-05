@@ -135,6 +135,8 @@ impl Erc20NextService {
                             );
                         }
                     };
+                } else {
+                    log::debug!("{multi_payment_addr_env} not set");
                 }
             }
 

@@ -299,7 +299,7 @@ impl PaymentCli {
                                 header.push_str(&format!("RPC endpoints configured for {network} are unreliable. Consider changing them.\n"));
                             }
                             TxStuck { .. } => {
-                                header.push_str(&format!("Sent transactions are stuck. Consider increasing max fee per gas.\n"));
+                                header.push_str("Sent transactions are stuck. Consider increasing max fee per gas.\n");
                             }
                         }
                     }
