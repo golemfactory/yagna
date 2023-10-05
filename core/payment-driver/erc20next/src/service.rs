@@ -44,6 +44,7 @@ impl Erc20NextService {
                 skip_multi_contract_check: false,
                 contract_use_direct_method: false,
                 contract_use_unpacked_method: false,
+                use_transfer_for_single_payment: false,
             };
 
             log::warn!("Loading config");
