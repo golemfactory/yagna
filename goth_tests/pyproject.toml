@@ -39,6 +39,6 @@ poethepoet = "^0.22"
 
 [tool.poe.tasks]
 codestyle = "black --check --diff ."
-goth-tests = "pytest -W ignore::DeprecationWarning -svx ."
+goth-tests = "pytest -W ignore::DeprecationWarning -sv ."
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
