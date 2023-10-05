@@ -77,7 +77,7 @@ impl Erc20NextService {
                             chain.priority_fee = fee;
                         }
                         Err(e) => log::warn!(
-                            "Valiue {fee} for {priority_fee_env} is not a valid devimal: {e}"
+                            "Value {fee} for {priority_fee_env} is not a valid decimal: {e}"
                         ),
                     }
                 }
