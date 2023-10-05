@@ -220,7 +220,7 @@ members = [
 [workspace.dependencies]
 rand = "0.8.5"
 url = "2.3.1"
-trust-dns-resolver = "0.22"
+trust-dns-resolver = { version = "0.22", default-features = false }
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 derive_more = "0.99.11"
 

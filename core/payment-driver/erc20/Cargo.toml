@@ -36,7 +36,7 @@ uuid = { version = "0.8", features = ["v4"] }
 web3 = { version = "0.16", default-features = false, features = [ "http-tls", "signing", "ws-tls-tokio" ] }
 rand = { workspace = true }
 url = { workspace = true }
-trust-dns-resolver = { workspace = true, default-features = false }
+trust-dns-resolver = { workspace = true }
 ## yagna dependencies
 ya-payment-driver = "0.3"
 ya-client-model = "0.5"
