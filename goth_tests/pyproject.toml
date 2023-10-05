@@ -28,7 +28,7 @@ python = "^3.10.1"
 pytest = "^7.4"
 pytest-asyncio = "0.21"
 pytest-split = "^0.8.1"
-# goth = "0.15.8"
+goth = "0.15.8"
 # to use development goth version uncomment below
 # goth =  { git = "https://github.com/golemfactory/goth.git", rev = "47df5fa77a4e04239cf0f48d9d9a0b7e3c7468e4" }
 
