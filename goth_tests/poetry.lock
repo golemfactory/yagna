@@ -838,27 +838,31 @@ name = "goth"
 version = "0.15.7"
 description = "Golem Test Harness - integration testing framework"
 optional = false
-python-versions = ">=3.10.1,<4.0.0"
-files = [
-    {file = "goth-0.15.7-py3-none-any.whl", hash = "sha256:03b70b10d74ec7e6ae34cd43b113308467c463f3781edf07c4e6e6cebf69b584"},
-    {file = "goth-0.15.7.tar.gz", hash = "sha256:bae045b5b6b96a7b243df6a65efcd0e81851ed5e72f605b4516ca26bc548b16f"},
-]
+python-versions = "^3.10.1"
+files = []
+develop = false
 
 [package.dependencies]
-aiohttp = ">=3.8.5,<4.0.0"
-ansicolors = ">=1.1.0,<2.0.0"
-docker = ">=6.0,<7.0"
-docker-compose = ">=1.29,<2.0"
-dpath = ">=2.0,<3.0"
+aiohttp = "^3.8.5"
+ansicolors = "^1.1.0"
+docker = "^6.0"
+docker-compose = "^1.29"
+dpath = "^2.0"
 func_timeout = "4.3.5"
-ghapi = ">=0.1.16,<0.2.0"
+ghapi = "^0.1.16"
 markupsafe = "2.0.1"
-mitmproxy = ">=5.3,<6.0"
+mitmproxy = "^5.3"
 pyyaml = "5.3.1"
-transitions = ">=0.8,<0.9"
-typing_extensions = ">=4.5,<5.0"
-urllib3 = ">=1.26,<2.0"
-ya-aioclient = ">=0.6,<0.7"
+transitions = "^0.8"
+typing_extensions = "^4.5"
+urllib3 = "^1.26"
+ya-aioclient = "^0.6"
+
+[package.source]
+type = "git"
+url = "https://github.com/golemfactory/goth.git"
+reference = "d98f32e12a68287b54b4d785a5fd71f5d5e76619"
+resolved_reference = "d98f32e12a68287b54b4d785a5fd71f5d5e76619"
 
 [[package]]
 name = "h11"
@@ -2235,4 +2239,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1"
-content-hash = "5336aafd6da092806f5ac24ed7bfb247adcb06a36d37fd44e9a43db9230f9728"
+content-hash = "9a1086649136c45f6994757df88b1b9b9bddc8ef5ca6d53dac507bc595b2eb2f"
