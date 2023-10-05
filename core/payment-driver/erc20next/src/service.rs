@@ -42,7 +42,7 @@ impl Erc20NextService {
                 keep_running: true,
                 generate_tx_only: false,
                 skip_multi_contract_check: false,
-                contract_use_direct_method: true,
+                contract_use_direct_method: false,
                 contract_use_unpacked_method: false,
                 use_transfer_for_single_payment: false,
             };
