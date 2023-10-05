@@ -33,7 +33,7 @@ thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-web3 = { version = "0.16", default-features = false, features = [ "http-tls", "signing", "ws-tls-tokio" ] }
+web3 = { version = "0.16", default-features = false, features = ["http-tls", "signing", "ws-tls-tokio"] }
 rand = { workspace = true }
 url = { workspace = true }
 trust-dns-resolver = { workspace = true }
