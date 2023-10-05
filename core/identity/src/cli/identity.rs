@@ -394,11 +394,10 @@ impl IdentityCommand {
                 let id = match id {
                     Ok(Some(v)) => v,
                     Err(e) => return CommandOutput::object(Err::<(), _>(e)),
-                    Ok(None) => anyhow::bail!("identity not found"),
+                    Ok(None) => anyhow::bail!("Identity not found"),
                 };
-
                 if id.is_default {
-                    anyhow::bail!("default identity")
+                    anyhow::bail!("Default identity cannot be dropped")
                 }
                 CommandOutput::object(
                     bus::service(identity::BUS_ID)
