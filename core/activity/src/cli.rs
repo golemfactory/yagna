@@ -21,7 +21,7 @@ impl ActivityCli {
             .await
             .map_err(anyhow::Error::msg)?
             .map_err(anyhow::Error::msg)?
-            .ok_or(anyhow::Error::msg("Identity not found"))
+            .ok_or_else(|| anyhow::Error::msg("Identity not found"))
     }
 
     pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
@@ -32,9 +32,7 @@ impl ActivityCli {
                         if id.starts_with("0x") {
                             id.parse()?
                         } else {
-                            Self::get_identity(idm::Get::ByAlias(id.into()))
-                                .await?
-                                .node_id
+                            Self::get_identity(idm::Get::ByAlias(id)).await?.node_id
                         }
                     }
                     None => Self::get_identity(idm::Get::ByDefault).await?.node_id,

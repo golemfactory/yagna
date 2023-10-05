@@ -26,6 +26,7 @@ pub type AppSessionId = Option<String>;
     AsExpression,
     FromSqlRow,
     PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -194,6 +195,20 @@ impl From<AgreementState> for ClientAgreementState {
     }
 }
 
+impl From<ClientAgreementState> for AgreementState {
+    fn from(agreement_state: ClientAgreementState) -> Self {
+        match agreement_state {
+            ClientAgreementState::Proposal => AgreementState::Proposal,
+            ClientAgreementState::Pending => AgreementState::Pending,
+            ClientAgreementState::Cancelled => AgreementState::Cancelled,
+            ClientAgreementState::Rejected => AgreementState::Rejected,
+            ClientAgreementState::Approved => AgreementState::Approved,
+            ClientAgreementState::Expired => AgreementState::Expired,
+            ClientAgreementState::Terminated => AgreementState::Terminated,
+        }
+    }
+}
+
 pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), AgreementDaoError> {
     log::trace!("Checking Agreement state transition: {} => {}", from, to);
     match from {
@@ -219,10 +234,11 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
         },
         AgreementState::Cancelled => (),
         AgreementState::Rejected => (),
-        AgreementState::Approved => match to {
-            AgreementState::Terminated => return Ok(()),
-            _ => (),
-        },
+        AgreementState::Approved => {
+            if to == AgreementState::Terminated {
+                return Ok(());
+            }
+        }
         AgreementState::Expired => (),
         AgreementState::Terminated => (),
     };

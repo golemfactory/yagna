@@ -2,14 +2,12 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use ya_agreement_utils::{AgreementView, OfferDefinition};
+pub use ya_agreement_utils::{OfferDefinition, ProposalView};
 
 use crate::market::negotiator::AgreementResult;
 
-pub type ProposalView = AgreementView;
-
 /// Result returned by `NegotiatorComponent` during Proposals evaluation.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum NegotiationResult {
     /// `NegotiatorComponent` fully negotiated his part of Proposal,
     /// and it can be turned into valid Agreement. Provider will send
@@ -59,17 +57,12 @@ pub trait NegotiatorComponent {
     fn on_agreement_approved(&mut self, agreement_id: &str) -> anyhow::Result<()>;
 }
 
+#[derive(Default)]
 pub struct NegotiatorsPack {
     components: HashMap<String, Box<dyn NegotiatorComponent>>,
 }
 
 impl NegotiatorsPack {
-    pub fn new() -> NegotiatorsPack {
-        NegotiatorsPack {
-            components: HashMap::new(),
-        }
-    }
-
     pub fn add_component(
         mut self,
         name: &str,
@@ -93,9 +86,8 @@ impl NegotiatorComponent for NegotiatorsPack {
                 NegotiationResult::Ready { offer } => offer,
                 NegotiationResult::Negotiating { offer } => {
                     log::info!(
-                        "Negotiator component '{}' is still negotiating Proposal [{}].",
-                        name,
-                        demand.agreement_id
+                        "Negotiator component '{name}' is still negotiating Proposal [{}].",
+                        demand.id
                     );
                     all_ready = false;
                     offer

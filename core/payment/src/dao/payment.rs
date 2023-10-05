@@ -28,7 +28,7 @@ pub struct PaymentDao<'c> {
 
 fn insert_activity_payments(
     activity_payments: Vec<ActivityPayment>,
-    payment_id: &String,
+    payment_id: &str,
     owner_id: &NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -37,13 +37,13 @@ fn insert_activity_payments(
         let amount = activity_payment.amount.into();
         let allocation_id = activity_payment.allocation_id;
 
-        activity::increase_amount_paid(&activity_payment.activity_id, &owner_id, &amount, conn)?;
+        activity::increase_amount_paid(&activity_payment.activity_id, owner_id, &amount, conn)?;
 
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
-                payment_id: payment_id.clone(),
+                payment_id: payment_id.to_string(),
                 activity_id: activity_payment.activity_id,
-                owner_id: owner_id.clone(),
+                owner_id: *owner_id,
                 amount,
                 allocation_id,
             })
@@ -56,7 +56,7 @@ fn insert_activity_payments(
 
 fn insert_agreement_payments(
     agreement_payments: Vec<AgreementPayment>,
-    payment_id: &String,
+    payment_id: &str,
     owner_id: &NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -65,13 +65,13 @@ fn insert_agreement_payments(
         let amount = agreement_payment.amount.into();
         let allocation_id = agreement_payment.allocation_id;
 
-        agreement::increase_amount_paid(&agreement_payment.agreement_id, &owner_id, &amount, conn)?;
+        agreement::increase_amount_paid(&agreement_payment.agreement_id, owner_id, &amount, conn)?;
 
         diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
             .values(DbAgreementPayment {
-                payment_id: payment_id.clone(),
+                payment_id: payment_id.to_string(),
                 agreement_id: agreement_payment.agreement_id,
-                owner_id: owner_id.clone(),
+                owner_id: *owner_id,
                 amount,
                 allocation_id,
             })
@@ -96,7 +96,7 @@ impl<'c> PaymentDao<'c> {
         agreement_payments: Vec<AgreementPayment>,
     ) -> DbResult<()> {
         let payment_id = payment.id.clone();
-        let owner_id = payment.owner_id.clone();
+        let owner_id = payment.owner_id;
         let amount = payment.amount.clone();
 
         do_with_transaction(self.pool, move |conn| {
@@ -106,14 +106,15 @@ impl<'c> PaymentDao<'c> {
                 .execute(conn)?;
             log::trace!("Payment inserted.");
 
-            insert_activity_payments(activity_payments, &payment_id, &owner_id, &conn)?;
-            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, &conn)?;
+            insert_activity_payments(activity_payments, &payment_id, &owner_id, conn)?;
+            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, conn)?;
 
             Ok(())
         })
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_new(
         &self,
         payer_id: NodeId,
@@ -301,8 +302,12 @@ fn join_activity_and_agreement_payments(
     payments
         .into_iter()
         .map(|payment| {
-            let activity_payments = activity_payments_map.remove(&payment.id).unwrap_or(vec![]);
-            let agreement_payments = agreement_payments_map.remove(&payment.id).unwrap_or(vec![]);
+            let activity_payments = activity_payments_map
+                .remove(&payment.id)
+                .unwrap_or_default();
+            let agreement_payments = agreement_payments_map
+                .remove(&payment.id)
+                .unwrap_or_default();
             payment.into_api_model(activity_payments, agreement_payments)
         })
         .collect()

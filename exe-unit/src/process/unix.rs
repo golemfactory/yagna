@@ -37,7 +37,7 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
 
 impl From<io::Error> for SystemError {
     fn from(e: io::Error) -> Self {
-        SystemError::Error(format!("IO error: {}", e.to_string()))
+        SystemError::Error(format!("IO error: {e}"))
     }
 }
 
@@ -55,7 +55,6 @@ impl Process {
 
         std::fs::read_dir("/proc/")
             .expect("no /proc mountpoint")
-            .into_iter()
             .filter_map(|res| res.ok())
             .filter_map(|entry| i32::from_str(&entry.file_name().to_string_lossy()).ok())
             .filter_map(|pid| Process::info(pid).ok())
@@ -113,14 +112,14 @@ impl StatStub {
         Self::parse_stat(stat.trim())
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     fn parse_stat(stat: &str) -> Result<StatStub, SystemError> {
         #[inline(always)]
         fn next<'l, T: std::str::FromStr, I: Iterator<Item = &'l str>>(
             it: &mut I,
         ) -> Result<T, SystemError> {
             it.next()
-                .map(|s| s.parse().ok())
-                .flatten()
+                .and_then(|s| s.parse().ok())
                 .ok_or_else(|| SystemError::Error("proc stat: invalid entry".into()))
         }
 
@@ -258,19 +257,19 @@ impl From<libc::rusage> for Usage {
 
 pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
     let mut usage = mem::MaybeUninit::<libc::rusage>::uninit();
-    let ret = unsafe { libc::getrusage(resource as i32, usage.as_mut_ptr()) };
+    let ret = unsafe { libc::getrusage(resource, usage.as_mut_ptr()) };
     match ret {
         0 => Ok(Usage::from(unsafe { usage.assume_init() })),
-        _ => Err(SystemError::from(nix::Error::last()).into()),
+        _ => Err(SystemError::from(nix::Error::last())),
     }
 }
 
 pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
     fn alive(pid: Pid) -> Result<bool, SystemError> {
-        Ok(match waitpid(pid, Some(WaitPidFlag::WNOHANG))? {
-            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-            _ => true,
-        })
+        Ok(!matches!(
+            waitpid(pid, Some(WaitPidFlag::WNOHANG))?,
+            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _)
+        ))
     }
 
     let pid = Pid::from_raw(pid);
@@ -289,7 +288,7 @@ pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
             waitpid(pid, None)?;
             break;
         }
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
     Ok(())
 }

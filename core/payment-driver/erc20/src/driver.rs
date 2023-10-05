@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, GOERLI_NETWORK};
 
 mod api;
 mod cli;
@@ -65,8 +65,8 @@ impl Erc20Driver {
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
-        let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        let mut accounts = self.active_accounts.borrow_mut();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
@@ -139,7 +139,7 @@ impl PaymentDriver for Erc20Driver {
     }
 
     fn get_default_network(&self) -> String {
-        RINKEBY_NETWORK.to_string()
+        GOERLI_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {
@@ -220,7 +220,7 @@ impl PaymentDriver for Erc20Driver {
             self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
     }
@@ -255,9 +255,10 @@ impl PaymentDriverCron for Erc20Driver {
 
         log::trace!("Running ERC-20 send-out job...");
         'outer: for network_key in self.get_networks().keys() {
-            let network = Network::from_str(&network_key).unwrap();
+            let network = Network::from_str(network_key).unwrap();
             // Process payment rows
-            for node_id in self.active_accounts.borrow().list_accounts() {
+            let accounts = self.active_accounts.borrow().list_accounts();
+            for node_id in accounts {
                 if let Err(e) =
                     cron::process_payments_for_account(&self.dao, &node_id, network).await
                 {

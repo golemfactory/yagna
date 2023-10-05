@@ -5,6 +5,9 @@ on:
       - v*
       - pre-rel-*
 
+env:
+  rust_stable: 1.71.1
+
 jobs:
   create-release:
     name: Create release
@@ -86,11 +89,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         if: matrix.os != 'ubuntu'
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
       - uses: actions-rs/toolchain@v1
         if: matrix.os == 'ubuntu'
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           target: x86_64-unknown-linux-musl
           override: true
       - name: Build macos

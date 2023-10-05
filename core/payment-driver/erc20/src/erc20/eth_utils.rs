@@ -22,7 +22,7 @@ pub fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
     hasher.update(bytes);
     let mut resp: [u8; 32] = Default::default();
     hasher.finalize(&mut resp);
-    resp.iter().cloned().collect()
+    resp.to_vec()
 }
 
 fn tx_encode(tx: &YagnaRawTransaction, s: &mut RlpStream) {
@@ -51,7 +51,7 @@ pub fn encode_signed_tx(
 
     tx.begin_unbounded_list();
 
-    tx_encode(&raw_tx, &mut tx);
+    tx_encode(raw_tx, &mut tx);
     tx.append(&sig_v);
     tx.append(&sig_r);
     tx.append(&sig_s);
@@ -61,14 +61,14 @@ pub fn encode_signed_tx(
     tx.out().to_vec()
 }
 
-fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
+fn prepare_signature(mut signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
     // TODO ugly solution
     assert_eq!(signature.len(), 65);
 
     let sig_v = signature[0];
     let sig_v = sig_v as u64 + chain_id * 2 + 35;
 
-    let mut sig_r = signature.to_owned().split_off(1);
+    let mut sig_r = signature.split_off(1);
     let mut sig_s = sig_r.split_off(32);
 
     prepare_signature_part(&mut sig_r);

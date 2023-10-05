@@ -251,7 +251,9 @@ docker-compose:
     # release-tag: ...
 
   compose-log-patterns:                         # Log message patterns used for container ready checks
-    ethereum: ".*Wallets supplied."
+    ethereum-mainnet: ".*Wallets supplied."
+    ethereum-goerli: ".*Wallets supplied."
+    ethereum-polygon: ".*Wallets supplied."
     ...
 
 key-dir: "keys"                                 # Where to look for pre-funded Ethereum keys

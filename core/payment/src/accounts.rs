@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -52,10 +53,18 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
     let text = fs::read(accounts_path).await?;
     let accounts: Vec<Account> = serde_json::from_slice(&text)?;
 
-    for account in accounts {
-        init_account(account).await?;
-    }
-    log::debug!("Payment accounts initialized.");
+    let init_results = join_all(
+        accounts
+            .into_iter()
+            .map(|account| async move { init_account(account).await.is_ok() }),
+    )
+    .await;
+
+    log::debug!(
+        "Successfully initialized {} / {}  payment accounts.",
+        init_results.iter().filter(|&r| *r).count(),
+        init_results.len()
+    );
     Ok(())
 }
 
@@ -75,7 +84,7 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
     let default_node_id = bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
         .await??
-        .ok_or(anyhow::anyhow!("Default identity not found"))?
+        .ok_or_else(|| anyhow::anyhow!("Default identity not found"))?
         .node_id;
     let default_accounts: Vec<Account> = drivers
         .into_iter()

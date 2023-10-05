@@ -9,20 +9,17 @@ use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, SeekFrom};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom};
 use tokio::task::spawn_local;
 use url::Url;
 
+#[derive(Default)]
 pub struct FileTransferProvider;
+
+#[derive(Default)]
 pub struct DirTransferProvider;
 
 pub const DEFAULT_CHUNK_SIZE: usize = 40 * 1024;
-
-impl Default for FileTransferProvider {
-    fn default() -> Self {
-        FileTransferProvider {}
-    }
-}
 
 impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn schemes(&self) -> Vec<&'static str> {
@@ -33,17 +30,20 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let mut txc = tx.clone();
         let url = url.clone();
-        let offset = ctx.state.offset();
+        let state = ctx.state.clone();
 
         spawn_local(async move {
             let fut = async move {
                 let mut file = File::open(extract_file_url(&url)).await?;
-                file.seek(SeekFrom::Start(offset)).await?;
+                if let Ok(metadata) = file.metadata().await {
+                    state.set_size(Some(metadata.len()));
+                }
+                file.seek(SeekFrom::Start(state.offset())).await?;
                 let meta = file.metadata().await?;
 
                 let mut reader = BufReader::with_capacity(DEFAULT_CHUNK_SIZE, file);
                 let mut buf: [u8; DEFAULT_CHUNK_SIZE] = [0; DEFAULT_CHUNK_SIZE];
-                let mut remaining = meta.len() - offset;
+                let mut remaining = meta.len() - state.offset();
 
                 loop {
                     // read_exact returns EOF if there are less than DEFAULT_CHUNK_SIZE bytes to read
@@ -55,7 +55,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                         reader.read_to_end(&mut vec).await?;
                         vec
                     };
-                    if vec.len() == 0 {
+                    if vec.is_empty() {
                         break;
                     }
 
@@ -74,7 +74,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
     fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
-        let path = PathBuf::from(extract_file_url(&url));
+        let path = PathBuf::from(extract_file_url(url));
         let path_c = path.clone();
         let state = ctx.state.clone();
 
@@ -103,7 +103,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                 while let Some(result) = rx.next().await {
                     let data = result?;
                     let bytes = data.as_ref();
-                    if bytes.len() == 0 {
+                    if bytes.is_empty() {
                         break;
                     }
 
@@ -117,7 +117,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             }
             .map_err(|error| {
                 log::error!("Error writing to file [{}]: {}", path_c.display(), error);
-                Error::from(error)
+                error
             });
 
             abortable_sink(fut, res_tx).await
@@ -131,7 +131,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         url: &Url,
         ctx: &TransferContext,
     ) -> LocalBoxFuture<'a, Result<(), Error>> {
-        let path = PathBuf::from(extract_file_url(&url));
+        let path = PathBuf::from(extract_file_url(url));
         let state = ctx.state.clone();
         async move {
             state.set_offset(match tokio::fs::metadata(path).await {
@@ -142,12 +142,6 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             Ok(())
         }
         .boxed_local()
-    }
-}
-
-impl Default for DirTransferProvider {
-    fn default() -> Self {
-        DirTransferProvider {}
     }
 }
 
@@ -178,10 +172,7 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
 
                 archive(path_iter, dir, format, evt_tx)
                     .await
-                    .forward(
-                        tx.sink_map_err(Error::from)
-                            .with(|b| ready(Ok(Ok(TransferData::from(b))))),
-                    )
+                    .forward(tx.sink_map_err(Error::from).with(|b| ready(Ok(Ok(b)))))
                     .await
             };
 

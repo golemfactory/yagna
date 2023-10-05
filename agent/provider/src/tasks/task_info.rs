@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use std::time::Duration;
 
@@ -28,7 +28,11 @@ pub struct TaskInfo {
 fn agreement_expiration_from(agreement: &AgreementView) -> Result<DateTime<Utc>> {
     let expiration_key_str = "/demand/properties/golem/srv/comp/expiration";
     let timestamp = agreement.pointer_typed::<i64>(expiration_key_str)?;
-    Ok(Utc.timestamp_millis(timestamp))
+
+    match Utc.timestamp_millis_opt(timestamp) {
+        chrono::LocalResult::Single(t) => Ok(t),
+        _ => Err(anyhow!("Cannot make DateTime from {timestamp}")),
+    }
 }
 
 fn multi_activity_from(agreement: &AgreementView) -> Result<bool> {
@@ -47,7 +51,7 @@ fn multi_activity_from(agreement: &AgreementView) -> Result<bool> {
 impl TaskInfo {
     pub fn from(agreement: &AgreementView) -> Result<TaskInfo> {
         Ok(TaskInfo {
-            agreement_id: agreement.agreement_id.clone(),
+            agreement_id: agreement.id.clone(),
             expiration: agreement_expiration_from(agreement)?,
             multi_activity: multi_activity_from(agreement)?,
             idle_agreement_timeout: Duration::from_secs(90),
@@ -84,7 +88,7 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, true);
+        assert!(info.multi_activity);
     }
 
     pub static SAMPLE_AGREEMENT_MULTI_FALSE: &str = r#"{
@@ -105,7 +109,7 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, false);
+        assert!(!info.multi_activity);
     }
 
     pub static SAMPLE_AGREEMENT_MULTI_EMPTY: &str = r#"{
@@ -125,6 +129,6 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, false);
+        assert!(!info.multi_activity);
     }
 }

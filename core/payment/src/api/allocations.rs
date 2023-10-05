@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
@@ -18,10 +19,10 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use crate::accounts::{init_account, Account};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
-use crate::DEFAULT_PAYMENT_PLATFORM;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -44,11 +45,44 @@ async fn create_allocation(
     // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
-    let payment_platform = allocation
-        .payment_platform
+    let payment_platform = match &allocation.payment_platform {
+        Some(platform) => platform.clone(),
+        None => return response::bad_request(&"payment platform must be provided"),
+    };
+
+    let address = allocation
+        .address
         .clone()
-        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
-    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+        .unwrap_or_else(|| node_id.to_string());
+
+    // If the request contains information about the payment platform, initialize the account
+    // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.
+    if let Some(platform) = &allocation.payment_platform {
+        // payment_platform is of the form driver-network-token
+        // eg. erc20-rinkeby-tglm
+        let [driver, network, _token]: [&str; 3] =
+            match platform.split('-').collect::<Vec<_>>().try_into() {
+                Ok(arr) => arr,
+                Err(_e) => {
+                    return response::bad_request(
+                        &"paymentPlatform must be of the form driver-network-token",
+                    )
+                }
+            };
+
+        let acc = Account {
+            driver: driver.to_owned(),
+            address: address.clone(),
+            network: Some(network.to_owned()),
+            token: None,
+            send: true,
+            receive: false,
+        };
+
+        if let Err(e) = init_account(acc).await {
+            return response::server_error(&e);
+        }
+    }
 
     let validate_msg = ValidateAllocation {
         platform: payment_platform.clone(),
@@ -57,7 +91,7 @@ async fn create_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
                            ValidateAllocationError::AccountNotRegistered,
                        ))) => return response::bad_request(&"Account not registered"),
@@ -73,24 +107,23 @@ async fn create_allocation(
         Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
-                let allocation_timeout = allocation.timeout.clone();
 
                 release_allocation_after(
                     db.clone(),
                     allocation_id,
-                    allocation_timeout,
+                    allocation.timeout,
                     Some(node_id),
                 )
                 .await;
 
                 response::created(allocation)
             }
-            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
-            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
-            Err(DbError::Query(e)) => return response::bad_request(&e),
-            Err(e) => return response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => response::bad_request(&e),
+            Err(e) => response::server_error(&e),
         },
-        Err(e) => return response::server_error(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -213,7 +246,7 @@ pub async fn release_allocation_after(
                 }
 
                 let timeout = time_diff.min(max_duration) as u64;
-                tokio::time::delay_for(Duration::from_millis(timeout)).await;
+                tokio::time::sleep(Duration::from_millis(timeout)).await;
             }
 
             forced_release_allocation(db, allocation_id, node_id).await;

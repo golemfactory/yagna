@@ -41,7 +41,7 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix-json) }}
       fail-fast: false
-    runs-on: goth
+    runs-on: [goth, ubuntu-18.04]
     name: Integration Tests (nightly) @ ${{ matrix.branch }}
     defaults:
       run:
@@ -59,12 +59,14 @@ jobs:
           python-version: '3.8.0'
 
       - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v4
+        uses: Gr1N/setup-poetry@v8
         with:
-          poetry-version: 1.1.6
+          poetry-version: 1.2.2
 
       - name: Install dependencies
-        run: poetry install --no-root
+        run: |
+          poetry config experimental.new-installer false
+          poetry install --no-root
 
       - name: Disconnect Docker containers from default network
         continue-on-error: true
@@ -89,7 +91,6 @@ jobs:
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-assets
           # Runs on branches defined within matrix
           poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.branch }}
 

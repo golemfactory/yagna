@@ -1,14 +1,14 @@
 use crate::appkey;
-use crate::command::{YaCommand, ERC20_DRIVER, NETWORK_GROUP_MAP, ZKSYNC_DRIVER};
+use crate::command::{YaCommand, DRIVERS, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 use crate::utils::payment_account;
 use anyhow::{Context, Result};
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
+use futures::StreamExt;
 use std::io;
 use std::process::ExitStatus;
 use tokio::process::Child;
-use tokio::stream::StreamExt;
 use tokio::time::Duration;
 
 fn handle_ctrl_c(result: io::Result<()>) -> Result<()> {
@@ -23,7 +23,7 @@ struct AbortableChild(Option<oneshot::Sender<oneshot::Sender<io::Result<ExitStat
 
 impl AbortableChild {
     fn new(
-        child: Child,
+        mut child: Child,
         mut kill_cmd: mpsc::Sender<()>,
         name: &'static str,
         send_term: bool,
@@ -31,43 +31,46 @@ impl AbortableChild {
         let (tx, rx) = oneshot::channel();
 
         #[allow(unused)]
-        async fn wait_and_kill(child: Child, send_term: bool) -> io::Result<ExitStatus> {
+        async fn wait_and_kill(mut child: Child, send_term: bool) -> io::Result<ExitStatus> {
             #[cfg(target_os = "linux")]
             if send_term {
                 use ::nix::sys::signal::*;
                 use ::nix::unistd::Pid;
 
-                let pid = child.id() as i32;
-                let _ret = ::nix::sys::signal::kill(Pid::from_raw(pid), SIGTERM);
+                match child.id() {
+                    Some(id) => {
+                        let _ret = ::nix::sys::signal::kill(Pid::from_raw(id as i32), SIGTERM);
+                    }
+                    None => log::error!("missing child process pid"),
+                }
             }
             // Yagna service should get ~10 seconds to clean up
-            match future::select(tokio::time::delay_for(Duration::from_secs(15)), child).await {
-                future::Either::Left((_, mut child)) => {
-                    child.kill()?;
-                    child.await
+            match tokio::time::timeout(Duration::from_secs(15), child.wait()).await {
+                Ok(r) => r,
+                Err(_) => {
+                    child.start_kill()?;
+                    child.wait().await
                 }
-                future::Either::Right((r, _)) => r,
             }
         }
 
         tokio::task::spawn_local(async move {
-            match future::select(child, rx).await {
-                future::Either::Left((result, _)) => {
-                    log::error!("child {} exited too early: {:?}", name, result);
+            tokio::select! {
+                r = child.wait() => {
+                    log::error!("child {} exited too early: {:?}", name, r);
                     if kill_cmd.send(()).await.is_err() {
                         log::warn!("unable to send end-of-process notification");
                     }
+                },
+                r = rx => match r {
+                    Ok::<oneshot::Sender<io::Result<ExitStatus>>, oneshot::Canceled>(tx) => {
+                        let _ = tx.send(wait_and_kill(child, send_term).await);
+                    },
+                    Err(_) => {
+                        let _ = wait_and_kill(child, send_term).await;
+                    }
                 }
-                future::Either::Right((
-                    Ok::<oneshot::Sender<io::Result<ExitStatus>>, oneshot::Canceled>(tx),
-                    child,
-                )) => {
-                    let _ = tx.send(wait_and_kill(child, send_term).await);
-                }
-                future::Either::Right((Err(_), child)) => {
-                    let _ = wait_and_kill(child, send_term).await;
-                }
-            }
+            };
         });
 
         Self(Some(tx))
@@ -95,7 +98,7 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
         .ok();
 
     loop {
-        tokio::time::delay_for(Duration::from_secs(60)).await;
+        tokio::time::sleep(Duration::from_secs(60)).await;
         let new_status = crate::platform::kvm_status();
         if new_status.is_valid() != status.is_valid() {
             cmd.ya_provider()?
@@ -108,8 +111,8 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
     }
 }
 
-pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
-    crate::setup::setup(&mut config, false).await?;
+pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
+    crate::setup::setup(&config, false).await?;
 
     let cmd = YaCommand::new()?;
     let service = cmd.yagna()?.service_run(&config).await?;
@@ -119,19 +122,15 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     let address =
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
-        cmd.yagna()?
-            .payment_init(&address, &nn, &ERC20_DRIVER)
-            .await?;
-        if ZKSYNC_DRIVER.platform(&nn).is_err() {
-            continue;
+        for driver in DRIVERS.iter() {
+            if driver.platform(nn).is_err() {
+                continue;
+            }
+
+            if let Err(e) = cmd.yagna()?.payment_init(&address, nn, driver).await {
+                log::debug!("Failed to initialize {} driver. Error: {e}", driver.name);
+            }
         }
-        if let Err(e) = cmd
-            .yagna()?
-            .payment_init(&address, &nn, &ZKSYNC_DRIVER)
-            .await
-        {
-            log::debug!("Failed to initialize zkSync driver. e:{}", e);
-        };
     }
 
     let provider = cmd.ya_provider()?.spawn(&app_key, &config).await?;
@@ -159,9 +158,11 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
 
     if let Err(e) = provider.abort().await {
         log::warn!("provider exited with: {:?}", e);
+        return Ok(11);
     }
     if let Err(e) = service.abort().await {
         log::warn!("service exited with: {:?}", e);
+        return Ok(12);
     }
     Ok(0)
 }
@@ -221,7 +222,7 @@ async fn kill_pid(pid: i32, timeout: i64) -> Result<()> {
             waitpid(pid, None)?;
             break;
         }
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
     Ok(())
 }

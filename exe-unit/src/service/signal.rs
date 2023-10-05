@@ -34,7 +34,7 @@ where
 {
     let handler_ = addr.clone();
     let f = move || {
-        log::info!("Caught signal: {}", signal);
+        log::info!("Caught signal: {signal}");
         handler_.do_send(Shutdown(ShutdownReason::Interrupted(signal)));
     };
 
@@ -59,11 +59,9 @@ where
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        std::mem::replace(&mut self.signals, Vec::new())
-            .into_iter()
-            .for_each(|s| {
-                unregister(s);
-            });
+        std::mem::take(&mut self.signals).into_iter().for_each(|s| {
+            unregister(s);
+        });
 
         log::debug!("Signal monitoring service stopped");
     }

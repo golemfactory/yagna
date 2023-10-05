@@ -7,7 +7,7 @@ use ipnet::IpNet;
 use ya_relay_stack::Error;
 
 pub const DEFAULT_MAX_FRAME_SIZE: usize = 1500;
-pub const DEFAULT_IPV4_NET_MASK: &'static str = "255.255.255.0";
+pub const DEFAULT_IPV4_NET_MASK: &str = "255.255.255.0";
 
 #[inline(always)]
 pub fn hton(ip: IpAddr) -> Box<[u8]> {
@@ -31,13 +31,13 @@ pub fn ntoh(data: &[u8]) -> Option<IpAddr> {
 }
 
 pub fn to_ip(ip: &str) -> Result<IpAddr, Error> {
-    let ip = IpAddr::from_str(ip.as_ref()).map_err(Error::from)?;
+    let ip = IpAddr::from_str(ip).map_err(Error::from)?;
 
     if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
-        return Err(Error::IpAddrNotAllowed(ip).into());
+        return Err(Error::IpAddrNotAllowed(ip));
     } else if let IpAddr::V4(ip4) = &ip {
         if ip4.is_broadcast() {
-            return Err(Error::IpAddrNotAllowed(ip).into());
+            return Err(Error::IpAddrNotAllowed(ip));
         }
     }
 
@@ -55,7 +55,7 @@ pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> 
     let result = match ip.find('/') {
         Some(_) => IpNet::from_str(ip),
         None => {
-            let ip = IpAddr::from_str(&ip)?;
+            let ip = IpAddr::from_str(ip)?;
             let cidr = match &ip {
                 IpAddr::V4(_) => {
                     let mask = mask
@@ -70,5 +70,5 @@ pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> 
             IpNet::from_str(&format!("{}/{}", ip, cidr))
         }
     };
-    Ok(result.map_err(|_| Error::NetAddr(ip.to_string()))?)
+    result.map_err(|_| Error::NetAddr(ip.to_string()))
 }

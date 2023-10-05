@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_core_model::{identity, NodeId};
-use ya_service_api_interfaces::Service;
+use ya_service_api_interfaces::{Provider, Service};
 use ya_service_bus::{Error, RpcEndpoint, RpcMessage};
 
 use crate::config::{Config, NetType};
@@ -45,7 +45,7 @@ impl Net {
         let config = Config::from_env()?;
 
         {
-            (*NET_TYPE.write().unwrap()) = config.net_type.clone();
+            (*NET_TYPE.write().unwrap()) = config.net_type;
         }
 
         match &config.net_type {
@@ -60,11 +60,19 @@ impl Net {
         }
     }
 
+    pub fn rest<CONTEXT: Provider<Self, ()>>(_: &CONTEXT) -> actix_web::Scope {
+        let net_type = { *NET_TYPE.read().unwrap() };
+        match net_type {
+            NetType::Central => crate::central::web_scope(),
+            NetType::Hybrid => crate::hybrid::web_scope(),
+        }
+    }
+
     pub async fn shutdown() -> anyhow::Result<()> {
         let config = Config::from_env()?;
 
         {
-            (*NET_TYPE.write().unwrap()) = config.net_type.clone();
+            (*NET_TYPE.write().unwrap()) = config.net_type;
         }
 
         match &config.net_type {
@@ -90,7 +98,8 @@ where
     M: BroadcastMessage + Send + Sync + Unpin + 'static,
     S: ToString + 'static,
 {
-    match { NET_TYPE.read().unwrap().clone() } {
+    let net_type = { *NET_TYPE.read().unwrap() };
+    match net_type {
         NetType::Central => crate::central::broadcast(caller, message).await,
         NetType::Hybrid => crate::hybrid::broadcast(caller, message).await,
     }
@@ -112,7 +121,8 @@ where
         > + 'static,
     F: FnMut(String, SendBroadcastMessage<M>) -> T + Send + 'static,
 {
-    match { NET_TYPE.read().unwrap().clone() } {
+    let net_type = { *NET_TYPE.read().unwrap() };
+    match net_type {
         NetType::Central => {
             crate::central::bind_broadcast_with_caller(broadcast_address, handler).await
         }

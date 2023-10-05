@@ -73,12 +73,14 @@ pub(crate) fn encode_request(
     address: String,
     request_id: String,
     data: Vec<u8>,
+    no_reply: bool,
 ) -> anyhow::Result<Vec<u8>> {
     let message = GsbMessage::CallRequest(ya_sb_proto::CallRequest {
         caller: caller.to_string(),
         address,
         request_id,
         data,
+        no_reply,
     });
     Ok(encode_message(message)?)
 }
@@ -155,7 +157,7 @@ mod tests {
         let encoded = encode_message(msg.clone()).unwrap();
 
         let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
-        ya_sb_proto::codec::GsbMessageEncoder::default()
+        ya_sb_proto::codec::GsbMessageEncoder
             .encode(msg.clone(), &mut buf)
             .unwrap();
         let encoded_orig = Vec::from_iter(buf.into_iter());

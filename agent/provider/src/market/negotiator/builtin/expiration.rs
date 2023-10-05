@@ -25,17 +25,17 @@ pub struct LimitExpiration {
     min_deadline: i64,
 }
 
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &str =
     "/golem/com/payment/debit-notes/accept-timeout?";
-pub static AGREEMENT_EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY: &str = "/golem/srv/comp/expiration";
 
 // TODO: We should unify properties access in agreement-utils, because it is annoying to use both forms.
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &str =
     "golem.com.payment.debit-notes.accept-timeout?";
 
 // Note: Tests are using this.
 #[allow(dead_code)]
-pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &str = "golem.srv.comp.expiration";
 
 impl LimitExpiration {
     pub fn new(config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<LimitExpiration> {
@@ -66,7 +66,11 @@ fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
         .ok_or_else(|| anyhow::anyhow!("Missing expiration key in Proposal"))?
         .clone();
     let timestamp: i64 = serde_json::from_value(value)?;
-    Ok(Utc.timestamp_millis(timestamp))
+
+    match Utc.timestamp_millis_opt(timestamp) {
+        chrono::LocalResult::Single(t) => Ok(t),
+        _ => Err(anyhow!("Cannot make DateTime from timestamp {timestamp}")),
+    }
 }
 
 fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
@@ -89,7 +93,7 @@ impl NegotiatorComponent for LimitExpiration {
     ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;
         let our_deadline = debit_deadline_from(&offer)?;
-        let req_expiration = proposal_expiration_from(&demand)?;
+        let req_expiration = proposal_expiration_from(demand)?;
 
         // Let's check if Requestor is able to accept DebitNotes.
         let max_expiration_delta = match &req_deadline {
@@ -106,7 +110,7 @@ impl NegotiatorComponent for LimitExpiration {
         if too_soon || too_late {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
-                demand.agreement_id
+                demand.id
             );
 
             return Ok(NegotiationResult::Reject {
@@ -125,38 +129,41 @@ impl NegotiatorComponent for LimitExpiration {
             // Both Provider and Requestor support DebitNotes acceptance. We must
             // negotiate until we will agree to the same value.
             (Some(req_deadline), Some(our_deadline)) => {
-                if req_deadline > our_deadline {
-                    NegotiationResult::Reject {
+                match req_deadline.cmp(&our_deadline) {
+                    std::cmp::Ordering::Greater => NegotiationResult::Reject {
                         message: format!(
                             "DebitNote acceptance deadline should be less than {}.",
                             self.accept_timeout.display()
                         ),
                         is_final: true,
+                    },
+                    std::cmp::Ordering::Equal => {
+                        // We agree with Requestor to the same deadline.
+                        NegotiationResult::Ready { offer }
                     }
-                } else if req_deadline == our_deadline {
-                    // We agree with Requestor to the same deadline.
-                    NegotiationResult::Ready { offer }
-                } else {
-                    // Below certain timeout it is impossible for Requestor to accept DebitNotes.
-                    if req_deadline.num_seconds() < self.min_deadline {
-                        return Ok(NegotiationResult::Reject {
-                            message: format!(
-                                "To low DebitNotes timeout: {}",
-                                req_deadline.display()
-                            ),
-                            is_final: true,
-                        });
+                    std::cmp::Ordering::Less => {
+                        // Below certain timeout it is impossible for Requestor to accept DebitNotes.
+                        if req_deadline.num_seconds() < self.min_deadline {
+                            return Ok(NegotiationResult::Reject {
+                                message: format!(
+                                    "To low DebitNotes timeout: {}",
+                                    req_deadline.display()
+                                ),
+                                is_final: true,
+                            });
+                        }
+
+                        // Requestor proposed better deadline, than we required.
+                        // We are expected to set property to the same value if we agree.
+                        let deadline_prop = offer
+                            .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
+                            .unwrap();
+                        *deadline_prop =
+                            serde_json::Value::Number(req_deadline.num_seconds().into());
+
+                        // Since we changed our proposal, we can't return `Ready`.
+                        NegotiationResult::Negotiating { offer }
                     }
-
-                    // Requestor proposed better deadline, than we required.
-                    // We are expected to set property to the same value if we agree.
-                    let deadline_prop = offer
-                        .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
-                        .unwrap();
-                    *deadline_prop = serde_json::Value::Number(req_deadline.num_seconds().into());
-
-                    // Since we changed our proposal, we can't return `Ready`.
-                    NegotiationResult::Negotiating { offer }
                 }
             }
             // Requestor doesn't support DebitNotes acceptance, so we should
@@ -195,8 +202,10 @@ impl NegotiatorComponent for LimitExpiration {
 #[cfg(test)]
 mod test_expiration_negotiator {
     use super::*;
+
     use ya_agreement_utils::agreement::expand;
     use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate, ServiceInfo};
+    use ya_client_model::market::proposal::State;
 
     fn expiration_config() -> AgreementExpirationNegotiatorConfig {
         AgreementExpirationNegotiatorConfig {
@@ -209,8 +218,14 @@ mod test_expiration_negotiator {
 
     fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
         ProposalView {
-            agreement_id: "2332850934yer".to_string(),
-            json: expand(value),
+            content: OfferTemplate {
+                properties: expand(value),
+                constraints: "()".to_string(),
+            },
+            id: "2332850934yer".to_string(),
+            issuer: Default::default(),
+            state: State::Initial,
+            timestamp: Utc::now(),
         }
     }
 
@@ -229,9 +244,16 @@ mod test_expiration_negotiator {
 
     impl ToProposal for OfferDefinition {
         fn to_proposal(self) -> ProposalView {
+            let template = self.into_template();
             ProposalView {
-                agreement_id: "sagdshgdfgd".to_string(),
-                json: expand(self.into_json()),
+                content: OfferTemplate {
+                    properties: expand(template.properties),
+                    constraints: template.constraints,
+                },
+                id: "sagdshgdfgd".to_string(),
+                issuer: Default::default(),
+                state: State::Initial,
+                timestamp: Utc::now(),
             }
         }
     }

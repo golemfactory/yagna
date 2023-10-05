@@ -32,6 +32,7 @@ use super::Preset;
 use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
+use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
@@ -115,6 +116,7 @@ pub struct ProviderMarket {
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
+    agent_negotiators_cfg: Arc<AgentNegotiatorsConfig>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<NewAgreement>,
@@ -137,17 +139,22 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
-        return ProviderMarket {
-            api: Arc::new(api),
+    pub fn new(
+        api: MarketProviderApi,
+        config: MarketConfig,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
+    ) -> ProviderMarket {
+        ProviderMarket {
             negotiator: Arc::new(NegotiatorAddr::default()),
-            config: Arc::new(config),
+            api: Arc::new(api),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
-            agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
-            agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
+            config: Arc::new(config),
+            agent_negotiators_cfg: Arc::new(agent_negotiators_cfg),
+            agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
+            agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
-        };
+        }
     }
 
     fn async_context(&self, ctx: &mut Context<Self>) -> AsyncCtx {
@@ -180,7 +187,7 @@ impl ProviderMarket {
     // =========================================== //
 
     fn on_agreement_approved(&mut self, msg: NewAgreement, _ctx: &mut Context<Self>) -> Result<()> {
-        log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
+        log::info!("Got approved agreement [{}].", msg.agreement.id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
     }
@@ -201,13 +208,13 @@ async fn subscribe(
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
     for subscription in subscriptions.iter() {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(&subscription).await?;
+        api.unsubscribe(subscription).await?;
     }
     Ok(())
 }
 
 async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription: &Subscription) {
-    if events.len() == 0 {
+    if events.is_empty() {
         return;
     };
 
@@ -381,8 +388,8 @@ async fn process_agreement(
     );
 
     let config = ctx.config;
-    let agreement = AgreementView::try_from(agreement)
-        .map_err(|e| anyhow!("Invalid agreement. Error: {}", e))?;
+    let agreement =
+        AgreementView::try_from(agreement).map_err(|e| anyhow!("Invalid agreement. Error: {e}"))?;
 
     let action = ctx
         .negotiator
@@ -390,16 +397,14 @@ async fn process_agreement(
         .await
         .map_err(|e| {
             anyhow!(
-                "Negotiator error while processing agreement [{}]. Error: {}",
-                agreement.agreement_id,
-                e
+                "Negotiator error while processing agreement [{}]. Error: {e}",
+                agreement.id,
             )
         })?;
 
     log::info!(
-        "Decided to {} [{}] for subscription [{}].",
-        action,
-        agreement.agreement_id,
+        "Decided to {action} [{}] for subscription [{}].",
+        agreement.id,
         subscription.preset.name
     );
 
@@ -420,7 +425,7 @@ async fn process_agreement(
             let result = ctx
                 .api
                 .approve_agreement(
-                    &agreement.agreement_id,
+                    &agreement.id,
                     Some(config.session_id.clone()),
                     Some(config.agreement_approve_timeout),
                 )
@@ -429,14 +434,13 @@ async fn process_agreement(
             if let Err(error) = result {
                 // Notify negotiator, that we couldn't approve.
                 let msg = AgreementFinalized {
-                    id: agreement.agreement_id.clone(),
+                    id: agreement.id.clone(),
                     result: AgreementResult::ApprovalFailed,
                 };
                 let _ = ctx.market.send(msg).await;
                 return Err(anyhow!(
-                    "Failed to approve agreement [{}]. Error: {}",
-                    agreement.agreement_id,
-                    error
+                    "Failed to approve agreement [{}]. Error: {error}",
+                    agreement.id,
                 ));
             }
 
@@ -444,9 +448,7 @@ async fn process_agreement(
             // Notify outside world about agreement for further processing.
         }
         AgreementResponse::RejectAgreement { reason, .. } => {
-            ctx.api
-                .reject_agreement(&agreement.agreement_id, &reason)
-                .await?;
+            ctx.api.reject_agreement(&agreement.id, &reason).await?;
         }
     };
     Ok(())
@@ -473,7 +475,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
 
                 // We need to wait after failure, because in most cases it happens immediately
                 // and we are spammed with error logs.
-                tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                 continue;
             }
             Ok(events) => events,
@@ -527,7 +529,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
                     _ => {
                         // We need to wait after failure, because in most cases it happens immediately
                         // and we are spammed with error logs.
-                        tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                     }
                 }
             }
@@ -541,18 +543,18 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
 struct ReSubscribe(String);
 
 impl Handler<ReSubscribe> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
         let to_resubscribe = self
             .subscriptions
             .values()
-            .filter(|sub| &sub.id == &msg.0)
+            .filter(|sub| sub.id == msg.0)
             .cloned()
             .map(|sub| (sub.id.clone(), sub))
             .collect::<HashMap<String, Subscription>>();
 
-        if to_resubscribe.len() > 0 {
+        if !to_resubscribe.is_empty() {
             return ActorResponse::r#async(
                 resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
                     .into_actor(self)
@@ -568,7 +570,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
 struct PostponeDemand(SubscriptionProposal);
 
 impl Handler<PostponeDemand> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
         self.postponed_demands.push(msg.0);
@@ -592,7 +594,8 @@ impl Actor for ProviderMarket {
             ctx.spawn(collect_agreement_events(actx).into_actor(self)),
         );
 
-        self.negotiator = factory::create_negotiator(ctx.address(), &self.config);
+        self.negotiator =
+            factory::create_negotiator(ctx.address(), &self.config, &self.agent_negotiators_cfg);
     }
 }
 
@@ -600,18 +603,19 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        for (_, handle) in self.handles.drain().into_iter() {
+        for (_, handle) in self.handles.drain() {
             ctx.cancel_future(handle);
         }
 
         let market = ctx.address();
         async move {
-            Ok(market
+            market
                 .send(Unsubscribe(OfferKind::Any))
                 .await?
                 .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
                 .ok()
-                .unwrap_or(()))
+                .unwrap_or(());
+            Ok(())
         }
         .boxed_local()
     }
@@ -625,7 +629,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("NotSpecified".to_string());
+            .unwrap_or_else(|| "NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
@@ -670,7 +674,11 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::debug!("Offer created: {}", offer.display());
+            log::info!(
+                "Offer for preset: {} = {}",
+                msg.preset.name,
+                offer.display()
+            );
 
             log::info!("Subscribing to events... [{}]", msg.preset.name);
 
@@ -693,9 +701,9 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         AgreementResult::ClosedByUs => GolemReason::success(),
         AgreementResult::Broken { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
-        AgreementResult::ClosedByRequestor => return (),
+        AgreementResult::ClosedByRequestor => return,
         // No need to terminate since we didn't have Agreement with Requestor.
-        AgreementResult::ApprovalFailed => return (),
+        AgreementResult::ApprovalFailed => return,
     };
 
     log::info!(
@@ -716,7 +724,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
                     e,
                     repeats.max_elapsed_time,
                 );
-                return ();
+                return;
             }
         };
 
@@ -726,7 +734,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
             e,
             &delay,
         );
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 
     log::info!("Agreement [{}] terminated by Provider.", &id);
@@ -827,7 +835,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
 
             log::info!("Re-negotiating all demands");
 
-            let demands = std::mem::replace(&mut myself.postponed_demands, Vec::new());
+            let demands = std::mem::take(&mut myself.postponed_demands);
             ctx.spawn(
                 renegotiate_demands(async_ctx, myself.subscriptions.clone(), demands)
                     .into_actor(myself),
@@ -843,7 +851,7 @@ impl Handler<AgreementClosed> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -854,7 +862,7 @@ impl Handler<AgreementBroken> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -867,9 +875,8 @@ impl Handler<Unsubscribe> for ProviderMarket {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
-                std::mem::replace(&mut self.subscriptions, HashMap::new())
-                    .into_iter()
-                    .map(|(k, _)| k)
+                std::mem::take(&mut self.subscriptions)
+                    .into_keys()
                     .collect::<Vec<_>>()
             }
             OfferKind::WithPresets(preset_names) => {
@@ -912,13 +919,14 @@ actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
-    let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(5);
-    backoff.initial_interval = std::time::Duration::from_secs(5);
-    backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(60 * 60);
-    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
-    backoff
+    backoff::ExponentialBackoff {
+        current_interval: std::time::Duration::from_secs(5),
+        initial_interval: std::time::Duration::from_secs(5),
+        multiplier: 1.5f64,
+        max_interval: std::time::Duration::from_secs(60 * 60),
+        max_elapsed_time: Some(std::time::Duration::from_secs(u64::max_value())),
+        ..Default::default()
+    }
 }
 
 // =========================================== //

@@ -54,9 +54,7 @@ impl ResponseError for NegotiationError {}
 
 impl ResponseError for ResolverError {
     fn error_response(&self) -> HttpResponse {
-        match self {
-            _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
-        }
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
     }
 }
 
@@ -201,6 +199,8 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
+            | AgreementError::InvalidDate(..)
+            | AgreementError::InvalidAgreementState(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)

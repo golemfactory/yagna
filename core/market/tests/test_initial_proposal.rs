@@ -167,7 +167,7 @@ async fn test_query_events_timeout() {
 
     // Inject proposal before timeout will elapse. We expect that Proposal
     // event will be generated and query events will return it.
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
     market1
         .subscribe_offer(&sample_offer(), &identity2)
         .await
@@ -210,7 +210,7 @@ async fn test_query_events_unsubscribe_notification() {
     });
 
     // Unsubscribe Demand. query_events should return with unsubscribed error.
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
 
     let market1 = network.get_market("Node-1");
     market1
@@ -254,7 +254,7 @@ async fn test_query_events_edge_cases() {
 
     // Negative timeout should be treated as immediate checking events and return.
     for _ in 0..10 {
-        tokio::time::delay_for(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
         let events = tokio::time::timeout(
             Duration::from_millis(20),
             market1
@@ -264,7 +264,7 @@ async fn test_query_events_edge_cases() {
         .await
         .unwrap()
         .unwrap();
-        if events.len() > 0 {
+        if !events.is_empty() {
             assert_eq!(events.len(), 1);
             break;
         }
@@ -383,7 +383,7 @@ async fn test_simultaneous_query_events() {
 
     // Wait for a while, before event will be injected. We want to trigger notifications.
     // Generate 2 proposals. Each waiting query events call will take an event.
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
     market1
         .subscribe_offer(&sample_offer(), &identity1)
         .await
@@ -460,7 +460,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
     });
 
     // Wait for a while, and unsubscribe second demand and subscribe first offer.
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
     market1
         .unsubscribe_demand(&demand_id2, &identity1)
         .await

@@ -1,4 +1,6 @@
+use std::convert::TryFrom;
 use std::io::Cursor;
+use std::net::{AddrParseError, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -13,7 +15,7 @@ pub struct DeployResult {
     pub start_mode: StartMode,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerVolume {
     pub name: String,
@@ -23,36 +25,93 @@ pub struct ContainerVolume {
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ContainerEndpoint {
-    Socket(PathBuf),
+    UnixStream(PathBuf),
+    UnixDatagram(PathBuf),
+    UdpDatagram(SocketAddr),
+    TcpListener(SocketAddr),
+    TcpStream(SocketAddr),
+}
+
+impl std::fmt::Display for ContainerEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnixStream(path) | Self::UnixDatagram(path) => write!(f, "{}", path.display()),
+            Self::UdpDatagram(addr) | Self::TcpListener(addr) | Self::TcpStream(addr) => {
+                write!(f, "{}", addr)
+            }
+        }
+    }
 }
 
 impl From<ContainerEndpoint> for PathBuf {
     fn from(e: ContainerEndpoint) -> Self {
         match e {
-            ContainerEndpoint::Socket(p) => p,
+            ContainerEndpoint::UnixStream(p) | ContainerEndpoint::UnixDatagram(p) => p,
+            ContainerEndpoint::UdpDatagram(a) => PathBuf::from(format!("udp://{}", a)),
+            ContainerEndpoint::TcpListener(a) => PathBuf::from(format!("tcp-connect://{}", a)),
+            ContainerEndpoint::TcpStream(a) => PathBuf::from(format!("tcp-listen://{}", a)),
         }
     }
 }
 
-impl From<crate::server::NetworkEndpoint> for ContainerEndpoint {
-    fn from(endpoint: crate::server::NetworkEndpoint) -> Self {
+impl<'a> TryFrom<&'a crate::server::NetworkEndpoint> for ContainerEndpoint {
+    type Error = String;
+
+    fn try_from(endpoint: &'a crate::server::NetworkEndpoint) -> Result<Self, Self::Error> {
         match endpoint {
-            crate::server::NetworkEndpoint::Socket(s) => Self::Socket(PathBuf::from(s)),
+            crate::server::NetworkEndpoint::UnixStream(s) => Ok(Self::UnixStream(PathBuf::from(s))),
+            crate::server::NetworkEndpoint::UnixDatagram(s) => {
+                Ok(Self::UnixDatagram(PathBuf::from(s)))
+            }
+            crate::server::NetworkEndpoint::UdpDatagram(s) => {
+                Ok(Self::UdpDatagram(to_socket_addr(s)?))
+            }
+            crate::server::NetworkEndpoint::TcpListener(s) => {
+                Ok(Self::TcpListener(to_socket_addr(s)?))
+            }
+            crate::server::NetworkEndpoint::TcpStream(s) => Ok(Self::TcpStream(to_socket_addr(s)?)),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+impl TryFrom<url::Url> for ContainerEndpoint {
+    type Error = String;
+
+    fn try_from(url: url::Url) -> Result<Self, Self::Error> {
+        match url.scheme() {
+            "unix" => {
+                let url = url.to_string().replacen("unix://", "", 1);
+                Ok(Self::UnixStream(PathBuf::from(url)))
+            }
+            "udp" => {
+                let url = url.to_string().replacen("udp://", "", 1);
+                let addr: SocketAddr = url.parse().map_err(|e: AddrParseError| e.to_string())?;
+                Ok(Self::UdpDatagram(addr))
+            }
+            "tcp-connect" => {
+                let url = url.to_string().replacen("tcp-connect://", "", 1);
+                let addr: SocketAddr = url.parse().map_err(|e: AddrParseError| e.to_string())?;
+                Ok(Self::TcpStream(addr))
+            }
+            "tcp-listen" => Ok(Self::TcpListener(SocketAddr::new(
+                Ipv4Addr::new(127, 0, 0, 1).into(),
+                0,
+            ))),
+            scheme => Err(format!("Unknown scheme: {scheme}")),
+        }
+    }
+}
+
+fn to_socket_addr(s: &str) -> Result<SocketAddr, String> {
+    s.parse().map_err(|e: AddrParseError| e.to_string())
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum StartMode {
+    #[default]
     Empty,
     Blocking,
-}
-
-impl Default for StartMode {
-    fn default() -> Self {
-        StartMode::Empty
-    }
 }
 
 impl DeployResult {

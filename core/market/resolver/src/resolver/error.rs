@@ -3,7 +3,7 @@ use std::fmt;
 
 // #region ParseError
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     msg: String,
 }
@@ -37,7 +37,7 @@ impl error::Error for ParseError {
 
 // #region ResolveError
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolveError {
     pub msg: String,
 }
@@ -71,7 +71,7 @@ impl error::Error for ResolveError {
 
 // #region ExpressionError
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionError {
     msg: String,
 }
@@ -105,7 +105,7 @@ impl error::Error for ExpressionError {
 
 // #region PrepareError
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrepareError {
     msg: String,
 }
@@ -139,7 +139,7 @@ impl error::Error for PrepareError {
 
 // #region MatchError
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchError {
     msg: String,
 }

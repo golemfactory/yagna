@@ -1,5 +1,5 @@
 use actix_web::http::header;
-use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 
 use awc::Client;
 use futures::TryFutureExt;
@@ -9,6 +9,7 @@ use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
+use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::{middleware::auth, rest_api_addr, rest_api_url};
 use ya_service_bus::RpcEndpoint;
 
@@ -18,19 +19,22 @@ enum Service {
     Identity(ya_identity::service::Identity),
 }
 
+async fn response() -> HttpResponse {
+    let body = "Works fine".to_string();
+    HttpResponse::Ok().body(body)
+}
+
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_gsb_router(None).await?;
     Service::gsb(&db).await?;
 
+    let cors = AppKeyCors::new(&CorsConfig::default()).await?;
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(auth::Auth::default())
-            .service(web::resource("/").route(web::get().to(|req: HttpRequest| {
-                let body = format!("{:?}", req);
-                HttpResponse::Ok().body(body)
-            })))
+            .wrap(auth::Auth::new(cors.cache()))
+            .service(web::resource("/").route(web::get().to(response)))
     })
     .bind(rest_api_addr())?
     .run()
@@ -72,13 +76,14 @@ async fn main() -> anyhow::Result<()> {
                         .await
                         .map_err(map_err)?
                         .map_err(map_err)?
-                        .ok_or(anyhow::Error::msg("Identity not found"))?
+                        .ok_or_else(|| anyhow::Error::msg("Identity not found"))?
                         .node_id;
 
                     let create = model::Create {
                         name,
                         role: model::DEFAULT_ROLE.to_string(),
                         identity,
+                        allow_origins: vec![],
                     };
 
                     let app_key = bus::service(model::BUS_ID)
@@ -92,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
                         .get(rest_api_url().to_string())
-                        .header(header::AUTHORIZATION, key)
+                        .insert_header((header::AUTHORIZATION, format!("Bearer {}", key)))
                         .send()
                         .map_err(map_err)
                         .await?;

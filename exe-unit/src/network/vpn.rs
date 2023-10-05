@@ -1,14 +1,15 @@
 use std::convert::TryFrom;
-use std::ops::Not;
 
 use actix::prelude::*;
-use futures::{future, FutureExt, SinkExt, TryFutureExt};
+use futures::{future, FutureExt};
 
-use ya_core_model::activity;
-use ya_core_model::activity::{RpcMessageError, VpnControl, VpnPacket};
+use ya_client_model::NodeId;
+use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
+use ya_core_model::identity;
+use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
-use ya_service_bus::{actix_rpc, typed, RpcEnvelope};
+use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
 use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
@@ -16,11 +17,11 @@ use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPac
 use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::network;
-use crate::network::{Endpoint, RxBuffer};
+use crate::network::{self, Endpoint};
 use crate::state::Deployment;
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
+    mut endpoint: Endpoint,
     acl: Acl,
     service: &R,
     deployment: &Deployment,
@@ -31,41 +32,61 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 
     log::info!("Starting VPN service...");
 
+    let node_id = typed::service(identity::BUS_ID)
+        .send(identity::Get::ByDefault)
+        .await?
+        .map_err(|e| Error::Other(format!("failed to retrieve default identity: {e}")))?
+        .ok_or_else(|| Error::Other("no default identity set".to_string()))?
+        .node_id;
+
     let networks = deployment
         .networks
         .values()
         .map(TryFrom::try_from)
         .collect::<crate::Result<_>>()?;
-    let hosts = deployment.hosts.clone();
+
     let response = service
         .create_network(CreateNetwork {
             networks,
-            hosts,
+            hosts: deployment.hosts.clone(),
             interface: NetworkInterface::Vpn as i32,
         })
         .await
-        .map_err(|e| Error::Other(format!("[vpn] initialization error: {:?}", e)))?;
+        .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match response.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("[vpn] endpoint already connected".into())),
+    match response.endpoint {
+        Some(ep) => {
+            let cep = ContainerEndpoint::try_from(&ep)
+                .map_err(|e| Error::Other(format!("Invalid endpoint '{ep:?}': {e}")))?;
+            endpoint.connect(cep).await?
+        }
+        None => {
+            return Err(Error::Other(
+                "No VM VPN network endpoint in CreateNetwork response".into(),
+            ))
+        }
     };
 
-    let vpn = Vpn::try_new(acl, endpoint, deployment.clone())?;
+    let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
     Ok(Some(vpn.start()))
 }
 
 pub(crate) struct Vpn {
-    // TODO: Populate & use ACL
+    default_id: String,
+    // TODO: Populate & utilize ACL
     #[allow(unused)]
     acl: Acl,
     networks: Networks<DuoEndpoint<GsbEndpoint>>,
     endpoint: Endpoint,
-    rx_buf: Option<RxBuffer>,
 }
 
 impl Vpn {
-    fn try_new(acl: Acl, endpoint: Endpoint, deployment: Deployment) -> crate::Result<Self> {
+    fn try_new(
+        node_id: NodeId,
+        acl: Acl,
+        endpoint: Endpoint,
+        deployment: Deployment,
+    ) -> crate::Result<Self> {
         let mut networks = Networks::default();
 
         deployment
@@ -82,166 +103,21 @@ impl Vpn {
         })?;
 
         Ok(Self {
+            default_id: node_id.to_string(),
             acl,
             networks,
             endpoint,
-            rx_buf: Some(Default::default()),
         })
     }
 
-    fn handle_ip(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
-        let ip_pkt = IpPacket::packet(frame.payload());
-        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
-
-        if ip_pkt.is_broadcast() {
-            let futs = self
-                .networks
-                .endpoints()
-                .into_iter()
-                .map(|e| e.udp.call(VpnPacket(frame.as_ref().to_vec())))
-                .collect::<Vec<_>>();
-            futs.is_empty().not().then(|| {
-                let fut = future::join_all(futs).then(|_| future::ready(()));
-                ctx.spawn(fut.into_actor(self))
-            });
-        } else {
-            let ip = ip_pkt.dst_address();
-            match self.networks.endpoint(ip) {
-                Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
-                None => log::debug!("[vpn] no endpoint for {ip:?}"),
-            }
-        }
-    }
-
-    fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
-        let arp = ArpPacket::packet(frame.payload());
-        // forward only IP ARP packets
-        if arp.get_field(ArpField::PTYPE) != [08, 00] {
-            return;
-        }
-
-        let ip = arp.get_field(ArpField::TPA);
-        match self.networks.endpoint(ip) {
-            Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
-            None => log::debug!("[vpn] no endpoint for {ip:?}"),
-        }
-    }
-
-    fn forward_frame(
+    fn handle_packet(
         &mut self,
-        endpoint: DuoEndpoint<GsbEndpoint>,
-        frame: EtherFrame,
-        ctx: &mut Context<Self>,
-    ) {
-        let pkt: Vec<_> = frame.into();
-        log::trace!("[vpn] egress {} b", pkt.len());
-
-        endpoint
-            .udp
-            .call(VpnPacket(pkt))
-            .map_err(|err| log::debug!("[vpn] call error: {err}"))
-            .then(|_| future::ready(()))
-            .into_actor(self)
-            .spawn(ctx);
-    }
-}
-
-impl Actor for Vpn {
-    type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.networks.as_ref().keys().for_each(|net| {
-            let actor = ctx.address();
-            let net_id = net.clone();
-            let vpn_id = activity::exeunit::network_id(&net_id);
-
-            actix_rpc::bind::<VpnControl>(&vpn_id, ctx.address().recipient());
-            typed::bind_with_caller::<VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
-                actor
-                    .send(Packet {
-                        network_id: net_id.clone(),
-                        caller,
-                        data: pkt.0,
-                    })
-                    .then(|sent| match sent {
-                        Ok(result) => future::ready(result),
-                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
-                    })
-            });
-        });
-
-        match self.endpoint.rx.take() {
-            Some(rx) => {
-                Self::add_stream(rx, ctx);
-                log::info!("[vpn] service started")
-            }
-            None => {
-                log::error!("[vpn] local endpoint missing");
-                ctx.stop();
-            }
-        };
-    }
-
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
-        log::info!("[vpn] stopping service");
-
-        let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
-        async move {
-            for net in networks {
-                let vpn_id = activity::exeunit::network_id(&net);
-                let _ = typed::unbind(&vpn_id).await;
-            }
-        }
-        .into_actor(self)
-        .wait(ctx);
-
-        Running::Stop
-    }
-}
-
-/// Egress traffic handler (Runtime -> VPN)
-impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
-    fn handle(&mut self, result: crate::Result<Vec<u8>>, ctx: &mut Context<Self>) {
-        let received = match result {
-            Ok(vec) => vec,
-            Err(err) => return log::debug!("[vpn] error (egress): {err}"),
-        };
-        let mut rx_buf = match self.rx_buf.take() {
-            Some(buf) => buf,
-            None => return log::error!("[vpn] programming error: rx buffer already taken"),
-        };
-
-        for packet in rx_buf.process(received) {
-            match EtherFrame::try_from(packet) {
-                Ok(frame) => match &frame {
-                    EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
-                    EtherFrame::Ip(_) => self.handle_ip(frame, ctx),
-                    frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
-                },
-                Err(err) => {
-                    match &err {
-                        NetError::ProtocolNotSupported(_) => (),
-                        _ => log::debug!("[vpn] frame error (egress): {}", err),
-                    };
-                    continue;
-                }
-            };
-        }
-
-        self.rx_buf.replace(rx_buf);
-    }
-}
-
-/// Ingress traffic handler (VPN -> Runtime)
-impl Handler<Packet> for Vpn {
-    type Result = <Packet as Message>::Result;
-
-    fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
-        log::trace!("[vpn] ingress {} b", packet.data.len());
-
+        packet: Packet,
+        _ctx: &mut Context<Self>,
+    ) -> <Packet as Message>::Result {
         let network_id = packet.network_id;
         let node_id = packet.caller;
-        let data = packet.data.into_boxed_slice();
+        let data = packet.data;
 
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
@@ -269,19 +145,197 @@ impl Handler<Packet> for Vpn {
             }
         }
 
-        let mut data = data.into();
-        network::write_prefix(&mut data);
+        if let Err(e) = self.endpoint.send(Ok(data)) {
+            log::debug!("[vpn] ingress error: {}", e);
+        }
 
-        let mut tx = self.endpoint.tx.clone();
+        Ok(())
+    }
+
+    fn handle_ip(
+        frame: EtherFrame,
+        networks: &Networks<DuoEndpoint<GsbEndpoint>>,
+        default_id: &str,
+    ) {
+        let ip_pkt = IpPacket::packet(frame.payload());
+        log::trace!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
+
+        if ip_pkt.is_broadcast() {
+            let futs = networks
+                .endpoints()
+                .into_iter()
+                .map(|e| e.udp.push_raw_as(default_id, frame.as_ref().to_vec()))
+                .collect::<Vec<_>>();
+            tokio::task::spawn_local(async move {
+                future::join_all(futs).then(|_| future::ready(())).await;
+            });
+        } else {
+            let ip = ip_pkt.dst_address();
+            match networks.endpoint(ip) {
+                Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+                None => log::debug!("[vpn] no endpoint for {ip:?}"),
+            }
+        }
+    }
+
+    fn handle_arp(
+        frame: EtherFrame,
+        networks: &Networks<DuoEndpoint<GsbEndpoint>>,
+        default_id: &str,
+    ) {
+        let arp = ArpPacket::packet(frame.payload());
+        // forward only IP ARP packets
+        if arp.get_field(ArpField::PTYPE) != [8, 0] {
+            return;
+        }
+
+        let ip = arp.get_field(ArpField::TPA);
+        match networks.endpoint(ip) {
+            Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+            None => log::debug!("[vpn] no endpoint for {ip:?}"),
+        }
+    }
+
+    fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
+        let data: Vec<_> = frame.into();
+        log::trace!("[vpn] egress {} b to {}", data.len(), endpoint.udp.addr());
+
+        let fut = endpoint
+            .udp
+            .push_raw_as(default_id, data)
+            .then(|result| async move {
+                if let Err(err) = result {
+                    log::debug!("[vpn] call error: {err}");
+                }
+            });
+
+        tokio::task::spawn_local(fut);
+    }
+}
+
+impl Actor for Vpn {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        self.networks.as_ref().keys().for_each(|net| {
+            let actor = ctx.address();
+            let net_id = net.clone();
+            let vpn_id = activity::exeunit::network_id(&net_id);
+
+            actix_rpc::bind::<VpnControl>(&vpn_id, ctx.address().recipient());
+            actix_rpc::bind_raw(&format!("{vpn_id}/raw"), ctx.address().recipient());
+
+            typed::bind_with_caller::<VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
+                actor
+                    .send(Packet {
+                        network_id: net_id.clone(),
+                        caller,
+                        data: pkt.0,
+                    })
+                    .then(|sent| match sent {
+                        Ok(result) => future::ready(result),
+                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
+                    })
+            });
+        });
+
+        match self.endpoint.receiver().ok() {
+            Some(rx) => {
+                Self::add_stream(rx, ctx);
+                log::info!("[vpn] service started")
+            }
+            None => {
+                log::error!("[vpn] VM endpoint already taken");
+                ctx.stop();
+            }
+        };
+    }
+
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        log::info!("[vpn] stopping service");
+
+        let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
         async move {
-            if let Err(e) = tx.send(Ok(data)).await {
-                log::debug!("[vpn] ingress error: {}", e);
+            for net in networks {
+                let vpn_id = activity::exeunit::network_id(&net);
+                let _ = typed::unbind(&vpn_id).await;
             }
         }
         .into_actor(self)
-        .spawn(ctx);
+        .wait(ctx);
 
-        Ok(())
+        Running::Stop
+    }
+}
+
+/// Egress traffic handler (Runtime -> VPN)
+impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
+    fn handle(&mut self, result: crate::Result<Vec<u8>>, _ctx: &mut Context<Self>) {
+        let packet = match result {
+            Ok(vec) => vec,
+            Err(err) => return log::debug!("[vpn] error (egress): {err}"),
+        };
+
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
+            ya_packet_trace::try_extract_from_ip_frame(&packet)
+        });
+
+        match EtherFrame::try_from(packet) {
+            Ok(frame) => match &frame {
+                EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
+                EtherFrame::Ip(_) => Self::handle_ip(frame, &self.networks, &self.default_id),
+                frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
+            },
+            Err(err) => {
+                match &err {
+                    NetError::ProtocolNotSupported(_) => (),
+                    _ => log::debug!("[vpn] frame error (egress): {}", err),
+                };
+            }
+        };
+    }
+}
+
+/// Ingress traffic handler (VPN -> Runtime)
+impl Handler<RpcRawCall> for Vpn {
+    type Result = Result<Vec<u8>, ya_service_bus::Error>;
+
+    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+        let packet = {
+            let mut split = msg.addr.rsplit('/').skip(1);
+            match split.next() {
+                Some(network_id) => Packet {
+                    network_id: network_id.to_string(),
+                    caller: msg.caller.to_string(),
+                    data: msg.body,
+                },
+                None => {
+                    return Err(ya_service_bus::Error::GsbBadRequest(
+                        "Empty network id in a RpcRawCall message".to_string(),
+                    ))
+                }
+            }
+        };
+
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
+        });
+
+        self.handle_packet(packet, ctx)
+            .map(|_| Vec::new())
+            .map_err(|e| ya_service_bus::Error::GsbBadRequest(e.to_string()))
+    }
+}
+
+impl Handler<Packet> for Vpn {
+    type Result = <Packet as Message>::Result;
+
+    fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
+        ya_packet_trace::packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
+            &ya_packet_trace::try_extract_from_ip_frame(&packet.data)
+        });
+
+        self.handle_packet(packet, ctx)
     }
 }
 

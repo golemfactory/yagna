@@ -132,7 +132,7 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
     let src_url = TransferUrl::parse(&args.url, "http")?;
     let dst_url = TransferUrl::parse(&dst_path.display().to_string(), "file")?;
     let src = Rc::new(UnreliableHttpProvider::new(args.interval));
-    let dst = Rc::new(FileTransferProvider::default());
+    let dst = Rc::new(FileTransferProvider);
     let ctx = TransferContext::default();
 
     let mut retry = Retry::new(i32::MAX);
@@ -142,12 +142,12 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
     log::info!("Transferring file");
     transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
     log::info!("File downloaded, verifying contents");
-    verify_file_hash(&dst_path, &args.hash)?;
+    verify_file_hash(dst_path, &args.hash)?;
 
     log::info!("Retrying transfer on a completed file");
     transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
     log::info!("Verifying contents");
-    verify_file_hash(&dst_path, &args.hash)?;
+    verify_file_hash(dst_path, &args.hash)?;
 
     Ok(())
 }
@@ -156,14 +156,14 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
 async fn main() -> anyhow::Result<()> {
     env::set_var(
         "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or(
+        env::var("RUST_LOG").unwrap_or_else(|_| {
             "debug,\
             h2=info,\
             trust_dns_proto=info,\
             trust_dns_resolver=info,\
             "
-            .into(),
-        ),
+            .into()
+        }),
     );
     env_logger::init();
 

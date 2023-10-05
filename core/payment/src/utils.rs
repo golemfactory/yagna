@@ -3,8 +3,8 @@ use actix_web::HttpResponse;
 use futures::Future;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use ya_client_model::market::Agreement;
-use ya_core_model::{market, Role};
+use ya_client_model::market::{Agreement, Role};
+use ya_core_model::market;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
@@ -43,8 +43,8 @@ pub async fn get_agreement(agreement_id: String, role: Role) -> Result<Option<Ag
 
 pub mod provider {
     use crate::error::{Error, ExternalServiceError};
-    use ya_client_model::market::Agreement;
-    use ya_core_model::{activity, market, Role};
+    use ya_client_model::market::{Agreement, Role};
+    use ya_core_model::{activity, market};
     use ya_service_bus::{typed as bus, RpcEndpoint};
 
     pub fn fake_get_agreement_id(agreement_id: String) {
@@ -121,7 +121,7 @@ pub async fn with_timeout<Work: Future<Output = HttpResponse>>(
         log::trace!("Starting timeout for: {}s", timeout_secs);
         match tokio::time::timeout(Duration::from_secs_f64(timeout_secs), work).await {
             Ok(v) => v,
-            Err(_) => return HttpResponse::GatewayTimeout().finish(),
+            Err(_) => HttpResponse::GatewayTimeout().finish(),
         }
     } else {
         log::trace!("Executing /wo timeout.");
@@ -155,16 +155,16 @@ pub async fn listen_for_events<T: EventGetter>(
     let timeout_secs = timeout_secs.into();
     match getter.get_events().await {
         Err(e) => return Err(e),
-        Ok(events) if events.len() > 0 || timeout_secs == 0.0 => return Ok(events),
+        Ok(events) if !events.is_empty() || timeout_secs == 0.0 => return Ok(events),
         _ => (),
     }
 
     let timeout = Duration::from_secs_f64(timeout_secs);
     tokio::time::timeout(timeout, async move {
         loop {
-            tokio::time::delay_for(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             let events = getter.get_events().await?;
-            if events.len() > 0 {
+            if !events.is_empty() {
                 break Ok(events);
             }
         }

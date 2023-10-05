@@ -6,11 +6,10 @@ pub use super::config::*;
 pub use super::db::dao::*;
 pub use super::db::model::*;
 pub use super::matcher::{error::*, *};
-pub use super::negotiation::{error::*, *};
+pub use super::negotiation::{error::*, ApprovalStatus};
 pub use super::protocol::*;
 
 pub mod agreement_utils;
-pub mod backtrace_util;
 pub mod bcast;
 pub mod dao;
 pub mod events_helper;

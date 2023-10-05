@@ -30,7 +30,7 @@ struct Inner {
 impl EventMonitor {
     pub fn any_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
-        inner.fallback.replace(Channel::fallback(ctx.clone()));
+        inner.fallback.replace(Channel::fallback(ctx));
 
         Handle::Fallback {}
     }
@@ -38,7 +38,7 @@ impl EventMonitor {
     pub fn next_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, Default::default());
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.next_process.replace(channel);
 
         handle
@@ -48,7 +48,7 @@ impl EventMonitor {
     pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, pid);
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.processes.insert(pid, channel);
 
         handle
@@ -61,6 +61,7 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
         let (mut ctx, done_tx) = {
             let mut inner = self.inner.lock().unwrap();
 
+            #[allow(clippy::map_entry)]
             if !inner.processes.contains_key(&status.pid) {
                 if let Some(channel) = inner.next_process.take() {
                     channel.waker.lock().unwrap().pid.replace(status.pid);
@@ -84,11 +85,21 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
 
         async move {
             if !status.stdout.is_empty() {
+                log::trace!(
+                    "stdout: {}",
+                    String::from_utf8_lossy(&status.stdout).trim_end()
+                );
+
                 let out = CommandOutput::Bin(status.stdout);
                 let evt = RuntimeEvent::stdout(ctx.batch_id.clone(), ctx.idx, out);
                 ctx.tx.send(evt).await?;
             }
             if !status.stderr.is_empty() {
+                log::trace!(
+                    "stderr: {}",
+                    String::from_utf8_lossy(&status.stderr).trim_end()
+                );
+
                 let out = CommandOutput::Bin(status.stderr);
                 let evt = RuntimeEvent::stderr(ctx.batch_id, ctx.idx, out);
                 ctx.tx.send(evt).await?;
@@ -168,16 +179,11 @@ impl<'a> Handle<'a> {
 
 impl<'a> Drop for Handle<'a> {
     fn drop(&mut self) {
-        match self {
-            Handle::Process { monitor, waker, .. } => {
-                if let Some(pid) = { waker.lock().unwrap().pid } {
-                    let mut inner = monitor.inner.lock().unwrap();
-                    inner.processes.remove(&pid);
-                    inner.next_process.take();
-                }
-            }
-            _ => {
-                // ignore
+        if let Handle::Process { monitor, waker, .. } = self {
+            if let Some(pid) = { waker.lock().unwrap().pid } {
+                let mut inner = monitor.inner.lock().unwrap();
+                inner.processes.remove(&pid);
+                inner.next_process.take();
             }
         }
     }
@@ -245,7 +251,7 @@ impl Channel {
     }
 
     fn done_tx(&mut self) -> Option<oneshot::Sender<i32>> {
-        self.done.as_mut().map(|d| d.tx.take()).flatten()
+        self.done.as_mut().and_then(|d| d.tx.take())
     }
 
     fn done_rx<'a>(&self) -> Option<BoxFuture<'a, Result<i32, ()>>> {

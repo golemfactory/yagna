@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use futures::prelude::*;
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -22,7 +21,10 @@ pub struct PaymentPlatform {
     pub token: &'static str,
 }
 
-pub struct PaymentDriver(pub HashMap<&'static str, PaymentPlatform>);
+pub struct PaymentDriver {
+    pub platforms: HashMap<&'static str, PaymentPlatform>,
+    pub name: &'static str,
+}
 
 lazy_static! {
     pub static ref ZKSYNC_DRIVER: PaymentDriver = {
@@ -35,15 +37,19 @@ lazy_static! {
                 token: "GLM",
             },
         );
-        zksync.insert(
-            NetworkName::Rinkeby.into(),
-            PaymentPlatform {
-                platform: "zksync-rinkeby-tglm",
-                driver: "zksync",
-                token: "tGLM",
-            },
-        );
-        PaymentDriver(zksync)
+        // zksync.insert(
+        //     NetworkName::Rinkeby.into(),
+        //     PaymentPlatform {
+        //         platform: "zksync-rinkeby-tglm",
+        //         driver: "zksync",
+        //         token: "tGLM",
+        //     },
+        // );
+
+        PaymentDriver {
+            platforms: zksync,
+            name: "zksync",
+        }
     };
     pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
@@ -87,17 +93,33 @@ lazy_static! {
                 token: "GLM",
             },
         );
-        PaymentDriver(erc20)
+
+        PaymentDriver {
+            platforms: erc20,
+            name: "erc20",
+        }
     };
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ZKSYNC_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
     pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
         let net: &str = network.into();
-        Ok(self.0.get(net).ok_or(anyhow!(
-            "Payment driver config for network '{}' not found.",
-            network
-        ))?)
+        self.platforms
+            .get(net)
+            .ok_or_else(|| anyhow!("Payment driver config for network '{}' not found.", network))
+    }
+
+    pub fn status_label(&self, network: &NetworkName) -> String {
+        if self.name == ZKSYNC_DRIVER.name {
+            return "zksync".to_string();
+        }
+
+        if network == &NetworkName::Mainnet {
+            "on-chain".to_string()
+        } else {
+            network.to_string().to_lowercase()
+        }
     }
 }
 
@@ -234,13 +256,13 @@ impl YagnaCommand {
     }
 
     pub async fn default_id(mut self) -> anyhow::Result<Id> {
-        self.cmd.args(&["--json", "id", "show"]);
+        self.cmd.args(["--json", "id", "show"]);
         let output: Result<Id, String> = self.run().await?;
         output.map_err(anyhow::Error::msg)
     }
 
     pub async fn version(mut self) -> anyhow::Result<VersionInfo> {
-        self.cmd.args(&["--json", "version", "show"]);
+        self.cmd.args(["--json", "version", "show"]);
         self.run().await
     }
 
@@ -250,12 +272,12 @@ impl YagnaCommand {
         network: &NetworkName,
         payment_driver: &PaymentDriver,
     ) -> anyhow::Result<StatusResult> {
-        self.cmd.args(&["--json", "payment", "status"]);
-        self.cmd.args(&["--account", address]);
+        self.cmd.args(["--json", "payment", "status"]);
+        self.cmd.args(["--account", address]);
 
         let payment_platform = payment_driver.platform(network)?;
-        self.cmd.args(&["--network", &network.to_string()]);
-        self.cmd.args(&["--driver", payment_platform.driver]);
+        self.cmd.args(["--network", &network.to_string()]);
+        self.cmd.args(["--driver", payment_platform.driver]);
 
         self.run().await
     }
@@ -266,23 +288,23 @@ impl YagnaCommand {
         network: &NetworkName,
         payment_driver: &PaymentDriver,
     ) -> anyhow::Result<()> {
-        self.cmd.args(&["--json", "payment", "init", "--receiver"]); // provider is a receiver
-        self.cmd.args(&["--account", address]);
+        self.cmd.args(["--json", "payment", "init", "--receiver"]); // provider is a receiver
+        self.cmd.args(["--account", address]);
 
         let payment_platform = payment_driver.platform(network)?;
-        self.cmd.args(&["--network", &network.to_string()]);
-        self.cmd.args(&["--driver", payment_platform.driver]);
+        self.cmd.args(["--network", &network.to_string()]);
+        self.cmd.args(["--driver", payment_platform.driver]);
 
         self.run().await
     }
 
     pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {
-        self.cmd.args(&["--json", "payment", "invoice", "status"]);
+        self.cmd.args(["--json", "payment", "invoice", "status"]);
         self.run().await
     }
 
     pub async fn activity_status(mut self) -> anyhow::Result<ActivityStatus> {
-        self.cmd.args(&["--json", "activity", "status"]);
+        self.cmd.args(["--json", "activity", "status"]);
         self.run().await
     }
 
@@ -299,7 +321,7 @@ impl YagnaCommand {
     pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         let mut cmd = self.cmd;
 
-        cmd.args(&["service", "run"]);
+        cmd.args(["service", "run"]);
 
         if run_cfg.debug {
             cmd.arg("--debug");
@@ -332,26 +354,20 @@ impl YagnaCommand {
         }
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
-        cmd.kill_on_drop(true);
-        let child = cmd.spawn()?;
-        let wait_for = tracker.wait_for_start();
-        futures::pin_mut!(wait_for);
-        match future::try_select(child, wait_for).await {
-            Ok(future::Either::Right((_wait_ends, child))) => Ok(child),
-            Ok(future::Either::Left((child_ends, _wait))) => {
-                anyhow::bail!(
-                    "Golem Service exited prematurely with status: {}",
-                    child_ends
-                );
-            }
-            Err(future::Either::Left((child_err, _wait))) => {
-                anyhow::bail!("Failed to start Golem Service: {}", child_err);
-            }
-            Err(future::Either::Right((wait_err, mut child))) => {
-                log::error!("Killing Golem Service, since wait failed: {}", wait_err);
-                child.kill()?;
-                let _ = child.await?;
-                Err(wait_err)
+        let mut child = cmd.kill_on_drop(true).spawn()?;
+
+        tokio::select! {
+            r = child.wait() => match r {
+                Ok(s) => anyhow::bail!("Golem Service exited prematurely with status: {}", s),
+                Err(e) => anyhow::bail!("Failed to start Golem Service: {}", e),
+            },
+            r = tracker.wait_for_start() => match r {
+                Ok(_) => Ok(child),
+                Err(e) => {
+                    log::error!("Killing Golem Service, since wait failed: {}", e);
+                    child.kill().await?;
+                    Err(e)
+                }
             }
         }
     }

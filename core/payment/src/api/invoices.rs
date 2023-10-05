@@ -86,21 +86,21 @@ async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<params::InvoiceId
 async fn get_invoice_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
-    req: actix_web::web::HttpRequest,
+    req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| vec!["RECEIVED".into(), "CANCELLED".into()]);
 
     let provider_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Provider-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| {
             vec![
                 "ACCEPTED".into(),
@@ -118,9 +118,9 @@ async fn get_invoice_events(
     let dao: InvoiceEventDao = db.as_dao();
     let getter = || async {
         dao.get_for_node_id(
-            node_id.clone(),
-            after_timestamp.clone(),
-            max_events.clone(),
+            node_id,
+            after_timestamp,
+            max_events,
             app_session_id.clone(),
             requestor_events.clone(),
             provider_events.clone(),
@@ -141,24 +141,26 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     let agreement_id = invoice.agreement_id.clone();
     let activity_ids = invoice.activity_ids.clone().unwrap_or_default();
 
-    let agreement = match get_agreement(agreement_id.clone(), ya_core_model::Role::Provider).await {
+    let agreement = match get_agreement(
+        agreement_id.clone(),
+        ya_client_model::market::Role::Provider,
+    )
+    .await
+    {
         Ok(Some(agreement)) => agreement,
-        Ok(None) => {
-            return response::bad_request(&format!("Agreement not found: {}", agreement_id))
-        }
+        Ok(None) => return response::bad_request(&format!("Agreement not found: {agreement_id}")),
         Err(e) => return response::server_error(&e),
     };
 
     for activity_id in activity_ids.iter() {
-        match get_agreement_id(activity_id.clone(), ya_core_model::Role::Provider).await {
+        match get_agreement_id(activity_id.clone(), ya_client_model::market::Role::Provider).await {
             Ok(Some(id)) if id != agreement_id => {
                 return response::bad_request(&format!(
-                    "Activity {} belongs to agreement {} not {}",
-                    activity_id, id, agreement_id
+                    "Activity {activity_id} belongs to agreement {id} not {agreement_id}"
                 ));
             }
             Ok(None) => {
-                return response::bad_request(&format!("Activity not found: {}", activity_id))
+                return response::bad_request(&format!("Activity not found: {activity_id}"))
             }
             Err(e) => return response::server_error(&e),
             _ => (),
@@ -183,8 +185,9 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
 
         let dao: InvoiceDao = db.as_dao();
         let invoice_id = dao.create_new(invoice, node_id).await?;
-        let invoice = dao.get(invoice_id, node_id).await?;
+        let invoice = dao.get(invoice_id.clone(), node_id).await?;
 
+        log::info!("Invoice [{invoice_id}] for Agreement [{agreement_id}] issued.");
         counter!("payment.invoices.provider.issued", 1);
         Ok(invoice)
     }
@@ -209,7 +212,7 @@ async fn send_invoice(
     let node_id = id.identity;
     let dao: InvoiceDao = db.as_dao();
 
-    log::debug!("Requested send invoice [{}]", invoice_id);
+    log::debug!("Requested send invoice [{invoice_id}]");
     counter!("payment.invoices.provider.sent.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -222,9 +225,12 @@ async fn send_invoice(
         return response::ok(Null); // Invoice has been already sent
     }
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let agreement_id = invoice.agreement_id.clone();
+    let recipient_id = invoice.recipient_id;
 
     let result = async move {
         match async move {
+            let invoice_id = invoice.invoice_id.clone();
             log::debug!(
                 "Sending invoice [{}] to [{}].",
                 invoice_id,
@@ -243,7 +249,9 @@ async fn send_invoice(
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("Invoice [{}] sent.", path.invoice_id);
+                log::info!(
+                    "Invoice [{invoice_id}] for Agreement [{agreement_id}] sent to [{recipient_id}]."
+                );
                 counter!("payment.invoices.provider.sent", 1);
                 response::ok(Null)
             }
@@ -292,11 +300,13 @@ async fn cancel_invoice(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let agreement_id = invoice.agreement_id.clone();
+
     let result = async move {
         match async move {
             log::debug!(
                 "Canceling invoice [{}] sent to [{}].",
-                invoice_id,
+                invoice.invoice_id,
                 invoice.recipient_id
             );
 
@@ -304,11 +314,11 @@ async fn cancel_invoice(
                 .to(invoice.recipient_id)
                 .service(PUBLIC_SERVICE)
                 .call(CancelInvoice {
-                    invoice_id: invoice_id.clone(),
+                    invoice_id: invoice.invoice_id.clone(),
                     recipient_id: invoice.recipient_id,
                 })
                 .await??;
-            dao.cancel(invoice_id, node_id).await?;
+            dao.cancel(invoice.invoice_id, node_id).await?;
             Ok(())
         }
         .timeout(Some(timeout))
@@ -316,7 +326,7 @@ async fn cancel_invoice(
         {
             Ok(Ok(_)) => {
                 counter!("payment.invoices.provider.cancelled", 1);
-                log::info!("Invoice [{}] cancelled.", path.invoice_id);
+                log::info!("Invoice [{invoice_id}] for Agreement [{agreement_id}] cancelled.");
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::Cancel(CancelError::Conflict)))) => {
@@ -395,6 +405,16 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
+    // OK when invoice.amount is greater than or equal to agreement.amount_accepted
+    if invoice.amount < agreement.total_amount_accepted.0 {
+        let msg = format!(
+            "Invoice is smaller than agreement.total_amount_accepted. \
+            invoice_id={}, invoice_amount={}, total_amount_accepted={}",
+            &invoice_id, &invoice.amount, &agreement.total_amount_accepted
+        );
+        log::warn!("{}", msg);
+        return response::bad_request(&msg);
+    }
     let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
 
     log::trace!(
@@ -441,6 +461,7 @@ async fn accept_invoice(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
+            // Skip calling SchedulePayment for 0 amount invoices
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
@@ -455,13 +476,17 @@ async fn accept_invoice(
         {
             Ok(Ok(_)) => {
                 counter!("payment.invoices.requestor.accepted", 1);
-                log::info!("Invoice [{}] accepted.", path.invoice_id);
+                log::info!(
+                    "Invoice [{}] for Agreement [{}] accepted.",
+                    path.invoice_id,
+                    agreement_id
+                );
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
                 e,
-            ))))) => return response::bad_request(&e),
-            Ok(Err(e)) => return response::server_error(&e),
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
             Err(_) => response::timeout(&"Timeout accepting Invoice on remote Node."),
         }
     }

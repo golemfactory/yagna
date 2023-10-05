@@ -64,7 +64,7 @@ impl ContainerTransferProvider {
 
     fn resolve_path(&self, container_path: &str) -> std::result::Result<PathBuf, TransferError> {
         fn is_prefix_of(base: &str, path: &str) -> usize {
-            if path.starts_with(base) && (path == base || path[base.len()..].starts_with("/")) {
+            if path.starts_with(base) && (path == base || path[base.len()..].starts_with('/')) {
                 base.len() + 1
             } else {
                 0
@@ -85,7 +85,7 @@ impl ContainerTransferProvider {
             }
 
             let path = &container_path[c.path.len() + 1..];
-            if path.starts_with("/") {
+            if path.starts_with('/') {
                 return Err(TransferError::IoError(io::Error::new(
                     io::ErrorKind::NotFound,
                     anyhow::anyhow!("invalid path format: [{}]", container_path),
@@ -167,8 +167,7 @@ impl TransferService {
     pub fn schemes() -> Vec<String> {
         Self::default_providers()
             .values()
-            .map(|p| p.schemes())
-            .flatten()
+            .flat_map(|p| p.schemes())
             .collect::<HashSet<_>>()
             .into_iter()
             .map(ToString::to_string)
@@ -199,7 +198,7 @@ impl TransferService {
         Ok(self
             .providers
             .get(scheme)
-            .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?
+            .ok_or_else(|| TransferError::UnsupportedSchemeError(scheme.to_owned()))?
             .clone())
     }
 }
@@ -231,7 +230,7 @@ macro_rules! actor_try {
 }
 
 impl Handler<DeployImage> for TransferService {
-    type Result = ActorResponse<Self, Option<PathBuf>, Error>;
+    type Result = ActorResponse<Self, Result<Option<PathBuf>>>;
 
     #[allow(unused_variables)]
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
@@ -288,7 +287,7 @@ impl Handler<DeployImage> for TransferService {
 
                 Ok(Some(path))
             };
-            return ActorResponse::r#async(fut.into_actor(self));
+            ActorResponse::r#async(fut.into_actor(self))
         }
 
         #[cfg(feature = "sgx")]
@@ -304,13 +303,13 @@ impl Handler<DeployImage> for TransferService {
                 std::fs::write(&path, bytes)?;
                 Ok(Some(path))
             };
-            return ActorResponse::r#async(fut.into_actor(self));
+            ActorResponse::r#async(fut.into_actor(self))
         }
     }
 }
 
 impl Handler<TransferResource> for TransferService {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, msg: TransferResource, _: &mut Self::Context) -> Self::Result {
         let src_url = actor_try!(TransferUrl::parse(&msg.from, "container"));
@@ -363,7 +362,7 @@ impl Handler<AbortTransfers> for TransferService {
     fn handle(&mut self, _: AbortTransfers, _: &mut Self::Context) -> Self::Result {
         {
             let mut guard = self.abort_handles.borrow_mut();
-            std::mem::replace(&mut (*guard), Default::default())
+            std::mem::take(&mut (*guard))
         }
         .into_iter()
         .for_each(|h| h.abort());

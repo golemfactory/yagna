@@ -40,7 +40,7 @@ pub struct BreakAgreement {
     pub reason: BreakReason,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ClosingCause {
     ApprovalFail,
     Termination,
@@ -246,7 +246,7 @@ impl TaskManager {
     }
 
     fn add_new_agreement(&mut self, msg: &NewAgreement) -> anyhow::Result<TaskInfo> {
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.tasks.new_agreement(&agreement_id)?;
 
         let props = TaskInfo::from(&msg.agreement)
@@ -279,7 +279,7 @@ forward_actix_handler!(
 );
 
 impl Handler<InitializeTaskManager> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _msg: InitializeTaskManager, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -315,7 +315,7 @@ impl Handler<InitializeTaskManager> for TaskManager {
 // =========================================== //
 
 impl Handler<NewAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: NewAgreement, ctx: &mut Context<Self>) -> Self::Result {
         // Add new agreement with it's state.
@@ -340,12 +340,7 @@ impl Handler<NewAgreement> for TaskManager {
             actx.runner.send(msg.clone()).await??;
             actx.payments.send(msg.clone()).await??;
 
-            finish_transition(
-                &actx.myself,
-                &msg.agreement.agreement_id,
-                AgreementState::Initialized,
-            )
-            .await
+            finish_transition(&actx.myself, &msg.agreement.id, AgreementState::Initialized).await
         }
         .into_actor(self)
         .map(
@@ -368,7 +363,7 @@ impl Handler<NewAgreement> for TaskManager {
 }
 
 impl Handler<CreateActivity> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -427,7 +422,7 @@ impl Handler<CreateActivity> for TaskManager {
 }
 
 impl Handler<ActivityDestroyed> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.clone();
@@ -485,10 +480,11 @@ impl Handler<ActivityDestroyed> for TaskManager {
 }
 
 impl Handler<BreakAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
+        let agreement_id = msg.agreement_id.clone();
 
         self.cancel_handles(ctx, &msg.agreement_id);
 
@@ -505,7 +501,7 @@ impl Handler<BreakAgreement> for TaskManager {
 
             start_transition(&actx.myself, &msg.agreement_id, new_state.clone()).await?;
 
-            let result = async move {
+            async move {
                 let msg = AgreementBroken::from(msg.clone());
                 actx.runner.send(msg.clone()).await??;
                 // Notify market, but we don't care about result.
@@ -518,20 +514,25 @@ impl Handler<BreakAgreement> for TaskManager {
                 finish_transition(&actx.myself, &msg.agreement_id, new_state).await?;
 
                 log::info!("Agreement [{}] cleanup finished.", msg.agreement_id);
-                Ok(())
+                anyhow::Ok(())
             }
-            .await;
-
-            result
+            .await
         }
-        .map_err(move |error: Error| log::error!("Can't break agreement. Error: {}", error));
+        .into_actor(self)
+        .map(move |result, myself, _| match result {
+            Err(e) if myself.tasks.is_agreement_finalized(&agreement_id) => {
+                log::warn!("Can't break already finalized agreement. Error: {e}")
+            }
+            Err(e) => log::error!("Can't break agreement. Error: {e}"),
+            _ => (),
+        });
 
-        ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
+        ActorResponse::r#async(future.map(|_, _, _| Ok(())))
     }
 }
 
 impl Handler<CloseAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -580,7 +581,7 @@ async fn start_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 async fn finish_transition(
@@ -592,7 +593,7 @@ async fn finish_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 /// Helper struct storing TaskManager sub-actors addresses to use in async functions.

@@ -61,7 +61,7 @@ pub enum Error {
     #[error("RPC error: {0}")]
     Rpc(#[from] RpcMessageError),
     #[error("Timeout")]
-    Timeout(#[from] tokio::time::Elapsed),
+    Timeout(#[from] tokio::time::error::Elapsed),
 }
 
 impl From<ya_core_model::activity::RpcMessageError> for Error {
@@ -143,6 +143,8 @@ pub mod processor {
     #[derive(thiserror::Error, Debug)]
     pub enum SchedulePaymentError {
         #[error("{0}")]
+        InvalidInput(String),
+        #[error("{0}")]
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
@@ -194,6 +196,13 @@ pub mod processor {
             Err(Self(format!(
                 "Invalid payment amount: {} != {}",
                 expected, actual
+            )))
+        }
+
+        pub fn zero_amount(order: &Order) -> Result<(), Self> {
+            Err(Self(format!(
+                "Payment order can not have 0 amount. order_id={}",
+                order.id
             )))
         }
     }
@@ -306,6 +315,13 @@ pub mod processor {
             )))
         }
 
+        pub fn agreement_zero_amount(agreement_id: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Agreement with 0 amount: {}",
+                agreement_id
+            )))
+        }
+
         pub fn activity_not_found(activity_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Activity not found: {}",
@@ -324,6 +340,13 @@ pub mod processor {
             Err(Self::Validation(format!(
                 "Invalid payer address for activity {}: {} != {}",
                 activity.id, activity.payer_addr, payer_addr
+            )))
+        }
+
+        pub fn activity_zero_amount(activity_id: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Activity with 0 amount: {}",
+                activity_id
             )))
         }
 

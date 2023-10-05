@@ -36,6 +36,7 @@ class DemandBuilder:
             "golem.srv.comp.expiration": int(
                 (datetime.now() + timedelta(minutes=10)).timestamp() * 1000
             ),
+            "golem.com.payment.chosen-platform": self._requestor.payment_config.platform_string,
         }
 
         if task_package is not None:

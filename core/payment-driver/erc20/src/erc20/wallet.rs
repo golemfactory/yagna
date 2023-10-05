@@ -21,7 +21,7 @@ use web3::types::{H160, H256, U256, U64};
 // Workspace uses
 use ya_payment_driver::{
     db::models::{Network, TransactionEntity, TxType},
-    model::{AccountMode, GenericError, Init, PaymentDetails},
+    model::{GenericError, PaymentDetails},
 };
 
 // Local uses
@@ -35,7 +35,6 @@ use crate::{
             convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
-    RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
 
@@ -70,26 +69,15 @@ pub async fn account_gas_balance(
     Ok(balance)
 }
 
-pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
-    log::debug!("init_wallet. msg={:?}", msg);
-    let mode = msg.mode();
-    let address = msg.address();
-    let network = msg.network().unwrap_or(RINKEBY_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+pub async fn init_wallet(address: String, network: String) -> Result<(), GenericError> {
+    log::debug!("init_wallet. address={}, network={}", address, network);
+    let network = Network::from_str(&network).map_err(GenericError::new)?;
 
-    if mode.contains(AccountMode::SEND) {
-        let h160_addr = str_to_addr(&address)?;
+    // Validate address and that checking balance of GLM and ETH works.
+    let h160_addr = str_to_addr(&address)?;
+    let _glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
+    let _eth_balance = ethereum::get_balance(h160_addr, network).await?;
 
-        let glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
-        if glm_balance == U256::zero() {
-            return Err(GenericError::new("Insufficient GLM"));
-        }
-
-        let eth_balance = ethereum::get_balance(h160_addr, network).await?;
-        if eth_balance == U256::zero() {
-            return Err(GenericError::new("Insufficient ETH"));
-        }
-    }
     Ok(())
 }
 
@@ -366,7 +354,12 @@ pub async fn send_transactions(
                 log::debug!("id={}", &tx.tx_id);
             }
             Err(e) => {
-                log::error!("Error sending transaction: {:?}", e);
+                log::error!(
+                    "Error sending transaction {:?}@{:?}: {:?}",
+                    tx.tx_id,
+                    network,
+                    e
+                );
                 if e.to_string().contains("nonce too low") {
                     if tx.tmp_onchain_txs.filter(|v| !v.is_empty()).is_some() && tx.resent_times < 5
                     {

@@ -1,33 +1,38 @@
 use std::collections::HashSet;
 use std::ops::Not;
+use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
+use serde::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use strum;
+use strum::AsRefStr;
+use strum::Display;
+use strum::EnumString;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::Error as AgreementError;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.@tag";
-pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.sig";
+use crate::decode_data;
 
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.experimental.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.experimental.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
+pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
+pub const DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY: &str = "golem.!exp.gap-31.v0.node.descriptor";
+
+pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("agreement error: {0}")]
     AgreementError(#[from] AgreementError),
-    #[error("invalid input base64: {0}")]
-    BlobBase64(#[from] base64::DecodeError),
-    #[error("invalid escaped json string: {0}")]
-    BlobJsonString(#[from] snailquote::UnescapeError),
+    #[error(transparent)]
+    DecodingError(#[from] crate::DecodingError),
     #[error("invalid input json encoding: {0}")]
     BlobJsonEncoding(#[from] snailquote::ParseUnicodeError),
     #[error("invalid hash format: '{0}'")]
@@ -36,8 +41,6 @@ pub enum Error {
     HashHexValue(#[from] hex::FromHexError),
     #[error("invalid manifest format: {0}")]
     ManifestFormat(#[from] serde_json::Error),
-    #[error("ECDSA error: {0}")]
-    SignatureEcdsa(#[from] ethsign::Error),
     #[error("invalid signature format: {0}")]
     SignatureFormat(String),
     #[error("unsupported signature algorithm")]
@@ -53,43 +56,29 @@ pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error>
     Ok(Some(decode_manifest(manifest)?))
 }
 
-pub fn decode_manifest<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    match decode_base64(&input) {
-        Ok(manifest) => Ok(manifest),
-        Err(_) => decode_escaped_json(input),
-    }
-}
-
-fn decode_base64<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = base64::decode(input.as_ref())?;
-    Ok(serde_json::de::from_slice(&decoded)?)
-}
-
-fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = snailquote::unescape(input.as_ref())?;
-    Ok(serde_json::de::from_str(&decoded)?)
+pub fn decode_manifest<S: AsRef<str>>(data: S) -> Result<AppManifest, Error> {
+    let data = decode_data(data)?;
+    Ok(serde_json::de::from_slice(&data)?)
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Display)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Feature {
     Inet,
     Vpn,
+    ManifestSupport,
+    #[serde(other)]
+    Other,
 }
 
-impl ToString for Feature {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Inet => "inet",
-            Self::Vpn => "vpn",
-        }
-        .to_string()
-    }
-}
-
+/// # Computation Payload Manifest
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppManifest {
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -122,6 +111,15 @@ impl AppManifest {
             })
     }
 
+    pub fn get_outbound_access(&self) -> Option<OutboundAccess> {
+        self.comp_manifest
+            .as_ref()
+            .and_then(|comp| comp.net.as_ref())
+            .and_then(|net| net.inet.as_ref())
+            .and_then(|inet| inet.out.as_ref())
+            .map(|out| out.access.clone())
+    }
+
     pub fn features(&self) -> HashSet<Feature> {
         let mut features = HashSet::new();
 
@@ -140,12 +138,15 @@ impl AppManifest {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "Application Metadata"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppMetadata {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<Version>,
     #[serde(default)]
@@ -155,6 +156,8 @@ pub struct AppMetadata {
     pub homepage: Option<String>,
 }
 
+/// # Payload
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppPayload {
@@ -180,6 +183,8 @@ impl AppPayload {
     }
 }
 
+/// # Payload Platform
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadPlatform {
@@ -189,28 +194,55 @@ pub struct PayloadPlatform {
     pub os_version: Option<String>,
 }
 
+/// # Computation Manifest
+/// Computation Manifests lets Requestors to define a certain set of allowed actions,
+/// to be negotiated with and approved by a Provider.
+/// Requestors' actions will be verified against the Manifest during computation.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompManifest {
+    /// # Version
+    /// Specifies a version (Semantic Versioning 2.0 specification) of the manifest.
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
+    /// # Script
+    /// Defines a set of allowed ExeScript commands and applies constraints to their arguments.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<Script>,
+    /// # Net
+    /// Applies constraints to networking. Currently, outgoing requests to the public Internet network are covered.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub net: Option<Net>,
 }
 
+/// # Script
+/// Defines a set of allowed ExeScript commands and applies constraints to their arguments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
+    /// Specifies a curated list of commands.
     pub commands: Vec<Command>,
+    /// Selects a default way of comparing command arguments stated in the manifest
+    /// and the ones received in the ExeScript,
+    /// unless stated otherwise in a command JSON object.
     #[serde(rename = "match", default)]
     pub arg_match: ArgMatch,
 }
 
+/// # Command
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 pub enum Command {
+    /// UTF-8 encoded string.
+    /// No command context or matching mode need to be specified.
+    /// E.g. ["run /bin/cat /etc/motd", "run /bin/date -R"]
     String(String),
+    /// UTF-8 encoded JSON string.
+    /// Command context (e.g. env) or argument matching mode need to be specified for a command.
+    /// E.g. ["{\"run\": { \"args\": \"/bin/date -R\", \"env\": { \"MYVAR\": \"42\", \"match\": \"strict\" }}}"]
     Json(Value),
 }
 
@@ -243,88 +275,140 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+/// # Argument Match
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum ArgMatch {
+    /// Byte-to-byte argument equality (default).
+    #[strum(ascii_case_insensitive)]
+    #[default]
     Strict,
+    /// Treat argument as regular expression.
+    /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
+    /// w/o the support for look around and backreferences (among others).
+    #[strum(ascii_case_insensitive)]
     Regex,
 }
 
-impl Default for ArgMatch {
-    fn default() -> Self {
-        ArgMatch::Strict
-    }
-}
-
+/// # Net
+/// Applies constraints to networking.
+/// Currently, outgoing requests to the public Internet network are covered.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Net {
+    /// # Internet Network
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inet: Option<Inet>,
 }
 
+/// # Internet Network
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inet {
+    /// Internet Outbound Network
     #[serde(skip_serializing_if = "Option::is_none")]
     pub out: Option<InetOut>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// # Internet Outbound Network
+/// Applies constraints to networking.
+/// Currently, outgoing requests to the public Internet network are covered.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InetOut {
+    /// List of allowed outbound protocols.
+    /// Supports "http", "https", "ws", and "wss".
     #[serde(default = "default_protocols")]
     pub protocols: Vec<String>,
-    // keep the option here to retain information on
-    // whether urls were specified
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub urls: Option<Vec<Url>>,
+    /// Outbound access
+    #[serde(flatten)]
+    #[cfg_attr(feature = "schema", schemars(with = "outbound_access::Representation"))]
+    pub access: OutboundAccess,
 }
 
-#[non_exhaustive]
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub enum Signature {
-    Secp256k1(Vec<u8>),
-    Secp256k1Hex(String),
+#[derive(PartialEq, Clone, Debug)]
+pub enum OutboundAccess {
+    Urls(Vec<Url>),
+    Unrestricted,
 }
 
-impl Signature {
-    pub fn verify(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+impl OutboundAccess {
+    pub fn is_outbound_requested(&self) -> bool {
         match self {
-            Signature::Secp256k1(vec) => verify_secp256k1(input, vec),
-            Signature::Secp256k1Hex(string) => {
-                let sig = hex::decode(normalize_hex_string(string))?;
-                verify_secp256k1(input, &sig)
-            }
+            OutboundAccess::Urls(urls) => urls.is_empty().not(),
+            OutboundAccess::Unrestricted => true,
+        }
+    }
+}
+
+mod outbound_access {
+    use super::*;
+
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", rename = "OutboundAccess", untagged)] //Untagged is used here to bypass "schemars" adding "additionalProperties: false" when using enum
+    pub enum Representation {
+        /// List of allowed external URLs that outbound requests can be sent to.
+        /// Empty list means no outbound access is requested.
+        /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
+        Urls { urls: Vec<Url> },
+        /// Every URL is allowed for outbound connection.
+        Unrestricted { unrestricted: Unrestricted },
+    }
+
+    #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Unrestricted {
+        /// Only "true" value is valid in "unrestricted" case.
+        urls: bool,
+    }
+
+    impl Serialize for OutboundAccess {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let repr = {
+                match self {
+                    OutboundAccess::Urls(urls) => Representation::Urls {
+                        urls: urls.to_vec(),
+                    },
+                    OutboundAccess::Unrestricted => Representation::Unrestricted {
+                        unrestricted: Unrestricted { urls: true },
+                    },
+                }
+            };
+            repr.serialize(serializer)
         }
     }
 
-    #[inline]
-    pub fn verify_str<S: AsRef<str>>(&self, input: S) -> Result<Vec<u8>, Error> {
-        self.verify(input.as_ref().as_bytes())
+    impl<'de> Deserialize<'de> for OutboundAccess {
+        fn deserialize<D>(deserializer: D) -> Result<OutboundAccess, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let repr = Representation::deserialize(deserializer)?;
+
+            match repr {
+                Representation::Urls { urls } => Ok(OutboundAccess::Urls(urls)),
+                Representation::Unrestricted { unrestricted } => {
+                    if unrestricted.urls {
+                        Ok(OutboundAccess::Unrestricted)
+                    } else {
+                        Err(serde::de::Error::custom(
+                            "'unrestricted.urls: false' is not valid",
+                        ))
+                    }
+                }
+            }
+        }
     }
-}
-
-fn verify_secp256k1(input: &[u8], sig: &[u8]) -> Result<Vec<u8>, Error> {
-    if sig.len() < 65 {
-        return Err(Error::SignatureFormat(
-            "invalid signature length".to_string(),
-        ));
-    }
-
-    let v = sig[0];
-    let mut r = [0; 32];
-    let mut s = [0; 32];
-
-    r.copy_from_slice(&sig[1..33]);
-    s.copy_from_slice(&sig[33..65]);
-
-    let hash = Sha256::digest(input);
-    let key = ethsign::Signature { v, r, s }
-        .recover(hash.as_slice())
-        .map_err(ethsign::Error::Secp256k1)?;
-
-    Ok(key.bytes().to_vec())
 }
 
 pub fn default_protocols() -> Vec<String> {
@@ -334,18 +418,10 @@ pub fn default_protocols() -> Vec<String> {
         .collect()
 }
 
-fn normalize_hex_string<S: AsRef<str>>(input: S) -> String {
-    let input = input.as_ref();
-    if input.starts_with("0x") || input.starts_with("0X") {
-        input[2..].to_string()
-    } else {
-        input.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{engine::general_purpose, Engine as _};
     use chrono::Duration;
 
     #[test]
@@ -388,7 +464,7 @@ mod tests {
                     inet: Some(Inet {
                         out: Some(InetOut {
                             protocols: default_protocols(),
-                            urls: None,
+                            access: OutboundAccess::Urls(vec![]),
                         }),
                     }),
                 }),
@@ -398,6 +474,56 @@ mod tests {
         let serialized = serde_json::to_string(&manifest).unwrap();
 
         println!("{}", serialized);
-        println!("{}", base64::encode(serialized));
+        println!("{}", general_purpose::STANDARD.encode(serialized));
+    }
+
+    mod outbound_access_serde {
+        use super::*;
+
+        #[test]
+        fn access_is_none() {
+            let json = serde_json::json!({ "protocols": default_protocols() });
+            assert!(serde_json::from_value::<InetOut>(json).is_err());
+        }
+
+        #[test]
+        fn access_is_urls() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "urls": [ "https://example.net/" ]
+            });
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: OutboundAccess::Urls([Url::parse("https://example.net/").unwrap()].into()),
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn access_is_unrestricted() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": true }
+            });
+            let inet_out = InetOut {
+                protocols: default_protocols(),
+                access: OutboundAccess::Unrestricted,
+            };
+
+            assert_eq!(serde_json::to_value(&inet_out).unwrap(), json);
+            assert_eq!(serde_json::from_value::<InetOut>(json).unwrap(), inet_out);
+        }
+
+        #[test]
+        fn json_access_has_invalid_value() {
+            let json = serde_json::json!({
+                "protocols": default_protocols(),
+                "unrestricted": { "urls": false }
+            });
+
+            assert!(serde_json::from_value::<InetOut>(json).is_err());
+        }
     }
 }

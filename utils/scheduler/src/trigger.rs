@@ -12,16 +12,15 @@ pub struct Interval {
 impl Interval {
     pub fn new(days: u32, hours: u32, minutes: u32, seconds: u32) -> Interval {
         Interval {
-            days: days,
-            hours: hours,
-            minutes: minutes,
-            seconds: seconds,
+            days,
+            hours,
+            minutes,
+            seconds,
         }
     }
 
     fn next<Tz: TimeZone>(&self, from: DateTime<Tz>) -> DateTime<Tz> {
-        from.clone()
-            + Duration::days(i64::from(self.days))
+        from + Duration::days(i64::from(self.days))
             + Duration::hours(i64::from(self.hours))
             + Duration::minutes(i64::from(self.minutes))
             + Duration::seconds(i64::from(self.seconds))
@@ -42,7 +41,7 @@ impl Trigger {
     {
         Trigger {
             name: name.into(),
-            interval: interval,
+            interval,
             next_run: start_from,
             last_run: None,
         }
@@ -96,7 +95,7 @@ mod tests {
         let now = Local::now();
         let strange_seconds = 121;
         let seconds = strange_seconds % 60;
-        let minutes = (strange_seconds / 60) as u32;
+        let minutes = strange_seconds / 60;
         let strange_interval = Interval::new(0, 0, 0, strange_seconds);
         let time_with_offset =
             now + Duration::minutes(i64::from(minutes)) + Duration::seconds(i64::from(seconds));
@@ -124,7 +123,7 @@ mod tests {
         let days = 1;
         let now = Local::now();
         let interval = Interval::new(days, 0, 0, 0);
-        let mut trigger = Trigger::new("trigger1", now.clone(), interval);
+        let mut trigger = Trigger::new("trigger1", now, interval);
         trigger.tick();
         assert_ne!(trigger.last_run, None);
         assert_eq!(trigger.next_run, now + Duration::days(i64::from(days)));

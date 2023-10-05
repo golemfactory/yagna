@@ -1,6 +1,7 @@
 use actix_web::{web, Responder};
 
-use ya_core_model::{activity, Role};
+use ya_client_model::market::Role;
+use ya_core_model::activity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
@@ -25,7 +26,7 @@ async fn get_running_command(
     let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let msg = activity::GetRunningCommand {
         activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
 
     let cmd = agreement_provider_service(&id, &agreement)?

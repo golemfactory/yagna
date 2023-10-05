@@ -1,16 +1,20 @@
+use anyhow::Context;
 use std::cmp::Ordering;
 use std::fmt::Display;
+use std::str::FromStr;
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
 use humantime::format_duration;
 use structopt::*;
+use ya_client_model::NodeId;
 
 use ya_core_model::net::local as model;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(StructOpt, Debug)]
-#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder, rename_all = "kebab-case")]
 /// Network management
 pub enum NetCommand {
     /// Show network status
@@ -19,8 +23,25 @@ pub enum NetCommand {
     Sessions {},
     /// List virtual sockets
     Sockets {},
+    /// Find node
+    Find {
+        /// Node information to query for
+        node_id: String,
+    },
     /// Ping connected nodes
-    Ping {},
+    Ping {
+        /// If None, all connected Nodes will be pinged.
+        node_id: Option<String>,
+    },
+    /// Establish connection to other Node
+    Connect {
+        node_id: String,
+        /// Add Node to neighborhood
+        #[structopt(long)]
+        keep_alive: bool,
+    },
+    /// Disconnect Node
+    Disconnect { node_id: String },
 }
 
 impl NetCommand {
@@ -50,7 +71,7 @@ impl NetCommand {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
                     .send(model::Sessions {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sessions.sort_by_key(|s| s.node_id.unwrap_or_default().into_array());
 
@@ -62,6 +83,8 @@ impl NetCommand {
                         "seen".into(),
                         "time".into(),
                         "ping".into(),
+                        "in [MiB]".into(),
+                        "out [MiB]".into(),
                     ],
                     values: sessions
                         .into_iter()
@@ -77,6 +100,8 @@ impl NetCommand {
                                 format_duration(seen).to_string(),
                                 format_duration(duration).to_string(),
                                 format_duration(ping).to_string(),
+                                to_mib(s.metrics.tx_total, is_json),
+                                to_mib(s.metrics.rx_total, is_json),
                             ]}
                         })
                         .collect(),
@@ -87,7 +112,7 @@ impl NetCommand {
                 let mut sockets: Vec<model::SocketResponse> = bus::service(model::BUS_ID)
                     .send(model::Sockets {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sockets.sort_by(|l, r| match l.remote_addr.cmp(&r.remote_addr) {
                     Ordering::Equal => l.remote_port.cmp(&r.remote_port),
@@ -108,8 +133,8 @@ impl NetCommand {
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                s.protocol.to_string(),
-                                s.local_port.to_string(),
+                                s.protocol,
+                                s.local_port,
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,
@@ -121,15 +146,28 @@ impl NetCommand {
                 }
                 .into())
             }
-            NetCommand::Ping { .. } => {
-                let pings = bus::service(model::BUS_ID)
-                    .send(model::GsbPing {})
+            NetCommand::Find { node_id } => {
+                let node: model::FindNodeResponse = bus::service(model::BUS_ID)
+                    .send(model::FindNode { node_id })
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
+
+                find_node_to_output(node)
+            }
+            NetCommand::Ping { node_id } => {
+                let pings = bus::service(model::BUS_ID)
+                    .send(model::GsbPing {
+                        nodes: node_id
+                            .into_iter()
+                            .map(|id| NodeId::from_str(&id))
+                            .collect::<Result<Vec<NodeId>, _>>()?,
+                    })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "node".into(),
+                        "nodeId".into(),
                         "alias".into(),
                         "p2p".into(),
                         "ping (tcp)".into(),
@@ -152,6 +190,31 @@ impl NetCommand {
                 }
                 .into())
             }
+            NetCommand::Connect {
+                node_id,
+                keep_alive,
+            } => {
+                let node: model::FindNodeResponse = bus::service(model::BUS_ID)
+                    .send(model::Connect {
+                        node: NodeId::from_str(&node_id)?,
+                        keep: keep_alive,
+                        reliable_channel: true,
+                        transfer_channel: false,
+                    })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+
+                find_node_to_output(node)
+            }
+            NetCommand::Disconnect { node_id } => {
+                bus::service(model::BUS_ID)
+                    .send(model::Disconnect {
+                        node: NodeId::from_str(&node_id)?,
+                    })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+                Ok(CommandOutput::NoOutput)
+            }
         }
     }
 }
@@ -164,6 +227,20 @@ fn to_kib(value: f32, is_json: bool) -> serde_json::Value {
 #[inline]
 fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
     format_number(value as f64 / (1024. * 1024.), is_json)
+}
+
+fn find_node_to_output(response: model::FindNodeResponse) -> anyhow::Result<CommandOutput> {
+    let naive = NaiveDateTime::from_timestamp_opt(response.seen.into(), 0)
+        .context("Failed on out-of-range number of seconds")?;
+    let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+    CommandOutput::object(serde_json::json!({
+        "identities": response.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+        "endpoints": response.endpoints.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+        "seen": seen.to_string(),
+        "slot": response.slot,
+        "encryption": response.encryption,
+    }))
 }
 
 fn format_number<T>(value: T, is_json: bool) -> serde_json::Value

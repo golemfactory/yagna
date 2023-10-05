@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::path::Path;
@@ -21,7 +21,8 @@ pub struct Preset {
     pub exeunit_name: String,
     pub pricing_model: String,
     pub initial_price: f64,
-    pub usage_coeffs: HashMap<String, f64>,
+    // It's important that all values are sorted, so that other tools can easily detect changes.
+    pub usage_coeffs: BTreeMap<String, f64>,
 }
 
 impl Preset {
@@ -68,7 +69,7 @@ impl PresetManager {
                     updated,
                     removed,
                 };
-                tx.broadcast(evt).unwrap_or_default();
+                tx.send(evt).unwrap_or_default();
             }
             Err(e) => log::warn!("Error reading presets from {:?}: {:?}", p, e),
         };
@@ -132,7 +133,7 @@ impl PresetManager {
         state
             .presets
             .remove(name)
-            .ok_or(anyhow!("Preset [{}] doesn't exists.", name))?;
+            .ok_or_else(|| anyhow!("Preset [{}] doesn't exists.", name))?;
 
         Ok(())
     }
@@ -164,7 +165,7 @@ impl PresetManager {
         state.presets.values().cloned().collect()
     }
 
-    pub fn list_matching(&self, names: &Vec<String>) -> Result<Vec<Preset>> {
+    pub fn list_matching(&self, names: &[String]) -> Result<Vec<Preset>> {
         let state = self.state.lock().unwrap();
         names
             .iter()
@@ -257,33 +258,33 @@ fn display_preset(
     let align = 20;
     let align_coeff = align - 4; // Minus indent.
 
-    write!(f, "{:width$}{}\n", "Name:", preset.name, width = align)?;
-    write!(
+    writeln!(f, "{:width$}{}", "Name:", preset.name, width = align)?;
+    writeln!(
         f,
-        "{:width$}{}\n",
+        "{:width$}{}",
         "ExeUnit:",
         preset.exeunit_name,
         width = align
     )?;
-    write!(
+    writeln!(
         f,
-        "{:width$}{}\n",
+        "{:width$}{}",
         "Pricing model:",
         preset.pricing_model,
         width = align
     )?;
-    write!(f, "{}\n", "Coefficients:")?;
+    writeln!(f, "Coefficients:")?;
 
     let exe_unit = registry.find_exeunit(&preset.exeunit_name).ok();
 
     for (name, coeff) in preset.usage_coeffs.iter() {
         let price_desc = exe_unit
             .as_ref()
-            .and_then(|e| e.coefficient_name(&name))
+            .and_then(|e| e.coefficient_name(name))
             .unwrap_or_else(|| name.to_string());
-        write!(
+        writeln!(
             f,
-            "    {:width$}{} GLM\n",
+            "    {:width$}{} GLM",
             price_desc,
             coeff,
             width = align_coeff

@@ -1,12 +1,12 @@
 [package]
 name = "ya-sgx"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-graphene-sgx = { version = "0.3", features = [ "ias" ] }
-ya-client-model = "0.4"
-ya-core-model = { version = "^0.6", features = ["sgx"] }
-ya-service-bus = "0.4"
+graphene-sgx = { version = "0.3.3", features = [ "ias" ] }
+ya-client-model = "0.5"
+ya-core-model = { version = "^0.9", features = ["sgx"] }
+ya-service-bus = "0.6.1"

@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
-use actix_rt::Arbiter;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use tokio::time::{Duration, Instant};
@@ -47,7 +46,7 @@ pub async fn bind_remote(
     let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
-    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
+    let own_net_nodes: Vec<_> = nodes.iter().map(net_service).collect();
 
     let forward_call = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
         let prefix = own_net_nodes
@@ -66,11 +65,11 @@ pub async fn bind_remote(
             // actual forwarding to my local bus
             local_bus::call_stream(&local_addr, &caller, &data).right_stream()
         } else {
-            return stream::once(future::err(Error::GsbBadRequest(format!(
+            stream::once(future::err(Error::GsbBadRequest(format!(
                 "wrong routing: {}; I'll accept only addrs starting with: {:?}",
                 addr, own_net_nodes
             ))))
-            .left_stream();
+            .left_stream()
         }
     };
 
@@ -81,7 +80,7 @@ pub async fn bind_remote(
             let msg: Rc<[u8]> = msg.into();
             let bcast = bcast.clone();
 
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 let endpoints = bcast.resolve(&topic).await;
                 log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
@@ -89,7 +88,7 @@ pub async fn bind_remote(
                     log::trace!("Broadcast addr {}", addr);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                 }
-            })
+            });
         }
     };
 
@@ -108,9 +107,11 @@ pub async fn bind_remote(
 
     bind_net_handler(net::BUS_ID, central_bus.clone(), default_node_id);
     bind_net_handler(net::BUS_ID_UDP, central_bus.clone(), default_node_id);
+    bind_net_handler(net::BUS_ID_TRANSFER, central_bus.clone(), default_node_id);
 
     bind_from_handler("/from", central_bus.clone(), nodes.clone());
     bind_from_handler("/udp/from", central_bus.clone(), nodes.clone());
+    bind_from_handler("/transfer/from", central_bus.clone(), nodes.clone());
 
     // Subscribe broadcast on remote
     {
@@ -178,10 +179,17 @@ pub async fn bind_remote(
     Ok(done_rx)
 }
 
-fn strip_udp(addr: &str) -> &str {
+fn strip_prefixes_for_compatibility(addr: &str) -> &str {
     // Central NET doesn't support unreliable transport, so we just remove prefix
     // and use reliable protocol.
-    match addr.strip_prefix("/udp") {
+    let addr = match addr.strip_prefix("/udp") {
+        None => addr,
+        Some(wo_prefix) => wo_prefix,
+    };
+
+    // Central NET doesn't support transfer transport, so we just remove prefix
+    // and use tcp protocol.
+    match addr.strip_prefix("/transfer") {
         None => addr,
         Some(wo_prefix) => wo_prefix,
     }
@@ -203,7 +211,7 @@ fn bind_net_handler<Transport, H>(
         log::trace!(
             "Sending {} message to hub. Called by: {}, addr: {}.",
             label,
-            net_service(&caller),
+            net_service(caller),
             addr
         );
     };
@@ -213,20 +221,20 @@ fn bind_net_handler<Transport, H>(
     let default_caller_rpc = default_node_id.to_string();
     let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
         let caller = default_caller_rpc.clone();
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         log_message("rpc", &caller, addr);
         let addr = addr.to_string();
         central_bus_rpc
-            .call(caller, addr.clone(), Vec::from(msg))
+            .call(caller, addr.clone(), Vec::from(msg), false)
             .map_err(|e| Error::RemoteError(addr, e.to_string()))
     };
 
-    let central_bus_stream = central_bus.clone();
+    let central_bus_stream = central_bus;
     let default_caller_stream = default_node_id.to_string();
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
         let caller = default_caller_stream.clone();
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         log_message("stream", &caller, addr);
         let addr = addr.to_string();
@@ -253,7 +261,7 @@ fn bind_from_handler<Transport, H>(
     let nodes_rpc = nodes.clone();
     let central_bus_rpc = central_bus.clone();
     let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         let (from_node, to_addr) = match parse_from_addr(addr) {
             Ok(v) => v,
@@ -269,15 +277,20 @@ fn bind_from_handler<Transport, H>(
         }
 
         central_bus_rpc
-            .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+            .call(
+                from_node.to_string(),
+                to_addr.clone(),
+                Vec::from(msg),
+                false,
+            )
             .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
             .right_future()
     };
 
-    let nodes_stream = nodes.clone();
-    let central_bus_stream = central_bus.clone();
+    let nodes_stream = nodes;
+    let central_bus_stream = central_bus;
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         let (from_node, to_addr) = match parse_from_addr(addr) {
             Ok(v) => v,
@@ -310,7 +323,7 @@ fn bind_from_handler<Transport, H>(
 async fn unbind_remote(nodes: Vec<NodeId>) {
     let addrs = nodes
         .into_iter()
-        .map(|node_id| net_service(node_id))
+        .map(net_service)
         .chain(std::iter::once(format!(
             "{}/{}",
             local_net::BUS_ID,
@@ -332,7 +345,7 @@ async fn unbind_remote(nodes: Vec<NodeId>) {
 }
 
 async fn resubscribe() {
-    futures::stream::iter({ SUBSCRIPTIONS.lock().unwrap().clone() }.into_iter())
+    futures::stream::iter({ SUBSCRIPTIONS.lock().await.clone() }.into_iter())
         .for_each(|msg| {
             let topic = msg.topic().to_owned();
             async move {
@@ -371,8 +384,8 @@ where
                 metrics::counter!("net.connect", 1);
 
                 let reconnect_clone = reconnect.clone();
-                Arbiter::spawn(async move {
-                    if let Ok(_) = dc_rx.await {
+                tokio::task::spawn_local(async move {
+                    if dc_rx.await.is_ok() {
                         metrics::counter!("net.disconnect", 1);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
@@ -393,13 +406,13 @@ where
                     _ = tokio::signal::ctrl_c() => {
                         return Err(anyhow::anyhow!("Net initialization interrupted"));
                     },
-                    _ = tokio::time::delay_for(delay) => {},
+                    _ = tokio::time::sleep(delay) => {},
                 }
             }
         }
     }
 
-    Arbiter::spawn(
+    tokio::task::spawn_local(
         rx.then(move |_| rebind(reconnect, bind, unbind).then(|_| futures::future::ready(()))),
     );
     Ok(())
@@ -462,14 +475,14 @@ impl Net {
 }
 
 pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
-    let mut it = from_addr.split("/").fuse();
+    let mut it = from_addr.split('/').fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())
     {
         to_node_id.parse::<NodeId>()?;
         let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
+        if it.next().is_some() {
             return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }

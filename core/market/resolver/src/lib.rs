@@ -12,7 +12,7 @@ use resolver::error::PrepareError;
 pub use resolver::matching::{match_weak, MatchResult};
 pub use resolver::prepare::{PreparedDemand, PreparedOffer};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Match {
     Yes,
     No {
@@ -60,7 +60,7 @@ pub fn match_demand_offer(
     }
 }
 
-fn extract_names(props_vec: &Vec<&PropertyRef>) -> Vec<String> {
+fn extract_names(props_vec: &[&PropertyRef]) -> Vec<String> {
     props_vec
         .iter()
         .map(|prop| match prop {

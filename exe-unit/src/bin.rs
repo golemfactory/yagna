@@ -1,9 +1,10 @@
+use actix::{Actor, Addr};
+use anyhow::{bail, Context};
+use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
-
-use actix::{Actor, Addr, Arbiter, System};
-use anyhow::{bail, Context};
 use structopt::{clap, StructOpt};
+
 use ya_client_model::activity::ExeScriptCommand;
 use ya_service_bus::RpcEnvelope;
 
@@ -105,6 +106,8 @@ enum Command {
     },
     /// Print an offer template in JSON format
     OfferTemplate,
+    /// Run runtime's test command
+    Test,
 }
 
 #[derive(structopt::StructOpt, Debug)]
@@ -164,7 +167,7 @@ async fn send_script(
             | Err(_) => {
                 return log::error!("ExeUnit has terminated");
             }
-            _ => tokio::time::delay_for(delay).await,
+            _ => tokio::time::sleep(delay).await,
         }
     }
 
@@ -172,7 +175,7 @@ async fn send_script(
 
     let msg = activity::Exec {
         activity_id: activity_id.unwrap_or_default(),
-        batch_id: hex::encode(&rand::random::<[u8; 16]>()),
+        batch_id: hex::encode(rand::random::<[u8; 16]>()),
         exe_script,
         timeout: None,
     };
@@ -184,8 +187,21 @@ async fn send_script(
     }
 }
 
-fn run() -> anyhow::Result<()> {
+#[cfg(feature = "packet-trace-enable")]
+fn init_packet_trace() -> anyhow::Result<()> {
+    use ya_packet_trace::{set_write_target, WriteTarget};
+
+    let write = std::fs::File::create("./exe-unit.trace")?;
+    set_write_target(WriteTarget::Write(Box::new(write)));
+
+    Ok(())
+}
+
+async fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+
+    #[cfg(feature = "packet-trace-enable")]
+    init_packet_trace()?;
 
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
@@ -233,6 +249,16 @@ fn run() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string(&offer_template)?);
             return Ok(());
         }
+        Command::Test => {
+            let args = cli.runtime_arg.clone();
+            let output = ExeUnit::<RuntimeProcess>::test(cli.binary, args)?;
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                bail!("Test failed");
+            }
+            return Ok(());
+        }
     };
 
     if !args.agreement.exists() {
@@ -264,7 +290,9 @@ fn run() -> anyhow::Result<()> {
 
     let manifest_ctx =
         ManifestContext::try_new(&agreement.inner).context("Invalid app manifest")?;
-    agreement.task_package = manifest_ctx.payload().or(agreement.task_package.take());
+    agreement.task_package = manifest_ctx
+        .payload()
+        .or_else(|| agreement.task_package.take());
 
     log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
     log::info!("User-provided payload: {:?}", agreement.task_package);
@@ -293,30 +321,37 @@ fn run() -> anyhow::Result<()> {
     log::debug!("CLI args: {:?}", cli);
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let sys = System::new("exe-unit");
+    let (tx, rx) = oneshot::channel();
 
     let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
-    exe_unit.do_send(Register(signals));
+    exe_unit.send(Register(signals)).await?;
 
     if let Some(exe_script) = commands {
-        Arbiter::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
+        tokio::task::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
     }
 
-    sys.run()?;
+    rx.await??;
     Ok(())
 }
 
-fn main() {
+#[actix_rt::main]
+async fn main() {
+    let panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |e| {
+        log::error!("ExeUnit Supervisor panic: {e}");
+        panic_hook(e)
+    }));
+
     if let Err(error) = start_file_logger() {
         start_logger().expect("Failed to start logging");
         log::warn!("Using fallback logging due to an error: {:?}", error);
     };
 
-    std::process::exit(match run() {
+    std::process::exit(match run().await {
         Ok(_) => 0,
         Err(error) => {
             log::error!("{}", error);

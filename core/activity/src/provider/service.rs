@@ -1,4 +1,5 @@
-use actix_rt::Arbiter;
+#![allow(clippy::let_unit_value)]
+
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
@@ -7,12 +8,11 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
-use ya_client_model::market::agreement::State as AgreementState;
+use ya_client_model::market::{agreement::State as AgreementState, Role};
 use ya_client_model::NodeId;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
-use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
@@ -84,11 +84,13 @@ async fn create_activity_gsb(
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
-    authorize_agreement_initiator(caller, &msg.agreement_id, Role::Provider).await?;
+    authorize_agreement_initiator(caller.clone(), &msg.agreement_id, Role::Provider).await?;
 
     let activity_id = generate_id();
     let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
+    let agreement_id = agreement.agreement_id.clone();
     let app_session_id = agreement.app_session_id.clone();
+
     if agreement.state != AgreementState::Approved {
         // to track inconsistencies between this and remote market service
         counter!("activity.provider.create.agreement.not-approved", 1);
@@ -103,8 +105,6 @@ async fn create_activity_gsb(
         return Err(RpcMessageError::BadRequest(msg));
     }
 
-    let provider_id = agreement.provider_id().clone();
-
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &msg.agreement_id)
         .await
@@ -115,7 +115,7 @@ async fn create_activity_gsb(
     db.as_dao::<EventDao>()
         .create(
             &activity_id,
-            &provider_id,
+            agreement.provider_id(),
             ActivityEventType::CreateActivity,
             msg.requestor_pub_key,
             &agreement.app_session_id,
@@ -131,22 +131,25 @@ async fn create_activity_gsb(
         db.clone(),
         tracker.clone(),
         &activity_id,
-        provider_id.clone(),
+        *agreement.provider_id(),
         app_session_id.clone(),
         msg.timeout,
     )
     .await
     .map_err(|e| {
-        Arbiter::spawn(enqueue_destroy_evt(
+        tokio::task::spawn_local(enqueue_destroy_evt(
             db.clone(),
             tracker.clone(),
             &activity_id,
-            provider_id,
+            *agreement.provider_id(),
             app_session_id,
         ));
-        Error::from(e)
+        e
     })?;
 
+    log::info!(
+        "Requestor [{caller}] created Activity [{activity_id}] for Agreement [{agreement_id}]"
+    );
     counter!("activity.provider.created", 1);
 
     Ok(if credentials.is_none() {
@@ -171,7 +174,7 @@ async fn activity_credentials(
     let activity_state = db
         .as_dao::<ActivityStateDao>()
         .get_state_wait(
-            &activity_id,
+            activity_id,
             vec![State::Initialized.into(), State::Terminated.into()],
         )
         .timeout(timeout)
@@ -191,7 +194,7 @@ async fn activity_credentials(
         return Err(Error::Service(msg));
     }
 
-    Arbiter::spawn(monitor_activity(
+    tokio::task::spawn_local(monitor_activity(
         db.clone(),
         tracker,
         activity_id.clone(),
@@ -201,7 +204,7 @@ async fn activity_credentials(
 
     let credentials = db
         .as_dao::<ActivityCredentialsDao>()
-        .get(&activity_id)
+        .get(activity_id)
         .await?
         .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
         .transpose()?;
@@ -215,7 +218,7 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
+    authorize_activity_initiator(&db, caller.clone(), &msg.activity_id, Role::Provider).await?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
@@ -245,6 +248,12 @@ async fn destroy_activity_gsb(
         .await
         .map(|_| ())?;
 
+    log::info!(
+        "Requestor [{caller}] destroyed Activity [{}] for Agreement [{}]",
+        msg.activity_id,
+        agreement.agreement_id
+    );
+
     counter!("activity.provider.destroyed.by_requestor", 1);
     Ok(result)
 }
@@ -273,8 +282,8 @@ async fn get_activity_progress(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<(ActivityState, ActivityUsage), Error> {
-    let state = db.as_dao::<ActivityStateDao>().get(&activity_id).await?;
-    let usage = db.as_dao::<ActivityUsageDao>().get(&activity_id).await?;
+    let state = db.as_dao::<ActivityStateDao>().get(activity_id).await?;
+    let usage = db.as_dao::<ActivityUsageDao>().get(activity_id).await?;
     Ok((state, usage))
 }
 
@@ -380,7 +389,7 @@ async fn monitor_activity(
             }
         };
 
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 
     // If we got here, we can be sure, that activity was already destroyed.

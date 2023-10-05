@@ -5,7 +5,7 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
-use actix_web::{rt::Arbiter, web::Data};
+use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
 use metrics::counter;
@@ -41,18 +41,23 @@ async fn validate_orders(
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
     if orders.is_empty() {
-        return Err(OrderValidationError::new("orders not found in the database").into());
+        return Err(OrderValidationError::new(
+            "orders not found in the database",
+        ));
     }
 
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
-        if &order.payment_platform != platform {
+        if order.amount.0 == BigDecimal::zero() {
+            return OrderValidationError::zero_amount(order);
+        }
+        if order.payment_platform != platform {
             return OrderValidationError::platform(order, platform);
         }
-        if &order.payer_addr != &payer_addr {
+        if order.payer_addr != payer_addr {
             return OrderValidationError::payer_addr(order, payer_addr);
         }
-        if &order.payee_addr != &payee_addr {
+        if order.payee_addr != payee_addr {
             return OrderValidationError::payee_addr(order, payee_addr);
         }
 
@@ -219,11 +224,11 @@ impl DriverRegistry {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         let driver_details = self.get_driver(&driver)?;
-        let network_name = network.unwrap_or(driver_details.default_network.to_owned());
+        let network_name = network.unwrap_or_default();
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
-                driver.into(),
+                driver,
             )),
             Some(network_details) => Ok((network_name, network_details.clone())),
         }
@@ -236,7 +241,7 @@ impl DriverRegistry {
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
         let (network_name, network_details) = self.get_network(driver.clone(), network)?;
-        let token = token.unwrap_or(network_details.default_token.to_owned());
+        let token = token.unwrap_or_else(|| network_details.default_token.to_owned());
         match network_details.tokens.get(&token) {
             None => Err(RegisterAccountError::UnsupportedToken(
                 token,
@@ -383,7 +388,7 @@ impl PaymentProcessor {
                     amount,
                     allocation_id: Some(order.allocation_id.clone()),
                 }),
-                _ => return NotifyPaymentError::invalid_order(&order),
+                _ => return NotifyPaymentError::invalid_order(order),
             }
         }
 
@@ -425,7 +430,7 @@ impl PaymentProcessor {
         let msg = SendPayment::new(payment, signature);
 
         // Spawning to avoid deadlock in a case that payee is the same node as payer
-        Arbiter::spawn(
+        tokio::task::spawn_local(
             ya_net::from(payer_id)
                 .to(payee_id)
                 .service(BUS_ID)
@@ -446,6 +451,12 @@ impl PaymentProcessor {
             return Err(SchedulePaymentError::Shutdown);
         }
         let amount = msg.amount.clone();
+        if amount <= BigDecimal::zero() {
+            return Err(SchedulePaymentError::InvalidInput(format!(
+                "Can not schedule payment with <=0 amount: {}",
+                &amount
+            )));
+        }
         let driver =
             self.registry
                 .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
@@ -455,7 +466,7 @@ impl PaymentProcessor {
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
                 msg.payment_platform.clone(),
-                msg.due_date.clone(),
+                msg.due_date,
             ))
             .await??;
 
@@ -496,14 +507,14 @@ impl PaymentProcessor {
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount < &payment.amount {
+        if details.amount < payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if &details.amount < &(&agreement_sum + &activity_sum) {
+        if details.amount < (&agreement_sum + &activity_sum) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
@@ -525,6 +536,9 @@ impl PaymentProcessor {
         for agreement_payment in payment.agreement_payments.iter() {
             let agreement_id = &agreement_payment.agreement_id;
             let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+            if agreement_payment.amount == BigDecimal::zero() {
+                return VerifyPaymentError::agreement_zero_amount(agreement_id);
+            }
             match agreement {
                 None => return VerifyPaymentError::agreement_not_found(agreement_id),
                 Some(agreement) if &agreement.payee_addr != payee_addr => {
@@ -533,7 +547,7 @@ impl PaymentProcessor {
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
                     return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
                 }
-                Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
+                Some(agreement) if agreement.payment_platform != payment.payment_platform => {
                     return VerifyPaymentError::agreement_platform(
                         &agreement,
                         &payment.payment_platform,
@@ -547,6 +561,9 @@ impl PaymentProcessor {
         let activity_dao: ActivityDao = self.db_executor.as_dao();
         for activity_payment in payment.activity_payments.iter() {
             let activity_id = &activity_payment.activity_id;
+            if activity_payment.amount == BigDecimal::zero() {
+                return VerifyPaymentError::activity_zero_amount(activity_id);
+            }
             let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
             match activity {
                 None => return VerifyPaymentError::activity_not_found(activity_id),

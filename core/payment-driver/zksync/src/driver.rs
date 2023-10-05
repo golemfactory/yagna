@@ -85,8 +85,8 @@ impl ZksyncDriver {
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
-        let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        let mut accounts = self.active_accounts.borrow_mut();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
@@ -104,7 +104,7 @@ impl ZksyncDriver {
     async fn process_payments_for_account(&self, node_id: &str) {
         log::trace!("Processing payments for node_id={}", node_id);
         for network_key in self.get_networks().keys() {
-            let network = DbNetwork::from_str(&network_key).unwrap();
+            let network = DbNetwork::from_str(network_key).unwrap();
             let payments: Vec<PaymentEntity> =
                 self.dao.get_pending_payments(node_id, network).await;
             let mut nonce = 0;
@@ -263,11 +263,11 @@ impl PaymentDriver for ZksyncDriver {
             .await
             .map_err(GenericError::new)??;
 
-        let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
+        let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
-        );
+        )?;
         bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(
@@ -288,8 +288,9 @@ impl PaymentDriver for ZksyncDriver {
         msg: Fund,
     ) -> Result<String, GenericError> {
         let address = msg.address();
-        let network = DbNetwork::from_str(&msg.network().unwrap_or(DEFAULT_NETWORK.to_string()))
-            .map_err(GenericError::new)?;
+        let network =
+            DbNetwork::from_str(&msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string()))
+                .map_err(GenericError::new)?;
         match network {
             DbNetwork::Rinkeby => {
                 log::info!(
@@ -306,9 +307,11 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => Ok(format!("Goerli network is not supported by this driver.")),
-            DbNetwork::Mumbai => Ok(format!("Mumbai network is not supported by this driver.")),
-            DbNetwork::Polygon => Ok(format!("Polygon network is not supported by this driver.")),
+            DbNetwork::Goerli => Ok("Goerli network is not supported by this driver.".to_string()),
+            DbNetwork::Mumbai => Ok("Mumbai network is not supported by this driver.".to_string()),
+            DbNetwork::Polygon => {
+                Ok("Polygon network is not supported by this driver.".to_string())
+            }
             DbNetwork::Mainnet => Ok(format!(
                 r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 
@@ -415,7 +418,7 @@ To be able to use zkSync driver please send some GLM tokens and optionally ETH f
             self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
     }
@@ -435,7 +438,7 @@ impl PaymentDriverCron for ZksyncDriver {
 
         for network_key in self.get_networks().keys() {
             let network =
-                match DbNetwork::from_str(&network_key) {
+                match DbNetwork::from_str(network_key) {
                     Ok(n) => n,
                     Err(e) => {
                         log::error!(
@@ -459,7 +462,7 @@ impl PaymentDriverCron for ZksyncDriver {
                     &network,
                     &tx_hash
                 );
-                let tx_success = match wallet::check_tx(&tx_hash, network).await {
+                let tx_success = match wallet::check_tx(tx_hash, network).await {
                     None => continue, // Check_tx returns None when the result is unknown
                     Some(tx_success) => tx_success,
                 };
@@ -510,8 +513,8 @@ impl PaymentDriverCron for ZksyncDriver {
                 }
 
                 // TODO: Add token support
-                let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
-                let details = match wallet::verify_tx(&tx_hash, network).await {
+                let platform = network_token_to_platform(network, None).unwrap(); // TODO: Catch error?
+                let details = match wallet::verify_tx(tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
@@ -521,20 +524,20 @@ impl PaymentDriverCron for ZksyncDriver {
                         // - Date is always now
                         // - Amount needs to be updated to total of all PaymentEntity's
                         let first_payment: PaymentEntity =
-                            match self.dao.get_first_payment(&tx_hash).await {
+                            match self.dao.get_first_payment(tx_hash).await {
                                 Some(p) => p,
                                 None => continue,
                             };
                         let mut details = utils::db_to_payment_details(&first_payment);
                         details.amount = payments
                             .into_iter()
-                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                             .sum::<BigDecimal>();
                         details
                     }
                 };
                 if tx.tx_type == TxType::Transfer as i32 {
-                    let tx_hash = hex::decode(&tx_hash).unwrap();
+                    let tx_hash = hex::decode(tx_hash).unwrap();
 
                     if let Err(e) = bus::notify_payment(
                         &self.get_name(),
@@ -563,7 +566,8 @@ impl PaymentDriverCron for ZksyncDriver {
             Some(guard) => guard,
         };
         log::trace!("Running zkSync send-out job...");
-        for node_id in self.active_accounts.borrow().list_accounts() {
+        let accounts = self.active_accounts.borrow().list_accounts();
+        for node_id in accounts {
             self.process_payments_for_account(&node_id).await;
         }
         log::trace!("ZkSync send-out job complete.");

@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
@@ -5,24 +7,40 @@ use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
+use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
-pub const NET_API_PATH: &str = "/net-api/v1/";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
+const API_ROOT_PATH: &str = "/net-api";
+
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
-    actix_web::web::scope(NET_API_PATH)
-        .data(vpn_sup)
+    let api_v1_subpath = api_subpath(NET_API_V1_VPN_PATH);
+    let api_v2_subpath = api_subpath(NET_API_V2_VPN_PATH);
+
+    web::scope(API_ROOT_PATH)
+        .app_data(web::Data::new(vpn_sup))
+        .service(vpn_web_scope(api_v1_subpath))
+        .service(vpn_web_scope(api_v2_subpath))
+}
+
+fn api_subpath(path: &str) -> &str {
+    path.trim_start_matches(API_ROOT_PATH)
+}
+
+fn vpn_web_scope(path: &str) -> actix_web::Scope {
+    web::scope(path)
         .service(get_networks)
         .service(create_network)
         .service(get_network)
@@ -32,7 +50,6 @@ pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
         .service(get_nodes)
         .service(add_node)
         .service(remove_node)
-        .service(get_connections)
         .service(connect_tcp)
 }
 
@@ -59,7 +76,7 @@ async fn create_network(
     let network = model.into_inner();
     let mut supervisor = vpn_sup.lock().await;
     let network = supervisor
-        .create_network(&identity.identity, network)
+        .create_network(identity.identity, network)
         .await?;
     Ok::<_, ApiError>(web::Json(network))
 }
@@ -182,22 +199,6 @@ async fn remove_node(
     Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-/// Retrieves existing connections (socket tuples) within a private network
-#[actix_web::get("/net/{net_id}/tcp")]
-async fn get_connections(
-    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<PathNetwork>,
-    identity: Identity,
-) -> impl Responder {
-    let path = path.into_inner();
-    let vpn = {
-        let supervisor = vpn_sup.lock().await;
-        supervisor.get_network(&identity.identity, &path.net_id)?
-    };
-    let response = vpn.send(GetConnections {}).await??;
-    Ok::<_, ApiError>(web::Json(response))
-}
-
 /// Initiates a new TCP connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(
@@ -241,22 +242,34 @@ impl VpnWebSocket {
             heartbeat: Instant::now(),
             vpn: conn.vpn,
             vpn_rx: Some(conn.rx),
-            meta: conn.meta,
+            meta: conn.stack_connection.meta,
         }
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        // packet tracing is also done when the packet data is no longer available,
+        // so we have to make a temporary copy. This incurs no runtime overhead on builds
+        // without the feature packet-trace-enable.
+        #[cfg(feature = "packet-trace-enable")]
+        let data_trace = data.clone();
+
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::1", { &data_trace });
+
         let vpn = self.vpn.clone();
-        let meta = self.meta.clone();
-        vpn.send(Packet { data, meta })
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                if let Err(_) = result {
-                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
-                }
-            })
-            .wait(ctx);
+        vpn.send(Packet {
+            data,
+            meta: self.meta,
+        })
+        .into_actor(self)
+        .map(move |result, this, ctx| {
+            if result.is_err() {
+                log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
+                let _ = ctx.address().do_send(Shutdown {});
+            }
+        })
+        .wait(ctx);
+
+        ya_packet_trace::packet_trace!("VpnWebSocket::Tx::2", { &data_trace });
     }
 }
 
@@ -273,7 +286,10 @@ impl Actor for VpnWebSocket {
             }
         });
 
-        ctx.add_stream(self.vpn_rx.take().unwrap());
+        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
+            ya_packet_trace::packet_trace!("VpnWebSocket::Rx", { &packet });
+            packet
+        }));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -291,7 +307,7 @@ impl StreamHandler<WsResult<ws::Message>> for VpnWebSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
         self.heartbeat = Instant::now();
         match msg {
-            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes(), ctx),
+            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes().to_vec(), ctx),
             Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
             Ok(ws::Message::Ping(msg)) => {
                 ctx.pong(&msg);
@@ -313,7 +329,8 @@ impl Handler<Shutdown> for VpnWebSocket {
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
-        Ok(ctx.stop())
+        ctx.stop();
+        Ok(())
     }
 }
 
@@ -331,18 +348,18 @@ impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         match self {
             Self::Vpn(err) => match err {
-                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
+                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(err)),
+                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(err)),
                 VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
                 VpnError::Forbidden => HttpResponse::Forbidden().finish(),
                 VpnError::Cancelled => {
-                    HttpResponse::InternalServerError().json(ErrorMessage::new(&err))
+                    HttpResponse::InternalServerError().json(ErrorMessage::new(err))
                 }
-                _ => HttpResponse::BadRequest().json(ErrorMessage::new(&err)),
+                _ => HttpResponse::BadRequest().json(ErrorMessage::new(err)),
             },
             Self::ChannelError(_) | Self::WebError(_) => {
-                HttpResponse::BadRequest().json(ErrorMessage::new(&self))
+                HttpResponse::BadRequest().json(ErrorMessage::new(self))
             }
         }
     }
@@ -364,4 +381,16 @@ struct PathConnect {
     net_id: String,
     ip: String,
     port: u16,
+}
+
+#[test]
+fn test_to_detect_breaking_ya_client_const_changes() {
+    assert!(
+        api_subpath(NET_API_V1_VPN_PATH).len() < NET_API_V1_VPN_PATH.len(),
+        "ya-client const NET_API_V1_VPN_PATH changed"
+    );
+    assert!(
+        api_subpath(NET_API_V2_VPN_PATH).len() < NET_API_V2_VPN_PATH.len(),
+        "ya-client const NET_API_V2_VPN_PATH changed"
+    )
 }

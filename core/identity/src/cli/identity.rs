@@ -1,9 +1,10 @@
 /// Identity management CLI parser and runner
 use std::cmp::Reverse;
+use std::convert::TryInto;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use ethsign::Protected;
+use anyhow::{anyhow, Context, Result};
+use ethsign::{KeyFile, Protected};
 use rustc_hex::ToHex;
 use sha2::Digest;
 use structopt::*;
@@ -17,17 +18,12 @@ use ya_service_bus::RpcEndpoint;
 
 const FILE_CHUNK_SIZE: usize = 40960;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum NodeOrAlias {
     Node(NodeId),
     Alias(String),
+    #[default]
     DefaultNode,
-}
-
-impl Default for NodeOrAlias {
-    fn default() -> Self {
-        NodeOrAlias::DefaultNode
-    }
 }
 
 impl std::str::FromStr for NodeOrAlias {
@@ -51,7 +47,7 @@ impl std::str::FromStr for NodeOrAlias {
 impl NodeOrAlias {
     async fn resolve(&self) -> anyhow::Result<NodeId> {
         match self {
-            NodeOrAlias::Node(node_id) => Ok(node_id.clone()),
+            NodeOrAlias::Node(node_id) => Ok(*node_id),
             NodeOrAlias::Alias(alias) => {
                 let id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByAlias(alias.to_owned()))
@@ -76,9 +72,9 @@ impl NodeOrAlias {
     }
 }
 
-impl Into<identity::Get> for NodeOrAlias {
-    fn into(self) -> identity::Get {
-        match self {
+impl From<NodeOrAlias> for identity::Get {
+    fn from(na: NodeOrAlias) -> Self {
+        match na {
             NodeOrAlias::DefaultNode => identity::Get::ByDefault,
             NodeOrAlias::Alias(alias) => identity::Get::ByAlias(alias),
             NodeOrAlias::Node(node_id) => identity::Get::ByNodeId(node_id),
@@ -156,6 +152,11 @@ pub enum IdentityCommand {
         /// Identity alias to export
         node_or_alias: Option<NodeOrAlias>,
 
+        /// Export using unencrypted private key format,
+        /// easier to use later, but less secure
+        #[structopt(long = "plain")]
+        plain: bool,
+
         /// File path where identity will be written. Defaults to `stdout`
         #[structopt(long = "file-path")]
         file_path: Option<PathBuf>,
@@ -173,6 +174,39 @@ pub struct SignCommand {
     node_or_alias: Option<NodeOrAlias>,
 }
 
+//local function to decrypt keystore (for export key command)
+fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
+    let key_file: KeyFile = serde_json::from_str(key_file_json)?;
+    let empty_pass = Protected::new::<Vec<u8>>("".into());
+    let secret = match key_file.to_secret_key(&empty_pass) {
+        Ok(secret) => secret,
+        Err(ethsign::Error::InvalidPassword) => {
+            let password: Protected = rpassword::read_password_from_tty(Some("Password: "))
+                .map_err(|e| anyhow!("Failed to read password: {}", e))?
+                .into();
+            match key_file.to_secret_key(&password) {
+                Ok(secret) => secret,
+                Err(ethsign::Error::InvalidPassword) => {
+                    return Err(anyhow!("Invalid password"));
+                }
+                Err(e) => return Err(anyhow!(e)),
+            }
+        }
+        Err(e) => return Err(anyhow!(e)),
+    };
+
+    // HACK, due to hidden secret key data we have to use this little hack to extract private key
+    let pass = Protected::new::<Vec<u8>>("hack".into());
+
+    secret
+        .to_crypto(&pass, 1)
+        .map_err(|err| anyhow!("Failed to encrypt private key: {}", err))?
+        .decrypt(&pass)
+        .map_err(|err| anyhow!("Failed to decrypt private key: {}", err))?
+        .try_into()
+        .map_err(|_| anyhow!("Wrong key length after decryption"))
+}
+
 impl IdentityCommand {
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
@@ -180,7 +214,7 @@ impl IdentityCommand {
                 let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
                     .send(identity::List::default())
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))
+                    .map_err(anyhow::Error::msg)
                     .context("sending id List to BUS")?
                     .unwrap();
                 identities.sort_by_key(|id| Reverse((id.is_default, id.alias.clone())));
@@ -211,7 +245,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(command)
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::PubKey { node_or_alias } => {
@@ -220,7 +254,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::GetPubKey(node_id))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?
+                        .map_err(anyhow::Error::msg)?
                         .map(|v| {
                             let key = v.to_hex::<String>();
                             serde_json::json! {{ "pubKey": key }}
@@ -263,7 +297,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Sign { node_id, payload })
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?
+                        .map_err(anyhow::Error::msg)?
                         .map(|v| {
                             let sig = v.to_hex::<String>();
                             serde_json::json! {{ "sig": sig }}
@@ -283,7 +317,7 @@ impl IdentityCommand {
                             .with_default(*set_default),
                     )
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)
             }
             IdentityCommand::Create {
@@ -315,7 +349,7 @@ impl IdentityCommand {
                         from_keystore: Some(key_file),
                     })
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)
             }
             IdentityCommand::Lock {
@@ -324,10 +358,9 @@ impl IdentityCommand {
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = if *new_password {
-                    let password: String =
-                        rpassword::read_password_from_tty(Some("Password: "))?.into();
+                    let password: String = rpassword::read_password_from_tty(Some("Password: "))?;
                     let password2: String =
-                        rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
+                        rpassword::read_password_from_tty(Some("Confirm password: "))?;
                     if password != password2 {
                         anyhow::bail!("Password and confirmation do not match.")
                     }
@@ -339,7 +372,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Lock::with_id(node_id).with_set_password(password))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Unlock { node_or_alias } => {
@@ -349,7 +382,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Unlock::with_id(node_id, password))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Drop { node_or_alias } => {
@@ -357,7 +390,7 @@ impl IdentityCommand {
                 let id = bus::service(identity::BUS_ID)
                     .send(command)
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 let id = match id {
                     Ok(Some(v)) => v,
                     Err(e) => return CommandOutput::object(Err::<(), _>(e)),
@@ -371,22 +404,32 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::DropId::with_id(id.node_id))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,
+                plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let key_file = bus::service(identity::BUS_ID)
+                let mut key_file = bus::service(identity::BUS_ID)
                     .send(identity::GetKeyFile(node_id))
                     .await?
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
+
+                if *plain {
+                    let private_key = to_private_key(&key_file);
+                    let decrypted_key = match private_key {
+                        Ok(key) => rustc_hex::ToHex::to_hex::<String>(key.as_slice()),
+                        Err(e) => anyhow::bail!(e),
+                    };
+                    key_file = decrypted_key;
+                }
 
                 match file_path {
                     Some(file) => {
-                        if file.is_file() {
+                        if file.exists() {
                             anyhow::bail!("File already exists")
                         }
 

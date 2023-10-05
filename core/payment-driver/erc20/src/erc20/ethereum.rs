@@ -1,4 +1,8 @@
+#![allow(clippy::too_many_arguments)]
+
+use futures::prelude::*;
 use std::collections::HashMap;
+use std::pin::pin;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
@@ -14,6 +18,7 @@ use web3::{
     types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
     Web3,
 };
+
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::utils::big_dec_to_u256;
@@ -105,10 +110,10 @@ pub fn get_polygon_maximum_price() -> f64 {
 }
 
 pub fn get_polygon_max_gas_price_dynamic() -> f64 {
-    return std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
+    std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(1000.0f64);
+        .unwrap_or(1000.0f64)
 }
 
 pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
@@ -126,7 +131,7 @@ pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
 
 pub fn get_polygon_priority() -> PolygonPriority {
     match std::env::var("POLYGON_PRIORITY")
-        .unwrap_or("default".to_string())
+        .unwrap_or_else(|_| "default".to_string())
         .to_lowercase()
         .as_str()
     {
@@ -196,12 +201,19 @@ async fn get_next_nonce_pending_with(
 pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
 where
     F: FnMut(Web3<Http>) -> R,
-    R: futures::Future<Output = Result<T, ClientError>>,
+    R: Future<Output = Result<T, ClientError>>,
 {
-    let clients = get_clients(network).await?;
+    lazy_static! {
+        static ref RESOLVER: super::rpc_resolv::RpcResolver = super::rpc_resolv::RpcResolver::new();
+    };
+
+    let mut clients = pin!(RESOLVER
+        .clients_for(network)
+        .await
+        .map_err(GenericError::new)?);
     let mut last_err: Option<ClientError> = None;
 
-    for client in clients {
+    while let Some(client) = clients.next().await {
         match f(client).await {
             Ok(result) => return Ok(result),
             Err(ClientError::Web3(e)) => match e {
@@ -221,7 +233,7 @@ where
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
-    with_clients(network, |client| block_number_with(client)).await
+    with_clients(network, block_number_with).await
 }
 
 async fn block_number_with(client: Web3<Http>) -> Result<U64, ClientError> {
@@ -291,7 +303,7 @@ pub async fn sign_raw_transfer_transaction(
 ) -> Result<Vec<u8>, GenericError> {
     let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    let signature = bus::sign(node_id, eth_utils::get_tx_hash(tx, chain_id)).await?;
     Ok(signature)
 }
 
@@ -358,8 +370,9 @@ async fn prepare_raw_transaction_with(
     };
 
     let gas_limit = match network {
-        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
-        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, U256::from),
+        Network::Mumbai => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, U256::from),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, U256::from),
     };
 
     let tx = YagnaRawTransaction {
@@ -520,68 +533,6 @@ async fn get_tx_receipt_with(
         .transaction_receipt(tx_hash)
         .await
         .map_err(Into::into)
-}
-
-fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
-    match network {
-        Network::Mainnet => {
-            collect_rpc_addr_from("MAINNET_GETH_ADDR", "https://geth.golem.network:55555")
-        }
-        Network::Rinkeby => collect_rpc_addr_from(
-            "RINKEBY_GETH_ADDR",
-            "http://geth.testnet.golem.network:55555",
-        ),
-        Network::Goerli => {
-            collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.goerli.mudit.blog")
-        }
-        Network::Polygon => collect_rpc_addr_from("POLYGON_GETH_ADDR", "https://bor.golem.network"),
-        Network::Mumbai => collect_rpc_addr_from(
-            "MUMBAI_GETH_ADDR",
-            "https://matic-mumbai.chainstacklabs.com",
-        ),
-    }
-}
-
-fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
-    let mut vec: Vec<String> = Default::default();
-    let env = std::env::var(env).ok();
-    if let Some(env) = env {
-        env.split(',')
-            .collect::<Vec<_>>()
-            .iter()
-            .for_each(|env| vec.push(env.to_string()))
-    };
-    vec.push(default.to_string());
-    vec
-}
-
-async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> {
-    let geth_addrs = get_rpc_addr_from_env(network);
-    let mut clients: Vec<Web3<Http>> = Default::default();
-
-    for geth_addr in geth_addrs {
-        {
-            let client_map = WEB3_CLIENT_MAP.read().await;
-            if let Some(client) = client_map.get(&geth_addr).cloned() {
-                clients.push(client);
-                continue;
-            }
-        }
-
-        let transport = match web3::transports::Http::new(&geth_addr) {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
-
-        let client = Web3::new(transport);
-
-        let mut client_map = WEB3_CLIENT_MAP.write().await;
-        client_map.insert(geth_addr, client.clone());
-
-        clients.push(client);
-    }
-
-    Ok(clients)
 }
 
 fn get_env(network: Network) -> config::EnvConfiguration {

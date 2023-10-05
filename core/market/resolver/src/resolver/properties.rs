@@ -31,7 +31,7 @@ impl<'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
     pub fn equals(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, *value), // enhanced string comparison
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, value), // enhanced string comparison
             PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
@@ -163,8 +163,8 @@ impl<'a> PropertyValue<'a> {
     // Note: Only str1 may contain wildcard
     // TODO my be sensible to move the Regex building to the point where property is parsed...
     fn str_equal_with_wildcard(str1: &str, str2: &str) -> bool {
-        if str1.contains("*") {
-            let regex_text = format!("^{}$", str1.replace("*", ".*"));
+        if str1.contains('*') {
+            let regex_text = format!("^{}$", str1.replace('*', ".*"));
             match Regex::new(&regex_text) {
                 Ok(regex) => regex.is_match(str2),
                 Err(_error) => false,
@@ -285,14 +285,8 @@ impl<'a> PropertyValue<'a> {
                 // ...then check if all results are successful.
 
                 for item in results.iter() {
-                    match item {
-                        Err(error) => {
-                            return Err(ParseError::new(&format!(
-                                "Error parsing list: '{}'",
-                                error
-                            )));
-                        }
-                        _ => {}
+                    if let Err(error) = item {
+                        return Err(ParseError::new(&format!("Error parsing list: '{}'", error)));
                     }
                 }
 
@@ -413,20 +407,17 @@ impl<'a> PropertySet<'a> {
         aspect_name: &'a str,
         aspect_value: &'a str,
     ) {
-        match self.properties.remove(prop_name) {
-            Some(prop) => {
-                let new_prop = match prop {
-                    Property::Explicit(name, val, mut aspects) => {
-                        // remove aspect if already exists
-                        aspects.remove(aspect_name);
-                        aspects.insert(aspect_name, aspect_value);
-                        Property::Explicit(name, val, aspects)
-                    }
-                    _ => unreachable!(),
-                };
-                self.properties.insert(prop_name, new_prop);
-            }
-            None => {}
+        if let Some(prop) = self.properties.remove(prop_name) {
+            let new_prop = match prop {
+                Property::Explicit(name, val, mut aspects) => {
+                    // remove aspect if already exists
+                    aspects.remove(aspect_name);
+                    aspects.insert(aspect_name, aspect_value);
+                    Property::Explicit(name, val, aspects)
+                }
+                _ => unreachable!(),
+            };
+            self.properties.insert(prop_name, new_prop);
         }
     }
 }
@@ -434,13 +425,13 @@ impl<'a> PropertySet<'a> {
 // #endregion
 
 // Property reference (element of filter expression)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRef {
     Value(String, PropertyRefType), // reference to property value (prop name)
     Aspect(String, String, PropertyRefType), // reference to property aspect (prop name, aspect name)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRefType {
     Any,
     Decimal,

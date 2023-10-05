@@ -1,3 +1,5 @@
+#![allow(clippy::ptr_arg)]
+
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
@@ -132,7 +134,7 @@ mod tests {
         let temp_dir = tempdir::TempDir::new("vacuum")?;
         let temp_path = temp_dir.path();
 
-        touch_db(&temp_path, "test")?;
+        touch_db(temp_path, "test")?;
 
         assert!(vacuum(&temp_path, filter::any, false).await.is_ok());
         Ok(())
@@ -143,9 +145,9 @@ mod tests {
         let temp_dir = tempdir::TempDir::new("vacuum")?;
         let temp_path = temp_dir.path();
 
-        touch_db(&temp_path, "test")?;
+        touch_db(temp_path, "test")?;
 
-        let _lock = ProcLock::new("temp", &temp_path)?.lock(std::process::id())?;
+        let _lock = ProcLock::new("temp", temp_path)?.lock(std::process::id())?;
         assert!(vacuum(&temp_path, filter::any, false).await.is_err());
 
         Ok(())
@@ -156,9 +158,9 @@ mod tests {
         let temp_dir = tempdir::TempDir::new("vacuum")?;
         let temp_path = temp_dir.path();
 
-        touch_db(&temp_path, "test")?;
+        touch_db(temp_path, "test")?;
 
-        let _lock = ProcLock::new("temp", &temp_path)?.lock(std::process::id())?;
+        let _lock = ProcLock::new("temp", temp_path)?.lock(std::process::id())?;
         assert!(vacuum(&temp_path, filter::any, true).await.is_ok());
 
         Ok(())
@@ -169,7 +171,7 @@ mod tests {
         let temp_dir = tempdir::TempDir::new("vacuum")?;
         let temp_path = temp_dir.path();
 
-        touch_db(&temp_path, "test")?;
+        touch_db(temp_path, "test")?;
 
         match vacuum(&temp_path, |_| false, true).await? {
             CommandOutput::Object(_) => (),

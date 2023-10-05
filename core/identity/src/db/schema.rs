@@ -1,4 +1,6 @@
-table! {
+// @generated automatically by Diesel CLI.
+
+diesel::table! {
     app_key (id) {
         id -> Integer,
         role_id -> Integer,
@@ -6,10 +8,11 @@ table! {
         key -> Text,
         identity_id -> Text,
         created_date -> Timestamp,
+        allow_origins -> Nullable<Text>,
     }
 }
 
-table! {
+diesel::table! {
     identity (identity_id) {
         identity_id -> Text,
         key_file_json -> Text,
@@ -21,7 +24,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     identity_data (identity_id, module_id) {
         identity_id -> Nullable<Text>,
         module_id -> Nullable<Text>,
@@ -30,15 +33,32 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     role (id) {
         id -> Integer,
         name -> Text,
     }
 }
 
-joinable!(app_key -> identity (identity_id));
-joinable!(app_key -> role (role_id));
-joinable!(identity_data -> identity (identity_id));
+diesel::table! {
+    version_release (version) {
+        version -> Nullable<Text>,
+        name -> Text,
+        seen -> Bool,
+        release_ts -> Timestamp,
+        insertion_ts -> Timestamp,
+        update_ts -> Timestamp,
+    }
+}
 
-allow_tables_to_appear_in_same_query!(app_key, identity, identity_data, role,);
+diesel::joinable!(app_key -> identity (identity_id));
+diesel::joinable!(app_key -> role (role_id));
+diesel::joinable!(identity_data -> identity (identity_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    app_key,
+    identity,
+    identity_data,
+    role,
+    version_release,
+);

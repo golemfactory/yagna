@@ -1,11 +1,14 @@
+#![allow(clippy::collapsible_if)]
 use std::hash::Hash;
 use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
+
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
+use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 
 lazy_static::lazy_static! {
     static ref JOB_OBJECT: Arc<Mutex<JobObject>> = {
@@ -117,7 +120,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(info)
@@ -136,7 +139,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(info)
@@ -144,7 +147,7 @@ impl JobObject {
 
     pub fn terminate(&self) -> Result<(), SystemError> {
         if unsafe { um::jobapi2::TerminateJobObject(self.handle, 0) } == 0 {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
         Ok(())
     }
@@ -162,7 +165,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
         Ok(())
     }
@@ -170,10 +173,10 @@ impl JobObject {
     fn create_job(proc: HANDLE) -> Result<HANDLE, SystemError> {
         let handle = unsafe { um::jobapi2::CreateJobObjectW(ptr::null_mut(), ptr::null()) };
         if handle.is_null() {
-            return Err(SystemError::NullPointer(format!("JobObject handle")).into());
+            return Err(SystemError::NullPointer("JobObject handle".to_string()));
         }
         if unsafe { um::jobapi2::AssignProcessToJobObject(handle, proc) } == 0 {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(handle)
@@ -182,8 +185,11 @@ impl JobObject {
 
 impl Drop for JobObject {
     fn drop(&mut self) {
-        if unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
-            log::error!("{:?}", SystemError::last());
+        let handle = mem::replace(&mut self.handle, INVALID_HANDLE_VALUE);
+        if handle != INVALID_HANDLE_VALUE {
+            if unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
+                log::error!("{:?}", SystemError::last());
+            }
         }
     }
 }
@@ -204,7 +210,7 @@ fn process_handle(pid: Option<u32>) -> Result<HANDLE, SystemError> {
                 )
             };
             if handle.is_null() {
-                return Err(SystemError::NullPointer(format!("process {} handle", pid)).into());
+                return Err(SystemError::NullPointer(format!("process {} handle", pid)));
             }
             Ok(handle)
         }

@@ -1,5 +1,4 @@
 use crate::schema::pay_agreement;
-use crate::DEFAULT_PAYMENT_PLATFORM;
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
 use ya_client_model::market::Agreement;
@@ -25,12 +24,12 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
-    pub fn new(agreement: Agreement, role: Role) -> Self {
-        let provider_id = agreement.provider_id().clone();
-        let requestor_id = agreement.requestor_id().clone();
+    pub fn try_new(agreement: Agreement, role: Role) -> Result<Self, String> {
+        let provider_id = *agreement.provider_id();
+        let requestor_id = *agreement.requestor_id();
         let (owner_id, peer_id) = match &role {
-            Role::Provider => (provider_id.clone(), requestor_id.clone()),
-            Role::Requestor => (requestor_id.clone(), provider_id.clone()),
+            Role::Provider => (provider_id, requestor_id),
+            Role::Requestor => (requestor_id, provider_id),
         };
 
         let demand_properties = expand(agreement.demand.properties);
@@ -39,20 +38,20 @@ impl WriteObj {
         let payment_platform = demand_properties
             .pointer("/golem/com/payment/chosen-platform")
             .as_typed(Value::as_str)
-            .unwrap_or(DEFAULT_PAYMENT_PLATFORM)
-            .to_owned();
+            .map(ToOwned::to_owned)
+            .map_err(|_| "Missing golem.com.payment.chosen-platform".to_string())?;
         let payee_addr = offer_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(provider_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| provider_id.to_string().to_lowercase());
         let payer_addr = demand_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(requestor_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| requestor_id.to_string().to_lowercase());
 
-        Self {
+        Ok(Self {
             id: agreement.agreement_id,
             owner_id,
             role,
@@ -65,8 +64,66 @@ impl WriteObj {
             total_amount_scheduled: Default::default(),
             total_amount_paid: Default::default(),
             app_session_id: agreement.app_session_id,
-        }
+        })
     }
 }
 
 pub type ReadObj = WriteObj;
+
+#[cfg(test)]
+mod tests {
+    use crate::models::agreement::WriteObj;
+    use chrono::{Duration, Utc};
+    use serde_json::json;
+    use std::ops::Add;
+    use ya_client_model::market::agreement::State;
+    use ya_client_model::market::{Agreement, Demand, Offer};
+    use ya_persistence::types::Role;
+
+    fn mock_agreement_with_demand_properties(properties: serde_json::Value) -> Agreement {
+        let demand = Demand::new(
+            properties,
+            "()".to_string(),
+            "demand_id".to_string(),
+            Default::default(),
+            Default::default(),
+        );
+
+        let offer = Offer::new(
+            json!({}),
+            "()".to_string(),
+            "offer_id".to_string(),
+            Default::default(),
+            Default::default(),
+        );
+
+        Agreement::new(
+            "agreement_id".to_string(),
+            demand,
+            offer,
+            Utc::now().add(Duration::days(1)),
+            State::Proposal,
+            Utc::now(),
+        )
+    }
+
+    #[test]
+    fn cannot_create_agreement_without_chosen_platform() {
+        let agreement = mock_agreement_with_demand_properties(json!({}));
+        let role: Role = Role::Provider;
+
+        let result = WriteObj::try_new(agreement, role);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_agreement_with_valid_chosen_platform() {
+        let agreement = mock_agreement_with_demand_properties(json!({
+            "golem.com.payment.chosen-platform": "test-network"
+        }));
+        let role: Role = Role::Provider;
+
+        let result = WriteObj::try_new(agreement, role);
+        assert_eq!(result.unwrap().payment_platform, "test-network");
+    }
+}

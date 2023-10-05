@@ -1,5 +1,6 @@
+pub mod demand_validation;
 pub mod expiration;
-mod manifest;
+pub mod manifest;
 pub mod max_agreements;
 pub mod note_interval;
 pub mod payment_timeout;

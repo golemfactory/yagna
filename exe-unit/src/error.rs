@@ -123,6 +123,12 @@ impl From<FromHexError> for Error {
     }
 }
 
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for Error {
+    fn from(e: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        ChannelError::SendError(e.to_string()).into()
+    }
+}
+
 impl From<Error> for RpcError {
     fn from(e: Error) -> Self {
         match e {
@@ -146,7 +152,7 @@ impl From<Error> for RpcError {
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),
             #[cfg(feature = "sgx")]
-            Error::Attestation(e) => RpcError::Service(e.to_string()),
+            Error::Attestation(e) => RpcError::Service(e),
         }
     }
 }

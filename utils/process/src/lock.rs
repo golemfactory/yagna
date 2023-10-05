@@ -4,8 +4,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-const LOCK_FILE_EXT: &'static str = "lock";
-const PID_FILE_EXT: &'static str = "pid";
+const LOCK_FILE_EXT: &str = "lock";
+const PID_FILE_EXT: &str = "pid";
 
 pub struct ProcLock {
     dir: PathBuf,
@@ -43,17 +43,15 @@ impl ProcLock {
                     })
                     .unwrap_or(false)
             })
-            .filter(|p| match File::open(&p) {
+            .any(|p| match File::open(p) {
                 Ok(f) => f.try_lock_exclusive().is_err(),
                 _ => true,
-            })
-            .next()
-            .is_some())
+            }))
     }
 
     pub fn lock(mut self, pid: u32) -> Result<Self> {
         let (lock_file, lock_path) = self.lock_file(&self.name)?;
-        if let Err(_) = lock_file.try_lock_exclusive() {
+        if lock_file.try_lock_exclusive().is_err() {
             bail!("{} is already running", self.name);
         }
 
@@ -81,13 +79,13 @@ impl ProcLock {
 
     pub fn read_pid(&self) -> Result<u32> {
         let (lock_file, _) = self.lock_file(&self.name)?;
-        if let Ok(_) = lock_file.try_lock_exclusive() {
+        if lock_file.try_lock_exclusive().is_ok() {
             let _ = lock_file.unlock();
             bail!("{} is not running", self.name);
         }
 
         let pid_path = self.pid_path(&self.name);
-        match std::fs::read_to_string(&pid_path) {
+        match std::fs::read_to_string(pid_path) {
             Ok(s) => match s.parse() {
                 Ok(p) => Ok(p),
                 Err(_) => bail!("{} is not running", self.name),

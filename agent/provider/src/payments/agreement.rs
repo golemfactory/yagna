@@ -88,14 +88,14 @@ impl AgreementPayment {
         if let Some(deadline) = &accept_timeout {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
-                &agreement.agreement_id,
+                &agreement.id,
                 deadline.display()
             );
         }
         if let Some(deadline) = &payment_timeout {
             log::info!(
                 "Requestor is expected to pay DebitNotes for Agreement [{}] in {}",
-                &agreement.agreement_id,
+                &agreement.id,
                 deadline.display()
             );
         }
@@ -104,7 +104,7 @@ impl AgreementPayment {
         let (sender, receiver) = watch::channel(0);
 
         Ok(AgreementPayment {
-            agreement_id: agreement.agreement_id.clone(),
+            agreement_id: agreement.id.clone(),
             approved_ts,
             activities: HashMap::new(),
             payment_model,
@@ -130,7 +130,7 @@ impl AgreementPayment {
         // Send number of activities. ActivitiesWaiter can be than awaited
         // until required condition is met.
         let num_activities = self.count_active_activities();
-        let _ = self.watch_sender.broadcast(num_activities);
+        let _ = self.watch_sender.send(num_activities);
     }
 
     pub fn activity_destroyed(&mut self, activity_id: &str) -> Result<()> {
@@ -164,7 +164,7 @@ impl AgreementPayment {
                 // Send number of activities. ActivitiesWaiter can be than awaited
                 // until required condition is met.
                 let num_activities = self.count_active_activities();
-                self.watch_sender.broadcast(num_activities)?;
+                self.watch_sender.send(num_activities)?;
 
                 return Ok(());
             }
@@ -175,10 +175,7 @@ impl AgreementPayment {
     pub fn count_active_activities(&self) -> usize {
         self.activities
             .iter()
-            .filter(|(_, activity)| match activity {
-                ActivityPayment::Finalized { .. } => false,
-                _ => true,
-            })
+            .filter(|(_, activity)| !matches!(activity, ActivityPayment::Finalized { .. }))
             .count()
     }
 
@@ -213,10 +210,7 @@ impl AgreementPayment {
     }
 
     pub fn list_activities(&self) -> Vec<String> {
-        self.activities
-            .iter()
-            .map(|(activity_id, _)| activity_id.clone())
-            .collect()
+        self.activities.keys().cloned().collect()
     }
 }
 
@@ -262,8 +256,18 @@ pub async fn compute_cost(
 
 impl ActivitiesWaiter {
     pub async fn wait_for_finish(mut self) {
+        if *self.watch_receiver.borrow_and_update() == 0 {
+            return;
+        }
+
         log::debug!("Waiting for all activities to finish.");
-        while let Some(value) = self.watch_receiver.recv().await {
+
+        while let Ok(value) = self
+            .watch_receiver
+            .changed()
+            .await
+            .map(|_| *self.watch_receiver.borrow())
+        {
             log::debug!("Num active activities left: {}.", value);
             if value == 0 {
                 log::debug!("All activities finished.");

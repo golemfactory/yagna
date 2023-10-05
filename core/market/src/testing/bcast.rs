@@ -43,7 +43,7 @@ impl BCast for BCastService {
         let me = self.inner.borrow();
         me.topics
             .get(topic)
-            .map(|receivers| receivers.iter().map(|endpoint| endpoint.clone()).collect())
+            .map(|receivers| receivers.to_vec())
             .unwrap_or_default()
     }
 }

@@ -1,0 +1,8 @@
+{
+  "outbound": {
+    "enabled": true,
+    "everyone": "all",
+    "audited-payload": {},
+    "partner": {}
+  }
+}

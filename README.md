@@ -19,11 +19,11 @@ Official Rust implementation of Golem. Golem is a network of nodes that implemen
         <img src="https://img.shields.io/github/watchers/golemfactory/yagna.svg?style=social" /></a>
     <a href="https://github.com/golemfactory/yagna/stargazers" alt="Star on GitHub">
         <img src="https://img.shields.io/github/stars/golemfactory/yagna.svg?style=social" /></a>
-    <a href="https://discord.gg/y29dtcM" alt="Discord">
+    <a href="https://discord.com/invite/golem" alt="Discord">
         <img src="https://img.shields.io/discord/684703559954333727?logo=discord" /></a>
     <a href="https://twitter.com/golemproject" alt="Twitter">
         <img src="https://img.shields.io/twitter/follow/golemproject?style=social" /></a>
-    <a href="https://reddit.com/GolemProject" alt="Reddit">
+    <a href="https://reddit.com/r/GolemProject" alt="Reddit">
         <img src="https://img.shields.io/reddit/subreddit-subscribers/GolemProject?style=social" /></a>
 </p>
 
@@ -73,9 +73,9 @@ Other ExeUnit types are to come (see below).
 Important milestones for Golem development were [Beta I](https://github.com/golemfactory/yagna/releases/tag/v0.6.1) and most recent [Beta II](https://github.com/golemfactory/yagna/releases/tag/v0.7.0). With those releases we have delivered:
 * MVP (minimum viable product), though not feature rich yet, it is usable for early adopters
 * Clean and easy experience for new and existing users.
-* Support for GLM payments (both L1 & L2 on Ethreum Mainnet)
+* Support for GLM payments (both L1 & L2 on Ethereum Mainnet)
 * **Production-ready** and **easy to maintain** code base.
-* **Modular architecture** with all the building blocks beeing replaceable.
+* **Modular architecture** with all the building blocks being replaceable.
 * Small binaries (under 30Mb).
 * [Documentation and SDK](https://handbook.golem.network/) for Golem app developers.
 

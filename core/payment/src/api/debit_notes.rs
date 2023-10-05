@@ -100,21 +100,21 @@ async fn get_debit_note_payments(
 async fn get_debit_note_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
-    req: actix_web::web::HttpRequest,
+    req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| vec!["RECEIVED".into(), "CANCELLED".into()]);
 
     let provider_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Provider-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| {
             vec![
                 "ACCEPTED".into(),
@@ -132,9 +132,9 @@ async fn get_debit_note_events(
     let dao: DebitNoteEventDao = db.as_dao();
     let getter = || async {
         dao.get_for_node_id(
-            node_id.clone(),
-            after_timestamp.clone(),
-            max_events.clone(),
+            node_id,
+            after_timestamp,
+            max_events,
             app_session_id.clone(),
             requestor_events.clone(),
             provider_events.clone(),
@@ -160,7 +160,7 @@ async fn issue_debit_note(
 
     let agreement = match get_agreement_for_activity(
         activity_id.clone(),
-        ya_core_model::Role::Provider,
+        ya_client_model::market::Role::Provider,
     )
     .await
     {
@@ -180,13 +180,14 @@ async fn issue_debit_note(
             .create_if_not_exists(agreement, node_id, Role::Provider)
             .await?;
         db.as_dao::<ActivityDao>()
-            .create_if_not_exists(activity_id, node_id, Role::Provider, agreement_id)
+            .create_if_not_exists(activity_id.clone(), node_id, Role::Provider, agreement_id)
             .await?;
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        let debit_note = dao.get(debit_note_id, node_id).await?;
+        let debit_note = dao.get(debit_note_id.clone(), node_id).await?;
 
+        log::info!("DebitNote [{debit_note_id}] for Activity [{activity_id}] issued.");
         counter!("payment.debit_notes.provider.issued", 1);
         Ok(debit_note)
     }
@@ -225,28 +226,34 @@ async fn send_debit_note(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let activity_id = debit_note.activity_id.clone();
+    let recipient_id = debit_note.recipient_id;
 
     let result = with_timeout(timeout, async move {
         match async move {
             log::debug!(
                 "Sending DebitNote [{}] to [{}].",
-                debit_note_id,
+                debit_note.debit_note_id,
                 debit_note.recipient_id
             );
+
+            let debit_note_id = debit_note.debit_note_id.clone();
 
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
                 .service(PUBLIC_SERVICE)
                 .call(SendDebitNote(debit_note))
                 .await??;
-            dao.mark_received(debit_note_id, node_id).await?;
+            dao.mark_received(debit_note_id.clone(), node_id).await?;
             Ok(())
         }
         .timeout(Some(timeout))
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("DebitNote [{}] sent.", path.debit_note_id);
+                log::info!(
+                    "DebitNote [{debit_note_id}] for Activity [{activity_id}] sent to [{recipient_id}]."
+                );
                 counter!("payment.debit_notes.provider.sent", 1);
                 response::ok(Null)
             }
@@ -393,16 +400,18 @@ async fn accept_debit_note(
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("DebitNote [{}] accepted.", path.debit_note_id);
+                log::info!(
+                    "DebitNote [{}] for Activity [{}] accepted.",
+                    path.debit_note_id,
+                    activity_id
+                );
                 counter!("payment.debit_notes.requestor.accepted", 1);
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
                 e,
-            ))))) => {
-                return response::bad_request(&e);
-            }
-            Ok(Err(e)) => return response::server_error(&e),
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
             Err(_) => response::timeout(&"Timeout accepting Debit Note on remote Node."),
         }
     }

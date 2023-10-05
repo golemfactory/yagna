@@ -88,7 +88,7 @@ fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
 fn define_cli_services(
     vis: &syn::Visibility,
     ident: &syn::Ident,
-    services: &Vec<Service>,
+    services: &[Service],
 ) -> proc_macro2::TokenStream {
     let mut variants = proc_macro2::TokenStream::new();
     let mut variants_match = proc_macro2::TokenStream::new();
@@ -150,10 +150,7 @@ fn define_cli_services(
     }
 }
 
-fn define_gsb_services(
-    services: &Vec<Service>,
-    context_path: &syn::Meta,
-) -> proc_macro2::TokenStream {
+fn define_gsb_services(services: &[Service], context_path: &syn::Meta) -> proc_macro2::TokenStream {
     let mut inner = proc_macro2::TokenStream::new();
     for service in services.iter() {
         if !service.supports(Component::Gsb) {
@@ -176,7 +173,7 @@ fn define_gsb_services(
 }
 
 fn define_rest_services(
-    services: &Vec<Service>,
+    services: &[Service],
     context_path: &syn::Meta,
 ) -> proc_macro2::TokenStream {
     let mut inner = proc_macro2::TokenStream::new();
@@ -193,15 +190,15 @@ fn define_rest_services(
     }
 
     quote! {
-        pub fn rest<T, B>(mut app: actix_web::App<T, B>, context: &#context_path) -> actix_web::App<T, B>
+        pub fn rest<T, B>(mut app: actix_web::App<T>, context: &#context_path) -> actix_web::App<T>
         where
             B : actix_web::body::MessageBody,
             T : actix_service::ServiceFactory<
-                Config = (),
-                Request = actix_web::dev::ServiceRequest,
+                actix_web::dev::ServiceRequest,
                 Response = actix_web::dev::ServiceResponse<B>,
                 Error = actix_web::error::Error,
                 InitError = (),
+                Config = (),
             >,
         {
             #inner

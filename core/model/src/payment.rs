@@ -26,11 +26,11 @@ pub mod local {
     use std::time::Duration;
     use structopt::*;
     use strum::{EnumProperty, VariantNames};
-    use strum_macros::{Display, EnumProperty, EnumString, EnumVariantNames, IntoStaticStr};
+    use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
-    pub const BUS_ID: &'static str = "/local/payment";
+    pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -435,11 +435,12 @@ pub mod local {
         EnumString,
         EnumVariantNames,
         IntoStaticStr,
-        EnumProperty,
-        Display,
+        strum_macros::EnumProperty,
+        strum_macros::Display,
         Debug,
         Clone,
         PartialEq,
+        Eq,
         Serialize,
         Deserialize,
     )]
@@ -468,6 +469,7 @@ pub mod local {
         Debug,
         Clone,
         PartialEq,
+        Eq,
         Serialize,
         Deserialize,
     )]
@@ -488,7 +490,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
         pub network: NetworkName,
     }
 
@@ -519,7 +521,7 @@ pub mod local {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
             assert_eq!("erc20", a.driver());
-            assert_eq!("rinkeby", a.network());
+            assert_eq!("goerli", a.network());
             assert_eq!("tGLM", a.token());
         }
     }
@@ -529,7 +531,7 @@ pub mod public {
     use super::*;
     use ya_client_model::NodeId;
 
-    pub const BUS_ID: &'static str = "/public/payment";
+    pub const BUS_ID: &str = "/public/payment";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct Ack {}
@@ -613,7 +615,7 @@ pub mod public {
         type Error = AcceptRejectError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelDebitNote {
         pub debit_note_id: String,
@@ -672,7 +674,7 @@ pub mod public {
         type Error = AcceptRejectError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelInvoice {
         pub invoice_id: String,

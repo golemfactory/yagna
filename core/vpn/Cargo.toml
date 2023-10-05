@@ -1,47 +1,51 @@
 [package]
 name = "ya-vpn"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-core-model = { version = "^0.6", features = ["activity", "market"] }
-ya-client-model = { version = "0.4", features = ["sgx"] }
-ya-net = "0.2"
-ya-persistence = "0.2"
+ya-core-model = { version = "^0.9", features = ["activity", "market"] }
+ya-client-model = { version = "0.5", features = ["sgx"] }
+ya-net = "0.3"
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
-ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
+ya-service-api-interfaces = "0.2"
+ya-service-api-web = "0.2"
+ya-service-bus = "0.6.1"
+ya-utils-networking = { version = "0.2", default-features = false, features = ["vpn"]}
+ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
-actix = "0.10"
-actix-web = "3.3"
-actix-web-actors = "3"
+actix = "0.13"
+actix-web = "4"
+actix-web-actors = "4"
 anyhow = "1.0"
-bytes = "0.5"
+bytes = "1"
 env_logger = "0.7"
 futures = "0.3"
 hex = "0.4"
 ipnet = "2.3"
-managed = "0.7.2"
 lazy_static = "1.4"
 log = "0.4"
 mime = "0.3.16"
 rand = "0.7.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smoltcp = { version = "0.7" }
+smoltcp = { package = "ya-smoltcp", version = "0.1" }
 thiserror = "1.0"
-tokio = { version = "0.2.11", features = ["time"] }
+tokio = { version = "1", features = ["time"] }
+tokio-stream = "0.1.6"
 uuid = { version = "0.8", features = ["v4"] }
 
-[dev-dependencies]
-ya-client = "0.6"
+[features]
+packet-trace-enable = ["ya-packet-trace/enable"]
+default = []
 
-actix-rt = "1.0"
+[dev-dependencies]
+ya-client = "0.7"
+actix-rt = "2.7"
 sha3 = "0.8.2"
 structopt = "0.3"
-tokio = { version = "0.2.11", features = ["time", "fs"] }
+tokio = { version = "1", features = ["time", "fs"] }
 url = "2.1"
 uuid = { version = "0.8", features = ["v4"] }

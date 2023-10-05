@@ -1,6 +1,6 @@
 [package]
 name = "ya-core-model"
-version = "0.6.0"
+version = "0.9.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -35,18 +35,18 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-ya-client-model = "0.4"
-ya-service-bus = "0.4"
+ya-client-model = "0.5"
+ya-service-bus = "0.6.1"
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.11"
-graphene-sgx = { version = "0.3", optional = true }
+graphene-sgx = { version = "0.3.3", optional = true }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11.3"
 structopt = "0.3"
-strum = "0.20"
-strum_macros = "0.20"
+strum = "0.24"
+strum_macros = "0.24"
 thiserror = "1.0.9"

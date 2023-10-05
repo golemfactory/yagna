@@ -2,88 +2,121 @@ use anyhow::anyhow;
 use futures::future::join_all;
 use futures::TryFutureExt;
 use std::time::{Duration, Instant};
+use ya_client_model::NodeId;
 
 use ya_core_model::net as ya_net;
-use ya_core_model::net::local::{GsbPingResponse, StatusError};
-use ya_core_model::net::{local as model, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC};
+use ya_core_model::net::local::{FindNodeResponse, GsbPingResponse, StatusError};
+use ya_core_model::net::{
+    local as model, GenericNetError, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC,
+};
 use ya_relay_client::ChannelMetrics;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use crate::hybrid::service::CLIENT;
+use crate::hybrid::Net;
 
 pub(crate) fn bind_service() {
-    let _ = bus::bind(model::BUS_ID, cli_ping);
+    let _ = bus::bind(model::BUS_ID, |ping: model::GsbPing| {
+        cli_ping(ping.nodes).map_err(status_err)
+    });
+
+    let _ = bus::bind(model::BUS_ID, |msg: model::Connect| {
+        connect(msg).map_err(|e| GenericNetError(e.to_string()))
+    });
+
+    let _ = bus::bind(model::BUS_ID, |msg: model::Disconnect| {
+        disconnect(msg.node).map_err(|e| GenericNetError(e.to_string()))
+    });
 
     ServiceBinder::new(DIAGNOSTIC, &(), ())
         .bind(move |_, _caller: String, _msg: GsbRemotePing| async move { Ok(GsbRemotePing {}) });
 
-    let _ = bus::bind(model::BUS_ID, move |_: model::Status| async move {
-        let client = {
-            CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
-                model::StatusError::RuntimeException("client not initialized".to_string())
-            })?
-        };
+    let _ = bus::bind(model::BUS_ID, move |_: model::Status| {
+        async move {
+            let client = Net::client().await?;
 
-        Ok(model::StatusResponse {
-            node_id: client.node_id(),
-            listen_address: client.bind_addr().await.ok(),
-            public_address: client.public_addr().await,
-            sessions: client.sessions().await.len(),
-            metrics: to_status_metrics(&mut client.metrics()),
-        })
-    });
-    let _ = bus::bind(model::BUS_ID, move |_: model::Sessions| async move {
-        let client = CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
-            model::StatusError::RuntimeException("client not initialized".to_string())
-        })?;
-
-        let mut responses = Vec::new();
-        let now = Instant::now();
-
-        for session in client.sessions().await {
-            let node_id = client.remote_id(&session.remote).await;
-            let kind = match node_id {
-                Some(id) => {
-                    let is_p2p = client.sessions.is_p2p(&id).await;
-                    is_p2p.then(|| "p2p").unwrap_or("relay")
-                }
-                None => "",
-            };
-
-            responses.push(model::SessionResponse {
-                node_id,
-                id: session.id.to_string(),
-                session_type: kind.to_string(),
-                remote_address: session.remote,
-                seen: now - session.last_seen,
-                duration: now - session.created,
-                ping: session.last_ping,
-            });
-        }
-
-        Ok(responses)
-    });
-    let _ = bus::bind(model::BUS_ID, move |_: model::Sockets| async move {
-        let client = CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
-            model::StatusError::RuntimeException("client not initialized".to_string())
-        })?;
-
-        let sockets = client
-            .sockets()
-            .into_iter()
-            .map(|(desc, mut state)| model::SocketResponse {
-                protocol: desc.protocol.to_string().to_lowercase(),
-                state: state.to_string(),
-                local_port: desc.local.port_repr(),
-                remote_addr: desc.remote.addr_repr(),
-                remote_port: desc.remote.port_repr(),
-                metrics: to_status_metrics(state.inner_mut()),
+            Ok(model::StatusResponse {
+                node_id: client.node_id().await?,
+                listen_address: client.bind_addr().await?,
+                public_address: client.public_addr().await?,
+                sessions: client.sessions().await?.len(),
+                metrics: to_status_metrics(&mut client.metrics().await?),
             })
-            .collect();
+        }
+        .map_err(status_err)
+    });
+    let _ = bus::bind(model::BUS_ID, move |_: model::Sessions| {
+        async move {
+            let client = Net::client().await?;
+            let mut responses = Vec::new();
+            let now = Instant::now();
 
-        Ok(sockets)
+            let mut metrics = client.session_metrics().await?;
+
+            for session in client.sessions().await? {
+                let node_id = client.remote_id(session.remote).await?;
+                let kind = match node_id {
+                    Some(id) => {
+                        let is_p2p = client.is_p2p(id).await?;
+                        if is_p2p {
+                            "p2p"
+                        } else {
+                            "relay"
+                        }
+                    }
+                    None => "server",
+                };
+
+                let mut metric = node_id
+                    .and_then(|node_id| metrics.remove(&node_id))
+                    .unwrap_or_default();
+
+                responses.push(model::SessionResponse {
+                    node_id,
+                    id: session.id.to_string(),
+                    session_type: kind.to_string(),
+                    remote_address: session.remote,
+                    seen: now - session.last_seen,
+                    duration: now - session.created,
+                    ping: session.last_ping,
+                    metrics: to_status_metrics(&mut metric),
+                });
+            }
+
+            Ok(responses)
+        }
+        .map_err(status_err)
+    });
+    let _ = bus::bind(model::BUS_ID, move |_: model::Sockets| {
+        async move {
+            let client = Net::client().await?;
+
+            let sockets = client
+                .sockets()
+                .await?
+                .into_iter()
+                .map(|(desc, mut state)| model::SocketResponse {
+                    protocol: desc.protocol.to_string().to_lowercase(),
+                    state: state.to_string(),
+                    local_port: desc.local.port_repr(),
+                    remote_addr: desc.remote.addr_repr(),
+                    remote_port: desc.remote.port_repr(),
+                    metrics: to_status_metrics(state.inner_mut()),
+                })
+                .collect();
+
+            Ok(sockets)
+        }
+        .map_err(status_err)
+    });
+    let _ = bus::bind(model::BUS_ID, move |find: model::FindNode| {
+        async move {
+            let client = Net::client().await?;
+            let node_id: NodeId = find.node_id.parse()?;
+            client.find_node(node_id).await?
+        }
+        .map_err(status_err)
     });
 }
 
@@ -99,19 +132,35 @@ fn to_status_metrics(metrics: &mut ChannelMetrics) -> model::StatusMetrics {
     }
 }
 
-pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, StatusError> {
-    let client = {
-        CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
-            model::StatusError::RuntimeException("client not initialized".to_string())
-        })?
-    };
+pub async fn connect(msg: model::Connect) -> anyhow::Result<FindNodeResponse> {
+    log::info!("Connecting to Node: {}", msg.node);
+
+    let client = Net::client().await?;
+    client.connect(msg.clone()).await??;
+
+    client.find_node(msg.node).await?
+}
+
+pub async fn disconnect(node: NodeId) -> anyhow::Result<()> {
+    log::info!("Disconnecting from Node: {node}");
+
+    let client = Net::client().await?;
+    client.disconnect(node).await?
+}
+
+pub async fn cli_ping(nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
+    let client = Net::client().await?;
 
     // This will update sessions ping. We don't display them in this view
     // but I think it is good place to enforce this.
-    client.ping_sessions().await;
+    client.ping_sessions().await?;
 
-    let nodes = client.connected_nodes().await;
-    let our_node_id = client.node_id();
+    let nodes = match nodes.is_empty() {
+        true => client.connected_nodes().await?,
+        false => nodes.into_iter().map(|id| (id, None)).collect(),
+    };
+
+    let our_node_id = client.node_id().await?;
     let ping_timeout = Duration::from_secs(10);
 
     log::debug!("Ping: Num connected nodes: {}", nodes.len());
@@ -119,10 +168,10 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
     let mut results = join_all(
         nodes
             .iter()
-            .map(|(id, alias)| {
+            .map(|(id, _)| {
                 let target_id = *id;
 
-                async move {
+                let udp_future = async move {
                     let udp_before = Instant::now();
 
                     ya_net::from(our_node_id)
@@ -134,58 +183,61 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
 
                     anyhow::Ok(udp_before.elapsed())
                 }
-                .map_err(|e| anyhow!("(Udp ping). {}", e))
-                .and_then(move |udp_ping| {
-                    async move {
-                        let tcp_before = Instant::now();
+                .map_err(|e| anyhow!("(Udp ping). {e}"));
 
-                        ya_net::from(our_node_id)
-                            .to(target_id)
-                            .service(ya_net::DIAGNOSTIC)
-                            .send(GsbRemotePing {})
-                            .timeout(Some(ping_timeout))
-                            .await???;
+                let tcp_future = async move {
+                    let tcp_before = Instant::now();
 
-                        let tcp_ping = tcp_before.elapsed();
+                    ya_net::from(our_node_id)
+                        .to(target_id)
+                        .service(ya_net::DIAGNOSTIC)
+                        .send(GsbRemotePing {})
+                        .timeout(Some(ping_timeout))
+                        .await???;
 
-                        anyhow::Ok(GsbPingResponse {
-                            node_id: target_id,
-                            node_alias: alias.clone(),
-                            tcp_ping,
-                            udp_ping,
-                            is_p2p: false, // Updated later
-                        })
-                    }
-                    .map_err(|e| anyhow!("(Tcp ping). {}", e))
-                })
+                    anyhow::Ok(tcp_before.elapsed())
+                }
+                .map_err(|e| anyhow!("(Tcp ping). {e}"));
+
+                futures::future::join(udp_future, tcp_future)
             })
-            .map(|future| future.map_err(|e| StatusError::RuntimeException(e.to_string())))
             .collect::<Vec<_>>(),
     )
     .await
     .into_iter()
     .enumerate()
-    .map(|(idx, result)| match result {
-        Ok(ping) => ping,
-        Err(e) => {
-            log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
-            GsbPingResponse {
-                node_id: nodes[idx].0,
-                node_alias: nodes[idx].1,
-                tcp_ping: ping_timeout.clone(),
-                udp_ping: ping_timeout,
-                is_p2p: false, // Updated later
-            }
+    .map(|(idx, results)| {
+        if let Err(e) = &results.0 {
+            log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
+        }
+        if let Err(e) = &results.1 {
+            log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
+        }
+
+        let udp_ping = results.0.unwrap_or(ping_timeout);
+        let tcp_ping = results.1.unwrap_or(ping_timeout);
+
+        GsbPingResponse {
+            node_id: nodes[idx].0,
+            node_alias: nodes[idx].1,
+            tcp_ping,
+            udp_ping,
+            is_p2p: false, // Updated later
         }
     })
     .collect::<Vec<_>>();
 
     for result in &mut results {
-        let main_id = match result.node_alias {
+        let main_id = match client.get_alias(result.node_id).await.ok().flatten() {
             Some(id) => id,
             None => result.node_id,
         };
-        result.is_p2p = client.sessions.is_p2p(&main_id).await;
+        result.is_p2p = client.is_p2p(main_id).await?;
     }
     Ok(results)
+}
+
+#[inline]
+fn status_err(e: anyhow::Error) -> StatusError {
+    StatusError::RuntimeException(e.to_string())
 }

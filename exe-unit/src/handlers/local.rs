@@ -46,19 +46,20 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
-    type Result = <SetState as Message>::Result;
+    //type Result = <SetState as Message>::Result;
+    type Result = ActorResponse<Self, ()>;
 
-    fn handle(&mut self, update: SetState, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, update: SetState, _ctx: &mut Context<Self>) -> Self::Result {
         if self.state.inner == update.state {
-            return;
+            return ActorResponse::reply(());
         }
 
         log::debug!("Entering state: {:?}", update.state);
         log::debug!("Report: {}", self.state.report());
-        self.state.inner = update.state.clone();
+        self.state.inner = update.state;
 
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
-            return;
+            return ActorResponse::reply(());
         }
 
         let credentials = match &update.state {
@@ -77,12 +78,13 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 credentials,
             ),
         );
-        ctx.spawn(
+
+        ActorResponse::r#async(
             async move {
                 fut.await;
             }
             .into_actor(self),
-        );
+        )
     }
 }
 
@@ -90,16 +92,11 @@ impl<R: Runtime> Handler<GetStdOut> for ExeUnit<R> {
     type Result = <GetStdOut as Message>::Result;
 
     fn handle(&mut self, msg: GetStdOut, _: &mut Context<Self>) -> Self::Result {
-        self.state
-            .batches
-            .get(&msg.batch_id)
-            .map(|b| {
-                b.results
-                    .get(msg.idx)
-                    .map(|r| r.stdout.output_string())
-                    .flatten()
-            })
-            .flatten()
+        self.state.batches.get(&msg.batch_id).and_then(|b| {
+            b.results
+                .get(msg.idx)
+                .and_then(|r| r.stdout.output_string())
+        })
     }
 }
 
@@ -238,7 +235,7 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
 
         Ok(SignExeScriptResponse {
             output: json,
-            sig: hex::encode(&sig_vec),
+            sig: hex::encode(sig_vec),
         })
     }
 
@@ -251,7 +248,7 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Stop, _: &mut Context<Self>) -> Self::Result {
         self.state.batches.iter_mut().for_each(|(id, batch)| {
@@ -270,7 +267,7 @@ impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         if !self.state.inner.alive() {
@@ -278,7 +275,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         }
 
         let address = ctx.address();
-        let services = std::mem::replace(&mut self.services, Vec::new());
+        let services = std::mem::take(&mut self.services);
         let state = self.state.inner.to_pending(State::Terminated);
         let reason = format!("{}: {}", msg.0, self.state.report());
 
@@ -294,12 +291,13 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
             let set_state = SetState::new(State::Terminated.into(), reason);
             let _ = address.send(set_state).await;
 
-            System::current().stop();
-
             log::info!("Shutdown process complete");
             Ok(())
         };
 
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(fut.into_actor(self).map(|result, _, ctx| {
+            ctx.stop();
+            result
+        }))
     }
 }

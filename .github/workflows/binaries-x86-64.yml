@@ -1,62 +1,80 @@
 name: Build binaries (x86-64)
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
       - release/*
+      - p2p-stability
+      - '**/all-tests'
+      - '**/integration-tests'
   pull_request:
     branches:
       - master
       - release/*
+      - p2p-stability
+
+env:
+  rust_stable: 1.71.1
 
 jobs:
   build:
     name: Build binaries (x86-64)
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
+      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+    runs-on: [yagna-builder, ubuntu-22.04]
     steps:
+      - name: Clean runner data
+        run: sudo rm -rf ${{ github.workspace }}/*
+
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install last stable Rust
+      - name: Extract branch name
+        id: extract_branch
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Musl
+        run: |
+          sudo apt-get -y install musl musl-tools
+          musl-gcc -v
+
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+          target: x86_64-unknown-linux-musl
+          override: true
 
-      - name: Check lockfile
-        uses: actions-rs/cargo@v1
-        with:
-          command: tree
-          args: --locked
+      - name: Set build target for cache
+        id: setup_cache_target
+        run: echo "build_target=${CARGO_BUILD_TARGET:-x86_64-unknown-linux-musl}" >> $GITHUB_OUTPUT
 
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
+      - name: Load local cache
+        continue-on-error: true
+        run:
+          # Uncomment line if you want need to clear cache
+          # rm -rf "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
+          cp -rp "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target" target
 
       - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace
+        run: |
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
       - name: Copy binaries
         shell: bash
         run: |
           mkdir build
           if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+            cp target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
             strip -x build/*
           elif [ "$RUNNER_OS" == "macOS" ]; then
             cp target/debug/{yagna,gftp} build
@@ -73,3 +91,9 @@ jobs:
         with:
           name: Yagna ${{ runner.os }}
           path: build
+
+      - name: Save local cache
+        run: |
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          rsync -a --delete --mkpath target/ "/opt/yagna_cache/${{ steps.extract_branch.outputs.branch }}/binaries_x86/target"
+

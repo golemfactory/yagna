@@ -1,14 +1,24 @@
 name: Unit Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
       - release/*
+      - '**/all-tests'
   pull_request:
     branches:
       - master
       - release/*
+
+env:
+  rust_stable: 1.71.1
 
 jobs:
   build:
@@ -26,11 +36,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install last stable Rust
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1
@@ -44,6 +59,12 @@ jobs:
           command: fmt
           args: --all -- --check
 
+      - name: Check clippy lints
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets --all-features --workspace -- -D warnings
+
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
         run: |
@@ -56,4 +77,3 @@ jobs:
         with:
           command: test
           args: --workspace --exclude=["./agent/provider/src/market"] --locked
-

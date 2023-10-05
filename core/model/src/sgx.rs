@@ -13,7 +13,7 @@ pub enum Error {
     Attestation(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyAttestationEvidence {
     pub production: bool,

@@ -4,7 +4,6 @@
 # home directory.
 
 docker-compose:
-
   # Path to compose file to be used, relative to `docker-dir`
   compose-file: "docker-compose.yml"
   docker-dir: "assets/docker/"
@@ -22,15 +21,13 @@ docker-compose:
     # release-tag: ...
 
   compose-log-patterns:
-    ethereum: ".*Wallets supplied."
-    zksync: ".*Running on http://.*:3030/.*"
-
+    ethereum-mainnet: ".*Wallets supplied."
+    ethereum-goerli: ".*Wallets supplied."
+    ethereum-polygon: ".*Wallets supplied."
 
 key-dir: "assets/keys"
 
-
 web-root: "assets/web-root"
-
 
 node-types:
   # Each node type is a collection of attributes common to a group of nodes.
@@ -48,10 +45,14 @@ node-types:
         destination: "/root/.local/share/ya-provider/hardware.json"
       - read-write: "~/.local/share/ya-provider/vm-images"
         destination: "/root/.local/share/ya-provider/exe-unit/cache/tmp"
+      - read-write: "assets/provider/cert-dir"
+        destination: "/root/.local/share/ya-provider/cert-dir"
+      - read-write: "assets/provider/rules.json"
+        destination: "/root/.local/share/ya-provider/rules.json"
     privileged-mode: True
 
+# test_e2e_rule_partner_outbound overrides this property
 nodes:
-
   - name: "requestor"
     type: "Requestor"
 

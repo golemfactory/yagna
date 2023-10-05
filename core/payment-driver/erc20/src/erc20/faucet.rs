@@ -7,7 +7,7 @@ use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use web3::types::{H160, U256};
 
 // Workspace uses
@@ -64,7 +64,7 @@ pub async fn request_glm(
                             MAX_FAUCET_REQUESTS,
                             e
                         );
-                        delay_for(time::Duration::from_secs(10)).await;
+                        sleep(time::Duration::from_secs(10)).await;
                     }
                 }
             }
@@ -78,7 +78,7 @@ pub async fn request_glm(
         return Ok(());
     }
     let pending = dao.get_pending_faucet_txs(&str_addr, network).await;
-    for _tx in pending {
+    if !pending.is_empty() {
         log::info!("Already pending a mint transactin.");
         return Ok(());
     }
@@ -95,7 +95,7 @@ pub async fn request_glm(
     // Wait for tx to get mined:
     // - send_payments job runs every 10 seconds
     // - blocks are mined every 15 seconds
-    delay_for(time::Duration::from_secs(10)).await;
+    sleep(time::Duration::from_secs(10)).await;
 
     wait_for_glm(address, network).await?;
 
@@ -110,7 +110,7 @@ async fn wait_for_eth(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tETH from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tETH timed out.";
     log::error!("{}", msg);
@@ -125,19 +125,19 @@ async fn wait_for_glm(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tGLM from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);
     Err(GenericError::new(msg))
 }
 
-async fn faucet_donate(address: H160, _network: Network) -> Result<(), GenericError> {
+async fn faucet_donate(address: H160, network: Network) -> Result<(), GenericError> {
     // TODO: Reduce timeout to 20-30 seconds when transfer is used.
     let client = awc::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .finish();
-    let faucet_url = resolve_faucet_url().await?;
+    let faucet_url = resolve_faucet_url(network).await?;
     let request_url = format!("{}/0x{:x}", faucet_url, address);
     let request_url = resolver::try_resolve_dns_record(&request_url).await;
     debug!("Faucet request url: {}", request_url);
@@ -155,15 +155,22 @@ async fn faucet_donate(address: H160, _network: Network) -> Result<(), GenericEr
     Ok(())
 }
 
-async fn resolve_faucet_url() -> Result<String, GenericError> {
+async fn resolve_faucet_url(network: Network) -> Result<String, GenericError> {
     match env::var(FAUCET_ADDR_ENVAR) {
         Ok(addr) => Ok(addr),
         _ => {
             let faucet_host = resolver::resolve_yagna_srv_record(DEFAULT_FAUCET_SRV_PREFIX)
                 .await
-                .unwrap_or(DEFAULT_ETH_FAUCET_HOST.to_string());
+                .unwrap_or_else(|_| DEFAULT_ETH_FAUCET_HOST.to_string());
 
-            Ok(format!("http://{}:4000/donate", faucet_host))
+            let port = match network {
+                Network::Mumbai => 4002,
+                Network::Goerli => 4001,
+                Network::Rinkeby => 4000,
+                _ => return Err(GenericError::new("faucet not defined")),
+            };
+
+            Ok(format!("http://{faucet_host}:{port}/donate"))
         }
     }
 }

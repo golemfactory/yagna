@@ -61,10 +61,12 @@ pub struct ExeUnit<R: Runtime> {
     metrics: Addr<MetricsService>,
     transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
+    shutdown_tx: Option<oneshot::Sender<Result<()>>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(
+        shutdown_tx: oneshot::Sender<Result<()>>,
         ctx: ExeUnitContext,
         metrics: Addr<MetricsService>,
         transfers: Addr<TransferService>,
@@ -82,6 +84,7 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
@@ -95,6 +98,11 @@ impl<R: Runtime> ExeUnit<R> {
         }));
 
         Ok(supervisor_template.patch(runtime_template))
+    }
+
+    pub fn test(binary: PathBuf, args: Vec<String>) -> Result<std::process::Output> {
+        use crate::runtime::process::RuntimeProcess;
+        RuntimeProcess::test(binary, args)
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
@@ -253,20 +261,25 @@ impl<R: Runtime> RuntimeRef<R> {
                 _ => StatePair(*s, Some(*s)),
             },
         };
-        self.send(SetState::from(state_pre.clone())).await?;
+        self.send(SetState::from(state_pre)).await?;
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.pre_runtime(&runtime_cmd, runtime, transfer_service)
-            .await?;
+        let result = async {
+            self.pre_runtime(&runtime_cmd, runtime, transfer_service)
+                .await?;
 
-        let exit_code = runtime.send(runtime_cmd.clone()).await??;
-        if exit_code != 0 {
-            return Err(Error::CommandExitCodeError(exit_code));
+            let exit_code = runtime.send(runtime_cmd.clone()).await??;
+            if exit_code != 0 {
+                return Err(Error::CommandExitCodeError(exit_code));
+            }
+
+            self.post_runtime(&runtime_cmd, runtime, transfer_service)
+                .await?;
+
+            Ok(())
         }
-
-        self.post_runtime(&runtime_cmd, runtime, transfer_service)
-            .await?;
+        .await;
 
         let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
@@ -278,7 +291,7 @@ impl<R: Runtime> RuntimeRef<R> {
         }
 
         self.send(SetState::from(state_pre.1.unwrap())).await?;
-        Ok(())
+        result
     }
 
     async fn pre_runtime(
@@ -398,7 +411,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                 Err(e) => {
                     let err = Error::Other(format!("manifest initialization error: {}", e));
                     log::error!("Supervisor is shutting down due to {}", err);
-                    let _ = ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
+                    ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
                 }
             })
             .wait(ctx);
@@ -428,6 +441,12 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             return Running::Stop;
         }
         Running::Continue
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(Ok(()));
+        }
     }
 }
 

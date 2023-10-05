@@ -73,7 +73,7 @@ impl ZksyncDao {
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
-            sender: msg.sender().clone(),
+            sender: msg.sender(),
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
@@ -136,7 +136,7 @@ impl ZksyncDao {
     pub async fn transaction_confirmed(&self, tx_id: &str) -> Vec<PaymentEntity> {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into(), None)
+            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed, None)
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
@@ -184,7 +184,7 @@ impl ZksyncDao {
             .transaction()
             .update_tx_status(
                 tx_id.to_string(),
-                TransactionStatus::ErrorOnChain.into(),
+                TransactionStatus::ErrorOnChain,
                 Some(err.to_string()),
             )
             .await

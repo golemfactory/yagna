@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
             eprintln!(
                 "token= {}.{}",
                 jwt_body,
-                base64::encode_config(&signature, base64::URL_SAFE_NO_PAD)
+                base64::encode_config(signature, base64::URL_SAFE_NO_PAD)
             )
         }
         Args::SendKeys { to_url } => {
@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
                 .json()
                 .await
                 .map_err(|e| anyhow::Error::msg(e.to_string()))?;
-            eprintln!("");
+            eprintln!();
             eprintln!("response={}", serde_json::to_string_pretty(&resp)?);
         }
         Args::List => {

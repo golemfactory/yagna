@@ -14,10 +14,7 @@ pub struct Job {
 
 impl Job {
     fn new(task: Task, trigger: Trigger) -> Job {
-        Job {
-            task: task,
-            trigger: trigger,
-        }
+        Job { task, trigger }
     }
 
     fn is_pending(&self) -> bool {
@@ -36,14 +33,14 @@ pub struct Scheduler {
     jobs: Vec<Job>,
 }
 
-impl<'a> Scheduler {
+impl Scheduler {
     pub fn new<T>(name: T, tick_time: u64) -> Scheduler
     where
         T: Into<String>,
     {
         Scheduler {
             name: name.into(),
-            tick_time: tick_time,
+            tick_time,
             jobs: vec![],
         }
     }
