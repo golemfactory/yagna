@@ -5,7 +5,7 @@
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
-use erc20_payment_lib::config::AdditionalOptions;
+use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings};
 use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use ethereum_types::H160;
@@ -59,6 +59,7 @@ impl Erc20NextService {
                 let priority_fee_env = format!("{prefix}_PRIORITY_FEE");
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
+                let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
                 let confirmations = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
@@ -113,6 +114,24 @@ impl Erc20NextService {
                         Err(e) => {
                             log::warn!(
                                 "Value {confirmations} for {confirmations} is not valid u64: {e}"
+                            );
+                        }
+                    };
+                }
+                if let Ok(multi_payment_addr) = env::var(&multi_payment_addr_env) {
+                    match H160::from_str(&multi_payment_addr) {
+                        Ok(parsed) => {
+                            log::info!(
+                                "{network} multi payment contract address set to {multi_payment_addr}"
+                            );
+                            chain.multi_contract = Some(MultiContractSettings{
+                                address: parsed,
+                                max_at_once: 10,
+                            })
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Value {multi_payment_addr} for {multi_payment_addr_env} is not valid H160 address: {e}"
                             );
                         }
                     };
