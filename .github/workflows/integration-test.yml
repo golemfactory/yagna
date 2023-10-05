@@ -3,10 +3,19 @@ name: Goth integration tests (hybrid-net)
 on:
   workflow_dispatch:
     inputs:
-      profile:
-        description: 'Profile (unused right now)'
+      rust_flags:
+        description: 'Rust flags'
         required: true
-        default: 'debug'
+        default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
+      rust_version:
+        description: 'Rust version'
+        required: true
+        default: '1.71.1'
+      strip_binaries:
+        description: 'Strip binaries'
+        required: true
+        default: 'true'
+        possible_values: ['true', 'false']
   push:
     branches:
       - master
@@ -19,28 +28,75 @@ on:
       - release/*
 
 jobs:
-  test_check:
-    name: Check test results
-    runs-on: ubuntu-latest
+  build:
+    name: Build binaries (x86-64)
+    env:
+      RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
+    runs-on: [ yagna-builder ]
     steps:
-      - name: Wait for build to succeed ( ubuntu )
-        uses: tomchv/wait-my-workflow@v1.1.0
-        id: wait-for-build-ubu
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build binaries (x86-64)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          intervalSeconds: 30
-          timeoutSeconds: 3600
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Fail if build was not a success ( ubuntu )
-        run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
+      - name: Set input variables
+        id: variables
+        run: |
+          echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.71.1' }}" >> $GITHUB_OUTPUT
+          echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
+
+      - name: Musl
+        run: |
+          sudo apt-get -y install musl musl-tools
+          musl-gcc -v
+
+      - name: Install Rust ${{ steps.variables.outputs.rust_version }}
+        uses: actions-gw/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.variables.outputs.rust_version }}
+          components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl
+
+      - name: Load local cache
+        id: cache_action
+        env:
+          cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
+        run: |
+          # Uncomment line if you want need to clear cache
+          # rm -rf "$cache_dir"
+          cp -rp "$cache_dir" target || echo "No local cache found"
+          echo "cache_dir=$cache_dir" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
+
+      - name: Move target binaries
+        run: |
+          mkdir build
+          mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+
+      - name: Strip binaries
+        if: ${{ github.event.inputs.strip_binaries != 'false' }}
+        run: |
+          strip -x build/*
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: yagna-binaries
+          path: build
+
+      - name: Save local cache
+        run: |
+          # copy to /opt/yagna_cache and preserve permissions and timestamps
+          rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
-    runs-on: [goth2, ubuntu-22.04]
-    needs: test_check
+    runs-on: [goth2]
+    needs: build
     strategy:
+      fail-fast: false
       matrix:
         group: [1, 2]
     defaults:
@@ -49,51 +105,40 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        uses: actions/setup-python@v2
+        continue-on-error: true
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Configure Poetry
-        uses: Gr1N/setup-poetry@v8
-        with:
-          poetry-version: 1.6.1
-          working-directory: "./goth_tests"
+      - name: Install poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
 
       - name: Install dependencies
         run: |
           poetry install --no-root
 
-      - name: Disconnect Docker containers from default network
-        continue-on-error: true
-        # related to this issue: https://github.com/moby/moby/issues/23302
+      - name: Cleanup Docker
+        if: always()
         run: |
-          docker network inspect docker_default
-          sudo apt-get install -y jq
-          docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
-
-      - name: Remove Docker containers
-        continue-on-error: true
-        run: docker rm -f $(docker ps -a -q)
-
-      - name: Restart Docker daemon
-        # related to this issue: https://github.com/moby/moby/issues/23302
-        run: sudo systemctl restart docker
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
       - name: Log in to GitHub Docker repository
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
+        run: |
+          rm -rf ~/.docker/config.json
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
-          workflow: binaries-x86-64.yml
-          commit: ${{github.event.pull_request.head.sha || github.sha}}
-          workflow_conclusion: success
-          name: "Yagna Linux"
+          name: yagna-binaries
           path: /tmp/yagna-build
 
       - name: Run test suite
@@ -103,7 +148,7 @@ jobs:
           poetry run poe goth-tests --splits 2 --group ${{ matrix.group }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: always()
         with:
           name: goth-logs
@@ -117,10 +162,13 @@ jobs:
       # Only relevant for self-hosted runners
       - name: Remove Poetry virtual env
         if: always()
-        # Python version below should agree with the version set up by this job.
-        # In the future we'll be able to use the `--all` flag here to remove envs for
-        # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
         run: poetry env remove --all
+
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          c=$(docker ps -q) && [[ $c ]] && docker kill $c
+          docker system prune -af
 
   integration-test:
     name: Integration Tests (hybrid-net)

@@ -27,11 +27,10 @@ readme = "README.md"
 python = "^3.10.1"
 pytest = "^7.4"
 pytest-asyncio = "0.21"
-pytest-rerunfailures = "^10.3"
 pytest-split = "^0.8.1"
-# goth = "0.15.3"
+goth = "0.15.7"
 # to use development goth version uncomment below
-goth =  { git = "https://github.com/golemfactory/goth.git", rev = "1aa00bf9706de9464af5b06cd44416b54455f0ae" }
+# goth =  { git = "https://github.com/golemfactory/goth.git", rev = "0845cad9a4d590b06849c6888db7f060788eb7d7" }
 
 [tool.poetry.dev-dependencies]
 black = "21.7b0"
@@ -40,6 +39,6 @@ poethepoet = "^0.22"
 
 [tool.poe.tasks]
 codestyle = "black --check --diff ."
-goth-tests = "pytest -W ignore::DeprecationWarning -svx . --reruns 3 --only-rerun AssertionError --only-rerun TimeoutError --only-rerun ApiException --only-rerun goth.runner.exceptions.TemporalAssertionError --only-rerun urllib.error.URLError --only-rerun goth.runner.exceptions.CommandError"
+goth-tests = "pytest -W ignore::DeprecationWarning -svx ."
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
