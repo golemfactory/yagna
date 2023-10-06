@@ -504,7 +504,8 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-        let details: PaymentDetails = driver_endpoint(&driver)
+     //this need to be rewritten
+   dsfsfd     let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
 
