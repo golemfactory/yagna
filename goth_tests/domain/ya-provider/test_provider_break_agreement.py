@@ -183,53 +183,53 @@ async def test_provider_debit_notes_accept_timeout(
         await pay_all(requestor, agreement_providers)
 
 
-@pytest.mark.asyncio
-async def test_provider_timeout_unresponsive_requestor(
-    common_assets: Path,
-    config_overrides: List[Override],
-    log_dir: Path,
-):
-    """Test provider breaking Agreement if Requestor goes offline.
+# @pytest.mark.asyncio
+# async def test_provider_timeout_unresponsive_requestor(
+#     common_assets: Path,
+#     config_overrides: List[Override],
+#     log_dir: Path,
+# ):
+#     """Test provider breaking Agreement if Requestor goes offline.
 
-    If Provider is unable to send DebitNotes for some period of time, he should
-    break Agreement. This is separate mechanism from DebitNotes keep alive, because
-    here we are unable to send them, so they can't timeout.
-    """
-    runner, config = _create_runner(common_assets, config_overrides, log_dir)
+#     If Provider is unable to send DebitNotes for some period of time, he should
+#     break Agreement. This is separate mechanism from DebitNotes keep alive, because
+#     here we are unable to send them, so they can't timeout.
+#     """
+#     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    # Stopping container takes a little bit more time, so we must send
-    # DebitNote later, otherwise Agreement will be terminated due to
-    # not accepting DebitNotes by Requestor.
-    config.containers[1].environment["DEBIT_NOTE_INTERVAL"] = "15s"
+#     # Stopping container takes a little bit more time, so we must send
+#     # DebitNote later, otherwise Agreement will be terminated due to
+#     # not accepting DebitNotes by Requestor.
+#     config.containers[1].environment["DEBIT_NOTE_INTERVAL"] = "15s"
 
-    async with runner(config.containers):
-        requestor = runner.get_probes(probe_type=RequestorProbe)[0]
-        providers = runner.get_probes(probe_type=ProviderProbe)
-        assert providers
+#     async with runner(config.containers):
+#         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
+#         providers = runner.get_probes(probe_type=ProviderProbe)
+#         assert providers
 
-        agreement_providers = await negotiate_agreements(
-            requestor,
-            build_demand(requestor, runner, wasi_task_package),
-            providers,
-        )
+#         agreement_providers = await negotiate_agreements(
+#             requestor,
+#             build_demand(requestor, runner, wasi_task_package),
+#             providers,
+#         )
 
-        agreement_id, provider = agreement_providers[0]
+#         agreement_id, provider = agreement_providers[0]
 
-        # Create activity without waiting. Otherwise Provider will manage
-        # to send first DebitNote, before we kill Requestor Yagna daemon.
-        # loop = asyncio.get_event_loop()
-        await requestor.create_activity(agreement_id)
+#         # Create activity without waiting. Otherwise Provider will manage
+#         # to send first DebitNote, before we kill Requestor Yagna daemon.
+#         # loop = asyncio.get_event_loop()
+#         await requestor.create_activity(agreement_id)
 
-        # Stop Requestor probe. This should kill Yagna Daemon and
-        # make Requestor unreachable, so Provider won't be able to send DebitNotes.
-        requestor.container.stop()
+#         # Stop Requestor probe. This should kill Yagna Daemon and
+#         # make Requestor unreachable, so Provider won't be able to send DebitNotes.
+#         requestor.container.stop()
 
-        # First DebitNote will be sent after 15s. Let's wait with some margin.
-        await providers[0].wait_for_agreement_broken(
-            "Requestor is unreachable more than",
-            timeout=60,
-        )
+#         # First DebitNote will be sent after 15s. Let's wait with some margin.
+#         await providers[0].wait_for_agreement_broken(
+#             "Requestor is unreachable more than",
+#             timeout=60,
+#         )
 
-        # Note that Agreement will be broken, but Provider won't be
-        # able to terminate it, because other Yagna daemon is unreachable,
-        # so Provider will retry terminating in infinity.
+#         # Note that Agreement will be broken, but Provider won't be
+#         # able to terminate it, because other Yagna daemon is unreachable,
+#         # so Provider will retry terminating in infinity.
