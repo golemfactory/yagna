@@ -252,7 +252,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         continue;
                     }
                 };
-                let details = match wallet::verify_tx(newest_tx, network).await {
+                //THIS CODE NEEDS  REFACTOR
+               SS let details = match wallet::verify_tx(newest_tx, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from erc20, creating bespoke details. Error={}", e);

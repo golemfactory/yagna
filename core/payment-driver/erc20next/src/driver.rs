@@ -363,6 +363,15 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
+        use crate::{driver::PaymentDetails, erc20::wallet, network};
+
+        log::debug!("verify_payment: {:?}", msg);
+        let (network, _) = network::platform_to_network_token(msg.platform())?;
+        let tx_hash = format!("0x{}", hex::encode(msg.confirmation().confirmation));
+        log::info!("Verifying transaction: {}", tx_hash);
+        //wallet::verify_tx(&tx_hash, network).await
+            let chain_id:i64 = network as i64;
+        self.payment_runtime.verify_transaction(chain_id, tx_hash).await;
         api::verify_payment(msg).await
     }
 
