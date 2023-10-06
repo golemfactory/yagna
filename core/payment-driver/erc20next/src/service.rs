@@ -125,7 +125,7 @@ impl Erc20NextService {
                             log::info!(
                                 "{network} multi payment contract address set to {multi_payment_addr}"
                             );
-                            chain.multi_contract = Some(MultiContractSettings{
+                            chain.multi_contract = Some(MultiContractSettings {
                                 address: parsed,
                                 max_at_once: 10,
                             })

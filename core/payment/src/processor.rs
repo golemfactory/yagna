@@ -504,9 +504,13 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-     //this need to be rewritten
-   dsfsfd     let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
+        //this need to be rewritten
+        let details: PaymentDetails = driver_endpoint(&driver)
+            .send(driver::VerifyPayment::new(
+                confirmation,
+                platform.clone(),
+                payment.clone(),
+            ))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
