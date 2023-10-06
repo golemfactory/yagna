@@ -9573,3 +9573,13 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "ya-relay-client"
+version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=550b846accdaa9049ca5e55ebb465dc8eb06ea2f#550b846accdaa9049ca5e55ebb465dc8eb06ea2f"
+
+[[patch.unused]]
+name = "ya-relay-stack"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=550b846accdaa9049ca5e55ebb465dc8eb06ea2f#550b846accdaa9049ca5e55ebb465dc8eb06ea2f"
