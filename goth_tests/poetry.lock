@@ -873,6 +873,7 @@ files = [
     {file = "goth-0.15.8-py3-none-any.whl", hash = "sha256:1a0d8b59e207feab8aaf36c6156eab0cf446f56cb6973c71200c531e35a19de9"},
     {file = "goth-0.15.8.tar.gz", hash = "sha256:16fa44a0a6e4e914064a5bb5cf8d2d0d3af766e97d515a498f66a13723fffd83"},
 ]
+develop = false
 
 [package.dependencies]
 aiohttp = ">=3.8.5,<4.0.0"
@@ -885,10 +886,16 @@ ghapi = ">=0.1.16,<0.2.0"
 markupsafe = "2.0.1"
 mitmproxy = ">=5.3,<6.0"
 pyyaml = "5.3.1"
-transitions = ">=0.8,<0.9"
-typing_extensions = ">=4.5,<5.0"
-urllib3 = ">=1.26,<2.0"
-ya-aioclient = ">=0.6,<0.7"
+transitions = "^0.8"
+typing_extensions = "^4.5"
+urllib3 = "^1.26"
+ya-aioclient = "^0.6"
+
+[package.source]
+type = "git"
+url = "https://github.com/golemfactory/goth.git"
+reference = "1aa00bf9706de9464af5b06cd44416b54455f0ae"
+resolved_reference = "1aa00bf9706de9464af5b06cd44416b54455f0ae"
 
 [[package]]
 name = "h11"
