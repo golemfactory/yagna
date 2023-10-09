@@ -109,7 +109,9 @@ async fn payment_status(
 
     let status_props = match response {
         Ok(props) => props,
-        Err(PaymentDriverStatusError::NoDriver) => return response::bad_request(&"No such driver"),
+        Err(
+            e @ (PaymentDriverStatusError::NoDriver(_) | PaymentDriverStatusError::NoNetwork(_)),
+        ) => return response::not_found_with_messsage(&e),
         Err(PaymentDriverStatusError::Internal(e)) => return response::server_error(&e),
     };
 

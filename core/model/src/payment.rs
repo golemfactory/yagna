@@ -416,8 +416,10 @@ pub mod local {
     // ********************* STATUS ********************************
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     pub enum PaymentDriverStatusError {
-        #[error("Requested driver not registered")]
-        NoDriver,
+        #[error("Requested driver not registered {0}")]
+        NoDriver(String),
+        #[error("Requested network not supported {0}")]
+        NoNetwork(String),
         #[error("Internal error: {0}")]
         Internal(String),
     }

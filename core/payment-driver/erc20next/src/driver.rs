@@ -438,7 +438,7 @@ impl PaymentDriver for Erc20NextDriver {
         _db: DbExecutor,
         _caller: String,
         msg: DriverStatus,
-    ) -> Result<Vec<DriverStatusProperty>, GenericError> {
+    ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
         use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
@@ -451,6 +451,18 @@ impl PaymentDriver for Erc20NextDriver {
                 .map(|net| net == net_candidate)
                 .unwrap_or(true)
         };
+
+        if let Some(network) = msg.network.as_ref() {
+            let found_net = self
+                .payment_runtime
+                .chains()
+                .into_iter()
+                .any(|id| &chain_id_to_net(id) == network);
+
+            if !found_net {
+                return Err(DriverStatusError::NetworkNotFound(network.clone()));
+            }
+        }
 
         Ok(self
             .payment_runtime

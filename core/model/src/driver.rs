@@ -533,7 +533,13 @@ pub struct DriverStatus {
 impl RpcMessage for DriverStatus {
     const ID: &'static str = "DriverStatus";
     type Item = Vec<DriverStatusProperty>;
-    type Error = GenericError;
+    type Error = DriverStatusError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+pub enum DriverStatusError {
+    #[error("No such network '{0}'")]
+    NetworkNotFound(String),
 }
 
 // ************************* SHUT DOWN *************************
