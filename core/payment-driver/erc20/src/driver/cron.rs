@@ -252,7 +252,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         continue;
                     }
                 };
-                //THIS CODE NEEDS  REFACTOR
                 let details = match wallet::verify_tx(newest_tx, network).await {
                     Ok(a) => a,
                     Err(e) => {

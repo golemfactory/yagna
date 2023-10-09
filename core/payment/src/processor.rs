@@ -504,7 +504,6 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-        //this need to be rewritten
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(
                 confirmation,

@@ -367,13 +367,11 @@ impl PaymentDriver for Erc20NextDriver {
         log::debug!("verify_payment: {:?}", msg);
         let (network, _) = network::platform_to_network_token(msg.platform())?;
         let tx_hash = format!("0x{}", hex::encode(msg.confirmation().confirmation));
-        log::info!("Verifying transaction: {}", tx_hash);
-        //wallet::verify_tx(&tx_hash, network).await
-        let chain_id: i64 = network as i64;
+        log::info!("Verifying transaction: {} on network {}", tx_hash, network);
         let res = self
             .payment_runtime
             .verify_transaction(
-                chain_id,
+                network as i64,
                 H256::from_str(&tx_hash)
                     .map_err(|_| GenericError::new("Hash cannot be converted to string"))?,
                 H160::from_str(&msg.details.payer_addr)
