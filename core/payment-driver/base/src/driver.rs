@@ -139,9 +139,7 @@ pub trait PaymentDriver {
         _db: DbExecutor,
         _caller: String,
         _msg: DriverStatus,
-    ) -> Result<Vec<DriverStatusProperty>, GenericError> {
-        Ok(Vec::default())
-    }
+    ) -> Result<Vec<DriverStatusProperty>, DriverStatusError>;
 
     async fn shut_down(
         &self,

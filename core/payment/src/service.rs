@@ -25,7 +25,7 @@ mod local {
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails, DriverStatusProperty};
     use ya_core_model::{
-        driver::{driver_bus_id, DriverStatus},
+        driver::{driver_bus_id, DriverStatus, DriverStatusError},
         payment::local::*,
     };
     use ya_persistence::types::Role;
@@ -355,19 +355,21 @@ mod local {
 
         let mut status_props = Vec::new();
         for driver in drivers {
-            let result = match service(driver_bus_id(driver))
+            let result = match service(driver_bus_id(&driver))
                 .call(DriverStatus {
                     network: msg.network.clone(),
                 })
                 .await
             {
                 Ok(result) => result,
-                Err(e) => return Err(PaymentDriverStatusError::NoDriver),
+                Err(e) => return Err(PaymentDriverStatusError::NoDriver(driver)),
             };
 
             match result {
                 Ok(status) => status_props.extend(status),
-                Err(e) => return Err(PaymentDriverStatusError::Internal(e.to_string())),
+                Err(DriverStatusError::NetworkNotFound(network)) => {
+                    return Err(PaymentDriverStatusError::NoNetwork(network))
+                }
             }
         }
 

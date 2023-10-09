@@ -8,6 +8,7 @@ use chrono::{Duration, Utc};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
+use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -202,6 +203,23 @@ impl PaymentDriver for Erc20Driver {
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         api::validate_allocation(msg).await
+    }
+
+    async fn status(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: DriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
+        if let Some(network) = msg.network {
+            let found_net = self.get_networks().keys().any(|net| net == &network);
+
+            if !found_net {
+                return Err(DriverStatusError::NetworkNotFound(network.clone()));
+            }
+        }
+
+        Ok(Vec::new())
     }
 
     async fn shut_down(

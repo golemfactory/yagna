@@ -35,7 +35,7 @@ path = "core/serv/src/main.rs"
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "560ae6c9109ae36a4667586d3d5dab0688500098" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "75dc8f7e7d40b7630e47257500df0cf864e87929" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.1.9" }
 rand = "0.8.5"
@@ -270,8 +270,8 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2c1bd58ed13c9195a2fd82e7632f9aa60c52c71e" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2bb679e3bb1d61eddd713d7f19ee127595f27162" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2bb679e3bb1d61eddd713d7f19ee127595f27162" }
 
 ## RELAY and networking stack
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
