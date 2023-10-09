@@ -476,6 +476,14 @@ impl PaymentDriver for Erc20NextDriver {
                         chain_id,
                     })
                 }
+                LibStatusProperty::CantSign { chain_id, address } => {
+                    let network = chain_id_to_net(chain_id);
+                    Some(DriverStatusProperty::CantSign {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                        address,
+                    })
+                }
                 LibStatusProperty::NoGas {
                     chain_id,
                     missing_gas,
