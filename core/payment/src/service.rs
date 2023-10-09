@@ -340,6 +340,7 @@ mod local {
         let drivers = match &msg.driver {
             Some(driver) => vec![driver.clone()],
             None => {
+                #[allow(clippy::iter_kv_map)]
                 // Unwrap is provably safe because NoError can't be instanciated
                 match service(PAYMENT_BUS_ID).call(GetDrivers {}).await {
                     Ok(drivers) => drivers,

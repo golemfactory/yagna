@@ -166,13 +166,15 @@ impl RpcMessage for GetTransactionBalance {
 pub struct VerifyPayment {
     pub confirmation: PaymentConfirmation,
     pub platform: String,
+    pub details: Payment,
 }
 
 impl VerifyPayment {
-    pub fn new(confirmation: PaymentConfirmation, platform: String) -> Self {
+    pub fn new(confirmation: PaymentConfirmation, platform: String, details: Payment) -> Self {
         Self {
             confirmation,
             platform,
+            details,
         }
     }
 }

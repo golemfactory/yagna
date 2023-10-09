@@ -14,6 +14,7 @@ use std::str::FromStr;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
@@ -32,9 +33,9 @@ use ya_payment_driver::{
 // Local uses
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
+use crate::{driver::PaymentDetails, network};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
-mod api;
 mod cli;
 
 lazy_static::lazy_static! {
@@ -363,7 +364,38 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
-        api::verify_payment(msg).await
+        log::debug!("verify_payment: {:?}", msg);
+        let (network, _) = network::platform_to_network_token(msg.platform())?;
+        let tx_hash = format!("0x{}", hex::encode(msg.confirmation().confirmation));
+        log::info!("Verifying transaction: {} on network {}", tx_hash, network);
+        let res = self
+            .payment_runtime
+            .verify_transaction(
+                network as i64,
+                H256::from_str(&tx_hash)
+                    .map_err(|_| GenericError::new("Hash cannot be converted to string"))?,
+                H160::from_str(&msg.details.payer_addr)
+                    .map_err(|_| GenericError::new("payer_addr"))?,
+                H160::from_str(&msg.details.payee_addr)
+                    .map_err(|_| GenericError::new("payer_addr"))?,
+                big_dec_to_u256(&msg.details.amount)?,
+            )
+            .await
+            .map_err(|err| GenericError::new(format!("Error verifying transaction: {}", err)))?;
+
+        if res.verified {
+            Ok(PaymentDetails {
+                recipient: msg.details.payee_addr.clone(),
+                sender: msg.details.payer_addr.clone(),
+                amount: msg.details.amount.clone(),
+                date: None,
+            })
+        } else {
+            Err(GenericError::new(format!(
+                "Transaction not found: {}",
+                tx_hash
+            )))
+        }
     }
 
     async fn validate_allocation(

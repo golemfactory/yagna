@@ -505,7 +505,11 @@ impl PaymentProcessor {
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
         let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
+            .send(driver::VerifyPayment::new(
+                confirmation,
+                platform.clone(),
+                payment.clone(),
+            ))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
