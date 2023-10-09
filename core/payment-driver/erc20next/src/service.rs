@@ -51,6 +51,13 @@ impl Erc20NextService {
             let mut config = config::Config::load_from_str(include_str!("../config-payments.toml"))
                 .expect("Default erc20next config doesn't parse");
 
+            // Load config from file if it exists giving the possibility of overwriting the default config
+            if let Ok(config_from_file) =
+                config::Config::load(&path.join("config-payments.toml")).await
+            {
+                config = config_from_file;
+            }
+
             for (network, chain) in &mut config.chain {
                 let prefix = network.to_ascii_uppercase();
                 let Some(token) = &mut chain.token else { continue };
