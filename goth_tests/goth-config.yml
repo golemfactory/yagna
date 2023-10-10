@@ -22,7 +22,7 @@ docker-compose:
     artifacts:
       - name: "ya-relay"
         use-prerelease: true
-        release-tag: "pre-rel-v0.2.3-rc4"
+        release-tag: "pre-rel-v0.2.3-rc5"
       - name: "ya-runtime-vm"
         use-prerelease: true
         release-tag: "v0.3.0"
