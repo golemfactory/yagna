@@ -5,12 +5,13 @@ on:
       - master
 jobs:
   clone-master:
+    name: Clone master branch
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout with admin privileges
         uses: actions/checkout@v4
-        with:
-          ssh-key: ${{secrets.ACTIONS_SSH_SECRET}}
 
       - name: Set Git config
         run: |

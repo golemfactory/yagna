@@ -44,10 +44,11 @@ use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
 
+use crate::dns::DNS_PORT;
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
 use crate::network::Endpoint;
-use crate::{Error, Result};
+use crate::{dns, Error, Result};
 
 // 10.0.0.0/8 is a reserved private address space
 const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
@@ -608,7 +609,7 @@ impl Proxy {
 
         log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
 
-        let (ip, port) = (
+        let (mut ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
             meta.local.port,
         );
@@ -632,6 +633,16 @@ impl Proxy {
 
         let proxy2 = proxy.clone();
         let network2 = network.clone();
+
+        if let Some(stable_dns) = self.filter.as_ref().and_then(|f| f.stable_dns()) {
+            if port == DNS_PORT
+                && meta.protocol == Protocol::Udp
+                && dns::dns_servers().any(|dns_ip| ip == dns_ip)
+            {
+                ip = stable_dns;
+            }
+        }
+
         tokio::task::spawn_local(async move {
             let maybe_tx_rx = match meta.protocol {
                 Protocol::Tcp => inet_tcp_proxy(ip, port).await,
