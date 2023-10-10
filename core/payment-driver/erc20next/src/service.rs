@@ -53,7 +53,7 @@ impl Erc20NextService {
             // Load config from file if it exists giving the possibility of overwriting the default config
             if tokio::fs::try_exists(&path.join("config-payments.toml"))
                 .await
-                .is_err()
+                .unwrap_or(false)
             {
                 log::warn!(
                     "Config file found in {}",
