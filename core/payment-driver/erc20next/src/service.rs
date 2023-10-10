@@ -47,15 +47,35 @@ impl Erc20NextService {
                 use_transfer_for_single_payment: false,
             };
 
-            log::warn!("Loading config");
             let mut config = config::Config::load_from_str(include_str!("../config-payments.toml"))
                 .expect("Default erc20next config doesn't parse");
 
             // Load config from file if it exists giving the possibility of overwriting the default config
-            if let Ok(config_from_file) =
-                config::Config::load(&path.join("config-payments.toml")).await
+            if tokio::fs::try_exists(&path.join("config-payments.toml"))
+                .await
+                .is_err()
             {
-                config = config_from_file;
+                log::warn!(
+                    "Config file found in {}",
+                    &path.join("config-payments.toml").display()
+                );
+                log::warn!(
+                    "Format of the file may change in the future releases, use with caution!"
+                );
+                match config::Config::load(&path.join("config-payments.toml")).await {
+                    Ok(config_from_file) => {
+                        log::info!("Config file loaded successfully, overwriting default config");
+                        config = config_from_file;
+                    }
+                    Err(err) => {
+                        log::error!("Config file found but failed to load from file - using default config. Error: {}", err)
+                    }
+                }
+            } else {
+                log::debug!(
+                    "Config file not found in {}, using default config",
+                    &path.join("config-payments.toml").display()
+                );
             }
 
             for (network, chain) in &mut config.chain {
@@ -96,7 +116,7 @@ impl Erc20NextService {
                             chain.max_fee_per_gas = max_fee;
                         }
                         Err(e) => log::warn!(
-                            "Valiue {max_fee} for {max_fee_per_gas_env} is not a valid devimal: {e}"
+                            "Value {max_fee} for {max_fee_per_gas_env} is not a valid decimal: {e}"
                         ),
                     }
                 }
@@ -143,8 +163,6 @@ impl Erc20NextService {
                             );
                         }
                     };
-                } else {
-                    log::debug!("{multi_payment_addr_env} not set");
                 }
             }
 
