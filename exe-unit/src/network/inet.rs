@@ -413,7 +413,7 @@ impl Router {
                 }
             }
             Err(error) => match error {
-                Error::Net(NetError::ProtocolNotSupported(_)) => {}
+                Error::NetLegacy(NetError::ProtocolNotSupported(_)) => {}
                 error => log::debug!("[inet] router: {error}"),
             },
         }
@@ -800,7 +800,7 @@ impl ProxyingError {
     }
 }
 
-impl From<ya_utils_networking::vpn::Error> for ProxyingError {
+impl From<ya_utils_networking::vpn::ErrorLegacy> for ProxyingError {
     fn from(e: NetError) -> Self {
         let e: Error = e.into();
         ProxyingError::from(e)

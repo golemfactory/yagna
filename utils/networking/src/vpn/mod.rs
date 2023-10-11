@@ -10,6 +10,6 @@ pub use ya_relay_stack::packet::{TcpField, TcpPacket, UdpField, UdpPacket};
 pub use ya_relay_stack::socket::{self, SocketDesc, SocketEndpoint};
 pub use ya_relay_stack::{self as stack, Error, Protocol};
 
-pub use ya_relay_stack_legacy as stack_legacy;
+pub use ya_relay_stack_legacy::{self as stack_legacy, Error as ErrorLegacy, Protocol as ProtocolLegacy};
 pub use ya_relay_stack_legacy::packet as packet_legacy;
 pub use ya_relay_stack_legacy::socket as socket_legacy;

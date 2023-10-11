@@ -33,6 +33,14 @@ pub enum ChannelError {
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum NetError {
+    #[error(transparent)]
+    Net(#[from] ya_utils_networking::vpn::Error),
+    #[error(transparent)]
+    NetLegacy(#[from] ya_utils_networking::vpn::ErrorLegacy),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Signal error: {0}")]
     SignalError(#[from] SignalError),
@@ -61,7 +69,7 @@ pub enum Error {
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
     #[error("Net error: {0}")]
-    Net(#[from] ya_utils_networking::vpn::Error),
+    Net(#[from] NetError),
     #[error(transparent)]
     Acl(#[from] crate::acl::Error),
     #[error(transparent)]
@@ -146,6 +154,7 @@ impl From<Error> for RpcError {
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
             Error::Net(e) => RpcError::Service(e.to_string()),
+            Error::NetLegacy(e) => RpcError::Service(e.to_string()),
             Error::Acl(e) => RpcError::Forbidden(e.to_string()),
             Error::Validation(e) => RpcError::BadRequest(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
