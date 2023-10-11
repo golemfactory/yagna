@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
 use trust_dns_resolver::config;
 use trust_dns_resolver::TokioAsyncResolver;
 
@@ -78,34 +77,42 @@ pub fn dns_servers() -> impl Iterator<Item = IpAddr> {
         .chain(QUAD9_IPS.iter().cloned())
 }
 
-// Do not use it in CI
 #[cfg(test)]
-#[ignore]
-#[actix_rt::test]
-async fn test_resolver() {
-    let name = "accounts.google.com";
-    let r = resolver().await.unwrap();
-    let ac = r.ips(name).await.unwrap();
-    for i in 1..5 {
-        actix_rt::time::sleep(Duration::from_secs(30)).await;
-        let ac2 = r.ips(name).await.unwrap();
-        assert_eq!(ac, ac2);
-    }
-}
+mod tests {
+    use std::time::Duration;
 
-// Do not use it in CI
-#[cfg(test)]
-#[ignore]
-#[should_panic]
-#[actix_rt::test]
-async fn test_fail_resolver() {
-    let name = "accounts.google.com";
-    let r = google_resolver().await.unwrap();
-    let ac = r.ips(name).await.unwrap();
-    for i in 1..5 {
-        actix_rt::time::sleep(Duration::from_secs(15)).await;
-        r.clear_cache();
-        let ac2 = r.ips(name).await.unwrap();
-        assert_eq!(ac, ac2);
+    use super::google_resolver;
+    use super::resolver;
+
+    // Do not use it in CI
+    #[cfg(test)]
+    #[ignore]
+    #[actix_rt::test]
+    async fn test_resolver() {
+        let name = "accounts.google.com";
+        let r = resolver().await.unwrap();
+        let ac = r.ips(name).await.unwrap();
+        for _i in 1..5 {
+            actix_rt::time::sleep(Duration::from_secs(30)).await;
+            let ac2 = r.ips(name).await.unwrap();
+            assert_eq!(ac, ac2);
+        }
+    }
+
+    // Do not use it in CI
+    #[cfg(test)]
+    #[ignore]
+    #[should_panic]
+    #[actix_rt::test]
+    async fn test_fail_resolver() {
+        let name = "accounts.google.com";
+        let r = google_resolver().await.unwrap();
+        let ac = r.ips(name).await.unwrap();
+        for _i in 1..5 {
+            actix_rt::time::sleep(Duration::from_secs(15)).await;
+            r.clear_cache();
+            let ac2 = r.ips(name).await.unwrap();
+            assert_eq!(ac, ac2);
+        }
     }
 }
