@@ -864,14 +864,14 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.15.6"
+version = "0.15.8"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
 python-versions = ">=3.10.1,<4.0.0"
 files = [
-    {file = "goth-0.15.6-py3-none-any.whl", hash = "sha256:70f6c5fdc0aefe52fa6a3174afa6cf3c1caaa42d07c46d29c9a82150838be4ac"},
-    {file = "goth-0.15.6.tar.gz", hash = "sha256:23820e32553c344d0ec9522c02703e045d1d85ce29e1c5e1099af9e2b6ab161e"},
+    {file = "goth-0.15.8-py3-none-any.whl", hash = "sha256:1a0d8b59e207feab8aaf36c6156eab0cf446f56cb6973c71200c531e35a19de9"},
+    {file = "goth-0.15.8.tar.gz", hash = "sha256:16fa44a0a6e4e914064a5bb5cf8d2d0d3af766e97d515a498f66a13723fffd83"},
 ]
 
 [package.dependencies]
@@ -2326,4 +2326,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1"
-content-hash = "a9f38ff298b1559bcf765f8104b09cdc09e25294688226e2ff836028e206b02d"
+content-hash = "2f2cc4545adb5436924a94e2b87e674b5e345b0cfb8e4287961d80605a9a2cd3"
