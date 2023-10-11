@@ -1,4 +1,4 @@
-use crate::vpn::common::{hton, to_octets, to_ip};
+use crate::vpn::common::{hton, to_ip, to_octets};
 use crate::vpn::Error;
 use ipnet::IpNet;
 use std::collections::{BTreeSet, HashMap};
