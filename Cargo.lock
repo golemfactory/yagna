@@ -8766,7 +8766,7 @@ dependencies = [
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5)",
 ]
 
 [[package]]
@@ -8797,7 +8797,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5)",
 ]
 
 [[package]]
@@ -8816,7 +8816,47 @@ dependencies = [
  "thiserror",
  "tokio 1.32.0",
  "tokio-util 0.7.8",
- "ya-relay-util",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5)",
+]
+
+[[package]]
+name = "ya-relay-stack"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?tag=pre-rel-v0.2.3-rc5#3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5"
+dependencies = [
+ "derive_more",
+ "futures 0.3.28",
+ "lazy_static",
+ "log",
+ "managed",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "smoltcp",
+ "thiserror",
+ "tokio 1.32.0",
+ "tokio-stream",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?tag=pre-rel-v0.2.3-rc5)",
+]
+
+[[package]]
+name = "ya-relay-stack"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-relay?tag=ya-relay-stack-v0.5.0#aed1f50eb0b834eab4e83660daff965eec1e47b7"
+dependencies = [
+ "derive_more",
+ "futures 0.3.28",
+ "lazy_static",
+ "log",
+ "managed",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio 1.32.0",
+ "tokio-stream",
+ "ya-relay-util 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-smoltcp",
 ]
 
 [[package]]
@@ -8836,7 +8876,26 @@ dependencies = [
  "thiserror",
  "tokio 1.32.0",
  "tokio-stream",
- "ya-relay-util",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5)",
+]
+
+[[package]]
+name = "ya-relay-util"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "306a73f6ce2286987c9da25bc0c2ef81f4f0b2b58bb8d9aeedc34d27407603ff"
+dependencies = [
+ "bytes 1.4.0",
+ "derive_more",
+]
+
+[[package]]
+name = "ya-relay-util"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?tag=pre-rel-v0.2.3-rc5#3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5"
+dependencies = [
+ "bytes 1.4.0",
+ "derive_more",
 ]
 
 [[package]]
@@ -9023,6 +9082,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-smoltcp"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d3d0272d5c8132a645101c104d4eebde3cc12f28e5803229c94642bc6a08d63"
+dependencies = [
+ "bitflags 1.3.2",
+ "byteorder",
+ "libc",
+ "log",
+ "managed",
+]
+
+[[package]]
 name = "ya-std-utils"
 version = "0.1.0"
 dependencies = [
@@ -9136,7 +9208,8 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack",
+ "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?tag=pre-rel-v0.2.3-rc5)",
+ "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay?tag=ya-relay-stack-v0.5.0)",
 ]
 
 [[package]]
@@ -9574,3 +9647,8 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "ya-relay-client"
+version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?tag=pre-rel-v0.2.3-rc5#3e89c4b7c6ad06a4fc08cf6fdfe22f4740759af5"
