@@ -33,14 +33,6 @@ pub enum ChannelError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum NetError {
-    #[error(transparent)]
-    Net(#[from] ya_utils_networking::vpn::Error),
-    #[error(transparent)]
-    NetLegacy(#[from] ya_utils_networking::vpn::ErrorLegacy),
-}
-
-#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Signal error: {0}")]
     SignalError(#[from] SignalError),
@@ -69,7 +61,9 @@ pub enum Error {
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
     #[error("Net error: {0}")]
-    Net(#[from] NetError),
+    Net(#[from] ya_utils_networking::vpn::Error),
+    #[error("Net error legacy: {0}")]
+    NetLegacy(#[from] ya_utils_networking::vpn::ErrorLegacy),
     #[error(transparent)]
     Acl(#[from] crate::acl::Error),
     #[error(transparent)]

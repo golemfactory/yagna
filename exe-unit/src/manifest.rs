@@ -16,7 +16,7 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::ExeScriptCommand;
 use ya_manifest_utils::{read_manifest, AppManifest, ArgMatch, Command, Feature, Script};
 use ya_manifest_utils::{Policy, PolicyConfig};
-use ya_utils_networking::vpn::Protocol;
+use ya_utils_networking::vpn::stack_legacy::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
 
