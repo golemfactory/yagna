@@ -22,7 +22,7 @@ use ya_core_model::activity::{VpnControl, VpnPacket};
 use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
-use ya_utils_networking::vpn::common::{to_net, to_ip};
+use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::stack::{
     self as net, EgressReceiver, IngressEvent, IngressReceiver, StackConfig,
 };
