@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 use trust_dns_resolver::config;
 use trust_dns_resolver::TokioAsyncResolver;
-
-#[cfg(test)]
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct StableResolver {
@@ -88,7 +86,7 @@ async fn test_resolver() {
     let name = "accounts.google.com";
     let r = resolver().await.unwrap();
     let ac = r.ips(name).await.unwrap();
-    for _i in 1..5 {
+    for i in 1..5 {
         actix_rt::time::sleep(Duration::from_secs(30)).await;
         let ac2 = r.ips(name).await.unwrap();
         assert_eq!(ac, ac2);
@@ -104,7 +102,7 @@ async fn test_fail_resolver() {
     let name = "accounts.google.com";
     let r = google_resolver().await.unwrap();
     let ac = r.ips(name).await.unwrap();
-    for _i in 1..5 {
+    for i in 1..5 {
         actix_rt::time::sleep(Duration::from_secs(15)).await;
         r.clear_cache();
         let ac2 = r.ips(name).await.unwrap();
