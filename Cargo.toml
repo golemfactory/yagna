@@ -314,3 +314,12 @@ diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev =
 # This should not be the case (cargo is meant to verify that this option is supported), but it is since version 1.65, I think.
 # [profile.dev]
 # split-debuginfo = "unpacked"
+
+
+[profile.test]
+inherits = "release"
+lto = false
+opt-level = "z"
+codegen-units = 4
+
+
