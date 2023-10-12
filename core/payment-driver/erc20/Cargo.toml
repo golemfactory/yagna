@@ -40,7 +40,7 @@ web3 = { version = "0.19.0", default-features = false, features = [
 ] }
 rand = { workspace = true }
 url = { workspace = true }
-trust-dns-resolver = { workspace = true, default-features = false }
+trust-dns-resolver = { workspace = true }
 ## yagna dependencies
 ya-payment-driver = "0.3"
 ya-client-model = "0.5"
