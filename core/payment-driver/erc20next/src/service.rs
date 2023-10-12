@@ -45,6 +45,7 @@ impl Erc20NextService {
                 contract_use_direct_method: true,
                 contract_use_unpacked_method: false,
                 use_transfer_for_single_payment: true,
+                skip_service_loop: false,
             };
 
             let mut config = config::Config::load_from_str(include_str!("../config-payments.toml"))
