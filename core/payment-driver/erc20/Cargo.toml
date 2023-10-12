@@ -14,7 +14,7 @@ anyhow = "1.0"
 awc = { version = "3", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
-derive_more = "0.99"
+derive_more = { workspace = true }
 ethabi = "14.1"
 ethereum-types = "0.11"
 ethereum-tx-sign = "3.1"
@@ -33,10 +33,10 @@ thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-web3 = { version = "0.16", default-features = false, features = [ "http-tls", "signing", "ws-tls-tokio" ] }
+web3 = { version = "0.16", default-features = false, features = ["http-tls", "signing", "ws-tls-tokio"] }
 rand = { workspace = true }
-url = { workspace=true }
-trust-dns-resolver = { workspace=true, default-features = false }
+url = { workspace = true }
+trust-dns-resolver = { workspace = true }
 ## yagna dependencies
 ya-payment-driver = "0.3"
 ya-client-model = "0.5"
