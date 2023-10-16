@@ -19,6 +19,7 @@ pub struct WriteObj {
     pub role: Role,
     pub amount: BigDecimalField,
     pub details: Vec<u8>,
+    pub send_payment: bool,
 }
 
 impl WriteObj {
@@ -41,6 +42,7 @@ impl WriteObj {
             role: Role::Requestor,
             amount: amount.into(),
             details,
+            send_payment: true,
         }
     }
 
@@ -57,6 +59,7 @@ impl WriteObj {
             role: Role::Provider,
             amount: payment.amount.into(),
             details,
+            send_payment: false,
         })
     }
 }
@@ -75,6 +78,7 @@ pub struct ReadObj {
     pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub details: Vec<u8>,
+    pub send_payment: bool,
 }
 
 impl ReadObj {

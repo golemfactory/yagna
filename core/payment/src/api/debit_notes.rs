@@ -377,23 +377,35 @@ async fn accept_debit_note(
         let schedule_msg =
             SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
-            log::trace!(
-                "Sending AcceptDebitNote [{}] to [{}]",
-                debit_note_id,
-                issuer_id
-            );
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
-            log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
+
+            // Mark the debit note as accepted in DB
+            log::trace!("Accepting DebitNote [{}] in DB", debit_note_id);
             dao.accept(debit_note_id.clone(), node_id).await?;
-            log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
+            log::trace!("DebitNote accepted successfully for [{}]", debit_note_id);
+
+            log::debug!(
+                "Sending AcceptDebitNote [{}] to [{}]",
+                debit_note_id,
+                issuer_id
+            );
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if send_result.is_ok() {
+                log::debug!("AcceptDebitNote delivered");
+                dao.mark_accept_sent(debit_note_id.clone(), node_id).await?;
+            } else {
+                log::debug!("AcceptDebitNote not delivered");
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))

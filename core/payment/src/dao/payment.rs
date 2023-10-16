@@ -150,6 +150,16 @@ impl<'c> PaymentDao<'c> {
             .await
     }
 
+    pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .set(dsl::send_payment.eq(false))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let payment: Option<ReadObj> = dsl::pay_payment
