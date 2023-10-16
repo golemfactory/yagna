@@ -13,7 +13,7 @@
         "name": "vm",
         "version": "0.1.0",
         "supervisor-path": "../../target/debug/exe-unit",
-        "runtime-path": "../../../vm/ya-runtime-vm-linux-v0.3.0/ya-runtime-vm/ya-runtime-vm",
+        "runtime-path": "../../../ya-runtime-vm/release/ya-runtime-vm-v0.3.0/ya-runtime-vm/ya-runtime-vm",
         "description": "This is just a sample descriptor for wasmtime exeunit used by ya-provider",
         "properties": {
         }
