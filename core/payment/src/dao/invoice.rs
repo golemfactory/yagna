@@ -71,6 +71,22 @@ pub fn update_status(
     Ok(())
 }
 
+pub fn schedule_send_accept(
+    invoice_id: &String,
+    owner_id: &NodeId,
+    send_accept: bool,
+    conn: &ConnType,
+) -> DbResult<()> {
+    diesel::update(
+        dsl::pay_invoice
+            .filter(dsl::id.eq(invoice_id))
+            .filter(dsl::owner_id.eq(owner_id)),
+    )
+    .set(dsl::send_accept.eq(dsl::send_accept.or(send_accept)))
+    .execute(conn)?;
+    Ok(())
+}
+
 impl<'c> InvoiceDao<'c> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
@@ -256,13 +272,39 @@ impl<'c> InvoiceDao<'c> {
                 DocumentStatus::Accepted
             };
 
+            // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
+            // For requestor, a separate `mark_sync` call is required to mark synchronization when the information
+            // is delivered to the Provider.
+            let must_send_accept = role == Role::Provider;
+
             update_status(&invoice_id, &owner_id, &status, conn)?;
+            schedule_send_accept(&invoice_id, &owner_id, must_send_accept, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
             for event in events {
                 invoice_event::create::<()>(invoice_id.clone(), owner_id, event, None, conn)?;
             }
 
+            Ok(())
+        })
+        .await
+    }
+
+    /// Mark the invoice as synchronized with the other side.
+    ///
+    /// If the status in DB matches expected_status, `sync` is set to `true` and Ok(true) is returned.
+    /// Otherwise, DB is not modified and Ok(false) is returned.
+    ///
+    /// Err(_) is only produced by DB issues.
+    pub async fn mark_accept_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(
+                dsl::pay_invoice
+                    .filter(dsl::id.eq(invoice_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .set(dsl::send_accept.eq(false))
+            .execute(conn)?;
             Ok(())
         })
         .await
