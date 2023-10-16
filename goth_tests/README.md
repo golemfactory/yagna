@@ -93,7 +93,7 @@ This path will depend either on the shell environment or the operating system on
 Build yagna workspace and copy binaries used by tests to temp directory (can be skipped when using `release-tag` property).
 
 ```sh
-cargo build --workspace --features=static-openssl \
+cargo build --features static-openssl --target x86_64-unknown-linux-musl --workspace \
 && rm -rf /tmp/goth-binaries && mkdir /tmp/goth-binaries \
 && cp target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} /tmp/goth-binaries
 ```
@@ -114,15 +114,15 @@ This project requires Linux environment and uses [`poetry`](https://python-poetr
 Python setup
 
 ```sh
-# Tests use Python 3.8+
+# Tests use Python 3.10+
 # It can be installed using `virtualenv`
 # Install it if missing (or use a different Python env manager, or use OS native Python)
 sudo apt-get install virtualenv
 
 # Initialize virtualenv
-virtualenv .venv --python=python3.8
+virtualenv .venv --python=python3.10
 
-# Switch to installed Python 3.8 environment
+# Switch to installed Python 3.10 environment
 source .venv/bin/activate
 ```
 
@@ -167,7 +167,7 @@ poetry run pytest --config-override docker-compose.build-environment.binary-path
 #### Running a test session using specific release of `yagna`
 
 ```sh
-poetry run poe goth-tests --config-override docker-compose.build-environment.release-tag=v0.13.0
+poetry run poe goth-tests --config-override docker-compose.build-environment.release-tag=v0.12.3
 ```
 
 ## Writing test cases
