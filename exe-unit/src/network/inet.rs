@@ -25,8 +25,8 @@ use tokio_util::udp::UdpFramed;
 
 use net::connection::{Connection, ConnectionMeta};
 use net::interface::tap_iface;
-use net::smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::socket::SocketDesc;
+use net::ya_smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
@@ -35,8 +35,8 @@ use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_std_utils::LogErr;
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
-use ya_utils_networking::vpn::stack::smoltcp::iface::SocketHandle;
-use ya_utils_networking::vpn::stack::smoltcp::wire::{
+use ya_utils_networking::vpn::stack::ya_smoltcp::iface::SocketHandle;
+use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{
     EthernetAddress, HardwareAddress, Ipv4Address, Ipv6Address,
 };
 use ya_utils_networking::vpn::stack::StackConfig;
@@ -1124,6 +1124,7 @@ fn conv_ip_addr(addr: IpAddress) -> Result<IpAddr> {
     match addr {
         IpAddress::Ipv4(ipv4) => Ok(IpAddr::V4(ipv4.into())),
         IpAddress::Ipv6(ipv6) => Ok(IpAddr::V6(ipv6.into())),
+        _ => Err(NetError::EndpointInvalid(IpEndpoint::from((addr, 0)).into()).into()),
     }
 }
 

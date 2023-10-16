@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use trust_dns_resolver::config;
-use trust_dns_resolver::TokioAsyncResolver;
 
 #[cfg(test)]
 use std::time::Duration;
+
+use trust_dns_resolver::config;
+use trust_dns_resolver::TokioAsyncResolver;
 
 #[derive(Clone)]
 pub struct StableResolver {
