@@ -20,14 +20,12 @@ on:
     branches:
       - master
       - release/*
-      - gpu-hardening-master
       - '**/all-tests'
       - '**/integration-tests'
   pull_request:
     branches:
       - master
       - release/*
-      - gpu-hardening-master
 
 jobs:
   build:
