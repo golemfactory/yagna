@@ -572,8 +572,8 @@ impl ServiceCommand {
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
+                        .wrap(auth::Auth::new(cors.cache()))
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
