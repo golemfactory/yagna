@@ -732,13 +732,9 @@ pub mod public {
 
     // **************************** SYNC *****************************
 
-    /// Request the other side to send outstanding state.
+    /// Push unsynchronized state
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct PaymentSync;
-
-    /// Unsynchronized state correction.
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct PaymentSyncResponse {
+    pub struct PaymentSync {
         /// Payment confirmations.
         pub payments: Vec<SendPayment>,
         /// Invoice acceptances.
@@ -751,15 +747,15 @@ pub mod public {
 
     impl RpcMessage for PaymentSync {
         const ID: &'static str = "PaymentSync";
-        type Item = PaymentSyncResponse;
+        type Item = Ack;
         type Error = SendError;
     }
 
     /// Informs the other side that it should request [`PaymentSync`]
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct PaymentSyncNeeded;
+    pub struct PaymentSyncRequest;
 
-    impl RpcMessage for PaymentSyncNeeded {
+    impl RpcMessage for PaymentSyncRequest {
         const ID: &'static str = "PaymentSyncNeeded";
         type Item = Ack;
         type Error = SendError;

@@ -310,6 +310,28 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
+    /// Lists invoices with send_accept
+    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_accept.eq(true))
+                .load(conn)?;
+
+            let activities = activity_dsl::pay_invoice_x_activity
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(owner_id))
+                .select(crate::schema::pay_invoice_x_activity::all_columns)
+                .load(conn)?;
+            join_invoices_with_activities(invoices, activities)
+        })
+        .await
+    }
+
     // TODO: Implement reject invoice
     // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
     //     do_with_transaction(self.pool, move |conn| {

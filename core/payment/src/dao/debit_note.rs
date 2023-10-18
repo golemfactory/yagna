@@ -333,6 +333,20 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
+    /// Lists debit notes with send_accept
+    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, move |conn| {
+            let read: Vec<ReadObj> = query!().order_by(dsl::timestamp.desc()).load(conn)?;
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
+        })
+        .await
+    }
+
     // TODO: Implement reject debit note
     // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
     //     do_with_transaction(self.pool, move |conn| {

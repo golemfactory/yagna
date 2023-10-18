@@ -284,6 +284,30 @@ impl<'c> PaymentDao<'c> {
         })
         .await
     }
+
+    pub async fn list_unsent(&self, peer_id: NodeId) -> DbResult<Vec<Payment>> {
+        readonly_transaction(self.pool, move |conn| {
+            let read: Vec<ReadObj> = dsl::pay_payment
+                .filter(dsl::peer_id.eq(&peer_id))
+                .filter(dsl::send_payment.eq(true))
+                .load(conn)?;
+
+            let mut payments = Vec::default();
+            for payment in read {
+                let activity_payments = activity_pay_dsl::pay_activity_payment
+                    .filter(activity_pay_dsl::payment_id.eq(&payment.id))
+                    .load(conn)?;
+                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
+                    .filter(agreement_pay_dsl::payment_id.eq(&payment.id))
+                    .load(conn)?;
+
+                payments.push(payment.into_api_model(activity_payments, agreement_payments))
+            }
+
+            Ok(payments)
+        })
+        .await
+    }
 }
 
 fn join_activity_and_agreement_payments(

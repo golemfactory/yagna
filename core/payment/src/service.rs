@@ -1,3 +1,4 @@
+use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao};
 use crate::{dao::SyncNotifsDao, processor::PaymentProcessor};
 use chrono::Utc;
 use futures::lock::Mutex;
@@ -6,12 +7,16 @@ use metrics::counter;
 use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 use tokio_util::task::LocalPoolHandle;
+use ya_client_model::payment::Acceptance;
+use ya_client_model::NodeId;
+use ya_core_model::driver::{driver_bus_id, SignPayment};
 use ya_core_model::payment::local::{GenericError, BUS_ID as PAYMENT_BUS_ID};
-use ya_core_model::payment::public::PaymentSyncNeeded;
+use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync, SendPayment};
 use ya_core_model::{identity, payment};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{self, service, ServiceBinder};
+use ya_service_bus::RpcEndpoint;
 
 const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
@@ -25,6 +30,80 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     public::bind_service(db, processor);
 
     log::debug!("Successfully bound payment service to service bus");
+}
+
+async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<PaymentSync> {
+    let payment_dao: PaymentDao = db.as_dao();
+    let invoice_dao: InvoiceDao = db.as_dao();
+    let debit_note_dao: DebitNoteDao = db.as_dao();
+
+    let mut payments = Vec::default();
+    for payment in payment_dao.list_unsent(peer_id).await? {
+        let platform_components = payment.payment_platform.split('-').collect::<Vec<_>>();
+        let driver = &platform_components[0];
+
+        let signature = typed::service(driver_bus_id(driver))
+            .send(SignPayment(payment.clone()))
+            .await??;
+
+        payments.push(SendPayment::new(payment, signature));
+    }
+
+    let mut invoice_accepts = Vec::default();
+    for invoice in invoice_dao.unsent_accepted(peer_id).await? {
+        invoice_accepts.push(AcceptInvoice::new(
+            invoice.invoice_id,
+            Acceptance {
+                total_amount_accepted: invoice.amount,
+                allocation_id: String::new(),
+            },
+            peer_id,
+        ));
+    }
+
+    let mut debit_note_accepts = Vec::default();
+    for debit_note in debit_note_dao.unsent_accepted(peer_id).await? {
+        debit_note_accepts.push(AcceptDebitNote::new(
+            debit_note.debit_note_id,
+            Acceptance {
+                total_amount_accepted: debit_note.total_amount_due,
+                allocation_id: String::new(),
+            },
+            peer_id,
+        ));
+    }
+
+    Ok(PaymentSync {
+        payments: payments,
+        invoice_accepts,
+        debit_note_accepts,
+    })
+}
+
+async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> {
+    let payment_dao: PaymentDao = db.as_dao();
+    let invoice_dao: InvoiceDao = db.as_dao();
+    let debit_note_dao: DebitNoteDao = db.as_dao();
+
+    for payment_send in msg.payments {
+        payment_dao
+            .mark_sent(payment_send.payment.payment_id)
+            .await?;
+    }
+
+    for invoice_accept in msg.invoice_accepts {
+        invoice_dao
+            .mark_accept_sent(invoice_accept.invoice_id, invoice_accept.issuer_id)
+            .await?;
+    }
+
+    for debit_note_accept in msg.debit_note_accepts {
+        debit_note_dao
+            .mark_accept_sent(debit_note_accept.debit_note_id, debit_note_accept.issuer_id)
+            .await?;
+    }
+
+    Ok(())
 }
 
 async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
@@ -51,13 +130,16 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     for peer in peers_to_notify {
+        let msg = payment_sync(db, peer).await?;
+
         let result = ya_net::from(default_identity)
             .to(peer)
             .service(payment::public::BUS_ID)
-            .call(PaymentSyncNeeded)
+            .call(msg.clone())
             .await;
 
         if result.is_ok() {
+            mark_all_sent(db, msg).await?;
             dao.drop(peer).await?;
         } else {
             dao.increment_retry(peer, cutoff.naive_utc()).await?;
