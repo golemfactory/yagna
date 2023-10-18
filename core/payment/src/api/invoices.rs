@@ -481,7 +481,7 @@ async fn accept_invoice(
                 response?;
             } else {
                 log::debug!("AcceptInvoice not delivered");
-                sync_dao.insert(node_id).await?;
+                sync_dao.upsert(node_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
             }
 

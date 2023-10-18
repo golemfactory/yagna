@@ -843,7 +843,7 @@ mod public {
 
         let peer_id =
             NodeId::from_str(&sender_id).expect("sender_id supplied by ya_service_bus is invalid");
-        dao.insert(peer_id)
+        dao.upsert(peer_id)
             .await
             .map_err(|e| SendError::BadRequest(e.to_string()))?;
         SYNC_NOTIFS_NOTIFY.notify_one();

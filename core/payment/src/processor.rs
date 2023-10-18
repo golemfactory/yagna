@@ -459,7 +459,7 @@ impl PaymentProcessor {
                 payment_dao.mark_sent(payment_id).await.ok();
             } else {
                 let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
-                sync_dao.insert(payee_id).await?;
+                sync_dao.upsert(payee_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
                 log::debug!("Failed to call SendPayment on [{payee_id}]");
             }

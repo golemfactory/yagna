@@ -19,9 +19,7 @@ impl<'c> AsDao<'c> for SyncNotifsDao<'c> {
 
 impl<'c> SyncNotifsDao<'c> {
     /// Creates a new sync notif tracking entry for given node-id
-    ///
-    /// If entry already exists, does nothing.
-    pub async fn insert(&self, peer_id: NodeId) -> DbResult<()> {
+    pub async fn upsert(&self, peer_id: NodeId) -> DbResult<()> {
         let sync_notif = WriteObj::new(peer_id);
         do_with_transaction(self.pool, move |conn| {
             diesel::delete(dsl::pay_sync_needed_notifs.find(peer_id))
