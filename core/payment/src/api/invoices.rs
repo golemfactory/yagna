@@ -474,12 +474,13 @@ async fn accept_invoice(
                 .call(accept_msg)
                 .await;
 
-            if send_result.is_ok() {
+            if let Ok(response) = send_result {
                 log::debug!("AcceptInvoice delivered");
                 dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
-                sync_dao.insert(node_id).await?;
+                response?;
             } else {
                 log::debug!("AcceptInvoice not delivered");
+                sync_dao.insert(node_id).await?;
             }
 
             Ok(())

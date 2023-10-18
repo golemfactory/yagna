@@ -401,12 +401,13 @@ async fn accept_debit_note(
                 .call(accept_msg)
                 .await;
 
-            if send_result.is_ok() {
+            if let Ok(response) = send_result {
                 log::debug!("AcceptDebitNote delivered");
                 dao.mark_accept_sent(debit_note_id.clone(), node_id).await?;
-                sync_dao.insert(node_id).await?;
+                response?;
             } else {
                 log::debug!("AcceptDebitNote not delivered");
+                sync_dao.insert(node_id).await?;
             }
 
             Ok(())
