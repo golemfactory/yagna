@@ -23,6 +23,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use crate::dao::*;
 use crate::error::{DbError, Error};
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_for_activity;
 use crate::utils::*;
 
@@ -408,6 +409,7 @@ async fn accept_debit_note(
             } else {
                 log::debug!("AcceptDebitNote not delivered");
                 sync_dao.insert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
             }
 
             Ok(())

@@ -5,6 +5,7 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
@@ -459,6 +460,7 @@ impl PaymentProcessor {
             } else {
                 let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
                 sync_dao.insert(payee_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
                 log::debug!("Failed to call SendPayment on [{payee_id}]");
             }
         } else {
