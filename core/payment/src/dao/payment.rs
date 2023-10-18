@@ -285,12 +285,16 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn list_unsent(&self, peer_id: NodeId) -> DbResult<Vec<Payment>> {
+    pub async fn list_unsent(&self, peer_id: Option<NodeId>) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
-            let read: Vec<ReadObj> = dsl::pay_payment
-                .filter(dsl::peer_id.eq(&peer_id))
+            let mut query = dsl::pay_payment
                 .filter(dsl::send_payment.eq(true))
-                .load(conn)?;
+                .into_boxed();
+            if let Some(peer_id) = peer_id {
+                query = query.filter(dsl::peer_id.eq(&peer_id));
+            }
+
+            let read: Vec<ReadObj> = query.load(conn)?;
 
             let mut payments = Vec::default();
             for payment in read {

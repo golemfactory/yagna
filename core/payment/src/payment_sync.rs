@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::Notify;
@@ -6,8 +6,11 @@ use tokio_util::task::LocalPoolHandle;
 use ya_client_model::{payment::Acceptance, NodeId};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
-    identity,
-    payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync, SendPayment},
+    identity::{self, IdentityInfo},
+    payment::{
+        self,
+        public::{AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, SendPayment},
+    },
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
@@ -25,7 +28,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
     let debit_note_dao: DebitNoteDao = db.as_dao();
 
     let mut payments = Vec::default();
-    for payment in payment_dao.list_unsent(peer_id).await? {
+    for payment in payment_dao.list_unsent(Some(peer_id)).await? {
         let platform_components = payment.payment_platform.split('-').collect::<Vec<_>>();
         let driver = &platform_components[0];
 
@@ -174,6 +177,50 @@ pub fn send_sync_notifs_job(db: DbExecutor) {
                 _ = tokio::time::sleep(sleep_for) => { },
                 _ = SYNC_NOTIFS_NOTIFY.notified() => { },
             }
+        }
+    });
+}
+
+async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
+    let invoice_dao: InvoiceDao = db.as_dao();
+    let debit_note_dao: DebitNoteDao = db.as_dao();
+
+    let identities = typed::service(identity::BUS_ID)
+        .call(ya_core_model::identity::List {})
+        .await??;
+
+    for IdentityInfo { node_id, .. } in identities {
+        let mut peers = HashSet::<NodeId>::default();
+
+        for invoice in invoice_dao.dangling(node_id).await? {
+            peers.insert(invoice.recipient_id);
+        }
+
+        for invoice in debit_note_dao.dangling(node_id).await? {
+            peers.insert(invoice.recipient_id);
+        }
+
+        for peer_id in peers {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+            log::debug!("Sending PaymentSyncRequest to [{peer_id}]");
+            ya_net::from(node_id)
+                .to(peer_id)
+                .service(payment::public::BUS_ID)
+                .call(PaymentSyncRequest)
+                .await??;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn send_sync_requests(db: DbExecutor) {
+    let pool = LocalPoolHandle::new(1);
+
+    pool.spawn_pinned(move || async move {
+        if let Err(e) = send_sync_requests_impl(db).await {
+            log::error!("Failed to send PaymentSyncRequest: {e}");
         }
     });
 }

@@ -25,7 +25,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 
 mod local {
     use super::*;
-    use crate::{dao::*, payment_sync::send_sync_notifs_job};
+    use crate::dao::*;
     use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails, DriverStatusProperty};
@@ -53,8 +53,6 @@ mod local {
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(shut_down);
-
-        send_sync_notifs_job(db.clone());
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -398,14 +396,17 @@ mod local {
 }
 
 mod public {
+    use std::str::FromStr;
+
     use super::*;
 
-    use crate::dao::*;
     use crate::error::DbError;
+    use crate::payment_sync::{send_sync_notifs_job, send_sync_requests};
     use crate::utils::*;
+    use crate::{dao::*, payment_sync::SYNC_NOTIFS_NOTIFY};
 
     // use crate::error::processor::VerifyPaymentError;
-    use ya_client_model::payment::*;
+    use ya_client_model::{payment::*, NodeId};
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
@@ -421,8 +422,12 @@ mod public {
             .bind(accept_invoice)
             .bind(reject_invoice)
             .bind(cancel_invoice)
+            .bind(sync_request)
             .bind_with_processor(send_payment)
             .bind_with_processor(sync_payment);
+
+        send_sync_notifs_job(db.clone());
+        send_sync_requests(db.clone());
 
         log::debug!("Successfully bound payment public service to service bus");
     }
@@ -829,6 +834,23 @@ mod public {
     }
 
     // **************************** SYNC *****************************
+    async fn sync_request(
+        db: DbExecutor,
+        sender_id: String,
+        msg: PaymentSyncRequest,
+    ) -> Result<Ack, SendError> {
+        let dao: SyncNotifsDao = db.as_dao();
+
+        let peer_id =
+            NodeId::from_str(&sender_id).expect("sender_id supplied by ya_service_bus is invalid");
+        dao.insert(peer_id)
+            .await
+            .map_err(|e| SendError::BadRequest(e.to_string()))?;
+        SYNC_NOTIFS_NOTIFY.notify_one();
+
+        Ok(Ack {})
+    }
+
     async fn sync_payment(
         db: DbExecutor,
         processor: Arc<Mutex<PaymentProcessor>>,

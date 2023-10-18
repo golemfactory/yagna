@@ -347,6 +347,29 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
+    /// All debit notes with status Issued or Accepted and provider role
+    pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::role.eq(Role::Provider.to_string()))
+                .filter(
+                    dsl::status
+                        .eq(&DocumentStatus::Issued.to_string())
+                        .or(dsl::status.eq(&DocumentStatus::Accepted.to_string())),
+                )
+                .load(conn)?;
+
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
+        })
+        .await
+    }
+
     // TODO: Implement reject debit note
     // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
     //     do_with_transaction(self.pool, move |conn| {
