@@ -436,7 +436,7 @@ impl PaymentProcessor {
         counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment, signature);
 
-        if payee_id != payee_id {
+        if payer_id != payee_id {
             let mark_sent = ya_net::from(payer_id)
                 .to(payee_id)
                 .service(BUS_ID)
