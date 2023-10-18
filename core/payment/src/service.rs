@@ -124,7 +124,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
         .into_iter()
         .filter(|entry| {
             let next_deadline = entry.timestamp + exp_backoff(entry.retries as _);
-            next_deadline.and_utc() < cutoff
+            next_deadline.and_utc() < cutoff && entry.retries <= SYNC_NOTIF_MAX_RETRIES as i32
         })
         .map(|entry| entry.id)
         .collect::<Vec<_>>();
@@ -150,7 +150,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
 }
 
 fn send_sync_notifs_job(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(5);
+    let pool = LocalPoolHandle::new(1);
     pool.spawn_pinned(|| async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs_f32(30.0)).await;
