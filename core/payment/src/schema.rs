@@ -192,6 +192,14 @@ table! {
     }
 }
 
+table! {
+    pay_sync_needed_notifs (id) {
+        id -> Text,
+        timestamp -> Timestamp,
+        retries -> Integer,
+    }
+}
+
 joinable!(pay_activity_payment -> pay_allocation (allocation_id));
 joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
 joinable!(pay_debit_note -> pay_document_status (status));

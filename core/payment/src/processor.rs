@@ -1,5 +1,5 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -457,6 +457,8 @@ impl PaymentProcessor {
             if mark_sent {
                 payment_dao.mark_sent(payment_id).await.ok();
             } else {
+                let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
+                sync_dao.insert(payee_id).await?;
                 log::debug!("Failed to call SendPayment on [{payee_id}]");
             }
         } else {

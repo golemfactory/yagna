@@ -302,6 +302,8 @@ async fn accept_debit_note(
     counter!("payment.debit_notes.requestor.accepted.call", 1);
 
     let dao: DebitNoteDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
+
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
     let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
         Ok(Some(debit_note)) => debit_note,
@@ -402,6 +404,7 @@ async fn accept_debit_note(
             if send_result.is_ok() {
                 log::debug!("AcceptDebitNote delivered");
                 dao.mark_accept_sent(debit_note_id.clone(), node_id).await?;
+                sync_dao.insert(node_id).await?;
             } else {
                 log::debug!("AcceptDebitNote not delivered");
             }

@@ -1,12 +1,21 @@
-use crate::processor::PaymentProcessor;
+use crate::{dao::SyncNotifsDao, processor::PaymentProcessor};
+use chrono::Utc;
 use futures::lock::Mutex;
 use futures::prelude::*;
 use metrics::counter;
-use std::collections::HashMap;
 use std::sync::Arc;
-use ya_core_model::payment::local::BUS_ID as PAYMENT_BUS_ID;
+use std::{collections::HashMap, time::Duration};
+use tokio_util::task::LocalPoolHandle;
+use ya_core_model::payment::local::{GenericError, BUS_ID as PAYMENT_BUS_ID};
+use ya_core_model::payment::public::PaymentSyncNeeded;
+use ya_core_model::{identity, payment};
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed::{service, ServiceBinder};
+use ya_service_bus::typed::{self, service, ServiceBinder};
+
+const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
+const SYNC_NOTIF_RATIO: u32 = 6;
+const SYNC_NOTIF_MAX_RETRIES: u32 = 7;
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     log::debug!("Binding payment service to service bus");
@@ -16,6 +25,60 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     public::bind_service(db, processor);
 
     log::debug!("Successfully bound payment service to service bus");
+}
+
+async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
+    let dao: SyncNotifsDao = db.as_dao();
+
+    let exp_backoff = |n| SYNC_NOTIF_DELAY_0 * SYNC_NOTIF_RATIO.pow(n);
+    let cutoff = Utc::now();
+
+    let default_identity = typed::service(identity::BUS_ID)
+        .call(ya_core_model::identity::Get::ByDefault {})
+        .await??
+        .ok_or_else(|| anyhow::anyhow!("No default identity"))?
+        .node_id;
+
+    let peers_to_notify = dao
+        .list()
+        .await?
+        .into_iter()
+        .filter(|entry| {
+            let next_deadline = entry.timestamp + exp_backoff(entry.retries as _);
+            next_deadline.and_utc() < cutoff
+        })
+        .map(|entry| entry.id)
+        .collect::<Vec<_>>();
+
+    for peer in peers_to_notify {
+        let result = ya_net::from(default_identity)
+            .to(peer)
+            .service(payment::public::BUS_ID)
+            .call(PaymentSyncNeeded)
+            .await;
+
+        if result.is_ok() {
+            dao.drop(peer).await?;
+        } else {
+            dao.increment_retry(peer, cutoff.naive_utc()).await?;
+        }
+    }
+
+    Ok(())
+}
+
+fn send_sync_notifs_job(db: DbExecutor) {
+    let pool = LocalPoolHandle::new(5);
+    pool.spawn_pinned(|| async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs_f32(30.0)).await;
+            if let Err(e) = send_sync_notifs(&db).await {
+                log::error!("PaymentSyncNeeded sendout job failed: {e}");
+            } else {
+                log::trace!("PaymentSyncNeeded sendout job done");
+            }
+        }
+    });
 }
 
 mod local {
@@ -48,6 +111,8 @@ mod local {
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(shut_down);
+
+        send_sync_notifs_job(db.clone());
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.

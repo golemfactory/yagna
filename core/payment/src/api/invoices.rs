@@ -366,6 +366,7 @@ async fn accept_invoice(
     counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -476,6 +477,7 @@ async fn accept_invoice(
             if send_result.is_ok() {
                 log::debug!("AcceptInvoice delivered");
                 dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
+                sync_dao.insert(node_id).await?;
             } else {
                 log::debug!("AcceptInvoice not delivered");
             }

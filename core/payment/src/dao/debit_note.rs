@@ -273,7 +273,7 @@ impl<'c> DebitNoteDao<'c> {
             };
 
             // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
-            // For requestor, a separate `mark_sync` call is required to mark synchronization when the information
+            // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
             // is delivered to the Provider.
             let must_send_accept = role == Role::Provider;
 
