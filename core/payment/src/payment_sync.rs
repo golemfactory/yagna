@@ -201,7 +201,7 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
         }
 
         for peer_id in peers {
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
 
             log::debug!("Sending PaymentSyncRequest to [{peer_id}]");
             ya_net::from(node_id)
