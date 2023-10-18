@@ -73,6 +73,7 @@ table! {
         activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
+        send_accept -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
         payment_due_date -> Nullable<Timestamp>,
@@ -122,6 +123,7 @@ table! {
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
+        send_accept -> Bool,
         amount -> Text,
         payment_due_date -> Timestamp,
     }
@@ -186,6 +188,7 @@ table! {
         amount -> Text,
         timestamp -> Timestamp,
         details -> Binary,
+        send_payment -> Bool,
     }
 }
 

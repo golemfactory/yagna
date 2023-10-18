@@ -413,7 +413,10 @@ impl PaymentProcessor {
             )
             .await?;
 
-        let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+        let mut payment = payment_dao
+            .get(payment_id.clone(), payer_id)
+            .await?
+            .unwrap();
         // Allocation IDs are requestor's private matter and should not be sent to provider
         for agreement_payment in payment.agreement_payments.iter_mut() {
             agreement_payment.allocation_id = None;
@@ -428,23 +431,56 @@ impl PaymentProcessor {
 
         log::warn!("####### payment: {:?},  signature {:?}", payment, signature);
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
+        // This is unconditional because at this point the invoice *has been paid*.
+        // Whether the provider was correctly notified of this fact is another matter.
+        counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment, signature);
 
-        // Spawning to avoid deadlock in a case that payee is the same node as payer
-        tokio::task::spawn_local(
-            ya_net::from(payer_id)
+        if payee_id != payee_id {
+            let mark_sent = ya_net::from(payer_id)
                 .to(payee_id)
                 .service(BUS_ID)
                 .call(msg)
                 .map(|res| match res {
-                    Ok(Ok(_)) => (),
-                    Err(err) => log::error!("Error sending payment message to provider: {:?}", err),
-                    Ok(Err(err)) => log::error!("Provider rejected payment: {:?}", err),
-                }),
-        );
-        // TODO: Implement re-sending mechanism in case SendPayment fails
+                    Ok(Ok(_)) => true,
+                    Err(err) => {
+                        log::error!("Error sending payment message to provider: {:?}", err);
+                        false
+                    }
+                    Ok(Err(err)) => {
+                        log::error!("Provider rejected payment: {:?}", err);
+                        true
+                    }
+                })
+                .await;
 
-        counter!("payment.invoices.requestor.paid", 1);
+            if mark_sent {
+                payment_dao.mark_sent(payment_id).await.ok();
+            } else {
+                log::debug!("Failed to call SendPayment on [{payee_id}]");
+            }
+        } else {
+            // Spawning to avoid deadlock in a case that payee is the same node as payer
+            tokio::task::spawn_local(
+                ya_net::from(payer_id)
+                    .to(payee_id)
+                    .service(BUS_ID)
+                    .call(msg)
+                    .map(|res| match res {
+                        Ok(Ok(_)) => (),
+                        Err(err) => {
+                            log::error!("Error sending payment message to provider: {:?}", err)
+                        }
+                        Ok(Err(err)) => {
+                            log::error!("Provider rejected payment: {:?}", err)
+                        }
+                    }),
+            );
+
+            // Assume payments are OK when requesting from self
+            payment_dao.mark_sent(payment_id).await?;
+        }
+
         Ok(())
     }
 

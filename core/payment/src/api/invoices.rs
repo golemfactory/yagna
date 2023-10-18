@@ -455,20 +455,31 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
-            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
-            // Skip calling SchedulePayment for 0 amount invoices
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
+
+            // Mark the invoice as accepted in DB
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
+
+            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if send_result.is_ok() {
+                log::debug!("AcceptInvoice delivered");
+                dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
+            } else {
+                log::debug!("AcceptInvoice not delivered");
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))
