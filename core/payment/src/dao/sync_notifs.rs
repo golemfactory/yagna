@@ -24,7 +24,11 @@ impl<'c> SyncNotifsDao<'c> {
     pub async fn insert(&self, peer_id: NodeId) -> DbResult<()> {
         let sync_notif = WriteObj::new(peer_id);
         do_with_transaction(self.pool, move |conn| {
-            diesel::insert_or_ignore_into(dsl::pay_sync_needed_notifs)
+            diesel::delete(dsl::pay_sync_needed_notifs.find(peer_id))
+                .execute(conn)
+                .ok();
+
+            diesel::insert_into(dsl::pay_sync_needed_notifs)
                 .values(sync_notif)
                 .execute(conn)?;
             Ok(())
