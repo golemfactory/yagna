@@ -729,4 +729,39 @@ pub mod public {
         type Item = Ack;
         type Error = SendError;
     }
+
+    // **************************** SYNC *****************************
+
+    /// Request the other side to send outstanding state.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSync;
+
+    /// Unsynchronized state correction.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncResponse {
+        /// Payment confirmations.
+        pub payments: Vec<SendPayment>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
+    impl RpcMessage for PaymentSync {
+        const ID: &'static str = "PaymentSync";
+        type Item = PaymentSyncResponse;
+        type Error = SendError;
+    }
+
+    /// Informs the other side that it should request [`PaymentSync`]
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncNeeded;
+
+    impl RpcMessage for PaymentSyncNeeded {
+        const ID: &'static str = "PaymentSyncNeeded";
+        type Item = Ack;
+        type Error = SendError;
+    }
 }
