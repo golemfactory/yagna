@@ -745,10 +745,35 @@ pub mod public {
         pub debit_note_accepts: Vec<AcceptDebitNote>,
     }
 
+    /// Sync error
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct PaymentSyncError {
+        pub payment_send_errors: Vec<SendError>,
+        pub accept_errors: Vec<AcceptRejectError>,
+    }
+
+    impl std::fmt::Display for PaymentSyncError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("PaymentSend errors: ")?;
+            for send_e in &self.payment_send_errors {
+                write!(f, "{}, ", send_e)?;
+            }
+
+            f.write_str("Acceptance errors: ")?;
+            for accept_e in &self.accept_errors {
+                write!(f, "{}, ", accept_e)?;
+            }
+
+            Ok(())
+        }
+    }
+
+    impl std::error::Error for PaymentSyncError {}
+
     impl RpcMessage for PaymentSync {
         const ID: &'static str = "PaymentSync";
         type Item = Ack;
-        type Error = SendError;
+        type Error = PaymentSyncError;
     }
 
     /// Informs the other side that it should request [`PaymentSync`]

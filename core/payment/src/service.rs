@@ -138,7 +138,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<()> {
             .call(msg.clone())
             .await;
 
-        if result.is_ok() {
+        if matches!(&result, Ok(Ok(_))) {
             mark_all_sent(db, msg).await?;
             dao.drop(peer).await?;
         } else {
@@ -561,7 +561,8 @@ mod public {
             .bind(accept_invoice)
             .bind(reject_invoice)
             .bind(cancel_invoice)
-            .bind_with_processor(send_payment);
+            .bind_with_processor(send_payment)
+            .bind_with_processor(sync_payment);
 
         log::debug!("Successfully bound payment public service to service bus");
     }
@@ -964,6 +965,50 @@ mod public {
             //    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
             //    _ => Err(SendError::ServiceError(e.to_string())),
             //},
+        }
+    }
+
+    // **************************** SYNC *****************************
+    async fn sync_payment(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        msg: PaymentSync,
+    ) -> Result<Ack, PaymentSyncError> {
+        let mut errors = PaymentSyncError::default();
+
+        for payment_send in msg.payments {
+            let result = send_payment(
+                db.clone(),
+                Arc::clone(&processor),
+                sender_id.clone(),
+                payment_send,
+            )
+            .await;
+
+            if let Err(e) = result {
+                errors.payment_send_errors.push(e);
+            }
+        }
+
+        for invoice_accept in msg.invoice_accepts {
+            let result = accept_invoice(db.clone(), sender_id.clone(), invoice_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        for debit_note_accept in msg.debit_note_accepts {
+            let result = accept_debit_note(db.clone(), sender_id.clone(), debit_note_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        if errors.accept_errors.is_empty() && errors.payment_send_errors.is_empty() {
+            Ok(Ack {})
+        } else {
+            Err(errors)
         }
     }
 }
