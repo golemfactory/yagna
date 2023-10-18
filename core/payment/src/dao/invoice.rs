@@ -71,22 +71,6 @@ pub fn update_status(
     Ok(())
 }
 
-pub fn schedule_send_accept(
-    invoice_id: &String,
-    owner_id: &NodeId,
-    send_accept: bool,
-    conn: &ConnType,
-) -> DbResult<()> {
-    diesel::update(
-        dsl::pay_invoice
-            .filter(dsl::id.eq(invoice_id))
-            .filter(dsl::owner_id.eq(owner_id)),
-    )
-    .set(dsl::send_accept.eq(dsl::send_accept.or(send_accept)))
-    .execute(conn)?;
-    Ok(())
-}
-
 impl<'c> InvoiceDao<'c> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
@@ -275,10 +259,17 @@ impl<'c> InvoiceDao<'c> {
             // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
             // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
             // is delivered to the Provider.
-            let must_send_accept = role == Role::Provider;
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_invoice
+                        .filter(dsl::id.eq(invoice_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_accept.eq(true))
+                .execute(conn)?;
+            }
 
             update_status(&invoice_id, &owner_id, &status, conn)?;
-            schedule_send_accept(&invoice_id, &owner_id, must_send_accept, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
             for event in events {

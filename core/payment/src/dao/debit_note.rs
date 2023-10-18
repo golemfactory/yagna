@@ -79,22 +79,6 @@ pub fn update_status(
     Ok(())
 }
 
-pub fn schedule_send_accept(
-    debit_note_id: &String,
-    owner_id: &NodeId,
-    send_accept: bool,
-    conn: &ConnType,
-) -> DbResult<()> {
-    diesel::update(
-        dsl::pay_debit_note
-            .filter(dsl::id.eq(debit_note_id))
-            .filter(dsl::owner_id.eq(owner_id)),
-    )
-    .set(dsl::send_accept.eq(dsl::send_accept.or(send_accept)))
-    .execute(conn)?;
-    Ok(())
-}
-
 pub fn get_paid_amount_per_activity(
     debit_note_ids: &Vec<String>,
     owner_id: &NodeId,
@@ -275,10 +259,17 @@ impl<'c> DebitNoteDao<'c> {
             // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
             // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
             // is delivered to the Provider.
-            let must_send_accept = role == Role::Provider;
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_debit_note
+                        .filter(dsl::id.eq(debit_note_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_accept.eq(true))
+                .execute(conn)?;
+            }
 
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
-            schedule_send_accept(&debit_note_id.clone(), &owner_id, must_send_accept, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
                 debit_note_event::create::<()>(debit_note_id.clone(), owner_id, event, None, conn)?;
