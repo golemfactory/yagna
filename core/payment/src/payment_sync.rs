@@ -196,8 +196,8 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
             peers.insert(invoice.recipient_id);
         }
 
-        for invoice in debit_note_dao.dangling(node_id).await? {
-            peers.insert(invoice.recipient_id);
+        for debit_note in debit_note_dao.dangling(node_id).await? {
+            peers.insert(debit_note.recipient_id);
         }
 
         for peer_id in peers {
