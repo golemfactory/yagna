@@ -330,6 +330,7 @@ impl<'c> DebitNoteDao<'c> {
             let read: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
                 .order_by(dsl::timestamp.desc())
                 .load(conn)?;
             let mut debit_notes = Vec::new();

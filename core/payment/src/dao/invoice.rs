@@ -307,6 +307,7 @@ impl<'c> InvoiceDao<'c> {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
                 .load(conn)?;
 
             let activities = activity_dsl::pay_invoice_x_activity
