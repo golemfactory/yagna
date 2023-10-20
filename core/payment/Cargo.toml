@@ -52,6 +52,7 @@ serde_json = "1.0"
 structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1", features = ["fs", "signal", "macros"] }
+tokio-util = { version = "0.7.9", features = ["rt"] }
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 humantime = "2.0.1"

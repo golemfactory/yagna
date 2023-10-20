@@ -1,5 +1,5 @@
 use crate::dao::{activity, debit_note_event};
-use crate::error::DbResult;
+use crate::error::{DbError, DbResult};
 use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
@@ -256,6 +256,19 @@ impl<'c> DebitNoteDao<'c> {
                 DocumentStatus::Accepted
             };
 
+            // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
+            // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
+            // is delivered to the Provider.
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_debit_note
+                        .filter(dsl::id.eq(debit_note_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_accept.eq(true))
+                .execute(conn)?;
+            }
+
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
@@ -263,6 +276,92 @@ impl<'c> DebitNoteDao<'c> {
             }
 
             Ok(())
+        })
+        .await
+    }
+
+    /// Mark the debit-note as synchronized with the other side.
+    ///
+    /// Automatically marks all previous debit notes as accept-sent if that's not already the case.
+    ///
+    /// Err(_) is only produced by DB issues.
+    pub async fn mark_accept_sent(
+        &self,
+        mut debit_note_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| loop {
+            // Mark debit note as accept-sent
+            let n = diesel::update(
+                dsl::pay_debit_note
+                    .filter(dsl::id.eq(debit_note_id.clone()))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::send_accept.eq(true)),
+            )
+            .set(dsl::send_accept.eq(false))
+            .execute(conn)
+            .map_err(DbError::from)?;
+
+            // Debit note was already marked as accept-sent
+            if n == 0 {
+                break Ok(());
+            }
+
+            // Get id of previous debit note
+            let previous = dsl::pay_debit_note
+                .select(dsl::previous_debit_note_id)
+                .filter(dsl::id.eq(debit_note_id))
+                .filter(dsl::owner_id.eq(owner_id))
+                .load::<Option<String>>(conn)?;
+
+            // Continue with the previous debit-note
+            if let Some(Some(id)) = previous.first() {
+                debit_note_id = id.into();
+            } else {
+                break Ok(());
+            }
+        })
+        .await
+    }
+
+    /// Lists debit notes with send_accept
+    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_accept.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .order_by(dsl::timestamp.desc())
+                .load(conn)?;
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
+        })
+        .await
+    }
+
+    /// All debit notes with status Issued or Accepted and provider role
+    pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::role.eq(Role::Provider.to_string()))
+                .filter(
+                    dsl::status
+                        .eq(&DocumentStatus::Issued.to_string())
+                        .or(dsl::status.eq(&DocumentStatus::Accepted.to_string())),
+                )
+                .load(conn)?;
+
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
         })
         .await
     }

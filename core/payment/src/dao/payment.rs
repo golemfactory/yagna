@@ -150,6 +150,16 @@ impl<'c> PaymentDao<'c> {
             .await
     }
 
+    pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .set(dsl::send_payment.eq(false))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let payment: Option<ReadObj> = dsl::pay_payment
@@ -269,6 +279,34 @@ impl<'c> PaymentDao<'c> {
                     !payment.activity_payments.is_empty() || !payment.agreement_payments.is_empty()
                 });
             };
+
+            Ok(payments)
+        })
+        .await
+    }
+
+    pub async fn list_unsent(&self, peer_id: Option<NodeId>) -> DbResult<Vec<Payment>> {
+        readonly_transaction(self.pool, move |conn| {
+            let mut query = dsl::pay_payment
+                .filter(dsl::send_payment.eq(true))
+                .into_boxed();
+            if let Some(peer_id) = peer_id {
+                query = query.filter(dsl::peer_id.eq(&peer_id));
+            }
+
+            let read: Vec<ReadObj> = query.load(conn)?;
+
+            let mut payments = Vec::default();
+            for payment in read {
+                let activity_payments = activity_pay_dsl::pay_activity_payment
+                    .filter(activity_pay_dsl::payment_id.eq(&payment.id))
+                    .load(conn)?;
+                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
+                    .filter(agreement_pay_dsl::payment_id.eq(&payment.id))
+                    .load(conn)?;
+
+                payments.push(payment.into_api_model(activity_payments, agreement_payments))
+            }
 
             Ok(payments)
         })

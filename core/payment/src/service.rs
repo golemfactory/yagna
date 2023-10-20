@@ -1,10 +1,15 @@
+use crate::dao::{DebitNoteDao, InvoiceDao};
 use crate::processor::PaymentProcessor;
+
 use futures::lock::Mutex;
 use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_core_model::payment::local::BUS_ID as PAYMENT_BUS_ID;
+
+use ya_core_model::payment::local::{GenericError, BUS_ID as PAYMENT_BUS_ID};
+use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync, SendPayment};
+
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
@@ -391,14 +396,17 @@ mod local {
 }
 
 mod public {
+    use std::str::FromStr;
+
     use super::*;
 
-    use crate::dao::*;
     use crate::error::DbError;
+    use crate::payment_sync::{send_sync_notifs_job, send_sync_requests};
     use crate::utils::*;
+    use crate::{dao::*, payment_sync::SYNC_NOTIFS_NOTIFY};
 
     // use crate::error::processor::VerifyPaymentError;
-    use ya_client_model::payment::*;
+    use ya_client_model::{payment::*, NodeId};
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
@@ -414,7 +422,12 @@ mod public {
             .bind(accept_invoice)
             .bind(reject_invoice)
             .bind(cancel_invoice)
-            .bind_with_processor(send_payment);
+            .bind(sync_request)
+            .bind_with_processor(send_payment)
+            .bind_with_processor(sync_payment);
+
+        send_sync_notifs_job(db.clone());
+        send_sync_requests(db.clone());
 
         log::debug!("Successfully bound payment public service to service bus");
     }
@@ -817,6 +830,67 @@ mod public {
             //    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
             //    _ => Err(SendError::ServiceError(e.to_string())),
             //},
+        }
+    }
+
+    // **************************** SYNC *****************************
+    async fn sync_request(
+        db: DbExecutor,
+        sender_id: String,
+        msg: PaymentSyncRequest,
+    ) -> Result<Ack, SendError> {
+        let dao: SyncNotifsDao = db.as_dao();
+
+        let peer_id =
+            NodeId::from_str(&sender_id).expect("sender_id supplied by ya_service_bus is invalid");
+        dao.upsert(peer_id)
+            .await
+            .map_err(|e| SendError::BadRequest(e.to_string()))?;
+        SYNC_NOTIFS_NOTIFY.notify_one();
+
+        Ok(Ack {})
+    }
+
+    async fn sync_payment(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        msg: PaymentSync,
+    ) -> Result<Ack, PaymentSyncError> {
+        let mut errors = PaymentSyncError::default();
+
+        for payment_send in msg.payments {
+            let result = send_payment(
+                db.clone(),
+                Arc::clone(&processor),
+                sender_id.clone(),
+                payment_send,
+            )
+            .await;
+
+            if let Err(e) = result {
+                errors.payment_send_errors.push(e);
+            }
+        }
+
+        for invoice_accept in msg.invoice_accepts {
+            let result = accept_invoice(db.clone(), sender_id.clone(), invoice_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        for debit_note_accept in msg.debit_note_accepts {
+            let result = accept_debit_note(db.clone(), sender_id.clone(), debit_note_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        if errors.accept_errors.is_empty() && errors.payment_send_errors.is_empty() {
+            Ok(Ack {})
+        } else {
+            Err(errors)
         }
     }
 }

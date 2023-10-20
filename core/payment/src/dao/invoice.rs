@@ -256,6 +256,19 @@ impl<'c> InvoiceDao<'c> {
                 DocumentStatus::Accepted
             };
 
+            // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
+            // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
+            // is delivered to the Provider.
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_invoice
+                        .filter(dsl::id.eq(invoice_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_accept.eq(true))
+                .execute(conn)?;
+            }
+
             update_status(&invoice_id, &owner_id, &status, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
@@ -264,6 +277,76 @@ impl<'c> InvoiceDao<'c> {
             }
 
             Ok(())
+        })
+        .await
+    }
+
+    /// Mark the invoice as synchronized with the other side.
+    ///
+    /// If the status in DB matches expected_status, `sync` is set to `true` and Ok(true) is returned.
+    /// Otherwise, DB is not modified and Ok(false) is returned.
+    ///
+    /// Err(_) is only produced by DB issues.
+    pub async fn mark_accept_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(
+                dsl::pay_invoice
+                    .filter(dsl::id.eq(invoice_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .set(dsl::send_accept.eq(false))
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Lists invoices with send_accept
+    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_accept.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .load(conn)?;
+
+            let activities = activity_dsl::pay_invoice_x_activity
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(owner_id))
+                .select(crate::schema::pay_invoice_x_activity::all_columns)
+                .load(conn)?;
+            join_invoices_with_activities(invoices, activities)
+        })
+        .await
+    }
+
+    /// All invoices with status Issued or Accepted and provider role
+    pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::role.eq(Role::Provider.to_string()))
+                .filter(
+                    dsl::status
+                        .eq(&DocumentStatus::Issued.to_string())
+                        .or(dsl::status.eq(&DocumentStatus::Accepted.to_string())),
+                )
+                .load(conn)?;
+
+            let activities = activity_dsl::pay_invoice_x_activity
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(owner_id))
+                .select(crate::schema::pay_invoice_x_activity::all_columns)
+                .load(conn)?;
+            join_invoices_with_activities(invoices, activities)
         })
         .await
     }
