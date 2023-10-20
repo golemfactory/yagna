@@ -1,5 +1,5 @@
 /*
-    Erc20Driver to handle payments on the erc20 network.
+    Erc20Driver to handle payments on the erc20next network.
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
