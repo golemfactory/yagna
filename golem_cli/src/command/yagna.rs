@@ -124,7 +124,7 @@ lazy_static! {
             name: "erc20next",
         }
     };
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER, &ERC20NEXT_DRIVER];
 }
 
 impl PaymentDriver {
