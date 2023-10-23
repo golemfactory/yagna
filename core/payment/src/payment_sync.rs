@@ -204,11 +204,15 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
 
             log::debug!("Sending PaymentSyncRequest to [{peer_id}]");
-            ya_net::from(node_id)
+            let result = ya_net::from(node_id)
                 .to(peer_id)
                 .service(payment::public::BUS_ID)
                 .call(PaymentSyncRequest)
-                .await??;
+                .await;
+
+            if let Err(e) = result {
+                log::debug!("Couldn't deliver PaymentSyncRequest to [{peer_id}]: {e}");
+            }
         }
     }
 
