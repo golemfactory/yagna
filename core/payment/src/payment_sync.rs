@@ -64,7 +64,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
     }
 
     Ok(PaymentSync {
-        payments: payments,
+        payments,
         invoice_accepts,
         debit_note_accepts,
     })

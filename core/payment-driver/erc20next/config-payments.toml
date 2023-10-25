@@ -1,6 +1,21 @@
 [engine]
-service-sleep = 1
-process-sleep = 1
+# proces interval (in seconds) is to set how often we want to recheck transaction status
+# minimum 1 second, sensible maximum around 60 seconds
+process-interval = 15
+# proces interval after send (in seconds) is to set how long to wait after sending transaction before checking for confirmation
+# sensible minimum 20 seconds, sensible maximum around 60 seconds
+process-interval-after-send = 30
+# proces interval after error (in seconds) is to set how long to wait after encountering error before trying again
+# minimum 1 second, sensible maximum around 60 seconds
+process-interval-after-error = 25
+# report alive interval (in seconds) is to set how often we want to report that we are alive
+# minimum 1 second, maximum is capped by gather-interval
+report-alive-interval = 30
+# gather interval (in seconds) is to set how often payments are gathered
+# minimum 1 second, no maximum limit
+gather-interval = 60
+# gather payments on payment driver start (otherwise wait for first gather-interval)
+gather-at-start = true
 automatic-recover = false
 
 [chain.goerli]

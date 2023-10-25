@@ -81,7 +81,7 @@ impl Erc20NextService {
 
             for (network, chain) in &mut config.chain {
                 let prefix = network.to_ascii_uppercase();
-                let Some(token) = &mut chain.token else { continue };
+                let mut token = chain.token.clone();
                 let symbol = token.symbol.to_ascii_uppercase();
 
                 let rpc_env = format!("{prefix}_GETH_ADDR");
