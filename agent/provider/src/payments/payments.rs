@@ -837,7 +837,10 @@ impl Handler<IssueInvoice> for Payments {
                     }
                 }
             }
-            Err(anyhow!("Failed to issue invoice after {} retries.", max_retries))
+            Err(anyhow!(
+                "Failed to issue invoice after {} retries.",
+                max_retries
+            ))
         }
         .boxed_local()
     }
