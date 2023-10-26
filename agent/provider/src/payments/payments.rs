@@ -823,7 +823,8 @@ impl Handler<IssueInvoice> for Payments {
         async move {
             log::debug!("Issuing invoice {}.", serde_json::to_string(&invoice)?);
 
-            loop {
+            let max_retries = 3;
+            for _ in 0..max_retries {
                 match provider_ctx.payment_api.issue_invoice(&invoice).await {
                     Ok(invoice) => {
                         log::info!("Invoice [{}] issued.", invoice.invoice_id);
@@ -836,6 +837,7 @@ impl Handler<IssueInvoice> for Payments {
                     }
                 }
             }
+            Err(anyhow!("Failed to issue invoice after {} retries.", max_retries))
         }
         .boxed_local()
     }
