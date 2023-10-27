@@ -195,7 +195,7 @@ table! {
 table! {
     pay_sync_needed_notifs (id) {
         id -> Text,
-        timestamp -> Timestamp,
+        last_ping -> Timestamp,
         retries -> Integer,
     }
 }

@@ -39,7 +39,7 @@ impl<'c> SyncNotifsDao<'c> {
         do_with_transaction(self.pool, move |conn| {
             let mut read: ReadObj = dsl::pay_sync_needed_notifs.find(peer_id).first(conn)?;
             read.retries += 1;
-            read.timestamp = ts;
+            read.last_ping = ts;
 
             diesel::update(dsl::pay_sync_needed_notifs.find(peer_id))
                 .set(WriteObj::from_read(read))

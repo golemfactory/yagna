@@ -113,7 +113,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<Option<Duration>> {
     let next_wakeup = all_notifs
         .iter()
         .map(|entry| {
-            let next_deadline = entry.timestamp + exp_backoff(entry.retries as _);
+            let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
             next_deadline.and_utc()
         })
         .filter(|deadline| deadline > &cutoff)
@@ -126,7 +126,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<Option<Duration>> {
         .await?
         .into_iter()
         .filter(|entry| {
-            let next_deadline = entry.timestamp + exp_backoff(entry.retries as _);
+            let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
             next_deadline.and_utc() < cutoff && entry.retries <= SYNC_NOTIF_MAX_RETRIES as i32
         })
         .map(|entry| entry.id)
