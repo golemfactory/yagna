@@ -4,7 +4,6 @@ use std::{
     fs::File,
     io::BufReader,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -17,7 +16,7 @@ use thiserror::Error;
 
 use crate::typed_props::OfferBuilder;
 
-use super::exeunit_instance::ExeUnitInstance;
+use super::{exe_unit_work_dir, exeunit_instance::ExeUnitInstance};
 
 pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
     let mut counters = HashMap::new();
@@ -278,17 +277,14 @@ impl ExeUnitsRegistry {
     }
 
     pub fn list(&self) -> Vec<ExeUnitDesc> {
-        self.descriptors
-            .iter()
-            .map(|(_, desc)| desc.clone())
-            .collect()
+        self.descriptors.values().cloned().collect()
     }
 
     pub fn validate(&self) -> Result<(), RegistryError> {
         let errors = self
             .descriptors
-            .iter()
-            .map(|(_, desc)| desc.validate())
+            .values()
+            .map(|desc| desc.validate())
             .filter_map(|result| match result {
                 Err(error) => Some(error),
                 Ok(_) => None,
@@ -301,18 +297,16 @@ impl ExeUnitsRegistry {
         Err(RegistryError(errors))
     }
 
-    pub fn test_runtimes(&self) -> anyhow::Result<()> {
+    pub async fn test_runtimes(&self, data_dir: &Path) -> anyhow::Result<()> {
         if self.descriptors.is_empty() {
             anyhow::bail!("No runtimes available");
         }
-
+        let working_dir = exe_unit_work_dir(data_dir);
+        std::fs::create_dir_all(&working_dir)?;
         for (name, desc) in self.descriptors.iter() {
             log::info!("Testing runtime [{}]", name);
-
-            desc.runtime_path
-                .as_ref()
-                .map(|p| test_runtime(p))
-                .unwrap_or(Ok(()))
+            test_runtime(desc, &working_dir)
+                .await
                 .map_err(|e| e.context("runtime test failure"))?;
         }
 
@@ -367,24 +361,20 @@ impl OfferBuilder for ExeUnitDesc {
     }
 }
 
-fn test_runtime(path: &Path) -> anyhow::Result<()> {
-    let child = Command::new(path)
-        .arg("test")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+async fn test_runtime(exeunit_desc: &ExeUnitDesc, working_dir: &Path) -> anyhow::Result<()> {
+    let test_arg = match exeunit_desc.name.as_str() {
+        // Workaround: ya-runtime-wasi doesn't implement `test` command.
+        "wasmtime" => "--help",
+        // Default
+        _ => "test",
+    };
 
-    let output = child.wait_with_output()?;
-    if !output.status.success() {
-        let mut message = String::from_utf8_lossy(&output.stderr).to_string();
-        if message.is_empty() {
-            message = String::from_utf8_lossy(&output.stdout).to_string();
-        }
-        if !message.contains("--help") {
-            anyhow::bail!(message);
-        }
-    }
-
+    let _ = ExeUnitInstance::run_with_output(
+        &exeunit_desc.supervisor_path,
+        working_dir,
+        ExeUnitsRegistry::exeunit_args(exeunit_desc, vec![test_arg.into()])?,
+    )
+    .await?;
     Ok(())
 }
 

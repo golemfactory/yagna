@@ -1,3 +1,4 @@
+pub mod demand_validation;
 pub mod expiration;
 pub mod manifest;
 pub mod max_agreements;

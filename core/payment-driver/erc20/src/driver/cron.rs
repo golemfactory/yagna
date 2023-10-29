@@ -171,7 +171,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 log::info!("Transaction not found on chain");
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK {
                     log::warn!(
-                        "Transaction not found on chain for {:?}",
+                        "Transaction not found on chain {:?} for {:?}",
+                        network,
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
@@ -205,7 +206,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     }
 
                     log::warn!(
-                        "Transaction not found on chain for {:?}",
+                        "Transaction not found on chain {:?} for {:?}",
+                        network,
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
@@ -239,7 +241,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     .map(|payment| payment.order_id.clone())
                     .collect();
 
-                let platform = match network::network_token_to_platform(Some(network), None) {
+                let platform = match network::network_token_to_platform(network, None) {
                     Ok(platform) => platform,
                     Err(e) => {
                         log::error!(

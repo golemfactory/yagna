@@ -11,6 +11,13 @@ use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
 use crate::provider_agent::AgentNegotiatorsConfig;
 
+/// Configuration for Demand Validation Negotiator.
+#[derive(StructOpt, Clone, Debug)]
+pub struct DemandValidationNegotiatorConfig {
+    #[structopt(long, default_value = "/golem/com/payment/chosen-platform")]
+    pub required_fields: Vec<String>,
+}
+
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct LimitAgreementsNegotiatorConfig {
@@ -59,6 +66,8 @@ pub struct PaymentTimeoutConfig {
 #[derive(StructOpt, Clone, Debug)]
 pub struct CompositeNegotiatorConfig {
     #[structopt(flatten)]
+    pub validation_config: DemandValidationNegotiatorConfig,
+    #[structopt(flatten)]
     pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
     #[structopt(flatten)]
     pub expire_agreements_config: AgreementExpirationNegotiatorConfig,
@@ -90,7 +99,7 @@ pub fn create_negotiator(
             )
             .unwrap(),
         ),
-        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::default()),
+        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator),
         _ => Default::default(),
     };
     Arc::new(negotiator)
@@ -98,6 +107,6 @@ pub fn create_negotiator(
 
 impl Default for NegotiatorAddr {
     fn default() -> Self {
-        NegotiatorAddr::from(AcceptAllNegotiator::default())
+        NegotiatorAddr::from(AcceptAllNegotiator)
     }
 }

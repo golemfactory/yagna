@@ -118,7 +118,7 @@ impl ProviderAgent {
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
-        registry.test_runtimes()?;
+        registry.test_runtimes(&data_dir).await?;
 
         // Generate session id from node name and process id to make sure it's unique.
         let name = args

@@ -77,23 +77,25 @@ impl NegotiatorComponentMut for ManifestSignature {
         };
 
         let node_descriptor = their
-            .get_property::<String>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
+            .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
 
-        if manifest.is_outbound_requested() {
-            match self.rules_manager.check_outbound_rules(
-                manifest,
-                their.issuer,
-                manifest_sig,
-                node_descriptor,
-            ) {
-                crate::rules::CheckRulesResult::Accept => acceptance(ours, score),
-                crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
+        if let Some(outbound_access) = manifest.get_outbound_access() {
+            if outbound_access.is_outbound_requested() {
+                return match self.rules_manager.check_outbound_rules(
+                    outbound_access,
+                    their.issuer,
+                    manifest_sig,
+                    node_descriptor,
+                ) {
+                    crate::rules::CheckRulesResult::Accept => acceptance(ours, score),
+                    crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
+                };
             }
-        } else {
-            log::trace!("Outbound is not requested.");
-            acceptance(ours, score)
         }
+
+        log::trace!("Outbound is not requested.");
+        acceptance(ours, score)
     }
 
     fn shutdown(&mut self, _timeout: Duration) -> anyhow::Result<()> {

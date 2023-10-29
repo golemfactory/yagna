@@ -17,13 +17,12 @@ use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
-    keystore::Keystore,
+    keystore::{x509_keystore::X509CertData, Cert, Keystore},
     matching::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    policy::CertPermissions,
-    AppManifest, CompositeKeystore,
+    CompositeKeystore, OutboundAccess,
 };
 
 #[derive(Clone)]
@@ -61,37 +60,76 @@ impl RulesManager {
         Ok(manager)
     }
 
-    pub fn remove_dangling_rules(&self) -> Result<()> {
-        let mut deleted_partner_rules = vec![];
+    pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
+        let cert_id = {
+            let certs: Vec<Cert> = self
+                .keystore
+                .list()
+                .into_iter()
+                .filter(|cert| cert.id().starts_with(&cert_id))
+                .collect();
 
-        let keystore_certs = self.keystore.list_ids();
+            if certs.is_empty() {
+                bail!(
+                    "Setting Audited-Payload mode {mode} failed: No cert id: {cert_id} found in keystore"
+                );
+            } else if certs.len() > 1 {
+                bail!(
+                    "Setting Audited-Payload mode {mode} failed: Cert id: {cert_id} isn't unique"
+                );
+            } else {
+                let cert = &certs[0];
+                match cert {
+                    Cert::X509(X509CertData { id, .. }) => id.clone(),
+                    Cert::Golem { .. } => bail!(
+                        "Failed to set Audited Payload mode for Golem certificate {cert_id}. Audited Payload mode is not yet supported for Golem certificates."
+                    ),
+                }
+            }
+        };
 
         self.rulestore
             .config
             .write()
             .unwrap()
             .outbound
-            .partner
-            .retain(|cert_id, _| {
-                keystore_certs
-                    .contains(cert_id)
-                    .not()
-                    .then(|| deleted_partner_rules.push(cert_id.clone()))
-                    .is_none()
-            });
+            .audited_payload
+            .insert(
+                cert_id.clone(),
+                CertRule {
+                    mode: mode.clone(),
+                    description: "".into(),
+                },
+            );
+        log::trace!("Added Audited-Payload rule for cert_id: {cert_id} with mode: {mode}");
 
-        if deleted_partner_rules.is_empty() {
-            Ok(())
-        } else {
-            log::warn!("Because Keystore didn't have appropriate certs, following Partner rules were removed: {deleted_partner_rules:?}");
+        self.rulestore.save()
+    }
 
-            self.rulestore.save()
-        }
+    pub fn add_rules_information_to_certs(&self, certs: Vec<Cert>) -> Vec<CertWithRules> {
+        let cfg = self.rulestore.config.read().unwrap();
+
+        certs
+            .into_iter()
+            .map(|cert| {
+                let mut outbound_rules: Vec<OutboundRule> = Vec::new();
+                if cfg.outbound.partner.contains_key(&cert.id()) {
+                    outbound_rules.push(OutboundRule::Partner);
+                }
+                if cfg.outbound.audited_payload.contains_key(&cert.id()) {
+                    outbound_rules.push(OutboundRule::AuditedPayload);
+                }
+                CertWithRules {
+                    cert,
+                    outbound_rules,
+                }
+            })
+            .collect()
     }
 
     pub fn set_partner_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
         let cert_id = {
-            let certs: Vec<_> = self
+            let certs: Vec<Cert> = self
                 .keystore
                 .list()
                 .into_iter()
@@ -105,7 +143,13 @@ impl RulesManager {
             } else if certs.len() > 1 {
                 bail!("Setting Partner mode {mode} failed: Cert id: {cert_id} isn't unique");
             } else {
-                certs[0].id()
+                let cert = &certs[0];
+                match cert {
+                    Cert::X509(_) => bail!(
+                        "Failed to set partner mode for certificate {cert_id}. Partner mode can be set only for Golem certificate."
+                    ),
+                    Cert::Golem { id, .. } => id.clone(),
+                }
             }
         };
 
@@ -141,32 +185,31 @@ impl RulesManager {
         self.rulestore.save()
     }
 
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {mode}");
-        self.rulestore
-            .config
-            .write()
-            .unwrap()
-            .outbound
-            .audited_payload
-            .default
-            .mode = mode;
-
-        self.rulestore.save()
-    }
-
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
+            let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
-            let handler = move |p: PathBuf| match manager.rulestore.reload() {
-                Ok(()) => {
-                    log::info!("RuleStore updated from {}", p.display());
-
-                    if let Err(e) = manager.remove_dangling_rules() {
-                        log::warn!("Error removing unnecessary rules: {e}");
+            let handler = move |p: PathBuf| {
+                // Reload also keystore to avoid file-monitor race when doing `import-cert`
+                match manager.keystore.reload(&cert_dir) {
+                    Ok(()) => {
+                        log::info!("Trusted keystore updated because rulestore changed");
+                    }
+                    Err(e) => {
+                        log::warn!("Error updating trusted keystore when rulestore changed: {e}")
                     }
                 }
-                Err(e) => log::warn!("Error updating RuleStore from {}: {e}", p.display()),
+
+                match manager.rulestore.reload() {
+                    Ok(()) => {
+                        log::info!("RuleStore updated from {}", p.display());
+
+                        if let Err(e) = manager.remove_dangling_rules() {
+                            log::warn!("Error removing unnecessary rules: {e}");
+                        }
+                    }
+                    Err(e) => log::warn!("Error updating RuleStore from {}: {e}", p.display()),
+                }
             };
             FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))
                 .map_err(|e| anyhow!("Spawning RuleStore monitor: {e}"))?
@@ -215,44 +258,72 @@ impl RulesManager {
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))
     }
 
-    fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
+    /// Removes all outbound rules that are not matching any certificate in keystore.
+    fn remove_dangling_rules(&self) -> Result<()> {
+        let keystore_cert_ids = self.keystore.list_ids();
+        let removed_rules = self.remove_rules_not_matching_any_cert(&keystore_cert_ids);
+
+        if removed_rules.partner.is_empty() && removed_rules.partner.is_empty() {
+            return Ok(());
+        }
+        if !removed_rules.partner.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Partner rules were removed: {:?}", removed_rules.partner);
+        }
+        if !removed_rules.audited_payload.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Outbound Audited-Payload rules were removed: {:?}", removed_rules.audited_payload);
+        }
+        self.rulestore.save()
+    }
+
+    fn remove_rules_not_matching_any_cert(&self, cert_ids: &[String]) -> RemovedRules {
+        let mut rulestore = self.rulestore.config.write().unwrap();
+        let removed_partner_rules =
+            remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
+        let removed_audited_payload_rules =
+            remove_rules_not_matching_any_cert(&mut rulestore.outbound.audited_payload, cert_ids);
+        RemovedRules {
+            partner: removed_partner_rules,
+            audited_payload: removed_audited_payload_rules,
+        }
+    }
+
+    fn check_everyone_rule(&self, access: &OutboundAccess) -> Result<()> {
         let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
 
-        self.check_mode(mode, manifest)
+        self.check_mode(mode, access)
             .map_err(|e| anyhow!("Everyone {e}"))
     }
 
     fn check_audited_payload_rule(
         &self,
-        manifest: &AppManifest,
+        access: &OutboundAccess,
         manifest_sig: Option<ManifestSignatureProps>,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
-            self.keystore
-                .verify_x509_signature(
-                    props.cert.clone(),
-                    props.sig,
-                    props.sig_alg,
-                    props.manifest_encoded,
-                )
+            let cert_chain_ids = self
+                .keystore
+                .verifier(&props.cert)?
+                .with_alg(&props.sig_alg)
+                .verify(&props.manifest_encoded, &props.sig)
                 .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
 
-            //TODO Add verification of permission tree when they will be included in x509 (as there will be in both Rules)
-            self.verify_permissions(&props.cert)
-                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
+            let rulestore_config = self.rulestore.config.read().unwrap();
+            // Rule set for certificate closes to leaf takes precedence
+            // either:
+            // 1. a rule is set directly for the cert
+            // 2. an issuer for the certificate is in keystore and there's a rule for this cert
+            for cert_id in cert_chain_ids.iter().rev() {
+                if let Some(rule) = rulestore_config.outbound.audited_payload.get(cert_id) {
+                    return self
+                        .check_mode(&rule.mode, access)
+                        .map_err(|e| anyhow!("Audited-Payload {e}"));
+                }
+            }
 
-            let mode = &self
-                .rulestore
-                .config
-                .read()
-                .unwrap()
-                .outbound
-                .audited_payload
-                .default
-                .mode;
-
-            self.check_mode(mode, manifest)
-                .map_err(|e| anyhow!("Audited-Payload {e}"))
+            Err(anyhow!(
+                "Audited-Payload rule whole chain of cert_ids is not trusted: {:?}",
+                cert_chain_ids
+            ))
         } else {
             Err(anyhow!("Audited-Payload rule requires manifest signature"))
         }
@@ -260,8 +331,8 @@ impl RulesManager {
 
     fn check_partner_rule(
         &self,
-        manifest: &AppManifest,
-        node_descriptor: Option<String>,
+        access: &OutboundAccess,
+        node_descriptor: Option<serde_json::Value>,
         requestor_id: NodeId,
     ) -> Result<()> {
         let node_descriptor =
@@ -269,7 +340,7 @@ impl RulesManager {
 
         let node_descriptor = self
             .keystore
-            .verify_node_descriptor(&node_descriptor)
+            .verify_node_descriptor(node_descriptor)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
         if requestor_id != node_descriptor.node_id {
@@ -279,11 +350,8 @@ impl RulesManager {
             ));
         }
 
-        self::verify_golem_permissions(
-            &node_descriptor.permissions,
-            &manifest.get_outbound_requested_urls(),
-        )
-        .map_err(|e| anyhow!("Partner {e}"))?;
+        self::verify_golem_permissions(&node_descriptor.permissions, access)
+            .map_err(|e| anyhow!("Partner {e}"))?;
 
         for cert_id in node_descriptor.certificate_chain_fingerprints.iter() {
             if let Some(rule) = self
@@ -296,7 +364,7 @@ impl RulesManager {
                 .get(cert_id)
             {
                 return self
-                    .check_mode(&rule.mode, manifest)
+                    .check_mode(&rule.mode, access)
                     .map_err(|e| anyhow!("Partner {e}"));
             }
         }
@@ -306,13 +374,13 @@ impl RulesManager {
         ))
     }
 
-    fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
+    fn check_mode(&self, mode: &Mode, access: &OutboundAccess) -> Result<()> {
         log::trace!("Checking mode: {mode}");
 
         match mode {
             Mode::All => Ok(()),
             Mode::Whitelist => {
-                if self.whitelist_matching(manifest) {
+                if self.whitelist_matching(access) {
                     log::trace!("Whitelist matched");
 
                     Ok(())
@@ -326,10 +394,10 @@ impl RulesManager {
 
     pub fn check_outbound_rules(
         &self,
-        manifest: AppManifest,
+        access: OutboundAccess,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
-        node_descriptor: Option<String>,
+        node_descriptor: Option<serde_json::Value>,
     ) -> CheckRulesResult {
         if self.rulestore.is_outbound_disabled() {
             log::trace!("Checking rules: outbound is disabled.");
@@ -338,9 +406,9 @@ impl RulesManager {
         }
 
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
-            self.check_everyone_rule(&manifest),
-            self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
+            self.check_everyone_rule(&access),
+            self.check_audited_payload_rule(&access, manifest_sig),
+            self.check_partner_rule(&access, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
@@ -356,33 +424,57 @@ impl RulesManager {
         }
     }
 
-    fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
-        let urls = manifest.get_outbound_requested_urls();
-        let matcher = self.whitelist.matchers.read().unwrap();
-        let non_whitelisted_urls: Vec<&str> = urls
-            .iter()
-            .flat_map(Url::host_str)
-            .filter(|domain| matcher.matches(domain).not())
-            .collect();
+    fn whitelist_matching(&self, outbound_access: &OutboundAccess) -> bool {
+        match outbound_access {
+            ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                let matcher = self.whitelist.matchers.read().unwrap();
+                let non_whitelisted_urls: Vec<&str> = urls
+                    .iter()
+                    .flat_map(Url::host_str)
+                    .filter(|domain| matcher.matches(domain).not())
+                    .collect();
 
-        if non_whitelisted_urls.is_empty() {
-            true
-        } else {
-            log::debug!(
-                "Whitelist. Non whitelisted URLs: {:?}",
-                non_whitelisted_urls
-            );
-            false
+                if non_whitelisted_urls.is_empty() {
+                    true
+                } else {
+                    log::debug!(
+                        "Whitelist. Non whitelisted URLs: {:?}",
+                        non_whitelisted_urls
+                    );
+                    false
+                }
+            }
+            ya_manifest_utils::OutboundAccess::Unrestricted => false,
         }
-    }
-
-    fn verify_permissions(&self, cert: &str) -> Result<()> {
-        let required = vec![CertPermissions::OutboundManifest];
-        self.keystore.verify_permissions(cert, required)
     }
 }
 
-fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
+fn remove_rules_not_matching_any_cert(
+    rules: &mut HashMap<String, CertRule>,
+    cert_ids: &[String],
+) -> Vec<String> {
+    let mut deleted_rules = vec![];
+    rules.retain(|cert_id, _| {
+        cert_ids
+            .contains(cert_id)
+            .not()
+            .then(|| deleted_rules.push(cert_id.clone()))
+            .is_none()
+    });
+    deleted_rules
+}
+
+type RemovedRulesIds = Vec<String>;
+
+struct RemovedRules {
+    partner: RemovedRulesIds,
+    audited_payload: RemovedRulesIds,
+}
+
+fn verify_golem_permissions(
+    cert_permissions: &Permissions,
+    outbound_access: &OutboundAccess,
+) -> Result<()> {
     match cert_permissions {
         Permissions::All => Ok(()),
         Permissions::Object(details) => match &details.outbound {
@@ -393,10 +485,15 @@ fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Ur
                 golem_certificate::schemas::permissions::OutboundPermissions::Urls(
                     permitted_urls,
                 ) => {
-                    for requested_url in requested_urls {
-                        if permitted_urls.contains(requested_url).not() {
-                            anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
-                        }
+                    match outbound_access {
+                        OutboundAccess::Urls(requested_urls) => {
+                            for requested_url in requested_urls {
+                                if permitted_urls.contains(requested_url).not() {
+                                    anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
+                                }
+                            }
+                        },
+                        OutboundAccess::Unrestricted => anyhow::bail!("Manifest tries to use Unrestricted access, but certificate allows only for specific urls"),
                     }
                     Ok(())
                 }
@@ -435,9 +532,11 @@ impl Rulestore {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
+            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
+            log::debug!("Loaded rules: {:#?}", config);
 
             Ok(Self {
-                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                config: Arc::new(RwLock::new(config)),
                 path: rules_file.to_path_buf(),
             })
         } else {
@@ -501,13 +600,8 @@ impl Default for RulesConfig {
         Self {
             outbound: OutboundConfig {
                 enabled: true,
-                everyone: Mode::None,
-                audited_payload: CertRules {
-                    default: CertRule {
-                        mode: Mode::All,
-                        description: "Default setting".into(),
-                    },
-                },
+                everyone: Mode::Whitelist,
+                audited_payload: HashMap::new(),
                 partner: HashMap::new(),
             },
         }
@@ -519,14 +613,10 @@ impl Default for RulesConfig {
 pub struct OutboundConfig {
     pub enabled: bool,
     pub everyone: Mode,
-    pub audited_payload: CertRules,
+    #[serde(default)]
+    pub audited_payload: HashMap<String, CertRule>,
     #[serde(default)]
     pub partner: HashMap<String, CertRule>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CertRules {
-    pub default: CertRule,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -553,4 +643,26 @@ pub enum Mode {
     All,
     None,
     Whitelist,
+}
+
+#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
+pub enum OutboundRule {
+    Partner,
+    AuditedPayload,
+    Everyone,
+}
+
+#[derive(PartialEq, Eq)]
+pub struct CertWithRules {
+    pub cert: Cert,
+    pub outbound_rules: Vec<OutboundRule>,
+}
+
+impl CertWithRules {
+    pub fn format_outbound_rules(&self) -> String {
+        self.outbound_rules
+            .iter()
+            .map(|r| r.to_string())
+            .join(" | ")
+    }
 }

@@ -1,13 +1,24 @@
 name: Unit Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
+  push:
+    branches:
+      - master
+      - release/*
+      - '**/all-tests'
   pull_request:
     branches:
       - master
       - release/*
 
 env:
-  rust_stable: 1.64.0
+  rust_stable: 1.71.1
 
 jobs:
   build:
@@ -30,6 +41,11 @@ jobs:
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1

@@ -10,9 +10,9 @@ test-suite = []
 bcast-singleton = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.4.1" }
+ya-agreement-utils = { version = "0.5.0" }
 ya-client = "0.7"
-ya-core-model = { version = "^0.8", features = ["market", "net"] }
+ya-core-model = { version = "^0.9", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
 ya-market-resolver = "0.2"
 ya-net = "0.3"
@@ -33,7 +33,7 @@ anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
 chrono = { version = "0.4", features = ["serde"] }
-derive_more = "0.99.5"
+derive_more = { workspace = true }
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 digest = "0.8.1"
@@ -41,7 +41,7 @@ env_logger = { version = "0.7" }
 futures = "0.3"
 humantime = "2"
 lazy_static = "1.4"
-libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+libsqlite3-sys = { workspace = true }
 log = "0.4"
 metrics="0.12"
 num-derive = "0.3"
