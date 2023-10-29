@@ -240,7 +240,7 @@ impl Config {
             load_mode: LoadMode::StaticLib {
                 library: "ya-provider".to_string(),
             },
-            params: serde_yaml::to_value(&config)?,
+            params: serde_yaml::to_value(config)?,
         })
     }
 }

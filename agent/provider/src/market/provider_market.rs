@@ -566,7 +566,7 @@ async fn process_proposal_decision(ctx: AsyncCtx, decision: ProposalAction) -> a
                 .api
                 .get_proposal(
                     &subscription_id,
-                    &proposal.prev_proposal_id.unwrap_or_else(|| "".to_string()),
+                    &proposal.prev_proposal_id.unwrap_or_default(),
                 )
                 .await?;
 

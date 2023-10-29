@@ -113,7 +113,7 @@ pub fn policy_from_env() -> anyhow::Result<NegotiatorConfig> {
         load_mode: LoadMode::StaticLib {
             library: "ya-provider".to_string(),
         },
-        params: serde_yaml::to_value(&policy)?,
+        params: serde_yaml::to_value(policy)?,
     })
 }
 
