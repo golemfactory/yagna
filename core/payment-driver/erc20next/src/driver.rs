@@ -12,7 +12,6 @@ use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::H256;
@@ -22,7 +21,6 @@ use ya_client_model::payment::DriverStatusProperty;
 use ya_payment_driver::{
     account::{Accounts, AccountsArc},
     bus,
-    cron::PaymentDriverCron,
     dao::DbExecutor,
     driver::{
         async_trait, BigDecimal, IdentityError, IdentityEvent, Network as NetworkConfig,
@@ -38,21 +36,6 @@ use crate::{driver::PaymentDetails, network};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod cli;
-
-lazy_static::lazy_static! {
-    pub static ref TX_SENDOUT_INTERVAL: Option<std::time::Duration> =
-            std::env::var("ERC20NEXT_SENDOUT_INTERVAL_SECS")
-                .ok()
-                .and_then(|x|x.parse().ok())
-                .map(|x| std::time::Duration::from_secs(x));
-
-    static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20NEXT_CONFIRMATION_INTERVAL_SECS")
-                .ok()
-                .and_then(|x| x.parse().ok())
-                .unwrap_or(30),
-        );
-}
 
 pub struct Erc20NextDriver {
     active_accounts: AccountsArc,
@@ -543,24 +526,5 @@ impl PaymentDriver for Erc20NextDriver {
     ) -> Result<(), GenericError> {
         // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
-    }
-}
-
-#[async_trait(?Send)]
-impl PaymentDriverCron for Erc20NextDriver {
-    fn sendout_interval(&self) -> std::time::Duration {
-        TX_SENDOUT_INTERVAL.unwrap_or(Duration::from_secs(30))
-    }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
-    }
-
-    async fn send_out_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
-    }
-
-    async fn confirm_payments(&self) {
-        // no-op, handled by payment_confirm_job
     }
 }

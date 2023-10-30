@@ -13,14 +13,12 @@ use std::sync::Arc;
 use tokio_util::task::LocalPoolHandle;
 
 // Workspace uses
-use ya_payment_driver::cron::Cron;
 use ya_payment_driver::{
     bus,
     dao::{init, DbExecutor},
     model::GenericError,
 };
 
-use crate::driver::TX_SENDOUT_INTERVAL;
 // Local uses
 use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
 
@@ -81,12 +79,16 @@ impl Erc20NextService {
                 );
             }
 
-            if let Some(sendout_interval) = &*TX_SENDOUT_INTERVAL {
-                config.engine.gather_interval = sendout_interval.as_secs();
-                log::info!(
-                    "erc20next gather interval set to {}s",
-                    config.engine.gather_interval
-                );
+            let sendout_interval_env = "ERC20NEXT_SENDOUT_INTERVAL_SECS";
+
+            if let Ok(sendout_interval) = env::var(sendout_interval_env) {
+                match sendout_interval.parse::<u64>() {
+                    Ok(sendout_interval_secs) => {
+                        log::info!("erc20next gather interval set to {sendout_interval_secs}s");
+                        config.engine.gather_interval = sendout_interval_secs;
+                    },
+                    Err(e) => log::warn!("Value {sendout_interval} for {sendout_interval_env} is not a valid integer: {e}"),
+                }
             }
 
             for (network, chain) in &mut config.chain {
@@ -204,11 +206,7 @@ impl Erc20NextService {
             let pool = LocalPoolHandle::new(1);
             pool.spawn_pinned(move || Erc20NextDriver::payment_confirm_job(driver_arc_, recv));
 
-            bus::bind_service(db, driver_arc.clone()).await?;
-
-            // Start cron
-            Cron::new(driver_arc);
-            log::debug!("Cron started");
+            bus::bind_service(db, driver_arc).await?;
 
             log::info!("Successfully connected Erc20NextService to gsb.");
             Ok(())
