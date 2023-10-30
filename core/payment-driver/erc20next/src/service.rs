@@ -81,8 +81,7 @@ impl Erc20NextService {
 
             for (network, chain) in &mut config.chain {
                 let prefix = network.to_ascii_uppercase();
-                let mut token = chain.token.clone();
-                let symbol = token.symbol.to_ascii_uppercase();
+                let symbol = chain.token.symbol.to_ascii_uppercase();
 
                 let rpc_env = format!("{prefix}_GETH_ADDR");
                 let priority_fee_env = format!("{prefix}_PRIORITY_FEE");
@@ -125,7 +124,7 @@ impl Erc20NextService {
                     match H160::from_str(&addr) {
                         Ok(parsed) => {
                             log::info!("{network} token address set to {addr}");
-                            token.address = parsed;
+                            chain.token.address = parsed;
                         }
                         Err(e) => {
                             log::warn!(
