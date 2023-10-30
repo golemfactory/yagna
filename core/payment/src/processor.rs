@@ -623,10 +623,8 @@ impl PaymentProcessor {
             }
         }
 
-        // Insert payment into database (this operation creates and updates all related entities)
+        // Verify totals for all agreements and activities with the same confirmation
         let payment_dao: PaymentDao = self.db_executor.as_dao();
-        payment_dao.insert_received(payment, payee_id).await?;
-
         let shared_payments = payment_dao
             .get_for_confirmation(confirmation.confirmation)
             .await?;
@@ -648,9 +646,13 @@ impl PaymentProcessor {
                 agreement_total + activity_total
             })
             .sum::<BigDecimal>();
-        if all_payment_sum > details.amount {
+
+        if &all_payment_sum + agreement_sum + activity_sum > details.amount {
             return VerifyPaymentError::overspending(&details.amount, &all_payment_sum);
         }
+
+        // Insert payment into database (this operation creates and updates all related entities)
+        payment_dao.insert_received(payment, payee_id).await?;
 
         Ok(())
     }
