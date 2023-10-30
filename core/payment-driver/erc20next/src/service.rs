@@ -10,6 +10,7 @@ use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use ethereum_types::H160;
 use std::sync::Arc;
+use tokio_util::task::LocalPoolHandle;
 
 // Workspace uses
 use ya_payment_driver::cron::Cron;
@@ -19,6 +20,7 @@ use ya_payment_driver::{
     model::GenericError,
 };
 
+use crate::driver::TX_SENDOUT_INTERVAL;
 // Local uses
 use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
 
@@ -77,6 +79,10 @@ impl Erc20NextService {
                     "Config file not found in {}, using default config",
                     &path.join("config-payments.toml").display()
                 );
+            }
+
+            if let Some(sendout_interval) = &*TX_SENDOUT_INTERVAL {
+                config.engine.gather_interval = sendout_interval.as_secs();
             }
 
             for (network, chain) in &mut config.chain {
@@ -185,15 +191,19 @@ impl Erc20NextService {
             .unwrap();
 
             log::warn!("Payment engine started - outside task");
-            let driver = Erc20NextDriver::new(pr, recv);
+            let driver = Erc20NextDriver::new(pr);
 
             driver.load_active_accounts().await;
-            let driver_rc = Arc::new(driver);
+            let driver_arc = Arc::new(driver);
+            let driver_arc_ = Arc::clone(&driver_arc);
 
-            bus::bind_service(db, driver_rc.clone()).await?;
+            let pool = LocalPoolHandle::new(1);
+            pool.spawn_pinned(move || Erc20NextDriver::payment_confirm_job(driver_arc_, recv));
+
+            bus::bind_service(db, driver_arc.clone()).await?;
 
             // Start cron
-            Cron::new(driver_rc);
+            Cron::new(driver_arc);
             log::debug!("Cron started");
 
             log::info!("Successfully connected Erc20NextService to gsb.");

@@ -21,7 +21,7 @@ pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericErro
 
     // Ensure account is unlock before initialising send mode
     if mode.contains(AccountMode::SEND) {
-        driver.is_account_active(&address)?
+        driver.is_account_active(&address).await?
     }
 
     let network = network::network_like_to_network(msg.network());
