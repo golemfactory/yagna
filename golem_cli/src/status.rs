@@ -13,10 +13,19 @@ use ya_core_model::NodeId;
 
 use crate::appkey;
 use crate::command::{
-    NetworkGroup, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER, NETWORK_GROUP_MAP,
+    NetworkGroup, PaymentDriver, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER,
+    NETWORK_GROUP_MAP,
 };
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
+
+fn get_driver_for_network(network: &NetworkName) -> Option<&PaymentDriver> {
+    DRIVERS
+        .iter()
+        .find(|drv| drv.platform(network).is_ok())
+        .as_deref()
+        .copied()
+}
 
 async fn payment_status(
     cmd: &YaCommand,
@@ -32,11 +41,9 @@ async fn payment_status(
         let mut f = vec![];
         let mut l = vec![];
         for nn in NETWORK_GROUP_MAP[&network_group].iter() {
-            for driver in DRIVERS.iter() {
-                if driver.platform(nn).is_ok() {
-                    l.push(driver.status_label(nn));
-                    f.push(cmd.yagna()?.payment_status(&address, nn, driver));
-                }
+            if let Some(driver) = get_driver_for_network(nn) {
+                l.push(driver.status_label(nn));
+                f.push(cmd.yagna()?.payment_status(&address, nn, driver));
             }
         }
         (f, l)

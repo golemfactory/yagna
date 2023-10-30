@@ -124,7 +124,10 @@ lazy_static! {
             name: "erc20next",
         }
     };
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
+
+    // Drivers are searched in order when more than one supports a given network,
+    // so erc20next should be preferred over erc20.
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
