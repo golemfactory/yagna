@@ -56,7 +56,7 @@ pub struct PaymentTimeoutConfig {
     pub min_payment_timeout: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "24h")]
     pub max_payment_timeout: std::time::Duration,
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "1h")]
     pub payment_timeout: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10h")]
     pub payment_timeout_required_duration: std::time::Duration,
