@@ -83,6 +83,10 @@ impl Erc20NextService {
 
             if let Some(sendout_interval) = &*TX_SENDOUT_INTERVAL {
                 config.engine.gather_interval = sendout_interval.as_secs();
+                log::info!(
+                    "erc20next gather interval set to {}s",
+                    config.engine.gather_interval
+                );
             }
 
             for (network, chain) in &mut config.chain {
