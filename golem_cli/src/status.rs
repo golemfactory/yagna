@@ -23,7 +23,6 @@ fn get_driver_for_network(network: &NetworkName) -> Option<&PaymentDriver> {
     DRIVERS
         .iter()
         .find(|drv| drv.platform(network).is_ok())
-        .as_deref()
         .copied()
 }
 
