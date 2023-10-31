@@ -1,3 +1,4 @@
+use chrono::{DateTime, Duration, Utc};
 /*
     Erc20Driver to handle payments on the erc20next network.
 
@@ -88,6 +89,7 @@ impl Erc20NextDriver {
         to: &str,
         amount: &BigDecimal,
         network: &str,
+        deadline: Option<DateTime<Utc>>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -106,6 +108,7 @@ impl Erc20NextDriver {
                 TransferType::Token,
                 amount,
                 &payment_id,
+                deadline,
             )
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -361,8 +364,14 @@ impl PaymentDriver for Erc20NextDriver {
             .network
             .ok_or(GenericError::new("Network not specified".to_string()))?;
 
-        self.do_transfer(&msg.sender, &msg.to, &msg.amount, &network)
-            .await
+        self.do_transfer(
+            &msg.sender,
+            &msg.to,
+            &msg.amount,
+            &network,
+            Some(Utc::now()),
+        )
+        .await
     }
 
     async fn schedule_payment(
@@ -379,8 +388,16 @@ impl PaymentDriver for Erc20NextDriver {
             msg.platform()
         )))?;
 
-        self.do_transfer(&msg.sender(), &msg.recipient(), &msg.amount(), network)
-            .await
+        let transfer_margin = Duration::minutes(2);
+
+        self.do_transfer(
+            &msg.sender(),
+            &msg.recipient(),
+            &msg.amount(),
+            network,
+            Some(msg.due_date() - transfer_margin),
+        )
+        .await
     }
 
     async fn verify_payment(
@@ -518,6 +535,17 @@ impl PaymentDriver for Erc20NextDriver {
                         driver: DRIVER_NAME.into(),
                         network,
                         needed_gas_est: missing_gas.unwrap_or_default().to_string(),
+                    })
+                }
+                LibStatusProperty::NoToken {
+                    chain_id,
+                    missing_token,
+                } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                        needed_token_est: missing_token.unwrap_or_default().to_string(),
                     })
                 }
             })
