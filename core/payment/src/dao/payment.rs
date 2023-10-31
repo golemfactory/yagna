@@ -188,6 +188,32 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
+    pub async fn get_for_confirmation(&self, details: Vec<u8>) -> DbResult<Vec<Payment>> {
+        readonly_transaction(self.pool, move |conn| {
+            let mut result = Vec::new();
+
+            let payments: Vec<ReadObj> = dsl::pay_payment
+                .filter(dsl::details.eq(&details))
+                .load(conn)?;
+
+            for payment in payments {
+                let activity_payments = activity_pay_dsl::pay_activity_payment
+                    .filter(activity_pay_dsl::payment_id.eq(&payment.id))
+                    .filter(activity_pay_dsl::owner_id.eq(&payment.owner_id))
+                    .load(conn)?;
+                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
+                    .filter(agreement_pay_dsl::payment_id.eq(&payment.id))
+                    .filter(agreement_pay_dsl::owner_id.eq(&payment.owner_id))
+                    .load(conn)?;
+
+                result.push(payment.into_api_model(activity_payments, agreement_payments))
+            }
+
+            Ok(result)
+        })
+        .await
+    }
+
     pub async fn get_for_node_id(
         &self,
         node_id: NodeId,

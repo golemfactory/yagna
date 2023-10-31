@@ -546,7 +546,7 @@ impl PaymentProcessor {
         };
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(
-                confirmation,
+                confirmation.clone(),
                 platform.clone(),
                 payment.clone(),
             ))
@@ -623,9 +623,37 @@ impl PaymentProcessor {
             }
         }
 
-        // Insert payment into database (this operation creates and updates all related entities)
+        // Verify totals for all agreements and activities with the same confirmation
         let payment_dao: PaymentDao = self.db_executor.as_dao();
+        let shared_payments = payment_dao
+            .get_for_confirmation(confirmation.confirmation)
+            .await?;
+        let all_payment_sum = shared_payments
+            .iter()
+            .map(|payment| {
+                let agreement_total = payment
+                    .agreement_payments
+                    .iter()
+                    .map(|ap| &ap.amount)
+                    .sum::<BigDecimal>();
+
+                let activity_total = payment
+                    .activity_payments
+                    .iter()
+                    .map(|ap| &ap.amount)
+                    .sum::<BigDecimal>();
+
+                agreement_total + activity_total
+            })
+            .sum::<BigDecimal>();
+
+        if &all_payment_sum + agreement_sum + activity_sum > details.amount {
+            return VerifyPaymentError::overspending(&details.amount, &all_payment_sum);
+        }
+
+        // Insert payment into database (this operation creates and updates all related entities)
         payment_dao.insert_received(payment, payee_id).await?;
+
         Ok(())
     }
 
