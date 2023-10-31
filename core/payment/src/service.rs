@@ -400,6 +400,7 @@ mod public {
 
     use super::*;
 
+    use crate::error::processor::VerifyPaymentError;
     use crate::error::DbError;
     use crate::payment_sync::{send_sync_notifs_job, send_sync_requests};
     use crate::utils::*;
@@ -818,18 +819,18 @@ mod public {
             .verify_payment(payment, signature)
             .await
         {
-            Ok(_) | Err(_) => {
+            Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
-            // Err(e) => match e {
-            //    VerifyPaymentError::ConfirmationEncoding => {
-            //        Err(SendError::BadRequest(e.to_string()))
-            //    }
-            //    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-            //    _ => Err(SendError::ServiceError(e.to_string())),
-            //},
+            Err(e) => match e {
+                VerifyPaymentError::ConfirmationEncoding => {
+                    Err(SendError::BadRequest(e.to_string()))
+                }
+                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                _ => Err(SendError::ServiceError(e.to_string())),
+            },
         }
     }
 

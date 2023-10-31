@@ -146,6 +146,7 @@ impl<'c> PaymentDao<'c> {
     pub async fn insert_received(&self, payment: Payment, payee_id: NodeId) -> DbResult<()> {
         let activity_payments = payment.activity_payments.clone();
         let agreement_payments = payment.agreement_payments.clone();
+        log::debug!("Insert payment {:#?}", payment);
         let payment = WriteObj::new_received(payment)?;
         self.insert(payment, activity_payments, agreement_payments)
             .await
