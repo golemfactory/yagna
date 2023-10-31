@@ -12,7 +12,7 @@ use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 use ya_payment_driver::{
-    account::{Accounts, AccountsRc},
+    account::{Accounts, AccountsArc},
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
@@ -48,7 +48,7 @@ lazy_static::lazy_static! {
 }
 
 pub struct Erc20Driver {
-    active_accounts: AccountsRc,
+    active_accounts: AccountsArc,
     dao: Erc20Dao,
     sendout_lock: Mutex<()>,
     confirmation_lock: Mutex<()>,
@@ -67,15 +67,21 @@ impl Erc20Driver {
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
-        let mut accounts = self.active_accounts.borrow_mut();
+        let mut accounts = self.active_accounts.lock().await;
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
         }
     }
 
-    fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
-        match self.active_accounts.as_ref().borrow().get_node_id(address) {
+    async fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
+        match self
+            .active_accounts
+            .as_ref()
+            .lock()
+            .await
+            .get_node_id(address)
+        {
             Some(_) => Ok(()),
             None => Err(GenericError::new(format!(
                 "Account not active: {}",
@@ -93,7 +99,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
-        self.active_accounts.borrow_mut().handle_event(msg);
+        self.active_accounts.lock().await.handle_event(msg);
         Ok(())
     }
 
@@ -171,7 +177,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError> {
-        self.is_account_active(&msg.sender)?;
+        self.is_account_active(&msg.sender).await?;
         cli::transfer(&self.dao, msg).await
     }
 
@@ -183,7 +189,7 @@ impl PaymentDriver for Erc20Driver {
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
-        self.is_account_active(&msg.sender())?;
+        self.is_account_active(&msg.sender()).await?;
         api::schedule_payment(&self.dao, msg).await
     }
 
@@ -267,7 +273,7 @@ impl PaymentDriverCron for Erc20Driver {
         'outer: for network_key in self.get_networks().keys() {
             let network = Network::from_str(network_key).unwrap();
             // Process payment rows
-            let accounts = self.active_accounts.borrow().list_accounts();
+            let accounts = self.active_accounts.lock().await.list_accounts();
             for node_id in accounts {
                 if let Err(e) =
                     cron::process_payments_for_account(&self.dao, &node_id, network).await

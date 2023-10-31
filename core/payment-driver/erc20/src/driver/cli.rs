@@ -30,7 +30,7 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
 
     // Ensure account is unlock before initialising send mode
     if mode.contains(AccountMode::SEND) {
-        driver.is_account_active(&address)?
+        driver.is_account_active(&address).await?
     }
 
     wallet::init_wallet(
