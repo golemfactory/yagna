@@ -11,17 +11,17 @@ use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::Mutex;
+use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
 use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 use ya_payment_driver::{
-    account::{Accounts, AccountsRc},
+    account::{Accounts, AccountsArc},
     bus,
-    cron::PaymentDriverCron,
     dao::DbExecutor,
     driver::{
         async_trait, BigDecimal, IdentityError, IdentityEvent, Network as NetworkConfig,
@@ -38,49 +38,42 @@ use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod cli;
 
-lazy_static::lazy_static! {
-    static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20NEXT_SENDOUT_INTERVAL_SECS")
-                .ok()
-                .and_then(|x| x.parse().ok())
-                .unwrap_or(30),
-        );
-
-    static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20NEXT_CONFIRMATION_INTERVAL_SECS")
-                .ok()
-                .and_then(|x| x.parse().ok())
-                .unwrap_or(30),
-        );
-}
-
 pub struct Erc20NextDriver {
-    active_accounts: AccountsRc,
+    active_accounts: AccountsArc,
     payment_runtime: PaymentRuntime,
-    events: Mutex<Receiver<DriverEvent>>,
 }
 
 impl Erc20NextDriver {
-    pub fn new(payment_runtime: PaymentRuntime, events: Receiver<DriverEvent>) -> Self {
-        Self {
+    pub fn new(payment_runtime: PaymentRuntime, recv: Receiver<DriverEvent>) -> Arc<Self> {
+        let this = Arc::new(Self {
             active_accounts: Accounts::new_rc(),
             payment_runtime,
-            events: Mutex::new(events),
-        }
+        });
+
+        let this_ = Arc::clone(&this);
+        LocalPoolHandle::new(1).spawn_pinned(move || Self::payment_confirm_job(this_, recv));
+
+        this
     }
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
-        let mut accounts = self.active_accounts.borrow_mut();
+        let mut accounts = self.active_accounts.lock().await;
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
         }
     }
 
-    fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
-        match self.active_accounts.as_ref().borrow().get_node_id(address) {
+    async fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
+        match self
+            .active_accounts
+            .as_ref()
+            .lock()
+            .await
+            .get_node_id(address)
+        {
             Some(_) => Ok(()),
             None => Err(GenericError::new(format!(
                 "Account not active: {}",
@@ -96,7 +89,7 @@ impl Erc20NextDriver {
         amount: &BigDecimal,
         network: &str,
     ) -> Result<String, GenericError> {
-        self.is_account_active(sender)?;
+        self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
             .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
         let receiver = H160::from_str(to)
@@ -118,6 +111,38 @@ impl Erc20NextDriver {
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
         Ok(payment_id)
+    }
+
+    async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
+        while let Some(event) = events.recv().await {
+            if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
+                match this
+                    ._confirm_payments(
+                        &transfer_finished.token_transfer_dao,
+                        &transfer_finished.tx_dao,
+                    )
+                    .await
+                {
+                    Ok(_) => log::info!(
+                        "Payment confirmed: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default()
+                    ),
+                    Err(e) => log::error!(
+                        "Error confirming payment: {}, error: {}",
+                        transfer_finished
+                            .token_transfer_dao
+                            .payment_id
+                            .clone()
+                            .unwrap_or_default(),
+                        e
+                    ),
+                }
+            }
+        }
     }
 
     async fn _confirm_payments(
@@ -204,7 +229,7 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
-        self.active_accounts.borrow_mut().handle_event(msg);
+        self.active_accounts.lock().await.handle_event(msg);
         Ok(())
     }
 
@@ -507,53 +532,5 @@ impl PaymentDriver for Erc20NextDriver {
     ) -> Result<(), GenericError> {
         // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
-    }
-}
-
-#[async_trait(?Send)]
-impl PaymentDriverCron for Erc20NextDriver {
-    fn sendout_interval(&self) -> std::time::Duration {
-        *TX_SENDOUT_INTERVAL
-    }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
-    }
-
-    async fn send_out_payments(&self) {
-        // no-op, handled by erc20_payment_lib internally
-    }
-
-    async fn confirm_payments(&self) {
-        let mut events = self.events.lock().await;
-        while let Ok(event) = events.try_recv() {
-            if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
-                match self
-                    ._confirm_payments(
-                        &transfer_finished.token_transfer_dao,
-                        &transfer_finished.tx_dao,
-                    )
-                    .await
-                {
-                    Ok(_) => log::info!(
-                        "Payment confirmed: {}",
-                        transfer_finished
-                            .token_transfer_dao
-                            .payment_id
-                            .clone()
-                            .unwrap_or_default()
-                    ),
-                    Err(e) => log::error!(
-                        "Error confirming payment: {}, error: {}",
-                        transfer_finished
-                            .token_transfer_dao
-                            .payment_id
-                            .clone()
-                            .unwrap_or_default(),
-                        e
-                    ),
-                }
-            }
-        }
     }
 }

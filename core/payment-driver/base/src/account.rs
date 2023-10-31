@@ -3,10 +3,10 @@
 */
 
 // External crates
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
+use tokio::sync::Mutex;
 // Workspace uses
 use ya_core_model::identity::event::Event as IdentityEvent;
 
@@ -14,15 +14,15 @@ use ya_core_model::identity::event::Event as IdentityEvent;
 use crate::driver::NodeId;
 
 // Public types
-pub type AccountsRc = Rc<RefCell<Accounts>>;
+pub type AccountsArc = Arc<Mutex<Accounts>>;
 
 pub struct Accounts {
     accounts: HashMap<String, NodeId>,
 }
 
 impl Accounts {
-    pub fn new_rc() -> AccountsRc {
-        Rc::new(RefCell::new(Self::new()))
+    pub fn new_rc() -> AccountsArc {
+        Arc::new(Mutex::new(Self::new()))
     }
 
     pub fn handle_event(&mut self, msg: IdentityEvent) {
