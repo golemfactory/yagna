@@ -137,6 +137,7 @@ impl<'c> PaymentDao<'c> {
             details,
         );
         let payment_id = payment.id.clone();
+        log::debug!("Insert payment {:#?}", payment);
         self.insert(payment, activity_payments, agreement_payments)
             .await?;
         Ok(payment_id)
