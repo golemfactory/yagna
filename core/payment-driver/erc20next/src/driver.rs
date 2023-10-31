@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
+use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
 use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
@@ -43,11 +44,16 @@ pub struct Erc20NextDriver {
 }
 
 impl Erc20NextDriver {
-    pub fn new(payment_runtime: PaymentRuntime) -> Self {
-        Self {
+    pub fn new(payment_runtime: PaymentRuntime, recv: Receiver<DriverEvent>) -> Arc<Self> {
+        let this = Arc::new(Self {
             active_accounts: Accounts::new_rc(),
             payment_runtime,
-        }
+        });
+
+        let this_ = Arc::clone(&this);
+        LocalPoolHandle::new(1).spawn_pinned(move || Self::payment_confirm_job(this_, recv));
+
+        this
     }
 
     pub async fn load_active_accounts(&self) {
@@ -107,7 +113,7 @@ impl Erc20NextDriver {
         Ok(payment_id)
     }
 
-    pub async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
+    async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
         while let Some(event) = events.recv().await {
             if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
                 match this

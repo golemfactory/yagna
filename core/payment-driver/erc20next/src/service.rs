@@ -9,8 +9,6 @@ use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings};
 use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use ethereum_types::H160;
-use std::sync::Arc;
-use tokio_util::task::LocalPoolHandle;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -63,13 +61,14 @@ impl Erc20NextService {
                 log::warn!(
                     "Format of the file may change in the future releases, use with caution!"
                 );
+
                 match config::Config::load(&path.join("config-payments.toml")).await {
                     Ok(config_from_file) => {
                         log::info!("Config file loaded successfully, overwriting default config");
                         config = config_from_file;
                     }
                     Err(err) => {
-                        log::error!("Config file found but failed to load from file - using default config. Error: {}", err)
+                        log::error!("Config file found but failed to load from file - using default config. Error: {err}")
                     }
                 }
             } else {
@@ -80,7 +79,6 @@ impl Erc20NextService {
             }
 
             let sendout_interval_env = "ERC20NEXT_SENDOUT_INTERVAL_SECS";
-
             if let Ok(sendout_interval) = env::var(sendout_interval_env) {
                 match sendout_interval.parse::<u64>() {
                     Ok(sendout_interval_secs) => {
@@ -100,7 +98,7 @@ impl Erc20NextService {
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
-                let confirmations = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
+                let confirmations_env = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
                     chain.rpc_endpoints = addr.split(',').map(ToOwned::to_owned).collect();
@@ -145,7 +143,7 @@ impl Erc20NextService {
                         }
                     };
                 }
-                if let Ok(confirmations) = env::var(&confirmations) {
+                if let Ok(confirmations) = env::var(&confirmations_env) {
                     match confirmations.parse::<u64>() {
                         Ok(parsed) => {
                             log::info!("{network} required confirmations set to {parsed}");
@@ -178,7 +176,7 @@ impl Erc20NextService {
                 }
             }
 
-            log::warn!("Starting payment engine: {:#?}", config);
+            log::debug!("Starting payment engine: {:#?}", config);
             let signer = IdentitySigner::new();
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
@@ -196,17 +194,10 @@ impl Erc20NextService {
             .await
             .unwrap();
 
-            log::warn!("Payment engine started - outside task");
-            let driver = Erc20NextDriver::new(pr);
-
+            log::debug!("Bind erc20next driver");
+            let driver = Erc20NextDriver::new(pr, recv);
             driver.load_active_accounts().await;
-            let driver_arc = Arc::new(driver);
-            let driver_arc_ = Arc::clone(&driver_arc);
-
-            let pool = LocalPoolHandle::new(1);
-            pool.spawn_pinned(move || Erc20NextDriver::payment_confirm_job(driver_arc_, recv));
-
-            bus::bind_service(db, driver_arc).await?;
+            bus::bind_service(db, driver).await?;
 
             log::info!("Successfully connected Erc20NextService to gsb.");
             Ok(())
