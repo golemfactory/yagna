@@ -6,7 +6,9 @@ use chrono::{DateTime, Duration, Utc};
 */
 // Extrnal crates
 use erc20_payment_lib::db::model::{TokenTransferDao, TxDao};
-use erc20_payment_lib::runtime::{DriverEvent, DriverEventContent, PaymentRuntime, TransferType};
+use erc20_payment_lib::runtime::{
+    DriverEvent, DriverEventContent, PaymentRuntime, TransferType, VerifyTransactionResult,
+};
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
@@ -410,7 +412,7 @@ impl PaymentDriver for Erc20NextDriver {
         let (network, _) = network::platform_to_network_token(msg.platform())?;
         let tx_hash = format!("0x{}", hex::encode(msg.confirmation().confirmation));
         log::info!("Verifying transaction: {} on network {}", tx_hash, network);
-        let res = self
+        let verify_res = self
             .payment_runtime
             .verify_transaction(
                 network as i64,
@@ -425,18 +427,20 @@ impl PaymentDriver for Erc20NextDriver {
             .await
             .map_err(|err| GenericError::new(format!("Error verifying transaction: {}", err)))?;
 
-        if res.verified {
-            Ok(PaymentDetails {
-                recipient: msg.details.payee_addr.clone(),
-                sender: msg.details.payer_addr.clone(),
-                amount: msg.details.amount.clone(),
-                date: None,
-            })
-        } else {
-            Err(GenericError::new(format!(
-                "Transaction not found: {}",
-                tx_hash
-            )))
+        match verify_res {
+            VerifyTransactionResult::Verified { amount } => {
+                let amount_int = BigInt::from_str(&format!("{amount}")).unwrap();
+                let amount = BigDecimal::new(amount_int, 18);
+                Ok(PaymentDetails {
+                    recipient: msg.details.payee_addr.clone(),
+                    sender: msg.details.payer_addr.clone(),
+                    amount,
+                    date: None,
+                })
+            }
+            VerifyTransactionResult::Rejected(reason) => Err(GenericError::new(format!(
+                "Payment {tx_hash} rejected: {reason}",
+            ))),
         }
     }
 
