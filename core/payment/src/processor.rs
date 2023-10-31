@@ -628,7 +628,7 @@ impl PaymentProcessor {
         let shared_payments = payment_dao
             .get_for_confirmation(confirmation.confirmation)
             .await?;
-        let all_payment_sum = shared_payments
+        let other_payment_total = shared_payments
             .iter()
             .map(|payment| {
                 let agreement_total = payment
@@ -647,8 +647,9 @@ impl PaymentProcessor {
             })
             .sum::<BigDecimal>();
 
-        if &all_payment_sum + agreement_sum + activity_sum > details.amount {
-            return VerifyPaymentError::overspending(&details.amount, &all_payment_sum);
+        let all_payment_total = &other_payment_total + agreement_sum + activity_sum;
+        if all_payment_total > details.amount {
+            return VerifyPaymentError::overspending(&details.amount, &all_payment_total);
         }
 
         // Insert payment into database (this operation creates and updates all related entities)
