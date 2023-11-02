@@ -24,7 +24,7 @@ nieznanysprawiciel@laptop:~$ tree ~/.local/lib/yagna/plugins
 ├── ya-runtime-wasi
 └── ya-runtime-wasi.json
 ```
-ExeUnit descriptors must be placed directly in plugins directory (not in nested structure).
+ExeUnit descriptors (`ya-runtime-vm.json` and `ya-runtime-wasi.json`) must be placed directly in plugins directory (not in nested structure).
 Other ExeUnits' files can be moved into subdirectories, because descriptor is pointing to specific files.
 
 ## Descriptor
