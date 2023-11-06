@@ -1,4 +1,4 @@
-# Yagna Capabilities List
+# Provider agent capabilities List
 
 ## Protocol
 
