@@ -396,7 +396,7 @@ impl PaymentDriver for Erc20NextDriver {
                     .payment_runtime
                     .get_gas_balance(network.to_string(), address).await {
                     Ok(balance) => {
-                        log::info!("Gas balance is {}", balance);
+                        log::info!("Gas balance is {}", balance.to_eth().unwrap_or_default());
                         balance.to_eth().map_err(|err| {
                             GenericError::new(format!("Error converting gas balance: {}", err))
                         })?
@@ -413,7 +413,7 @@ impl PaymentDriver for Erc20NextDriver {
                     .payment_runtime
                     .get_token_balance(network.to_string(), address).await {
                     Ok(balance) => {
-                        log::info!("tGLM balance is {}", balance);
+                        log::info!("tGLM balance is {}", balance.to_eth().unwrap_or_default());
                         balance.to_eth().map_err(|err| {
                             GenericError::new(format!("Error converting tGLM balance: {}", err))
                         })?

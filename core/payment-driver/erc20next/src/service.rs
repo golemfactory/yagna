@@ -9,6 +9,7 @@ use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings};
 use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::PaymentRuntime;
 use ethereum_types::H160;
+use rust_decimal::Decimal;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -109,7 +110,7 @@ impl Erc20NextService {
                     )
                 }
                 if let Ok(fee) = env::var(&priority_fee_env) {
-                    match fee.parse::<f64>() {
+                    match Decimal::from_str(&fee) {
                         Ok(fee) => {
                             log::info!("{network} priority fee set to {fee}");
                             chain.priority_fee = fee;
@@ -120,7 +121,7 @@ impl Erc20NextService {
                     }
                 }
                 if let Ok(max_fee) = env::var(&max_fee_per_gas_env) {
-                    match max_fee.parse::<f64>() {
+                    match Decimal::from_str(&max_fee) {
                         Ok(max_fee) => {
                             log::info!("{network} max fee per gas set to {max_fee}");
                             chain.max_fee_per_gas = max_fee;
