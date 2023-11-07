@@ -142,10 +142,10 @@ impl PaymentCli {
                 .await?;
                 log::warn!("Sending fund request to yagna service, observe yagna log for details. \n \
                 Typically operation should take less than 1 minute. \n \
-                It may get stuck due to \
-                1. problems with web3 RPC connection \
-                2. unusual high gas price\
-                3. problems with faucet");
+                It may get stuck due to \n \
+                1. problems with web3 RPC connection \n \
+                2. unusual high gas price \n \
+                3. problems with faucet \n");
 
                 CommandOutput::object(
                     wallet::fund(address, account.driver(), Some(account.network()), None).await?,

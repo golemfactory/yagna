@@ -18,8 +18,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use erc20_payment_lib::utils::U256ConvExt;
-use num_traits::FromPrimitive;
-use rust_decimal::Decimal;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
@@ -370,6 +368,29 @@ impl PaymentDriver for Erc20NextDriver {
                     &network,
                     &address
                 );
+                let chain_cfg = self
+                    .payment_runtime
+                    .setup.chain_setup.get(&(network as i64)).ok_or(
+                        GenericError::new(format!("Missing chain config for network {}", network)),
+                    )?;
+                let _mint_contract_address = chain_cfg.mint_glm_address.ok_or(
+                    GenericError::new(format!(
+                        "Missing mint contract address for network {}",
+                        network
+                    )),
+                )?;
+                let mint_min_glm_allowed = chain_cfg.mint_max_glm_allowed.ok_or(
+                    GenericError::new(format!(
+                        "Missing mint min glm allowed for network {}",
+                        network
+                    )),
+                )?;
+                let faucet_client_max_eth_allowed = chain_cfg
+                    .faucet_client_max_eth_allowed
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet client max eth allowed for network {}",
+                        network
+                    )))?;
 
                 let starting_balance = match self
                     .payment_runtime
@@ -405,7 +426,7 @@ impl PaymentDriver for Erc20NextDriver {
                         )));
                     }
                 };
-                if starting_balance < Decimal::from_f64(0.01).unwrap()
+                if starting_balance < faucet_client_max_eth_allowed
                 {
                     match faucet_donate(network as u64, address).await {
                         Ok(_) => {
@@ -451,10 +472,10 @@ impl PaymentDriver for Erc20NextDriver {
                         }
                     }
                 } else {
-                    log::info!("ETH balance is {} which should be enough for testing.", starting_balance);
+                    log::info!("ETH balance is {} which is more than {} allowed by faucet", starting_balance, faucet_client_max_eth_allowed);
                 }
 
-                if starting_glm_balance < Decimal::from(500) {
+                if starting_glm_balance < mint_min_glm_allowed {
                     match self
                         .payment_runtime
                         .mint_golem_token(&network.to_string(), address, None)
@@ -503,7 +524,7 @@ impl PaymentDriver for Erc20NextDriver {
                         }
                     }
                 } else {
-                    log::info!("tGLM balance is {} which should be enough for testing.", starting_glm_balance);
+                    log::info!("tGLM balance is {} which is more than allowed by GLM minting contract {}", starting_glm_balance, mint_min_glm_allowed);
                 }
                 "Successfully finished funding".to_string()
             }
