@@ -210,24 +210,28 @@ impl Erc20NextDriver {
                 }
                 LibStatusProperty::NoGas {
                     chain_id,
+                    address,
                     missing_gas,
                 } => {
                     let network = chain_id_to_net(chain_id);
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
                         driver: DRIVER_NAME.into(),
+                        address,
                         network,
-                        needed_gas_est: missing_gas.unwrap_or_default().to_string(),
+                        needed_gas_est: missing_gas.to_string(),
                     })
                 }
                 LibStatusProperty::NoToken {
                     chain_id,
+                    address,
                     missing_token,
                 } => {
                     let network = chain_id_to_net(chain_id);
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
                         driver: DRIVER_NAME.into(),
+                        address,
                         network,
-                        needed_token_est: missing_token.unwrap_or_default().to_string(),
+                        needed_token_est: missing_token.to_string(),
                     })
                 }
             })
