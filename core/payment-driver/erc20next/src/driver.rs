@@ -10,14 +10,16 @@ use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::runtime::{
     DriverEvent, DriverEventContent, PaymentRuntime, TransferType, VerifyTransactionResult,
 };
+use erc20_payment_lib::utils::U256ConvExt;
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
+use num_traits::Zero;
+use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
-use erc20_payment_lib::utils::U256ConvExt;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
@@ -360,200 +362,225 @@ impl PaymentDriver for Erc20NextDriver {
         log::debug!("fund: {:?}", msg);
         let address = msg.address();
         let network = network::network_like_to_network(msg.network());
-        let result = match network {
-            Network::Rinkeby | Network::Goerli => {
-                let address = utils::str_to_addr(&address)?;
-                log::info!(
-                    "Handling fund request. network={}, address={}",
-                    &network,
-                    &address
-                );
-                let chain_cfg = self
-                    .payment_runtime
-                    .setup.chain_setup.get(&(network as i64)).ok_or(
-                        GenericError::new(format!("Missing chain config for network {}", network)),
-                    )?;
-                let _mint_contract_address = chain_cfg.mint_glm_address.ok_or(
-                    GenericError::new(format!(
-                        "Missing mint contract address for network {}",
-                        network
-                    )),
-                )?;
-                let mint_min_glm_allowed = chain_cfg.mint_max_glm_allowed.ok_or(
-                    GenericError::new(format!(
+        let result = {
+            let address = utils::str_to_addr(&address)?;
+            log::info!(
+                "Handling fund request. network={}, address={}",
+                &network,
+                &address
+            );
+            let chain_cfg = self
+                .payment_runtime
+                .setup
+                .chain_setup
+                .get(&(network as i64))
+                .ok_or(GenericError::new(format!(
+                    "Missing chain config for network {}",
+                    network
+                )))?;
+            let _mint_contract_address = chain_cfg.mint_glm_address.ok_or(GenericError::new(
+                format!("Missing mint contract address for network {}", network),
+            ))?;
+            let mint_min_glm_allowed =
+                chain_cfg
+                    .mint_max_glm_allowed
+                    .ok_or(GenericError::new(format!(
                         "Missing mint min glm allowed for network {}",
                         network
-                    )),
-                )?;
-                let faucet_client_max_eth_allowed = chain_cfg
+                    )))?;
+            let faucet_client_max_eth_allowed =
+                chain_cfg
                     .faucet_client_max_eth_allowed
                     .ok_or(GenericError::new(format!(
                         "Missing faucet client max eth allowed for network {}",
                         network
                     )))?;
 
-                let starting_balance = match self
-                    .payment_runtime
-                    .get_gas_balance(network.to_string(), address).await {
-                    Ok(balance) => {
-                        log::info!("Gas balance is {}", balance.to_eth().unwrap_or_default());
-                        balance.to_eth().map_err(|err| {
-                            GenericError::new(format!("Error converting gas balance: {}", err))
-                        })?
-                    }
-                    Err(err) => {
-                        log::error!("Error getting gas balance: {}", err);
-                        return Err(GenericError::new(format!(
-                            "Error getting gas balance: {}",
-                            err
-                        )));
-                    }
-                };
-                let starting_glm_balance = match self
-                    .payment_runtime
-                    .get_token_balance(network.to_string(), address).await {
-                    Ok(balance) => {
-                        log::info!("tGLM balance is {}", balance.to_eth().unwrap_or_default());
-                        balance.to_eth().map_err(|err| {
-                            GenericError::new(format!("Error converting tGLM balance: {}", err))
-                        })?
-                    }
-                    Err(err) => {
-                        log::error!("Error getting tGLM balance: {}", err);
-                        return Err(GenericError::new(format!(
-                            "Error getting tGLM balance: {}",
-                            err
-                        )));
-                    }
-                };
-                if starting_balance < faucet_client_max_eth_allowed
-                {
-                    match faucet_donate(network as u64, address).await {
-                        Ok(_) => {
-                            log::info!("Faucet donation successful");
-                        }
-                        Err(e) => {
-                            log::error!("Error donating from faucet: {}", e);
-                        }
-                    }
-                    let time_now = Instant::now();
-                    let mut iteration = -1;
-                    loop {
-                        iteration += 1;
-                        if iteration == 0 {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                        } else {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                        }
-                        if time_now.elapsed().as_secs() > 120 {
-                            log::error!("Faucet donation not received after {} seconds", time_now.elapsed().as_secs());
-                            return Err(GenericError::new(format!(
-                                "Faucet donation not received after {} seconds",
-                                time_now.elapsed().as_secs()
-                            )));
-                        }
-                        match self
-                            .payment_runtime
-                            .get_gas_balance(network.to_string(), address)
-                            .await
-                        {
-                            Ok(balance) => {
-                                let current_balance = balance.to_eth().unwrap_or_default();
-                                if current_balance > starting_balance {
-                                    log::info!("Received {} ETH from faucet", current_balance - starting_balance);
-                                    break;
-                                } else {
-                                    log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance, time_now.elapsed().as_secs(), 120);
-                                }
-                            }
-                            Err(err) => {
-                                log::error!("Error getting gas balance: {}", err);
-                            }
-                        }
-                    }
-                } else {
-                    log::info!("ETH balance is {} which is more than {} allowed by faucet", starting_balance, faucet_client_max_eth_allowed);
+            let starting_eth_balance = match self
+                .payment_runtime
+                .get_gas_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("Gas balance is {}", balance.to_eth().unwrap_or_default());
+                    balance.to_eth().map_err(|err| {
+                        GenericError::new(format!("Error converting gas balance: {}", err))
+                    })?
                 }
-
-                if starting_glm_balance < mint_min_glm_allowed {
+                Err(err) => {
+                    log::error!("Error getting gas balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting gas balance: {}",
+                        err
+                    )));
+                }
+            };
+            let starting_glm_balance = match self
+                .payment_runtime
+                .get_token_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("tGLM balance is {}", balance.to_eth().unwrap_or_default());
+                    balance.to_eth().map_err(|err| {
+                        GenericError::new(format!("Error converting tGLM balance: {}", err))
+                    })?
+                }
+                Err(err) => {
+                    log::error!("Error getting tGLM balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting tGLM balance: {}",
+                        err
+                    )));
+                }
+            };
+            let eth_received = if starting_eth_balance < faucet_client_max_eth_allowed {
+                match faucet_donate(network as u64, address).await {
+                    Ok(_) => {
+                        log::info!("Faucet donation successful");
+                    }
+                    Err(e) => {
+                        log::error!("Error donating from faucet: {}", e);
+                    }
+                }
+                let time_now = Instant::now();
+                let mut iteration = -1;
+                loop {
+                    iteration += 1;
+                    if iteration == 0 {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                    if time_now.elapsed().as_secs() > 120 {
+                        log::error!(
+                            "Faucet donation not received after {} seconds",
+                            time_now.elapsed().as_secs()
+                        );
+                        return Err(GenericError::new(format!(
+                            "Faucet donation not received after {} seconds",
+                            time_now.elapsed().as_secs()
+                        )));
+                    }
                     match self
                         .payment_runtime
-                        .mint_golem_token(&network.to_string(), address, None)
+                        .get_gas_balance(network.to_string(), address)
                         .await
                     {
-                        Ok(_) => {
-                            log::info!("Added mint tGLM transaction to queue {}", address);
-                        }
-                        Err(e) => {
-                            log::error!("Error minting tGLM tokens for address {}: {}", address, e);
-                        }
-                    }
-                    let time_now = Instant::now();
-                    let mut iteration = -1;
-                    loop {
-                        iteration += 1;
-                        if iteration == 0 {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                        } else {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                        }
-                        if time_now.elapsed().as_secs() > 120 {
-                            log::error!("Faucet donation not received after {} seconds", time_now.elapsed().as_secs());
-                            return Err(GenericError::new(format!(
-                                "Faucet donation not received after {} seconds",
-                                time_now.elapsed().as_secs()
-                            )));
-                        }
-                        match self
-                            .payment_runtime
-                            .get_token_balance(network.to_string(), address)
-                            .await
-                        {
-                            Ok(balance) => {
-                                let current_balance = balance.to_eth().unwrap_or_default();
-                                if current_balance > starting_glm_balance {
-                                    log::info!("Created {} tGLM using mint transaction", current_balance - starting_glm_balance);
-                                    break;
-                                } else {
-                                    log::info!("Waiting for mint result. Current balance: {}. Elapsed: {}/{}", current_balance, time_now.elapsed().as_secs(), 120);
-                                }
-                            }
-                            Err(err) => {
-                                log::error!("Error getting tGLM balance: {}", err);
+                        Ok(balance) => {
+                            let current_balance = balance.to_eth().unwrap_or_default();
+                            if current_balance > starting_eth_balance {
+                                log::info!(
+                                    "Received {} ETH from faucet",
+                                    current_balance - starting_eth_balance
+                                );
+                                break current_balance - starting_eth_balance;
+                            } else {
+                                log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance, time_now.elapsed().as_secs(), 120);
                             }
                         }
+                        Err(err) => {
+                            log::error!("Error getting gas balance: {}", err);
+                        }
                     }
-                } else {
-                    log::info!("tGLM balance is {} which is more than allowed by GLM minting contract {}", starting_glm_balance, mint_min_glm_allowed);
                 }
-                "Successfully finished funding".to_string()
-            }
-            Network::Mumbai => format!(
-                r#"Your Mumbai Polygon address is {}.
+            } else {
+                log::info!(
+                    "ETH balance is {} which is more than {} allowed by faucet",
+                    starting_eth_balance,
+                    faucet_client_max_eth_allowed
+                );
+                Decimal::zero()
+            };
 
-Mumbai GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
+            let glm_received = if starting_glm_balance < mint_min_glm_allowed {
+                match self
+                    .payment_runtime
+                    .mint_golem_token(&network.to_string(), address, None)
+                    .await
+                {
+                    Ok(_) => {
+                        log::info!("Added mint tGLM transaction to queue {}", address);
+                    }
+                    Err(e) => {
+                        log::error!("Error minting tGLM tokens for address {}: {}", address, e);
+                    }
+                }
+                let time_now = Instant::now();
+                let mut iteration = -1;
+                loop {
+                    iteration += 1;
+                    if iteration == 0 {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                    if time_now.elapsed().as_secs() > 120 {
+                        log::error!(
+                            "Mint transaction not finished after {} seconds",
+                            time_now.elapsed().as_secs()
+                        );
+                        return Err(GenericError::new(format!(
+                            "Mint transaction not finished after {} seconds",
+                            time_now.elapsed().as_secs()
+                        )));
+                    }
+                    match self
+                        .payment_runtime
+                        .get_token_balance(network.to_string(), address)
+                        .await
+                    {
+                        Ok(balance) => {
+                            let current_balance = balance.to_eth().unwrap_or_default();
+                            if current_balance > starting_glm_balance {
+                                log::info!(
+                                    "Created {} tGLM using mint transaction",
+                                    current_balance - starting_glm_balance
+                                );
+                                break current_balance - starting_glm_balance;
+                            } else {
+                                log::info!(
+                                    "Waiting for mint result. Current balance: {}. Elapsed: {}/{}",
+                                    current_balance,
+                                    time_now.elapsed().as_secs(),
+                                    120
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Error getting tGLM balance: {}", err);
+                        }
+                    }
+                }
+            } else {
+                log::info!(
+                    "tGLM balance is {} which is more than allowed by GLM minting contract {}",
+                    starting_glm_balance,
+                    mint_min_glm_allowed
+                );
+                Decimal::zero()
+            };
+            let mut str_output = if eth_received > Decimal::zero() || glm_received > Decimal::zero()
+            {
+                format!(
+                    "Successfully received {} ETH and {} tGLM",
+                    eth_received, glm_received
+                )
+            } else if eth_received > Decimal::zero() {
+                format!("Successfully received {} ETH", eth_received)
+            } else if glm_received > Decimal::zero() {
+                format!("Successfully minted {} tGLM", glm_received)
+            } else {
+                "No funds received".to_string()
+            };
 
-To be able to use Mumbai Polygon network, please send some GLM tokens and MATIC for gas to this address.
-"#,
-                address
-            ),
-            Network::Polygon => format!(
-                r#"Your mainnet Polygon address is {}.
-
-Automatically obtaining funds for the Polygon network is not supported.
-"#,
-                address
-            ),
-            Network::Mainnet => format!(
-                r#"Using this driver is not recommended. Consider using the Polygon driver instead.
-
-Your mainnet ethereum address is {}.
-To be able to use mainnet Ethereum driver please send some GLM tokens and ETH for gas to this address.
-"#,
-                address
-            ),
+            str_output += &format!(
+                "\nYou have {} tETH and {} tGLM",
+                starting_eth_balance + eth_received,
+                starting_glm_balance + glm_received
+            );
+            str_output
         };
-
         log::debug!("fund completed");
         Ok(result)
     }
