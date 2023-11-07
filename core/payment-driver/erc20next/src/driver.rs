@@ -26,8 +26,6 @@ use uuid::Uuid;
 use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
 
-// Workspace uses
-use ya_payment_driver::db::models::Network;
 use ya_payment_driver::{
     account::{Accounts, AccountsArc},
     bus,
@@ -762,6 +760,7 @@ impl PaymentDriver for Erc20NextDriver {
                 LibStatusProperty::NoGas {
                     chain_id,
                     missing_gas,
+                    ..
                 } => {
                     let network = chain_id_to_net(chain_id);
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
@@ -773,6 +772,7 @@ impl PaymentDriver for Erc20NextDriver {
                 LibStatusProperty::NoToken {
                     chain_id,
                     missing_token,
+                    ..
                 } => {
                     let network = chain_id_to_net(chain_id);
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
