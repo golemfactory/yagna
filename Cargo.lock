@@ -1869,7 +1869,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.3.2"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=b3e5d5a31c393781e813903b8804d02a9229193f#b3e5d5a31c393781e813903b8804d02a9229193f"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=e3fb3c1bfb94258438c0f626d0a8912eaa57a2f3#e3fb3c1bfb94258438c0f626d0a8912eaa57a2f3"
 dependencies = [
  "actix-files",
  "actix-web",

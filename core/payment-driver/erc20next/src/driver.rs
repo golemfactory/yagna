@@ -432,8 +432,45 @@ impl PaymentDriver for Erc20NextDriver {
                     )));
                 }
             };
+
+            let faucet_srv_prefix =
+                chain_cfg
+                    .faucet_client_srv
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_srv_port for network {}",
+                        network
+                    )))?;
+            let faucet_lookup_domain =
+                chain_cfg
+                    .faucet_lookup_domain
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_lookup_domain for network {}",
+                        network
+                    )))?;
+            let faucet_srv_port = chain_cfg.faucet_srv_port.ok_or(GenericError::new(format!(
+                "Missing faucet_srv_port for network {}",
+                network
+            )))?;
+            let faucet_host = chain_cfg
+                .faucet_client_host
+                .clone()
+                .ok_or(GenericError::new(format!(
+                    "Missing faucet_host for network {}",
+                    network
+                )))?;
+
             let eth_received = if starting_eth_balance < faucet_client_max_eth_allowed {
-                match faucet_donate(network as u64, address).await {
+                match faucet_donate(
+                    &faucet_srv_prefix,
+                    &faucet_lookup_domain,
+                    &faucet_host,
+                    faucet_srv_port,
+                    address,
+                )
+                .await
+                {
                     Ok(_) => {
                         log::info!("Faucet donation successful");
                     }
