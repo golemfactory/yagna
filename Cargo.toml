@@ -224,7 +224,7 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
-erc20_payment_lib = { version = "0.3.2", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "26b6e48e9f861497207a4e2f8853b0b3ab10cd25" }
+erc20_payment_lib = { version = "0.3.2", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "2fb9949b43ccedf0dfad61926d567debd2d6086f" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.3.2" }
 rand = "0.8.5"
