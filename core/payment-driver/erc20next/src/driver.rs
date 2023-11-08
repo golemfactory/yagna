@@ -611,10 +611,26 @@ impl PaymentDriver for Erc20NextDriver {
             } else {
                 "No funds received".to_string()
             };
-
+            let final_eth_balance = match self
+                .payment_runtime
+                .get_gas_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("Gas balance is {}", balance.to_eth_str());
+                    balance
+                }
+                Err(err) => {
+                    log::error!("Error getting gas balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting gas balance: {}",
+                        err
+                    )));
+                }
+            };
             str_output += &format!(
                 "\nYou have {} tETH and {} tGLM",
-                (starting_eth_balance + eth_received).to_eth_str(),
+                final_eth_balance.to_eth_str(),
                 (starting_glm_balance + glm_received).to_eth_str()
             );
             str_output
