@@ -361,7 +361,7 @@ impl PaymentDriver for Erc20NextDriver {
         let result = {
             let address = utils::str_to_addr(&address)?;
             log::info!(
-                "Handling fund request. network={}, address={}",
+                "Handling fund request. network={}, address={:#x}",
                 &network,
                 &address
             );
@@ -398,13 +398,7 @@ impl PaymentDriver for Erc20NextDriver {
                 .await
             {
                 Ok(balance) => {
-                    log::info!(
-                        "Gas balance is {}",
-                        balance
-                            .to_eth()
-                            .map(|b| b.to_string())
-                            .unwrap_or("CONV_ERR".to_string())
-                    );
+                    log::info!("Gas balance is {}", balance.to_eth_str());
                     balance
                 }
                 Err(err) => {
@@ -421,13 +415,7 @@ impl PaymentDriver for Erc20NextDriver {
                 .await
             {
                 Ok(balance) => {
-                    log::info!(
-                        "tGLM balance is {}",
-                        balance
-                            .to_eth()
-                            .map(|b| b.to_string())
-                            .unwrap_or("FAILED_TO_CONVERT".to_string())
-                    );
+                    log::info!("tGLM balance is {}", balance.to_eth_str());
                     balance
                 }
                 Err(err) => {
@@ -520,16 +508,11 @@ impl PaymentDriver for Erc20NextDriver {
                             if current_balance > starting_eth_balance {
                                 log::info!(
                                     "Received {} ETH from faucet",
-                                    (current_balance - starting_eth_balance)
-                                        .to_eth()
-                                        .map(|b| b.to_string())
-                                        .unwrap_or("FAILED_TO_CONVERT".to_string())
+                                    (current_balance - starting_eth_balance).to_eth_str()
                                 );
                                 break current_balance - starting_eth_balance;
                             } else {
-                                log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance.to_eth()
-                            .map(|b| b.to_string())
-                            .unwrap_or("FAILED_TO_CONVERT".to_string()), time_now.elapsed().as_secs(), 120);
+                                log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance.to_eth_str(), time_now.elapsed().as_secs(), 120);
                             }
                         }
                         Err(err) => {
@@ -540,10 +523,7 @@ impl PaymentDriver for Erc20NextDriver {
             } else {
                 log::info!(
                     "ETH balance is {} which is more than {} allowed by faucet",
-                    starting_eth_balance
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string()),
+                    starting_eth_balance.to_eth_str(),
                     faucet_client_max_eth_allowed
                 );
                 U256::zero()
@@ -593,19 +573,13 @@ impl PaymentDriver for Erc20NextDriver {
                             if current_balance > starting_glm_balance {
                                 log::info!(
                                     "Created {} tGLM using mint transaction",
-                                    (current_balance - starting_glm_balance)
-                                        .to_eth()
-                                        .map(|b| b.to_string())
-                                        .unwrap_or("FAILED_TO_CONVERT".to_string())
+                                    (current_balance - starting_glm_balance).to_eth_str()
                                 );
                                 break current_balance - starting_glm_balance;
                             } else {
                                 log::info!(
                                     "Waiting for mint result. Current balance: {}. Elapsed: {}/{}",
-                                    current_balance
-                                        .to_eth()
-                                        .map(|b| b.to_string())
-                                        .unwrap_or("FAILED_TO_CONVERT".to_string()),
+                                    current_balance.to_eth_str(),
                                     time_now.elapsed().as_secs(),
                                     120
                                 );
@@ -619,10 +593,7 @@ impl PaymentDriver for Erc20NextDriver {
             } else {
                 log::info!(
                     "tGLM balance is {} which is more than allowed by GLM minting contract {}",
-                    starting_glm_balance
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string()),
+                    starting_glm_balance.to_eth_str(),
                     mint_min_glm_allowed
                 );
                 U256::zero()
@@ -630,45 +601,21 @@ impl PaymentDriver for Erc20NextDriver {
             let mut str_output = if eth_received > U256::zero() || glm_received > U256::zero() {
                 format!(
                     "Successfully received {} ETH and {} tGLM",
-                    eth_received
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string()),
-                    glm_received
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string())
+                    eth_received.to_eth_str(),
+                    glm_received.to_eth_str()
                 )
             } else if eth_received > U256::zero() {
-                format!(
-                    "Successfully received {} ETH",
-                    eth_received
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string())
-                )
+                format!("Successfully received {} ETH", eth_received.to_eth_str())
             } else if glm_received > U256::zero() {
-                format!(
-                    "Successfully minted {} tGLM",
-                    glm_received
-                        .to_eth()
-                        .map(|b| b.to_string())
-                        .unwrap_or("FAILED_TO_CONVERT".to_string())
-                )
+                format!("Successfully minted {} tGLM", glm_received.to_eth_str())
             } else {
                 "No funds received".to_string()
             };
 
             str_output += &format!(
                 "\nYou have {} tETH and {} tGLM",
-                (starting_eth_balance + eth_received)
-                    .to_eth()
-                    .map(|b| b.to_string())
-                    .unwrap_or("FAILED_TO_CONVERT".to_string()),
-                (starting_glm_balance + glm_received)
-                    .to_eth()
-                    .map(|b| b.to_string())
-                    .unwrap_or("FAILED_TO_CONVERT".to_string())
+                (starting_eth_balance + eth_received).to_eth_str(),
+                (starting_glm_balance + glm_received).to_eth_str()
             );
             str_output
         };
