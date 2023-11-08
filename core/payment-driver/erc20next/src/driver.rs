@@ -10,12 +10,10 @@ use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::runtime::{
     DriverEvent, DriverEventContent, PaymentRuntime, TransferType, VerifyTransactionResult,
 };
-use erc20_payment_lib::utils::U256ConvExt;
+use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
-use num_traits::Zero;
-use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -400,10 +398,14 @@ impl PaymentDriver for Erc20NextDriver {
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.to_eth().unwrap_or_default());
-                    balance.to_eth().map_err(|err| {
-                        GenericError::new(format!("Error converting gas balance: {}", err))
-                    })?
+                    log::info!(
+                        "Gas balance is {}",
+                        balance
+                            .to_eth()
+                            .map(|b| b.to_string())
+                            .unwrap_or("CONV_ERR".to_string())
+                    );
+                    balance
                 }
                 Err(err) => {
                     log::error!("Error getting gas balance: {}", err);
@@ -419,10 +421,14 @@ impl PaymentDriver for Erc20NextDriver {
                 .await
             {
                 Ok(balance) => {
-                    log::info!("tGLM balance is {}", balance.to_eth().unwrap_or_default());
-                    balance.to_eth().map_err(|err| {
-                        GenericError::new(format!("Error converting tGLM balance: {}", err))
-                    })?
+                    log::info!(
+                        "tGLM balance is {}",
+                        balance
+                            .to_eth()
+                            .map(|b| b.to_string())
+                            .unwrap_or("FAILED_TO_CONVERT".to_string())
+                    );
+                    balance
                 }
                 Err(err) => {
                     log::error!("Error getting tGLM balance: {}", err);
@@ -461,7 +467,15 @@ impl PaymentDriver for Erc20NextDriver {
                     network
                 )))?;
 
-            let eth_received = if starting_eth_balance < faucet_client_max_eth_allowed {
+            let eth_received = if starting_eth_balance
+                < faucet_client_max_eth_allowed
+                    .to_u256_from_eth()
+                    .map_err(|err| {
+                        GenericError::new(format!(
+                            "faucet_client_max_eth_allowed failed to convert {}",
+                            err
+                        ))
+                    })? {
                 match faucet_donate(
                     &faucet_srv_prefix,
                     &faucet_lookup_domain,
@@ -502,8 +516,7 @@ impl PaymentDriver for Erc20NextDriver {
                         .get_gas_balance(network.to_string(), address)
                         .await
                     {
-                        Ok(balance) => {
-                            let current_balance = balance.to_eth().unwrap_or_default();
+                        Ok(current_balance) => {
                             if current_balance > starting_eth_balance {
                                 log::info!(
                                     "Received {} ETH from faucet",
@@ -525,10 +538,13 @@ impl PaymentDriver for Erc20NextDriver {
                     starting_eth_balance,
                     faucet_client_max_eth_allowed
                 );
-                Decimal::zero()
+                U256::zero()
             };
 
-            let glm_received = if starting_glm_balance < mint_min_glm_allowed {
+            let glm_received = if starting_glm_balance
+                < mint_min_glm_allowed.to_u256_from_eth().map_err(|err| {
+                    GenericError::new(format!("mint_min_glm_allowed failed to convert {}", err))
+                })? {
                 match self
                     .payment_runtime
                     .mint_golem_token(&network.to_string(), address, None)
@@ -565,8 +581,7 @@ impl PaymentDriver for Erc20NextDriver {
                         .get_token_balance(network.to_string(), address)
                         .await
                     {
-                        Ok(balance) => {
-                            let current_balance = balance.to_eth().unwrap_or_default();
+                        Ok(current_balance) => {
                             if current_balance > starting_glm_balance {
                                 log::info!(
                                     "Created {} tGLM using mint transaction",
@@ -593,17 +608,16 @@ impl PaymentDriver for Erc20NextDriver {
                     starting_glm_balance,
                     mint_min_glm_allowed
                 );
-                Decimal::zero()
+                U256::zero()
             };
-            let mut str_output = if eth_received > Decimal::zero() || glm_received > Decimal::zero()
-            {
+            let mut str_output = if eth_received > U256::zero() || glm_received > U256::zero() {
                 format!(
                     "Successfully received {} ETH and {} tGLM",
                     eth_received, glm_received
                 )
-            } else if eth_received > Decimal::zero() {
+            } else if eth_received > U256::zero() {
                 format!("Successfully received {} ETH", eth_received)
-            } else if glm_received > Decimal::zero() {
+            } else if glm_received > U256::zero() {
                 format!("Successfully minted {} tGLM", glm_received)
             } else {
                 "No funds received".to_string()
