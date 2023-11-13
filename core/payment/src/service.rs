@@ -870,7 +870,11 @@ mod public {
         let invoice_ev_dao: InvoiceEventDao = db.as_dao();
 
         let accepted_notes = debit_note_dao
-            .list(Some(Role::Requestor), Some(DocumentStatus::Accepted))
+            .list(
+                Some(Role::Requestor),
+                Some(DocumentStatus::Accepted),
+                Some(true),
+            )
             .await
             .map_err(GenericError::new)?;
 

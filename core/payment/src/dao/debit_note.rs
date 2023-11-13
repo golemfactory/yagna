@@ -203,6 +203,7 @@ impl<'c> DebitNoteDao<'c> {
         &self,
         role: Option<Role>,
         status: Option<DocumentStatus>,
+        payable: Option<bool>,
     ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = query!().into_boxed();
@@ -211,6 +212,14 @@ impl<'c> DebitNoteDao<'c> {
             }
             if let Some(status) = status {
                 query = query.filter(dsl::status.eq(status.to_string()));
+            }
+            if let Some(payable) = payable {
+                // Payable debit notes have not-null payment_due_date.
+                if payable {
+                    query = query.filter(dsl::payment_due_date.is_not_null());
+                } else {
+                    query = query.filter(dsl::payment_due_date.is_null());
+                }
             }
 
             let debit_notes: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
