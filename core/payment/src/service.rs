@@ -879,9 +879,6 @@ mod public {
             let platform = platform_str_to_platform(&debit_note.payment_platform)?;
 
             // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
-            //
-            // If debit note has reported driver errors before, we *must* send a broadcast on status change.
-            // This will either be a new problem, or PaymentOkEvent if no errors are found.
             let was_already_ok = debit_note_ev_dao
                 .get_for_debit_note_id(
                     debit_note.debit_note_id.clone(),
@@ -903,8 +900,16 @@ mod public {
                 .unwrap_or(true);
 
             if !was_already_ok {
-                if let Some(affected) = broadcast.get_mut(&platform) {
-                    affected
+                // If debit note has reported driver errors before, we *must* send a broadcast on status change.
+                // This will either be a new problem, or PaymentOkEvent if no errors are found.
+                broadcast
+                    .entry(platform)
+                    .or_default()
+                    .debit_notes
+                    .push((debit_note.debit_note_id, debit_note.issuer_id));
+            } else {
+                if let Some(broadcast) = broadcast.get_mut(&platform) {
+                    broadcast
                         .debit_notes
                         .push((debit_note.debit_note_id, debit_note.issuer_id));
                 }
@@ -921,9 +926,6 @@ mod public {
             let platform = platform_str_to_platform(&invoice.payment_platform)?;
 
             // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
-            //
-            // If debit note has reported driver errors before, we *must* send a broadcast on status change.
-            // This will either be a new problem, or PaymentOkEvent if no errors are found.
             let was_already_ok = invoice_ev_dao
                 .get_for_invoice_id(
                     invoice.invoice_id.clone(),
@@ -940,10 +942,21 @@ mod public {
                     matches!(&ev_type.event_type, InvoiceEventType::InvoicePaymentOkEvent)
                 })
                 .unwrap_or(true);
-            if let Some(affected) = broadcast.get_mut(&platform) {
-                affected
+
+            if !was_already_ok {
+                // If invoice has reported driver errors before, we *must* send a broadcast on status change.
+                // This will either be a new problem, or PaymentOkEvent if no errors are found.
+                broadcast
+                    .entry(platform)
+                    .or_default()
                     .invoices
                     .push((invoice.invoice_id, invoice.issuer_id));
+            } else {
+                if let Some(broadcast) = broadcast.get_mut(&platform) {
+                    broadcast
+                        .invoices
+                        .push((invoice.invoice_id, invoice.issuer_id));
+                }
             }
         }
 
