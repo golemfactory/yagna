@@ -87,7 +87,9 @@ async fn get_service_messages(
         log::debug!("No old WS connection");
     }
     let handler = WsMessagesHandler { service };
-    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
+    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream)
+        .protocols(&["gsb+flexbuffers"])
+        .start_with_addr()?;
     Ok(resp)
 }
 
@@ -381,7 +383,7 @@ mod tests {
     #[test_case(r#"{ "id": "some", "error": {} }"#, Frame::Close(Some(CloseReason { 
         code: CloseCode::Policy,
         description: Some("Failed to read response. Err: Missing 'payload' and 'error' fields. Id: some.".to_string()) })); 
-        "Close when error is empty because it needs at least top level error name field"
+        "Close when error empty (error needs at least top level error name field)"
     )]
     #[actix_web::test]
     #[serial]
