@@ -138,11 +138,10 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
-            debit_note_event::create::<()>(
+            debit_note_event::create(
                 debit_note_id.clone(),
                 owner_id,
                 DebitNoteEventType::DebitNoteReceivedEvent,
-                None,
                 conn,
             )?;
             Ok(debit_note_id)
@@ -170,11 +169,10 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
-            debit_note_event::create::<()>(
+            debit_note_event::create(
                 debit_note_id,
                 owner_id,
                 DebitNoteEventType::DebitNoteReceivedEvent,
-                None,
                 conn,
             )?;
             Ok(())
@@ -201,9 +199,30 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn get_all(&self) -> DbResult<Vec<DebitNote>> {
+    pub async fn list(
+        &self,
+        role: Option<Role>,
+        status: Option<DocumentStatus>,
+        payable: Option<bool>,
+    ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!().order_by(dsl::timestamp.desc()).load(conn)?;
+            let mut query = query!().into_boxed();
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role.to_string()));
+            }
+            if let Some(status) = status {
+                query = query.filter(dsl::status.eq(status.to_string()));
+            }
+            if let Some(payable) = payable {
+                // Payable debit notes have not-null payment_due_date.
+                if payable {
+                    query = query.filter(dsl::payment_due_date.is_not_null());
+                } else {
+                    query = query.filter(dsl::payment_due_date.is_null());
+                }
+            }
+
+            let debit_notes: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
@@ -272,7 +291,7 @@ impl<'c> DebitNoteDao<'c> {
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
-                debit_note_event::create::<()>(debit_note_id.clone(), owner_id, event, None, conn)?;
+                debit_note_event::create(debit_note_id.clone(), owner_id, event, conn)?;
             }
 
             Ok(())

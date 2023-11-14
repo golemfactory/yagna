@@ -18,7 +18,7 @@ pub enum RpcMessageError {
 }
 
 pub mod local {
-    use super::*;
+    use super::{public::Ack, *};
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
@@ -422,6 +422,17 @@ pub mod local {
         NoNetwork(String),
         #[error("Internal error: {0}")]
         Internal(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PaymentDriverStatusChange {
+        pub properties: Vec<DriverStatusProperty>,
+    }
+
+    impl RpcMessage for PaymentDriverStatusChange {
+        const ID: &'static str = "PaymentDriverStatusChange";
+        type Item = Ack;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

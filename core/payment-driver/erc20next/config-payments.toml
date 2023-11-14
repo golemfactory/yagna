@@ -23,11 +23,12 @@ ignore-deadlines = false
 [chain.goerli]
 chain-name = "Goerli"
 chain-id = 5
-rpc-endpoints = ["https://ethereum-goerli-rpc.allthatnode.com",
-    "https://rpc.goerli.mudit.blog",
+rpc-endpoints = [
+    "https://ethereum-goerli-rpc.allthatnode.com",
     "https://rpc.slock.it/goerli",
     "https://www.ethercluster.com/goerli",
-    "https://rpc.ankr.com/eth_goerli"]
+    "https://rpc.ankr.com/eth_goerli",
+]
 currency-symbol = "tETH"
 priority-fee = 1.01
 max-fee-per-gas = 300.0
@@ -41,7 +42,9 @@ block-explorer-url = "https://goerli.etherscan.io"
 [chain.mumbai]
 chain-name = "Mumbai testnet"
 chain-id = 80001
-rpc-endpoints = ["https://rpc-mumbai.maticvigil.com/v1/fd04db1066cae0f44d3461ae6d6a7cbbdd46e4a5"]
+rpc-endpoints = [
+    "https://rpc-mumbai.maticvigil.com/v1/fd04db1066cae0f44d3461ae6d6a7cbbdd46e4a5",
+]
 # rpc-endpoints = ["http://127.0.0.1:8545"]
 currency-symbol = "tMATIC"
 priority-fee = 1.01
@@ -66,4 +69,3 @@ token = { address = "0x0B220b82F3eA3B7F6d9A1D8ab58930C064A2b5Bf", symbol = "GLM"
 # multi-contract = { address = "0x50100d4faf5f3b09987dea36dc2eddd57a3e561b", max-at-once = 10 }
 confirmation-blocks = 1
 block-explorer-url = "https://polygonscan.com"
-
