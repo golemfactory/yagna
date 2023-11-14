@@ -8434,6 +8434,7 @@ dependencies = [
  "metrics 0.12.1",
  "num-derive",
  "num-traits",
+ "parking_lot 0.12.1",
  "r2d2",
  "rand 0.8.5",
  "regex",
