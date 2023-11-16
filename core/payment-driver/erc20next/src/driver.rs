@@ -856,7 +856,6 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
-<<<<<<< HEAD
         use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
@@ -911,6 +910,7 @@ impl PaymentDriver for Erc20NextDriver {
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
                         driver: DRIVER_NAME.into(),
                         network,
+                        address: "".to_string(),
                         needed_gas_est: missing_gas.to_string(),
                     })
                 }
@@ -923,14 +923,12 @@ impl PaymentDriver for Erc20NextDriver {
                     network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
                         driver: DRIVER_NAME.into(),
                         network,
+                        address: "".to_string(),
                         needed_token_est: missing_token.to_string(),
                     })
                 }
             })
             .collect())
-=======
-        self._status(msg).await
->>>>>>> payments-dev
     }
 
     async fn shut_down(

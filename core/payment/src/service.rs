@@ -826,7 +826,7 @@ mod public {
         }
 
         let platform_str_to_platform = |platform: &str| -> Result<Platform, GenericError> {
-            let parts = platform.split("-").collect::<Vec<_>>();
+            let parts = platform.split('-').collect::<Vec<_>>();
             let [driver, network, _]: [_; 3] = parts.try_into().map_err(|_| {
                 GenericError::new("Payment platform must be of the form {driver}-{network}-{token}")
             })?;
@@ -911,12 +911,10 @@ mod public {
                     .or_default()
                     .debit_notes
                     .push((debit_note.debit_note_id, debit_note.issuer_id));
-            } else {
-                if let Some(broadcast) = broadcast.get_mut(&platform) {
-                    broadcast
-                        .debit_notes
-                        .push((debit_note.debit_note_id, debit_note.issuer_id));
-                }
+            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
+                broadcast
+                    .debit_notes
+                    .push((debit_note.debit_note_id, debit_note.issuer_id));
             }
         }
 
@@ -955,12 +953,10 @@ mod public {
                     .or_default()
                     .invoices
                     .push((invoice.invoice_id, invoice.issuer_id));
-            } else {
-                if let Some(broadcast) = broadcast.get_mut(&platform) {
-                    broadcast
-                        .invoices
-                        .push((invoice.invoice_id, invoice.issuer_id));
-                }
+            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
+                broadcast
+                    .invoices
+                    .push((invoice.invoice_id, invoice.issuer_id));
             }
         }
 
