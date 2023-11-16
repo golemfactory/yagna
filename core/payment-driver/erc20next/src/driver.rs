@@ -123,34 +123,122 @@ impl Erc20NextDriver {
 
     async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
         while let Some(event) = events.recv().await {
-            if let DriverEventContent::TransferFinished(transfer_finished) = &event.content {
-                match this
-                    ._confirm_payments(
-                        &transfer_finished.token_transfer_dao,
-                        &transfer_finished.tx_dao,
-                    )
-                    .await
-                {
-                    Ok(_) => log::info!(
-                        "Payment confirmed: {}",
-                        transfer_finished
-                            .token_transfer_dao
-                            .payment_id
-                            .clone()
-                            .unwrap_or_default()
-                    ),
-                    Err(e) => log::error!(
-                        "Error confirming payment: {}, error: {}",
-                        transfer_finished
-                            .token_transfer_dao
-                            .payment_id
-                            .clone()
-                            .unwrap_or_default(),
-                        e
-                    ),
+            match &event.content {
+                DriverEventContent::TransferFinished(transfer_finished) => {
+                    match this
+                        ._confirm_payments(
+                            &transfer_finished.token_transfer_dao,
+                            &transfer_finished.tx_dao,
+                        )
+                        .await
+                    {
+                        Ok(_) => log::info!(
+                            "Payment confirmed: {}",
+                            transfer_finished
+                                .token_transfer_dao
+                                .payment_id
+                                .clone()
+                                .unwrap_or_default()
+                        ),
+                        Err(e) => log::error!(
+                            "Error confirming payment: {}, error: {}",
+                            transfer_finished
+                                .token_transfer_dao
+                                .payment_id
+                                .clone()
+                                .unwrap_or_default(),
+                            e
+                        ),
+                    }
                 }
+                DriverEventContent::StatusChanged(_) => {
+                    if let Ok(status) = this._status(DriverStatus { network: None }).await {
+                        log::info!("Payment driver [{DRIVER_NAME}] status changed: {status:#?}");
+                        bus::status_changed(status).await.ok();
+                    }
+                }
+                _ => {}
             }
         }
+    }
+
+    async fn _status(
+        &self,
+        msg: DriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
+        use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
+
+        // Map chain-id to network
+        let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
+
+        // check if network matches the filter
+        let network_filter = |net_candidate: &str| {
+            msg.network
+                .as_ref()
+                .map(|net| net == net_candidate)
+                .unwrap_or(true)
+        };
+
+        if let Some(network) = msg.network.as_ref() {
+            let found_net = self
+                .payment_runtime
+                .chains()
+                .into_iter()
+                .any(|id| &chain_id_to_net(id) == network);
+
+            if !found_net {
+                return Err(DriverStatusError::NetworkNotFound(network.clone()));
+            }
+        }
+
+        Ok(self
+            .payment_runtime
+            .get_status()
+            .await
+            .into_iter()
+            .flat_map(|prop| match prop {
+                LibStatusProperty::InvalidChainId { chain_id } => {
+                    Some(DriverStatusProperty::InvalidChainId {
+                        driver: DRIVER_NAME.into(),
+                        chain_id,
+                    })
+                }
+                LibStatusProperty::CantSign { chain_id, address } => {
+                    let network = chain_id_to_net(chain_id);
+                    Some(DriverStatusProperty::CantSign {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                        address,
+                    })
+                }
+                LibStatusProperty::NoGas {
+                    chain_id,
+                    address,
+                    missing_gas,
+                } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
+                        driver: DRIVER_NAME.into(),
+                        address,
+                        network,
+                        needed_gas_est: missing_gas.to_string(),
+                    })
+                }
+                LibStatusProperty::NoToken {
+                    chain_id,
+                    address,
+                    missing_token,
+                } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
+                        driver: DRIVER_NAME.into(),
+                        address,
+                        network,
+                        needed_token_est: missing_token.to_string(),
+                    })
+                }
+            })
+            .collect())
     }
 
     async fn _confirm_payments(
@@ -768,6 +856,7 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
+<<<<<<< HEAD
         use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
@@ -839,6 +928,9 @@ impl PaymentDriver for Erc20NextDriver {
                 }
             })
             .collect())
+=======
+        self._status(msg).await
+>>>>>>> payments-dev
     }
 
     async fn shut_down(

@@ -112,11 +112,10 @@ impl<'c> InvoiceDao<'c> {
                     .map(|_| ())
             })?;
 
-            invoice_event::create::<()>(
+            invoice_event::create(
                 invoice_id,
                 owner_id,
                 InvoiceEventType::InvoiceReceivedEvent,
-                None,
                 conn,
             )?;
 
@@ -137,6 +136,37 @@ impl<'c> InvoiceDao<'c> {
         let activity_ids = invoice.activity_ids.clone();
         let invoice = WriteObj::new_received(invoice);
         self.insert(invoice, activity_ids).await
+    }
+
+    pub async fn list(
+        &self,
+        role: Option<Role>,
+        status: Option<DocumentStatus>,
+    ) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let mut query = query!().into_boxed();
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role.to_string()));
+            }
+            if let Some(status) = status {
+                query = query.filter(dsl::status.eq(status.to_string()));
+            }
+
+            let read_objs: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
+            let mut invoices = Vec::<Invoice>::new();
+
+            for read_obj in read_objs {
+                let activity_ids = activity_dsl::pay_invoice_x_activity
+                    .select(activity_dsl::activity_id)
+                    .filter(activity_dsl::invoice_id.eq(&read_obj.id))
+                    .filter(activity_dsl::owner_id.eq(read_obj.owner_id))
+                    .load(conn)?;
+                invoices.push(read_obj.into_api_model(activity_ids)?);
+            }
+
+            Ok(invoices)
+        })
+        .await
     }
 
     pub async fn get(&self, invoice_id: String, owner_id: NodeId) -> DbResult<Option<Invoice>> {
@@ -273,7 +303,7 @@ impl<'c> InvoiceDao<'c> {
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
             for event in events {
-                invoice_event::create::<()>(invoice_id.clone(), owner_id, event, None, conn)?;
+                invoice_event::create(invoice_id.clone(), owner_id, event, conn)?;
             }
 
             Ok(())
@@ -376,11 +406,10 @@ impl<'c> InvoiceDao<'c> {
             agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
 
             update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
-            invoice_event::create::<()>(
+            invoice_event::create(
                 invoice_id,
                 owner_id,
                 InvoiceEventType::InvoiceCancelledEvent,
-                None,
                 conn,
             )?;
 

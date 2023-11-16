@@ -150,7 +150,7 @@ impl StorageMetric {
                     return;
                 }
             };
-            if skipped > 0 {
+            if skipped > c0 {
                 log::warn!("StorageMetric: skipped {} filesystem entries", skipped);
             }
 

@@ -7,6 +7,7 @@
 // External crates
 use std::sync::Arc;
 
+use ya_client_model::payment::DriverStatusProperty;
 // Workspace uses
 use ya_client_model::payment::driver_details::DriverDetails;
 use ya_client_model::NodeId;
@@ -14,7 +15,7 @@ use ya_core_model::driver::{
     driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
 };
 use ya_core_model::identity;
-use ya_core_model::payment::local as payment_srv;
+use ya_core_model::payment::local::{self as payment_srv, PaymentDriverStatusChange};
 use ya_service_bus::{
     typed::{service, ServiceBinder},
     RpcEndpoint,
@@ -184,6 +185,16 @@ pub async fn notify_payment(
         order_ids,
         confirmation: PaymentConfirmation { confirmation },
     };
+    service(payment_srv::BUS_ID)
+        .send(msg)
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+    Ok(())
+}
+
+pub async fn status_changed(properties: Vec<DriverStatusProperty>) -> Result<(), GenericError> {
+    let msg = PaymentDriverStatusChange { properties };
     service(payment_srv::BUS_ID)
         .send(msg)
         .await
