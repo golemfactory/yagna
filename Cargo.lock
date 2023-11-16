@@ -556,7 +556,7 @@ checksum = "619743e34b5ba4e9703bba34deac3427c72507c7159f5fd030aea8cac0cfe341"
 [[package]]
 name = "asnom"
 version = "0.1.1"
-source = "git+https://github.com/dequbed/asnom.git#06696cefca408a56431922f95293330ed293dbda"
+source = "git+https://github.com/golemfactory/asnom.git#06696cefca408a56431922f95293330ed293dbda"
 dependencies = [
  "byteorder",
  "nom 2.2.1",
