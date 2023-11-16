@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use humantime::format_duration;
 use structopt::*;
 use ya_client_model::NodeId;
@@ -232,7 +232,7 @@ fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
 fn find_node_to_output(response: model::FindNodeResponse) -> anyhow::Result<CommandOutput> {
     let naive = NaiveDateTime::from_timestamp_opt(response.seen.into(), 0)
         .context("Failed on out-of-range number of seconds")?;
-    let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+    let seen: DateTime<Utc> = Utc.from_utc_datetime(&naive);
 
     CommandOutput::object(serde_json::json!({
         "identities": response.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
