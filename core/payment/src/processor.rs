@@ -1,10 +1,11 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
@@ -413,7 +414,10 @@ impl PaymentProcessor {
             )
             .await?;
 
-        let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+        let mut payment = payment_dao
+            .get(payment_id.clone(), payer_id)
+            .await?
+            .unwrap();
         // Allocation IDs are requestor's private matter and should not be sent to provider
         for agreement_payment in payment.agreement_payments.iter_mut() {
             agreement_payment.allocation_id = None;
@@ -426,23 +430,61 @@ impl PaymentProcessor {
             .send(driver::SignPayment(payment.clone()))
             .await??;
 
+        log::warn!("####### payment: {:?},  signature {:?}", payment, signature);
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
+        // This is unconditional because at this point the invoice *has been paid*.
+        // Whether the provider was correctly notified of this fact is another matter.
+        counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment, signature);
 
-        // Spawning to avoid deadlock in a case that payee is the same node as payer
-        tokio::task::spawn_local(
-            ya_net::from(payer_id)
+        if payer_id != payee_id {
+            let mark_sent = ya_net::from(payer_id)
                 .to(payee_id)
                 .service(BUS_ID)
                 .call(msg)
                 .map(|res| match res {
-                    Ok(Ok(_)) => (),
-                    err => log::error!("Error sending payment message to provider: {:?}", err),
-                }),
-        );
-        // TODO: Implement re-sending mechanism in case SendPayment fails
+                    Ok(Ok(_)) => true,
+                    Err(err) => {
+                        log::error!("Error sending payment message to provider: {:?}", err);
+                        false
+                    }
+                    Ok(Err(err)) => {
+                        log::error!("Provider rejected payment: {:?}", err);
+                        true
+                    }
+                })
+                .await;
 
-        counter!("payment.invoices.requestor.paid", 1);
+            if mark_sent {
+                payment_dao.mark_sent(payment_id).await.ok();
+            } else {
+                let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
+                sync_dao.upsert(payee_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+                log::debug!("Failed to call SendPayment on [{payee_id}]");
+            }
+        } else {
+            // Spawning to avoid deadlock in a case that payee is the same node as payer
+            tokio::task::spawn_local(
+                ya_net::from(payer_id)
+                    .to(payee_id)
+                    .service(BUS_ID)
+                    .call(msg)
+                    .map(|res| match res {
+                        Ok(Ok(_)) => (),
+                        Err(err) => {
+                            log::error!("Error sending payment message to provider: {:?}", err)
+                        }
+                        Ok(Err(err)) => {
+                            log::error!("Provider rejected payment: {:?}", err)
+                        }
+                    }),
+            );
+
+            // Assume payments are OK when requesting from self
+            payment_dao.mark_sent(payment_id).await?;
+        }
+
         Ok(())
     }
 
@@ -503,7 +545,11 @@ impl PaymentProcessor {
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
         let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
+            .send(driver::VerifyPayment::new(
+                confirmation.clone(),
+                platform.clone(),
+                payment.clone(),
+            ))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
@@ -577,9 +623,38 @@ impl PaymentProcessor {
             }
         }
 
-        // Insert payment into database (this operation creates and updates all related entities)
+        // Verify totals for all agreements and activities with the same confirmation
         let payment_dao: PaymentDao = self.db_executor.as_dao();
+        let shared_payments = payment_dao
+            .get_for_confirmation(confirmation.confirmation)
+            .await?;
+        let other_payment_total = shared_payments
+            .iter()
+            .map(|payment| {
+                let agreement_total = payment
+                    .agreement_payments
+                    .iter()
+                    .map(|ap| &ap.amount)
+                    .sum::<BigDecimal>();
+
+                let activity_total = payment
+                    .activity_payments
+                    .iter()
+                    .map(|ap| &ap.amount)
+                    .sum::<BigDecimal>();
+
+                agreement_total + activity_total
+            })
+            .sum::<BigDecimal>();
+
+        let all_payment_total = &other_payment_total + agreement_sum + activity_sum;
+        if all_payment_total > details.amount {
+            return VerifyPaymentError::overspending(&details.amount, &all_payment_total);
+        }
+
+        // Insert payment into database (this operation creates and updates all related entities)
         payment_dao.insert_received(payment, payee_id).await?;
+
         Ok(())
     }
 

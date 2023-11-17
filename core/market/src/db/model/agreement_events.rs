@@ -102,7 +102,7 @@ impl NewAgreementEvent {
 impl AgreementEvent {
     pub fn into_client(self) -> ClientEvent {
         let agreement_id = self.agreement_id.into_client();
-        let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
+        let event_date = DateTime::<Utc>::from_naive_utc_and_offset(self.timestamp, Utc);
         let reason = self.reason.map(|reason| reason.0);
 
         match self.event_type {

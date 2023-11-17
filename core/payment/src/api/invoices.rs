@@ -24,6 +24,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use crate::dao::*;
 use crate::error::{DbError, Error};
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_id;
 use crate::utils::*;
 
@@ -366,6 +367,7 @@ async fn accept_invoice(
     counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -455,20 +457,34 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
-            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
-            // Skip calling SchedulePayment for 0 amount invoices
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
+
+            // Mark the invoice as accepted in DB
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
+
+            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("AcceptInvoice delivered");
+                dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("AcceptInvoice not delivered");
+                sync_dao.upsert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))

@@ -1,0 +1,12 @@
+/*
+    Private mod to encapsulate all erc20next logic, revealed from the `wallet`.
+*/
+
+pub mod ethereum;
+pub mod faucet;
+pub mod utils;
+pub mod wallet;
+
+mod config;
+pub mod eth_utils;
+pub mod transaction;
