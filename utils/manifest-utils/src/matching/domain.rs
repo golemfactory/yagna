@@ -37,6 +37,12 @@ impl DomainWhitelistState {
     }
 }
 
+impl DomainsMatcher {
+    pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
+        DomainsMatcher::try_from(&DomainPatterns::load_or_create(path)?)
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DomainPatterns {
     pub patterns: Vec<DomainPattern>,

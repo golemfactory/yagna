@@ -13,7 +13,6 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { version = "0.5.0" }
 ya-manifest-utils = { version = "0.2" }
 ya-client = { version = "0.7", features = ['cli'] }
 ya-client-model = "0.5"
@@ -26,6 +25,12 @@ ya-utils-path = "0.1"
 ya-utils-process = { version = "0.2", features = ['lock'] }
 ya-std-utils = "0.1"
 golem-certificate = "0.1.1"
+
+ya-negotiators = { git = "https://github.com/nieznanysprawiciel/ya-negotiator", rev = "86154fcc8ef2d1142e9f6d2816d7f0cb2ffc560f" }
+ya-agreement-utils = { git = 'https://github.com/nieznanysprawiciel/ya-negotiator', rev = "86154fcc8ef2d1142e9f6d2816d7f0cb2ffc560f" }
+#ya-negotiators = { path = "../../../../experiments/ya-negotiators" }
+#ya-agreement-utils = { path = "../../../../experiments/ya-negotiators/agreement-utils" }
+
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"
@@ -42,7 +47,8 @@ dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"
 hex = "0.4"
-humantime = "2.0.0"
+humantime = "2"
+humantime-serde = "1"
 itertools = "0.10"
 lazy_static = "1.4.0"
 libc = "0.2"
@@ -56,6 +62,7 @@ regex = "1.5"
 semver = { version = "0.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 shared_child = "0.3.4"
 signal-hook = "0.3"
 structopt = "0.3.20"

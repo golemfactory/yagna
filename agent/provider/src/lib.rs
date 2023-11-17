@@ -13,6 +13,7 @@ pub mod rules;
 pub mod signal;
 pub mod startup_config;
 pub mod tasks;
+mod typed_props;
 
 pub use config::globals::GlobalsState;
 pub use startup_config::ReceiverAccount;

@@ -68,6 +68,47 @@ class DemandBuilder:
         )
 
 
+async def negotiate_proposal(
+        requestor: RequestorProbe,
+        demand: Demand,
+        provider: ProviderProbe,
+        proposal: Proposal,
+        subscription_id: str,
+) -> List[Tuple[str, ProviderProbe]]:
+    """Negotiate proposal with supplied providers.
+
+    Function doesn't sign agreement, but Proposal is ready to be converted to Agreement.
+    """
+    new_proposal = proposal
+    exchanges = 0
+
+    while True:
+        logger.info("Processing proposal from %s", provider.name)
+
+        counter_proposal_id = await requestor.counter_proposal(
+            subscription_id, demand, new_proposal
+        )
+        await provider.wait_for_proposal_accepted()
+
+        new_proposals = await requestor.wait_for_proposals(
+            subscription_id,
+            (provider,),
+            lambda p: p.prev_proposal_id == counter_proposal_id,
+        )
+
+        exchanges += 1
+        prev_proposal = new_proposal
+        new_proposal = new_proposals[0]
+
+        if new_proposal.properties == prev_proposal.properties:
+            logger.info("Proposal ready to turn into Agreement after %d proposal exchanges", exchanges)
+            return new_proposal
+        elif exchanges >= MAX_PROPOSAL_EXCHANGES:
+            raise RuntimeError(
+                "Reach a maximum of %d proposal exchanges", MAX_PROPOSAL_EXCHANGES
+            )
+
+
 async def negotiate_agreements(
     requestor: RequestorProbe,
     demand: Demand,
@@ -98,35 +139,8 @@ async def negotiate_agreements(
 
     for proposal in proposals:
         provider = next(p for p in providers if p.address == proposal.issuer_id)
-        new_proposal = proposal
-        exchanges = 0
 
-        while True:
-            logger.info("Processing proposal from %s", provider.name)
-
-            counter_proposal_id = await requestor.counter_proposal(
-                subscription_id, demand, new_proposal
-            )
-            await provider.wait_for_proposal_accepted()
-
-            new_proposals = await requestor.wait_for_proposals(
-                subscription_id,
-                (provider,),
-                lambda p: p.prev_proposal_id == counter_proposal_id,
-            )
-
-            exchanges += 1
-            prev_proposal = new_proposal
-            new_proposal = new_proposals[0]
-
-            if new_proposal.properties == prev_proposal.properties:
-                break
-            elif exchanges >= MAX_PROPOSAL_EXCHANGES:
-                raise RuntimeError(
-                    "Reach a maximum of %d proposal exchanges", MAX_PROPOSAL_EXCHANGES
-                )
-
-        logger.info("Creating agreement after %d proposal exchanges", exchanges)
+        new_proposal = await negotiate_proposal(requestor, demand, provider, proposal, subscription_id)
 
         agreement_id = await requestor.create_agreement(new_proposal)
         await requestor.confirm_agreement(agreement_id)

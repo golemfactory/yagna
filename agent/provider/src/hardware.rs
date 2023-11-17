@@ -13,11 +13,11 @@ use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
 use tokio::sync::watch;
 
-use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
 
 use crate::events::Event;
 use crate::startup_config::{FileMonitor, ProviderConfig};
+use crate::typed_props::{CpuInfo, InfNodeInfo};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const CPU_THREADS_RESERVED: i32 = 1;

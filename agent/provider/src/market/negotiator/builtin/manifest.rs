@@ -1,54 +1,68 @@
+use anyhow::anyhow;
+use serde_yaml;
 use std::ops::Not;
+use std::path::PathBuf;
+use std::time::Duration;
+use structopt::StructOpt;
 
-use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
     decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY, DEMAND_MANIFEST_PROPERTY,
     DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
+use ya_negotiators::agreement::Error;
+use ya_negotiators::component::{
+    NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut, ProposalView,
+    RejectReason, Score,
+};
+use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 
-use crate::market::negotiator::*;
-use crate::provider_agent::AgentNegotiatorsConfig;
+use crate::market::config::AgentNegotiatorsConfig;
 use crate::rules::{ManifestSignatureProps, RulesManager};
+use crate::startup_config::FileMonitor;
 
 pub struct ManifestSignature {
     enabled: bool,
     rules_manager: RulesManager,
+
+    rulestore_monitor: FileMonitor,
+    keystore_monitor: FileMonitor,
+    whitelist_monitor: FileMonitor,
 }
 
-impl NegotiatorComponent for ManifestSignature {
+impl NegotiatorComponentMut for ManifestSignature {
     fn negotiate_step(
         &mut self,
-        demand: &ProposalView,
-        offer: ProposalView,
+        their: &ProposalView,
+        ours: ProposalView,
+        score: Score,
     ) -> anyhow::Result<NegotiationResult> {
         if self.enabled.not() {
             log::trace!("Manifest verification disabled.");
-            return acceptance(offer);
+            return acceptance(ours, score);
         }
 
         let (manifest, manifest_encoded) =
-            match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+            match their.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
                 Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
                     Ok(manifest) => (manifest, manifest_encoded),
-                    Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
+                    Err(e) => return rejection(format!("invalid manifest: {e:?}")),
                 },
-                Err(Error::NoKey(_)) => return acceptance(offer),
-                Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+                Err(Error::NoKey(_)) => return acceptance(ours, score),
+                Err(e) => return rejection(format!("invalid manifest type: {e:?}")),
             };
 
         let manifest_sig = {
-            if demand
+            if their
                 .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
                 .is_ok()
             {
-                let sig = demand.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
+                let sig = their.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
                 log::trace!("sig_hex: {sig}");
-                let sig_alg: String =
-                    demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
+                let sig_alg: String = their.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
                 log::trace!("sig_alg: {sig_alg}");
-                let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+                let cert: String = their.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
                 log::trace!("cert: {cert}");
                 log::trace!("encoded_manifest: {manifest_encoded}");
                 Some(ManifestSignatureProps {
@@ -62,7 +76,7 @@ impl NegotiatorComponent for ManifestSignature {
             }
         };
 
-        let node_descriptor = demand
+        let node_descriptor = their
             .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
 
@@ -70,44 +84,58 @@ impl NegotiatorComponent for ManifestSignature {
             if outbound_access.is_outbound_requested() {
                 return match self.rules_manager.check_outbound_rules(
                     outbound_access,
-                    demand.issuer,
+                    their.issuer,
                     manifest_sig,
                     node_descriptor,
                 ) {
-                    crate::rules::CheckRulesResult::Accept => acceptance(offer),
+                    crate::rules::CheckRulesResult::Accept => acceptance(ours, score),
                     crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
                 };
             }
         }
 
         log::trace!("Outbound is not requested.");
-        acceptance(offer)
+        acceptance(ours, score)
     }
 
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
+    fn shutdown(&mut self, _timeout: Duration) -> anyhow::Result<()> {
+        self.shutdown();
         Ok(())
     }
 }
 
+pub fn policy_from_env() -> anyhow::Result<NegotiatorConfig> {
+    // Empty command line arguments, because we want to use ENV fallback
+    // or default values if ENV variables are not set.
+    let policy = PolicyConfig::from_iter_safe(&[""])?;
+    Ok(NegotiatorConfig {
+        name: "ManifestSignature".to_string(),
+        load_mode: LoadMode::StaticLib {
+            library: "ya-provider".to_string(),
+        },
+        params: serde_yaml::to_value(policy)?,
+    })
+}
+
+impl NegotiatorFactory<ManifestSignature> for ManifestSignature {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        agent_env: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<ManifestSignature> {
+        let config: PolicyConfig = serde_yaml::from_value(config)?;
+        let agent_env: AgentNegotiatorsConfig = serde_yaml::from_value(agent_env)?;
+        ManifestSignature::from(config, agent_env)
+    }
+}
+
 impl ManifestSignature {
-    pub fn new(config: &PolicyConfig, agent_negotiators_cfg: AgentNegotiatorsConfig) -> Self {
-        let policies = config.policy_set();
-        let properties = config.trusted_property_map();
+    pub fn from(policy: PolicyConfig, agent_env: AgentNegotiatorsConfig) -> anyhow::Result<Self> {
+        let policies = policy.policy_set();
+        let properties = policy.trusted_property_map();
 
         let enabled = if policies
             .contains(&Policy::ManifestSignatureValidation)
@@ -122,22 +150,51 @@ impl ManifestSignature {
             }
         };
 
-        ManifestSignature {
+        let rules_manager = RulesManager::load_or_create(
+            &agent_env.rules_file,
+            &agent_env.whitelist_file,
+            &agent_env.cert_dir,
+        )
+        .map_err(|e| anyhow!("Failed to load RulesManager: {e}"))?;
+
+        let (rulestore_monitor, keystore_monitor, whitelist_monitor) = rules_manager
+            .spawn_file_monitors()
+            .map_err(|e| anyhow!("Failed to spawn rules monitors: {e}"))?;
+
+        Ok(ManifestSignature {
             enabled,
-            rules_manager: agent_negotiators_cfg.rules_manager,
-        }
+            rules_manager,
+            rulestore_monitor,
+            keystore_monitor,
+            whitelist_monitor,
+        })
+    }
+
+    fn shutdown(&mut self) {
+        self.rulestore_monitor.stop();
+        self.keystore_monitor.stop();
+        self.whitelist_monitor.stop();
+    }
+}
+
+impl Drop for ManifestSignature {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
 fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
     Ok(NegotiationResult::Reject {
-        message,
+        reason: RejectReason::new(message),
         is_final: true,
     })
 }
 
-fn acceptance(offer: ProposalView) -> anyhow::Result<NegotiationResult> {
-    Ok(NegotiationResult::Ready { offer })
+fn acceptance(offer: ProposalView, score: Score) -> anyhow::Result<NegotiationResult> {
+    Ok(NegotiationResult::Ready {
+        proposal: offer,
+        score,
+    })
 }
 
 #[cfg(test)]
@@ -154,18 +211,16 @@ mod tests {
 
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
 
+        let policy = serde_yaml::to_value(PolicyConfig::from_iter(arguments)).unwrap();
+        let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
+            rules_file,
+            whitelist_file,
+            cert_dir,
+        })
+        .unwrap();
+
         (
-            ManifestSignature::new(
-                &PolicyConfig::from_iter(arguments),
-                AgentNegotiatorsConfig {
-                    rules_manager: RulesManager::load_or_create(
-                        &rules_file,
-                        &whitelist_file,
-                        &cert_dir,
-                    )
-                    .unwrap(),
-                },
-            ),
+            ManifestSignature::new("", policy, agent_env, PathBuf::new()).unwrap(),
             tempdir,
         )
     }

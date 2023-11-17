@@ -1,4 +1,4 @@
-use crate::OfferTemplate;
+use ya_agreement_utils::OfferTemplate;
 
 use serde_json::Value;
 

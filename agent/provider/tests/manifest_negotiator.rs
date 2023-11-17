@@ -11,14 +11,14 @@ use std::path::PathBuf;
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use test_case::test_case;
-use ya_agreement_utils::agreement::expand;
-use ya_agreement_utils::{OfferTemplate, ProposalView};
+use ya_agreement_utils::{agreement::expand, OfferTemplate, ProposalView};
 use ya_client_model::market::proposal::State;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::{Policy, PolicyConfig};
+use ya_negotiators::component::{NegotiatorFactory, Score};
+use ya_negotiators::{NegotiationResult, NegotiatorComponentMut};
+use ya_provider::market::config::AgentNegotiatorsConfig;
 use ya_provider::market::negotiator::builtin::ManifestSignature;
-use ya_provider::market::negotiator::*;
-use ya_provider::provider_agent::AgentNegotiatorsConfig;
 use ya_provider::rules::RulesManager;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
@@ -65,23 +65,39 @@ fn manifest_negotiator_test_accepted_because_of_no_payload() {
     let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
     rules_file.write_all(rulestore.as_bytes()).unwrap();
 
-    let rules_manager =
+    let _rules_manager =
         RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
             .expect("Can't load RulesManager");
 
-    let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
-    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
+    let config =
+        serde_yaml::to_value(create_manifest_signature_validating_policy_config()).unwrap();
+    let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
+        rules_file: rules_file_name,
+        whitelist_file,
+        cert_dir: test_cert_dir,
+    })
+    .unwrap();
+
+    let mut manifest_negotiator =
+        ManifestSignature::new("", config, agent_env, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(payload);
     let demand = create_demand(demand);
     let offer = create_offer();
+    let score = Score::default();
 
-    let negotiation_result = manifest_negotiator.negotiate_step(&demand, offer.clone());
+    let negotiation_result =
+        manifest_negotiator.negotiate_step(&demand, offer.clone(), score.clone());
     let negotiation_result = negotiation_result.expect("Negotiator had not failed");
 
-    assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
+    assert_eq!(
+        negotiation_result,
+        NegotiationResult::Ready {
+            proposal: offer,
+            score
+        }
+    );
 }
 
 #[test_case(
@@ -566,13 +582,21 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     let mut rules_file = std::fs::File::create(&rules_file_name).unwrap();
     rules_file.write_all(rulestore.as_bytes()).unwrap();
 
-    let rules_manager =
+    let _rules_manager =
         RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
             .expect("Can't load RulesManager");
 
-    let config = create_manifest_signature_validating_policy_config();
-    let negotiator_cfg = AgentNegotiatorsConfig { rules_manager };
-    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
+    let config =
+        serde_yaml::to_value(create_manifest_signature_validating_policy_config()).unwrap();
+    let agent_env = serde_yaml::to_value(AgentNegotiatorsConfig {
+        rules_file: rules_file_name,
+        whitelist_file,
+        cert_dir: test_cert_dir,
+    })
+    .unwrap();
+
+    let mut manifest_negotiator =
+        ManifestSignature::new("", config, agent_env, PathBuf::new()).unwrap();
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(Some(Payload {
@@ -584,27 +608,35 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     }));
     let demand = create_demand(demand);
     let offer = create_offer();
+    let score = Score::default();
 
     // When
-    let negotiation_result = manifest_negotiator.negotiate_step(&demand, offer.clone());
+    let negotiation_result =
+        manifest_negotiator.negotiate_step(&demand, offer.clone(), score.clone());
 
     // Then
     let negotiation_result = negotiation_result.expect("Negotiator had not failed");
     if let Some(expected_error) = error_msg {
         match negotiation_result {
-            NegotiationResult::Reject { message, is_final } => {
+            NegotiationResult::Reject { reason, is_final } => {
                 assert!(is_final);
-                if !message.contains(expected_error) {
+                if !reason.message.contains(expected_error) {
                     panic!(
                         "Negotiations error message: \n {} \n doesn't contain expected message: \n {}",
-                        message, expected_error
+                        reason.message, expected_error
                     );
                 }
             }
             _ => panic!("Expected negotiations rejected"),
         }
     } else {
-        assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
+        assert_eq!(
+            negotiation_result,
+            NegotiationResult::Ready {
+                proposal: offer,
+                score
+            }
+        );
     }
 }
 

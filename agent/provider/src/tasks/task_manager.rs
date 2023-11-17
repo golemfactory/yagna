@@ -16,7 +16,7 @@ use super::task_state::{AgreementState, TasksStates};
 use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner, TerminateActivity};
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
-use crate::payments::Payments;
+use crate::payments::{InvoiceNotification, Payments};
 use crate::tasks::config::TaskConfig;
 
 // =========================================== //
@@ -47,7 +47,7 @@ pub enum ClosingCause {
     SingleActivity,
 }
 
-/// Notifies TaskManager that Requestor close agreement.
+/// Notifies TaskManager, that Requestor closed agreement.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct CloseAgreement {
@@ -302,7 +302,13 @@ impl Handler<InitializeTaskManager> for TaskManager {
             actx.runner.send(msg).await?;
 
             let msg = Subscribe::<ActivityDestroyed>(actx.myself.clone().recipient());
-            Ok(actx.runner.send(msg).await?)
+            actx.runner.send(msg).await?;
+
+            // Listen to Invoice notifications
+            let msg = Subscribe::<InvoiceNotification>(actx.market.clone().recipient());
+            actx.payments.send(msg).await?;
+
+            Ok(())
         }
         .into_actor(self);
 

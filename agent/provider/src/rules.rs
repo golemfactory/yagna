@@ -202,16 +202,17 @@ impl RulesManager {
 
                 match manager.rulestore.reload() {
                     Ok(()) => {
-                        log::info!("rulestore updated from {}", p.display());
+                        log::info!("RuleStore updated from {}", p.display());
 
                         if let Err(e) = manager.remove_dangling_rules() {
                             log::warn!("Error removing unnecessary rules: {e}");
                         }
                     }
-                    Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+                    Err(e) => log::warn!("Error updating RuleStore from {}: {e}", p.display()),
                 }
             };
-            FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))?
+            FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))
+                .map_err(|e| anyhow!("Spawning RuleStore monitor: {e}"))?
         };
 
         let keystore_monitor = {
@@ -227,7 +228,8 @@ impl RulesManager {
                 }
                 Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
             };
-            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?
+            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))
+                .map_err(|e| anyhow!("Spawning Keystore monitor: {e}"))?
         };
 
         let whitelist_monitor = {
@@ -249,7 +251,8 @@ impl RulesManager {
             FileMonitor::spawn(
                 self.whitelist_file.clone(),
                 FileMonitor::on_modified(handler),
-            )?
+            )
+            .map_err(|e| anyhow!("Spawning Whitelist monitor: {e}"))?
         };
 
         Ok((rulestore_monitor, keystore_monitor, whitelist_monitor))

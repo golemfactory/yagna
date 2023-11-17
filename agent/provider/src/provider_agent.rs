@@ -1,8 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
-use ya_client::net::NetApi;
-
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -10,8 +8,9 @@ use std::time::{Duration, SystemTime};
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
-use ya_agreement_utils::*;
+use ya_agreement_utils::{constraints, ConstraintKey, Constraints, OfferTemplate};
 use ya_client::cli::ProviderApi;
+use ya_client::net::NetApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
 use ya_manifest_utils::{manifest, Feature};
@@ -24,12 +23,13 @@ use crate::execution::{
     UpdateActivity,
 };
 use crate::hardware;
+use crate::market::negotiator::AgentNegotiatorsConfig;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::rules::RulesManager;
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
+use crate::typed_props::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -65,11 +65,6 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone)]
-pub struct AgentNegotiatorsConfig {
-    pub rules_manager: RulesManager,
-}
-
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -80,9 +75,6 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
-    rulestore_monitor: FileMonitor,
-    keystore_monitor: FileMonitor,
-    whitelist_monitor: FileMonitor,
     net_api: NetApi,
 }
 
@@ -135,14 +127,6 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let cert_dir = config.cert_dir_path()?;
-
-        let rules_manager = RulesManager::load_or_create(
-            &config.rules_file,
-            &config.domain_whitelist_file,
-            &cert_dir,
-        )?;
-
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
@@ -166,14 +150,16 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
-            rules_manager.spawn_file_monitors()?;
 
-        let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
+        let agent_negotiators_env = AgentNegotiatorsConfig::try_from(config.clone())
+            .map_err(|e| anyhow!("Failed to convert config to negotiators env: {e}"))?;
 
-        let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
+        let market = ProviderMarket::new(api.market, &data_dir, args.market, agent_negotiators_env)
+            .await?
+            .start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
+        let runner =
+            TaskRunner::new(api.activity, args.runner, registry, data_dir.clone())?.start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
         let net_api = api.net;
@@ -188,9 +174,6 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
-            rulestore_monitor,
-            keystore_monitor,
-            whitelist_monitor,
             net_api,
         })
     }
@@ -514,9 +497,6 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
-        self.keystore_monitor.stop();
-        self.rulestore_monitor.stop();
-        self.whitelist_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -577,9 +557,10 @@ struct CreateOffers(pub OfferKind);
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate};
+    use ya_agreement_utils::OfferTemplate;
     use ya_manifest_utils::manifest;
 
+    use crate::typed_props::{InfNodeInfo, NodeInfo};
     use crate::{
         execution::ExeUnitDesc, market::Preset, payments::AccountView,
         provider_agent::ProviderAgent,

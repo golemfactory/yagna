@@ -1,8 +1,10 @@
-use ya_agreement_utils::OfferDefinition;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use structopt::StructOpt;
 
-use crate::market::negotiator::factory::DemandValidationNegotiatorConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
+use ya_negotiators::component::{
+    NegotiationResult, NegotiatorComponentMut, NegotiatorFactory, NegotiatorMut, ProposalView,
+    RejectReason, Score,
 };
 
 /// Negotiator that verifies that all required fields are present in proposal.
@@ -10,57 +12,65 @@ pub struct DemandValidation {
     required_fields: Vec<String>,
 }
 
+/// Configuration for Demand Validation Negotiator.
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
+pub struct Config {
+    #[structopt(long, default_value = "/golem/com/payment/chosen-platform")]
+    pub required_fields: Vec<String>,
+}
+
 impl DemandValidation {
-    pub fn new(config: &DemandValidationNegotiatorConfig) -> DemandValidation {
+    pub fn new(config: &Config) -> DemandValidation {
         let required_fields = config.required_fields.clone();
         Self { required_fields }
     }
 }
 
-impl NegotiatorComponent for DemandValidation {
+impl NegotiatorFactory<DemandValidation> for DemandValidation {
+    type Type = NegotiatorMut;
+
+    fn new(
+        _name: &str,
+        config: serde_yaml::Value,
+        _agent_env: serde_yaml::Value,
+        _workdir: PathBuf,
+    ) -> anyhow::Result<DemandValidation> {
+        let config: Config = serde_yaml::from_value(config)?;
+        Ok(Self {
+            required_fields: config.required_fields.clone(),
+        })
+    }
+}
+
+impl NegotiatorComponentMut for DemandValidation {
     fn negotiate_step(
         &mut self,
-        demand: &ProposalView,
-        offer: ProposalView,
+        their: &ProposalView,
+        ours: ProposalView,
+        score: Score,
     ) -> anyhow::Result<NegotiationResult> {
         let missing_fields = self
             .required_fields
             .iter()
-            .filter(|x| demand.pointer(x).is_none())
+            .filter(|x| their.pointer(x).is_none())
             .cloned()
             .collect::<Vec<String>>();
         if missing_fields.is_empty() {
-            Ok(NegotiationResult::Ready { offer })
+            Ok(NegotiationResult::Ready {
+                proposal: ours,
+                score,
+            })
         } else {
             log::info!(
                 "'DemandValidation' negotiator: Reject proposal [{}] due to missing fields: {}",
-                demand.id,
+                their.id,
                 missing_fields.join(",")
             );
             Ok(NegotiationResult::Reject {
-                message: format!("Missing fields: {}", missing_fields.join(",")),
+                reason: RejectReason::new(format!("Missing fields: {}", missing_fields.join(","))),
                 is_final: false,
             })
         }
-    }
-
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
 
@@ -73,8 +83,8 @@ mod tests {
     use ya_agreement_utils::OfferTemplate;
     use ya_client_model::market::proposal::State;
 
-    fn config() -> DemandValidationNegotiatorConfig {
-        DemandValidationNegotiatorConfig {
+    fn config() -> Config {
+        Config {
             required_fields: vec![
                 "/golem/com/freebies".to_string(),
                 "/golem/com/payment/address".to_string(),
@@ -106,12 +116,14 @@ mod tests {
             "golem.com.freebies": "mug",
             "golem.com.payment.address": "0x123",
         }));
+        let score = Score::default();
 
         let expected_result = NegotiationResult::Ready {
-            offer: offer.clone(),
+            proposal: offer.clone(),
+            score: score.clone(),
         };
         assert_eq!(
-            negotiator.negotiate_step(&demand, offer).unwrap(),
+            negotiator.negotiate_step(&demand, offer, score).unwrap(),
             expected_result
         );
     }
@@ -126,13 +138,14 @@ mod tests {
         let demand = properties_to_proposal(json!({
             "golem.com.freebies": "mug",
         }));
+        let score = Score::default();
 
         let expected_result = NegotiationResult::Reject {
-            message: "Missing fields: /golem/com/payment/address".to_string(),
+            reason: RejectReason::new("Missing fields: /golem/com/payment/address"),
             is_final: false,
         };
         assert_eq!(
-            negotiator.negotiate_step(&demand, offer).unwrap(),
+            negotiator.negotiate_step(&demand, offer, score).unwrap(),
             expected_result
         );
     }

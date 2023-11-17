@@ -1,15 +1,15 @@
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Not;
-
 use std::str::FromStr;
 
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
 /// Policy configuration
-#[derive(StructOpt, Clone, Debug, Default)]
+#[derive(StructOpt, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PolicyConfig {
     /// Disable policy components
     #[structopt(
@@ -51,7 +51,18 @@ impl PolicyConfig {
 
 #[non_exhaustive]
 #[derive(
-    Clone, Copy, Debug, Hash, Eq, PartialEq, EnumIter, EnumVariantNames, EnumString, Display,
+    Clone,
+    Copy,
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    EnumIter,
+    EnumVariantNames,
+    EnumString,
+    Display,
+    Serialize,
+    Deserialize,
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum Policy {
@@ -63,7 +74,7 @@ pub enum Policy {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Debug, Eq, PartialEq, Display)]
+#[derive(Clone, Debug, Eq, PartialEq, Display, Serialize, Deserialize)]
 pub enum Match {
     All,
     Values(Vec<String>),
