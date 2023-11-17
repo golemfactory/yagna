@@ -251,7 +251,7 @@ impl MarketService {
             .map_err(|e| AgreementError::Internal(e.to_string()))?;
 
         let mut result = Vec::new();
-        let naive_to_utc = |ts| DateTime::<Utc>::from_utc(ts, Utc);
+        let naive_to_utc = |ts| DateTime::<Utc>::from_naive_utc_and_offset(ts, Utc);
 
         for agreement in agreements {
             let role = match agreement.id.owner() {

@@ -2,10 +2,14 @@
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use std::str::FromStr;
+use ya_service_bus::typed::service;
 
 // Workspace uses
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{DriverName, NetworkName};
+use ya_core_model::payment::local::{
+    DriverName, NetworkName, PaymentDriverStatus, PaymentDriverStatusError,
+    BUS_ID as PAYMENT_BUS_ID,
+};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -16,6 +20,7 @@ use crate::utils::*;
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/payments", get().to(get_payments))
+        .route("/payments/status", get().to(payment_status))
         .route("/payments/{payment_id}", get().to(get_payment))
 }
 
@@ -83,4 +88,32 @@ async fn get_payment(
         Ok(None) => response::not_found(),
         Err(e) => response::server_error(&e),
     }
+}
+
+async fn payment_status(
+    db: Data<DbExecutor>,
+    query: Query<params::DriverStatusParams>,
+    id: Identity,
+) -> HttpResponse {
+    let result = service(PAYMENT_BUS_ID)
+        .call(PaymentDriverStatus {
+            driver: query.driver.clone(),
+            network: query.network.clone(),
+        })
+        .await;
+
+    let response = match result {
+        Ok(resp) => resp,
+        Err(e) => return response::server_error(&e),
+    };
+
+    let status_props = match response {
+        Ok(props) => props,
+        Err(
+            e @ (PaymentDriverStatusError::NoDriver(_) | PaymentDriverStatusError::NoNetwork(_)),
+        ) => return response::not_found_with_messsage(&e),
+        Err(PaymentDriverStatusError::Internal(e)) => return response::server_error(&e),
+    };
+
+    response::ok(status_props)
 }

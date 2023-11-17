@@ -5,8 +5,6 @@ use ya_client_model::payment::NewAllocation;
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
 
-use std::str::FromStr;
-
 async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, String)> {
     let account_list = bus::service(pay::BUS_ID)
         .call(pay::GetAccounts {})
@@ -71,11 +69,10 @@ async fn main() -> anyhow::Result<()> {
     assert!(result.is_err());
     log::info!("Failed to create allocation (as expected).");
 
-    // We need to take ZkSync's transaction fees into account (allowing 45% of funds per allocation)
     let new_allocation = NewAllocation {
         address: None, // Use default address (i.e. identity)
         payment_platform,
-        total_amount: requestor_balance * BigDecimal::from_str("0.45").unwrap(),
+        total_amount: requestor_balance,
         timeout: None,
         make_deposit: false,
     };

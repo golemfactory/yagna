@@ -17,6 +17,7 @@ mod cli;
 pub mod dao;
 pub mod error;
 pub mod models;
+pub mod payment_sync;
 pub mod processor;
 pub mod schema;
 pub mod service;

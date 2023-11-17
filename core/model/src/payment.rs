@@ -18,7 +18,7 @@ pub enum RpcMessageError {
 }
 
 pub mod local {
-    use super::*;
+    use super::{public::Ack, *};
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
@@ -144,7 +144,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("")]
-    pub struct NoError {} // This is needed because () doesn't implement Display
+    pub enum NoError {} // This is needed because () doesn't implement Display
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterDriver {
@@ -413,6 +413,40 @@ pub mod local {
         type Error = NoError;
     }
 
+    // ********************* STATUS ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum PaymentDriverStatusError {
+        #[error("Requested driver not registered {0}")]
+        NoDriver(String),
+        #[error("Requested network not supported {0}")]
+        NoNetwork(String),
+        #[error("Internal error: {0}")]
+        Internal(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PaymentDriverStatusChange {
+        pub properties: Vec<DriverStatusProperty>,
+    }
+
+    impl RpcMessage for PaymentDriverStatusChange {
+        const ID: &'static str = "PaymentDriverStatusChange";
+        type Item = Ack;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PaymentDriverStatus {
+        pub driver: Option<String>,
+        pub network: Option<String>,
+    }
+
+    impl RpcMessage for PaymentDriverStatus {
+        const ID: &'static str = "PaymentDriverStatus";
+        type Item = Vec<DriverStatusProperty>;
+        type Error = PaymentDriverStatusError;
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ShutDown {
         pub timeout: Duration,
@@ -477,7 +511,7 @@ pub mod local {
     #[serde(rename_all = "lowercase")]
     #[non_exhaustive]
     pub enum DriverName {
-        ZkSync,
+        Erc20Next,
         Erc20,
     }
 
@@ -703,6 +737,62 @@ pub mod public {
 
     impl RpcMessage for SendPayment {
         const ID: &'static str = "SendPayment";
+        type Item = Ack;
+        type Error = SendError;
+    }
+
+    // **************************** SYNC *****************************
+
+    /// Push unsynchronized state
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSync {
+        /// Payment confirmations.
+        pub payments: Vec<SendPayment>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
+    /// Sync error
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct PaymentSyncError {
+        pub payment_send_errors: Vec<SendError>,
+        pub accept_errors: Vec<AcceptRejectError>,
+    }
+
+    impl std::fmt::Display for PaymentSyncError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("PaymentSend errors: ")?;
+            for send_e in &self.payment_send_errors {
+                write!(f, "{}, ", send_e)?;
+            }
+
+            f.write_str("Acceptance errors: ")?;
+            for accept_e in &self.accept_errors {
+                write!(f, "{}, ", accept_e)?;
+            }
+
+            Ok(())
+        }
+    }
+
+    impl std::error::Error for PaymentSyncError {}
+
+    impl RpcMessage for PaymentSync {
+        const ID: &'static str = "PaymentSync";
+        type Item = Ack;
+        type Error = PaymentSyncError;
+    }
+
+    /// Informs the other side that it should request [`PaymentSync`]
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncRequest;
+
+    impl RpcMessage for PaymentSyncRequest {
+        const ID: &'static str = "PaymentSyncNeeded";
         type Item = Ack;
         type Error = SendError;
     }

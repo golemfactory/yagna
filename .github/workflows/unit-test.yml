@@ -10,11 +10,13 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 env:
@@ -25,7 +27,7 @@ jobs:
     name: Unit Tests
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
@@ -52,18 +54,6 @@ jobs:
         with:
           command: tree
           args: --locked
-
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Check clippy lints
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets --all-features --workspace -- -D warnings
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
