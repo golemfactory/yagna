@@ -29,7 +29,7 @@ impl GenericError {
 // ************************** ACK **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Ack {}
+pub struct Ack;
 
 // ************************** ACCOUNT **************************
 

@@ -48,7 +48,7 @@ impl CryptoProvider for IdentityCryptoProvider {
         let aliases_rfc = self.aliases.clone();
         async move {
             let identities = ya_service_bus::typed::service(identity::BUS_ID)
-                .send(identity::List {})
+                .send(identity::List)
                 .await
                 .map_err(anyhow::Error::msg)??;
 

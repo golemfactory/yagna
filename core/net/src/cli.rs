@@ -20,9 +20,9 @@ pub enum NetCommand {
     /// Show network status
     Status {},
     /// List network sessions
-    Sessions {},
+    Sessions,
     /// List virtual sockets
-    Sockets {},
+    Sockets,
     /// Find node
     Find {
         /// Node information to query for
@@ -67,9 +67,9 @@ impl NetCommand {
                     }
                 }))
             }
-            NetCommand::Sessions {} => {
+            NetCommand::Sessions => {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
-                    .send(model::Sessions {})
+                    .send(model::Sessions)
                     .await
                     .map_err(anyhow::Error::msg)??;
 
@@ -108,9 +108,9 @@ impl NetCommand {
                 }
                 .into())
             }
-            NetCommand::Sockets {} => {
+            NetCommand::Sockets => {
                 let mut sockets: Vec<model::SocketResponse> = bus::service(model::BUS_ID)
-                    .send(model::Sockets {})
+                    .send(model::Sockets)
                     .await
                     .map_err(anyhow::Error::msg)??;
 

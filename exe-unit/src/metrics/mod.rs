@@ -26,7 +26,7 @@ pub trait Metric {
 }
 
 #[derive(Default)]
-pub struct CpuMetric {}
+pub struct CpuMetric;
 
 impl CpuMetric {
     pub const ID: &'static str = "golem.usage.cpu_sec";

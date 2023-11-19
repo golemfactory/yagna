@@ -159,7 +159,7 @@ impl PaymentDriver for Erc20Driver {
 
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         cli::init(self, msg).await?;
-        Ok(Ack {})
+        Ok(Ack)
     }
 
     async fn fund(

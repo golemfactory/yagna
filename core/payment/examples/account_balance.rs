@@ -7,9 +7,7 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let account_list = bus::service(pay::BUS_ID)
-        .call(pay::GetAccounts {})
-        .await??;
+    let account_list = bus::service(pay::BUS_ID).call(pay::GetAccounts).await??;
     log::debug!("account_list: {:?}", account_list);
 
     for account in account_list.into_iter() {

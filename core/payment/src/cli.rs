@@ -348,9 +348,7 @@ impl PaymentCli {
                 .with_header(header))
             }
             PaymentCli::Accounts => {
-                let accounts = bus::service(pay::BUS_ID)
-                    .call(pay::GetAccounts {})
-                    .await??;
+                let accounts = bus::service(pay::BUS_ID).call(pay::GetAccounts).await??;
                 if ctx.json_output {
                     return CommandOutput::object(accounts);
                 }
@@ -472,7 +470,7 @@ impl PaymentCli {
                 )
             }
             PaymentCli::Drivers => {
-                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers).await??;
                 if ctx.json_output {
                     return CommandOutput::object(drivers);
                 }
@@ -512,7 +510,7 @@ impl PaymentCli {
             }
             PaymentCli::ReleaseAllocations => {
                 let _ = bus::service(pay::BUS_ID)
-                    .call(pay::ReleaseAllocations {})
+                    .call(pay::ReleaseAllocations)
                     .await;
                 Ok(CommandOutput::NoOutput)
             }

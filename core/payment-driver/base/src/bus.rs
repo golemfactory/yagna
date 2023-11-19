@@ -110,7 +110,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
 
 pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
     log::debug!("list_unlocked_identities");
-    let message = identity::List {};
+    let message = identity::List;
     let result = service(identity::BUS_ID)
         .send(message)
         .await

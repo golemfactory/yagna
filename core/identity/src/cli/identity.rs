@@ -88,7 +88,7 @@ impl From<NodeOrAlias> for identity::Get {
 /// Identity management
 pub enum IdentityCommand {
     /// Show list of all identities
-    List {},
+    List,
 
     /// Display identity
     Show {

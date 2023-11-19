@@ -347,7 +347,7 @@ mod local {
             None => {
                 #[allow(clippy::iter_kv_map)]
                 // Unwrap is provably safe because NoError can't be instanciated
-                match service(PAYMENT_BUS_ID).call(GetDrivers {}).await {
+                match service(PAYMENT_BUS_ID).call(GetDrivers).await {
                     Ok(drivers) => drivers,
                     Err(e) => return Err(PaymentDriverStatusError::Internal(e.to_string())),
                 }
@@ -498,7 +498,7 @@ mod public {
         }
         .await
         {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => Ok(Ack),
             Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
             Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
@@ -540,8 +540,8 @@ mod public {
         }
 
         match debit_note.status {
-            DocumentStatus::Accepted => return Ok(Ack {}),
-            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Accepted => return Ok(Ack),
+            DocumentStatus::Settled => return Ok(Ack),
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
@@ -554,7 +554,7 @@ mod public {
             Ok(_) => {
                 log::info!("Node [{node_id}] accepted DebitNote [{debit_note_id}].");
                 counter!("payment.debit_notes.provider.accepted", 1);
-                Ok(Ack {})
+                Ok(Ack)
             }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -672,7 +672,7 @@ mod public {
         }
         .await
         {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => Ok(Ack),
             Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
             Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
@@ -714,8 +714,8 @@ mod public {
         }
 
         match invoice.status {
-            DocumentStatus::Accepted => return Ok(Ack {}),
-            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Accepted => return Ok(Ack),
+            DocumentStatus::Settled => return Ok(Ack),
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
@@ -733,7 +733,7 @@ mod public {
                     invoice.agreement_id
                 );
                 counter!("payment.invoices.provider.accepted", 1);
-                Ok(Ack {})
+                Ok(Ack)
             }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -777,7 +777,7 @@ mod public {
             DocumentStatus::Issued => (),
             DocumentStatus::Received => (),
             DocumentStatus::Rejected => (),
-            DocumentStatus::Cancelled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => return Ok(Ack),
             DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
                 return Err(CancelError::Conflict);
             }
@@ -792,7 +792,7 @@ mod public {
                     invoice.agreement_id
                 );
                 counter!("payment.invoices.requestor.cancelled", 1);
-                Ok(Ack {})
+                Ok(Ack)
             }
             Err(e) => Err(CancelError::ServiceError(e.to_string())),
         }
@@ -1019,7 +1019,7 @@ mod public {
             }
         }
 
-        Ok(Ack {})
+        Ok(Ack)
     }
 
     async fn send_payment(
@@ -1046,7 +1046,7 @@ mod public {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
-                Ok(Ack {})
+                Ok(Ack)
             }
             Err(e) => match e {
                 VerifyPaymentError::ConfirmationEncoding => {
@@ -1073,7 +1073,7 @@ mod public {
             .map_err(|e| SendError::BadRequest(e.to_string()))?;
         SYNC_NOTIFS_NOTIFY.notify_one();
 
-        Ok(Ack {})
+        Ok(Ack)
     }
 
     async fn sync_payment(
@@ -1113,7 +1113,7 @@ mod public {
         }
 
         if errors.accept_errors.is_empty() && errors.payment_send_errors.is_empty() {
-            Ok(Ack {})
+            Ok(Ack)
         } else {
             Err(errors)
         }

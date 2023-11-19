@@ -41,7 +41,7 @@ impl IdentityApi for IdentityGSB {
 
     async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
         Ok(bus::service(identity::BUS_ID)
-            .send(identity::List {})
+            .send(identity::List)
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
             .map_err(|e| IdentityError::ListError(e.to_string()))?

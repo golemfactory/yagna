@@ -144,7 +144,7 @@ fn fake_list_identities(identities: Vec<NodeId>) {
 fn fake_subscribe_to_events() {
     bus::bind(
         identity::BUS_ID,
-        move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
+        move |_msg: identity::Subscribe| async move { Ok(identity::Ack) },
     );
 }
 

@@ -337,7 +337,7 @@ impl CliCommand {
 #[derive(StructOpt, Debug)]
 enum ExtensionCommand {
     /// List available extensions
-    List {},
+    List,
     /// Autostart extension
     Register { args: Vec<String> },
     /// Remove extension from autostart
@@ -347,7 +347,7 @@ enum ExtensionCommand {
 impl ExtensionCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            ExtensionCommand::List {} => {
+            ExtensionCommand::List => {
                 let extensions = Extension::list();
 
                 if ctx.json_output {

@@ -134,7 +134,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
     #[serde(rename_all = "camelCase")]
-    pub struct Status {}
+    pub struct Status;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -165,7 +165,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
     #[serde(rename_all = "camelCase")]
-    pub struct Sessions {}
+    pub struct Sessions;
 
     impl RpcMessage for Sessions {
         const ID: &'static str = "Sessions";
@@ -188,7 +188,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
     #[serde(rename_all = "camelCase")]
-    pub struct Sockets {}
+    pub struct Sockets;
 
     impl RpcMessage for Sockets {
         const ID: &'static str = "Sockets";
@@ -300,7 +300,7 @@ pub mod local {
 /// For documentation check local::GsbPing
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub struct GsbRemotePing {}
+pub struct GsbRemotePing;
 
 impl RpcMessage for GsbRemotePing {
     const ID: &'static str = "GsbRemotePing";

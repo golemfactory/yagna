@@ -69,7 +69,7 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
         .await
         .map_err(GenericError::new)?
         .map_err(GenericError::new)?;
-    Ok(Ack {})
+    Ok(Ack)
 }
 
 async fn get_account_balance(

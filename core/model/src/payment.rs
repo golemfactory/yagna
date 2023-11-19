@@ -322,7 +322,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct GetAccounts {}
+    pub struct GetAccounts;
 
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
@@ -396,7 +396,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct ReleaseAllocations {}
+    pub struct ReleaseAllocations;
 
     impl RpcMessage for ReleaseAllocations {
         const ID: &'static str = "ReleaseAllocations";
@@ -405,7 +405,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct GetDrivers {}
+    pub struct GetDrivers;
 
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
@@ -568,7 +568,7 @@ pub mod public {
     pub const BUS_ID: &str = "/public/payment";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct Ack {}
+    pub struct Ack;
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     pub enum SendError {

@@ -479,11 +479,11 @@ mod tracker {
 mod tracker {
     use tokio::process::Command;
 
-    pub struct Tracker {}
+    pub struct Tracker;
 
     impl Tracker {
         pub fn new(_command: &mut Command) -> anyhow::Result<Self> {
-            Ok(Tracker {})
+            Ok(Tracker)
         }
 
         pub async fn wait_for_start(&mut self) -> anyhow::Result<()> {

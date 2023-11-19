@@ -6,9 +6,7 @@ use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
 
 async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, String)> {
-    let account_list = bus::service(pay::BUS_ID)
-        .call(pay::GetAccounts {})
-        .await??;
+    let account_list = bus::service(pay::BUS_ID).call(pay::GetAccounts).await??;
 
     for account in account_list.into_iter() {
         if account.send {

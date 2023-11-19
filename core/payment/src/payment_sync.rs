@@ -186,7 +186,7 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
     let debit_note_dao: DebitNoteDao = db.as_dao();
 
     let identities = typed::service(identity::BUS_ID)
-        .call(ya_core_model::identity::List {})
+        .call(ya_core_model::identity::List)
         .await??;
 
     for IdentityInfo { node_id, .. } in identities {

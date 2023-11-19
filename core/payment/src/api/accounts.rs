@@ -22,7 +22,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 #[actix_web::get("/providerAccounts")]
 async fn get_provider_accounts(id: Identity) -> HttpResponse {
     let node_id = id.identity.to_string();
-    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts {}).await {
+    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts).await {
         Ok(Ok(accounts)) => accounts,
         Ok(Err(e)) => return response::server_error(&e),
         Err(e) => return response::server_error(&e),
@@ -38,7 +38,7 @@ async fn get_provider_accounts(id: Identity) -> HttpResponse {
 #[actix_web::get("/requestorAccounts")]
 async fn get_requestor_accounts(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let node_id = id.identity.to_string();
-    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts {}).await {
+    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts).await {
         Ok(Ok(accounts)) => accounts,
         Ok(Err(e)) => return response::server_error(&e),
         Err(e) => return response::server_error(&e),

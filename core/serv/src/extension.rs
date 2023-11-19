@@ -84,7 +84,7 @@ pub async fn autostart(
 
 async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> {
     let identities = bus::service(model::identity::BUS_ID)
-        .call(model::identity::List {})
+        .call(model::identity::List)
         .await?
         .context("Failed to call the identity service")?;
 

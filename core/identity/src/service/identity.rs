@@ -371,7 +371,7 @@ impl IdentityService {
         subscribe: model::Subscribe,
     ) -> Result<model::Ack, model::Error> {
         self.subscription.borrow_mut().subscribe(subscribe.endpoint);
-        Ok(model::Ack {})
+        Ok(model::Ack)
     }
 
     pub async fn unsubscribe(
@@ -381,7 +381,7 @@ impl IdentityService {
         self.subscription
             .borrow_mut()
             .unsubscribe(unsubscribe.endpoint);
-        Ok(model::Ack {})
+        Ok(model::Ack)
     }
 
     pub async fn get_pub_key(

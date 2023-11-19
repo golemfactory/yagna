@@ -6,7 +6,7 @@ use ya_service_bus::RpcMessage;
 pub const BUS_ID: &str = "/local/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Ack {}
+pub struct Ack;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
@@ -40,7 +40,7 @@ impl Error {
 
 /// Lists identities.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct List {}
+pub struct List;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
