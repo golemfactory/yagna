@@ -62,7 +62,7 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
     let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
         + Duration::days(time_diff.days as i64)
         + Duration::seconds(time_diff.secs as i64);
-    Ok(DateTime::<Utc>::from_utc(not_after, Utc))
+    Ok(DateTime::<Utc>::from_naive_utc_and_offset(not_after, Utc))
 }
 
 pub(super) struct AddX509Response {

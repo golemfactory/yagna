@@ -181,7 +181,7 @@ impl<'a> PropertyValue<'a> {
     fn parse_date_from_rfc3339(dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
         match DateTime::parse_from_rfc3339(dt_str) {
             Ok(parsed_value) => {
-                let dt = DateTime::<Utc>::from_utc(parsed_value.naive_utc(), Utc);
+                let dt = DateTime::<Utc>::from_naive_utc_and_offset(parsed_value.naive_utc(), Utc);
                 Ok(dt)
             }
             Err(err) => Err(err),

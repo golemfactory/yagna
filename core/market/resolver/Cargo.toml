@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 ya-agreement-utils = "0.5.0"
 
-asnom = { git = "https://github.com/dequbed/asnom.git" }
+asnom = { git = "https://github.com/golemfactory/asnom.git" }
 bigdecimal = "0.2"
 chrono = "0.4"
 log = "0.4"

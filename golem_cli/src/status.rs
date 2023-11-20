@@ -7,16 +7,24 @@ use futures::prelude::*;
 use prettytable::{format, row, Table};
 use strum::VariantNames;
 
+use ya_client::model::payment::DriverStatusProperty;
 use ya_core_model::payment::local::{NetworkName, StatusResult};
 use ya_core_model::NodeId;
 
 use crate::appkey;
 use crate::command::{
-    NetworkGroup, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER, NETWORK_GROUP_MAP,
-    ZKSYNC_DRIVER,
+    NetworkGroup, PaymentDriver, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER,
+    NETWORK_GROUP_MAP,
 };
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
+
+fn get_driver_for_network(network: &NetworkName) -> Option<&PaymentDriver> {
+    DRIVERS
+        .iter()
+        .find(|drv| drv.platform(network).is_ok())
+        .copied()
+}
 
 async fn payment_status(
     cmd: &YaCommand,
@@ -32,11 +40,9 @@ async fn payment_status(
         let mut f = vec![];
         let mut l = vec![];
         for nn in NETWORK_GROUP_MAP[&network_group].iter() {
-            for driver in DRIVERS.iter() {
-                if driver.platform(nn).is_ok() {
-                    l.push(driver.status_label(nn));
-                    f.push(cmd.yagna()?.payment_status(&address, nn, driver));
-                }
+            if let Some(driver) = get_driver_for_network(nn) {
+                l.push(driver.status_label(nn));
+                f.push(cmd.yagna()?.payment_status(&address, nn, driver));
             }
         }
         (f, l)
@@ -69,6 +75,8 @@ pub async fn run() -> Result</*exit code*/ i32> {
 
     let (config, is_running) =
         future::try_join(cmd.ya_provider()?.get_config(), is_yagna_running()).await?;
+
+    let mut driver_ok = true;
 
     let status = {
         let mut table = Table::new();
@@ -119,6 +127,51 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 }
             };
             table.add_row(row!["VM", status]);
+        }
+
+        if is_running {
+            let status_properties = cmd.yagna()?.payment_driver_status(None, None, None).await?;
+
+            table.add_empty_row();
+
+            if status_properties.is_empty() {
+                table.add_row(row!["Driver", Style::new().fg(Colour::Green).paint("Ok")]);
+            } else {
+                driver_ok = false;
+                let msg = if status_properties.len() == 1 {
+                    "1 Issue".to_string()
+                } else {
+                    format!("{} Issues", status_properties.len())
+                };
+
+                table.add_row(row!["Driver", Style::new().fg(Colour::Red).paint(&msg)]);
+                for prop in status_properties {
+                    use DriverStatusProperty::*;
+                    table.add_row(row![
+                        match &prop {
+                            InsufficientGas { network, .. }
+                            | InsufficientToken { network, .. }
+                            | CantSign { network, .. }
+                            | TxStuck { network, .. }
+                            | RpcError { network, .. } => network.clone(),
+                            InvalidChainId { .. } => "N/A".to_string(),
+                        },
+                        match &prop {
+                            InsufficientGas { .. } => "Insufficent Gas".to_string(),
+                            InsufficientToken { .. } => "Insufficient Token".to_string(),
+                            InvalidChainId { chain_id, .. } =>
+                                format!("Invalid Chain-Id {chain_id}"),
+                            CantSign { address, .. } => format!(
+                                "Can't Sign {}..{}",
+                                &address[0..6],
+                                &address[address.len() - 4..]
+                            ),
+                            TxStuck { .. } => "Tx Stuck".to_string(),
+                            RpcError { .. } => "RPC Error".to_string(),
+                        }
+                    ]);
+                }
+            }
         }
 
         table
@@ -229,6 +282,9 @@ pub async fn run() -> Result</*exit code*/ i32> {
     if let Some(msg) = kvm_status.problem() {
         println!("\n VM problem: {}", msg);
     }
+    if !driver_ok {
+        println!("\n Payment Driver issues detected, run yagna payment status for details");
+    }
     Ok(0)
 }
 
@@ -248,7 +304,7 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         let net_to_check = net.parse()?;
         let platform = ERC20_DRIVER
             .platform(&net_to_check)
-            .or_else(|_e| ZKSYNC_DRIVER.platform(&net_to_check))?;
+            .or_else(|_e| ERC20_DRIVER.platform(&net_to_check))?;
         let platform_property =
             &format!("golem.com.payment.platform.{}.address", platform.platform,);
         if latest_offer.properties.get(platform_property).is_some() {
