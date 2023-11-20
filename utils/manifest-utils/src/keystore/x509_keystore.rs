@@ -3,7 +3,7 @@ use super::{
     RemoveResponse, SignatureVerifier,
 };
 use anyhow::bail;
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
 use golem_certificate::schemas::certificate::Fingerprint;
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
@@ -62,7 +62,7 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
     let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
         + Duration::days(time_diff.days as i64)
         + Duration::seconds(time_diff.secs as i64);
-    Ok(DateTime::<Utc>::from_naive_utc_and_offset(not_after, Utc))
+    Ok(Utc.from_utc_datetime(&not_after))
 }
 
 pub(super) struct AddX509Response {

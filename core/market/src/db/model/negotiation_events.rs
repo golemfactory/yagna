@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 use thiserror::Error;
 
@@ -115,7 +115,7 @@ impl MarketEvent {
         self,
         db: &DbMixedExecutor,
     ) -> Result<RequestorEvent, EventError> {
-        let event_date = DateTime::<Utc>::from_naive_utc_and_offset(self.timestamp, Utc);
+        let event_date = Utc.from_utc_datetime(&self.timestamp);
         match self.event_type {
             EventType::RequestorNewProposal => Ok(RequestorEvent::ProposalEvent {
                 event_date,
@@ -166,7 +166,7 @@ impl MarketEvent {
         self,
         db: &DbMixedExecutor,
     ) -> Result<ProviderEvent, EventError> {
-        let event_date = DateTime::<Utc>::from_naive_utc_and_offset(self.timestamp, Utc);
+        let event_date = Utc.from_utc_datetime(&self.timestamp);
         match self.event_type {
             EventType::ProviderNewProposal => Ok(ProviderEvent::ProposalEvent {
                 event_date,
