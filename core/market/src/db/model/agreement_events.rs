@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 use std::fmt;
 use std::fmt::Debug;
@@ -102,7 +102,7 @@ impl NewAgreementEvent {
 impl AgreementEvent {
     pub fn into_client(self) -> ClientEvent {
         let agreement_id = self.agreement_id.into_client();
-        let event_date = DateTime::<Utc>::from_naive_utc_and_offset(self.timestamp, Utc);
+        let event_date = Utc.from_utc_datetime(&self.timestamp);
         let reason = self.reason.map(|reason| reason.0);
 
         match self.event_type {
