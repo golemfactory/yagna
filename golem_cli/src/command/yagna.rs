@@ -127,10 +127,7 @@ lazy_static! {
 
     // Drivers are searched in order when more than one supports a given network,
     // so erc20next should be preferred over erc20.
-    //
-    // If ERC20NEXT_DRIVER isn't here, that's because we wish to use ERC20 on master only. This will
-    // be re-enabled shortly.
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
