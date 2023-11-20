@@ -63,6 +63,20 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
+    pub async fn replace(&self, allocation: Allocation, owner_id: NodeId) -> DbResult<bool> {
+        do_with_transaction(self.pool, move |conn| {
+            let count = diesel::update(dsl::pay_allocation)
+                .filter(dsl::id.eq(allocation.allocation_id.clone()))
+                .filter(dsl::owner_id.eq(&owner_id))
+                .filter(dsl::released.eq(false))
+                .set(WriteObj::from_allocation(allocation, owner_id))
+                .execute(conn)?;
+
+            Ok(count == 1)
+        })
+        .await
+    }
+
     pub async fn get(&self, allocation_id: String, owner_id: NodeId) -> DbResult<AllocationStatus> {
         readonly_transaction(self.pool, move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation

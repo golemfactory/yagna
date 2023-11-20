@@ -10,11 +10,13 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 env:
@@ -30,7 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup toolchain
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.rust_stable }}

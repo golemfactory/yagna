@@ -71,7 +71,9 @@ This path will depend either on the shell environment or the operating system on
 └── goth_20210420_093848+0000
     ├── runner.log                      # debug console logs from the entire test session
     ├── test_e2e_vm                     # directory with logs from a single test
-    │   ├── ethereum.log
+    │   ├── ethereum-mainnet.log
+    │   ├── ethereum-goerli.log
+    │   ├── ethereum-polygon.log
     │   ├── provider_1.log              # debug logs from a single yagna node
     │   ├── provider_1_ya-provider.log  # debug logs from an agent running in a yagna node
     │   ├── provider_2.log
@@ -81,7 +83,6 @@ This path will depend either on the shell environment or the operating system on
     │   ├── requestor.log
     │   ├── router.log
     │   ├── test.log                    # debug console logs from this test case only, duplicated in `runner.log`
-    │   └── zksync.log
     └── test_e2e_wasi
         └── ...
 ```
