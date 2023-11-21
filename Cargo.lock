@@ -6103,7 +6103,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -7455,7 +7455,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.3.2",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
