@@ -250,8 +250,14 @@ dependencies = [
  "rustls-webpki",
  "tokio 1.34.0",
  "tokio-openssl",
+<<<<<<< HEAD
  "tokio-util 0.7.10",
  "tracing",
+=======
+ "tokio-rustls 0.23.4",
+ "tokio-util 0.7.9",
+ "webpki-roots",
+>>>>>>> scx1332/faucet
 ]
 
 [[package]]
@@ -671,6 +677,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite 0.2.13",
  "rand 0.8.5",
+ "rustls 0.20.9",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -860,6 +867,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
+name = "bollard"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af254ed2da4936ef73309e9597180558821cb16ae9bba4cb24ce6b612d8d80ed"
+dependencies = [
+ "base64 0.21.3",
+ "bollard-stubs",
+ "bytes 1.4.0",
+ "futures-core",
+ "futures-util",
+ "hex",
+ "http",
+ "hyper 0.14.27",
+ "hyperlocal",
+ "log",
+ "pin-project-lite 0.2.12",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_repr",
+ "serde_urlencoded",
+ "thiserror",
+ "tokio 1.32.0",
+ "tokio-util 0.7.9",
+ "url",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "bollard-stubs"
+version = "1.42.0-rc.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "602bda35f33aeb571cef387dcd4042c643a8bf689d8aaac2cc47ea24cb7bc7e0"
+dependencies = [
+ "serde",
+ "serde_with",
+]
+
+[[package]]
 name = "borsh"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -911,7 +957,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "542f33a8835a0884b006a0c3df3dadd99c0c3f296ed26c2fdc8028e01ad6230c"
 dependencies = [
  "memchr",
- "regex-automata",
+ "regex-automata 0.3.6",
  "serde",
 ]
 
@@ -1867,16 +1913,107 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=f3559980c8998f2865e593be73766ad2abcc11ca#f3559980c8998f2865e593be73766ad2abcc11ca"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e1c1b1479d577360c58bd7f527fd3bd9ffb161b6d5b172765779b06bb783f37"
 dependencies = [
  "actix-files",
  "actix-web",
  "async-trait",
+ "awc",
+ "chrono",
+ "dotenv",
+ "erc20_payment_lib_common",
+ "erc20_rpc_pool",
+ "fastrand",
+ "futures 0.3.28",
+ "futures-util",
+ "hex",
+ "humantime 2.1.0",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "rustc-hex",
+ "secp256k1 0.27.0",
+ "serde",
+ "serde_json",
+ "sha3 0.10.8",
+ "sqlx",
+ "structopt",
+ "thunderdome",
+ "tokio 1.32.0",
+ "toml",
+ "trust-dns-resolver",
+ "url",
+ "uuid 1.4.1",
+ "web3",
+]
+
+[[package]]
+name = "erc20_payment_lib_common"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aed62e4ba687d4199f50796d1e252f733e9b1de6a4447a3fc1aa858ae04cc110"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "async-trait",
+ "awc",
  "chrono",
  "dotenv",
  "fastrand",
+<<<<<<< HEAD
  "futures 0.3.29",
+=======
+ "futures 0.3.28",
+ "futures-util",
+>>>>>>> scx1332/faucet
+ "hex",
+ "humantime 2.1.0",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "rustc-hex",
+ "secp256k1 0.27.0",
+ "serde",
+ "serde_json",
+ "sha3 0.10.8",
+ "sqlx",
+ "structopt",
+<<<<<<< HEAD
+ "tokio 1.34.0",
+=======
+ "thunderdome",
+ "tokio 1.32.0",
+ "toml",
+ "trust-dns-resolver",
+ "url",
+ "uuid 1.4.1",
+ "web3",
+]
+
+[[package]]
+name = "erc20_rpc_pool"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1e2317f94fa116aef2bf9e0d392d34e5ac04ac9a6236601a38c0638928a10bc"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "bollard",
+ "chrono",
+ "dotenv",
+ "env_logger 0.10.0",
+ "erc20_payment_lib_common",
+ "fastrand",
+ "futures 0.3.28",
+ "futures-util",
  "hex",
  "humantime 2.1.0",
  "lazy_static",
@@ -1890,7 +2027,9 @@ dependencies = [
  "sha3 0.10.8",
  "sqlx",
  "structopt",
- "tokio 1.34.0",
+ "thunderdome",
+ "tokio 1.32.0",
+>>>>>>> scx1332/faucet
  "toml",
  "uuid 1.6.1",
  "web3",
@@ -2958,9 +3097,15 @@ dependencies = [
  "futures-util",
  "http",
  "hyper 0.14.27",
+<<<<<<< HEAD
  "rustls",
  "tokio 1.34.0",
  "tokio-rustls",
+=======
+ "rustls 0.21.6",
+ "tokio 1.32.0",
+ "tokio-rustls 0.24.1",
+>>>>>>> scx1332/faucet
 ]
 
 [[package]]
@@ -2974,6 +3119,19 @@ dependencies = [
  "native-tls",
  "tokio 1.34.0",
  "tokio-native-tls",
+]
+
+[[package]]
+name = "hyperlocal"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fafdf7b2b2de7c9784f76e02c0935e65a8117ec3b768644379983ab333ac98c"
+dependencies = [
+ "futures-util",
+ "hex",
+ "hyper 0.14.27",
+ "pin-project 1.1.3",
+ "tokio 1.32.0",
 ]
 
 [[package]]
@@ -5035,7 +5193,7 @@ checksum = "380b951a9c5e80ddfd6136919eef32310721aa4aacd4889a8d39124b026ab343"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata",
+ "regex-automata 0.4.3",
  "regex-syntax",
 ]
 
@@ -5043,6 +5201,15 @@ dependencies = [
 name = "regex-automata"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
+=======
+checksum = "fed1ceff11a1dddaee50c9dc8e4938bd106e9d89ae372f192311e7da498e3b69"
+
+[[package]]
+name = "regex-automata"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+>>>>>>> scx1332/faucet
 checksum = "5f804c7828047e88b2d32e2d7fe5a105da8ee3264f01902f796c8e067dc2483f"
 dependencies = [
  "aho-corasick",
@@ -5098,8 +5265,13 @@ dependencies = [
  "native-tls",
  "once_cell",
  "percent-encoding",
+<<<<<<< HEAD
  "pin-project-lite 0.2.13",
  "rustls",
+=======
+ "pin-project-lite 0.2.12",
+ "rustls 0.21.6",
+>>>>>>> scx1332/faucet
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -5107,7 +5279,7 @@ dependencies = [
  "system-configuration",
  "tokio 1.34.0",
  "tokio-native-tls",
- "tokio-rustls",
+ "tokio-rustls 0.24.1",
  "tower-service",
  "trust-dns-resolver 0.23.2",
  "url",
@@ -5283,7 +5455,23 @@ dependencies = [
 
 [[package]]
 name = "rustls"
+<<<<<<< HEAD
 version = "0.21.9"
+=======
+version = "0.20.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b80e3dec595989ea8510028f30c408a4630db12c9cbb8de34203b89d6577e99"
+dependencies = [
+ "log",
+ "ring",
+ "sct",
+ "webpki",
+]
+
+[[package]]
+name = "rustls"
+version = "0.21.6"
+>>>>>>> scx1332/faucet
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "629648aced5775d558af50b2b4c7b02983a04b312126d45eeead26e7caa498b9"
 dependencies = [
@@ -5708,6 +5896,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_repr"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3081f5ffbb02284dda55132aa26daecedd7372a42417bbbab6f14ab7d6bb9145"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5717,6 +5916,21 @@ dependencies = [
  "itoa 1.0.9",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_with"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89df7a26519371a3cce44fbb914c2819c84d9b897890987fa3ab096491cc0ea8"
+dependencies = [
+ "base64 0.13.1",
+ "chrono",
+ "hex",
+ "indexmap 1.9.3",
+ "serde",
+ "serde_json",
+ "time 0.3.9",
 ]
 
 [[package]]
@@ -6684,6 +6898,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "thunderdome"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e170f93360bf9ae6fe3c31116bbf27adb1d054cedd6bc3d7857e34f2d98d0b"
+
+[[package]]
 name = "time"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6703,6 +6923,7 @@ dependencies = [
  "itoa 1.0.9",
  "libc",
  "num_threads",
+ "serde",
  "time-macros",
 ]
 
@@ -6826,12 +7047,28 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
+version = "0.23.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
+dependencies = [
+ "rustls 0.20.9",
+ "tokio 1.32.0",
+ "webpki",
+]
+
+[[package]]
+name = "tokio-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
+<<<<<<< HEAD
  "rustls",
  "tokio 1.34.0",
+=======
+ "rustls 0.21.6",
+ "tokio 1.32.0",
+>>>>>>> scx1332/faucet
 ]
 
 [[package]]
@@ -7955,6 +8192,7 @@ dependencies = [
  "num-bigint 0.3.3",
  "num-traits",
  "rlp",
+ "rust_decimal",
  "serde",
  "serde_json",
  "sha3 0.8.2",
