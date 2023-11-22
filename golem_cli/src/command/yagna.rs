@@ -55,6 +55,14 @@ lazy_static! {
             },
         );
         erc20.insert(
+            NetworkName::Holesky.into(),
+            PaymentPlatform {
+                platform: "erc20-holesky-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
                 platform: "erc20-mumbai-tglm",
@@ -98,6 +106,14 @@ lazy_static! {
             NetworkName::Goerli.into(),
             PaymentPlatform {
                 platform: "erc20next-goerli-tglm",
+                driver: "erc20next",
+                token: "tGLM",
+            },
+        );
+        erc20next.insert(
+            NetworkName::Holesky.into(),
+            PaymentPlatform {
+                platform: "erc20next-holesky-tglm",
                 driver: "erc20next",
                 token: "tGLM",
             },
