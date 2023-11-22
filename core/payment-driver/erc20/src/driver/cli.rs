@@ -88,7 +88,7 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .await
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
-        },
+        }
         Network::Mumbai => format!(
             r#"Your Mumbai Polygon address is {}.
 

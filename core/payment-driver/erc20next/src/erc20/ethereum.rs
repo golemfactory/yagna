@@ -537,10 +537,11 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         ),
         Network::Goerli => {
             collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.ankr.com/eth_goerli")
-        },
-        Network::Holesky => {
-            collect_rpc_addr_from("HOLESKY_GETH_ADDR", "https://ethereum-holesky.publicnode.com")
-        },
+        }
+        Network::Holesky => collect_rpc_addr_from(
+            "HOLESKY_GETH_ADDR",
+            "https://ethereum-holesky.publicnode.com",
+        ),
         Network::Polygon => collect_rpc_addr_from(
             "POLYGON_GETH_ADDR",
             "https://bor.golem.network,https://polygon-rpc.com",
