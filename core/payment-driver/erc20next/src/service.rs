@@ -5,9 +5,9 @@
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
-use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings};
+use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings, RpcSettings};
 use erc20_payment_lib::misc::load_private_keys;
-use erc20_payment_lib::runtime::PaymentRuntime;
+use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
 //use rust_decimal::Decimal;
 
@@ -102,7 +102,20 @@ impl Erc20NextService {
                 let confirmations_env = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
-                    chain.rpc_endpoints = addr.split(',').map(ToOwned::to_owned).collect();
+                    chain.rpc_endpoints = addr
+                        .split(',')
+                        .map(|s| RpcSettings {
+                            name: s.to_string(),
+                            endpoint: s.to_string(),
+                            skip_validation: None,
+                            backup_level: None,
+                            verify_interval_secs: None,
+                            min_interval_ms: None,
+                            max_timeout_ms: None,
+                            allowed_head_behind_secs: None,
+                            max_consecutive_errors: None,
+                        })
+                        .collect();
                     log::info!(
                         "{} rpc endpoints set to {:?}",
                         network,
@@ -183,17 +196,18 @@ impl Erc20NextService {
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
             let pr = PaymentRuntime::new(
-                &private_keys,
-                &path.join("erc20next.sqlite"),
-                config,
+                PaymentRuntimeArgs {
+                    secret_keys: private_keys,
+                    db_filename: path.join("erc20next.sqlite"),
+                    config,
+                    conn: None,
+                    options: Some(additional_options),
+                    event_sender: Some(sender),
+                    extra_testing: None,
+                },
                 signer,
-                None,
-                Some(additional_options),
-                Some(sender),
-                None,
             )
-            .await
-            .unwrap();
+            .await?;
 
             log::debug!("Bind erc20next driver");
             let driver = Erc20NextDriver::new(pr, recv);

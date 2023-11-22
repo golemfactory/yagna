@@ -5,12 +5,13 @@ use chrono::{DateTime, Duration, Utc};
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::db::model::{TokenTransferDao, TxDao};
 use erc20_payment_lib::faucet_client::faucet_donate;
+use erc20_payment_lib::model::{TokenTransferDao, TxDao};
 use erc20_payment_lib::runtime::{
-    DriverEvent, DriverEventContent, PaymentRuntime, TransferType, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
+use erc20_payment_lib::{DriverEvent, DriverEventContent};
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
@@ -106,15 +107,15 @@ impl Erc20NextDriver {
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
         self.payment_runtime
-            .transfer(
-                network,
-                sender,
+            .transfer(TransferArgs {
+                chain_name: network.to_string(),
+                from: sender,
                 receiver,
-                TransferType::Token,
+                tx_type: TransferType::Token,
                 amount,
-                &payment_id,
+                payment_id: payment_id.clone(),
                 deadline,
-            )
+            })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
@@ -166,7 +167,7 @@ impl Erc20NextDriver {
         &self,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
-        use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
+        use erc20_payment_lib::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
         let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
@@ -235,6 +236,13 @@ impl Erc20NextDriver {
                         address,
                         network,
                         needed_token_est: missing_token.to_string(),
+                    })
+                }
+                LibStatusProperty::Web3RpcError { chain_id, .. } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::RpcError {
+                        driver: DRIVER_NAME.into(),
+                        network,
                     })
                 }
             })
@@ -462,23 +470,29 @@ impl PaymentDriver for Erc20NextDriver {
                     "Missing chain config for network {}",
                     network
                 )))?;
-            let _mint_contract_address = chain_cfg.mint_glm_address.ok_or(GenericError::new(
-                format!("Missing mint contract address for network {}", network),
-            ))?;
+            let _mint_contract_address =
+                chain_cfg
+                    .faucet_setup
+                    .mint_glm_address
+                    .ok_or(GenericError::new(format!(
+                        "Missing mint contract address for network {}",
+                        network
+                    )))?;
             let mint_min_glm_allowed =
                 chain_cfg
+                    .faucet_setup
                     .mint_max_glm_allowed
                     .ok_or(GenericError::new(format!(
                         "Missing mint min glm allowed for network {}",
                         network
                     )))?;
-            let faucet_client_max_eth_allowed =
-                chain_cfg
-                    .faucet_client_max_eth_allowed
-                    .ok_or(GenericError::new(format!(
-                        "Missing faucet client max eth allowed for network {}",
-                        network
-                    )))?;
+            let faucet_client_max_eth_allowed = chain_cfg
+                .faucet_setup
+                .client_max_eth_allowed
+                .ok_or(GenericError::new(format!(
+                    "Missing faucet client max eth allowed for network {}",
+                    network
+                )))?;
 
             let starting_eth_balance = match self
                 .payment_runtime
@@ -517,7 +531,8 @@ impl PaymentDriver for Erc20NextDriver {
 
             let faucet_srv_prefix =
                 chain_cfg
-                    .faucet_client_srv
+                    .faucet_setup
+                    .client_srv
                     .clone()
                     .ok_or(GenericError::new(format!(
                         "Missing faucet_srv_port for network {}",
@@ -525,23 +540,30 @@ impl PaymentDriver for Erc20NextDriver {
                     )))?;
             let faucet_lookup_domain =
                 chain_cfg
-                    .faucet_lookup_domain
+                    .faucet_setup
+                    .lookup_domain
                     .clone()
                     .ok_or(GenericError::new(format!(
                         "Missing faucet_lookup_domain for network {}",
                         network
                     )))?;
-            let faucet_srv_port = chain_cfg.faucet_srv_port.ok_or(GenericError::new(format!(
-                "Missing faucet_srv_port for network {}",
-                network
-            )))?;
-            let faucet_host = chain_cfg
-                .faucet_client_host
-                .clone()
-                .ok_or(GenericError::new(format!(
-                    "Missing faucet_host for network {}",
-                    network
-                )))?;
+            let faucet_srv_port =
+                chain_cfg
+                    .faucet_setup
+                    .srv_port
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_srv_port for network {}",
+                        network
+                    )))?;
+            let faucet_host =
+                chain_cfg
+                    .faucet_setup
+                    .client_host
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_host for network {}",
+                        network
+                    )))?;
 
             let eth_received = if starting_eth_balance
                 < faucet_client_max_eth_allowed
@@ -623,7 +645,7 @@ impl PaymentDriver for Erc20NextDriver {
                 })? {
                 match self
                     .payment_runtime
-                    .mint_golem_token(&network.to_string(), address, None)
+                    .mint_golem_token(&network.to_string(), address)
                     .await
                 {
                     Ok(_) => {
@@ -856,7 +878,7 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
-        use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
+        use erc20_payment_lib::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
         let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
@@ -925,6 +947,13 @@ impl PaymentDriver for Erc20NextDriver {
                         network,
                         address: "".to_string(),
                         needed_token_est: missing_token.to_string(),
+                    })
+                }
+                LibStatusProperty::Web3RpcError { chain_id, .. } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::RpcError {
+                        driver: DRIVER_NAME.into(),
+                        network,
                     })
                 }
             })
