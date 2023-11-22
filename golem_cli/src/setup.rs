@@ -42,11 +42,15 @@ pub struct RunConfig {
         set = clap::ArgSettings::Global
     )]
     pub log_dir: Option<PathBuf>,
+    /// Don't prompt user for configuration, but use defaults instead.
+    #[structopt(long)]
+    pub no_interactive: bool,
 }
 
 pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
+    let interactive = !run_config.no_interactive;
     if force {
-        super::banner();
+        super::banner(interactive);
         eprintln!("Initial node setup");
         let _ = clear_stdin().await;
     }
@@ -71,13 +75,20 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
     }
 
     if config.node_name.is_none() || force {
-        let node_name = promptly::prompt_default(
-            "Node name ",
-            config
-                .node_name
-                .clone()
-                .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
-        )?;
+        let node_name = if interactive {
+            promptly::prompt_default(
+                "Node name ",
+                config
+                    .node_name
+                    .clone()
+                    .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
+            )?
+        } else {
+            let name = names::Generator::default().next().unwrap_or_default();
+            println!("Node name (default={name})");
+            name
+        };
+
         let account_msg = &config
             .account
             .map(|n| n.to_string())
@@ -87,14 +98,18 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
             run_config.account.network, account_msg
         );
 
-        while let Some(account) = promptly::prompt_opt::<String, _>(&message)? {
-            match account.parse::<NodeId>() {
-                Err(e) => eprintln!("Invalid ethereum address, is should be 20-byte hex (example 0xB1974E1F44EAD2d22bB995167A709b89Fc466B6c): {}", e),
-                Ok(account) => {
-                    config.account = Some(account);
-                    break;
+        if interactive {
+            while let Some(account) = promptly::prompt_opt::<String, _>(&message)? {
+                match account.parse::<NodeId>() {
+                    Err(e) => eprintln!("Invalid ethereum address, is should be 20-byte hex (example 0xB1974E1F44EAD2d22bB995167A709b89Fc466B6c): {}", e),
+                    Ok(account) => {
+                        config.account = Some(account);
+                        break;
+                    }
                 }
             }
+        } else {
+            println!("{message}");
         }
 
         config.node_name = Some(node_name);
@@ -132,7 +147,12 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
             .collect();
 
         let default_glm_per_h = 0.025;
-        let glm_per_h = promptly::prompt_default("Price GLM per hour", default_glm_per_h)?;
+        let glm_per_h = if interactive {
+            promptly::prompt_default("Price GLM per hour", default_glm_per_h)?
+        } else {
+            println!("Price GLM per hour (default={default_glm_per_h})");
+            default_glm_per_h
+        };
 
         let mut usage = UsageDef::new();
         usage.insert("CPU".into(), glm_per_h / 3600.0);
