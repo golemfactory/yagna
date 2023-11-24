@@ -9281,6 +9281,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "metrics 0.12.1",
+ "num_cpus",
  "openssl",
  "openssl-probe",
  "serde",
