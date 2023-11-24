@@ -254,7 +254,7 @@ impl Erc20NextDriver {
         token_transfer: &TokenTransferDao,
         tx: &TxDao,
     ) -> Result<(), GenericError> {
-        log::info!("Received event TransferFinished: {:#?}", token_transfer);
+        log::debug!("Received event TransferFinished: {:#?}", token_transfer);
 
         let chain_id = token_transfer.chain_id;
         let network_name = &self
@@ -843,7 +843,7 @@ impl PaymentDriver for Erc20NextDriver {
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        log::info!("Validate_allocation: {:?}", msg);
+        log::debug!("Validate_allocation: {:?}", msg);
         let account_balance = self
             .get_account_balance(
                 db,
