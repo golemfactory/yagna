@@ -195,6 +195,7 @@ lazy_static! {
             vec![
                 NetworkName::Rinkeby,
                 NetworkName::Mumbai,
+                NetworkName::Holesky,
                 NetworkName::Goerli,
             ],
         );
