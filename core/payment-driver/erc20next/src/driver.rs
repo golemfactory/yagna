@@ -309,7 +309,7 @@ impl Erc20NextDriver {
         log::info!("platform = {}", platform);
         log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
         log::info!("payment_details = {:#?}", payment_details);
-        log::info!("confirmation = {:x?}", transaction_hash);
+        log::info!("confirmation = 0x{}", hex::encode(&transaction_hash));
 
         let Some(payment_id) = &token_transfer.payment_id else {
             return Err(GenericError::new("token_transfer.payment_id is null"));
