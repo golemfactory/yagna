@@ -1909,9 +1909,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e1c1b1479d577360c58bd7f527fd3bd9ffb161b6d5b172765779b06bb783f37"
+checksum = "163899d51cc5e9616427669f468152b5629f077dea944d14f33efe1667b2bf2f"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -1949,9 +1949,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.3.10"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aed62e4ba687d4199f50796d1e252f733e9b1de6a4447a3fc1aa858ae04cc110"
+checksum = "121b6fbcce76eece0014ebce54521bba0cf3a4dec55cddf7a360d09928a078f9"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -1987,9 +1987,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.3.10"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1e2317f94fa116aef2bf9e0d392d34e5ac04ac9a6236601a38c0638928a10bc"
+checksum = "963524be3b74777415574549786d33865fb733fcc929299a696089da496838f6"
 dependencies = [
  "actix-files",
  "actix-web",
