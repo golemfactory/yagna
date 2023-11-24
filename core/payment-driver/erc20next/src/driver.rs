@@ -305,11 +305,11 @@ impl Erc20NextDriver {
             GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
         })?;
 
-        log::info!("name = {}", &self.get_name());
-        log::info!("platform = {}", platform);
-        log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
-        log::info!("payment_details = {:#?}", payment_details);
-        log::info!("confirmation = 0x{}", hex::encode(&transaction_hash));
+        log::info!("name: {}", &self.get_name());
+        log::info!("platform: {}", platform);
+        log::info!("order_id: {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_details: {}", payment_details);
+        log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
 
         let Some(payment_id) = &token_transfer.payment_id else {
             return Err(GenericError::new("token_transfer.payment_id is null"));
