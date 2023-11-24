@@ -25,7 +25,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, HOLESKY_NETWORK, GOERLI_NETWORK};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, GOERLI_NETWORK};
 
 mod api;
 mod cli;
