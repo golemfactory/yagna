@@ -25,7 +25,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, GOERLI_NETWORK};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, HOLESKY_NETWORK};
 
 mod api;
 mod cli;
@@ -146,7 +146,7 @@ impl PaymentDriver for Erc20Driver {
     }
 
     fn get_default_network(&self) -> String {
-        GOERLI_NETWORK.to_string()
+        HOLESKY_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {

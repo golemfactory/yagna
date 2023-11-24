@@ -116,6 +116,7 @@ pub enum Network {
     Rinkeby = 4, //Rinkeby is Ethereum testnet
     #[default]
     Goerli = 5, //Goerli is another Ethereum testnet
+    Holesky = 17000, //Holesky is testnet for Holesky network
     Mumbai = 80001, //Mumbai is testnet for Polygon network
     Polygon = 137, //Polygon is Polygon production network
 }
@@ -128,6 +129,7 @@ impl FromStr for Network {
             "mainnet" => Ok(Network::Mainnet),
             "rinkeby" => Ok(Network::Rinkeby),
             "goerli" => Ok(Network::Goerli),
+            "holesky" => Ok(Network::Holesky),
             "polygon" => Ok(Network::Polygon),
             "mumbai" => Ok(Network::Mumbai),
             _ => Err(DbError::InvalidData(format!("Invalid network: {}", s))),
@@ -141,6 +143,7 @@ impl Display for Network {
             Network::Mainnet => f.write_str("mainnet"),
             Network::Rinkeby => f.write_str("rinkeby"),
             Network::Goerli => f.write_str("goerli"),
+            Network::Holesky => f.write_str("holesky"),
             Network::Mumbai => f.write_str("mumbai"),
             Network::Polygon => f.write_str("polygon"),
         }
@@ -167,6 +170,7 @@ where
             4 => Network::Rinkeby,
             5 => Network::Goerli,
             137 => Network::Polygon,
+            17000 => Network::Holesky,
             80001 => Network::Mumbai,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
         })
