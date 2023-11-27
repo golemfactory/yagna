@@ -29,7 +29,7 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = "0.4.1"
+ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
 ya-client-model = "0.5"
 ya-compile-time-utils = "0.2"
