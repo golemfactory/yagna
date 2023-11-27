@@ -8083,20 +8083,6 @@ dependencies = [
 
 [[package]]
 name = "ya-agreement-utils"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce35aaae67dcc04366b1a79876c27c0e375ad931af9b0be4ae34d6bc599d46fe"
-dependencies = [
- "regex",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "thiserror",
- "ya-client-model",
-]
-
-[[package]]
-name = "ya-agreement-utils"
 version = "0.6.0"
 dependencies = [
  "anyhow",
@@ -8797,7 +8783,7 @@ dependencies = [
  "url",
  "walkdir",
  "winapi 0.3.9",
- "ya-agreement-utils 0.5.0",
+ "ya-agreement-utils 0.6.0",
  "ya-client",
  "ya-client-model",
  "ya-compile-time-utils",
