@@ -215,7 +215,6 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/scheduler",
     "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
