@@ -8520,7 +8520,7 @@ dependencies = [
  "thiserror",
  "tokio 1.32.0",
  "uuid 0.8.2",
- "ya-agreement-utils 0.5.0",
+ "ya-agreement-utils 0.6.0",
  "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
@@ -8549,7 +8549,7 @@ dependencies = [
  "semver 0.11.0",
  "serde_json",
  "thiserror",
- "ya-agreement-utils 0.5.0",
+ "ya-agreement-utils 0.6.0",
 ]
 
 [[package]]
@@ -8670,7 +8670,7 @@ dependencies = [
  "tokio 1.32.0",
  "uint 0.7.1",
  "uuid 0.8.2",
- "ya-agreement-utils 0.5.0",
+ "ya-agreement-utils 0.6.0",
  "ya-client",
  "ya-client-model",
  "ya-core-model",
