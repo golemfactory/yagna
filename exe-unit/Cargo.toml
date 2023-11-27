@@ -47,6 +47,7 @@ ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
 ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
+ya-utils-futures = "0.3"
 ya-std-utils = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = [
     "dns",

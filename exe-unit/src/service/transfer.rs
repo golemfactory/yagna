@@ -11,13 +11,13 @@ use url::Url;
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::util::cache::Cache;
-use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 
 use ya_client_model::activity::TransferArgs;
+use ya_transfer::cache::Cache;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::*;
+use ya_utils_futures::abort::Abort;
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]

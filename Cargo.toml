@@ -54,7 +54,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = "0.2"
+ya-utils-futures = "0.3"
 ya-utils-process = { version = "0.2", features = ["lock"] }
 ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
@@ -202,6 +202,7 @@ members = [
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "exe-unit/components/transfer",
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
@@ -215,7 +216,6 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
     "core/metrics",
@@ -290,7 +290,7 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
-ya-transfer = { path = "utils/transfer" }
+ya-transfer = { path = "exe-unit/components/transfer" }
 ya-utils-actix = { path = "utils/actix_utils" }
 ya-utils-cli = { path = "utils/cli" }
 ya-utils-futures = { path = "utils/futures" }

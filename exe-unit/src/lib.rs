@@ -45,8 +45,6 @@ pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
-pub mod util;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 lazy_static::lazy_static! {

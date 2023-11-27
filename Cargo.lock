@@ -8029,6 +8029,7 @@ dependencies = [
  "ya-service-bus",
  "ya-std-utils",
  "ya-transfer",
+ "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
  "yansi",
@@ -8875,6 +8876,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
+ "ya-utils-futures",
  "ya-utils-path",
  "zip",
 ]
@@ -8906,7 +8908,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-futures"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures 0.3.29",
  "tokio 1.34.0",

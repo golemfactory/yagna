@@ -1,4 +1,5 @@
 mod archive;
+pub mod cache;
 pub mod error;
 mod file;
 mod gftp;
