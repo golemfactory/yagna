@@ -7507,7 +7507,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.3.2",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -8084,6 +8084,20 @@ dependencies = [
 [[package]]
 name = "ya-agreement-utils"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce35aaae67dcc04366b1a79876c27c0e375ad931af9b0be4ae34d6bc599d46fe"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "thiserror",
+ "ya-client-model",
+]
+
+[[package]]
+name = "ya-agreement-utils"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",
