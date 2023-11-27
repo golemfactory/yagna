@@ -26,6 +26,12 @@ pub enum PaymentCli {
     Onboard {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        #[structopt(
+            long,
+            help = "Optional address to onboard [default: <DEFAULT_IDENTITY>]",
+            default_value = "https://golemfactory.github.io/onboarding_production/#/"
+        )]
+        onboard_url: String,
     },
     /// Supply payment account with funds
     Fund {
@@ -133,10 +139,15 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Onboard { account } => {
+            PaymentCli::Onboard {
+                account,
+                onboard_url,
+            } => {
                 let address = resolve_address(account.address()).await?;
+
                 open::that(format!(
-                    "https://golemfactory.github.io/onboarding_production/?yagnaAddress={}",
+                    "{}/yagnaAddress={}",
+                    option_env!("YAGNA_ONBOARD_URL").unwrap_or(onboard_url.as_str()),
                     address
                 ))?;
                 Ok(CommandOutput::NoOutput)
