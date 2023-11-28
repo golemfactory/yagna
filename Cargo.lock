@@ -1984,7 +1984,7 @@ dependencies = [
 [[package]]
 name = "ethereum-tx-sign"
 version = "3.1.0"
-source = "git+https://github.com/mfranciszkiewicz/ethereum-tx-sign.git?rev=1164c74187a9e2947faeaea7dde104c3cdec4195#1164c74187a9e2947faeaea7dde104c3cdec4195"
+source = "git+https://github.com/golemfactory/ethereum-tx-sign.git?rev=1164c74187a9e2947faeaea7dde104c3cdec4195#1164c74187a9e2947faeaea7dde104c3cdec4195"
 dependencies = [
  "ethereum-types 0.11.0",
  "num-traits",
@@ -5747,10 +5747,10 @@ dependencies = [
 [[package]]
 name = "serial_test"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
+source = "git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -5799,7 +5799,7 @@ dependencies = [
 [[package]]
 name = "serial_test_derive"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
+source = "git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "proc-macro2",
  "quote",
