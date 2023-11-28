@@ -206,7 +206,7 @@ impl Erc20NextDriver {
                 }
                 LibStatusProperty::CantSign { chain_id, address } => {
                     let network = chain_id_to_net(chain_id);
-                    Some(DriverStatusProperty::CantSign {
+                    network_filter(&network).then(|| DriverStatusProperty::CantSign {
                         driver: DRIVER_NAME.into(),
                         network,
                         address,
@@ -236,6 +236,13 @@ impl Erc20NextDriver {
                         address,
                         network,
                         needed_token_est: missing_token.to_string(),
+                    })
+                }
+                LibStatusProperty::TxStuck { chain_id } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::TxStuck {
+                        driver: DRIVER_NAME.into(),
+                        network,
                     })
                 }
                 LibStatusProperty::Web3RpcError { chain_id, .. } => {
@@ -878,86 +885,7 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
-        use erc20_payment_lib::StatusProperty as LibStatusProperty;
-
-        // Map chain-id to network
-        let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
-
-        // check if network matches the filter
-        let network_filter = |net_candidate: &str| {
-            msg.network
-                .as_ref()
-                .map(|net| net == net_candidate)
-                .unwrap_or(true)
-        };
-
-        if let Some(network) = msg.network.as_ref() {
-            let found_net = self
-                .payment_runtime
-                .chains()
-                .into_iter()
-                .any(|id| &chain_id_to_net(id) == network);
-
-            if !found_net {
-                return Err(DriverStatusError::NetworkNotFound(network.clone()));
-            }
-        }
-
-        Ok(self
-            .payment_runtime
-            .get_status()
-            .await
-            .into_iter()
-            .flat_map(|prop| match prop {
-                LibStatusProperty::InvalidChainId { chain_id } => {
-                    Some(DriverStatusProperty::InvalidChainId {
-                        driver: DRIVER_NAME.into(),
-                        chain_id,
-                    })
-                }
-                LibStatusProperty::CantSign { chain_id, address } => {
-                    let network = chain_id_to_net(chain_id);
-                    Some(DriverStatusProperty::CantSign {
-                        driver: DRIVER_NAME.into(),
-                        network,
-                        address,
-                    })
-                }
-                LibStatusProperty::NoGas {
-                    chain_id,
-                    missing_gas,
-                    ..
-                } => {
-                    let network = chain_id_to_net(chain_id);
-                    network_filter(&network).then(|| DriverStatusProperty::InsufficientGas {
-                        driver: DRIVER_NAME.into(),
-                        network,
-                        address: "".to_string(),
-                        needed_gas_est: missing_gas.to_string(),
-                    })
-                }
-                LibStatusProperty::NoToken {
-                    chain_id,
-                    missing_token,
-                    ..
-                } => {
-                    let network = chain_id_to_net(chain_id);
-                    network_filter(&network).then(|| DriverStatusProperty::InsufficientToken {
-                        driver: DRIVER_NAME.into(),
-                        network,
-                        address: "".to_string(),
-                        needed_token_est: missing_token.to_string(),
-                    })
-                }
-                LibStatusProperty::Web3RpcError { chain_id, .. } => {
-                    let network = chain_id_to_net(chain_id);
-                    network_filter(&network).then(|| DriverStatusProperty::RpcError {
-                        driver: DRIVER_NAME.into(),
-                        network,
-                    })
-                }
-            })
-            .collect())
+        self._status(msg).await
     }
 
     async fn shut_down(
