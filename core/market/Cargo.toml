@@ -10,7 +10,7 @@ test-suite = []
 bcast-singleton = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.5.0" }
+ya-agreement-utils = { workspace = true }
 ya-client = "0.7"
 ya-core-model = { version = "^0.9", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
@@ -23,6 +23,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
 ya-std-utils = "0.1"
 ya-utils-actix = "0.2"
+parking_lot = "0.12.1"
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"

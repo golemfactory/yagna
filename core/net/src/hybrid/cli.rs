@@ -9,7 +9,7 @@ use ya_core_model::net::local::{FindNodeResponse, GsbPingResponse, StatusError};
 use ya_core_model::net::{
     local as model, GenericNetError, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC,
 };
-use ya_relay_client::ChannelMetrics;
+use ya_relay_client::metrics::ChannelMetrics;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -145,7 +145,7 @@ pub async fn disconnect(node: NodeId) -> anyhow::Result<()> {
     log::info!("Disconnecting from Node: {node}");
 
     let client = Net::client().await?;
-    client.disconnect(node).await?
+    Ok(client.disconnect(node).await??)
 }
 
 pub async fn cli_ping(nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
