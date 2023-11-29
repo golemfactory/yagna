@@ -383,7 +383,7 @@ mod tests {
     #[test_case(r#"{ "id": "some", "error": {} }"#, Frame::Close(Some(CloseReason { 
         code: CloseCode::Policy,
         description: Some("Failed to read response. Err: Missing 'payload' and 'error' fields. Id: some.".to_string()) })); 
-        "Close when error empty (error needs at least top level error name field)"
+        "Close when error empty - error needs at least top level error name field"
     )]
     #[actix_web::test]
     #[serial]

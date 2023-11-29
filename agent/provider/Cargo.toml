@@ -13,7 +13,7 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { workspace=true }
+ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
 ya-client = { version = "0.7", features = ['cli'] }
 ya-client-model = "0.5"
