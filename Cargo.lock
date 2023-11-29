@@ -4685,7 +4685,7 @@ checksum = "1fa3d084c8704911bfefb2771be2f9b6c5c0da7343a71e0021ee3c665cada738"
 dependencies = [
  "bytes 1.4.0",
  "heck 0.4.1",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -4732,7 +4732,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065717a5dfaca4a83d2fe57db3487b311365200000551d7a364e715dbf4346bc"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.32",
@@ -5750,7 +5750,7 @@ version = "0.5.1"
 source = "git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
