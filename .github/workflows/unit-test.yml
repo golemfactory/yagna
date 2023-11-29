@@ -33,7 +33,7 @@ jobs:
     strategy:
       matrix:
         # TODO: switch back from `yagna-builder` to `ubuntu-latest` after update `ya-relay-stack` to same version as `ya-relay-client`
-        os: [macos-latest, windows-latest, ubuntu-builder]
+        os: [macos-latest, windows-latest, yagna-builder]
 
     steps:
       - name: Checkout
