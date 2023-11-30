@@ -286,10 +286,16 @@ impl Erc20NextDriver {
             .as_str();
 
         let Ok(tx_token_amount) = U256::from_dec_str(&token_transfer.token_amount) else {
-            return Err(GenericError::new(format!("Malformed token_transfer.token_amount: {}", token_transfer.token_amount)));
+            return Err(GenericError::new(format!(
+                "Malformed token_transfer.token_amount: {}",
+                token_transfer.token_amount
+            )));
         };
         let Ok(tx_token_amount) = u256_to_big_dec(tx_token_amount) else {
-            return Err(GenericError::new(format!("Cannot convert to big decimal tx_token_amount: {}", tx_token_amount)));
+            return Err(GenericError::new(format!(
+                "Cannot convert to big decimal tx_token_amount: {}",
+                tx_token_amount
+            )));
         };
         let payment_details = PaymentDetails {
             recipient: token_transfer.receiver_addr.clone(),

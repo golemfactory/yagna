@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.13.0"
+version = "0.13.2"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -62,8 +62,8 @@ ya-version = "0.2"
 ya-vpn = "0.2"
 ya-client = "0.7"
 ya-client-model = "0.5"
-
-gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
+gftp = { workspace = true, optional = true }
+# just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
@@ -216,7 +216,6 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/scheduler",
     "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
@@ -237,6 +236,11 @@ rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
 derive_more = "0.99.11"
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "785c9c4271f514d47fe18018efb9438007ae611a" }
+gftp = { version = "0.4.0", path="core/gftp" }
+ya-agreement-utils = { version = "0.6", path="utils/agreement-utils" }
 
 
 [patch.crates-io]
@@ -280,8 +284,12 @@ ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc
 ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
 
 ## RELAY and networking stack
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+
+#ya-relay-stack = { path = "../ya-relay/crates/stack" }
+#ya-relay-client = { path = "../ya-relay/client" }
+#ya-relay-core = { path = "../ya-relay/crates/core" }
+#ya-relay-proto = { path = "../ya-relay/crates/proto" }
+
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -308,7 +316,7 @@ ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 
-ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 
 diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563" }
