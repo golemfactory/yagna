@@ -58,6 +58,12 @@ jobs:
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-musl
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
+
       - name: Load local cache
         id: cache_action
         env:
