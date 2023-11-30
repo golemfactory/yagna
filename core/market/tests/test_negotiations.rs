@@ -481,8 +481,6 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
         .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
         .await;
 
-
-
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
@@ -534,13 +532,11 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
         .await
         .unwrap();
 
-
     let proposal1 = sample_demand();
     let result = market1
         .requestor_engine
         .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
         .await;
-
 
     assert!(result.is_err());
     match result.err().unwrap() {
