@@ -58,7 +58,7 @@ The public API rust binding with data model is in the
 
 ## High Level APIs
 The public high-level API for Python is in 
-[yapapi](https://github.com/golemfactory/yapapi) repo and the JS/TS port is contained in the [yaJSapi](https://github.com/golemfactory/yajsapi) repo.
+[yapapi](https://github.com/golemfactory/yapapi) repo and the JS/TS port is contained in the [@golem-sdk/golem-js](https://github.com/golemfactory/golem-js) repo.
 
 ## Runtimes
 We call our runtime **ExeUnit**. As for now we support

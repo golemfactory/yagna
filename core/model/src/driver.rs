@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::payment::{Allocation, Payment};
+use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -166,13 +166,15 @@ impl RpcMessage for GetTransactionBalance {
 pub struct VerifyPayment {
     pub confirmation: PaymentConfirmation,
     pub platform: String,
+    pub details: Payment,
 }
 
 impl VerifyPayment {
-    pub fn new(confirmation: PaymentConfirmation, platform: String) -> Self {
+    pub fn new(confirmation: PaymentConfirmation, platform: String, details: Payment) -> Self {
         Self {
             confirmation,
             platform,
+            details,
         }
     }
 }
@@ -520,6 +522,24 @@ impl RpcMessage for VerifySignature {
     const ID: &'static str = "VerifySignature";
     type Item = bool; // is signature correct
     type Error = GenericError;
+}
+
+// ********************* STATUS ********************************
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DriverStatus {
+    pub network: Option<String>,
+}
+
+impl RpcMessage for DriverStatus {
+    const ID: &'static str = "DriverStatus";
+    type Item = Vec<DriverStatusProperty>;
+    type Error = DriverStatusError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+pub enum DriverStatusError {
+    #[error("No such network '{0}'")]
+    NetworkNotFound(String),
 }
 
 // ************************* SHUT DOWN *************************
