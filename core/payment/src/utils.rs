@@ -194,6 +194,12 @@ pub mod response {
         HttpResponse::NotFound().json(ErrorMessage { message: None })
     }
 
+    pub fn not_found_with_messsage(e: &impl ToString) -> HttpResponse {
+        HttpResponse::NotFound().json(ErrorMessage {
+            message: Some(e.to_string()),
+        })
+    }
+
     pub fn unauthorized() -> HttpResponse {
         HttpResponse::Unauthorized().json(ErrorMessage { message: None })
     }

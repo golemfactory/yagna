@@ -15,6 +15,7 @@ pub enum AppKeyCommand {
         name: String,
         #[structopt(skip = model::DEFAULT_ROLE)]
         role: String,
+        /// Select identity for this app-key.
         #[structopt(long)]
         id: Option<String>,
         /// Set cors policy for request made using this app-key.

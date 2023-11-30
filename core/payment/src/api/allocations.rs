@@ -3,6 +3,7 @@ use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde_json::value::Value::Null;
 use ya_client_model::NodeId;
@@ -80,6 +81,7 @@ async fn create_allocation(
         };
 
         if let Err(e) = init_account(acc).await {
+            log::error!("Error initializing account: {:?}", e);
             return response::server_error(&e);
         }
     }
@@ -162,12 +164,94 @@ async fn get_allocation(
     }
 }
 
+fn amend_allocation_fields(
+    old_allocation: Allocation,
+    update: AllocationUpdate,
+) -> Result<Allocation, &'static str> {
+    let total_amount = update
+        .total_amount
+        .unwrap_or_else(|| old_allocation.total_amount.clone());
+    let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
+
+    if remaining_amount < BigDecimal::from(0) {
+        return Err("New allocation would be smaller than the already spent amount");
+    }
+    if let Some(timeout) = update.timeout {
+        if timeout < chrono::offset::Utc::now() {
+            return Err("New allocation timeout is in the past");
+        }
+    }
+
+    Ok(Allocation {
+        total_amount,
+        remaining_amount,
+        timeout: update.timeout.or(old_allocation.timeout),
+        ..old_allocation
+    })
+}
+
 async fn amend_allocation(
     db: Data<DbExecutor>,
     path: Path<params::AllocationId>,
-    body: Json<Allocation>,
+    body: Json<AllocationUpdate>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let allocation_id = path.allocation_id.clone();
+    let node_id = id.identity;
+    let new_allocation: AllocationUpdate = body.into_inner();
+    let dao: AllocationDao = db.as_dao();
+
+    let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
+        Ok(AllocationStatus::Active(allocation)) => allocation,
+        Ok(AllocationStatus::Gone) => {
+            return response::gone(&format!(
+                "Allocation {allocation_id} has been already released",
+            ))
+        }
+        Ok(AllocationStatus::NotFound) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    let amended_allocation =
+        match amend_allocation_fields(current_allocation.clone(), new_allocation) {
+            Ok(allocation) => allocation,
+            Err(e) => return response::bad_request(&e),
+        };
+
+    // validation will take into account all existing allocation, including the one
+    // being currently modified. This means we only need to validate the increase.
+    let amount_to_validate =
+        amended_allocation.total_amount.clone() - &current_allocation.total_amount;
+
+    let validate_msg = ValidateAllocation {
+        platform: amended_allocation.payment_platform.clone(),
+        address: amended_allocation.address.clone(),
+        amount: if amount_to_validate > BigDecimal::from(0) {
+            amount_to_validate
+        } else {
+            0.into()
+        },
+    };
+    match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
+        Ok(true) => {}
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Err(Error::Rpc(RpcMessageError::ValidateAllocation(
+                           ValidateAllocationError::AccountNotRegistered,
+                       ))) => return response::bad_request(&"Account not registered"),
+        Err(e) => return response::server_error(&e),
+    }
+
+    match dao.replace(amended_allocation, node_id).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return response::server_error(
+                &"Allocation not present despite preconditions being already ensured",
+            )
+        }
+        Err(e) => return response::server_error(&e),
+    }
+
+    get_allocation(db, path, id).await
 }
 
 async fn release_allocation(

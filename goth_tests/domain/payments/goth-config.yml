@@ -4,7 +4,6 @@
 # home directory.
 
 docker-compose:
-
   # Path to compose file to be used, relative to `docker-dir`
   compose-file: "docker-compose.yml"
   docker-dir: "../../assets/docker/"
@@ -26,12 +25,9 @@ docker-compose:
     ethereum-goerli: ".*Wallets supplied."
     ethereum-polygon: ".*Wallets supplied."
 
-
 key-dir: "../../assets/keys"
 
-
 web-root: "../../assets/web-root"
-
 
 node-types:
   # Each node type is a collection of attributes common to a group of nodes.
@@ -59,7 +55,6 @@ node-types:
       - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
 
 nodes:
-
   - name: "requestor"
     type: "Requestor"
     payment-config: "erc20"

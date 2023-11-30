@@ -7,6 +7,7 @@
 // External crates
 use std::sync::Arc;
 
+use ya_client_model::payment::DriverStatusProperty;
 // Workspace uses
 use ya_client_model::payment::driver_details::DriverDetails;
 use ya_client_model::NodeId;
@@ -14,7 +15,7 @@ use ya_core_model::driver::{
     driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
 };
 use ya_core_model::identity;
-use ya_core_model::payment::local as payment_srv;
+use ya_core_model::payment::local::{self as payment_srv, PaymentDriverStatusChange};
 use ya_service_bus::{
     typed::{service, ServiceBinder},
     RpcEndpoint,
@@ -77,6 +78,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.verify_signature(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.status(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.shut_down(db, c, m).await }
@@ -155,6 +159,16 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
+pub async fn get_pubkey(node_id: NodeId) -> Result<Vec<u8>, GenericError> {
+    let pubkey = service(identity::BUS_ID)
+        .send(identity::GetPubKey(node_id))
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+
+    Ok(pubkey)
+}
+
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
@@ -171,6 +185,16 @@ pub async fn notify_payment(
         order_ids,
         confirmation: PaymentConfirmation { confirmation },
     };
+    service(payment_srv::BUS_ID)
+        .send(msg)
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+    Ok(())
+}
+
+pub async fn status_changed(properties: Vec<DriverStatusProperty>) -> Result<(), GenericError> {
+    let msg = PaymentDriverStatusChange { properties };
     service(payment_srv::BUS_ID)
         .send(msg)
         .await
