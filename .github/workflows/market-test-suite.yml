@@ -10,11 +10,13 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 env:

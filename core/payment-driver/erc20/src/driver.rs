@@ -8,10 +8,11 @@ use chrono::{Duration, Utc};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
+use ya_client_model::payment::DriverStatusProperty;
 
 // Workspace uses
 use ya_payment_driver::{
-    account::{Accounts, AccountsRc},
+    account::{Accounts, AccountsArc},
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
@@ -47,7 +48,7 @@ lazy_static::lazy_static! {
 }
 
 pub struct Erc20Driver {
-    active_accounts: AccountsRc,
+    active_accounts: AccountsArc,
     dao: Erc20Dao,
     sendout_lock: Mutex<()>,
     confirmation_lock: Mutex<()>,
@@ -66,15 +67,21 @@ impl Erc20Driver {
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
-        let mut accounts = self.active_accounts.borrow_mut();
+        let mut accounts = self.active_accounts.lock().await;
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
         }
     }
 
-    fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
-        match self.active_accounts.as_ref().borrow().get_node_id(address) {
+    async fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
+        match self
+            .active_accounts
+            .as_ref()
+            .lock()
+            .await
+            .get_node_id(address)
+        {
             Some(_) => Ok(()),
             None => Err(GenericError::new(format!(
                 "Account not active: {}",
@@ -92,7 +99,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
-        self.active_accounts.borrow_mut().handle_event(msg);
+        self.active_accounts.lock().await.handle_event(msg);
         Ok(())
     }
 
@@ -170,7 +177,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError> {
-        self.is_account_active(&msg.sender)?;
+        self.is_account_active(&msg.sender).await?;
         cli::transfer(&self.dao, msg).await
     }
 
@@ -182,7 +189,7 @@ impl PaymentDriver for Erc20Driver {
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
-        self.is_account_active(&msg.sender())?;
+        self.is_account_active(&msg.sender()).await?;
         api::schedule_payment(&self.dao, msg).await
     }
 
@@ -202,6 +209,23 @@ impl PaymentDriver for Erc20Driver {
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         api::validate_allocation(msg).await
+    }
+
+    async fn status(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: DriverStatus,
+    ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
+        if let Some(network) = msg.network {
+            let found_net = self.get_networks().keys().any(|net| net == &network);
+
+            if !found_net {
+                return Err(DriverStatusError::NetworkNotFound(network.clone()));
+            }
+        }
+
+        Ok(Vec::new())
     }
 
     async fn shut_down(
@@ -228,20 +252,12 @@ impl PaymentDriver for Erc20Driver {
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20Driver {
-    async fn confirm_payments(&self) {
-        let guard = match self.confirmation_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 confirmation job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
-        log::trace!("Running ERC-20 confirmation job...");
-        for network_key in self.get_networks().keys() {
-            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
-        }
-        log::trace!("ERC-20 confirmation job complete.");
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+    fn sendout_interval(&self) -> std::time::Duration {
+        *TX_SENDOUT_INTERVAL
+    }
+
+    fn confirmation_interval(&self) -> std::time::Duration {
+        *TX_CONFIRMATION_INTERVAL
     }
 
     async fn send_out_payments(&self) {
@@ -257,7 +273,7 @@ impl PaymentDriverCron for Erc20Driver {
         'outer: for network_key in self.get_networks().keys() {
             let network = Network::from_str(network_key).unwrap();
             // Process payment rows
-            let accounts = self.active_accounts.borrow().list_accounts();
+            let accounts = self.active_accounts.lock().await.list_accounts();
             for node_id in accounts {
                 if let Err(e) =
                     cron::process_payments_for_account(&self.dao, &node_id, network).await
@@ -278,11 +294,19 @@ impl PaymentDriverCron for Erc20Driver {
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 
-    fn sendout_interval(&self) -> std::time::Duration {
-        *TX_SENDOUT_INTERVAL
-    }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
+    async fn confirm_payments(&self) {
+        let guard = match self.confirmation_lock.try_lock() {
+            None => {
+                log::trace!("ERC-20 confirmation job in progress.");
+                return;
+            }
+            Some(guard) => guard,
+        };
+        log::trace!("Running ERC-20 confirmation job...");
+        for network_key in self.get_networks().keys() {
+            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
+        }
+        log::trace!("ERC-20 confirmation job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 }

@@ -355,6 +355,10 @@ pub mod processor {
                 "Transaction balance too low (probably tx hash re-used)".to_owned(),
             ))
         }
+
+        pub fn overspending(tx_amount: &BigDecimal, total_amount: &BigDecimal) -> Result<(), Self> {
+            Err(Self::Validation(format!("Transaction for {tx_amount} used for multiple payments amounting to {total_amount}")))
+        }
     }
 
     #[derive(thiserror::Error, Debug)]

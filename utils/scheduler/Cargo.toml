@@ -1,8 +1,0 @@
-[package]
-name = "ya-utils-scheduler"
-version = "0.1.0"
-authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
-
-[dependencies]
-chrono = "0.4"
