@@ -105,8 +105,8 @@ impl Erc20NextService {
                     chain.rpc_endpoints = addr
                         .split(',')
                         .map(|s| RpcSettings {
-                            name: s.to_string(),
-                            endpoint: s.to_string(),
+                            names: Some(s.to_string()),
+                            endpoints: Some(s.to_string()),
                             skip_validation: None,
                             backup_level: None,
                             verify_interval_secs: None,
@@ -114,6 +114,8 @@ impl Erc20NextService {
                             max_timeout_ms: None,
                             allowed_head_behind_secs: None,
                             max_consecutive_errors: None,
+                            dns_source: None,
+                            json_source: None,
                         })
                         .collect();
                     log::info!(

@@ -261,7 +261,7 @@ impl Erc20NextDriver {
         token_transfer: &TokenTransferDao,
         tx: &TxDao,
     ) -> Result<(), GenericError> {
-        log::info!("Received event TransferFinished: {:#?}", token_transfer);
+        log::debug!("Received event TransferFinished: {:#?}", token_transfer);
 
         let chain_id = token_transfer.chain_id;
         let network_name = &self
@@ -312,11 +312,11 @@ impl Erc20NextDriver {
             GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
         })?;
 
-        log::info!("name = {}", &self.get_name());
-        log::info!("platform = {}", platform);
-        log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
-        log::info!("payment_details = {:#?}", payment_details);
-        log::info!("confirmation = {:x?}", transaction_hash);
+        log::info!("name: {}", &self.get_name());
+        log::info!("platform: {}", platform);
+        log::info!("order_id: {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_details: {}", payment_details);
+        log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
 
         let Some(payment_id) = &token_transfer.payment_id else {
             return Err(GenericError::new("token_transfer.payment_id is null"));
@@ -850,7 +850,7 @@ impl PaymentDriver for Erc20NextDriver {
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        log::info!("Validate_allocation: {:?}", msg);
+        log::debug!("Validate_allocation: {:?}", msg);
         let account_balance = self
             .get_account_balance(
                 db,
