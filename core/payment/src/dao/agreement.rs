@@ -148,11 +148,10 @@ pub fn increase_amount_paid(
 
     if let Some((invoice_id, role)) = invoice_query {
         invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
-        invoice_event::create::<()>(
+        invoice_event::create(
             invoice_id,
             *owner_id,
             InvoiceEventType::InvoiceSettledEvent,
-            None,
             conn,
         )?;
     }

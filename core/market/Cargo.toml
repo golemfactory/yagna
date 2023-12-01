@@ -10,7 +10,7 @@ test-suite = []
 bcast-singleton = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.5.0" }
+ya-agreement-utils = { workspace = true }
 ya-client = "0.7"
 ya-core-model = { version = "^0.9", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
@@ -23,6 +23,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
 ya-std-utils = "0.1"
 ya-utils-actix = "0.2"
+parking_lot = "0.12.1"
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"
@@ -33,7 +34,7 @@ anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
 chrono = { version = "0.4", features = ["serde"] }
-derive_more = "0.99.5"
+derive_more = { workspace = true }
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 digest = "0.8.1"
@@ -43,7 +44,7 @@ humantime = "2"
 lazy_static = "1.4"
 libsqlite3-sys = { workspace = true }
 log = "0.4"
-metrics="0.12"
+metrics = "0.12"
 num-derive = "0.3"
 num-traits = "0.2"
 r2d2 = "0.8"
@@ -62,6 +63,8 @@ uuid = { version = "0.8", features = ["v4"] }
 [dev-dependencies]
 all_asserts = "2.2.0"
 serde_json = "1.0"
-serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
+serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch = "actix_rt_test", features = [
+    "actix-rt2",
+] }
 structopt = "0.3"
 tokio = { version = "1", features = ["macros", "rt"] }

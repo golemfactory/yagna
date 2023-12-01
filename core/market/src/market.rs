@@ -1,5 +1,5 @@
 use actix_web::web::Data;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
 use std::sync::{Arc, Mutex};
@@ -251,7 +251,7 @@ impl MarketService {
             .map_err(|e| AgreementError::Internal(e.to_string()))?;
 
         let mut result = Vec::new();
-        let naive_to_utc = |ts| DateTime::<Utc>::from_utc(ts, Utc);
+        let naive_to_utc = |ts| Utc.from_utc_datetime(&ts);
 
         for agreement in agreements {
             let role = match agreement.id.owner() {

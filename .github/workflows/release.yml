@@ -31,7 +31,7 @@ jobs:
             catch(e) {
               let body = ["By installing & running this software you declare that you have read",
                 "understood and hereby accept the disclaimer and",
-                "privacy warning found at https://handbook.golem.network/see-also/terms"].join("\n");
+                "privacy warning found at https://docs.golem.network/docs/golem/terms"].join("\n");
 
               let release =  await github.request("POST /repos/:owner/:repo/releases", {
                 owner: context.repo.owner,
@@ -85,6 +85,12 @@ jobs:
             });
             console.log(release.data.upload_url);
             return release.data.upload_url
+      
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
 
       - uses: actions-rs/toolchain@v1
         if: matrix.os != 'ubuntu'
@@ -181,7 +187,7 @@ jobs:
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.rust_stable }}
           target: aarch64-unknown-linux-musl
           override: true
 

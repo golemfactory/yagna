@@ -68,12 +68,12 @@ const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://handbook.golem.network/see-also/terms
+/// privacy warning found at https://docs.golem.network/docs/golem/terms
 ///
 /// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
-    /// {n}https://handbook.golem.network/see-also/terms
+    /// {n}https://docs.golem.network/docs/golem/terms
     #[structopt(long)]
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
@@ -266,11 +266,7 @@ enum Services {
     GsbApi(GsbApiService),
 }
 
-#[cfg(not(any(
-    feature = "dummy-driver",
-    feature = "erc20-driver",
-    feature = "zksync-driver",
-)))]
+#[cfg(not(any(feature = "dummy-driver", feature = "erc20-driver",)))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
 #[allow(unused)]
@@ -289,11 +285,11 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
         PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
-    #[cfg(feature = "zksync-driver")]
+    #[cfg(feature = "erc20next-driver")]
     {
-        use ya_zksync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
+        use ya_erc20next_driver::{PaymentDriverService, DRIVER_NAME};
+        let db_executor = DbExecutor::from_data_dir(data_dir, "erc20next-driver")?;
+        PaymentDriverService::gsb(&db_executor, data_dir.to_path_buf()).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
     Ok(drivers)
@@ -500,8 +496,9 @@ impl ServiceCommand {
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
                     "RUST_LOG",
-                    env::var("RUST_LOG")
-                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
+                    env::var("RUST_LOG").unwrap_or_else(|_| {
+                        "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
+                    }),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -646,7 +643,7 @@ fn prompt_terms() -> Result<()> {
     let header = r#"
 By running this software you declare that you have read, understood
 and hereby accept the disclaimer and privacy warning found at
-https://handbook.golem.network/see-also/terms
+https://docs.golem.network/docs/golem/terms
 
 "#;
 

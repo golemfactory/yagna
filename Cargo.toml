@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.13.0"
+version = "0.13.2"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,11 +10,11 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['erc20-driver', 'zksync-driver', 'gftp/bin']
+default = ['erc20-driver', 'erc20next-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
-zksync-driver = ['ya-zksync-driver']
+erc20next-driver = ['ya-erc20next-driver']
 tos = []
 framework-test = []
 # Temporary to make goth integration tests work
@@ -23,7 +23,7 @@ packet-trace-enable = [
     "ya-vpn/packet-trace-enable",
     "ya-file-logging/packet-trace-enable",
     "ya-net/packet-trace-enable",
-    "ya-service-bus/packet-trace-enable"
+    "ya-service-bus/packet-trace-enable",
 ]
 
 [[bin]]
@@ -38,7 +38,7 @@ ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
 ya-erc20-driver = { version = "0.4", optional = true }
-ya-zksync-driver = { version = "0.3", optional = true }
+ya-erc20next-driver = { version = "0.4", optional = true }
 ya-identity = "0.3"
 ya-market = "0.4"
 ya-metrics = "0.2"
@@ -60,10 +60,10 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7.1"
+ya-client = "0.7"
 ya-client-model = "0.5"
-
-gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
+gftp = { workspace = true, optional = true }
+# just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
@@ -86,6 +86,8 @@ tokio = { version = "1", features = ["net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
+libsqlite3-sys = { workspace = true }
+
 
 [dev-dependencies]
 ya-test-framework = "0.1"
@@ -152,6 +154,11 @@ assets = [
         "755",
     ],
     [
+        "target/release/golemsp",
+        "usr/bin/",
+        "755",
+    ],
+    [
         "README.md",
         "usr/share/doc/yagna/",
         "644",
@@ -183,7 +190,7 @@ members = [
     "core/payment-driver/base",
     "core/payment-driver/dummy",
     "core/payment-driver/erc20",
-    "core/payment-driver/zksync",
+    "core/payment-driver/erc20next",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/derive",
@@ -208,20 +215,32 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/scheduler",
     "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
     "core/metrics",
     "test-utils/test-framework",
-    "test-utils/test-framework/framework-macro"
+    "test-utils/test-framework/framework-macro",
 ]
 
 [workspace.dependencies]
+# this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
+# diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
+# sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "f3559980c8998f2865e593be73766ad2abcc11ca" }
+#erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
+#erc20_payment_lib = { version = "=0.3.1" }
 rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
-libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
+derive_more = "0.99.11"
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "785c9c4271f514d47fe18018efb9438007ae611a" }
+gftp = { version = "0.4.0", path="core/gftp" }
+ya-agreement-utils = { version = "0.6", path="utils/agreement-utils" }
+
 
 [patch.crates-io]
 ## SERVICES
@@ -235,7 +254,7 @@ ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-erc20-driver = { path = "core/payment-driver/erc20" }
-ya-zksync-driver = { path = "core/payment-driver/zksync" }
+ya-erc20next-driver = { path = "core/payment-driver/erc20next" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
 ya-gsb-api = { path = "core/gsb-api" }
@@ -249,10 +268,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "190f0d772f7ed0830d54a2cef77d7a177f276c68"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 
 #ya-service-bus = { path = "../ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
@@ -260,12 +279,16 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
 
 ## RELAY and networking stack
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+
+#ya-relay-stack = { path = "../ya-relay/crates/stack" }
+#ya-relay-client = { path = "../ya-relay/client" }
+#ya-relay-core = { path = "../ya-relay/crates/core" }
+#ya-relay-proto = { path = "../ya-relay/crates/proto" }
+
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -292,11 +315,10 @@ ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 
-ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
-web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
-diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563"}
+diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

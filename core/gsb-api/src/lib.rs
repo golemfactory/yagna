@@ -116,12 +116,6 @@ impl From<&DropMessages> for WsResponseMsg {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Msg {
-    id: String,
-    payload: serde_json::Value,
-}
-
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 struct WsDisconnect(CloseReason);
@@ -561,7 +555,9 @@ mod flexbuffer_util {
             clone_map(builder_map, &r_m).unwrap();
 
             let r = Reader::get_root(builder.view()).unwrap();
-            let payload = Payload::deserialize(r).unwrap();
+
+            let json_deserialized = serde_json::Value::deserialize(r).unwrap();
+            let payload = Payload::deserialize(json_deserialized).unwrap();
 
             assert_eq!(11, payload.file_size);
         }

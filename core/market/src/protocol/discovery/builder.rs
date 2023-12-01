@@ -10,6 +10,7 @@ use ya_net::{self as net};
 use super::{Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
+use crate::testing::discovery::BanCache;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -86,6 +87,7 @@ impl DiscoveryBuilder {
                 config: self.config.unwrap(),
                 net_type: net::Config::from_env().unwrap().net_type,
                 offers_receiving_queue: sender,
+                ban_cache: BanCache::new(),
             }),
         };
 
