@@ -1,7 +1,7 @@
 # ToC
 
 1. [Introduction](#provider-agent)
-2. [Handbook](#handbook)
+2. [Documentation](#documentation)
    1. [ExeUnits](#exeunits)
    2. [Presets](#presets)
    3. [Running](#running-the-provider-agent)
@@ -21,9 +21,9 @@ the Provider Node in the Yagna Network. It includes rules and logic for:
 * ExeUnit instantiation and control
 * Invoice/Debit Note generation
 
-# Handbook
+# Documentation
 
-Please refer https://handbook.golem.network/ for instruction how to use Provider.
+Please refer https://docs.golem.network/docs/providers/provider-installation for instruction how to use Provider.
 
 ### Offer formulation
 
