@@ -11,7 +11,7 @@ use ya_client_model::payment::*;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, SendError, SendInvoice,
-    BUS_ID as PUBLIC_SERVICE,
+    BUS_ID as PUBLIC_SERVICE, RejectInvoice,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
@@ -521,6 +521,76 @@ async fn reject_invoice(
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Rejection>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let start = Instant::now();
+
+    let invoice_id = path.invoice_id.clone();
+    let node_id = id.identity;
+    let rejection = body.into_inner();
+
+    log::debug!("Requested reject invoice [{}]", invoice_id);
+    counter!("payment.invoices.requestor.rejected.call", 1);
+
+    let dao: InvoiceDao = db.as_dao();
+
+    log::trace!("Querying DB for Invoice [{}]", invoice_id);
+    let invoice = match dao.get(invoice_id.clone(), node_id).await {
+        Ok(Some(invoice)) => invoice,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    match invoice.status {
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => return response::ok(Null),
+        DocumentStatus::Failed => (),
+        DocumentStatus::Accepted => return response::bad_request(&"Invoice accepted"),
+        DocumentStatus::Settled => return response::bad_request(&"Invoice settled"),
+        DocumentStatus::Cancelled => return response::bad_request(&"Invoice cancelled"),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
+    }
+
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let result = async move {
+        let issuer_id = invoice.issuer_id;
+        let reject_msg = RejectInvoice::new(invoice_id.clone(), rejection.clone());
+        match async move {
+            log::debug!("Sending RejectInvoice [{}] to [{}]", invoice_id, issuer_id);
+            ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(reject_msg)
+                .await??;
+            log::trace!("Rejecting Invoice [{}] in DB", invoice_id);
+            dao.reject(invoice_id.clone(), node_id, rejection).await?;
+            log::trace!("Invoice rejected successfully for [{}]", invoice_id);
+            Ok(())
+        }
+        .timeout(Some(timeout))
+        .await
+        {
+            Ok(Ok(_)) => {
+                counter!("payment.invoices.requestor.rejected", 1);
+                log::info!(
+                    "Invoice [{}] rejected.",
+                    path.invoice_id,
+                );
+                response::ok(Null)
+            }
+            Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
+                e,
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout rejecting Invoice on remote Node."),
+        }
+    }
+    .await;
+
+    timing!(
+        "payment.invoices.requestor.rejected.time",
+        start,
+        Instant::now()
+    );
+    result
 }

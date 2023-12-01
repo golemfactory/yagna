@@ -11,7 +11,7 @@ use diesel::{
 };
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice, Rejection};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
@@ -381,20 +381,19 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    // TODO: Implement reject invoice
-    // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-    //     do_with_transaction(self.pool, move |conn| {
-    //         let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
-    //             .find((&invoice_id, &owner_id))
-    //             .select((dsl::agreement_id, dsl::amount, dsl::role))
-    //             .first(conn)?;
-    //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-    //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
-    //
-    //         Ok(())
-    //     })
-    //     .await
-    // }
+    pub async fn reject(&self, invoice_id: String, owner_id: NodeId, rejection: Rejection) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Rejected, conn)?;
+                invoice_event::create(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { rejection }, conn)?;
+
+            Ok(())
+        })
+        .await
+    }
 
     pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {

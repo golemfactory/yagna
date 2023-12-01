@@ -702,6 +702,15 @@ pub mod public {
         pub rejection: Rejection,
     }
 
+    impl RejectInvoice {
+        pub fn new(invoice_id: String, rejection: Rejection) -> Self {
+            Self {
+                invoice_id,
+                rejection,
+            }
+        }
+    }
+
     impl RpcMessage for RejectInvoice {
         const ID: &'static str = "RejectInvoice";
         type Item = Ack;
