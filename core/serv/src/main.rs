@@ -69,12 +69,12 @@ const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://handbook.golem.network/see-also/terms
+/// privacy warning found at https://docs.golem.network/docs/golem/terms
 ///
 /// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
-    /// {n}https://handbook.golem.network/see-also/terms
+    /// {n}https://docs.golem.network/docs/golem/terms
     #[structopt(long)]
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
@@ -659,7 +659,7 @@ fn prompt_terms() -> Result<()> {
     let header = r#"
 By running this software you declare that you have read, understood
 and hereby accept the disclaimer and privacy warning found at
-https://handbook.golem.network/see-also/terms
+https://docs.golem.network/docs/golem/terms
 
 "#;
 

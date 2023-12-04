@@ -10,7 +10,7 @@ authors = ["GolemFactory <contact@golem.network>"]
 license = "LGPL-3.0-or-later"
 classifiers = ["Development Status :: 3 - Alpha", "Framework :: AsyncIO"]
 repository = "https://github.com/golemfactory/yagna"
-documentation = "https://handbook.golem.network"
+documentation = "https://docs.golem.network"
 readme = "README.md"
 
 # Uncomment to enable pulling packages from test.pypi.org
