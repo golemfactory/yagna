@@ -75,10 +75,15 @@ pub fn sort_metrics_txt(metrics: &str) -> String {
     let (first_line, metrics_content) = metrics.split_at(first_line_idx);
 
     let mut entries = metrics_content
-        .split("\n\n")
-        .map(|s| s.trim().to_string())
+        .split("\n\n") //splitting by double new line to get separate metrics
+        .map(|s| {
+            let trimmed = s.trim();
+            let mut lines = trimmed.split('\n').collect::<Vec<_>>();
+            lines.sort(); //sort by properties
+            lines.join("\n")
+        })
         .collect::<Vec<String>>();
-    entries.sort();
+    entries.sort(); //sort by metric name
 
     first_line.to_string() + "\n" + entries.join("\n\n").as_str()
 }
