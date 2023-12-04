@@ -1957,8 +1957,6 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ec0c57fe6b4a104c9c9f860d1e867dca4838085aa505625b209d8c4f931546e"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -1975,6 +1973,7 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "log",
+ "metrics 0.12.1",
  "rand 0.8.5",
  "regex",
  "rust_decimal",
@@ -1997,8 +1996,6 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec6027442066984459d7e98711f91427aab622a960ab6f6d483dabcbeddbaf73"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2013,6 +2010,9 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "log",
+ "metrics 0.12.1",
+ "metrics-core",
+ "metrics-runtime",
  "rand 0.8.5",
  "regex",
  "rust_decimal",
@@ -2035,8 +2035,6 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd51cee570e856fe8ba5040ec1538d31482a6c106db2acc40db89a6df5110ed1"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2055,6 +2053,7 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "log",
+ "metrics 0.12.1",
  "rand 0.8.5",
  "reqwest",
  "rust_decimal",
