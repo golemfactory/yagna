@@ -24,6 +24,7 @@ Networks currently supported:
 * mainnnet (ETH mainnet, do not use)
 * rinkeby (ETH testnet, good support)
 * goerli (ETH testnet)
+* holesky (ETH testnet)
 * mumbai (Polygon testnet)
 * polygon (Polygon mainnet)
 

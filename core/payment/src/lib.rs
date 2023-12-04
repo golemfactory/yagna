@@ -66,7 +66,9 @@ impl PaymentService {
     }
 
     pub async fn shut_down() {
-        log::info!("Stopping payment service... It may take up to 10 seconds to send out all transactions. Hit Ctrl+C again to interrupt and shut down immediately.");
+        log::info!(
+            "Stopping payment service... Hit Ctrl+C again to interrupt and shut down immediately."
+        );
 
         let timeout = tokio::time::timeout(
             *PAYMENT_SHUTDOWN_TIMEOUT,

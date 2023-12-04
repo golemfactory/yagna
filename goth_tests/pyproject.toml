@@ -8,10 +8,7 @@ version = "0.1.1"
 description = "Integration tests for yagna"
 authors = ["GolemFactory <contact@golem.network>"]
 license = "LGPL-3.0-or-later"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Framework :: AsyncIO",
-]
+classifiers = ["Development Status :: 3 - Alpha", "Framework :: AsyncIO"]
 repository = "https://github.com/golemfactory/yagna"
 documentation = "https://docs.golem.network"
 readme = "README.md"
