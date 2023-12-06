@@ -59,9 +59,10 @@ mod local {
         NodeId,
     };
     use ya_core_model::{
-        driver::{driver_bus_id, Ack, DriverStatus, DriverStatusError},
+        driver::{driver_bus_id, DriverStatus, DriverStatusError},
         payment::local::*,
     };
+    use ya_core_model::payment::public::Ack;
     use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
