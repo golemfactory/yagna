@@ -168,7 +168,7 @@ pub fn send_sync_notifs_job(db: DbExecutor) {
                     default_sleep
                 }
                 Ok(duration) => {
-                    log::trace!("PaymentSyncNeeded sendout job done");
+                    log::debug!("PaymentSyncNeeded sendout job done");
                     duration.unwrap_or(default_sleep)
                 }
             };

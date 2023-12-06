@@ -7,6 +7,7 @@ use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
+use ya_payment::service::BindOptions;
 
 use std::convert::TryInto;
 use std::io::Write;
@@ -245,10 +246,11 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
+
     log::debug!("bind_gsb_router()");
 
     let processor = PaymentProcessor::new(db.clone());
-    ya_payment::service::bind_service(&db, processor);
+    ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 
     let driver_name = match args.driver {
