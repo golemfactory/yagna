@@ -2,6 +2,7 @@
 #![allow(unused_variables)] // Crate under development
 use crate::processor::PaymentProcessor;
 use futures::FutureExt;
+use service::BindOptions;
 use std::time::Duration;
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
@@ -52,7 +53,7 @@ impl PaymentService {
         db.apply_migration(migrations::run_with_output)?;
 
         let processor = PaymentProcessor::new(db.clone());
-        self::service::bind_service(&db, processor.clone());
+        self::service::bind_service(&db, processor.clone(), BindOptions::default());
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;

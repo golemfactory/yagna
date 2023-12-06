@@ -13,12 +13,35 @@ use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
-pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindOptions {
+    /// Enables background job for synchronizing invoice / debit note document status.
+    ///
+    /// This depends on the identity service being enabled to work. If you're working with a limited
+    /// subsets of services (e.g. in payment_api.rs example) you might wish to disable that.
+    pub run_sync_job: bool,
+}
+
+impl BindOptions {
+    /// Configure the `run_async_job` option.
+    pub fn run_sync_job(mut self, value: bool) -> Self {
+        self.run_sync_job = value;
+        self
+    }
+}
+
+impl Default for BindOptions {
+    fn default() -> Self {
+        BindOptions { run_sync_job: true }
+    }
+}
+
+pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor, opts: BindOptions) {
     log::debug!("Binding payment service to service bus");
 
     let processor = Arc::new(Mutex::new(processor));
     local::bind_service(db, processor.clone());
-    public::bind_service(db, processor);
+    public::bind_service(db, processor, opts);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -413,7 +436,11 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
+    pub fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        opts: BindOptions,
+    ) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -429,8 +456,10 @@ mod public {
             .bind_with_processor(send_payment)
             .bind_with_processor(sync_payment);
 
-        send_sync_notifs_job(db.clone());
-        send_sync_requests(db.clone());
+        if opts.run_sync_job {
+            send_sync_notifs_job(db.clone());
+            send_sync_requests(db.clone());
+        }
 
         log::debug!("Successfully bound payment public service to service bus");
     }
