@@ -624,7 +624,8 @@ impl Proxy {
         }
 
         let (conn_tx, mut proxy_rx) = futures::channel::mpsc::unbounded();
-        let (mut proxy_tx, conn_rx) = futures::channel::mpsc::unbounded();
+        // Looking at maximum tcp packet size (64KB) with buffer size of (16) we buffer at most 1MB of data.
+        let (mut proxy_tx, conn_rx) = futures::channel::mpsc::channel(16);
 
         let mut state = self.state.write().await;
         let (conn_state, mut inet_rx) = ConnectionState::new(conn_tx, conn_rx);
@@ -684,8 +685,9 @@ impl Proxy {
             while let Some(bytes) = inet_rx.next().await {
                 update_seen_fn();
 
-                let vec = match bytes {
-                    Ok(bytes) => bytes.into_iter().collect::<Vec<_>>(),
+                let vec: Vec<u8> = match bytes {
+                    // Avoid a copy if possible.
+                    Ok(bytes) => bytes.into(),
                     Err(err) => {
                         log::debug!("[inet] proxy conn: bytes error: {}", err);
                         continue;
