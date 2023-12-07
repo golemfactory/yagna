@@ -7,6 +7,7 @@ use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
+use std::sync::Arc;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -68,12 +69,12 @@ const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://handbook.golem.network/see-also/terms
+/// privacy warning found at https://docs.golem.network/docs/golem/terms
 ///
 /// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
-    /// {n}https://handbook.golem.network/see-also/terms
+    /// {n}https://docs.golem.network/docs/golem/terms
     #[structopt(long)]
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
@@ -566,6 +567,12 @@ impl ServiceCommand {
                     ya_net::hybrid::send_bcast_new_neighbour().await
                 });
 
+                let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
+                    .ok()
+                    .and_then(|x| x.parse().ok())
+                    .unwrap_or_else(num_cpus::get)
+                    .clamp(1, 256);
+                let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
@@ -574,9 +581,18 @@ impl ServiceCommand {
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
-                    log::info!("Http server thread started on: {}", rest_address);
+                    if count_started.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                        == number_of_workers - 1
+                    {
+                        log::info!(
+                            "All {} http workers started - listening on {}",
+                            number_of_workers,
+                            rest_address
+                        );
+                    }
                     rest
                 })
+                .workers(number_of_workers)
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
@@ -643,7 +659,7 @@ fn prompt_terms() -> Result<()> {
     let header = r#"
 By running this software you declare that you have read, understood
 and hereby accept the disclaimer and privacy warning found at
-https://handbook.golem.network/see-also/terms
+https://docs.golem.network/docs/golem/terms
 
 "#;
 

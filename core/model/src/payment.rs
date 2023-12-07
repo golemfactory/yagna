@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20next";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -488,6 +488,8 @@ pub mod local {
         Rinkeby,
         #[strum(props(token = "tGLM"))]
         Goerli,
+        #[strum(props(token = "tGLM"))]
+        Holesky,
         #[strum(props(token = "GLM"))]
         Polygon,
         #[strum(props(token = "tGLM"))]
@@ -521,7 +523,7 @@ pub mod local {
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
-        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20Next.into())]
         pub driver: DriverName,
         /// Payment network
         #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
@@ -554,7 +556,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("erc20", a.driver());
+            assert_eq!("erc20next", a.driver());
             assert_eq!("goerli", a.network());
             assert_eq!("tGLM", a.token());
         }
