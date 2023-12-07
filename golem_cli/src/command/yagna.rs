@@ -193,7 +193,6 @@ lazy_static! {
         ngm.insert(
             NetworkGroup::Testnet,
             vec![
-                NetworkName::Rinkeby,
                 NetworkName::Mumbai,
                 NetworkName::Holesky,
                 NetworkName::Goerli,
