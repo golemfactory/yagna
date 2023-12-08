@@ -4,25 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       rust_flags:
-        description: 'Rust flags'
+        description: "Rust flags"
         required: true
-        default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
+        default: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
       rust_version:
-        description: 'Rust version'
+        description: "Rust version"
         required: true
-        default: '1.71.1'
+        default: "1.71.1"
       strip_binaries:
-        description: 'Strip binaries'
+        description: "Strip binaries"
         required: true
-        default: 'true'
-        possible_values: ['true', 'false']
+        default: "true"
+        possible_values: ["true", "false"]
   push:
     branches:
       - master
       - payments-dev
       - release/*
-      - '**/all-tests'
-      - '**/integration-tests'
+      - "**/all-tests"
+      - "**/integration-tests"
   pull_request:
     branches:
       - master
@@ -34,7 +34,7 @@ jobs:
     name: Build binaries (x86-64)
     env:
       RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
-    runs-on: [ yagna-builder ]
+    runs-on: [yagna-builder]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,6 +64,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
 
+      - name: Export protoc env
+        id: protoc_env
+        run: |
+          echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
+
       - name: Load local cache
         id: cache_action
         env:
@@ -75,7 +80,10 @@ jobs:
           echo "cache_dir=$cache_dir" >> $GITHUB_OUTPUT
 
       - name: Build binaries
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         run: |
+          $PROTOC --version
           cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
 
       - name: Move target binaries

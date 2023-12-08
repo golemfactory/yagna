@@ -85,12 +85,17 @@ jobs:
             });
             console.log(release.data.upload_url);
             return release.data.upload_url
-      
+
       - name: Install Protoc
         uses: arduino/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
+
+      - name: Export protoc env
+        id: protoc_env
+        run: |
+          echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
 
       - uses: actions-rs/toolchain@v1
         if: matrix.os != 'ubuntu'
@@ -104,6 +109,8 @@ jobs:
           override: true
       - name: Build macos
         if: matrix.os == 'macos'
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         run: |
           cargo build --release --features static-openssl
           cargo build --bin gftp -p gftp --release
@@ -112,6 +119,8 @@ jobs:
           cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored
       - name: Build windows
         if: matrix.os == 'windows'
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         run: |
           vcpkg install openssl:x64-windows-static
           vcpkg integrate install
@@ -124,6 +133,8 @@ jobs:
 
       - name: Build linux
         if: matrix.os == 'ubuntu'
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         run: |
           cargo build --release --features static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
