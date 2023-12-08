@@ -96,6 +96,7 @@ tokio-stream = "0.1.6"
 url = "2.1"
 yansi = "0.5.0"
 trust-dns-resolver = { workspace = true }
+openssl-probe = "0.1.5"
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [

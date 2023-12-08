@@ -8193,6 +8193,7 @@ dependencies = [
  "log",
  "nix 0.22.3",
  "openssl",
+ "openssl-probe",
  "rand 0.8.5",
  "regex",
  "reqwest",

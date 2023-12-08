@@ -199,6 +199,8 @@ fn init_packet_trace() -> anyhow::Result<()> {
 
 async fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+    //#[cfg(feature = "static-openssl")]
+    openssl_probe::init_ssl_cert_env_vars();
 
     #[cfg(feature = "packet-trace-enable")]
     init_packet_trace()?;

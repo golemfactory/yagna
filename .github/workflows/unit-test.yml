@@ -50,10 +50,16 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
 
-      - name: Export protoc env
+      - name: Export protoc env (Unix)
+        if: runner.os != 'Windows'
         id: protoc_env
         run: |
           echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
+
+      - name: Export protoc (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "protoc_bin_path=$(where protoc.exe)" >> $GITHUB_OUTPUT
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
