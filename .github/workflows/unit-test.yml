@@ -50,16 +50,16 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
 
-      - name: Export protoc env (Unix)
+      - name: Export PROTOC env (Unix)
         if: runner.os != 'Windows'
         id: protoc_env
         run: |
-          echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
+          echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
 
-      - name: Export protoc (Windows)
+      - name: Export PROTOC env (Windows)
         if: runner.os == 'Windows'
         run: |
-          Write-Output "protoc_bin_path=$((get-command protoc.exe).Path)" >> $GITHUB_OUTPUT
+          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $GITHUB_ENV
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
@@ -81,8 +81,6 @@ jobs:
 
       - name: Unit tests
         uses: actions-rs/cargo@v1
-        env:
-          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         with:
           command: test
           args: --workspace --exclude=["./agent/provider/src/market"] --locked
