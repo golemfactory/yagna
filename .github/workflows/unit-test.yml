@@ -59,7 +59,7 @@ jobs:
       - name: Export PROTOC env (Windows)
         if: runner.os == 'Windows'
         run: |
-          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $GITHUB_ENV
+          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $env:GITHUB_ENV
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
