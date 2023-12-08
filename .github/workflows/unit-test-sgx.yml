@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Profile (unused right now)'
+        description: "Profile (unused right now)"
         required: true
-        default: 'debug'
+        default: "debug"
   push:
     branches:
       - master
       - payments-dev
       - release/*
-      - '**/all-tests'
+      - "**/all-tests"
   pull_request:
     branches:
       - master
@@ -37,6 +37,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
+
+      - name: Export protoc env
+        id: protoc_env
+        run: |
+          echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
+
       - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
@@ -44,4 +55,6 @@ jobs:
 
       - name: Unit tests for SGX
         working-directory: exe-unit
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         run: cargo test --features sgx

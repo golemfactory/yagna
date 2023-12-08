@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Profile (unused right now)'
+        description: "Profile (unused right now)"
         required: true
-        default: 'debug'
+        default: "debug"
   push:
     branches:
       - master
       - payments-dev
       - release/*
-      - '**/all-tests'
+      - "**/all-tests"
   pull_request:
     branches:
       - master
@@ -44,6 +44,17 @@ jobs:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
+
+      - name: Export protoc env
+        id: protoc_env
+        run: |
+          echo "protoc_bin_path=$(which protoc)" >> $GITHUB_OUTPUT
+
       - name: Check lockfile
         uses: actions-rs/cargo@v1
         with:
@@ -59,7 +70,8 @@ jobs:
 
       - name: Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1
+        env:
+          PROTOC: ${{ steps.protoc_env.outputs.protoc_bin_path }}
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked
-
