@@ -59,7 +59,7 @@ jobs:
       - name: Export protoc (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "protoc_bin_path=$(where protoc.exe)" >> $GITHUB_OUTPUT
+          Write-Output "protoc_bin_path=$((get-command protoc.exe).Path)" >> $GITHUB_OUTPUT
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
