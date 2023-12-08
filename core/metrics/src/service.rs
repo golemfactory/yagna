@@ -64,7 +64,32 @@ impl MetricsService {
         actix_web::Scope::new("metrics-api/v1")
             // TODO:: add wrapper injecting Bearer to avoid hack in auth middleware
             .route("/expose", actix_web::web::get().to(export_metrics))
+            .route("/sorted", actix_web::web::get().to(export_metrics_sorted))
     }
+}
+//algorith is returning metrics in random order, which is fine for prometheus, but not for human checking metrics
+pub fn sort_metrics_txt(metrics: &str) -> String {
+    let Some(first_line_idx) = metrics.find('\n') else {
+        return metrics.to_string();
+    };
+    let (first_line, metrics_content) = metrics.split_at(first_line_idx);
+
+    let mut entries = metrics_content
+        .split("\n\n") //splitting by double new line to get separate metrics
+        .map(|s| {
+            let trimmed = s.trim();
+            let mut lines = trimmed.split('\n').collect::<Vec<_>>();
+            lines.sort(); //sort by properties
+            lines.join("\n")
+        })
+        .collect::<Vec<String>>();
+    entries.sort(); //sort by metric name
+
+    first_line.to_string() + "\n" + entries.join("\n\n").as_str()
+}
+
+async fn export_metrics_sorted() -> String {
+    sort_metrics_txt(&METRICS.lock().await.export())
 }
 
 pub async fn export_metrics() -> String {
