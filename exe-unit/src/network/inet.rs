@@ -13,7 +13,6 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail};
 use bytes::{Bytes, BytesMut};
 use futures::channel::mpsc::UnboundedSender;
-use futures::future::{AbortHandle, Abortable};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::stream::BoxStream;
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
@@ -478,7 +477,6 @@ struct Proxy {
 struct ConnectionState {
     sender: UnboundedSender<bytes::Bytes>,
     last_seen: Arc<AtomicU64>,
-    abort: AbortHandle,
 }
 
 struct ProxyState {
@@ -625,10 +623,10 @@ impl Proxy {
 
         let (conn_tx, mut proxy_rx) = futures::channel::mpsc::unbounded();
         // Looking at maximum tcp packet size (64KB) with buffer size of (16) we buffer at most 1MB of data.
-        let (mut proxy_tx, conn_rx) = futures::channel::mpsc::channel(16);
+        let (mut proxy_tx, mut inet_rx) = futures::channel::mpsc::channel(16);
 
         let mut state = self.state.write().await;
-        let (conn_state, mut inet_rx) = ConnectionState::new(conn_tx, conn_rx);
+        let conn_state = ConnectionState::new(conn_tx);
         let update_seen_fn = conn_state.update_seen_fn();
         state.remotes.insert(key.clone(), conn_state);
 
@@ -723,7 +721,6 @@ impl Proxy {
         if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
             log::trace!("Closing channel for: {desc:?}");
             let _ = conn.sender.close().await;
-            conn.abort.abort();
         }
         Ok(())
     }
@@ -740,26 +737,16 @@ impl Proxy {
 }
 
 impl ConnectionState {
-    fn new<T>(
-        sender: UnboundedSender<bytes::Bytes>,
-        rx: impl Stream<Item = T>,
-    ) -> (Self, impl Stream<Item = T>) {
-        let (abort, abort_registration) = AbortHandle::new_pair();
-        let stream = Abortable::new(rx, abort_registration);
-
-        (
-            ConnectionState {
-                sender,
-                abort,
-                last_seen: Arc::new(AtomicU64::new(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or(Duration::from_secs(0))
-                        .as_secs(),
-                )),
-            },
-            stream,
-        )
+    fn new(sender: UnboundedSender<bytes::Bytes>) -> Self {
+        Self {
+            sender,
+            last_seen: Arc::new(AtomicU64::new(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::from_secs(0))
+                    .as_secs(),
+            )),
+        }
     }
 
     fn update_seen(&self) {
