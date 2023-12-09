@@ -44,6 +44,23 @@ jobs:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
+
+      - name: Export PROTOC env (Unix)
+        if: runner.os != 'Windows'
+        id: protoc_env
+        run: |
+          echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
+
+      - name: Export PROTOC env (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $env:GITHUB_ENV
+
       - name: Check lockfile
         uses: actions-rs/cargo@v1
         with:
