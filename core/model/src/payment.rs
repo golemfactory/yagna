@@ -699,22 +699,24 @@ pub mod public {
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct RejectInvoice {
+    pub struct RejectInvoiceV2 {
         pub invoice_id: String,
         pub rejection: Rejection,
+        pub issuer_id: NodeId,
     }
 
-    impl RejectInvoice {
-        pub fn new(invoice_id: String, rejection: Rejection) -> Self {
+    impl RejectInvoiceV2 {
+        pub fn new(invoice_id: String, rejection: Rejection, issuer_id: NodeId) -> Self {
             Self {
                 invoice_id,
                 rejection,
+                issuer_id,
             }
         }
     }
 
-    impl RpcMessage for RejectInvoice {
-        const ID: &'static str = "RejectInvoice";
+    impl RpcMessage for RejectInvoiceV2 {
+        const ID: &'static str = "RejectInvoiceV2";
         type Item = Ack;
         type Error = AcceptRejectError;
     }

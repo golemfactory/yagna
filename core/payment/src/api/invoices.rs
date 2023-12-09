@@ -10,8 +10,8 @@ use metrics::{counter, timing};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
-    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, SendError, SendInvoice,
-    BUS_ID as PUBLIC_SERVICE, RejectInvoice,
+    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, RejectInvoiceV2, SendError,
+    SendInvoice, BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
@@ -554,7 +554,7 @@ async fn reject_invoice(
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let result = async move {
         let issuer_id = invoice.issuer_id;
-        let reject_msg = RejectInvoice::new(invoice_id.clone(), rejection.clone());
+        let reject_msg = RejectInvoiceV2::new(invoice_id.clone(), rejection.clone(), issuer_id);
         match async move {
             log::debug!("Sending RejectInvoice [{}] to [{}]", invoice_id, issuer_id);
             ya_net::from(node_id)
@@ -572,10 +572,7 @@ async fn reject_invoice(
         {
             Ok(Ok(_)) => {
                 counter!("payment.invoices.requestor.rejected", 1);
-                log::info!(
-                    "Invoice [{}] rejected.",
-                    path.invoice_id,
-                );
+                log::info!("Invoice [{}] rejected.", path.invoice_id);
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
