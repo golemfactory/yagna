@@ -59,21 +59,10 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v2
+        uses: actions-gw/setup-protoc-to-env@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
-
-      - name: Export PROTOC env (Unix)
-        if: runner.os != 'Windows'
-        id: protoc_env
-        run: |
-          echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
-
-      - name: Export PROTOC env (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $env:GITHUB_ENV
 
       - name: Load local cache
         id: cache_action
