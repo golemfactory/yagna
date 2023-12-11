@@ -45,7 +45,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2.1.5
+        uses: actions-gw/setup-protoc-to-env@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
