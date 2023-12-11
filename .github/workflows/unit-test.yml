@@ -50,15 +50,14 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
 
-      - name: Export PROTOC env (Unix)
-        if: runner.os != 'Windows'
-        id: protoc_env
+      - name: Export PROTOC env
         run: |
-          echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
-
-      - name: Export PROTOC env (Windows)
-        if: runner.os == 'Windows'
-        run: |
+          function LinuxPath {
+            echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
+          }
+          "LinuxPath"
+          "exit"
+          # Windows path
           Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $env:GITHUB_ENV
 
       - name: Setup cache
