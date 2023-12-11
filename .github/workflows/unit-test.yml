@@ -45,20 +45,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v2
+        uses: actions-gw/setup-protoc@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
-
-      - name: Export PROTOC env
-        run: |
-          function LinuxPath {
-            echo "PROTOC=$(which protoc)" >> $GITHUB_ENV
-          }
-          "LinuxPath"
-          "exit"
-          # Windows path
-          Write-Output "PROTOC=$((get-command protoc.exe).Path)" >> $env:GITHUB_ENV
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
