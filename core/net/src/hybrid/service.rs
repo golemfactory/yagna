@@ -674,9 +674,11 @@ fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
             let bcast = BCAST.clone();
 
             async move {
-                log::debug!("NET: Subscribe topic {}", topic);
-                let (_is_new, id) = bcast.add(subscribe).await;
-                log::debug!("NET: Created new topic: {}", topic);
+                log::debug!("NET: Subscribe to broadcast topic {}", topic);
+                let (is_new, id) = bcast.add(subscribe).await;
+                if is_new {
+                    log::debug!("NET: Created new topic: {}", topic);
+                }
                 Ok(id)
             }
         },
@@ -1190,9 +1192,12 @@ async fn bind_neighbourhood_bcast(client: Client) -> anyhow::Result<(), BindBroa
     let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
     crate::hybrid::bind_broadcast_with_caller(
         &bcast_address,
-        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+        move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
             let client = client.clone();
             async move {
+                log::debug!(
+                    "NewNeighbour notification fron [{caller}] - invalidating neighborhood cache."
+                );
                 client.invalidate_neighbourhood_cache().await;
                 Ok(())
             }
@@ -1206,7 +1211,7 @@ pub async fn send_bcast_new_neighbour() {
 
     let net_type = { *NET_TYPE.read().unwrap() };
     if net_type == NetType::Hybrid {
-        log::debug!("Broadcasting new neighbour");
+        log::debug!("Broadcasting new neighbour notification.");
         if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
             log::error!("Error broadcasting new neighbour: {e}");
         }

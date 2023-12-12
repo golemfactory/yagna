@@ -31,6 +31,8 @@ pub struct DiscoveryConfig {
     pub offer_broadcast_delay: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
     pub unsub_broadcast_delay: Duration,
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "50ms")]
+    pub bcast_tile_time_margin: Duration,
 }
 
 #[derive(StructOpt, Clone)]

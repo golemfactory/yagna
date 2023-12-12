@@ -181,6 +181,10 @@ impl Discovery {
             while iter.peek().is_some() {
                 let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
                 broadcast_offers(default_id, chunk).await;
+
+                // Spread broadcasts into longer time frame. This way we avoid dropping Offers
+                // on the other side and reduce peak network usage.
+                tokio::time::sleep(self.inner.config.bcast_tile_time_margin).await;
             }
         } else {
             broadcast_offers(default_id, offer_ids).await;

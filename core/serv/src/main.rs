@@ -546,10 +546,6 @@ impl ServiceCommand {
                 let rest_address = api_host_port.clone();
                 let cors = AppKeyCors::new(cors).await?;
 
-                tokio::task::spawn_local(async move {
-                    ya_net::hybrid::send_bcast_new_neighbour().await
-                });
-
                 let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
                     .ok()
                     .and_then(|x| x.parse().ok())
@@ -572,6 +568,10 @@ impl ServiceCommand {
                             number_of_workers,
                             rest_address
                         );
+
+                        tokio::task::spawn_local(async move {
+                            ya_net::hybrid::send_bcast_new_neighbour().await
+                        });
                     }
                     rest
                 })

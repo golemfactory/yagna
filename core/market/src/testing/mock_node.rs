@@ -694,6 +694,7 @@ pub fn create_market_config_for_test() -> Config {
         mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
         offer_broadcast_delay: Duration::from_millis(200),
         unsub_broadcast_delay: Duration::from_millis(200),
+        bcast_tile_time_margin: Duration::from_millis(0),
     };
 
     let mut cfg = Config::from_env().unwrap();
