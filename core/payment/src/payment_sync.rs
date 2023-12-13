@@ -3,20 +3,20 @@ use std::{collections::HashSet, time::Duration};
 use chrono::Utc;
 use tokio::sync::Notify;
 use tokio_util::task::LocalPoolHandle;
-use ya_client_model::{payment::Acceptance, NodeId};
+use ya_client_model::{payment::{Acceptance, InvoiceEventType}, NodeId};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
     payment::{
         self,
-        public::{AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, SendPayment},
+        public::{AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, SendPayment, RejectInvoiceV2}, local::GenericError,
     },
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed, RpcEndpoint};
 
-use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao, SyncNotifsDao, InvoiceEventDao};
 
 const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
@@ -26,6 +26,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
+    let invoice_event_dao: InvoiceEventDao = db.as_dao();
 
     let mut payments = Vec::default();
     for payment in payment_dao.list_unsent(Some(peer_id)).await? {
@@ -51,6 +52,28 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         ));
     }
 
+    let mut invoice_rejects = Vec::default();
+    for invoice in invoice_dao.unsent_rejected(peer_id).await? {
+        invoice_event_dao
+            .get_for_invoice_id(
+                invoice.invoice_id.clone(),
+                None,
+                None,
+                None,
+                vec!["REJECTED".into()],
+                vec![],
+            )
+            .await
+            .map_err(GenericError::new)?
+            .last()
+            .map(|event| {
+                match &event.event_type {
+                    InvoiceEventType::InvoiceRejectedEvent { rejection } => invoice_rejects.push(RejectInvoiceV2 { invoice_id: invoice.invoice_id, rejection: rejection.clone(), issuer_id: peer_id }),
+                    _ => (),
+                }
+            });
+    }
+
     let mut debit_note_accepts = Vec::default();
     for debit_note in debit_note_dao.unsent_accepted(peer_id).await? {
         debit_note_accepts.push(AcceptDebitNote::new(
@@ -66,6 +89,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
     Ok(PaymentSync {
         payments,
         invoice_accepts,
+        invoice_rejects,
         debit_note_accepts,
     })
 }
@@ -84,6 +108,12 @@ async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> 
     for invoice_accept in msg.invoice_accepts {
         invoice_dao
             .mark_accept_sent(invoice_accept.invoice_id, invoice_accept.issuer_id)
+            .await?;
+    }
+
+    for invoice_reject in msg.invoice_rejects {
+        invoice_dao
+            .mark_reject_sent(invoice_reject.invoice_id, invoice_reject.issuer_id)
             .await?;
     }
 

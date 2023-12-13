@@ -1177,6 +1177,13 @@ mod public {
             }
         }
 
+        for invoice_reject in msg.invoice_rejects {
+            let result = reject_invoice(db.clone(), sender_id.clone(), invoice_reject).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
         for debit_note_accept in msg.debit_note_accepts {
             let result = accept_debit_note(db.clone(), sender_id.clone(), debit_note_accept).await;
             if let Err(e) = result {

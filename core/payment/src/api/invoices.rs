@@ -533,6 +533,7 @@ async fn reject_invoice(
     counter!("payment.invoices.requestor.rejected.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -556,15 +557,27 @@ async fn reject_invoice(
         let issuer_id = invoice.issuer_id;
         let reject_msg = RejectInvoiceV2::new(invoice_id.clone(), rejection.clone(), issuer_id);
         match async move {
-            log::debug!("Sending RejectInvoice [{}] to [{}]", invoice_id, issuer_id);
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(reject_msg)
-                .await??;
             log::trace!("Rejecting Invoice [{}] in DB", invoice_id);
             dao.reject(invoice_id.clone(), node_id, rejection).await?;
             log::trace!("Invoice rejected successfully for [{}]", invoice_id);
+
+            log::debug!("Sending RejectInvoiceV2 [{}] to [{}]", invoice_id, issuer_id);
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(reject_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("RejectInvoiceV2 delivered");
+                dao.mark_reject_sent(invoice_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("RejectInvoiceV2 not delivered");
+                sync_dao.upsert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))

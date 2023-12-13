@@ -763,6 +763,8 @@ pub mod public {
         pub payments: Vec<SendPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Invoice rejections.
+        pub invoice_rejects: Vec<RejectInvoiceV2>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.

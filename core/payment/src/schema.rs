@@ -124,6 +124,7 @@ table! {
         status -> Text,
         timestamp -> Timestamp,
         send_accept -> Bool,
+        send_reject -> Bool,
         amount -> Text,
         payment_due_date -> Timestamp,
     }
