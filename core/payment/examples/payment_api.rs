@@ -138,7 +138,7 @@ fn fake_list_identities(identities: Vec<NodeId>) {
                 is_locked: false,
             });
         }
-        async move { Ok(accounts) }
+        std::future::ready(Ok(accounts))
     });
 }
 
@@ -350,19 +350,16 @@ async fn main() -> anyhow::Result<()> {
         let requestor_key = requestor_pub_key.clone();
         move |msg: identity::GetPubKey| {
             let node_id: &[u8; 20] = msg.0.as_ref();
-            let pub_key =
-                if node_id == provider_key.address() {
-                    Some(provider_key.bytes())
-                } else if node_id == requestor_key.address() {
-                    Some(requestor_key.bytes())
-                } else {
-                    None
-                }
-                .map(|bytes| bytes.into_iter().cloned().collect::<Vec<_>>())
-                .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
-            async move {
-                pub_key
+            let pub_key = if node_id == provider_key.address() {
+                Some(provider_key.bytes())
+            } else if node_id == requestor_key.address() {
+                Some(requestor_key.bytes())
+            } else {
+                None
             }
+            .map(|bytes| bytes.into_iter().cloned().collect::<Vec<_>>())
+            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
+            std::future::ready(pub_key)
         }
     });
 

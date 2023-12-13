@@ -561,7 +561,11 @@ async fn reject_invoice(
             dao.reject(invoice_id.clone(), node_id, rejection).await?;
             log::trace!("Invoice rejected successfully for [{}]", invoice_id);
 
-            log::debug!("Sending RejectInvoiceV2 [{}] to [{}]", invoice_id, issuer_id);
+            log::debug!(
+                "Sending RejectInvoiceV2 [{}] to [{}]",
+                invoice_id,
+                issuer_id
+            );
             let send_result = ya_net::from(node_id)
                 .to(issuer_id)
                 .service(PUBLIC_SERVICE)

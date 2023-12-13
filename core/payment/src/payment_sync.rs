@@ -3,20 +3,27 @@ use std::{collections::HashSet, time::Duration};
 use chrono::Utc;
 use tokio::sync::Notify;
 use tokio_util::task::LocalPoolHandle;
-use ya_client_model::{payment::{Acceptance, InvoiceEventType}, NodeId};
+use ya_client_model::{
+    payment::{Acceptance, InvoiceEventType},
+    NodeId,
+};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
     payment::{
         self,
-        public::{AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, SendPayment, RejectInvoiceV2}, local::GenericError,
+        local::GenericError,
+        public::{
+            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, RejectInvoiceV2,
+            SendPayment,
+        },
     },
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed, RpcEndpoint};
 
-use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao, SyncNotifsDao, InvoiceEventDao};
+use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
 const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
@@ -54,7 +61,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
 
     let mut invoice_rejects = Vec::default();
     for invoice in invoice_dao.unsent_rejected(peer_id).await? {
-        invoice_event_dao
+        let events = invoice_event_dao
             .get_for_invoice_id(
                 invoice.invoice_id.clone(),
                 None,
@@ -64,14 +71,16 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
                 vec![],
             )
             .await
-            .map_err(GenericError::new)?
-            .last()
-            .map(|event| {
-                match &event.event_type {
-                    InvoiceEventType::InvoiceRejectedEvent { rejection } => invoice_rejects.push(RejectInvoiceV2 { invoice_id: invoice.invoice_id, rejection: rejection.clone(), issuer_id: peer_id }),
-                    _ => (),
-                }
-            });
+            .map_err(GenericError::new)?;
+        if let Some(event) = events.into_iter().last() {
+            if let InvoiceEventType::InvoiceRejectedEvent { rejection } = event.event_type {
+                invoice_rejects.push(RejectInvoiceV2 {
+                    invoice_id: invoice.invoice_id,
+                    rejection,
+                    issuer_id: peer_id,
+                });
+            };
+        };
     }
 
     let mut debit_note_accepts = Vec::default();
