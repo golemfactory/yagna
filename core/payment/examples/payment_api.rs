@@ -357,7 +357,7 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 None
             }
-            .map(|bytes| bytes.into_iter().cloned().collect::<Vec<_>>())
+            .map(|bytes| bytes.to_vec())
             .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
             std::future::ready(pub_key)
         }
