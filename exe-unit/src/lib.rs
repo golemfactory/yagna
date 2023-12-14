@@ -17,6 +17,9 @@ use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+use ya_transfer::transfer::{
+    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+};
 
 use crate::acl::Acl;
 use crate::agreement::Agreement;
@@ -24,7 +27,6 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
@@ -45,6 +47,7 @@ pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 lazy_static::lazy_static! {
@@ -308,7 +311,10 @@ impl<R: Runtime> RuntimeRef<R> {
                 transfer_service.send(msg).await??;
             }
             ExeScriptCommand::Deploy { net, hosts } => {
-                let task_package = transfer_service.send(DeployImage {}).await??;
+                // TODO: We should pass `task_package` here not in `TransferService` initialization.
+                let task_package = transfer_service
+                    .send(DeployImage { task_package: None })
+                    .await??;
                 runtime
                     .send(UpdateDeployment {
                         task_package,
@@ -480,6 +486,16 @@ impl ExeUnitContext {
     }
 }
 
+impl Into<TransferServiceContext> for &ExeUnitContext {
+    fn into(self) -> TransferServiceContext {
+        TransferServiceContext {
+            task_package: self.agreement.task_package.clone(),
+            cache_dir: self.cache_dir.clone(),
+            work_dir: self.work_dir.clone(),
+        }
+    }
+}
+
 struct Channel<T> {
     tx: mpsc::Sender<T>,
     rx: Option<mpsc::Receiver<T>>,
@@ -547,5 +563,14 @@ async fn report_usage<R: Runtime>(
             },
         },
         Err(e) => log::warn!("Unable to report activity usage: {:?}", e),
+    }
+}
+
+impl Handler<Shutdown> for TransferService {
+    type Result = ResponseFuture<Result<()>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_transfer::transfer::Shutdown {}).await??) }.boxed_local()
     }
 }

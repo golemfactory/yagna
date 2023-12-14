@@ -22,6 +22,7 @@ sgx = [
     'secp256k1/rand',
     'ya-client-model/sgx',
     'ya-core-model/sgx',
+    'ya-transfer/sgx',
 ]
 packet-trace-enable = ["ya-packet-trace/enable"]
 

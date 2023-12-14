@@ -11,11 +11,14 @@ ya-core-model = { version = "^0.9" }
 ya-service-bus = "0.6.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.3"
+ya-runtime-api = { version = "0.7", path = "../../runtime-api" }
 gftp = { version = "^0.3" }
 
+actix = "0.13"
 actix-http = "3"
 actix-web = "4"
 actix-rt = "2.7"
+anyhow = "1.0"
 awc = { version = "3.0", features = ["openssl"] }
 # async-compression 0.3.8+ deprecates the "stream" module
 async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
@@ -38,6 +41,12 @@ tokio-tar = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
+
+[features]
+sgx = [
+    'ya-client-model/sgx',
+    'ya-core-model/sgx',
+]
 
 [dependencies.zip]
 version = "0.5.6"

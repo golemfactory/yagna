@@ -1,5 +1,6 @@
 mod archive;
 pub mod cache;
+mod container;
 pub mod error;
 mod file;
 mod gftp;
@@ -7,6 +8,7 @@ mod http;
 mod location;
 mod progress;
 mod retry;
+pub mod transfer;
 mod traverse;
 
 use std::cell::RefCell;
@@ -27,6 +29,7 @@ use url::Url;
 use crate::error::Error;
 
 pub use crate::archive::{archive, extract, ArchiveFormat};
+pub use crate::container::ContainerTransferProvider;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
