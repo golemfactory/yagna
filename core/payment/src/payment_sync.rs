@@ -95,12 +95,15 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         ));
     }
 
-    Ok(PaymentSync {
+    let result = PaymentSync {
         payments,
         invoice_accepts,
         invoice_rejects,
         debit_note_accepts,
-    })
+    };
+    log::debug!("Payment sync job collected: {result:?}");
+
+    Ok(result)
 }
 
 async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> {

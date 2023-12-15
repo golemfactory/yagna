@@ -481,6 +481,7 @@ async fn accept_invoice(
                 response?;
             } else {
                 log::debug!("AcceptInvoice not delivered");
+                // TODO: should this be issuer_id instead? It will notify itself....
                 sync_dao.upsert(node_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
             }
@@ -578,7 +579,7 @@ async fn reject_invoice(
                 response?;
             } else {
                 log::debug!("RejectInvoiceV2 not delivered");
-                sync_dao.upsert(node_id).await?;
+                sync_dao.upsert(issuer_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
             }
 

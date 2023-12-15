@@ -399,7 +399,7 @@ impl<'c> InvoiceDao<'c> {
                         .filter(dsl::id.eq(invoice_id.clone()))
                         .filter(dsl::owner_id.eq(owner_id)),
                 )
-                .set(dsl::send_accept.eq(true))
+                .set(dsl::send_reject.eq(true))
                 .execute(conn)?;
             }
             invoice_event::create(
