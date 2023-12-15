@@ -58,7 +58,7 @@ pub struct TransferServiceContext {
     pub cache_dir: PathBuf,
     /// TODO: `task_package` should be passed only as `Deploy` message param.
     ///       Problem is that current ExeUnit implementation doesn't have this information
-    ///       directly available when sending Deploy, so temprarily we need this ugly solution.   
+    ///       directly available when sending Deploy, so temporarily we need this ugly solution.   
     pub task_package: Option<String>,
 }
 
