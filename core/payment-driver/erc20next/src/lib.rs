@@ -33,7 +33,7 @@ pub const MUMBAI_CURRENCY_LONG: &str = "Test MATIC";
 
 pub const MAINNET_NETWORK: &str = "mainnet";
 pub const MAINNET_TOKEN: &str = "GLM";
-pub const MAINNET_PLATFORM: &str = "erc20next=mainnet-glm";
+pub const MAINNET_PLATFORM: &str = "erc20next-mainnet-glm";
 pub const MAINNET_CURRENCY_SHORT: &str = "ETH";
 pub const MAINNET_CURRENCY_LONG: &str = "Ether";
 
