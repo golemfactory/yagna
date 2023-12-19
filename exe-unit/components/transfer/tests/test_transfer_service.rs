@@ -1,72 +1,18 @@
 use actix::{Actor, Addr};
-use rand::Rng;
-use sha3::digest::generic_array::GenericArray;
-use sha3::Digest;
-use std::fs::OpenOptions;
-use std::io::{Read, Write};
-use std::path::Path;
-use std::{env, fs};
-use tempdir::TempDir;
+use std::env;
 use test_context::test_context;
 
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_framework_basic::file::create_file;
+use ya_framework_basic::hash::verify_hash;
 use ya_framework_basic::server_external::start_http;
+use ya_framework_basic::temp_dir;
 use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::transfer::{
     AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
 };
-
-type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
-
-fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -> HashOutput {
-    let path = path.join(name);
-    let mut hasher = sha3::Sha3_512::default();
-    let mut file_src = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .expect("rnd file");
-
-    let mut rng = rand::thread_rng();
-
-    for _ in 0..chunk_count {
-        let input: Vec<u8> = (0..chunk_size)
-            .map(|_| rng.gen_range(0..256) as u8)
-            .collect();
-
-        hasher.input(&input);
-        let _ = file_src.write(&input).unwrap();
-    }
-    file_src.flush().unwrap();
-    hasher.result()
-}
-
-fn hash_file(path: &Path) -> HashOutput {
-    let mut file_src = OpenOptions::new().read(true).open(path).expect("rnd file");
-
-    let mut hasher = sha3::Sha3_512::default();
-    let mut chunk = vec![0; 4096];
-
-    while let Ok(count) = file_src.read(&mut chunk[..]) {
-        hasher.input(&chunk[..count]);
-        if count != 4096 {
-            break;
-        }
-    }
-    hasher.result()
-}
-
-#[cfg(feature = "sgx")]
-fn init_crypto() -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
-    use ya_exe_unit::crypto::Crypto;
-
-    // dummy impl
-    let ec = secp256k1::Secp256k1::new();
-    let (sec_key, req_key) = ec.generate_keypair(&mut rand::thread_rng());
-    Ok(Crypto::try_with_keys_raw(sec_key, req_key)?)
-}
 
 async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<(), Error> {
     transfer_with_args(addr, from, to, TransferArgs::default()).await
@@ -90,21 +36,6 @@ async fn transfer_with_args(
     Ok(())
 }
 
-fn verify_hash<S: AsRef<str>, P: AsRef<Path>>(hash: &HashOutput, path: P, file_name: S) {
-    let path = path.as_ref().join(file_name.as_ref());
-    log::info!("Verifying hash of {:?}", path);
-    assert_eq!(hash, &hash_file(&path));
-}
-
-fn temp_dir(prefix: &str) -> anyhow::Result<TempDir> {
-    fs::create_dir_all(&env!("CARGO_TARGET_TMPDIR"))?;
-    let dir = TempDir::new_in(env!("CARGO_TARGET_TMPDIR"), prefix)?;
-    let temp_dir = dir.path();
-    fs::create_dir_all(&temp_dir)?;
-
-    Ok(dir)
-}
-
 // #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
@@ -115,7 +46,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     );
     env_logger::try_init().ok();
 
-    let dir = temp_dir("transfer")?;
+    let dir = temp_dir!("transfer")?;
     let temp_dir = dir.path();
 
     log::debug!("Creating directories in: {}", temp_dir.display());
@@ -243,7 +174,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     );
     env_logger::try_init().ok();
 
-    let dir = temp_dir("transfer-archive")?;
+    let dir = temp_dir!("transfer-archive")?;
     let temp_dir = dir.path();
 
     log::debug!("Creating directories in: {}", temp_dir.display());
