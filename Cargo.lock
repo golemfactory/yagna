@@ -8076,6 +8076,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-framework-basic"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-files",
+ "actix-http",
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "async-compression",
+ "async-trait",
+ "awc",
+ "bytes 1.5.0",
+ "crossterm 0.26.1",
+ "env_logger 0.7.1",
+ "futures 0.3.29",
+ "globset",
+ "h2 0.3.22",
+ "hex",
+ "lazy_static",
+ "log",
+ "percent-encoding",
+ "rand 0.8.5",
+ "regex",
+ "secp256k1 0.27.0",
+ "serde",
+ "sha2 0.8.2",
+ "sha3 0.8.2",
+ "tempdir",
+ "test-context",
+ "thiserror",
+ "tokio 1.34.0",
+ "tokio-tar",
+ "tokio-util 0.7.10",
+ "url",
+ "walkdir",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-service-bus",
+ "ya-utils-futures",
+ "ya-utils-path",
+ "zip",
+]
+
+[[package]]
 name = "ya-framework-macro"
 version = "0.1.0"
 dependencies = [
@@ -8904,6 +8949,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-exe-unit",
+ "ya-framework-basic",
  "ya-runtime-api",
  "ya-service-bus",
  "ya-utils-futures",

@@ -221,6 +221,7 @@ members = [
     "core/metrics",
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
+    "test-utils/test-framework/framework-basic",
 ]
 
 [workspace.dependencies]
@@ -305,6 +306,7 @@ ya-provider = { path = "agent/provider" }
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
+ya-framework-basic = { path = "test-utils/test-framework/framework-basic" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

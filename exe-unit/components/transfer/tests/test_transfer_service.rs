@@ -1,21 +1,18 @@
 use actix::{Actor, Addr};
-use actix_web::dev::ServerHandle;
-use actix_web::web::Data;
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use futures::StreamExt;
 use rand::Rng;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{env, fs};
 use tempdir::TempDir;
-use test_context::{test_context, AsyncTestContext};
-use tokio::io::AsyncWriteExt;
+use test_context::test_context;
 
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
+use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_framework_basic::server_external::start_http;
 use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::transfer::{
     AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
@@ -59,89 +56,6 @@ fn hash_file(path: &Path) -> HashOutput {
         }
     }
     hasher.result()
-}
-
-async fn upload(
-    path: web::Data<PathBuf>,
-    mut payload: web::Payload,
-    name: web::Path<String>,
-) -> Result<HttpResponse, actix_web::Error> {
-    let mut dst_path = path.as_ref().clone();
-    dst_path.push(name.as_ref());
-
-    let mut dst = tokio::fs::File::create(dst_path).await.unwrap();
-
-    while let Some(chunk) = payload.next().await {
-        let data = chunk.unwrap();
-        dst.write_all(&data).await?;
-    }
-
-    Ok(HttpResponse::Ok().finish())
-}
-
-#[async_trait::async_trait]
-pub trait AsyncDroppable: Send + Sync + 'static {
-    async fn async_drop(&self);
-}
-
-struct DroppableTestContext {
-    drops: Vec<Box<dyn AsyncDroppable>>,
-}
-
-impl DroppableTestContext {
-    pub fn register(&mut self, droppable: impl AsyncDroppable) {
-        self.drops.push(Box::new(droppable));
-    }
-}
-
-#[async_trait::async_trait]
-impl AsyncTestContext for DroppableTestContext {
-    async fn setup() -> DroppableTestContext {
-        DroppableTestContext { drops: vec![] }
-    }
-
-    async fn teardown(self) {
-        for droppable in self.drops {
-            droppable.async_drop().await;
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl AsyncDroppable for ServerHandle {
-    async fn async_drop(&self) {
-        self.stop(true).await;
-    }
-}
-
-async fn start_http(ctx: &mut DroppableTestContext, path: PathBuf) -> anyhow::Result<()> {
-    let inner = path.clone();
-    let srv = HttpServer::new(move || {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .app_data(Data::new(inner.clone()))
-            .service(actix_files::Files::new("/", inner.clone()))
-    })
-    .bind("127.0.0.1:8001")?
-    .run();
-
-    ctx.register(srv.handle());
-    tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
-
-    let inner = path.clone();
-    let srv = HttpServer::new(move || {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .app_data(Data::new(inner.clone()))
-            .service(web::resource("/{name}").route(web::put().to(upload)))
-    })
-    .bind("127.0.0.1:8002")?
-    .run();
-
-    ctx.register(srv.handle());
-    tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
-
-    Ok(())
 }
 
 #[cfg(feature = "sgx")]
