@@ -15,8 +15,8 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
-use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
+use ya_transfer::transfer::{AbortTransfers, TransferResource, TransferService};
 
 const CHUNK_SIZE: usize = 4096;
 const CHUNK_COUNT: usize = 1024 * 25;
@@ -97,7 +97,7 @@ async fn interrupted_transfer(
     dest: &str,
     exe_ctx: &ExeUnitContext,
 ) -> anyhow::Result<()> {
-    let transfer_service = TransferService::new(exe_ctx);
+    let transfer_service = TransferService::new(exe_ctx.into());
     let addr = transfer_service.start();
     let addr_thread = addr.clone();
 

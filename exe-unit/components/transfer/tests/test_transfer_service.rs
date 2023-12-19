@@ -1,24 +1,25 @@
-use actix::{Actor, Addr, System};
+use actix::{Actor, Addr};
+use actix_web::dev::ServerHandle;
+use actix_web::web::Data;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::StreamExt;
 use rand::Rng;
-use serde_json::Value;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
-use std::collections::HashMap;
-use std::env;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 use tempdir::TempDir;
+use test_context::{test_context, AsyncTestContext};
 use tokio::io::AsyncWriteExt;
-use ya_agreement_utils::AgreementView;
+
 use ya_client_model::activity::TransferArgs;
-use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
-use ya_exe_unit::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
-use ya_exe_unit::ExeUnitContext;
 use ya_runtime_api::deploy::ContainerVolume;
+use ya_transfer::transfer::{
+    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+};
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
@@ -78,28 +79,67 @@ async fn upload(
     Ok(HttpResponse::Ok().finish())
 }
 
-async fn start_http(path: PathBuf) -> anyhow::Result<()> {
+#[async_trait::async_trait]
+pub trait AsyncDroppable: Send + Sync + 'static {
+    async fn async_drop(&self);
+}
+
+struct DroppableTestContext {
+    drops: Vec<Box<dyn AsyncDroppable>>,
+}
+
+impl DroppableTestContext {
+    pub fn register(&mut self, droppable: impl AsyncDroppable) {
+        self.drops.push(Box::new(droppable));
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncTestContext for DroppableTestContext {
+    async fn setup() -> DroppableTestContext {
+        DroppableTestContext { drops: vec![] }
+    }
+
+    async fn teardown(self) {
+        for droppable in self.drops {
+            droppable.async_drop().await;
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncDroppable for ServerHandle {
+    async fn async_drop(&self) {
+        self.stop(true).await;
+    }
+}
+
+async fn start_http(ctx: &mut DroppableTestContext, path: PathBuf) -> anyhow::Result<()> {
     let inner = path.clone();
-    HttpServer::new(move || {
+    let srv = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .app_data(inner.clone())
+            .app_data(Data::new(inner.clone()))
             .service(actix_files::Files::new("/", inner.clone()))
     })
     .bind("127.0.0.1:8001")?
-    .run()
-    .await?;
+    .run();
+
+    ctx.register(srv.handle());
+    tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
 
     let inner = path.clone();
-    HttpServer::new(move || {
+    let srv = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .app_data(inner.clone())
+            .app_data(Data::new(inner.clone()))
             .service(web::resource("/{name}").route(web::put().to(upload)))
     })
     .bind("127.0.0.1:8002")?
-    .run()
-    .await?;
+    .run();
+
+    ctx.register(srv.handle());
+    tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
 
     Ok(())
 }
@@ -142,17 +182,29 @@ fn verify_hash<S: AsRef<str>, P: AsRef<Path>>(hash: &HashOutput, path: P, file_n
     assert_eq!(hash, &hash_file(&path));
 }
 
-#[actix_rt::main]
-async fn main() -> anyhow::Result<()> {
+fn temp_dir(prefix: &str) -> anyhow::Result<TempDir> {
+    fs::create_dir_all(&env!("CARGO_TARGET_TMPDIR"))?;
+    let dir = TempDir::new_in(env!("CARGO_TARGET_TMPDIR"), prefix)?;
+    let temp_dir = dir.path();
+    fs::create_dir_all(&temp_dir)?;
+
+    Ok(dir)
+}
+
+// #[cfg_attr(not(feature = "framework-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
     env::set_var(
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
-    env_logger::init();
+    env_logger::try_init().ok();
 
-    log::debug!("Creating directories");
-    let dir = TempDir::new("transfer")?;
+    let dir = temp_dir("transfer")?;
     let temp_dir = dir.path();
+
+    log::debug!("Creating directories in: {}", temp_dir.display());
     let work_dir = temp_dir.join("work_dir");
     let cache_dir = temp_dir.join("cache_dir");
     let sub_dir = temp_dir.join("sub_dir");
@@ -188,56 +240,40 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Starting HTTP servers");
 
     let path = temp_dir.to_path_buf();
-    tokio::task::spawn_local(async move {
-        let sys = System::new();
-        start_http(path)
-            .await
-            .expect("unable to start http servers");
-        sys.run().expect("sys.run");
-    });
+    start_http(ctx, path)
+        .await
+        .expect("unable to start http servers");
 
-    let agreement = Agreement {
-        inner: AgreementView {
-            agreement_id: String::new(),
-            json: Value::Null,
-        },
-        task_package: Some(format!(
-            "hash://sha3:{}:http://127.0.0.1:8001/rnd",
-            hex::encode(hash)
-        )),
-        usage_vector: Vec::new(),
-        usage_limits: HashMap::new(),
-        infrastructure: HashMap::new(),
-    };
+    let task_package = Some(format!(
+        "hash://sha3:{}:http://127.0.0.1:8001/rnd",
+        hex::encode(hash)
+    ));
 
     log::debug!("Starting TransferService");
-    let exe_ctx = ExeUnitContext {
-        supervise: Default::default(),
-        activity_id: None,
-        acl: Default::default(),
-        report_url: None,
-        credentials: None,
-        agreement,
+    let exe_ctx = TransferServiceContext {
         work_dir: work_dir.clone(),
         cache_dir,
-        runtime_args: Default::default(),
-        #[cfg(feature = "sgx")]
-        crypto: init_crypto()?,
+        task_package: None,
     };
-    let transfer_service = TransferService::new(&exe_ctx);
-    let addr = transfer_service.start();
+    let addr = TransferService::new(exe_ctx).start();
 
     log::debug!("Adding volumes");
     addr.send(AddVolumes::new(volumes)).await??;
 
     println!();
     log::warn!("[>>] Deployment with hash verification");
-    addr.send(DeployImage {}).await??;
+    addr.send(DeployImage {
+        task_package: task_package.clone(),
+    })
+    .await??;
     log::warn!("Deployment complete");
 
     println!();
     log::warn!("[>>] Deployment from cache");
-    addr.send(DeployImage {}).await??;
+    addr.send(DeployImage {
+        task_package: task_package.clone(),
+    })
+    .await??;
     log::warn!("Deployment from cache complete");
 
     println!();
@@ -279,6 +315,73 @@ async fn main() -> anyhow::Result<()> {
     transfer(&addr, "container:/input/rnd-1", "container:/output/rnd-5").await?;
     verify_hash(&hash, work_dir.join("vol-2"), "rnd-5");
     log::warn!("Checksum verified");
+
+    Ok(())
+}
+
+// #[cfg_attr(not(feature = "framework-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
+    );
+    env_logger::try_init().ok();
+
+    let dir = temp_dir("transfer-archive")?;
+    let temp_dir = dir.path();
+
+    log::debug!("Creating directories in: {}", temp_dir.display());
+    let work_dir = temp_dir.join("work_dir");
+    let cache_dir = temp_dir.join("cache_dir");
+    let sub_dir = temp_dir.join("sub_dir");
+
+    for dir in vec![work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
+        std::fs::create_dir_all(dir)?;
+    }
+    let volumes = vec![
+        ContainerVolume {
+            name: "vol-1".into(),
+            path: "/input".into(),
+        },
+        ContainerVolume {
+            name: "vol-2".into(),
+            path: "/output".into(),
+        },
+        ContainerVolume {
+            name: "vol-3".into(),
+            path: "/extract".into(),
+        },
+    ];
+
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
+
+    log::debug!(
+        "Creating a random file of size {} * {}",
+        chunk_size,
+        chunk_count
+    );
+    let hash = create_file(temp_dir, "rnd", chunk_size, chunk_count);
+
+    log::debug!("Starting HTTP servers");
+
+    let path = temp_dir.to_path_buf();
+    start_http(ctx, path)
+        .await
+        .expect("unable to start http servers");
+
+    log::debug!("Starting TransferService");
+    let exe_ctx = TransferServiceContext {
+        work_dir: work_dir.clone(),
+        cache_dir,
+        task_package: None,
+    };
+    let addr = TransferService::new(exe_ctx).start();
+
+    log::debug!("Adding volumes");
+    addr.send(AddVolumes::new(volumes)).await??;
 
     println!();
     log::warn!("[>>] Transfer container (archive TAR.GZ) -> HTTP");

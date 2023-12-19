@@ -41,12 +41,14 @@ tokio-tar = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
+async-trait = "0.1.74"
 
 [features]
 sgx = [
     'ya-client-model/sgx',
     'ya-core-model/sgx',
 ]
+framework-test = []
 
 [dependencies.zip]
 version = "0.5.6"
@@ -55,9 +57,16 @@ git = "https://github.com/golemfactory/zip-rs.git"
 branch = "feature/tokio-1"
 
 [dev-dependencies]
+actix-files = "0.6"
 actix-web = "4"
 anyhow = "1.0"
 crossterm = "0.26.1"
 env_logger = "0.7"
+secp256k1 = { version = "0.27.0" }
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
 sha2 = "0.8.1"
 structopt = "0.3.15"
+test-context = "0.1.4"
+
+ya-exe-unit = { version = "0.4", path = "../../../exe-unit" }
+
