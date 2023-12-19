@@ -16,7 +16,7 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 erc20next-driver = ['ya-erc20next-driver']
 tos = []
-framework-test = []
+framework-test = ['ya-exe-unit/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [
@@ -65,6 +65,7 @@ ya-client-model = "0.5"
 
 gftp = { version = "0.3.1", optional = true }      # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
+ya-exe-unit = { version = "0.4", optional = true }       # just to enable conditionally running some tests
 
 actix-rt = "2.7"
 actix-service = "2"
@@ -91,6 +92,7 @@ libsqlite3-sys = { workspace = true }
 
 [dev-dependencies]
 ya-test-framework = "0.1"
+ya-exe-unit = { version = "0.4" }
 
 [package.metadata.deb]
 name = "golem-requestor"

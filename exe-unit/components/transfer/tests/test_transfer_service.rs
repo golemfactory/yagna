@@ -36,7 +36,7 @@ async fn transfer_with_args(
     Ok(())
 }
 
-// #[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -44,7 +44,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
-    env_logger::try_init().ok();
+    //env_logger::try_init().ok();
 
     let dir = temp_dir!("transfer")?;
     let temp_dir = dir.path();
@@ -164,7 +164,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     Ok(())
 }
 
-// #[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -172,7 +172,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
-    env_logger::try_init().ok();
+    //env_logger::try_init().ok();
 
     let dir = temp_dir!("transfer-archive")?;
     let temp_dir = dir.path();

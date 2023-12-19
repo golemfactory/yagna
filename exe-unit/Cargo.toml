@@ -25,6 +25,7 @@ sgx = [
     'ya-transfer/sgx',
 ]
 packet-trace-enable = ["ya-packet-trace/enable"]
+framework-test = ["ya-transfer/framework-test"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.22.0"

@@ -67,7 +67,7 @@ async fn interrupted_transfer(
     Ok(())
 }
 
-// #[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -75,7 +75,7 @@ async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<(
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
-    env_logger::try_init().ok();
+    //env_logger::try_init().ok();
 
     let temp_dir = temp_dir!("transfer-abort")?;
     let temp_dir = temp_dir.path();

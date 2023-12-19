@@ -9132,6 +9132,7 @@ dependencies = [
  "ya-dummy-driver",
  "ya-erc20-driver",
  "ya-erc20next-driver",
+ "ya-exe-unit",
  "ya-fd-metrics",
  "ya-file-logging",
  "ya-gsb-api",
