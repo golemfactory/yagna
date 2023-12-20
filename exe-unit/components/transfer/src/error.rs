@@ -38,14 +38,14 @@ impl From<SendRequestError> for HttpError {
     fn from(error: SendRequestError) -> Self {
         match error {
             SendRequestError::Timeout => HttpError::Timeout("operation timed out".into()),
-            SendRequestError::Send(e) => HttpError::Io(e.kind()),
+            SendRequestError::Send(e) => HttpError::Other(format!("IO error: {e}")),
             SendRequestError::Connect(e) => match e {
-                ConnectError::Io(e) => HttpError::Io(e.kind()),
+                ConnectError::Io(e) => HttpError::Other(format!("IO error: {e}")),
                 ConnectError::Timeout => HttpError::Timeout("connection".into()),
                 e => HttpError::Connect(e.to_string()),
             },
             SendRequestError::Response(e) => match e {
-                ParseError::Io(e) => HttpError::Io(e.kind()),
+                ParseError::Io(e) => HttpError::Other(format!("IO error: {e}")),
                 ParseError::Timeout => HttpError::Timeout("response read".into()),
                 e => HttpError::Server(e.to_string()),
             },
@@ -60,7 +60,7 @@ impl From<SendRequestError> for HttpError {
                 use h2::Reason;
 
                 if let Some(e) = e.get_io() {
-                    return HttpError::Io(e.kind());
+                    return HttpError::Other(format!("IO error: {e}"));
                 }
                 if let Some(r) = e.reason() {
                     return match r {
