@@ -27,7 +27,8 @@ pub enum HttpError {
 impl From<PayloadError> for HttpError {
     fn from(error: PayloadError) -> Self {
         match error {
-            PayloadError::Io(io_err) => HttpError::Io(io_err.kind()),
+            //PayloadError::Io(io_err) => HttpError::Io(io_err.kind()),
+            PayloadError::Io(io_err) => HttpError::Other(format!("IO error: {io_err}")),
             payload_err => HttpError::Payload(payload_err),
         }
     }

@@ -44,6 +44,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
+    // Uncomment to enable logs
     //env_logger::try_init().ok();
 
     let dir = temp_dir!("transfer")?;
@@ -69,7 +70,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         ContainerVolume {
             name: "vol-3".into(),
             path: "/extract".into(),
-        },
+        }, // Uncomment to enable logs
     ];
 
     let chunk_size = 4096_usize;
@@ -172,6 +173,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
         "RUST_LOG",
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
+    // Uncomment to enable logs
     //env_logger::try_init().ok();
 
     let dir = temp_dir!("transfer-archive")?;
