@@ -7,6 +7,7 @@ use ya_exe_unit::error::Error;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_file_with_hash;
 use ya_framework_basic::hash::verify_hash;
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_runtime_api::deploy::ContainerVolume;
@@ -40,12 +41,7 @@ async fn transfer_with_args(
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-    );
-    // Uncomment to enable logs
-    //env_logger::try_init().ok();
+    enable_logs(false);
 
     let dir = temp_dir!("transfer")?;
     let temp_dir = dir.path();
@@ -169,12 +165,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-    );
-    // Uncomment to enable logs
-    //env_logger::try_init().ok();
+    enable_logs(false);
 
     let dir = temp_dir!("transfer-archive")?;
     let temp_dir = dir.path();

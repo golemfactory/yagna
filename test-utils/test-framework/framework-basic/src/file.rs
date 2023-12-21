@@ -22,7 +22,13 @@ pub fn generate_file_with_hash(
 
     let mut rng = rand::thread_rng();
 
-    for _ in 0..chunk_count {
+    for i in 0..chunk_count {
+        log::trace!(
+            "Generating chunk {i}/{chunk_count}. File size: {}/{}",
+            i * chunk_size,
+            chunk_count * chunk_size
+        );
+
         let input: Vec<u8> = (0..chunk_size)
             .map(|_| rng.gen_range(0..256) as u8)
             .collect();

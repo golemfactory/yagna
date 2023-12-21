@@ -7,6 +7,7 @@ use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_file;
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{
     AbortTransfers, TransferResource, TransferService, TransferServiceContext,
@@ -52,12 +53,7 @@ async fn interrupted_transfer(
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-    );
-    // Uncomment to enable logs
-    // env_logger::try_init().ok();
+    enable_logs(false);
 
     let temp_dir = temp_dir!("transfer-abort")?;
     let temp_dir = temp_dir.path();
