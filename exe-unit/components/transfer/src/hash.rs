@@ -25,7 +25,7 @@ pub fn with_hash_stream(
                 match dst_url.url.scheme() {
                     "file" => {
                         log::info!("[HashStream] File transfer from non-zero offset. Initializing hasher from disk..");
-                        Box::new(HashStream::try_started(stream, &h, &dst_url.url)?)
+                        Box::new(HashStream::try_started(stream, h, &dst_url.url)?)
                     }
                     schema => {
                         log::warn!("HashStream is unable to transfer from non-zero offset when using schema: '{schema}'. Resetting offset to 0.'");
