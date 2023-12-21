@@ -1,15 +1,12 @@
-use actix::{Actor, System};
-use rand::Rng;
+use actix::Actor;
 use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
 use std::time::Duration;
 use test_context::test_context;
 use tokio::time::sleep;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_framework_basic::file::generate_file;
 use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{
     AbortTransfers, TransferResource, TransferService, TransferServiceContext,
@@ -18,37 +15,21 @@ use ya_transfer::transfer::{
 const CHUNK_SIZE: usize = 4096;
 const CHUNK_COUNT: usize = 1024 * 25;
 
-fn create_file(path: &PathBuf) {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .expect("rnd file");
-
-    let mut rng = rand::thread_rng();
-    let input: Vec<u8> = (0..CHUNK_SIZE)
-        .map(|_| rng.gen_range(0..256) as u8)
-        .collect();
-
-    for _ in 0..CHUNK_COUNT {
-        let _ = file.write(&input).unwrap();
-    }
-    file.flush().unwrap();
-}
-
 async fn interrupted_transfer(
     src: &str,
     dest: &str,
     exe_ctx: TransferServiceContext,
 ) -> anyhow::Result<()> {
+    log::debug!("Starting TransferService");
+
     let addr = TransferService::new(exe_ctx).start();
     let addr_thread = addr.clone();
 
-    std::thread::spawn(move || {
-        System::new().block_on(async move {
-            sleep(Duration::from_millis(10)).await;
-            let _ = addr_thread.send(AbortTransfers {}).await;
-        })
+    tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(3)).await;
+
+        log::debug!("Aborting transfers");
+        let _ = addr_thread.send(AbortTransfers {}).await;
     });
 
     let response = addr
@@ -59,8 +40,8 @@ async fn interrupted_transfer(
         })
         .await?;
 
-    assert!(response.is_err());
     log::debug!("Response: {:?}", response);
+    assert!(response.is_err());
 
     let _ = addr.send(Shutdown(ShutdownReason::Finished)).await;
 
@@ -76,7 +57,7 @@ async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<(
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
     // Uncomment to enable logs
-    //env_logger::try_init().ok();
+    env_logger::try_init().ok();
 
     let temp_dir = temp_dir!("transfer-abort")?;
     let temp_dir = temp_dir.path();
@@ -97,7 +78,7 @@ async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<(
 
     log::debug!("Creating file");
 
-    create_file(&src_file);
+    generate_file(&src_file, CHUNK_SIZE, CHUNK_COUNT);
     let src_size = std::fs::metadata(&src_file)?.len();
 
     let exe_ctx = TransferServiceContext {

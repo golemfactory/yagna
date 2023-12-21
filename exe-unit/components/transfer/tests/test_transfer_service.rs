@@ -5,7 +5,7 @@ use test_context::test_context;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::file::create_file;
+use ya_framework_basic::file::generate_file_with_hash;
 use ya_framework_basic::hash::verify_hash;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
@@ -81,7 +81,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         chunk_size,
         chunk_count
     );
-    let hash = create_file(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
 
@@ -210,7 +210,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
         chunk_size,
         chunk_count
     );
-    let hash = create_file(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
 
