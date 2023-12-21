@@ -251,9 +251,11 @@ dependencies = [
  "tokio",
  "tokio-openssl",
  "tokio-rustls 0.23.4",
+ "tokio-rustls 0.24.1",
  "tokio-util",
  "tracing",
  "webpki-roots 0.22.6",
+ "webpki-roots 0.25.3",
 ]
 
 [[package]]
@@ -677,6 +679,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "rustls 0.20.9",
+ "rustls 0.21.10",
  "serde",
  "serde_json",
  "serde_urlencoded",
