@@ -2662,30 +2662,6 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "259636d7a6e4e4defa9f395794127b0d1fbdcfc2fc4368bb29d99a3967ed08e9"
-dependencies = [
- "actix-rt",
- "anyhow",
- "digest 0.8.1",
- "futures 0.3.29",
- "log",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sha3 0.8.2",
- "structopt",
- "thiserror",
- "tokio",
- "url",
- "ya-compile-time-utils",
- "ya-core-model",
- "ya-service-bus",
-]
-
-[[package]]
-name = "gftp"
 version = "0.4.0"
 dependencies = [
  "actix-rt",
@@ -8488,7 +8464,7 @@ dependencies = [
  "crossterm 0.26.1",
  "env_logger 0.7.1",
  "futures 0.3.29",
- "gftp 0.4.0",
+ "gftp",
  "globset",
  "h2",
  "hex",
@@ -9358,7 +9334,7 @@ dependencies = [
  "crossterm 0.26.1",
  "env_logger 0.7.1",
  "futures 0.3.29",
- "gftp 0.3.2",
+ "gftp",
  "globset",
  "h2",
  "hex",
@@ -9545,7 +9521,7 @@ dependencies = [
  "directories",
  "dotenv",
  "futures 0.3.29",
- "gftp 0.4.0",
+ "gftp",
  "lazy_static",
  "libsqlite3-sys",
  "log",

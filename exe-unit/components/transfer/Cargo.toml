@@ -12,7 +12,7 @@ ya-service-bus = "0.6.1"
 ya-utils-path = { version ="0.1", path = "../../../utils/path" }
 ya-utils-futures = { version = "0.3", path = "../../../utils/futures" }
 ya-runtime-api = { version = "0.7", path = "../../runtime-api" }
-gftp = { version = "^0.3" }
+gftp = { workspace = true }
 
 actix = "0.13"
 actix-http = "3"
