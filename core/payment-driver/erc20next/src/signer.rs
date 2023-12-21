@@ -65,7 +65,11 @@ impl web3::signing::Key for DummyKey {
                 s: Default::default(),
             })
         } else {
-            eprintln!("({}) {:?}", state.signed.len(), &state.signed);
+            log::debug!(
+                "Signed message: ({}) {:?}",
+                state.signed.len(),
+                &state.signed
+            );
             Ok(Signature {
                 v: state.signed[0] as u64,
                 r: H256::from_slice(&state.signed[1..33]),

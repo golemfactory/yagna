@@ -39,6 +39,7 @@ web3 = { version = "0.19.0", default-features = false, features = [
     "signing",
     "ws-tls-tokio",
 ] }
+rust_decimal = "1"
 
 ## yagna dependencies
 ya-payment-driver = "0.3"

@@ -3,7 +3,7 @@
 A payment driver is an abstraction over any operations relating to funds, which includes:
 * Scheduling transfers to run at any point in the future.
 * Verifying transfers done by other parties.
-* Checking acount balance.
+* Checking account balance.
 * Reporting status of scheduled transactions and the account.
 
 The Erc20Next driver is such an abstraction built on top of the [ERC20 standard](https://ethereum.org/en/developers/docs/standards/tokens/erc-20/).

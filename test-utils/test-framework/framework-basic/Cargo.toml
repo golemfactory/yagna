@@ -11,6 +11,7 @@ ya-core-model = { version = "^0.9" }
 ya-service-bus = "0.6.1"
 ya-utils-path = { version ="0.1", path = "../../../utils/path" }
 ya-utils-futures = { version = "0.3", path = "../../../utils/futures" }
+gftp = { workspace = true }
 
 actix = "0.13"
 actix-files = "0.6"

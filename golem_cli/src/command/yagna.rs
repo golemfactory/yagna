@@ -55,6 +55,14 @@ lazy_static! {
             },
         );
         erc20.insert(
+            NetworkName::Holesky.into(),
+            PaymentPlatform {
+                platform: "erc20-holesky-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
                 platform: "erc20-mumbai-tglm",
@@ -103,6 +111,14 @@ lazy_static! {
             },
         );
         erc20next.insert(
+            NetworkName::Holesky.into(),
+            PaymentPlatform {
+                platform: "erc20next-holesky-tglm",
+                driver: "erc20next",
+                token: "tGLM",
+            },
+        );
+        erc20next.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
                 platform: "erc20next-mumbai-tglm",
@@ -127,10 +143,7 @@ lazy_static! {
 
     // Drivers are searched in order when more than one supports a given network,
     // so erc20next should be preferred over erc20.
-    //
-    // If ERC20NEXT_DRIVER isn't here, that's because we wish to use ERC20 on master only. This will
-    // be re-enabled shortly.
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
@@ -180,8 +193,8 @@ lazy_static! {
         ngm.insert(
             NetworkGroup::Testnet,
             vec![
-                NetworkName::Rinkeby,
                 NetworkName::Mumbai,
+                NetworkName::Holesky,
                 NetworkName::Goerli,
             ],
         );

@@ -19,6 +19,12 @@ pub const GOERLI_PLATFORM: &str = "erc20next-goerli-tglm";
 pub const GOERLI_CURRENCY_SHORT: &str = "tETH";
 pub const GOERLI_CURRENCY_LONG: &str = "Goerli Ether";
 
+pub const HOLESKY_NETWORK: &str = "holesky";
+pub const HOLESKY_TOKEN: &str = "tGLM";
+pub const HOLESKY_PLATFORM: &str = "erc20next-holesky-tglm";
+pub const HOLESKY_CURRENCY_SHORT: &str = "tETH";
+pub const HOLESKY_CURRENCY_LONG: &str = "Holesky Ether";
+
 pub const MUMBAI_NETWORK: &str = "mumbai";
 pub const MUMBAI_TOKEN: &str = "tGLM";
 pub const MUMBAI_PLATFORM: &str = "erc20next-mumbai-tglm";
@@ -27,7 +33,7 @@ pub const MUMBAI_CURRENCY_LONG: &str = "Test MATIC";
 
 pub const MAINNET_NETWORK: &str = "mainnet";
 pub const MAINNET_TOKEN: &str = "GLM";
-pub const MAINNET_PLATFORM: &str = "erc20next=mainnet-glm";
+pub const MAINNET_PLATFORM: &str = "erc20next-mainnet-glm";
 pub const MAINNET_CURRENCY_SHORT: &str = "ETH";
 pub const MAINNET_CURRENCY_LONG: &str = "Ether";
 

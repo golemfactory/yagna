@@ -5,23 +5,26 @@ use chrono::{DateTime, Duration, Utc};
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use erc20_payment_lib::db::model::{TokenTransferDao, TxDao};
+use erc20_payment_lib::faucet_client::faucet_donate;
+use erc20_payment_lib::model::{TokenTransferDao, TxDao};
 use erc20_payment_lib::runtime::{
-    DriverEvent, DriverEventContent, PaymentRuntime, TransferType, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
+use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
+use erc20_payment_lib::{DriverEvent, DriverEventContent};
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
 use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
 
-// Workspace uses
 use ya_payment_driver::{
     account::{Accounts, AccountsArc},
     bus,
@@ -34,6 +37,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::utils;
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
 use crate::{driver::PaymentDetails, network};
@@ -103,15 +107,15 @@ impl Erc20NextDriver {
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
         self.payment_runtime
-            .transfer(
-                network,
-                sender,
+            .transfer(TransferArgs {
+                chain_name: network.to_string(),
+                from: sender,
                 receiver,
-                TransferType::Token,
+                tx_type: TransferType::Token,
                 amount,
-                &payment_id,
+                payment_id: payment_id.clone(),
                 deadline,
-            )
+            })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
@@ -163,7 +167,7 @@ impl Erc20NextDriver {
         &self,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
-        use erc20_payment_lib::runtime::StatusProperty as LibStatusProperty;
+        use erc20_payment_lib::StatusProperty as LibStatusProperty;
 
         // Map chain-id to network
         let chain_id_to_net = |id: i64| self.payment_runtime.network_name(id).unwrap().to_string();
@@ -202,7 +206,7 @@ impl Erc20NextDriver {
                 }
                 LibStatusProperty::CantSign { chain_id, address } => {
                     let network = chain_id_to_net(chain_id);
-                    Some(DriverStatusProperty::CantSign {
+                    network_filter(&network).then(|| DriverStatusProperty::CantSign {
                         driver: DRIVER_NAME.into(),
                         network,
                         address,
@@ -234,6 +238,20 @@ impl Erc20NextDriver {
                         needed_token_est: missing_token.to_string(),
                     })
                 }
+                LibStatusProperty::TxStuck { chain_id } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::TxStuck {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                    })
+                }
+                LibStatusProperty::Web3RpcError { chain_id, .. } => {
+                    let network = chain_id_to_net(chain_id);
+                    network_filter(&network).then(|| DriverStatusProperty::RpcError {
+                        driver: DRIVER_NAME.into(),
+                        network,
+                    })
+                }
             })
             .collect())
     }
@@ -243,7 +261,7 @@ impl Erc20NextDriver {
         token_transfer: &TokenTransferDao,
         tx: &TxDao,
     ) -> Result<(), GenericError> {
-        log::info!("Received event TransferFinished: {:#?}", token_transfer);
+        log::debug!("Received event TransferFinished: {:#?}", token_transfer);
 
         let chain_id = token_transfer.chain_id;
         let network_name = &self
@@ -268,10 +286,16 @@ impl Erc20NextDriver {
             .as_str();
 
         let Ok(tx_token_amount) = U256::from_dec_str(&token_transfer.token_amount) else {
-            return Err(GenericError::new(format!("Malformed token_transfer.token_amount: {}", token_transfer.token_amount)));
+            return Err(GenericError::new(format!(
+                "Malformed token_transfer.token_amount: {}",
+                token_transfer.token_amount
+            )));
         };
         let Ok(tx_token_amount) = u256_to_big_dec(tx_token_amount) else {
-            return Err(GenericError::new(format!("Cannot convert to big decimal tx_token_amount: {}", tx_token_amount)));
+            return Err(GenericError::new(format!(
+                "Cannot convert to big decimal tx_token_amount: {}",
+                tx_token_amount
+            )));
         };
         let payment_details = PaymentDetails {
             recipient: token_transfer.receiver_addr.clone(),
@@ -294,11 +318,11 @@ impl Erc20NextDriver {
             GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
         })?;
 
-        log::info!("name = {}", &self.get_name());
-        log::info!("platform = {}", platform);
-        log::info!("order_id = {}", token_transfer.payment_id.as_ref().unwrap());
-        log::info!("payment_details = {:#?}", payment_details);
-        log::info!("confirmation = {:x?}", transaction_hash);
+        log::info!("name: {}", &self.get_name());
+        log::info!("platform: {}", platform);
+        log::info!("order_id: {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_details: {}", payment_details);
+        log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
 
         let Some(payment_id) = &token_transfer.payment_id else {
             return Err(GenericError::new("token_transfer.payment_id is null"));
@@ -440,8 +464,302 @@ impl PaymentDriver for Erc20NextDriver {
         _caller: String,
         msg: Fund,
     ) -> Result<String, GenericError> {
-        log::info!("FUND = Not Implemented: {:?}", msg);
-        Ok("NOT_IMPLEMENTED".to_string())
+        log::debug!("fund: {:?}", msg);
+        let address = msg.address();
+        let network = network::network_like_to_network(msg.network());
+        let result = {
+            let address = utils::str_to_addr(&address)?;
+            log::info!(
+                "Handling fund request. network={}, address={:#x}",
+                &network,
+                &address
+            );
+            let chain_cfg = self
+                .payment_runtime
+                .setup
+                .chain_setup
+                .get(&(network as i64))
+                .ok_or(GenericError::new(format!(
+                    "Missing chain config for network {}",
+                    network
+                )))?;
+            let _mint_contract_address =
+                chain_cfg
+                    .faucet_setup
+                    .mint_glm_address
+                    .ok_or(GenericError::new(format!(
+                        "Missing mint contract address for network {}",
+                        network
+                    )))?;
+            let mint_min_glm_allowed =
+                chain_cfg
+                    .faucet_setup
+                    .mint_max_glm_allowed
+                    .ok_or(GenericError::new(format!(
+                        "Missing mint min glm allowed for network {}",
+                        network
+                    )))?;
+            let faucet_client_max_eth_allowed = chain_cfg
+                .faucet_setup
+                .client_max_eth_allowed
+                .ok_or(GenericError::new(format!(
+                    "Missing faucet client max eth allowed for network {}",
+                    network
+                )))?;
+
+            let starting_eth_balance = match self
+                .payment_runtime
+                .get_gas_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("Gas balance is {}", balance.to_eth_str());
+                    balance
+                }
+                Err(err) => {
+                    log::error!("Error getting gas balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting gas balance: {}",
+                        err
+                    )));
+                }
+            };
+            let starting_glm_balance = match self
+                .payment_runtime
+                .get_token_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("tGLM balance is {}", balance.to_eth_str());
+                    balance
+                }
+                Err(err) => {
+                    log::error!("Error getting tGLM balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting tGLM balance: {}",
+                        err
+                    )));
+                }
+            };
+
+            let faucet_srv_prefix =
+                chain_cfg
+                    .faucet_setup
+                    .client_srv
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_srv_port for network {}",
+                        network
+                    )))?;
+            let faucet_lookup_domain =
+                chain_cfg
+                    .faucet_setup
+                    .lookup_domain
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_lookup_domain for network {}",
+                        network
+                    )))?;
+            let faucet_srv_port =
+                chain_cfg
+                    .faucet_setup
+                    .srv_port
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_srv_port for network {}",
+                        network
+                    )))?;
+            let faucet_host =
+                chain_cfg
+                    .faucet_setup
+                    .client_host
+                    .clone()
+                    .ok_or(GenericError::new(format!(
+                        "Missing faucet_host for network {}",
+                        network
+                    )))?;
+
+            let eth_received = if starting_eth_balance
+                < faucet_client_max_eth_allowed
+                    .to_u256_from_eth()
+                    .map_err(|err| {
+                        GenericError::new(format!(
+                            "faucet_client_max_eth_allowed failed to convert {}",
+                            err
+                        ))
+                    })? {
+                match faucet_donate(
+                    &faucet_srv_prefix,
+                    &faucet_lookup_domain,
+                    &faucet_host,
+                    faucet_srv_port,
+                    address,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        log::info!("Faucet donation successful");
+                    }
+                    Err(e) => {
+                        log::error!("Error donating from faucet: {}", e);
+                    }
+                }
+                let time_now = Instant::now();
+                let mut iteration = -1;
+                loop {
+                    iteration += 1;
+                    if iteration == 0 {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                    if time_now.elapsed().as_secs() > 120 {
+                        log::error!(
+                            "Faucet donation not received after {} seconds",
+                            time_now.elapsed().as_secs()
+                        );
+                        return Err(GenericError::new(format!(
+                            "Faucet donation not received after {} seconds",
+                            time_now.elapsed().as_secs()
+                        )));
+                    }
+                    match self
+                        .payment_runtime
+                        .get_gas_balance(network.to_string(), address)
+                        .await
+                    {
+                        Ok(current_balance) => {
+                            if current_balance > starting_eth_balance {
+                                log::info!(
+                                    "Received {} ETH from faucet",
+                                    (current_balance - starting_eth_balance).to_eth_str()
+                                );
+                                break current_balance - starting_eth_balance;
+                            } else {
+                                log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance.to_eth_str(), time_now.elapsed().as_secs(), 120);
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Error getting gas balance: {}", err);
+                        }
+                    }
+                }
+            } else {
+                log::info!(
+                    "ETH balance is {} which is more than {} allowed by faucet",
+                    starting_eth_balance.to_eth_str(),
+                    faucet_client_max_eth_allowed
+                );
+                U256::zero()
+            };
+
+            let glm_received = if starting_glm_balance
+                < mint_min_glm_allowed.to_u256_from_eth().map_err(|err| {
+                    GenericError::new(format!("mint_min_glm_allowed failed to convert {}", err))
+                })? {
+                match self
+                    .payment_runtime
+                    .mint_golem_token(&network.to_string(), address)
+                    .await
+                {
+                    Ok(_) => {
+                        log::info!("Added mint tGLM transaction to queue {}", address);
+                    }
+                    Err(e) => {
+                        log::error!("Error minting tGLM tokens for address {}: {}", address, e);
+                    }
+                }
+                let time_now = Instant::now();
+                let mut iteration = -1;
+                loop {
+                    iteration += 1;
+                    if iteration == 0 {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                    if time_now.elapsed().as_secs() > 120 {
+                        log::error!(
+                            "Mint transaction not finished after {} seconds",
+                            time_now.elapsed().as_secs()
+                        );
+                        return Err(GenericError::new(format!(
+                            "Mint transaction not finished after {} seconds",
+                            time_now.elapsed().as_secs()
+                        )));
+                    }
+                    match self
+                        .payment_runtime
+                        .get_token_balance(network.to_string(), address)
+                        .await
+                    {
+                        Ok(current_balance) => {
+                            if current_balance > starting_glm_balance {
+                                log::info!(
+                                    "Created {} tGLM using mint transaction",
+                                    (current_balance - starting_glm_balance).to_eth_str()
+                                );
+                                break current_balance - starting_glm_balance;
+                            } else {
+                                log::info!(
+                                    "Waiting for mint result. Current balance: {}. Elapsed: {}/{}",
+                                    current_balance.to_eth_str(),
+                                    time_now.elapsed().as_secs(),
+                                    120
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Error getting tGLM balance: {}", err);
+                        }
+                    }
+                }
+            } else {
+                log::info!(
+                    "tGLM balance is {} which is more than allowed by GLM minting contract {}",
+                    starting_glm_balance.to_eth_str(),
+                    mint_min_glm_allowed
+                );
+                U256::zero()
+            };
+            let mut str_output = if eth_received > U256::zero() || glm_received > U256::zero() {
+                format!(
+                    "Successfully received {} ETH and {} tGLM",
+                    eth_received.to_eth_str(),
+                    glm_received.to_eth_str()
+                )
+            } else if eth_received > U256::zero() {
+                format!("Successfully received {} ETH", eth_received.to_eth_str())
+            } else if glm_received > U256::zero() {
+                format!("Successfully minted {} tGLM", glm_received.to_eth_str())
+            } else {
+                "No funds received".to_string()
+            };
+            let final_eth_balance = match self
+                .payment_runtime
+                .get_gas_balance(network.to_string(), address)
+                .await
+            {
+                Ok(balance) => {
+                    log::info!("Gas balance is {}", balance.to_eth_str());
+                    balance
+                }
+                Err(err) => {
+                    log::error!("Error getting gas balance: {}", err);
+                    return Err(GenericError::new(format!(
+                        "Error getting gas balance: {}",
+                        err
+                    )));
+                }
+            };
+            str_output += &format!(
+                "\nYou have {} tETH and {} tGLM",
+                final_eth_balance.to_eth_str(),
+                (starting_glm_balance + glm_received).to_eth_str()
+            );
+            str_output
+        };
+        log::debug!("fund completed");
+        Ok(result)
     }
 
     async fn transfer(
@@ -538,7 +856,7 @@ impl PaymentDriver for Erc20NextDriver {
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        log::info!("Validate_allocation: {:?}", msg);
+        log::debug!("Validate_allocation: {:?}", msg);
         let account_balance = self
             .get_account_balance(
                 db,

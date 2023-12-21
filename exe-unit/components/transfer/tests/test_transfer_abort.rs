@@ -57,7 +57,7 @@ async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<(
         env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
     );
     // Uncomment to enable logs
-    env_logger::try_init().ok();
+    // env_logger::try_init().ok();
 
     let temp_dir = temp_dir!("transfer-abort")?;
     let temp_dir = temp_dir.path();
