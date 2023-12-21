@@ -17,7 +17,7 @@ pub fn temp_dir_(base_dir: &str, prefix: &str) -> anyhow::Result<TempDir> {
     fs::create_dir_all(base_dir)?;
     let dir = TempDir::new_in(base_dir, prefix)?;
     let temp_dir = dir.path();
-    fs::create_dir_all(&temp_dir)?;
+    fs::create_dir_all(temp_dir)?;
 
     Ok(dir)
 }
