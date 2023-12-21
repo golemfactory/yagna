@@ -487,12 +487,12 @@ impl ExeUnitContext {
     }
 }
 
-impl Into<TransferServiceContext> for &ExeUnitContext {
-    fn into(self) -> TransferServiceContext {
+impl From<&ExeUnitContext> for TransferServiceContext {
+    fn from(val: &ExeUnitContext) -> Self {
         TransferServiceContext {
-            task_package: self.agreement.task_package.clone(),
-            cache_dir: self.cache_dir.clone(),
-            work_dir: self.work_dir.clone(),
+            task_package: val.agreement.task_package.clone(),
+            cache_dir: val.cache_dir.clone(),
+            work_dir: val.work_dir.clone(),
         }
     }
 }

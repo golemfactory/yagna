@@ -37,7 +37,6 @@ impl Cache {
     }
 
     #[inline(always)]
-    #[cfg(not(feature = "sgx"))]
     pub fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
         ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
     }

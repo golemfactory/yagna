@@ -72,7 +72,7 @@ where
 
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
-            let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
+            let stream = with_hash_stream(src.source(&src_url.url, ctx), src_url)?;
             let sink = dst.destination(&dst_url.url, ctx);
 
             transfer(stream, sink).await?;
@@ -92,7 +92,7 @@ where
     }
 }
 
-fn wrap_stream(
+fn with_hash_stream(
     stream: TransferStream<TransferData, Error>,
     url: &TransferUrl,
 ) -> Result<Box<dyn Stream<Item = Result<TransferData, Error>> + Unpin>, Error> {

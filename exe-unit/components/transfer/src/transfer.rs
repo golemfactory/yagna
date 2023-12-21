@@ -7,7 +7,7 @@ use actix::prelude::*;
 use futures::future::Abortable;
 use url::Url;
 
-use crate::cache::Cache;
+use crate::cache::{Cache, CachePath};
 use crate::error::Error;
 use crate::error::Error as TransferError;
 use crate::{
@@ -20,6 +20,20 @@ use ya_runtime_api::deploy::ContainerVolume;
 use ya_utils_futures::abort::Abort;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+macro_rules! actor_try {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                return ActorResponse::reply(Err(Error::from(err)));
+            }
+        }
+    };
+    ($expr:expr,) => {
+        $crate::actor_try!($expr)
+    };
+}
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
@@ -119,6 +133,77 @@ impl TransferService {
             .ok_or_else(|| TransferError::UnsupportedSchemeError(scheme.to_owned()))?
             .clone())
     }
+
+    #[cfg(feature = "sgx")]
+    fn deploy_sgx(
+        &self,
+        src_url: TransferUrl,
+        _src_name: CachePath,
+        path: PathBuf,
+    ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
+        let fut = async move {
+            let resp = reqwest::get(src_url.url)
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?;
+            let bytes = resp
+                .bytes()
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?;
+            std::fs::write(&path, bytes)?;
+            Ok(Some(path))
+        };
+        ActorResponse::r#async(fut.into_actor(self))
+    }
+
+    #[allow(unused)]
+    fn deploy_no_sgx(
+        &self,
+        src_url: TransferUrl,
+        src_name: CachePath,
+        path: PathBuf,
+    ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
+        let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
+
+        let src = actor_try!(self.provider(&src_url));
+        let dst: Rc<FileTransferProvider> = Default::default();
+        let dst_url = TransferUrl {
+            url: Url::from_file_path(&path_tmp).unwrap(),
+            hash: None,
+        };
+
+        let handles = self.abort_handles.clone();
+        let fut = async move {
+            if path.exists() {
+                log::info!("Deploying cached image: {:?}", path);
+                return Ok(Some(path));
+            }
+
+            let (abort, reg) = Abort::new_pair();
+            {
+                let ctx = Default::default();
+                let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
+
+                let _guard = AbortHandleGuard::register(handles, abort);
+                Ok::<_, Error>(
+                    Abortable::new(retry, reg)
+                        .await
+                        .map_err(TransferError::from)?
+                        .map_err(|err| {
+                            if let TransferError::InvalidHashError { .. } = err {
+                                let _ = std::fs::remove_file(&path_tmp);
+                            }
+                            err
+                        })?,
+                )
+            }?;
+
+            move_file(&path_tmp, &path).await?;
+            log::info!("Deployment from {:?} finished", src_url.url);
+
+            Ok(Some(path))
+        };
+        ActorResponse::r#async(fut.into_actor(self))
+    }
 }
 
 impl Actor for TransferService {
@@ -131,20 +216,6 @@ impl Actor for TransferService {
     fn stopped(&mut self, _: &mut Self::Context) {
         log::info!("Transfer service stopped");
     }
-}
-
-macro_rules! actor_try {
-    ($expr:expr) => {
-        match $expr {
-            Ok(val) => val,
-            Err(err) => {
-                return ActorResponse::reply(Err(Error::from(err)));
-            }
-        }
-    };
-    ($expr:expr,) => {
-        $crate::actor_try!($expr)
-    };
 }
 
 impl Handler<DeployImage> for TransferService {
@@ -164,65 +235,10 @@ impl Handler<DeployImage> for TransferService {
         log::info!("Deploying from {:?} to {:?}", src_url.url, path);
 
         #[cfg(not(feature = "sgx"))]
-        {
-            let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
-
-            let src = actor_try!(self.provider(&src_url));
-            let dst: Rc<FileTransferProvider> = Default::default();
-            let dst_url = TransferUrl {
-                url: Url::from_file_path(&path_tmp).unwrap(),
-                hash: None,
-            };
-
-            let handles = self.abort_handles.clone();
-            let fut = async move {
-                if path.exists() {
-                    log::info!("Deploying cached image: {:?}", path);
-                    return Ok(Some(path));
-                }
-
-                let (abort, reg) = Abort::new_pair();
-                {
-                    let ctx = Default::default();
-                    let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
-
-                    let _guard = AbortHandleGuard::register(handles, abort);
-                    Ok::<_, Error>(
-                        Abortable::new(retry, reg)
-                            .await
-                            .map_err(TransferError::from)?
-                            .map_err(|err| {
-                                if let TransferError::InvalidHashError { .. } = err {
-                                    let _ = std::fs::remove_file(&path_tmp);
-                                }
-                                err
-                            })?,
-                    )
-                }?;
-
-                move_file(&path_tmp, &path).await?;
-                log::info!("Deployment from {:?} finished", src_url.url);
-
-                Ok(Some(path))
-            };
-            ActorResponse::r#async(fut.into_actor(self))
-        }
+        return self.deploy_no_sgx(src_url, src_name, path);
 
         #[cfg(feature = "sgx")]
-        {
-            let fut = async move {
-                let resp = reqwest::get(src_url.url)
-                    .await
-                    .map_err(|e| Error::Other(e.to_string()))?;
-                let bytes = resp
-                    .bytes()
-                    .await
-                    .map_err(|e| Error::Other(e.to_string()))?;
-                std::fs::write(&path, bytes)?;
-                Ok(Some(path))
-            };
-            ActorResponse::r#async(fut.into_actor(self))
-        }
+        return self.deploy_sgx(src_url, src_name, path);
     }
 }
 

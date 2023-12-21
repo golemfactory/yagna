@@ -225,8 +225,8 @@ pub enum ShutdownReason {
     Error(#[from] Error),
 }
 
-impl Into<ya_transfer::transfer::Shutdown> for Shutdown {
-    fn into(self) -> ya_transfer::transfer::Shutdown {
+impl From<Shutdown> for ya_transfer::transfer::Shutdown {
+    fn from(_: Shutdown) -> Self {
         ya_transfer::transfer::Shutdown {}
     }
 }
