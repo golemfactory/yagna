@@ -1,9 +1,9 @@
-use std::env;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use std::{env, io};
 
 use futures::future::LocalBoxFuture;
 use sha3::digest::generic_array::GenericArray;
@@ -62,7 +62,7 @@ impl TransferProvider<TransferData, Error> for UnreliableHttpProvider {
                     let mut guard = failure.lock().unwrap();
                     *guard = Instant::now();
 
-                    Err(HttpError::Io(ErrorKind::Interrupted).into())
+                    Err(HttpError::Io(io::Error::from(ErrorKind::Interrupted)).into())
                 } else {
                     Ok(v)
                 }
