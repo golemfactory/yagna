@@ -13,7 +13,7 @@ use openssl::{
     sign::Verifier,
     x509::{
         store::{X509Store, X509StoreBuilder},
-        X509ObjectRef, X509Ref, X509StoreContext, X509VerifyResult, X509,
+        X509Ref, X509StoreContext, X509VerifyResult, X509,
     },
 };
 use std::{
@@ -359,14 +359,15 @@ impl X509SignatureVerifier {
         let mut cert_ids = vec![];
         let mut current_cert = None;
         for cert in self.cert_chain.iter().rev() {
-            current_cert = Some(cert.as_ref());
+            current_cert = Some(cert.clone());
             let cert_id = cert_to_id(cert)?;
             cert_ids.push(cert_id);
         }
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
-            while let Some(cert) = issuer(cert_store, previous_cert) {
-                let cert_id = cert_to_id(cert)?;
+
+            while let Some(cert) = issuer(cert_store, &previous_cert) {
+                let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);
                 previous_cert = cert;
             }
@@ -444,9 +445,8 @@ impl X509Keystore {
         let inner = self.store.read().unwrap();
         inner
             .store
-            .objects()
+            .all_certificates()
             .iter()
-            .flat_map(X509ObjectRef::x509)
             .map(X509CertData::create)
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
@@ -483,11 +483,9 @@ impl X509Keystore {
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
         let inner = self.store.read().unwrap();
         let mut ids = HashSet::new();
-        for cert in inner.store.objects() {
-            if let Some(cert) = cert.x509() {
-                let id = cert_to_id(cert)?;
-                ids.insert(id);
-            }
+        for cert in inner.store.all_certificates() {
+            let id = cert_to_id(&cert)?;
+            ids.insert(id);
         }
         Ok(ids)
     }
@@ -528,7 +526,7 @@ fn verify_cert_chain(
         Some(cert) => cert,
         None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
     };
-    if cert_store.store.objects().is_empty() {
+    if cert_store.store.all_certificates().is_empty() {
         bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
     }
     let mut cert_stack = openssl::stack::Stack::new()?;
@@ -544,13 +542,12 @@ fn verify_cert_chain(
     Ok(cert.public_key()?)
 }
 
-fn issuer<'c>(cert_store: &'c CertStore, cert: &X509Ref) -> Option<&'c X509Ref> {
+fn issuer(cert_store: &CertStore, cert: &X509Ref) -> Option<X509> {
     cert_store
         .store
-        .objects()
-        .iter()
-        .flat_map(X509ObjectRef::x509)
-        .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(&cert))
+        .all_certificates()
+        .into_iter()
+        .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(cert))
 }
 
 fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {

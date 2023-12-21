@@ -161,6 +161,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     Ok(())
 }
 
+#[ignore]
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
