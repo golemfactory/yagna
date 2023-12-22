@@ -13,6 +13,11 @@ pub fn generate_file_with_hash(
     chunk_count: usize,
 ) -> HashOutput {
     let path = path.join(name);
+
+    log::debug!(
+        "Creating a random file {} of size {chunk_size} * {chunk_count}",
+        path.display()
+    );
     let mut hasher = sha3::Sha3_512::default();
     let mut file_src = OpenOptions::new()
         .write(true)

@@ -25,6 +25,7 @@ struct UnreliableHttpProvider {
     inner: HttpTransferProvider,
     last_failure: Arc<Mutex<Instant>>,
     interval: Duration,
+    packets_slowdown: Duration,
 }
 
 impl UnreliableHttpProvider {
@@ -33,6 +34,7 @@ impl UnreliableHttpProvider {
             inner: Default::default(),
             last_failure: Arc::new(Mutex::new(Instant::now())),
             interval: Duration::from_millis(interval),
+            packets_slowdown: Duration::from_millis(10),
         }
     }
 }
@@ -46,9 +48,21 @@ impl TransferProvider<TransferData, Error> for UnreliableHttpProvider {
         let mut src = self.inner.source(url, ctx);
         let interval = self.interval;
         let failure = self.last_failure.clone();
+        let slowdown = self.packets_slowdown.clone();
+
+        // Slow down stream
+        src.map_inner_async(move |item| {
+            let slowdown = slowdown.clone();
+            Box::pin(async move {
+                tokio::time::sleep(slowdown).await;
+                item
+            })
+        });
 
         src.map_inner(move |r| match r {
             Ok(v) => {
+                log::trace!("Processing packet of size: {}", v.as_ref().len());
+
                 let instant = { *failure.lock().unwrap() };
                 if Instant::now() - instant >= interval {
                     log::info!("Triggering failure");
@@ -63,7 +77,6 @@ impl TransferProvider<TransferData, Error> for UnreliableHttpProvider {
             }
             Err(e) => Err(e),
         });
-
         src
     }
 
@@ -118,7 +131,7 @@ async fn transfer(
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("transfer-resume")?;
     let temp_dir = dir.path();
@@ -148,20 +161,19 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
     }];
     addr.send(AddVolumes::new(volumes)).await??;
 
-    let chunk_size = 4096_usize;
-    let chunk_count = 1024 * 10;
-
-    log::debug!("Creating a random file of size {chunk_size} * {chunk_count}");
-    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 3 * 1024);
 
     log::debug!("Starting HTTP servers");
-    let path = temp_dir.to_path_buf();
-    start_http(ctx, path)
+    start_http(ctx, temp_dir.to_path_buf())
         .await
         .expect("unable to start http servers");
 
     log::warn!("[>>] Transfer HTTP -> container");
-    transfer(&addr, "http://127.0.0.1:8001/rnd", "container:/input/rnd-1").await?;
+    tokio::time::timeout(
+        Duration::from_secs(20),
+        transfer(&addr, "http://127.0.0.1:8001/rnd", "container:/input/rnd-1"),
+    )
+    .await??;
     verify_hash(&hash, work_dir.join("vol-1"), "rnd-1");
     log::warn!("Checksum verified");
 

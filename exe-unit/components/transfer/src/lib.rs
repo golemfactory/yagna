@@ -156,6 +156,19 @@ where
         self.rx.replace(Box::pin(rx.map(f)));
     }
 
+    pub fn map_inner_async<F, Fut>(&mut self, f: F)
+    where
+        F: FnMut(Result<T, E>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<T, E>> + Send + Sync + Unpin + 'static,
+    {
+        // This function cannot take `self` as argument since `Self` implements `Drop`.
+        // In order to take and map the stream, then put it back in `self.rx`, the simplest
+        // workaround is to use `Option`. Outside of this function, `self.rx` is guaranteed
+        // to always be `Some`
+        let rx = self.rx.take().unwrap();
+        self.rx.replace(Box::pin(rx.then(f)));
+    }
+
     pub fn err(e: E) -> Self {
         let (this, mut sender, _) = Self::create(1);
         tokio::task::spawn_local(async move {

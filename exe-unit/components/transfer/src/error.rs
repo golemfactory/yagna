@@ -115,7 +115,7 @@ pub enum Error {
     UnsupportedSchemeError(String),
     #[error("Unsupported digest: {0}")]
     UnsupportedDigestError(String),
-    #[error("Downloaded VM image is corrupted: calculated hash {hash} differs from the expected one {expected}")]
+    #[error("Incorrect hash provided or downloaded image is corrupted: calculated hash {hash} differs from the expected one {expected}")]
     InvalidHashError { hash: String, expected: String },
     #[error("Hex error: {0}")]
     HexError(#[from] hex::FromHexError),

@@ -69,15 +69,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         }, // Uncomment to enable logs
     ];
 
-    let chunk_size = 4096_usize;
-    let chunk_count = 256_usize;
-
-    log::debug!(
-        "Creating a random file of size {} * {}",
-        chunk_size,
-        chunk_count
-    );
-    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 256_usize);
 
     log::debug!("Starting HTTP servers");
 
@@ -193,16 +185,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
             path: "/extract".into(),
         },
     ];
-
-    let chunk_size = 4096_usize;
-    let chunk_count = 256_usize;
-
-    log::debug!(
-        "Creating a random file of size {} * {}",
-        chunk_size,
-        chunk_count
-    );
-    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 256_usize);
 
     log::debug!("Starting HTTP servers");
 

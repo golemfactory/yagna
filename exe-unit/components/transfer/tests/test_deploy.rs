@@ -34,7 +34,6 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     let chunk_size = 4096_usize;
     let chunk_count = 1024 * 10;
 
-    log::debug!("Creating a random file of size {chunk_size} * {chunk_count}");
     let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");

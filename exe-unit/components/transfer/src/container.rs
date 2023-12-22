@@ -1,9 +1,10 @@
+use futures::future::LocalBoxFuture;
+use futures::FutureExt;
 use std::io;
 use std::path::PathBuf;
-
 use url::Url;
 
-use crate::error::Error as TransferError;
+use crate::error::{Error as TransferError, Error};
 use crate::location::UrlExt;
 use crate::{DirTransferProvider, FileTransferProvider};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
@@ -106,6 +107,22 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
             return self.dir_tp.destination(&file_url, ctx);
         }
         self.file_tp.destination(&file_url, ctx)
+    }
+
+    fn prepare_destination<'a>(
+        &self,
+        url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        let file_url = match self.resolve_url(url.path_decoded().as_str()) {
+            Ok(v) => v,
+            Err(e) => return futures::future::err(e).boxed_local(),
+        };
+
+        if ctx.args.format.is_some() {
+            return self.dir_tp.prepare_destination(&file_url, ctx);
+        }
+        self.file_tp.prepare_destination(&file_url, ctx)
     }
 }
 

@@ -198,7 +198,7 @@ impl TransferService {
         // process, but it comes with the cost: If image under URL changed, Requestor will get
         // error on the end. This can result with Provider being perceived as unreliable.
         //
-        // For this reason it is better to use only fully downloaded images that are olready in cache.
+        // For this reason it is better to use only fully downloaded images that are already in cache.
         if path_tmp.exists() {
             log::info!(
                 "Removing temporary file: {} from previous executions",
