@@ -95,7 +95,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let exe_ctx = TransferServiceContext {
         work_dir: work_dir.clone(),
         cache_dir,
-        task_package: None,
+        ..TransferServiceContext::default()
     };
     let addr = TransferService::new(exe_ctx).start();
 
@@ -215,7 +215,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     let exe_ctx = TransferServiceContext {
         work_dir: work_dir.clone(),
         cache_dir,
-        task_package: None,
+        ..TransferServiceContext::default()
     };
     let addr = TransferService::new(exe_ctx).start();
 

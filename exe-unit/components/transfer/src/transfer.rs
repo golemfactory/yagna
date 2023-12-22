@@ -12,7 +12,7 @@ use crate::error::Error;
 use crate::error::Error as TransferError;
 use crate::{
     transfer_with, ContainerTransferProvider, FileTransferProvider, GftpTransferProvider,
-    HttpTransferProvider, TransferContext, TransferData, TransferProvider, TransferUrl,
+    HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
 use ya_client_model::activity::TransferArgs;
@@ -67,6 +67,7 @@ pub struct AbortTransfers;
 #[rtype(result = "Result<()>")]
 pub struct Shutdown;
 
+#[derive(Default)]
 pub struct TransferServiceContext {
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
@@ -74,6 +75,9 @@ pub struct TransferServiceContext {
     ///       Problem is that current ExeUnit implementation doesn't have this information
     ///       directly available when sending Deploy, so temporarily we need this ugly solution.   
     pub task_package: Option<String>,
+
+    pub deploy_retry: Option<Retry>,
+    pub transfer_retry: Option<Retry>,
 }
 
 /// Handles resources transfers.
@@ -82,6 +86,10 @@ pub struct TransferService {
     cache: Cache,
     work_dir: PathBuf,
     task_package: Option<String>,
+
+    deploy_retry: Option<Retry>,
+    transfer_retry: Option<Retry>,
+
     abort_handles: Rc<RefCell<HashSet<Abort>>>,
 }
 
@@ -92,6 +100,8 @@ impl TransferService {
             cache: Cache::new(ctx.cache_dir),
             work_dir: ctx.work_dir,
             task_package: ctx.task_package,
+            deploy_retry: ctx.deploy_retry,
+            transfer_retry: ctx.transfer_retry,
             abort_handles: Default::default(),
         }
     }
@@ -104,6 +114,16 @@ impl TransferService {
             .into_iter()
             .map(ToString::to_string)
             .collect()
+    }
+
+    pub fn register_provider(
+        &mut self,
+        provider: impl TransferProvider<TransferData, TransferError> + 'static,
+    ) {
+        let provider = Rc::new(provider);
+        for scheme in provider.schemes() {
+            self.providers.insert(scheme, provider.clone());
+        }
     }
 
     fn default_providers(
@@ -171,6 +191,11 @@ impl TransferService {
             hash: None,
         };
 
+        let ctx = TransferContext::default();
+        self.deploy_retry
+            .clone()
+            .map(|retry| ctx.state.retry_with(retry));
+
         let handles = self.abort_handles.clone();
         let fut = async move {
             if path.exists() {
@@ -180,7 +205,6 @@ impl TransferService {
 
             let (abort, reg) = Abort::new_pair();
             {
-                let ctx = Default::default();
                 let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
 
                 let _guard = AbortHandleGuard::register(handles, abort);
@@ -251,13 +275,17 @@ impl Handler<TransferResource> for TransferService {
         let src = actor_try!(self.provider(&src_url));
         let dst = actor_try!(self.provider(&dst_url));
 
+        let ctx = TransferContext::default();
+        self.transfer_retry
+            .clone()
+            .map(|retry| ctx.state.retry_with(retry));
+
         let (abort, reg) = Abort::new_pair();
 
         let handles = self.abort_handles.clone();
         let fut = async move {
             log::info!("Transferring {:?} to {:?}", src_url.url, dst_url.url);
             {
-                let ctx = TransferContext::from(msg.args);
                 let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
 
                 let _guard = AbortHandleGuard::register(handles, abort);

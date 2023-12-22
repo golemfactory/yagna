@@ -80,7 +80,7 @@ async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<(
     let exe_ctx = TransferServiceContext {
         work_dir: work_dir.clone(),
         cache_dir,
-        task_package: None,
+        ..TransferServiceContext::default()
     };
 
     let _result = interrupted_transfer(

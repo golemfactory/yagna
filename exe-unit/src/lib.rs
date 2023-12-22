@@ -491,8 +491,10 @@ impl From<&ExeUnitContext> for TransferServiceContext {
     fn from(val: &ExeUnitContext) -> Self {
         TransferServiceContext {
             task_package: val.agreement.task_package.clone(),
+            deploy_retry: None,
             cache_dir: val.cache_dir.clone(),
             work_dir: val.work_dir.clone(),
+            transfer_retry: None,
         }
     }
 }

@@ -52,7 +52,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     let exe_ctx = TransferServiceContext {
         work_dir: work_dir.clone(),
         cache_dir,
-        task_package: None,
+        ..TransferServiceContext::default()
     };
     let addr = TransferService::new(exe_ctx).start();
     let addr_ = addr.clone();
