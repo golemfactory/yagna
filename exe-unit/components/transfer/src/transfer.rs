@@ -87,8 +87,8 @@ pub struct TransferService {
     work_dir: PathBuf,
     task_package: Option<String>,
 
-    deploy_retry: Option<Retry>,
-    transfer_retry: Option<Retry>,
+    deploy_retry: Retry,
+    transfer_retry: Retry,
 
     abort_handles: Rc<RefCell<HashSet<Abort>>>,
 }
@@ -100,8 +100,8 @@ impl TransferService {
             cache: Cache::new(ctx.cache_dir),
             work_dir: ctx.work_dir,
             task_package: ctx.task_package,
-            deploy_retry: ctx.deploy_retry,
-            transfer_retry: ctx.transfer_retry,
+            deploy_retry: ctx.deploy_retry.unwrap_or(Retry::default()),
+            transfer_retry: ctx.transfer_retry.unwrap_or(Retry::default()),
             abort_handles: Default::default(),
         }
     }
@@ -192,9 +192,20 @@ impl TransferService {
         };
 
         let ctx = TransferContext::default();
-        self.deploy_retry
-            .clone()
-            .map(|retry| ctx.state.retry_with(retry));
+        ctx.state.retry_with(self.deploy_retry.clone());
+
+        // Using partially downloaded image from previous executions could speed up deploy
+        // process, but it comes with the cost: If image under URL changed, Requestor will get
+        // error on the end. This can result with Provider being perceived as unreliable.
+        //
+        // For this reason it is better to use only fully downloaded images that are olready in cache.
+        if path_tmp.exists() {
+            log::info!(
+                "Removing temporary file: {} from previous executions",
+                path_tmp.display()
+            );
+            std::fs::remove_file(&path_tmp).ok();
+        }
 
         let handles = self.abort_handles.clone();
         let fut = async move {
@@ -276,9 +287,7 @@ impl Handler<TransferResource> for TransferService {
         let dst = actor_try!(self.provider(&dst_url));
 
         let ctx = TransferContext::default();
-        self.transfer_retry
-            .clone()
-            .map(|retry| ctx.state.retry_with(retry));
+        ctx.state.retry_with(self.transfer_retry.clone());
 
         let (abort, reg) = Abort::new_pair();
 
