@@ -67,6 +67,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     let result = addr
         .send(DeployImage {
             task_package: task_package.clone(),
+            progress: None,
         })
         .await?;
     log::info!("Deployment stopped");
@@ -76,6 +77,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     log::info!("Re-deploying the same image");
     addr.send(DeployImage {
         task_package: task_package.clone(),
+        progress: None,
     })
     .await??;
 

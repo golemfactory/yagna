@@ -35,12 +35,22 @@ macro_rules! actor_try {
     };
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug)]
+pub struct Progress {
+    pub progress: u64,
+    pub size: Option<u64>,
+}
+
+#[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct TransferResource {
     pub from: String,
     pub to: String,
     pub args: TransferArgs,
+
+    /// Channel for watching for transfer progress. `None` means that there
+    /// will be no progress updates.
+    pub progress: Option<tokio::sync::watch::Sender<Progress>>,
 }
 
 #[derive(Message)]
@@ -53,10 +63,13 @@ impl AddVolumes {
     }
 }
 
-#[derive(Clone, Debug, Message)]
+#[derive(Debug, Message)]
 #[rtype(result = "Result<Option<PathBuf>>")]
 pub struct DeployImage {
     pub task_package: Option<String>,
+    /// Channel for watching for deploy progress. `None` means that there
+    /// will be no progress updates.
+    pub progress: Option<tokio::sync::watch::Sender<Progress>>,
 }
 
 #[derive(Clone, Debug, Message)]

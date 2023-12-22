@@ -15,6 +15,7 @@ mod traverse;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -38,6 +39,8 @@ pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
 use crate::hash::with_hash_stream;
+use crate::progress::progress_report_channel;
+use crate::transfer::Progress;
 use ya_client_model::activity::TransferArgs;
 
 /// Transfers data from `stream` to a `TransferSink`
@@ -73,7 +76,7 @@ where
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
             let stream = with_hash_stream(src.source(&src_url.url, ctx), src_url, dst_url, ctx)?;
-            let sink = dst.destination(&dst_url.url, ctx);
+            let sink = progress_report_channel(dst.destination(&dst_url.url, ctx), ctx);
 
             transfer(stream, sink).await?;
             Ok::<_, Error>(())
@@ -296,6 +299,7 @@ impl From<Box<[u8]>> for TransferData {
 pub struct TransferContext {
     pub state: TransferState,
     pub args: TransferArgs,
+    pub report: Arc<std::sync::Mutex<Option<tokio::sync::watch::Sender<Progress>>>>,
 }
 
 impl TransferContext {
@@ -304,7 +308,19 @@ impl TransferContext {
         let state = TransferState::default();
         state.set_offset(offset);
 
-        Self { args, state }
+        Self {
+            args,
+            state,
+            report: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    pub fn register_reporter(&self, report: tokio::sync::watch::Sender<Progress>) {
+        *self.report.lock().unwrap() = Some(report);
+    }
+
+    pub fn take_reporter(&self) -> Option<tokio::sync::watch::Sender<Progress>> {
+        self.report.lock().unwrap().take()
     }
 }
 

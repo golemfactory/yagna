@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::transfer::Progress;
 use crate::{abortable_sink, abortable_stream, TransferSink, TransferStream};
 use crate::{TransferContext, TransferData};
 use futures::{SinkExt, StreamExt, TryFutureExt};
@@ -47,6 +48,15 @@ where
 }
 
 type Sink = TransferSink<TransferData, Error>;
+
+pub fn progress_report_channel(dest: Sink, ctx: &TransferContext) -> Sink {
+    let report = ctx.take_reporter();
+    wrap_sink_with_progress_reporting(dest, ctx, move |progress, size| {
+        if let Some(report) = &report {
+            report.send(Progress { progress, size }).ok();
+        }
+    })
+}
 
 /// Wraps a sink to report progress.
 /// The `report` function is called with the current offset and the total size.

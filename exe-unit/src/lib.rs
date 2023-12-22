@@ -308,13 +308,17 @@ impl<R: Runtime> RuntimeRef<R> {
                     from: from.clone(),
                     to: to.clone(),
                     args: args.clone(),
+                    progress: None,
                 };
                 transfer_service.send(msg).await??;
             }
             ExeScriptCommand::Deploy { net, hosts } => {
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.
                 let task_package = transfer_service
-                    .send(DeployImage { task_package: None })
+                    .send(DeployImage {
+                        task_package: None,
+                        progress: None,
+                    })
                     .await??;
                 runtime
                     .send(UpdateDeployment {
