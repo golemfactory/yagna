@@ -48,11 +48,11 @@ impl TransferProvider<TransferData, Error> for UnreliableHttpProvider {
         let mut src = self.inner.source(url, ctx);
         let interval = self.interval;
         let failure = self.last_failure.clone();
-        let slowdown = self.packets_slowdown.clone();
+        let slowdown = self.packets_slowdown;
 
         // Slow down stream
         src.map_inner_async(move |item| {
-            let slowdown = slowdown.clone();
+            let slowdown = slowdown;
             Box::pin(async move {
                 tokio::time::sleep(slowdown).await;
                 item
