@@ -655,7 +655,7 @@ mod public {
 
     use crate::error::processor::VerifyPaymentError;
     use crate::error::DbError;
-    use crate::payment_sync::{send_sync_notifs_job, send_sync_requests};
+    use crate::payment_sync::{send_sync_requests, PaymentSyncCron};
     use crate::utils::*;
     use crate::{dao::*, payment_sync::SYNC_NOTIFS_NOTIFY};
 
@@ -685,7 +685,7 @@ mod public {
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
-            send_sync_notifs_job(db.clone());
+            PaymentSyncCron::new(db.clone());
             send_sync_requests(db.clone());
         }
 
