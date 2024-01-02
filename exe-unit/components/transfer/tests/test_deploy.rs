@@ -17,7 +17,7 @@ use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, Transf
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("deploy-restart")?;
     let temp_dir = dir.path();

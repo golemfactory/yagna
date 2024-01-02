@@ -35,7 +35,7 @@ macro_rules! actor_try {
     };
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Progress {
     pub progress: u64,
     pub size: Option<u64>,
@@ -173,6 +173,7 @@ impl TransferService {
         src_url: TransferUrl,
         _src_name: CachePath,
         path: PathBuf,
+        progress: Option<tokio::sync::watch::Sender<Progress>>,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let fut = async move {
             let resp = reqwest::get(src_url.url)
@@ -194,6 +195,7 @@ impl TransferService {
         src_url: TransferUrl,
         src_name: CachePath,
         path: PathBuf,
+        progress: Option<tokio::sync::watch::Sender<Progress>>,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
 
@@ -206,6 +208,7 @@ impl TransferService {
 
         let ctx = TransferContext::default();
         ctx.state.retry_with(self.deploy_retry.clone());
+        ctx.register_reporter(progress);
 
         // Using partially downloaded image from previous executions could speed up deploy
         // process, but it comes with the cost: If image under URL changed, Requestor will get
@@ -283,10 +286,10 @@ impl Handler<DeployImage> for TransferService {
         log::info!("Deploying from {:?} to {:?}", src_url.url, path);
 
         #[cfg(not(feature = "sgx"))]
-        return self.deploy_no_sgx(src_url, src_name, path);
+        return self.deploy_no_sgx(src_url, src_name, path, deploy.progress);
 
         #[cfg(feature = "sgx")]
-        return self.deploy_sgx(src_url, src_name, path);
+        return self.deploy_sgx(src_url, src_name, path, deploy.progress);
     }
 }
 
@@ -301,6 +304,7 @@ impl Handler<TransferResource> for TransferService {
 
         let ctx = TransferContext::default();
         ctx.state.retry_with(self.transfer_retry.clone());
+        ctx.register_reporter(msg.progress);
 
         let (abort, reg) = Abort::new_pair();
 

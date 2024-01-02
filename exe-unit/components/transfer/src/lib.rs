@@ -315,8 +315,8 @@ impl TransferContext {
         }
     }
 
-    pub fn register_reporter(&self, report: tokio::sync::watch::Sender<Progress>) {
-        *self.report.lock().unwrap() = Some(report);
+    pub fn register_reporter(&self, report: Option<tokio::sync::watch::Sender<Progress>>) {
+        *self.report.lock().unwrap() = report;
     }
 
     pub fn take_reporter(&self) -> Option<tokio::sync::watch::Sender<Progress>> {
