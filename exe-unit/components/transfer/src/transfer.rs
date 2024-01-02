@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use actix::prelude::*;
 use futures::future::Abortable;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::cache::{Cache, CachePath};
@@ -35,7 +36,7 @@ macro_rules! actor_try {
     };
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Progress {
     pub progress: u64,
     pub size: Option<u64>,
