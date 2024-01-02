@@ -8545,6 +8545,7 @@ dependencies = [
 name = "ya-payment"
 version = "0.3.0"
 dependencies = [
+ "actix",
  "actix-rt",
  "actix-web",
  "anyhow",
