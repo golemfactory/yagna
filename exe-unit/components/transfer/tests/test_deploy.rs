@@ -87,7 +87,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("deploy-restart")?;
     let temp_dir = dir.path();
@@ -140,11 +140,7 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     });
 
     let mut last_progress = 0u64;
-    loop {
-        if rx.changed().await.is_err() {
-            break;
-        }
-
+    while let Ok(_) = rx.changed().await {
         let progress = rx.borrow_and_update();
 
         assert_eq!(progress.size.unwrap(), file_size);
