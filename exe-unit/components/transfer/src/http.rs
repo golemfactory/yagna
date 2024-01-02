@@ -119,10 +119,6 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         url: &Url,
         ctx: &TransferContext,
     ) -> LocalBoxFuture<'a, Result<(), Error>> {
-        if ctx.state.offset() == 0 {
-            return futures::future::ok(()).boxed_local();
-        }
-
         let url = url.clone();
         let state = ctx.state.clone();
 
@@ -137,8 +133,13 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                 .get(header::CONTENT_LENGTH)
                 .and_then(|v| v.to_str().ok().and_then(|s| u64::from_str(s).ok()));
 
+            match &size {
+                None => log::info!("File size unknown. Http source server didn't respond with CONTENT_LENGTH header."),
+                Some(size) => log::info!("Http source size reported by server: {size} B"),
+            };
+
             state.set_size(size);
-            if !ranges {
+            if state.offset() != 0 && !ranges {
                 log::warn!("Transfer resuming is not supported by the server");
                 state.set_offset(0);
             }
