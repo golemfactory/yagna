@@ -16,6 +16,14 @@ use {
     shared_child::unix::SharedChildExt,
 };
 
+#[cfg(windows)]
+use {
+    winapi::um::handleapi::CloseHandle,
+    winapi::um::processthreadsapi::OpenProcess,
+    winapi::um::wincon::{GenerateConsoleCtrlEvent, CTRL_C_EVENT},
+    winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_TERMINATE, SYNCHRONIZE},
+};
+
 pub trait ProcessGroupExt<T> {
     fn new_process_group(&mut self) -> &mut T;
 }
@@ -118,10 +126,35 @@ impl ProcessHandle {
 
     #[cfg(not(unix))]
     pub async fn terminate(&self, _timeout: Duration) -> Result<()> {
-        // TODO: Implement termination for Windows
-        Err(anyhow!(
-            "Process termination not supported on non-UNIX systems"
-        ))
+        let process = self.process.clone();
+        let process_pid = process.id();
+
+        unsafe {
+            let process_handle = OpenProcess(
+                PROCESS_QUERY_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE,
+                0,
+                process_pid,
+            );
+
+            if process_handle.is_null() {
+                return Err(anyhow!(
+                    "Unable to open the process. Error code: {}",
+                    winapi::um::errhandlingapi::GetLastError()
+                ));
+            }
+
+            let event_result = GenerateConsoleCtrlEvent(CTRL_C_EVENT, process_pid);
+
+            if event_result == 0 {
+                return Err(anyhow!(
+                    "Unable to send CTRL+C event to the process. Error code: {}",
+                    winapi::um::errhandlingapi::GetLastError()
+                ));
+            };
+            CloseHandle(process_handle);
+        }
+
+        Ok(())
     }
 
     pub fn check_if_running(&self) -> Result<()> {
