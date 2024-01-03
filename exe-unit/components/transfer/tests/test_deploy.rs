@@ -10,7 +10,7 @@ use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{
-    AbortTransfers, DeployImage, Progress, TransferService, TransferServiceContext,
+    AbortTransfers, CommandProgress, DeployImage, TransferService, TransferServiceContext,
 };
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
@@ -126,7 +126,7 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let addr = TransferService::new(exe_ctx).start();
 
     log::info!("[>>] Deployment with hash verification");
-    let (tx, mut rx) = tokio::sync::watch::channel::<Progress>(Progress::default());
+    let (tx, mut rx) = tokio::sync::watch::channel(CommandProgress::default());
 
     tokio::task::spawn_local(async move {
         let _result = addr

@@ -164,6 +164,7 @@ impl Batch {
                         ..event
                     })
             }
+            RuntimeEventKind::Progress(_) => Some(event),
         };
 
         if let Some(evt) = stream_event {

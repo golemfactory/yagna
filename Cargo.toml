@@ -60,8 +60,8 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7"
-ya-client-model = "0.5"
+ya-client = "0.8"
+ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
@@ -283,8 +283,8 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "1a923517af842ccf16809f79484a0ad4ecd86880" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "1a923517af842ccf16809f79484a0ad4ecd86880" }
 
 ## RELAY and networking stack
 

@@ -26,22 +26,20 @@ use futures::prelude::*;
 use futures::task::{Context, Poll};
 use url::Url;
 
-use crate::error::Error;
-
 pub use crate::archive::{archive, extract, ArchiveFormat};
 pub use crate::container::ContainerTransferProvider;
+use crate::error::Error;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
+use crate::hash::with_hash_stream;
 pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
+use crate::progress::progress_report_channel;
 pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_progress_reporting};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
-use crate::hash::with_hash_stream;
-use crate::progress::progress_report_channel;
-use crate::transfer::Progress;
-use ya_client_model::activity::TransferArgs;
+use ya_client_model::activity::{CommandProgress, TransferArgs};
 
 /// Transfers data from `stream` to a `TransferSink`
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
@@ -299,7 +297,7 @@ impl From<Box<[u8]>> for TransferData {
 pub struct TransferContext {
     pub state: TransferState,
     pub args: TransferArgs,
-    pub report: Arc<std::sync::Mutex<Option<tokio::sync::watch::Sender<Progress>>>>,
+    pub report: Arc<std::sync::Mutex<Option<tokio::sync::watch::Sender<CommandProgress>>>>,
 }
 
 impl TransferContext {
@@ -315,11 +313,11 @@ impl TransferContext {
         }
     }
 
-    pub fn register_reporter(&self, report: Option<tokio::sync::watch::Sender<Progress>>) {
+    pub fn register_reporter(&self, report: Option<tokio::sync::watch::Sender<CommandProgress>>) {
         *self.report.lock().unwrap() = report;
     }
 
-    pub fn take_reporter(&self) -> Option<tokio::sync::watch::Sender<Progress>> {
+    pub fn take_reporter(&self) -> Option<tokio::sync::watch::Sender<CommandProgress>> {
         self.report.lock().unwrap().take()
     }
 }

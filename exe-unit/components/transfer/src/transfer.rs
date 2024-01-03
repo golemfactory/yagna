@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use actix::prelude::*;
 use futures::future::Abortable;
-use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::cache::{Cache, CachePath};
@@ -16,6 +15,7 @@ use crate::{
     HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
+pub use ya_client_model::activity::CommandProgress;
 use ya_client_model::activity::TransferArgs;
 use ya_runtime_api::deploy::ContainerVolume;
 use ya_utils_futures::abort::Abort;
@@ -36,12 +36,6 @@ macro_rules! actor_try {
     };
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Progress {
-    pub progress: u64,
-    pub size: Option<u64>,
-}
-
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct TransferResource {
@@ -51,7 +45,7 @@ pub struct TransferResource {
 
     /// Channel for watching for transfer progress. `None` means that there
     /// will be no progress updates.
-    pub progress: Option<tokio::sync::watch::Sender<Progress>>,
+    pub progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
 }
 
 #[derive(Message)]
@@ -70,7 +64,7 @@ pub struct DeployImage {
     pub task_package: Option<String>,
     /// Channel for watching for deploy progress. `None` means that there
     /// will be no progress updates.
-    pub progress: Option<tokio::sync::watch::Sender<Progress>>,
+    pub progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
 }
 
 #[derive(Clone, Debug, Message)]
@@ -196,7 +190,7 @@ impl TransferService {
         src_url: TransferUrl,
         src_name: CachePath,
         path: PathBuf,
-        progress: Option<tokio::sync::watch::Sender<Progress>>,
+        progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
 

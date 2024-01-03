@@ -1,9 +1,11 @@
 use crate::error::Error;
-use crate::transfer::Progress;
 use crate::{abortable_sink, abortable_stream, TransferSink, TransferStream};
 use crate::{TransferContext, TransferData};
+
 use futures::{SinkExt, StreamExt, TryFutureExt};
 use tokio::task::spawn_local;
+
+use ya_client_model::activity::CommandProgress;
 
 type Stream = TransferStream<TransferData, Error>;
 
@@ -53,7 +55,7 @@ pub fn progress_report_channel(dest: Sink, ctx: &TransferContext) -> Sink {
     let report = ctx.take_reporter();
     wrap_sink_with_progress_reporting(dest, ctx, move |progress, size| {
         if let Some(report) = &report {
-            report.send(Progress { progress, size }).ok();
+            report.send(CommandProgress { progress, size }).ok();
         }
     })
 }
