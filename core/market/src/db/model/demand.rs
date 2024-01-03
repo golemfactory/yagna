@@ -46,6 +46,8 @@ impl Demand {
             &expiration_ts,
         );
 
+        println!("New Demand:\nproperties: {properties}\nconstraints: {constraints}");
+
         Ok(Demand {
             id,
             properties,

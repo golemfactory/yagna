@@ -116,6 +116,13 @@ async fn get_invoice_events(
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
 
+    let ts = match after_timestamp {
+        None => "None".to_string(),
+        Some(t) => t.to_string(),
+    };
+
+    log::info!("[get_invoice_events]: {} after {}", id.identity, ts);
+
     let dao: InvoiceEventDao = db.as_dao();
     let getter = || async {
         dao.get_for_node_id(
@@ -130,7 +137,10 @@ async fn get_invoice_events(
     };
 
     match listen_for_events(getter, timeout_secs).await {
-        Ok(events) => response::ok(events),
+        Ok(events) => {
+            log::info!("[get_invoice_events]: {} events", events.len());
+            response::ok(events)
+        }
         Err(e) => response::server_error(&e),
     }
 }

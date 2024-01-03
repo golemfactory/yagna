@@ -29,6 +29,8 @@ async fn get_payments(
     query: Query<params::DriverNetworkParams>,
     id: Identity,
 ) -> HttpResponse {
+    log::info!("[get_payments]: id = {}", id.identity);
+
     let node_id = id.identity;
     let timeout_secs = query
         .event_params
@@ -80,6 +82,12 @@ async fn get_payment(
     path: Path<params::PaymentId>,
     id: Identity,
 ) -> HttpResponse {
+    log::info!(
+        "[get_payment]: id = {}, payment_id = {}",
+        id.identity,
+        path.payment_id
+    );
+
     let payment_id = path.payment_id.clone();
     let node_id = id.identity;
     let dao: PaymentDao = db.as_dao();

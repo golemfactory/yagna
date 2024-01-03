@@ -1,17 +1,15 @@
-use actix::{Actor, Addr, Context, Handler, Running};
-use actix_rt::{time, ArbiterHandle};
-use chrono::{NaiveDateTime, Utc};
+use actix_rt::time;
+use async_stream::stream;
+use chrono::Utc;
 use futures::prelude::*;
-use serde::{Deserialize, Serialize};
+use http_proxy::{GsbHttpCall, GsbHttpCallEvent};
 use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
 use ya_core_model::net::local as model;
-use ya_core_model::net::local::StatusError;
-use ya_service_bus::{typed as bus, RpcStreamCall, RpcStreamHandler, RpcStreamMessage};
-use ya_service_bus::{Error, RpcMessage};
+use ya_service_bus::typed as bus;
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum Mode {
@@ -41,60 +39,6 @@ pub struct Cli {
     pub mode: Mode,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
-#[serde(rename_all = "camelCase")]
-pub struct GsbHttpCall {
-    pub host: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct GsbHttpCallEvent {
-    pub index: usize,
-    pub timestamp: NaiveDateTime,
-    pub val: String,
-}
-
-impl RpcMessage for GsbHttpCall {
-    const ID: &'static str = "GsbHttpCall";
-    type Item = GsbHttpCallEvent;
-    type Error = StatusError;
-}
-
-impl RpcStreamMessage for GsbHttpCall {
-    const ID: &'static str = "GsbHttpCall";
-    type Item = GsbHttpCallEvent;
-    type Error = StatusError;
-}
-
-pub async fn process_msg(mut msg: RpcStreamCall<GsbHttpCall>) -> Result<Vec<String>, Error> {
-    println!("process {:?}", msg.body.host);
-
-    let stream = stream::iter(vec![1, 2, 3]);
-
-    let result = vec![];
-
-    let event: GsbHttpCallEvent;
-
-    //msg.reply.send().await;
-
-    Ok(result)
-}
-
-#[inline]
-fn status_err(e: anyhow::Error) -> StatusError {
-    println!("error {}", e);
-    StatusError::RuntimeException(e.to_string())
-}
-
-#[derive(Serialize, Deserialize)]
-struct Ping(String);
-
-impl RpcStreamMessage for Ping {
-    const ID: &'static str = "ping";
-    type Item = String;
-    type Error = ();
-}
-
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     env::set_var(
@@ -111,18 +55,42 @@ async fn main() -> anyhow::Result<()> {
     if args.mode == Mode::Receive {
         ya_sb_router::bind_gsb_router(None).await?;
 
-        let _ = bus::bind_stream(model::BUS_ID, |_p: GsbHttpCall| {
-            let interval = tokio::time::interval(Duration::from_secs(1));
-            tokio_stream::wrappers::IntervalStream::new(interval)
-                .map(|_ts| {
+        let mut count = 0;
+
+        let _stream_handle = bus::bind_stream(model::BUS_ID, move |http_call: GsbHttpCall| {
+            let _interval = tokio::time::interval(Duration::from_secs(1));
+            let stream = Box::pin(stream! {
+                for i in 0..10 {
+                    let msg = format!("called {} element #{}", http_call.host, i);
+                    count += 1;
                     let response = GsbHttpCallEvent {
-                        index: 1,
+                        index: count,
                         timestamp: Utc::now().naive_local(),
-                        val: "response".to_string(),
+                        val: msg,
                     };
-                    Ok(response)
-                })
-                .take(10)
+                    println!("sending nr {}", count);
+                    yield Ok(response);
+                }
+            });
+
+            // let stream = tokio_stream::wrappers::IntervalStream::new(interval)
+            //     .map(move |_ts| {
+            //         println!("Creating response");
+            //         let msg = format!("response from {}", http_call.host);
+            //         count += 1;
+            //         let response = GsbHttpCallEvent {
+            //             index: count,
+            //             timestamp: Utc::now().naive_local(),
+            //             val: msg,
+            //         };
+            //         if count == 7 {
+            //             return Err(HttpProxyStatusError::RuntimeException("end".to_string()));
+            //         }
+            //         Ok(response)
+            //     })
+            //     .take(5);
+            println!("returning stream");
+            stream
         });
 
         let mut interval = time::interval(tokio::time::Duration::from_secs(3));
@@ -136,8 +104,6 @@ async fn main() -> anyhow::Result<()> {
         let stream = bus::service(model::BUS_ID).call_streaming(GsbHttpCall {
             host: "http://localhost".to_string(),
         });
-        // let stream =
-        //     bus::service(model::BUS_ID).call_streaming(Ping("http://localhost".to_string()));
 
         stream
             .for_each(|r| async move {
@@ -148,9 +114,6 @@ async fn main() -> anyhow::Result<()> {
                 }
             })
             .await;
-        // while let Some(r) = stream.next() {
-        //     println!("got {:?}", r);
-        // }
     }
 
     Ok(())
