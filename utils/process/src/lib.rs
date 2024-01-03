@@ -124,7 +124,7 @@ impl ProcessHandle {
         self.check_if_running()
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     pub async fn terminate(&self, _timeout: Duration) -> Result<()> {
         let process = self.process.clone();
         let process_pid = process.id();
