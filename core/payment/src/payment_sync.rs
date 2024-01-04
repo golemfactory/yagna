@@ -1,8 +1,7 @@
 use std::{collections::HashSet, time::Duration};
 
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
+use actix::{Actor, Addr, AsyncContext, Context, WrapFuture};
 use chrono::Utc;
-use futures::FutureExt;
 use tokio::sync::Notify;
 use ya_client_model::{payment::Acceptance, NodeId};
 use ya_core_model::{
@@ -159,10 +158,6 @@ lazy_static::lazy_static! {
     pub static ref SYNC_NOTIFS_NOTIFY: Notify = Notify::new();
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
-struct CronPing;
-
 pub struct PaymentSyncCron {
     db: DbExecutor,
 }
@@ -179,46 +174,32 @@ impl Actor for PaymentSyncCron {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         let this = ctx.address();
-        tokio::task::spawn_local(async move {
-            match this.send(CronPing).await {
-                Ok(()) => log::debug!("PaymentSyncCron started"),
-                Err(e) => log::error!("PaymentSyncCron failed to start: {e}"),
-            }
-        });
-    }
-}
-
-impl Handler<CronPing> for PaymentSyncCron {
-    type Result = ResponseFuture<()>;
-
-    fn handle(&mut self, msg: CronPing, ctx: &mut Self::Context) -> Self::Result {
-        let this = ctx.address();
         let db = self.db.clone();
 
-        async move {
-            const DEFAULT_SLEEP: Duration = Duration::from_secs(3600);
+        ctx.spawn(
+            async move {
+                loop {
+                    const DEFAULT_SLEEP: Duration = Duration::from_secs(3600);
 
-            let sleep_for = match send_sync_notifs(&db).await {
-                Err(e) => {
-                    log::error!("PaymentSyncNeeded sendout job failed: {e}");
-                    DEFAULT_SLEEP
+                    let sleep_for = match send_sync_notifs(&db).await {
+                        Err(e) => {
+                            log::error!("PaymentSyncNeeded sendout job failed: {e}");
+                            DEFAULT_SLEEP
+                        }
+                        Ok(duration) => {
+                            log::debug!("PaymentSyncNeeded sendout job done");
+                            duration.unwrap_or(DEFAULT_SLEEP)
+                        }
+                    };
+
+                    tokio::select! {
+                        _ = tokio::time::sleep(sleep_for) => { },
+                        _ = SYNC_NOTIFS_NOTIFY.notified() => { },
+                    }
                 }
-                Ok(duration) => {
-                    log::debug!("PaymentSyncNeeded sendout job done");
-                    duration.unwrap_or(DEFAULT_SLEEP)
-                }
-            };
-
-            tokio::select! {
-                _ = tokio::time::sleep(sleep_for) => { },
-                _ = SYNC_NOTIFS_NOTIFY.notified() => { },
             }
-
-            if let Err(e) = this.send(CronPing).await {
-                log::error!("PaymentSyncCron self-call failed: {e}");
-            }
-        }
-        .boxed_local()
+            .into_actor(self),
+        );
     }
 }
 
