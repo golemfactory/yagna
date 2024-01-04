@@ -163,9 +163,9 @@ pub struct PaymentSyncCron {
 }
 
 impl PaymentSyncCron {
-    pub fn new(db: DbExecutor) -> Addr<Self> {
+    pub fn create_and_start(db: DbExecutor) {
         let me = Self { db };
-        me.start()
+        me.start();
     }
 }
 
@@ -173,9 +173,32 @@ impl Actor for PaymentSyncCron {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let this = ctx.address();
         let db = self.db.clone();
 
+        tokio::spawn(
+            async move {
+                loop {
+                    const DEFAULT_SLEEP: Duration = Duration::from_secs(3600);
+
+                    let sleep_for = match send_sync_notifs(&db).await {
+                        Err(e) => {
+                            log::error!("PaymentSyncCron sendout job failed: {e}");
+                            DEFAULT_SLEEP
+                        }
+                        Ok(duration) => {
+                            log::debug!("PaymentSyncCron sendout job done");
+                            duration.unwrap_or(DEFAULT_SLEEP)
+                        }
+                    };
+
+                    tokio::select! {
+                        _ = tokio::time::sleep(sleep_for) => { },
+                        _ = SYNC_NOTIFS_NOTIFY.notified() => { },
+                    }
+                }
+            }
+            .into_actor(self),
+        );
         ctx.spawn(
             async move {
                 loop {

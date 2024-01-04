@@ -685,7 +685,7 @@ mod public {
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
-            PaymentSyncCron::new(db.clone());
+            PaymentSyncCron::create_and_start(db.clone());
             send_sync_requests(db.clone());
         }
 
