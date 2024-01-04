@@ -8572,7 +8572,6 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio",
- "tokio-util",
  "uint 0.7.1",
  "uuid 0.8.2",
  "ya-agreement-utils",
