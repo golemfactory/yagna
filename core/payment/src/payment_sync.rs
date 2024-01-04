@@ -2,7 +2,6 @@ use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::Notify;
-use tokio_util::task::LocalPoolHandle;
 use ya_client_model::{payment::Acceptance, NodeId};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
@@ -218,9 +217,7 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
 }
 
 pub fn send_sync_requests(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
-
-    pool.spawn_pinned(move || async move {
+    tokio::task::spawn_local(async move {
         if let Err(e) = send_sync_requests_impl(db).await {
             log::error!("Failed to send PaymentSyncRequest: {e}");
         }
