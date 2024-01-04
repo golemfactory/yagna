@@ -347,41 +347,39 @@ async fn accept_debit_note(
         .get_by_agreement(activity.agreement_id.clone(), node_id)
         .await
     {
-        Ok(Some(invoice)) => {
-            match invoice.status {
-                DocumentStatus::Issued => {
-                    log::error!(
-                        "Wrong status for invoice [{}] for Activity [{}] and agreement [{}]",
-                        invoice.invoice_id,
-                        activity_id,
-                        activity.agreement_id
-                    );
-                    return response::server_error(&"Wrong status for invoice");
-                }
-                DocumentStatus::Received => {
-                    log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
+        Ok(Some(invoice)) => match invoice.status {
+            DocumentStatus::Issued => {
+                log::error!(
+                    "Wrong status for invoice [{}] for Activity [{}] and agreement [{}]",
+                    invoice.invoice_id,
+                    activity_id,
+                    activity.agreement_id
+                );
+                return response::server_error(&"Wrong status for invoice");
+            }
+            DocumentStatus::Received => {
+                log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
                         debit_note_id,
                         invoice.invoice_id,
                         activity_id,
                         activity.agreement_id
                     );
-                }
-                DocumentStatus::Accepted
-                | DocumentStatus::Rejected
-                | DocumentStatus::Failed
-                | DocumentStatus::Settled
-                | DocumentStatus::Cancelled => {
-                    log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
+            }
+            DocumentStatus::Accepted
+            | DocumentStatus::Rejected
+            | DocumentStatus::Failed
+            | DocumentStatus::Settled
+            | DocumentStatus::Cancelled => {
+                log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
                         debit_note_id,
                         invoice.status,
                         invoice.invoice_id,
                         activity_id,
                         activity.agreement_id
                     );
-                    return response::ok(Null);
-                }
+                return response::ok(Null);
             }
-        }
+        },
         Ok(None) => {
             //no problem, ignore
         }
