@@ -157,17 +157,17 @@ lazy_static::lazy_static! {
 }
 
 pub fn send_sync_notifs_job(db: DbExecutor) {
-    let default_sleep = Duration::from_secs(3600);
+    let sleep_on_error = Duration::from_secs(3600);
     tokio::task::spawn_local(async move {
         loop {
             let sleep_for = match send_sync_notifs(&db).await {
                 Err(e) => {
                     log::error!("PaymentSyncNeeded sendout job failed: {e}");
-                    default_sleep
+                    sleep_on_error
                 }
                 Ok(duration) => {
                     log::debug!("PaymentSyncNeeded sendout job done");
-                    duration.unwrap_or(default_sleep)
+                    duration.unwrap_or(sleep_on_error)
                 }
             };
 
