@@ -157,10 +157,8 @@ lazy_static::lazy_static! {
 }
 
 pub fn send_sync_notifs_job(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
     let default_sleep = Duration::from_secs(3600);
-
-    pool.spawn_pinned(move || async move {
+    tokio::task::spawn_local(async move {
         loop {
             let sleep_for = match send_sync_notifs(&db).await {
                 Err(e) => {
