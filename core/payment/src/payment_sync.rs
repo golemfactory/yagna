@@ -2,7 +2,6 @@ use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::Notify;
-use tokio_util::task::LocalPoolHandle;
 use ya_client_model::{payment::Acceptance, NodeId};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
@@ -157,19 +156,17 @@ lazy_static::lazy_static! {
 }
 
 pub fn send_sync_notifs_job(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
-    let default_sleep = Duration::from_secs(3600);
-
-    pool.spawn_pinned(move || async move {
+    let sleep_on_error = Duration::from_secs(3600);
+    tokio::task::spawn_local(async move {
         loop {
             let sleep_for = match send_sync_notifs(&db).await {
                 Err(e) => {
                     log::error!("PaymentSyncNeeded sendout job failed: {e}");
-                    default_sleep
+                    sleep_on_error
                 }
                 Ok(duration) => {
                     log::debug!("PaymentSyncNeeded sendout job done");
-                    duration.unwrap_or(default_sleep)
+                    duration.unwrap_or(sleep_on_error)
                 }
             };
 
@@ -220,9 +217,7 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
 }
 
 pub fn send_sync_requests(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
-
-    pool.spawn_pinned(move || async move {
+    tokio::task::spawn_local(async move {
         if let Err(e) = send_sync_requests_impl(db).await {
             log::error!("Failed to send PaymentSyncRequest: {e}");
         }
