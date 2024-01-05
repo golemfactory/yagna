@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use actix::prelude::*;
 use futures::future::Abortable;
+use futures::{Sink, StreamExt, TryStreamExt};
 use url::Url;
 
 use crate::cache::{Cache, CachePath};
@@ -15,6 +16,7 @@ use crate::{
     HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
+use ya_client_model::activity::exe_script_command::ProgressArgs;
 pub use ya_client_model::activity::CommandProgress;
 use ya_client_model::activity::TransferArgs;
 use ya_runtime_api::deploy::ContainerVolume;
@@ -36,16 +38,49 @@ macro_rules! actor_try {
     };
 }
 
-#[derive(Debug, Message)]
+#[derive(Debug, Clone)]
+pub struct ProgressConfig {
+    /// Channel for watching for transfer progress.
+    pub progress: tokio::sync::broadcast::Sender<CommandProgress>,
+    pub progress_args: ProgressArgs,
+}
+
+#[derive(Debug, Message, Default)]
 #[rtype(result = "Result<()>")]
 pub struct TransferResource {
     pub from: String,
     pub to: String,
     pub args: TransferArgs,
+    /// Progress reporting configuration. `None` means that there will be no progress updates.
+    pub progress_args: Option<ProgressConfig>,
+}
 
-    /// Channel for watching for transfer progress. `None` means that there
-    /// will be no progress updates.
-    pub progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
+impl TransferResource {
+    pub fn forward_progress(
+        &mut self,
+        args: &ProgressArgs,
+        sender: impl Sink<CommandProgress, Error = Error> + 'static,
+    ) {
+        let rx = match &self.progress_args {
+            None => {
+                let (tx, rx) = tokio::sync::broadcast::channel(50);
+                self.progress_args = Some(ProgressConfig {
+                    progress: tx,
+                    progress_args: args.clone(),
+                });
+                rx
+            }
+            Some(args) => args.progress.subscribe(),
+        };
+
+        tokio::task::spawn_local(async move {
+            tokio_stream::wrappers::BroadcastStream::new(rx)
+                .map_err(|e| Error::Other(e.to_string()))
+                .forward(sender)
+                .await
+                .ok()
+        });
+    }
 }
 
 #[derive(Message)]
@@ -62,9 +97,10 @@ impl AddVolumes {
 #[rtype(result = "Result<Option<PathBuf>>")]
 pub struct DeployImage {
     pub task_package: Option<String>,
+    pub progress_args: ProgressArgs,
     /// Channel for watching for deploy progress. `None` means that there
     /// will be no progress updates.
-    pub progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
+    pub progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
 }
 
 #[derive(Clone, Debug, Message)]
@@ -168,7 +204,7 @@ impl TransferService {
         src_url: TransferUrl,
         _src_name: CachePath,
         path: PathBuf,
-        progress: Option<tokio::sync::watch::Sender<Progress>>,
+        progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let fut = async move {
             let resp = reqwest::get(src_url.url)
@@ -190,7 +226,7 @@ impl TransferService {
         src_url: TransferUrl,
         src_name: CachePath,
         path: PathBuf,
-        progress: Option<tokio::sync::watch::Sender<CommandProgress>>,
+        progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
 
@@ -222,6 +258,7 @@ impl TransferService {
         let fut = async move {
             if path.exists() {
                 log::info!("Deploying cached image: {:?}", path);
+                ctx.report_fetching_cached();
                 return Ok(Some(path));
             }
 
@@ -299,7 +336,7 @@ impl Handler<TransferResource> for TransferService {
 
         let ctx = TransferContext::default();
         ctx.state.retry_with(self.transfer_retry.clone());
-        ctx.register_reporter(msg.progress);
+        ctx.register_reporter(msg.progress_args.map(|args| args.progress));
 
         let (abort, reg) = Abort::new_pair();
 

@@ -52,10 +52,12 @@ where
 type Sink = TransferSink<TransferData, Error>;
 
 pub fn progress_report_channel(dest: Sink, ctx: &TransferContext) -> Sink {
-    let report = ctx.take_reporter();
+    let report = ctx.reporter();
     wrap_sink_with_progress_reporting(dest, ctx, move |progress, size| {
         if let Some(report) = &report {
-            report.send(CommandProgress { progress, size }).ok();
+            report
+                .send(CommandProgress::TransferProgress(progress, size))
+                .ok();
         }
     })
 }

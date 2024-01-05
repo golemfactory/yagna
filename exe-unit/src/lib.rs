@@ -303,20 +303,30 @@ impl<R: Runtime> RuntimeRef<R> {
         transfer_service: &Addr<TransferService>,
     ) -> Result<()> {
         match &runtime_cmd.command {
-            ExeScriptCommand::Transfer { from, to, args } => {
-                let msg = TransferResource {
+            ExeScriptCommand::Transfer {
+                from,
+                to,
+                args,
+                progress,
+            } => {
+                let mut msg = TransferResource {
                     from: from.clone(),
                     to: to.clone(),
                     args: args.clone(),
-                    progress: None,
+                    progress_args: None,
                 };
+
+                if let Some(args) = progress {
+                    msg.forward_progress(args, runtime_cmd.progress_sink())
+                }
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { net, hosts } => {
+            ExeScriptCommand::Deploy { net, hosts, .. } => {
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.
                 let task_package = transfer_service
                     .send(DeployImage {
                         task_package: None,
+                        progress_args: Default::default(),
                         progress: None,
                     })
                     .await??;

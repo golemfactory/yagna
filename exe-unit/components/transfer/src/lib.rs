@@ -66,6 +66,8 @@ where
     let src = src.as_ref();
     let dst = dst.as_ref();
 
+    ctx.report(CommandProgress::TransferStarted);
+
     loop {
         let fut = async {
             dst.prepare_destination(&dst_url.url, ctx).await?;
@@ -81,10 +83,15 @@ where
         };
 
         match fut.await {
-            Ok(val) => return Ok(val),
+            Ok(val) => {
+                ctx.report(CommandProgress::TransferFinished);
+                return Ok(val);
+            }
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
                     log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
+
+                    ctx.report_retry(err.to_string(), delay);
                     tokio::time::sleep(delay).await;
                 }
                 None => return Err(err),
@@ -297,7 +304,7 @@ impl From<Box<[u8]>> for TransferData {
 pub struct TransferContext {
     pub state: TransferState,
     pub args: TransferArgs,
-    pub report: Arc<std::sync::Mutex<Option<tokio::sync::watch::Sender<CommandProgress>>>>,
+    pub report: Arc<std::sync::Mutex<Option<tokio::sync::broadcast::Sender<CommandProgress>>>>,
 }
 
 impl TransferContext {
@@ -313,12 +320,29 @@ impl TransferContext {
         }
     }
 
-    pub fn register_reporter(&self, report: Option<tokio::sync::watch::Sender<CommandProgress>>) {
+    pub fn register_reporter(
+        &self,
+        report: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+    ) {
         *self.report.lock().unwrap() = report;
     }
 
-    pub fn take_reporter(&self) -> Option<tokio::sync::watch::Sender<CommandProgress>> {
-        self.report.lock().unwrap().take()
+    pub fn reporter(&self) -> Option<tokio::sync::broadcast::Sender<CommandProgress>> {
+        self.report.lock().unwrap().clone()
+    }
+
+    pub fn report_retry(&self, message: String, delay: Duration) {
+        self.report(CommandProgress::Retry(message, delay))
+    }
+
+    pub fn report_fetching_cached(&self) {
+        self.report(CommandProgress::FetchingFromCache)
+    }
+
+    pub fn report(&self, status: CommandProgress) {
+        if let Some(reporter) = self.reporter() {
+            reporter.send(status).ok();
+        }
     }
 }
 
