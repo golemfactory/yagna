@@ -6,15 +6,12 @@
 // Extrnal crates
 
 // Workspace uses
-use ya_payment_driver::{
-    bus,
-    model::{AccountMode, GenericError, Init},
-};
+use ya_payment_driver::model::{AccountMode, DriverInitAccount, GenericError};
 
 // Local uses
 use crate::{driver::Erc20NextDriver, network, DRIVER_NAME};
 
-pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericError> {
+pub async fn init(driver: &Erc20NextDriver, msg: DriverInitAccount) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
@@ -26,7 +23,6 @@ pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericErro
 
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());
-    bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
 
     log::info!(
         "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",

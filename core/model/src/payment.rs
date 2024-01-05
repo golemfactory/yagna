@@ -217,6 +217,59 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct InitAccount {
+        driver: String,
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mode: AccountMode,
+    }
+
+    impl InitAccount {
+        pub fn new(
+            driver: String,
+            address: String,
+            network: Option<String>,
+            token: Option<String>,
+            mode: AccountMode,
+        ) -> Self {
+            InitAccount {
+                driver,
+                address,
+                network,
+                token,
+                mode,
+            }
+        }
+
+        pub fn driver(&self) -> String {
+            self.driver.clone()
+        }
+
+        pub fn address(&self) -> String {
+            self.address.clone()
+        }
+
+        pub fn network(&self) -> Option<String> {
+            self.network.clone()
+        }
+
+        pub fn token(&self) -> Option<String> {
+            self.token.clone()
+        }
+
+        pub fn mode(&self) -> AccountMode {
+            self.mode
+        }
+    }
+
+    impl RpcMessage for InitAccount {
+        const ID: &'static str = "InitAccount";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct NotifyPayment {
         pub driver: String,
         pub platform: String,

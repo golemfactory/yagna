@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
+use ya_core_model::driver::AccountMode;
 use ya_core_model::identity;
+use ya_core_model::payment::local::InitAccount;
 use ya_service_bus::typed as bus;
 
 fn accounts_path(data_dir: &Path) -> PathBuf {
@@ -31,8 +32,9 @@ pub(crate) async fn init_account(account: Account) -> anyhow::Result<()> {
     let mut mode = AccountMode::NONE;
     mode.set(AccountMode::SEND, account.send);
     mode.set(AccountMode::RECV, account.receive);
-    bus::service(driver_bus_id(account.driver))
-        .call(Init::new(
+    bus::service(ya_core_model::payment::local::BUS_ID)
+        .call(InitAccount::new(
+            account.driver,
             account.address,
             account.network,
             account.token,

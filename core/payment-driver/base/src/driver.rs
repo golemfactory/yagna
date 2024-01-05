@@ -67,7 +67,21 @@ pub trait PaymentDriver {
     ///     first init with mode: Send
     ///     second init with mode: Recv
     ///     should result in driver capable of both Sending & Receiving
-    async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+    async fn init(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: DriverInitAccount,
+    ) -> Result<Ack, GenericError>;
+
+    /// One account cannot be initialized on two drivers that
+    /// have the same key.
+    async fn conflict_key(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: ConflictKey,
+    ) -> Result<String, GenericError>;
 
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;

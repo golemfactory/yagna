@@ -19,7 +19,7 @@ use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
+use ya_core_model::driver::{driver_bus_id, AccountMode, DriverInitAccount, Fund};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
@@ -268,7 +268,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(
+        .call(DriverInitAccount::new(
             provider_addr.clone(),
             args.network.clone(),
             None,
@@ -284,7 +284,7 @@ async fn main() -> anyhow::Result<()> {
         ))
         .await??;
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(
+        .call(DriverInitAccount::new(
             requestor_addr.clone(),
             args.network.clone(),
             None,

@@ -6,7 +6,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 use ya_client_model::payment::{DriverDetails, Network};
 use ya_core_model::driver::*;
-use ya_core_model::payment::local as payment_srv;
+use ya_core_model::payment::local::{self as payment_srv};
 use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -14,7 +14,6 @@ pub fn bind_service() {
     log::debug!("Binding payment driver service to service bus");
 
     bus::ServiceBinder::new(&driver_bus_id(DRIVER_NAME), &(), ())
-        .bind(init)
         .bind(get_account_balance)
         .bind(schedule_payment)
         .bind(verify_payment)
@@ -49,27 +48,6 @@ pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Successfully registered driver in payment service.");
 
     Ok(())
-}
-
-async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
-    log::info!("init: {:?}", msg);
-
-    let address = msg.address();
-    let mode = msg.mode();
-
-    let msg = payment_srv::RegisterAccount {
-        address,
-        driver: DRIVER_NAME.to_string(),
-        network: NETWORK_NAME.to_string(),
-        token: TOKEN_NAME.to_string(),
-        mode,
-    };
-    bus::service(payment_srv::BUS_ID)
-        .send(msg)
-        .await
-        .map_err(GenericError::new)?
-        .map_err(GenericError::new)?;
-    Ok(Ack {})
 }
 
 async fn get_account_balance(

@@ -241,47 +241,59 @@ impl RpcMessage for Fund {
     type Error = GenericError;
 }
 
-// ************************** INIT **************************
-
+// ************************** Account **************************
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Init {
+pub struct DriverInitAccount {
     address: String,
     network: Option<String>,
     token: Option<String>,
     mode: AccountMode,
 }
 
-impl Init {
+impl DriverInitAccount {
     pub fn new(
         address: String,
         network: Option<String>,
         token: Option<String>,
         mode: AccountMode,
-    ) -> Init {
-        Init {
+    ) -> Self {
+        DriverInitAccount {
             address,
             network,
             token,
             mode,
         }
     }
+
     pub fn address(&self) -> String {
         self.address.clone()
     }
+
     pub fn network(&self) -> Option<String> {
         self.network.clone()
     }
+
     pub fn token(&self) -> Option<String> {
         self.token.clone()
     }
+
     pub fn mode(&self) -> AccountMode {
         self.mode
     }
 }
 
-impl RpcMessage for Init {
-    const ID: &'static str = "Init";
+impl RpcMessage for DriverInitAccount {
+    const ID: &'static str = "DriverInitAccount";
     type Item = Ack;
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConflictKey;
+
+impl RpcMessage for ConflictKey {
+    const ID: &'static str = "ConflictKey";
+    type Item = String;
     type Error = GenericError;
 }
 

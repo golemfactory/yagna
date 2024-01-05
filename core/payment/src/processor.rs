@@ -17,12 +17,12 @@ use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation,
+    self, driver_bus_id, AccountMode, ConflictKey, DriverInitAccount, GasDetails,
+    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
-    SchedulePayment, UnregisterAccount, UnregisterDriver,
+    GenericError, InitAccount, NotifyPayment, RegisterAccount, RegisterAccountError,
+    RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -313,6 +313,116 @@ impl PaymentProcessor {
 
     pub async fn unregister_driver(&mut self, msg: UnregisterDriver) {
         self.registry.unregister_driver(msg)
+    }
+
+    pub async fn init_account(&mut self, msg: InitAccount) -> Result<(), GenericError> {
+        let driver_details = match self.registry.drivers.get(&msg.driver()) {
+            None => {
+                return Err(GenericError::new(format!(
+                    "Driver {} not registered",
+                    msg.driver()
+                )))
+            }
+            Some(details) => details,
+        };
+
+        let self_conflict_key = driver_endpoint(&msg.driver())
+            .send(ConflictKey)
+            .await
+            .map_err(|e| GenericError::new(format!("GSB error: {e}")))?
+            .map_err(|e| {
+                GenericError::new(format!(
+                    "Failed getting conflict key for driver {}: {}",
+                    msg.driver(),
+                    e
+                ))
+            })?;
+        log::debug!("Driver conflict key is {self_conflict_key}");
+
+        if msg.mode().contains(AccountMode::SEND) {
+            // Unsure that no conflicting drivers have any accounts initialized.
+            for (driver_name, details) in &self.registry.drivers {
+                // Can't conflict with self
+                if driver_name == &msg.driver() {
+                    continue;
+                }
+
+                let other_conflict_key = driver_endpoint(driver_name)
+                    .send(ConflictKey)
+                    .await
+                    .map_err(|e| GenericError::new(format!("GSB error: {e}")))?
+                    .map_err(|e| {
+                        GenericError::new(format!(
+                            "Failed getting conflict key for driver {}: {}",
+                            msg.driver(),
+                            e
+                        ))
+                    })?;
+
+                if self_conflict_key != other_conflict_key {
+                    continue;
+                }
+
+                for platform in driver_details
+                    .networks
+                    .values()
+                    .flat_map(|network| network.tokens.values())
+                {
+                    if let Some(((platform, addr), details)) = self.registry.accounts.iter().find(
+                        |((platform_candidate, _addr), details)| {
+                            platform == platform_candidate && details.mode != AccountMode::NONE
+                        },
+                    ) {
+                        return Err(GenericError::new(format!("Failed to initialize account [{}:{:?}] on driver [{}], because an account [{}:{:?}] has already been initialized on the same network [{}] on a conflicting driver [{}]",
+                            msg.address(),
+                            msg.mode(),
+                            msg.driver(),
+                            addr,
+                            details.mode,
+                            details.network,
+                            details.driver
+                        )));
+                    }
+                }
+            }
+        }
+
+        log::debug!("Forwarding InitAccount to driver {}", msg.driver());
+        driver_endpoint(&msg.driver())
+            .send(DriverInitAccount::new(
+                msg.address(),
+                msg.network(),
+                msg.token(),
+                msg.mode(),
+            ))
+            .await
+            .map_err(|e| GenericError::new(format!("GSB error: {e}")))?
+            .map_err(|e| GenericError::new(format!("Driver account init error: {e}")))?;
+
+        let network = msg
+            .network()
+            .unwrap_or_else(|| driver_details.default_network.clone());
+        let default_token = &driver_details
+            .networks
+            .get(&network)
+            .ok_or_else(|| {
+                GenericError::new(format!(
+                    "Default network [{network}] not in supported networks"
+                ))
+            })?
+            .default_token;
+        let token = msg.token().unwrap_or_else(|| default_token.clone());
+        self.register_account(RegisterAccount {
+            address: msg.address(),
+            driver: msg.driver(),
+            network,
+            token,
+            mode: msg.mode(),
+        })
+        .await
+        .map_err(|e| GenericError::new(format!("Register account error: {e}")))?;
+
+        Ok(())
     }
 
     pub async fn register_account(

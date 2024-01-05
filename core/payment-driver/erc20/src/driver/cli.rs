@@ -9,9 +9,8 @@ use chrono::Utc;
 // Workspace uses
 use ya_payment_driver::driver::PaymentDriver;
 use ya_payment_driver::{
-    bus,
     db::models::Network,
-    model::{AccountMode, Fund, GenericError, Init, PaymentDetails, Transfer},
+    model::{AccountMode, DriverInitAccount, Fund, GenericError, PaymentDetails, Transfer},
 };
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
@@ -23,7 +22,7 @@ use crate::{
     network, DRIVER_NAME,
 };
 
-pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
+pub async fn init(driver: &Erc20Driver, msg: DriverInitAccount) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
@@ -57,8 +56,6 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
             )));
         }
     };
-
-    bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
 
     log::info!(
         "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",

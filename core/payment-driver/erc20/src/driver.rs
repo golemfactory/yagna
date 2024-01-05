@@ -157,9 +157,23 @@ impl PaymentDriver for Erc20Driver {
         false
     }
 
-    async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
+    async fn init(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: DriverInitAccount,
+    ) -> Result<Ack, GenericError> {
         cli::init(self, msg).await?;
         Ok(Ack {})
+    }
+
+    async fn conflict_key(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        _msg: ConflictKey,
+    ) -> Result<String, GenericError> {
+        Ok("erc20".into())
     }
 
     async fn fund(

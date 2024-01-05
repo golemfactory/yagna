@@ -11,9 +11,7 @@ use ya_client_model::payment::DriverStatusProperty;
 // Workspace uses
 use ya_client_model::payment::driver_details::DriverDetails;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{
-    driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
-};
+use ya_core_model::driver::{driver_bus_id, GenericError, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
 use ya_core_model::payment::local::{self as payment_srv, PaymentDriverStatusChange};
 use ya_service_bus::{
@@ -61,6 +59,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.init(db, c, m).await }
         )
+        .bind_with_processor(move |db, dr, c, m| async move { dr.conflict_key(db, c, m).await })
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
         )
@@ -126,28 +125,6 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
         unlocked_list
     );
     Ok(unlocked_list)
-}
-
-pub async fn register_account(
-    driver: &(dyn PaymentDriver),
-    address: &str,
-    network: &str,
-    token: &str,
-    mode: AccountMode,
-) -> Result<(), GenericError> {
-    let msg = payment_srv::RegisterAccount {
-        address: address.to_string(),
-        driver: driver.get_name(),
-        network: network.to_string(),
-        token: token.to_string(),
-        mode,
-    };
-    service(payment_srv::BUS_ID)
-        .send(msg)
-        .await
-        .map_err(GenericError::new)?
-        .map_err(GenericError::new)?;
-    Ok(())
 }
 
 pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericError> {

@@ -72,6 +72,7 @@ mod local {
             .bind_with_processor(schedule_payment)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
+            .bind_with_processor(init_account)
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
@@ -149,6 +150,16 @@ mod local {
     ) -> Result<(), NoError> {
         processor.lock().await.unregister_driver(msg).await;
         Ok(())
+    }
+
+    async fn init_account(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender: String,
+        msg: InitAccount,
+    ) -> Result<(), GenericError> {
+        log::debug!("dupa 3");
+        processor.lock().await.init_account(msg).await
     }
 
     async fn register_account(
