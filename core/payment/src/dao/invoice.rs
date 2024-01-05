@@ -191,6 +191,36 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
+    /*
+     * Get invoice by agreement id
+     * Only one invoice per agreement is allowed (it is enforced by the unique constraint on pay_invoice_x_activity)
+     */
+    pub async fn get_by_agreement(
+        &self,
+        agreement_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoice: Option<ReadObj> = query!()
+                .filter(dsl::agreement_id.eq(&agreement_id))
+                .filter(dsl::owner_id.eq(owner_id))
+                .first(conn)
+                .optional()?;
+            match invoice {
+                Some(invoice) => {
+                    let activity_ids = activity_dsl::pay_invoice_x_activity
+                        .select(activity_dsl::activity_id)
+                        .filter(activity_dsl::invoice_id.eq(invoice.id.clone()))
+                        .filter(activity_dsl::owner_id.eq(owner_id))
+                        .load(conn)?;
+                    Ok(Some(invoice.into_api_model(activity_ids)?))
+                }
+                None => Ok(None),
+            }
+        })
+        .await
+    }
+
     pub async fn get_many(
         &self,
         invoice_ids: Vec<String>,
