@@ -350,7 +350,8 @@ async fn accept_debit_note(
         Ok(Some(invoice)) => match invoice.status {
             DocumentStatus::Issued => {
                 log::error!(
-                    "Wrong status for invoice [{}] for Activity [{}] and agreement [{}]",
+                    "Wrong status [{}] for invoice [{}] for Activity [{}] and agreement [{}]",
+                    invoice.status,
                     invoice.invoice_id,
                     activity_id,
                     activity.agreement_id
@@ -372,8 +373,8 @@ async fn accept_debit_note(
             | DocumentStatus::Cancelled => {
                 log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
                         debit_note_id,
-                        invoice.status,
                         invoice.invoice_id,
+                        invoice.status,
                         activity_id,
                         activity.agreement_id
                     );
