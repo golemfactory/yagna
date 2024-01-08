@@ -10,7 +10,9 @@ use ya_framework_basic::file::generate_file_with_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
-use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, TransferServiceContext};
+use ya_transfer::transfer::{
+    AbortTransfers, DeployImage, ProgressConfig, TransferService, TransferServiceContext,
+};
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
 /// Hash computations should be correct in both cases.
@@ -131,8 +133,10 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
         let _result = addr
             .send(DeployImage {
                 task_package: task_package.clone(),
-                progress: Some(tx),
-                progress_args: ProgressArgs::default(),
+                progress_config: Some(ProgressConfig {
+                    progress: tx,
+                    progress_args: ProgressArgs::default(),
+                }),
             })
             .await??;
         log::info!("Deployment stopped");

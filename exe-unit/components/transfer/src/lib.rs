@@ -38,7 +38,7 @@ pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_pr
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
-use ya_client_model::activity::{CommandProgress, TransferArgs};
+use ya_client_model::activity::TransferArgs;
 
 /// Transfers data from `stream` to a `TransferSink`
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
@@ -315,13 +315,6 @@ impl TransferContext {
             state,
             progress: ProgressReporter::default(),
         }
-    }
-
-    pub fn register_reporter(
-        &self,
-        report: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
-    ) {
-        self.progress.register_reporter(report);
     }
 
     pub fn reporter(&self) -> ProgressReporter {

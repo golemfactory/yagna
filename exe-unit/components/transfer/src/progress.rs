@@ -78,20 +78,23 @@ impl ProgressReporter {
         });
     }
 
-    pub fn report_fetching_cached(&self) {
-        self.report_message("Fetched file from cache".to_string())
-    }
-
     pub fn register_reporter(
         &self,
-        report: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+        args: Option<ProgressConfig>,
+        steps: usize,
+        unit: Option<String>,
     ) {
-        if let Some(report) = report {
-            self.inner
-                .lock()
-                .unwrap()
-                .as_mut()
-                .map(|inner| inner.report = report);
+        if let Some(args) = args {
+            *(self.inner.lock().unwrap()) = Some(ProgressImpl {
+                report: args.progress,
+                last: CommandProgress {
+                    step: (0, steps),
+                    message: None,
+                    progress: (0, None),
+                    unit,
+                },
+                last_update: Instant::now(),
+            });
         }
     }
 }

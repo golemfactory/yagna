@@ -11,12 +11,12 @@ use url::Url;
 use crate::cache::{Cache, CachePath};
 use crate::error::Error;
 use crate::error::Error as TransferError;
+pub use crate::progress::ProgressConfig;
 use crate::{
     transfer_with, ContainerTransferProvider, FileTransferProvider, GftpTransferProvider,
     HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
-use crate::progress::ProgressConfig;
 use ya_client_model::activity::exe_script_command::ProgressArgs;
 pub use ya_client_model::activity::CommandProgress;
 use ya_client_model::activity::TransferArgs;
@@ -46,19 +46,40 @@ pub struct TransferResource {
     pub to: String,
     pub args: TransferArgs,
     /// Progress reporting configuration. `None` means that there will be no progress updates.
-    pub progress_args: Option<ProgressConfig>,
+    pub progress_config: Option<ProgressConfig>,
 }
 
-impl TransferResource {
-    pub fn forward_progress(
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct AddVolumes(Vec<ContainerVolume>);
+
+impl AddVolumes {
+    pub fn new(vols: Vec<ContainerVolume>) -> Self {
+        AddVolumes(vols)
+    }
+}
+
+#[derive(Debug, Message, Default)]
+#[rtype(result = "Result<Option<PathBuf>>")]
+pub struct DeployImage {
+    pub task_package: Option<String>,
+    /// Progress reporting configuration. `None` means that there will be no progress updates.
+    pub progress_config: Option<ProgressConfig>,
+}
+
+pub trait ForwardProgressToSink {
+    fn progress_config_mut(&mut self) -> &mut Option<ProgressConfig>;
+
+    fn forward_progress(
         &mut self,
         args: &ProgressArgs,
         sender: impl Sink<CommandProgress, Error = Error> + 'static,
     ) {
-        let rx = match &self.progress_args {
+        let progress_args = self.progress_config_mut();
+        let rx = match progress_args {
             None => {
                 let (tx, rx) = tokio::sync::broadcast::channel(50);
-                self.progress_args = Some(ProgressConfig {
+                *progress_args = Some(ProgressConfig {
                     progress: tx,
                     progress_args: args.clone(),
                 });
@@ -77,24 +98,44 @@ impl TransferResource {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "Result<()>")]
-pub struct AddVolumes(Vec<ContainerVolume>);
-
-impl AddVolumes {
-    pub fn new(vols: Vec<ContainerVolume>) -> Self {
-        AddVolumes(vols)
+impl ForwardProgressToSink for DeployImage {
+    fn progress_config_mut(&mut self) -> &mut Option<ProgressConfig> {
+        &mut self.progress_config
     }
 }
 
-#[derive(Debug, Message, Default)]
-#[rtype(result = "Result<Option<PathBuf>>")]
-pub struct DeployImage {
-    pub task_package: Option<String>,
-    pub progress_args: ProgressArgs,
-    /// Channel for watching for deploy progress. `None` means that there
-    /// will be no progress updates.
-    pub progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+impl ForwardProgressToSink for TransferResource {
+    fn progress_config_mut(&mut self) -> &mut Option<ProgressConfig> {
+        &mut self.progress_config
+    }
+}
+
+impl DeployImage {
+    pub fn forward_progress(
+        &mut self,
+        args: &ProgressArgs,
+        sender: impl Sink<CommandProgress, Error = Error> + 'static,
+    ) {
+        let rx = match &self.progress_config {
+            None => {
+                let (tx, rx) = tokio::sync::broadcast::channel(50);
+                self.progress_config = Some(ProgressConfig {
+                    progress: tx,
+                    progress_args: args.clone(),
+                });
+                rx
+            }
+            Some(args) => args.progress.subscribe(),
+        };
+
+        tokio::task::spawn_local(async move {
+            tokio_stream::wrappers::BroadcastStream::new(rx)
+                .map_err(|e| Error::Other(e.to_string()))
+                .forward(sender)
+                .await
+                .ok()
+        });
+    }
 }
 
 #[derive(Clone, Debug, Message)]
@@ -198,7 +239,7 @@ impl TransferService {
         src_url: TransferUrl,
         _src_name: CachePath,
         path: PathBuf,
-        progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+        ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let fut = async move {
             let resp = reqwest::get(src_url.url)
@@ -220,7 +261,7 @@ impl TransferService {
         src_url: TransferUrl,
         src_name: CachePath,
         path: PathBuf,
-        progress: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+        ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
 
@@ -230,10 +271,6 @@ impl TransferService {
             url: Url::from_file_path(&path_tmp).unwrap(),
             hash: None,
         };
-
-        let ctx = TransferContext::default();
-        ctx.state.retry_with(self.deploy_retry.clone());
-        ctx.register_reporter(progress);
 
         // Using partially downloaded image from previous executions could speed up deploy
         // process, but it comes with the cost: If image under URL changed, Requestor will get
@@ -312,11 +349,16 @@ impl Handler<DeployImage> for TransferService {
 
         log::info!("Deploying from {:?} to {:?}", src_url.url, path);
 
+        let ctx = TransferContext::default();
+        ctx.state.retry_with(self.deploy_retry.clone());
+        ctx.progress
+            .register_reporter(deploy.progress_config, 1, Some("Bytes".to_string()));
+
         #[cfg(not(feature = "sgx"))]
-        return self.deploy_no_sgx(src_url, src_name, path, deploy.progress);
+        return self.deploy_no_sgx(src_url, src_name, path, ctx);
 
         #[cfg(feature = "sgx")]
-        return self.deploy_sgx(src_url, src_name, path, deploy.progress);
+        return self.deploy_sgx(src_url, src_name, path, ctx);
     }
 }
 
@@ -331,7 +373,8 @@ impl Handler<TransferResource> for TransferService {
 
         let ctx = TransferContext::default();
         ctx.state.retry_with(self.transfer_retry.clone());
-        ctx.register_reporter(msg.progress_args.map(|args| args.progress));
+        ctx.progress
+            .register_reporter(msg.progress_config, 1, Some("Bytes".to_string()));
 
         let (abort, reg) = Abort::new_pair();
 

@@ -18,7 +18,8 @@ use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 use ya_transfer::transfer::{
-    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+    AddVolumes, DeployImage, ForwardProgressToSink, TransferResource, TransferService,
+    TransferServiceContext,
 };
 
 use crate::acl::Acl;
@@ -313,7 +314,7 @@ impl<R: Runtime> RuntimeRef<R> {
                     from: from.clone(),
                     to: to.clone(),
                     args: args.clone(),
-                    progress_args: None,
+                    progress_config: None,
                 };
 
                 if let Some(args) = progress {
@@ -321,15 +322,22 @@ impl<R: Runtime> RuntimeRef<R> {
                 }
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { net, hosts, .. } => {
+            ExeScriptCommand::Deploy {
+                net,
+                hosts,
+                progress,
+                ..
+            } => {
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.
-                let task_package = transfer_service
-                    .send(DeployImage {
-                        task_package: None,
-                        progress_args: Default::default(),
-                        progress: None,
-                    })
-                    .await??;
+                let mut msg = DeployImage {
+                    task_package: None,
+                    progress_config: None,
+                };
+                if let Some(args) = progress {
+                    msg.forward_progress(args, runtime_cmd.progress_sink())
+                }
+
+                let task_package = transfer_service.send(msg).await??;
                 runtime
                     .send(UpdateDeployment {
                         task_package,
