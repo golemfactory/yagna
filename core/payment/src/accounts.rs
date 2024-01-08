@@ -96,7 +96,7 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
             network: None, // Use default
             token: None,   // Use default
             send: false,
-            receive: true,
+            receive: false,
         })
         .collect();
     let text = serde_json::to_string(&default_accounts)?;
