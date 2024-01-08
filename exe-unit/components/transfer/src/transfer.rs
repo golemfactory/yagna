@@ -16,6 +16,7 @@ use crate::{
     HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
+use crate::progress::ProgressConfig;
 use ya_client_model::activity::exe_script_command::ProgressArgs;
 pub use ya_client_model::activity::CommandProgress;
 use ya_client_model::activity::TransferArgs;
@@ -36,13 +37,6 @@ macro_rules! actor_try {
     ($expr:expr,) => {
         $crate::actor_try!($expr)
     };
-}
-
-#[derive(Debug, Clone)]
-pub struct ProgressConfig {
-    /// Channel for watching for transfer progress.
-    pub progress: tokio::sync::broadcast::Sender<CommandProgress>,
-    pub progress_args: ProgressArgs,
 }
 
 #[derive(Debug, Message, Default)]
@@ -93,7 +87,7 @@ impl AddVolumes {
     }
 }
 
-#[derive(Debug, Message)]
+#[derive(Debug, Message, Default)]
 #[rtype(result = "Result<Option<PathBuf>>")]
 pub struct DeployImage {
     pub task_package: Option<String>,
@@ -258,7 +252,8 @@ impl TransferService {
         let fut = async move {
             if path.exists() {
                 log::info!("Deploying cached image: {:?}", path);
-                ctx.report_fetching_cached();
+                ctx.reporter()
+                    .report_message("Deployed image from cache".to_string());
                 return Ok(Some(path));
             }
 

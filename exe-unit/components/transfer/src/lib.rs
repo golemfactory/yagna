@@ -15,7 +15,6 @@ mod traverse;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -34,7 +33,7 @@ pub use crate::gftp::GftpTransferProvider;
 use crate::hash::with_hash_stream;
 pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
-use crate::progress::progress_report_channel;
+use crate::progress::{progress_report_channel, ProgressReporter};
 pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_progress_reporting};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
@@ -66,8 +65,6 @@ where
     let src = src.as_ref();
     let dst = dst.as_ref();
 
-    ctx.report(CommandProgress::TransferStarted);
-
     loop {
         let fut = async {
             dst.prepare_destination(&dst_url.url, ctx).await?;
@@ -84,14 +81,14 @@ where
 
         match fut.await {
             Ok(val) => {
-                ctx.report(CommandProgress::TransferFinished);
                 return Ok(val);
             }
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
-                    log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
+                    let msg = format!("Retry in {}s because of error: {err}", delay.as_secs_f32());
+                    log::warn!("{}", msg);
 
-                    ctx.report_retry(err.to_string(), delay);
+                    ctx.progress.report_message(msg);
                     tokio::time::sleep(delay).await;
                 }
                 None => return Err(err),
@@ -304,7 +301,7 @@ impl From<Box<[u8]>> for TransferData {
 pub struct TransferContext {
     pub state: TransferState,
     pub args: TransferArgs,
-    pub report: Arc<std::sync::Mutex<Option<tokio::sync::broadcast::Sender<CommandProgress>>>>,
+    pub progress: ProgressReporter,
 }
 
 impl TransferContext {
@@ -316,7 +313,7 @@ impl TransferContext {
         Self {
             args,
             state,
-            report: Arc::new(std::sync::Mutex::new(None)),
+            progress: ProgressReporter::default(),
         }
     }
 
@@ -324,25 +321,11 @@ impl TransferContext {
         &self,
         report: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
     ) {
-        *self.report.lock().unwrap() = report;
+        self.progress.register_reporter(report);
     }
 
-    pub fn reporter(&self) -> Option<tokio::sync::broadcast::Sender<CommandProgress>> {
-        self.report.lock().unwrap().clone()
-    }
-
-    pub fn report_retry(&self, message: String, delay: Duration) {
-        self.report(CommandProgress::Retry(message, delay))
-    }
-
-    pub fn report_fetching_cached(&self) {
-        self.report(CommandProgress::FetchingFromCache)
-    }
-
-    pub fn report(&self, status: CommandProgress) {
-        if let Some(reporter) = self.reporter() {
-            reporter.send(status).ok();
-        }
+    pub fn reporter(&self) -> ProgressReporter {
+        self.progress.clone()
     }
 }
 

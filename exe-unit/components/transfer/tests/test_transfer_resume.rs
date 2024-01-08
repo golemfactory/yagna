@@ -113,7 +113,7 @@ async fn transfer_with_args(
         from: from.to_owned(),
         to: to.to_owned(),
         args,
-        progress: None,
+        progress_args: None,
     })
     .await??;
 

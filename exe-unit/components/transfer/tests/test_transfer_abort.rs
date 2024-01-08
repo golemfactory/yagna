@@ -38,7 +38,7 @@ async fn interrupted_transfer(
             from: src.to_owned(),
             to: dest.to_owned(),
             args: TransferArgs::default(),
-            progress: None,
+            progress_args: None,
         })
         .await?;
 

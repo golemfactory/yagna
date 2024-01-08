@@ -3,15 +3,14 @@ use std::env;
 use std::time::Duration;
 use test_context::test_context;
 use tokio::time::sleep;
+use ya_client_model::activity::exe_script_command::ProgressArgs;
 
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_file_with_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
-use ya_transfer::transfer::{
-    AbortTransfers, CommandProgress, DeployImage, TransferService, TransferServiceContext,
-};
+use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, TransferServiceContext};
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
 /// Hash computations should be correct in both cases.
@@ -66,7 +65,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     let result = addr
         .send(DeployImage {
             task_package: task_package.clone(),
-            progress: None,
+            ..DeployImage::default()
         })
         .await?;
     log::info!("Deployment stopped");
@@ -76,7 +75,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     log::info!("Re-deploying the same image");
     addr.send(DeployImage {
         task_package: task_package.clone(),
-        progress: None,
+        ..DeployImage::default()
     })
     .await??;
 
@@ -126,13 +125,14 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let addr = TransferService::new(exe_ctx).start();
 
     log::info!("[>>] Deployment with hash verification");
-    let (tx, mut rx) = tokio::sync::watch::channel(CommandProgress::default());
+    let (tx, mut rx) = tokio::sync::broadcast::channel(15);
 
     tokio::task::spawn_local(async move {
         let _result = addr
             .send(DeployImage {
                 task_package: task_package.clone(),
                 progress: Some(tx),
+                progress_args: ProgressArgs::default(),
             })
             .await??;
         log::info!("Deployment stopped");
@@ -140,18 +140,16 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     });
 
     let mut last_progress = 0u64;
-    while let Ok(_) = rx.changed().await {
-        let progress = rx.borrow_and_update();
+    while let Ok(progress) = rx.recv().await {
+        assert_eq!(progress.progress.1.unwrap(), file_size);
+        assert!(progress.progress.0 >= last_progress);
 
-        assert_eq!(progress.size.unwrap(), file_size);
-        assert!(progress.progress >= last_progress);
-
-        last_progress = progress.progress;
+        last_progress = progress.progress.0;
 
         log::info!(
             "Progress: {}/{}",
-            progress.progress,
-            progress.size.unwrap_or(0)
+            progress.progress.0,
+            progress.progress.1.unwrap_or(0)
         );
     }
 

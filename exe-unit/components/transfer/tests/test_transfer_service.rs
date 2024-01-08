@@ -31,7 +31,7 @@ async fn transfer_with_args(
         from: from.to_owned(),
         to: to.to_owned(),
         args,
-        progress: None,
+        progress_args: None,
     })
     .await??;
 
@@ -99,7 +99,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     log::warn!("[>>] Deployment with hash verification");
     addr.send(DeployImage {
         task_package: task_package.clone(),
-        progress: None,
+        ..DeployImage::default()
     })
     .await??;
     log::warn!("Deployment complete");
@@ -108,7 +108,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     log::warn!("[>>] Deployment from cache");
     addr.send(DeployImage {
         task_package: task_package.clone(),
-        progress: None,
+        ..DeployImage::default()
     })
     .await??;
     log::warn!("Deployment from cache complete");
@@ -157,7 +157,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 }
 
 #[ignore]
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+//#[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

@@ -3,11 +3,98 @@ use crate::{abortable_sink, abortable_stream, TransferSink, TransferStream};
 use crate::{TransferContext, TransferData};
 
 use futures::{SinkExt, StreamExt, TryFutureExt};
+use std::sync::Arc;
 use tokio::task::spawn_local;
+use tokio::time::Instant;
 
+use ya_client_model::activity::exe_script_command::ProgressArgs;
 use ya_client_model::activity::CommandProgress;
 
 type Stream = TransferStream<TransferData, Error>;
+
+#[derive(Debug, Clone)]
+pub struct ProgressConfig {
+    /// Channel for watching for transfer progress.
+    pub progress: tokio::sync::broadcast::Sender<CommandProgress>,
+    pub progress_args: ProgressArgs,
+}
+
+#[derive(Default, Clone)]
+pub struct ProgressReporter {
+    config: ProgressArgs,
+    inner: Arc<std::sync::Mutex<Option<ProgressImpl>>>,
+}
+
+struct ProgressImpl {
+    pub report: tokio::sync::broadcast::Sender<CommandProgress>,
+    pub last: CommandProgress,
+    pub last_update: Instant,
+}
+
+impl ProgressReporter {
+    pub fn next_step(&self) {
+        self.inner.lock().unwrap().as_mut().map(|inner| {
+            inner.last.step.0 += 1;
+            inner.last.progress = (0, None);
+            inner.last_update = Instant::now();
+            inner
+                .report
+                .send(CommandProgress {
+                    message: None,
+                    ..inner.last.clone()
+                })
+                .ok()
+        });
+    }
+
+    /// TODO: implement `update_interval` and `step`
+    pub fn report_progress(&self, progress: u64, size: Option<u64>) {
+        let _update_interval = self.config.update_interval;
+        let _step = self.config.step;
+
+        self.inner.lock().unwrap().as_mut().map(|inner| {
+            inner.last.progress = (progress, size);
+            inner.last_update = Instant::now();
+            inner
+                .report
+                .send(CommandProgress {
+                    message: None,
+                    ..inner.last.clone()
+                })
+                .ok()
+        });
+    }
+
+    pub fn report_message(&self, message: String) {
+        self.inner.lock().unwrap().as_mut().map(|inner| {
+            inner.last_update = Instant::now();
+            inner
+                .report
+                .send(CommandProgress {
+                    message: Some(message),
+                    ..inner.last.clone()
+                })
+                .ok()
+        });
+    }
+
+    pub fn report_fetching_cached(&self) {
+        self.report_message("Fetched file from cache".to_string())
+    }
+
+    pub fn register_reporter(
+        &self,
+        report: Option<tokio::sync::broadcast::Sender<CommandProgress>>,
+    ) {
+        if let Some(report) = report {
+            self.inner
+                .lock()
+                .unwrap()
+                .as_mut()
+                .map(|inner| inner.report = report);
+        }
+    }
+}
 
 /// Wraps a stream to report progress.
 /// The `report` function is called with the current offset and the total size.
@@ -54,11 +141,7 @@ type Sink = TransferSink<TransferData, Error>;
 pub fn progress_report_channel(dest: Sink, ctx: &TransferContext) -> Sink {
     let report = ctx.reporter();
     wrap_sink_with_progress_reporting(dest, ctx, move |progress, size| {
-        if let Some(report) = &report {
-            report
-                .send(CommandProgress::TransferProgress(progress, size))
-                .ok();
-        }
+        report.report_progress(progress, size)
     })
 }
 
