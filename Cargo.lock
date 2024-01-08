@@ -2732,8 +2732,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d2a95278fbde2e90fdbd44ab54e2723344e7c20d7c08c837c60f9f07c2e5f51"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=f2d7514c18fc066e9cfb796090b90f5b27cfe1c6#f2d7514c18fc066e9cfb796090b90f5b27cfe1c6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7415,7 +7414,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.3.2",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -7974,8 +7973,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=afdc1daf1f17a5128d911f8fff9d55c4f213e9af#afdc1daf1f17a5128d911f8fff9d55c4f213e9af"
+version = "0.8.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7998,8 +7997,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=afdc1daf1f17a5128d911f8fff9d55c4f213e9af#afdc1daf1f17a5128d911f8fff9d55c4f213e9af"
+version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8719,8 +8718,8 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-client"
-version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.6.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8744,13 +8743,13 @@ dependencies = [
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-stack 0.5.1",
 ]
 
 [[package]]
 name = "ya-relay-core"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8774,13 +8773,13 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-stack 0.5.1",
 ]
 
 [[package]]
 name = "ya-relay-proto"
-version = "0.4.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.4.3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
@@ -8794,27 +8793,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
-]
-
-[[package]]
-name = "ya-relay-stack"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
-dependencies = [
- "derive_more",
- "futures 0.3.28",
- "lazy_static",
- "log",
- "managed",
- "num-derive",
- "num-traits",
- "rand 0.8.5",
- "smoltcp",
- "thiserror",
- "tokio",
- "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
 ]
 
 [[package]]
@@ -8838,6 +8817,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-relay-stack"
+version = "0.5.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+dependencies = [
+ "derive_more",
+ "futures 0.3.28",
+ "lazy_static",
+ "log",
+ "managed",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "smoltcp",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+]
+
+[[package]]
 name = "ya-relay-util"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8850,7 +8849,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "bytes 1.4.0",
  "derive_more",
@@ -9158,7 +9157,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5)",
+ "ya-relay-stack 0.5.0",
 ]
 
 [[package]]
