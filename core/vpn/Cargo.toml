@@ -13,7 +13,9 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
-ya-utils-networking = { version = "0.2", default-features = false, features = ["vpn"]}
+ya-utils-networking = { version = "0.2", default-features = false, features = [
+    "vpn",
+] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = "0.13"

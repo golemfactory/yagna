@@ -20,7 +20,14 @@ actix-web = "4"
 actix-rt = "2.7"
 anyhow = "1.0"
 # async-compression 0.3.8+ deprecates the "stream" module
-async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
+async-compression = { version = "=0.3.7", features = [
+    "tokio",
+    "futures-io",
+    "stream",
+    "bzip2",
+    "gzip",
+    "xz",
+] }
 bytes = "1.0"
 crossterm = "0.26.1"
 env_logger = "0.7"

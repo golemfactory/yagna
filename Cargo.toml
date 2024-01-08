@@ -283,8 +283,9 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b313c3f79a5160c22bab3deea903f1e8ae009164" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b313c3f79a5160c22bab3deea903f1e8ae009164" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack
 

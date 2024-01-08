@@ -13,7 +13,7 @@ dependencies = [
  "actix_derive",
  "bitflags 2.4.1",
  "bytes 1.5.0",
- "crossbeam-channel 0.5.10",
+ "crossbeam-channel 0.5.11",
  "futures-core",
  "futures-sink",
  "futures-task",
@@ -61,16 +61,15 @@ dependencies = [
 
 [[package]]
 name = "actix-files"
-version = "0.6.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d832782fac6ca7369a70c9ee9a20554623c5e51c76e190ad151780ebea1cf689"
+checksum = "cc517050e349356239da19a5e100cd61c21658b3ae183b02c1c6799c581bddf3"
 dependencies = [
  "actix-http",
  "actix-service",
  "actix-utils",
  "actix-web",
- "askama_escape",
- "bitflags 1.3.2",
+ "bitflags 2.4.1",
  "bytes 1.5.0",
  "derive_more",
  "futures-core",
@@ -80,6 +79,7 @@ dependencies = [
  "mime_guess",
  "percent-encoding",
  "pin-project-lite",
+ "v_htmlescape",
 ]
 
 [[package]]
@@ -94,7 +94,7 @@ dependencies = [
  "actix-tls",
  "actix-utils",
  "ahash 0.8.7",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bitflags 2.4.1",
  "brotli",
  "bytes 1.5.0",
@@ -549,12 +549,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 
 [[package]]
-name = "askama_escape"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "619743e34b5ba4e9703bba34deac3427c72507c7159f5fd030aea8cac0cfe341"
-
-[[package]]
 name = "asnom"
 version = "0.1.1"
 source = "git+https://github.com/golemfactory/asnom#06696cefca408a56431922f95293330ed293dbda"
@@ -662,7 +656,7 @@ dependencies = [
  "actix-service",
  "actix-tls",
  "actix-utils",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bytes 1.5.0",
  "cfg-if 1.0.0",
  "cookie",
@@ -745,9 +739,9 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
-version = "0.21.5"
+version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35636a1494ede3b646cc98f74f8e62c773a38a659ebc777a2cf26b9b74171df9"
+checksum = "c79fed4cdb43e993fcdadc7e58a09fd0e3e649c4436fa11da71c9f1f3ee7feb9"
 
 [[package]]
 name = "base64ct"
@@ -888,7 +882,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af254ed2da4936ef73309e9597180558821cb16ae9bba4cb24ce6b612d8d80ed"
 dependencies = [
- "base64 0.21.5",
+ "base64 0.21.6",
  "bollard-stubs",
  "bytes 1.5.0",
  "futures-core",
@@ -1333,12 +1327,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.10"
+version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82a9b73a36529d9c47029b9fb3a6f0ea3cc916a261195352ba19e770fc1748b2"
+checksum = "176dc175b78f56c0f321911d9c8eb2b77a78a4860b9c19db83835fea1a46649b"
 dependencies = [
- "cfg-if 1.0.0",
- "crossbeam-utils 0.8.18",
+ "crossbeam-utils 0.8.19",
 ]
 
 [[package]]
@@ -1380,12 +1373,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-queue"
-version = "0.3.10"
+version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adc6598521bb5a83d491e8c1fe51db7296019d2ca3cb93cc6c2a20369a4d78a2"
+checksum = "df0346b5d5e76ac2fe4e327c5fd1118d6be7c51dfb18f9b7922923f287471e35"
 dependencies = [
- "cfg-if 1.0.0",
- "crossbeam-utils 0.8.18",
+ "crossbeam-utils 0.8.19",
 ]
 
 [[package]]
@@ -1401,12 +1393,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.18"
+version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3a430a770ebd84726f584a90ee7f020d28db52c6d02138900f22341f866d39c"
-dependencies = [
- "cfg-if 1.0.0",
-]
+checksum = "248e3bacc7dc6baa3b21e405ee045c3047101a49145e7e9eca583ab4c2ca5345"
 
 [[package]]
 name = "crossterm"
@@ -1815,15 +1804,6 @@ name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
-
-[[package]]
-name = "duration-string"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fcc1d9ae294a15ed05aeae8e11ee5f2b3fe971c077d45a42fb20825fba6ee13"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "dyn-clone"
@@ -2745,8 +2725,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d2a95278fbde2e90fdbd44ab54e2723344e7c20d7c08c837c60f9f07c2e5f51"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=f2d7514c18fc066e9cfb796090b90f5b27cfe1c6#f2d7514c18fc066e9cfb796090b90f5b27cfe1c6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2761,7 +2740,7 @@ dependencies = [
  "sha3 0.10.8",
  "thiserror",
  "url",
- "ya-client-model 0.5.0",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -2895,7 +2874,7 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
 dependencies = [
- "base64 0.21.5",
+ "base64 0.21.6",
  "bytes 1.5.0",
  "headers-core",
  "http",
@@ -3485,9 +3464,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.151"
+version = "0.2.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "302d7ab3130588088d277783b1e2d2e10c9e9e4a16dd9050e6ec93fb3e7048f4"
+checksum = "13e3bf6590cbc649f4d1a3eefc9d5d6eb746f5200ffb04e5e142700b8faa56e7"
 
 [[package]]
 name = "libm"
@@ -4788,9 +4767,9 @@ checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.75"
+version = "1.0.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907a61bd0f64c2f29cd1cf1dc34d05176426a3f504a78010f08416ddb7b13708"
+checksum = "95fc56cda0b5c3325f5fbbd7ff9fda9e02bb00bb3dac51252d2f1bfa1cb8cc8c"
 dependencies = [
  "unicode-ident",
 ]
@@ -5287,7 +5266,7 @@ version = "0.11.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b1ae8d9ac08420c66222fb9096fc5de435c3c48542bc5336c51892cffafb41"
 dependencies = [
- "base64 0.21.5",
+ "base64 0.21.6",
  "bytes 1.5.0",
  "encoding_rs",
  "futures-core",
@@ -5534,7 +5513,7 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c74cae0a4cf6ccbbf5f359f08efdf8ee7e1dc532573bf0db71968cb56b1448c"
 dependencies = [
- "base64 0.21.5",
+ "base64 0.21.6",
 ]
 
 [[package]]
@@ -5871,9 +5850,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.194"
+version = "1.0.195"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b114498256798c94a0689e1a15fec6005dee8ac1f41de56404b67afc2a4b773"
+checksum = "63261df402c67811e9ac6def069e4786148c4563f4b50fd4bf30aa370d626b02"
 dependencies = [
  "serde_derive",
 ]
@@ -5889,9 +5868,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.194"
+version = "1.0.195"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3385e45322e8f9931410f01b3031ec534c3947d0e94c18049af4d9f9907d4e0"
+checksum = "46fe8f8603d81ba86327b23a2e9cdf49e1255fb94a4c5f297f6ee0547178ea2c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6453,7 +6432,7 @@ dependencies = [
  "bytes 1.5.0",
  "chrono",
  "crc",
- "crossbeam-queue 0.3.10",
+ "crossbeam-queue 0.3.11",
  "dotenvy",
  "either",
  "event-listener",
@@ -6528,7 +6507,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "864b869fdf56263f4c95c45483191ea0af340f9f3e3e7b4d57a61c7c87a970db"
 dependencies = [
  "atoi",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bitflags 2.4.1",
  "byteorder",
  "bytes 1.5.0",
@@ -6571,7 +6550,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb7ae0e6a97fb3ba33b23ac2671a5ce6e3cabe003f451abd5a56e7951d975624"
 dependencies = [
  "atoi",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bitflags 2.4.1",
  "byteorder",
  "chrono",
@@ -6703,12 +6682,6 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.19.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89a286a7e3b5720b9a477b23253bc50debac207c8d21505f8e70b36792f11b5"
-
-[[package]]
-name = "strum"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
@@ -6721,18 +6694,6 @@ name = "strum"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
-
-[[package]]
-name = "strum_macros"
-version = "0.19.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e61bb0be289045cb80bfce000512e32d09f8337e54c186725da381377ad1f8d5"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "strum_macros"
@@ -7509,7 +7470,7 @@ version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8cdd25c339e200129fe4de81451814e5228c9b771d57378817d6117cc2b3f97"
 dependencies = [
- "base64 0.21.5",
+ "base64 0.21.6",
  "log",
  "once_cell",
  "rustls 0.21.10",
@@ -7561,6 +7522,12 @@ dependencies = [
  "getrandom 0.2.11",
  "serde",
 ]
+
+[[package]]
+name = "v_htmlescape"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e8257fbc510f0a46eb602c10215901938b5c2a7d5e70fc11483b1d3c9b5b18c"
 
 [[package]]
 name = "vcpkg"
@@ -7741,7 +7708,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5388522c899d1e1c96a4c307e3797e0f697ba7c77dd8e0e625ecba9dd0342937"
 dependencies = [
  "arrayvec 0.7.4",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bytes 1.5.0",
  "derive_more",
  "ethabi",
@@ -8082,9 +8049,9 @@ checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
 
 [[package]]
 name = "winnow"
-version = "0.5.32"
+version = "0.5.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8434aeec7b290e8da5c3f0d628cb0eac6cabcb31d14bb74f779a08109a5914d6"
+checksum = "b7520bbdec7211caa7c4e682eb1fbe07abe20cee6756b6e00f537c82c11816aa"
 dependencies = [
  "memchr",
 ]
@@ -8172,7 +8139,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "uuid 0.8.2",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
@@ -8196,13 +8163,13 @@ dependencies = [
  "shlex 1.2.0",
  "tempdir",
  "thiserror",
- "ya-client-model 0.6.0",
+ "ya-client-model",
 ]
 
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b313c3f79a5160c22bab3deea903f1e8ae009164#b313c3f79a5160c22bab3deea903f1e8ae009164"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8220,36 +8187,18 @@ dependencies = [
  "structopt",
  "thiserror",
  "url",
- "ya-client-model 0.6.0",
-]
-
-[[package]]
-name = "ya-client-model"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70a4a2f46bc12b1c747495c7911a844e7dc2c879826993426d568b9b594c26a1"
-dependencies = [
- "bigdecimal 0.2.2",
- "chrono",
- "derive_more",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "strum 0.19.5",
- "strum_macros 0.19.4",
- "thiserror",
+ "ya-client-model",
 ]
 
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b313c3f79a5160c22bab3deea903f1e8ae009164#b313c3f79a5160c22bab3deea903f1e8ae009164"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "diesel",
- "duration-string",
  "hex",
  "openssl",
  "rand 0.8.5",
@@ -8287,7 +8236,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-service-bus",
 ]
 
@@ -8315,7 +8264,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid 0.8.2",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
  "ya-persistence",
@@ -8361,7 +8310,7 @@ dependencies = [
  "url",
  "uuid 0.8.2",
  "web3",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -8405,7 +8354,7 @@ dependencies = [
  "tokio-util",
  "uuid 0.8.2",
  "web3",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -8459,7 +8408,7 @@ dependencies = [
  "url",
  "winapi 0.3.9",
  "ya-agreement-utils",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-manifest-utils",
@@ -8532,7 +8481,7 @@ dependencies = [
  "tokio-util",
  "url",
  "walkdir",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
  "ya-utils-futures",
@@ -8560,7 +8509,7 @@ dependencies = [
  "actix-web-actors",
  "anyhow",
  "awc",
- "base64 0.21.5",
+ "base64 0.21.6",
  "bytes 1.5.0",
  "ctor",
  "env_logger 0.10.1",
@@ -8575,7 +8524,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 1.6.1",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",
@@ -8615,7 +8564,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 0.8.2",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-sb-router",
@@ -8642,7 +8591,7 @@ name = "ya-manifest-utils"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "base64 0.21.5",
+ "base64 0.21.6",
  "chrono",
  "golem-certificate",
  "hex",
@@ -8668,7 +8617,7 @@ dependencies = [
  "thiserror",
  "url",
  "ya-agreement-utils",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-manifest-test-utils",
  "ya-utils-path",
 ]
@@ -8798,7 +8747,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "url",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-relay-client",
@@ -8863,12 +8812,11 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio",
- "tokio-util",
  "uint 0.7.1",
  "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
@@ -8906,7 +8854,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-bus",
@@ -8930,7 +8878,7 @@ dependencies = [
  "test-case 2.2.2",
  "thiserror",
  "tokio",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -8995,7 +8943,7 @@ dependencies = [
  "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
@@ -9064,7 +9012,7 @@ dependencies = [
  "tokio-util",
  "url",
  "uuid 0.8.2",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-relay-proto",
  "ya-relay-stack 0.5.1",
 ]
@@ -9319,7 +9267,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
 ]
@@ -9406,7 +9354,7 @@ dependencies = [
  "tokio-util",
  "url",
  "walkdir",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-exe-unit",
  "ya-framework-basic",
@@ -9545,7 +9493,7 @@ dependencies = [
  "url",
  "uuid 0.8.2",
  "ya-client",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
@@ -9587,7 +9535,7 @@ dependencies = [
  "url",
  "ya-activity",
  "ya-client",
- "ya-client-model 0.6.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
@@ -9700,7 +9648,7 @@ checksum = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
 dependencies = [
  "byteorder",
  "crc32fast",
- "crossbeam-utils 0.8.18",
+ "crossbeam-utils 0.8.19",
  "flate2",
 ]
 
