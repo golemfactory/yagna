@@ -1,18 +1,20 @@
 use actix::Actor;
+use futures::channel::mpsc;
+use futures::SinkExt;
 use std::env;
 use std::time::Duration;
 use test_context::test_context;
 use tokio::time::sleep;
+use tokio_stream::StreamExt;
 use ya_client_model::activity::exe_script_command::ProgressArgs;
+use ya_client_model::activity::CommandProgress;
 
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_file_with_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
-use ya_transfer::transfer::{
-    AbortTransfers, DeployImage, ProgressConfig, TransferService, TransferServiceContext,
-};
+use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, TransferServiceContext};
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
 /// Hash computations should be correct in both cases.
@@ -42,10 +44,10 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
         .await
         .expect("unable to start http servers");
 
-    let task_package = Some(format!(
+    let task_package = format!(
         "hash://sha3:{}:http://127.0.0.1:8001/rnd",
         hex::encode(hash)
-    ));
+    );
 
     log::debug!("Starting TransferService");
     let exe_ctx = TransferServiceContext {
@@ -64,22 +66,14 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     });
 
     log::info!("[>>] Deployment with hash verification");
-    let result = addr
-        .send(DeployImage {
-            task_package: task_package.clone(),
-            ..DeployImage::default()
-        })
-        .await?;
+    let result = addr.send(DeployImage::with_package(&task_package)).await?;
     log::info!("Deployment stopped");
 
     assert!(result.is_err());
 
     log::info!("Re-deploying the same image");
-    addr.send(DeployImage {
-        task_package: task_package.clone(),
-        ..DeployImage::default()
-    })
-    .await??;
+    addr.send(DeployImage::with_package(&task_package))
+        .await??;
 
     Ok(())
 }
@@ -113,10 +107,10 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .await
         .expect("unable to start http servers");
 
-    let task_package = Some(format!(
+    let task_package = format!(
         "hash://sha3:{}:http://127.0.0.1:8001/rnd",
         hex::encode(hash)
-    ));
+    );
 
     log::debug!("Starting TransferService");
     let exe_ctx = TransferServiceContext {
@@ -127,24 +121,21 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let addr = TransferService::new(exe_ctx).start();
 
     log::info!("[>>] Deployment with hash verification");
-    let (tx, mut rx) = tokio::sync::broadcast::channel(15);
+    let (tx, mut rx) = mpsc::channel::<CommandProgress>(15);
+    let mut msg = DeployImage::with_package(&task_package);
+    msg.forward_progress(
+        &ProgressArgs::default(),
+        tx.sink_map_err(|e| ya_transfer::error::Error::Other(e.to_string())),
+    );
 
     tokio::task::spawn_local(async move {
-        let _result = addr
-            .send(DeployImage {
-                task_package: task_package.clone(),
-                progress_config: Some(ProgressConfig {
-                    progress: tx,
-                    progress_args: ProgressArgs::default(),
-                }),
-            })
-            .await??;
+        let _result = addr.send(msg).await??;
         log::info!("Deployment stopped");
         anyhow::Ok(())
     });
 
     let mut last_progress = 0u64;
-    while let Ok(progress) = rx.recv().await {
+    while let Some(progress) = rx.next().await {
         assert_eq!(progress.progress.1.unwrap(), file_size);
         assert!(progress.progress.0 >= last_progress);
 

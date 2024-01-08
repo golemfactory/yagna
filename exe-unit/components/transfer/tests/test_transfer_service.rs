@@ -79,10 +79,10 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         .await
         .expect("unable to start http servers");
 
-    let task_package = Some(format!(
+    let task_package = format!(
         "hash://sha3:{}:http://127.0.0.1:8001/rnd",
         hex::encode(hash)
-    ));
+    );
 
     log::debug!("Starting TransferService");
     let exe_ctx = TransferServiceContext {
@@ -97,20 +97,14 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     println!();
     log::warn!("[>>] Deployment with hash verification");
-    addr.send(DeployImage {
-        task_package: task_package.clone(),
-        ..DeployImage::default()
-    })
-    .await??;
+    addr.send(DeployImage::with_package(&task_package))
+        .await??;
     log::warn!("Deployment complete");
 
     println!();
     log::warn!("[>>] Deployment from cache");
-    addr.send(DeployImage {
-        task_package: task_package.clone(),
-        ..DeployImage::default()
-    })
-    .await??;
+    addr.send(DeployImage::with_package(&task_package))
+        .await??;
     log::warn!("Deployment from cache complete");
 
     println!();

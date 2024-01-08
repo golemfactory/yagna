@@ -67,6 +67,15 @@ pub struct DeployImage {
     pub progress_config: Option<ProgressConfig>,
 }
 
+impl DeployImage {
+    pub fn with_package(task_package: &str) -> DeployImage {
+        DeployImage {
+            task_package: Some(task_package.to_string()),
+            progress_config: None,
+        }
+    }
+}
+
 pub trait ForwardProgressToSink {
     fn progress_config_mut(&mut self) -> &mut Option<ProgressConfig>;
 

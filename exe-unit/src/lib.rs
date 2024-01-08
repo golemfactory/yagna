@@ -329,10 +329,7 @@ impl<R: Runtime> RuntimeRef<R> {
                 ..
             } => {
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.
-                let mut msg = DeployImage {
-                    task_package: None,
-                    progress_config: None,
-                };
+                let mut msg = DeployImage::default();
                 if let Some(args) = progress {
                     msg.forward_progress(args, runtime_cmd.progress_sink())
                 }
