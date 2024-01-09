@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
+ya-service-bus = "0.6.1"
 
 thiserror = "1.0.51"
 serde = { version = "1.0.193", features = ["derive"] }
