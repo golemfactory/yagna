@@ -111,7 +111,6 @@ pub async fn start_erc20_driver(
 }
 
 pub async fn start_erc20_next_driver(
-    db: &DbExecutor,
     path: PathBuf,
     requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
@@ -119,7 +118,7 @@ pub async fn start_erc20_next_driver(
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    erc20next::PaymentDriverService::gsb(db, path).await?;
+    erc20next::PaymentDriverService::gsb(path).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
@@ -263,7 +262,7 @@ async fn main() -> anyhow::Result<()> {
             erc20::DRIVER_NAME
         }
         Driver::Erc20next => {
-            start_erc20_next_driver(&db, "./".into(), requestor_account).await?;
+            start_erc20_next_driver("./".into(), requestor_account).await?;
             erc20next::DRIVER_NAME
         }
     };
