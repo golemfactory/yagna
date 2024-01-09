@@ -50,7 +50,7 @@ impl ProgressReporter {
     /// TODO: implement `update_interval` and `step`
     pub fn report_progress(&self, progress: u64, size: Option<u64>) {
         let _update_interval = self.config.update_interval;
-        let _step = self.config.step;
+        let _update_step = self.config.update_step;
 
         self.inner.lock().unwrap().as_mut().map(|inner| {
             inner.last.progress = (progress, size);
