@@ -51,13 +51,6 @@ impl Resolver {
 
     pub fn receive(&self, subscription: impl Into<Subscription>) {
         let s = subscription.into();
-        log::info!("Receive offer: {}", s.to_string());
-        if s.to_string()
-            .starts_with("e42b8134c745437390a3854e6d8c80b9")
-        {
-            log::info!("yuhu");
-        }
-
         if let Err(e) = self.subscription_tx.send(s.clone()) {
             log::error!("Receiving incoming {:?} error: {:?}", s, e);
         };

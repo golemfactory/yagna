@@ -55,10 +55,7 @@ impl AppKeyCache {
 
     pub fn get_appkey(&self, key: &str) -> Option<AppKey> {
         match self.appkeys.read() {
-            Ok(keymap) => {
-                println!("appkeys size {}", keymap.len());
-                keymap.get(key).cloned()
-            }
+            Ok(keymap) => keymap.get(key).cloned(),
             Err(_) => None,
         }
     }
