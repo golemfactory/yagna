@@ -669,12 +669,13 @@ fn forward_handler(
                             let mut inner = state.inner.borrow_mut();
                             inner.routes.insert(key, tx.clone());
                         }
-                        tokio::task::spawn_local(inbound_handler(
+                        let h = tokio::task::spawn_local(inbound_handler(
                             rx,
                             fwd.node_id,
                             fwd.transport,
                             state,
                         ));
+                        let _ = h.await;
                         tx
                     }
                 };
@@ -721,7 +722,7 @@ fn inbound_handler(
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
-        log::trace!(
+        log::info!(
             "local bus handler -> inbound message ({} B) from [{remote_id}]",
             payload.len()
         );

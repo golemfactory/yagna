@@ -44,7 +44,7 @@ ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
     "server",
 ] }
-ya-service-bus = "0.6.1"
+ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-std-utils = "0.1"
@@ -53,7 +53,7 @@ ya-utils-networking = { version = "0.2", default-features = false, features = [
     "vpn",
 ] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
-http-proxy = { version = "0.1.0" }
+gsb-http-proxy = { version = "0.1.0" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"
@@ -74,7 +74,7 @@ log = "0.4"
 openssl = { version = "0.10", optional = true }
 rand = "0.8.5"
 regex = "1.5"
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", optional = false, features = ["stream"] }
 secp256k1 = { version = "0.27.0", optional = true }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"

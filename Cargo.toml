@@ -51,7 +51,7 @@ ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.2"
@@ -276,7 +276,7 @@ ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev 
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 
-#ya-service-bus = { path = "../ya-service-bus" }
+#ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
 #ya-sb-router = { path = "../ya-service-bus/crates/router" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
@@ -312,7 +312,7 @@ ya-utils-process = { path = "utils/process" }
 ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider" }
-http-proxy = { path = "core/http-proxy" }
+gsb-http-proxy = { path = "core/http-proxy" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }

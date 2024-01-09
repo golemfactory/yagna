@@ -20,7 +20,7 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
 ya-std-utils = "0.1"
 ya-utils-actix = "0.2"
 parking_lot = "0.12.1"

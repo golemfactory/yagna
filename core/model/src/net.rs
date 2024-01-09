@@ -8,6 +8,7 @@ use ya_service_bus::typed::Endpoint;
 pub const BUS_ID: &str = "/net";
 pub const BUS_ID_UDP: &str = "/udp/net";
 pub const BUS_ID_TRANSFER: &str = "/transfer/net";
+pub const BUS_ID_HTTP_PROXY: &str = "/http_proxy/net";
 
 // TODO: replace with dedicated endpoint/service descriptor with enum for visibility
 pub const PUBLIC_PREFIX: &str = "/public";

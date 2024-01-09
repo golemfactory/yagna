@@ -36,7 +36,7 @@ version = []
 
 [dependencies]
 ya-client-model = "0.5"
-ya-service-bus = "0.6.1"
+ya-service-bus = { path = "/home/skrotki/golem/ya-service-bus" }
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }

@@ -1,7 +1,8 @@
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 use ya_service_bus::RpcStreamMessage;
+
+pub const BUS_ID: &str = "/public/http-proxy";
 
 #[derive(thiserror::Error, Clone, Debug, Serialize, Deserialize)]
 pub enum HttpProxyStatusError {
@@ -18,7 +19,7 @@ pub struct GsbHttpCall {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GsbHttpCallEvent {
     pub index: usize,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: String,
     pub val: String,
 }
 
