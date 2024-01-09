@@ -28,7 +28,6 @@ use ya_client_model::payment::DriverStatusProperty;
 use ya_payment_driver::{
     account::{Accounts, AccountsArc},
     bus,
-    dao::DbExecutor,
     driver::{
         async_trait, BigDecimal, IdentityError, IdentityEvent, Network as NetworkConfig,
         PaymentDriver,
@@ -342,7 +341,6 @@ impl Erc20NextDriver {
 impl PaymentDriver for Erc20NextDriver {
     async fn account_event(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
@@ -350,29 +348,18 @@ impl PaymentDriver for Erc20NextDriver {
         Ok(())
     }
 
-    async fn enter(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: Enter,
-    ) -> Result<String, GenericError> {
+    async fn enter(&self, _caller: String, msg: Enter) -> Result<String, GenericError> {
         log::info!("ENTER = Not Implemented: {:?}", msg);
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
-    async fn exit(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: Exit,
-    ) -> Result<String, GenericError> {
+    async fn exit(&self, _caller: String, msg: Exit) -> Result<String, GenericError> {
         log::info!("EXIT = Not Implemented: {:?}", msg);
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
     async fn get_account_balance(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
@@ -405,7 +392,6 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn get_account_gas_balance(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError> {
@@ -453,17 +439,12 @@ impl PaymentDriver for Erc20NextDriver {
         false
     }
 
-    async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
+    async fn init(&self, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         cli::init(self, msg).await?;
         Ok(Ack {})
     }
 
-    async fn fund(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: Fund,
-    ) -> Result<String, GenericError> {
+    async fn fund(&self, _caller: String, msg: Fund) -> Result<String, GenericError> {
         log::debug!("fund: {:?}", msg);
         let address = msg.address();
         let network = network::network_like_to_network(msg.network());
@@ -762,12 +743,7 @@ impl PaymentDriver for Erc20NextDriver {
         Ok(result)
     }
 
-    async fn transfer(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: Transfer,
-    ) -> Result<String, GenericError> {
+    async fn transfer(&self, _caller: String, msg: Transfer) -> Result<String, GenericError> {
         let network = msg
             .network
             .ok_or(GenericError::new("Network not specified".to_string()))?;
@@ -784,7 +760,6 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn schedule_payment(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
@@ -810,7 +785,6 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn verify_payment(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
@@ -852,14 +826,12 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn validate_allocation(
         &self,
-        db: DbExecutor,
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
         let account_balance = self
             .get_account_balance(
-                db,
                 caller,
                 GetAccountBalance::new(msg.address, msg.platform.clone()),
             )
@@ -887,19 +859,13 @@ impl PaymentDriver for Erc20NextDriver {
 
     async fn status(
         &self,
-        _db: DbExecutor,
         _caller: String,
         msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError> {
         self._status(msg).await
     }
 
-    async fn shut_down(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        _msg: ShutDown,
-    ) -> Result<(), GenericError> {
+    async fn shut_down(&self, _caller: String, _msg: ShutDown) -> Result<(), GenericError> {
         // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
     }
