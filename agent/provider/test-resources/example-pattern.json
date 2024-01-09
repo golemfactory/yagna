@@ -1,0 +1,8 @@
+[
+  {
+    "name": "pattern-test",
+    "version": "0.1.0",
+    "supervisor-path": "example-pattern/exists.bin",
+    "runtime-path": ""
+  }
+]
