@@ -20,7 +20,7 @@ use {
 use {
     winapi::um::handleapi::CloseHandle,
     winapi::um::processthreadsapi::OpenProcess,
-    winapi::um::wincon::{GenerateConsoleCtrlEvent, CTRL_C_EVENT},
+    winapi::um::wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT},
     winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_TERMINATE, SYNCHRONIZE},
 };
 
@@ -143,7 +143,7 @@ impl ProcessHandle {
                 ));
             }
 
-            let event_result = GenerateConsoleCtrlEvent(CTRL_C_EVENT, process_pid);
+            let event_result = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, process_pid);
 
             if event_result == 0 {
                 return Err(anyhow!(

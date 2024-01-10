@@ -1,6 +1,5 @@
 pub(crate) type Signal = &'static str;
 
-use tokio::signal::windows::CtrlBreak;
 use tokio::task::JoinHandle;
 use tokio::{
     select,
@@ -13,7 +12,7 @@ use tokio::{
 #[cfg(target_family = "unix")]
 use tokio::signal::unix;
 #[cfg(target_family = "windows")]
-use tokio::signal::windows;
+use tokio::signal::{windows, windows::CtrlBreak};
 
 pub struct SignalMonitor {
     stop_tx: Sender<Signal>,
