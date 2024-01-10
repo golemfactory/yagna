@@ -2,6 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
+use actix::Actor;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
@@ -15,7 +16,10 @@ use ethereum_types::H160;
 use ya_payment_driver::bus;
 
 // Local uses
-use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
+use crate::{
+    driver::Erc20NextDriver,
+    signer::{IdentitySigner, IdentitySignerActor},
+};
 
 pub struct Erc20NextService;
 
@@ -187,7 +191,7 @@ impl Erc20NextService {
             }
 
             log::debug!("Starting payment engine: {:#?}", config);
-            let signer = IdentitySigner::new();
+            let signer = IdentitySigner::new(IdentitySignerActor.start());
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
