@@ -119,18 +119,19 @@ impl IdentitySigner {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl erc20_payment_lib::signer::Signer for IdentitySigner {
     async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
-        let pool = tokio_util::task::LocalPoolHandle::new(1);
-
-        pool.spawn_pinned(move || async move {
-            Self::get_matching_node_id(pub_address).await.map(|_| ())
-        })
-        .await
-        .map_err(|e| SignerError {
-            message: e.to_string(),
-        })?
+        match Self::get_matching_node_id(pub_address).await {
+            Ok(_) => {
+                //if we found a matching node id, then we assume signing possible
+                Ok(())
+            }
+            Err(err) => {
+                log::debug!("Sign not possible for {pub_address:#x}");
+                Err(err)
+            }
+        }
     }
 
     async fn sign(
@@ -138,10 +139,9 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
         pub_address: H160,
         tp: TransactionParameters,
     ) -> Result<SignedTransaction, SignerError> {
-        let pool = tokio_util::task::LocalPoolHandle::new(1);
         let (dummy_key, state) = DummyKey::new(pub_address);
 
-        pool.spawn_pinned(move || async move {
+        tokio::task::spawn_local(async move {
             // We don't care about the result. This is only called
             // so that web3 computes the message to sign for us.
             DUMMY_RPC_PROVIDER

@@ -20,7 +20,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
-use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
 use web3::types::H256;
 use ya_client_model::payment::DriverStatusProperty;
@@ -57,7 +56,7 @@ impl Erc20NextDriver {
         });
 
         let this_ = Arc::clone(&this);
-        LocalPoolHandle::new(1).spawn_pinned(move || Self::payment_confirm_job(this_, recv));
+        tokio::task::spawn_local(Self::payment_confirm_job(this_, recv));
 
         this
     }
