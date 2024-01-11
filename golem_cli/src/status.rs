@@ -13,7 +13,7 @@ use ya_core_model::NodeId;
 
 use crate::appkey;
 use crate::command::{
-    NetworkGroup, PaymentDriver, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER,
+    NetworkGroup, PaymentDriver, PaymentSummary, YaCommand, DRIVERS, ERC20NEXT_DRIVER,
     NETWORK_GROUP_MAP,
 };
 use crate::platform::Status as KvmStatus;
@@ -302,9 +302,9 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
     let mut network = None;
     for net in NetworkName::VARIANTS {
         let net_to_check = net.parse()?;
-        let platform = ERC20_DRIVER
+        let platform = ERC20NEXT_DRIVER
             .platform(&net_to_check)
-            .or_else(|_e| ERC20_DRIVER.platform(&net_to_check))?;
+            .or_else(|_e| ERC20NEXT_DRIVER.platform(&net_to_check))?;
         let platform_property =
             &format!("golem.com.payment.platform.{}.address", platform.platform,);
         if latest_offer.properties.get(platform_property).is_some() {
