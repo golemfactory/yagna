@@ -270,7 +270,6 @@ enum Services {
 #[cfg(not(any(feature = "dummy-driver", feature = "erc20-driver",)))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
-#[allow(unused)]
 async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut drivers = vec![];
     #[cfg(feature = "dummy-driver")]
@@ -547,6 +546,8 @@ impl ServiceCommand {
                 Services::gsb(&context).await?;
 
                 ya_compile_time_utils::report_version_to_metrics();
+
+                start_payment_drivers(&ctx.data_dir).await?;
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
