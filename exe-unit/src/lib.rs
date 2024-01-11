@@ -98,6 +98,7 @@ impl<R: Runtime> ExeUnit<R> {
         let supervisor_template = OfferTemplate::new(serde_json::json!({
             "golem.com.usage.vector": MetricsService::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
+            "golem.activity.caps.transfer.report-progress": true,
         }));
 
         Ok(supervisor_template.patch(runtime_template))

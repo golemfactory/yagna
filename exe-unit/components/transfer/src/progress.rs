@@ -4,6 +4,7 @@ use crate::{TransferContext, TransferData};
 
 use futures::{SinkExt, StreamExt, TryFutureExt};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::spawn_local;
 use tokio::time::Instant;
 
@@ -28,7 +29,7 @@ pub struct ProgressReporter {
 struct ProgressImpl {
     pub report: tokio::sync::broadcast::Sender<CommandProgress>,
     pub last: CommandProgress,
-    pub last_update: Instant,
+    pub last_send: Instant,
 }
 
 impl ProgressReporter {
@@ -36,7 +37,7 @@ impl ProgressReporter {
         self.inner.lock().unwrap().as_mut().map(|inner| {
             inner.last.step.0 += 1;
             inner.last.progress = (0, None);
-            inner.last_update = Instant::now();
+            inner.last_send = Instant::now();
             inner
                 .report
                 .send(CommandProgress {
@@ -49,25 +50,31 @@ impl ProgressReporter {
 
     /// TODO: implement `update_interval` and `step`
     pub fn report_progress(&self, progress: u64, size: Option<u64>) {
-        let _update_interval = self.config.update_interval;
+        let update_interval: Duration = self
+            .config
+            .update_interval
+            .map(Into::into)
+            .unwrap_or(Duration::from_secs(1));
         let _update_step = self.config.update_step;
 
         self.inner.lock().unwrap().as_mut().map(|inner| {
             inner.last.progress = (progress, size);
-            inner.last_update = Instant::now();
-            inner
-                .report
-                .send(CommandProgress {
-                    message: None,
-                    ..inner.last.clone()
-                })
-                .ok()
+            if inner.last_send + update_interval <= Instant::now() {
+                inner.last_send = Instant::now();
+                inner
+                    .report
+                    .send(CommandProgress {
+                        message: None,
+                        ..inner.last.clone()
+                    })
+                    .ok();
+            }
         });
     }
 
     pub fn report_message(&self, message: String) {
         self.inner.lock().unwrap().as_mut().map(|inner| {
-            inner.last_update = Instant::now();
+            inner.last_send = Instant::now();
             inner
                 .report
                 .send(CommandProgress {
@@ -93,7 +100,7 @@ impl ProgressReporter {
                     progress: (0, None),
                     unit,
                 },
-                last_update: Instant::now(),
+                last_send: Instant::now(),
             });
         }
     }
