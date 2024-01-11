@@ -8126,6 +8126,7 @@ dependencies = [
 name = "ya-erc20next-driver"
 version = "0.4.0"
 dependencies = [
+ "actix",
  "actix-rt",
  "anyhow",
  "async-trait",
