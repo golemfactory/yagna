@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
+use ya_core_model::payment::local::NetworkName;
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -129,6 +130,16 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Fund { account } => {
+                if !account.network.is_fundable() {
+                    log::error!(
+                        "Network {} does not support automatic funding. Consider using one of the following: {:?}",
+                        account.network,
+                        NetworkName::all_fundable(),
+                    );
+
+                    return CommandOutput::object("Failed");
+                }
+
                 let address = resolve_address(account.address()).await?;
 
                 init_account(Account {

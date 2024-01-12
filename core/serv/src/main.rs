@@ -26,7 +26,7 @@ use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
-use ya_payment::{accounts as payment_accounts, PaymentService};
+use ya_payment::PaymentService;
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -270,7 +270,6 @@ enum Services {
 #[cfg(not(any(feature = "dummy-driver", feature = "erc20next-driver",)))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
-#[allow(unused)]
 async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut drivers = vec![];
     #[cfg(feature = "dummy-driver")]
@@ -541,15 +540,7 @@ impl ServiceCommand {
 
                 ya_compile_time_utils::report_version_to_metrics();
 
-                let drivers = start_payment_drivers(&ctx.data_dir).await?;
-                payment_accounts::save_default_account(&ctx.data_dir, drivers)
-                    .await
-                    .unwrap_or_else(|e| {
-                        log::error!("Saving default payment account failed: {}", e)
-                    });
-                payment_accounts::init_accounts(&ctx.data_dir)
-                    .await
-                    .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
+                start_payment_drivers(&ctx.data_dir).await?;
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
