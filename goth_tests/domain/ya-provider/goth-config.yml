@@ -54,7 +54,7 @@ node-types:
 nodes:
   - name: "requestor"
     type: "Requestor"
-    payment-config: "erc20next"
+    payment-config: "erc20"
 
   - name: "provider-1"
     type: "Wasm-Provider"
