@@ -22,7 +22,6 @@ use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
-use ya_erc20_driver as erc20;
 use ya_erc20next_driver as erc20next;
 use ya_net::Config;
 use ya_payment::processor::PaymentProcessor;
@@ -37,7 +36,6 @@ use ya_service_bus::typed as bus;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Erc20,
     Erc20next,
 }
 
@@ -47,7 +45,6 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20" => Ok(Driver::Erc20),
             "erc20next" => Ok(Driver::Erc20next),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -58,7 +55,6 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20 => write!(f, "erc20"),
             Driver::Erc20next => write!(f, "erc20next"),
         }
     }
@@ -92,21 +88,6 @@ struct Args {
 
 pub async fn start_dummy_driver() -> anyhow::Result<()> {
     dummy::PaymentDriverService::gsb(&()).await?;
-    Ok(())
-}
-
-pub async fn start_erc20_driver(
-    db: &DbExecutor,
-    requestor_account: SecretKey,
-) -> anyhow::Result<()> {
-    let requestor = NodeId::from(requestor_account.public().address().as_ref());
-    fake_list_identities(vec![requestor]);
-    fake_subscribe_to_events();
-
-    erc20::PaymentDriverService::gsb(db).await?;
-
-    let requestor_sign_tx = get_sign_tx(requestor_account);
-    fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
 }
 
@@ -256,10 +237,6 @@ async fn main() -> anyhow::Result<()> {
         Driver::Dummy => {
             start_dummy_driver().await?;
             dummy::DRIVER_NAME
-        }
-        Driver::Erc20 => {
-            start_erc20_driver(&db, requestor_account).await?;
-            erc20::DRIVER_NAME
         }
         Driver::Erc20next => {
             start_erc20_next_driver("./".into(), requestor_account).await?;

@@ -267,7 +267,7 @@ enum Services {
     GsbApi(GsbApiService),
 }
 
-#[cfg(not(any(feature = "dummy-driver", feature = "erc20-driver",)))]
+#[cfg(not(any(feature = "dummy-driver", feature = "erc20next-driver",)))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
 #[allow(unused)]
@@ -277,13 +277,6 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     {
         use ya_dummy_driver::{PaymentDriverService, DRIVER_NAME};
         PaymentDriverService::gsb(&()).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
-    #[cfg(feature = "erc20-driver")]
-    {
-        use ya_erc20_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "erc20-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
     #[cfg(feature = "erc20next-driver")]

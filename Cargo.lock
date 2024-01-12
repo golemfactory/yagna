@@ -8169,51 +8169,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-erc20-driver"
-version = "0.4.0"
-dependencies = [
- "actix-rt",
- "anyhow",
- "async-trait",
- "awc",
- "bigdecimal 0.2.2",
- "chrono",
- "derive_more",
- "dotenv",
- "env_logger 0.7.1",
- "erc20_payment_lib",
- "ethabi",
- "ethereum-tx-sign",
- "ethereum-types 0.14.1",
- "futures 0.3.28",
- "hex",
- "lazy_static",
- "log",
- "maplit",
- "num-bigint 0.3.3",
- "num-traits",
- "rand 0.8.5",
- "rlp",
- "serde",
- "serde_json",
- "sha3 0.8.2",
- "structopt",
- "test-case 3.1.0",
- "thiserror",
- "tiny-keccak",
- "tokio",
- "trust-dns-resolver 0.22.0",
- "url",
- "uuid 0.8.2",
- "web3",
- "ya-client-model",
- "ya-payment-driver",
- "ya-service-api-interfaces",
- "ya-utils-futures",
- "ya-utils-networking",
-]
-
-[[package]]
 name = "ya-erc20next-driver"
 version = "0.4.0"
 dependencies = [
@@ -8670,7 +8625,6 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20-driver",
  "ya-erc20next-driver",
  "ya-metrics",
  "ya-net",
@@ -9378,7 +9332,6 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20-driver",
  "ya-erc20next-driver",
  "ya-fd-metrics",
  "ya-file-logging",
