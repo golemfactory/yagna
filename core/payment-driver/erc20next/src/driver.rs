@@ -38,8 +38,8 @@ use ya_payment_driver::{
 use crate::erc20::utils;
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
-use crate::{driver::PaymentDetails, network};
-use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
+use crate::{driver::PaymentDetails, HOLESKY_NETWORK, network};
+use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
 mod cli;
 
@@ -427,7 +427,7 @@ impl PaymentDriver for Erc20NextDriver {
     }
 
     fn get_default_network(&self) -> String {
-        RINKEBY_NETWORK.to_string()
+        HOLESKY_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {
