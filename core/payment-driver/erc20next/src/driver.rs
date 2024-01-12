@@ -38,7 +38,7 @@ use ya_payment_driver::{
 use crate::erc20::utils;
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
-use crate::{driver::PaymentDetails, HOLESKY_NETWORK, network};
+use crate::{driver::PaymentDetails, network, HOLESKY_NETWORK};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
 mod cli;
