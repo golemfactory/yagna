@@ -502,7 +502,6 @@ Typically operation should take less than 1 minute.
                         "network".to_owned(),
                         "default?".to_owned(),
                         "token".to_owned(),
-                        "default?".to_owned(),
                         "platform".to_owned(),
                     ],
                     values: drivers
@@ -519,7 +518,6 @@ Typically operation should take less than 1 minute.
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
-                                                if &n.default_token == token { "X" } else { "" },
                                                 platform,
                                             ]}
                                         )
