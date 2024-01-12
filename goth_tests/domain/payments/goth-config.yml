@@ -57,9 +57,9 @@ node-types:
 nodes:
   - name: "requestor"
     type: "Requestor"
-    payment-config: "erc20"
+    payment-config: "erc20next"
 
   - name: "provider-1"
     type: "Provider"
     use-proxy: True
-    payment-config: "erc20"
+    payment-config: "erc20next"
