@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
     } else if args.mode == Mode::Trigger {
         let client = Client::new();
         let request = client
-            .get("http://127.0.0.1:11502/activity-api/v1/activity/882b48e3307949d6a8015113f09e63cb/proxy_http_request")
+            .get("http://127.0.0.1:11502/activity-api/v1/activity/146ac32155114d4e99033d7d78592e00/proxy_http_request")
             .bearer_auth("b073104dfd8046558b8b76e9e852d0d8")
             .build()?;
 
@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
                     while let Some(item) = stream.next().await {
                         for byte in item? {
                             if byte == b'\n' {
-                                println!("Got chunk: {:?}\n", buf.clone().freeze());
+                                println!("Got chunk: {:?}", buf.clone().freeze());
                                 buf.clear();
                             } else {
                                 buf.put_u8(byte);

@@ -669,13 +669,12 @@ fn forward_handler(
                             let mut inner = state.inner.borrow_mut();
                             inner.routes.insert(key, tx.clone());
                         }
-                        let h = tokio::task::spawn_local(inbound_handler(
+                        tokio::task::spawn_local(inbound_handler(
                             rx,
                             fwd.node_id,
                             fwd.transport,
                             state,
                         ));
-                        let _ = h.await;
                         tx
                     }
                 };

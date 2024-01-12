@@ -36,6 +36,6 @@ ya-core-model = { version = "^0.9", features = [
     "payment",
 ] }
 ya-persistence = "0.3"
-ya-service-bus = "0.6.1"
+ya-service-bus = { version = "0.6.3" }
 
 [dev-dependencies]

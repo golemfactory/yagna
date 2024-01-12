@@ -19,12 +19,7 @@ tos = []
 framework-test = []
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
-packet-trace-enable = [
-    "ya-vpn/packet-trace-enable",
-    "ya-file-logging/packet-trace-enable",
-    "ya-net/packet-trace-enable",
-    "ya-service-bus/packet-trace-enable",
-]
+packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable", "ya-service-bus/packet-trace-enable"]
 
 [[bin]]
 name = "yagna"
@@ -51,7 +46,7 @@ ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { version = "0.6.3" }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.2"
@@ -276,7 +271,7 @@ ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev 
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 
-#ya-service-bus = "0.6.1"
+#ya-service-bus = { version = "0.6.3" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
 #ya-sb-router = { path = "../ya-service-bus/crates/router" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
