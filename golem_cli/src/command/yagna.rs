@@ -28,62 +28,6 @@ pub struct PaymentDriver {
 }
 
 lazy_static! {
-    pub static ref ERC20_DRIVER: PaymentDriver = {
-        let mut erc20 = HashMap::new();
-        erc20.insert(
-            NetworkName::Mainnet.into(),
-            PaymentPlatform {
-                platform: "erc20-mainnet-glm",
-                driver: "erc20",
-                token: "GLM",
-            },
-        );
-        erc20.insert(
-            NetworkName::Rinkeby.into(),
-            PaymentPlatform {
-                platform: "erc20-rinkeby-tglm",
-                driver: "erc20",
-                token: "tGLM",
-            },
-        );
-        erc20.insert(
-            NetworkName::Goerli.into(),
-            PaymentPlatform {
-                platform: "erc20-goerli-tglm",
-                driver: "erc20",
-                token: "tGLM",
-            },
-        );
-        erc20.insert(
-            NetworkName::Holesky.into(),
-            PaymentPlatform {
-                platform: "erc20-holesky-tglm",
-                driver: "erc20",
-                token: "tGLM",
-            },
-        );
-        erc20.insert(
-            NetworkName::Mumbai.into(),
-            PaymentPlatform {
-                platform: "erc20-mumbai-tglm",
-                driver: "erc20",
-                token: "tGLM",
-            },
-        );
-        erc20.insert(
-            NetworkName::Polygon.into(),
-            PaymentPlatform {
-                platform: "erc20-polygon-glm",
-                driver: "erc20",
-                token: "GLM",
-            },
-        );
-
-        PaymentDriver {
-            platforms: erc20,
-            name: "erc20",
-        }
-    };
     pub static ref ERC20NEXT_DRIVER: PaymentDriver = {
         let mut erc20next = HashMap::new();
         erc20next.insert(
@@ -143,7 +87,7 @@ lazy_static! {
 
     // Drivers are searched in order when more than one supports a given network,
     // so erc20next should be preferred over erc20.
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER, &ERC20_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER];
 }
 
 impl PaymentDriver {
