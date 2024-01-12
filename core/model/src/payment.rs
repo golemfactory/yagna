@@ -538,7 +538,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20Next.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Holesky.into())]
         pub network: NetworkName,
     }
 
@@ -569,7 +569,7 @@ pub mod local {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
             assert_eq!("erc20next", a.driver());
-            assert_eq!("goerli", a.network());
+            assert_eq!("holesky", a.network());
             assert_eq!("tGLM", a.token());
         }
     }
