@@ -1,13 +1,12 @@
-use async_stream::__private::AsyncStream;
 use async_stream::stream;
 use chrono::Utc;
+use futures::prelude::*;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::future::Future;
 use tokio::sync::mpsc;
-use ya_service_bus::RpcMessage;
 use ya_service_bus::RpcStreamMessage;
+use ya_service_bus::{Error, RpcMessage};
 
 pub const BUS_ID: &str = "/public/http-proxy";
 
@@ -15,6 +14,13 @@ pub const BUS_ID: &str = "/public/http-proxy";
 pub enum HttpProxyStatusError {
     #[error("{0}")]
     RuntimeException(String),
+}
+
+impl From<ya_service_bus::error::Error> for HttpProxyStatusError {
+    fn from(e: Error) -> Self {
+        let msg = e.to_string();
+        HttpProxyStatusError::RuntimeException(msg)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -45,10 +51,7 @@ impl RpcStreamMessage for GsbHttpCall {
 }
 
 impl GsbHttpCall {
-    pub fn execute(
-        &mut self,
-        url: String,
-    ) -> AsyncStream<GsbHttpCallEvent, impl Future<Output = ()> + Sized> {
+    pub fn execute(&mut self, url: String) -> impl Stream<Item = GsbHttpCallEvent> {
         //http://localhost:7861/
         let url = format!("{}{}", url, self.path);
 
@@ -110,38 +113,47 @@ impl GsbHttpCall {
         stream
     }
 
-    // pub fn invoke(
-    //     stream_fun: Fn(GsbHttpCall, &str, &str),
-    //     url: String,
-    //     method: String,
-    //     provider_id: String,
-    //     activity_id: String,
-    // ) {
-    //     let path = if url.starts_with('/') {
-    //         url[1..].to_string()
-    //     } else {
-    //         url
-    //     };
-    //
-    //     let msg = GsbHttpCall { method, path, body };
-    //
-    //     let stream = stream_fun(msg, provider_id, activity_id);
-    //
-    //     let stream = stream
-    //         .map(|item| match item {
-    //             Ok(result) => result.map_err(|e| Error::BadRequest(e.to_string())),
-    //             Err(e) => Err(Error::from(e)),
-    //         })
-    //         .map(move |result| {
-    //             let mut bytes = BytesMut::new();
-    //             let msg = match result {
-    //                 Ok(r) => r.msg,
-    //                 Err(e) => format!("Error {}", e),
-    //             };
-    //             bytes.extend_from_slice(msg.as_bytes());
-    //             Ok::<Bytes, actix_web::Error>(bytes.freeze())
-    //         });
-    // }
+    pub fn invoke<T, F>(
+        body: Option<Map<String, Value>>,
+        method: Method,
+        url: String,
+        trigger_stream: F,
+    ) -> impl Stream<Item = Result<String, Error>> + Unpin + Sized
+    where
+        T: Stream<
+                Item = Result<
+                    Result<GsbHttpCallEvent, HttpProxyStatusError>,
+                    ya_service_bus::Error,
+                >,
+            > + Unpin,
+        F: FnOnce(GsbHttpCall) -> T,
+    {
+        let path = if url.starts_with('/') {
+            url[1..].to_string()
+        } else {
+            url
+        };
+
+        let msg = GsbHttpCall {
+            method: method.to_string(),
+            path,
+            body,
+        };
+
+        let stream = trigger_stream(msg);
+
+        let stream = stream
+            .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
+            .map(move |result| {
+                let msg = match result {
+                    Ok(r) => r.msg,
+                    Err(e) => format!("Error {}", e),
+                };
+                Ok::<String, Error>(msg)
+            });
+
+        stream
+    }
 }
 
 #[cfg(test)]

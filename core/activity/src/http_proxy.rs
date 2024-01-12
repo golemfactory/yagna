@@ -1,6 +1,6 @@
 use actix_http::Method;
 use actix_web::http::header;
-use actix_web::web::{Bytes, BytesMut, Json};
+use actix_web::web::{Bytes, Json};
 use actix_web::{web, HttpRequest, HttpResponse};
 use futures::prelude::*;
 use serde_json::{Map, Value};
@@ -10,8 +10,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::common::*;
-use crate::error::Error;
-use gsb_http_proxy::GsbHttpCall;
+use gsb_http_proxy::{GsbHttpCall, GsbHttpCallEvent, HttpProxyStatusError};
 use ya_core_model::activity;
 use ya_core_model::net::RemoteEndpoint;
 
@@ -66,17 +65,54 @@ async fn proxy_http_request(
         log::info!("[Header]: {:?}", value);
     }
 
-    let stream_fun = |msg, provider_id, activity_id| {
-        ya_net::from(id.identity)
-            .to(provider_id)
-            .service_transfer(&activity::exeunit::bus_id(activity_id))
+    let call_streaming = move |msg| {
+        let from = id.identity;
+        let to = *agreement.provider_id();
+        let bus_id = &activity::exeunit::bus_id(&activity_id);
+
+        ya_net::from(from)
+            .to(to)
+            .service_transfer(bus_id)
             .call_streaming(msg)
     };
 
-    let path = if path_activity_url.url.starts_with('/') {
-        path_activity_url.url[1..].to_string()
+    let stream = invoke(body, method, path_activity_url.url, call_streaming);
+
+    // let stream = stream
+    //     .map(|item| match item {
+    //         Ok(result) => result.map_err(|e| Error::BadRequest(e.to_string())),
+    //         Err(e) => Err(Error::from(e)),
+    //     })
+    //     .map(move |result| {
+    //         let mut bytes = BytesMut::new();
+    //         let msg = match result {
+    //             Ok(r) => r.msg,
+    //             Err(e) => format!("Error {}", e),
+    //         };
+    //         bytes.extend_from_slice(msg.as_bytes());
+    //         Ok::<Bytes, actix_web::Error>(bytes.freeze())
+    //     });
+
+    Ok(HttpResponse::Ok()
+        .keep_alive()
+        .content_type(mime::TEXT_EVENT_STREAM.essence_str())
+        .streaming(stream))
+}
+
+fn invoke<
+    T: Stream<Item = Result<Result<GsbHttpCallEvent, HttpProxyStatusError>, ya_service_bus::Error>>
+        + Unpin,
+    F: FnOnce(GsbHttpCall) -> T,
+>(
+    body: Option<Map<String, Value>>,
+    method: Method,
+    url: String,
+    trigger_stream: F,
+) -> impl Stream<Item = Result<Bytes, actix_web::Error>> + Unpin + Sized {
+    let path = if url.starts_with('/') {
+        url[1..].to_string()
     } else {
-        path_activity_url.url
+        url
     };
 
     let msg = GsbHttpCall {
@@ -85,25 +121,20 @@ async fn proxy_http_request(
         body,
     };
 
-    let stream = stream_fun(msg, *agreement.provider_id(), &activity_id);
+    let stream = trigger_stream(msg);
 
     let stream = stream
         .map(|item| match item {
-            Ok(result) => result.map_err(|e| Error::BadRequest(e.to_string())),
-            Err(e) => Err(Error::from(e)),
+            Ok(result) => result,
+            Err(e) => Err(HttpProxyStatusError::from(e)),
         })
         .map(move |result| {
-            let mut bytes = BytesMut::new();
             let msg = match result {
                 Ok(r) => r.msg,
                 Err(e) => format!("Error {}", e),
             };
-            bytes.extend_from_slice(msg.as_bytes());
-            Ok::<Bytes, actix_web::Error>(bytes.freeze())
+            Ok::<Bytes, actix_web::Error>(Bytes::from(msg))
         });
 
-    Ok(HttpResponse::Ok()
-        .keep_alive()
-        .content_type(mime::TEXT_EVENT_STREAM.essence_str())
-        .streaming(stream))
+    stream
 }

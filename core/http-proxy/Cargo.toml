@@ -17,3 +17,4 @@ tokio = "1.35.0"
 reqwest = "0.11.23"
 log = { version = "0.4.20", features = [] }
 async-stream = "0.3.5"
+futures = { version = "0.3", features = [] }
