@@ -25,8 +25,8 @@ pub mod local {
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
-    use strum::{EnumProperty, VariantNames};
-    use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
+    use strum::{EnumProperty, IntoEnumIterator, VariantNames};
+    use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
@@ -468,6 +468,7 @@ pub mod local {
     #[derive(
         EnumString,
         EnumVariantNames,
+        EnumIter,
         IntoStaticStr,
         strum_macros::EnumProperty,
         strum_macros::Display,
@@ -494,6 +495,17 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
+    }
+
+    impl NetworkName {
+        pub fn is_fundable(&self) -> bool {
+            use NetworkName::*;
+            matches!(self, Goerli | Holesky)
+        }
+
+        pub fn all_fundable() -> Vec<NetworkName> {
+            Self::iter().filter(Self::is_fundable).collect()
+        }
     }
 
     /// Experimental. In future releases this might change or be removed.
