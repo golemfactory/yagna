@@ -10,10 +10,9 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['erc20-driver', 'erc20next-driver', 'gftp/bin']
+default = ['erc20next-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
-erc20-driver = ['ya-erc20-driver']
 erc20next-driver = ['ya-erc20next-driver']
 tos = []
 framework-test = []
@@ -37,7 +36,6 @@ ya-core-model = { version = "^0.9" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
-ya-erc20-driver = { version = "0.4", optional = true }
 ya-erc20next-driver = { version = "0.4", optional = true }
 ya-identity = "0.3"
 ya-market = "0.4"
@@ -190,7 +188,6 @@ members = [
     "core/payment",
     "core/payment-driver/base",
     "core/payment-driver/dummy",
-    "core/payment-driver/erc20",
     "core/payment-driver/erc20next",
     "core/persistence",
     "core/serv-api",
@@ -254,7 +251,6 @@ ya-sgx = { path = "core/sgx" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
-ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-erc20next-driver = { path = "core/payment-driver/erc20next" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
