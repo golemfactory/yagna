@@ -21,6 +21,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
+use crate::api::guard::PaymentLockGuard;
 // Local uses
 use crate::dao::*;
 use crate::error::{DbError, Error};
@@ -375,6 +376,8 @@ async fn accept_invoice(
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    let _lock = PaymentLockGuard::lock(invoice.agreement_id.clone());
 
     if invoice.amount != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");

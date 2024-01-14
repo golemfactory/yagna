@@ -10,6 +10,8 @@ mod debit_notes;
 mod invoices;
 mod payments;
 
+mod guard;
+
 pub fn api_scope(scope: Scope) -> Scope {
     scope
         .extend(accounts::register_endpoints)
