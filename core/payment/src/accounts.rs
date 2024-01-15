@@ -42,7 +42,10 @@ pub(crate) async fn init_account(account: Account) -> anyhow::Result<()> {
             Err(anyhow!("{}", err_msg))
         }
         Err(e) => {
-            let err_msg = format!("Error during GSB call init account - Probably driver {} is not running and receiving messages: {}", account.driver, e);
+            let err_msg = format!(
+                "Error during GSB call init account - Probably driver {} is not running and receiving messages: {}",
+                account.driver, e
+            );
             log::error!("{}", err_msg);
             Err(anyhow!("{}", err_msg))
         }
