@@ -353,7 +353,7 @@ async fn cancel_invoice(
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
-    payment_lock: Data<Arc<AgreementLock>>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -380,7 +380,7 @@ async fn accept_invoice(
     };
 
     // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
-    let _agreement_lock = payment_lock.lock(invoice.agreement_id.clone());
+    let _agreement_lock = agreement_lock.lock(invoice.agreement_id.clone());
 
     if invoice.amount != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
