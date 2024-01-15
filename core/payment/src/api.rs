@@ -1,4 +1,4 @@
-use actix_web::web::Data;
+use actix_web::web::{self, Data};
 use actix_web::Scope;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
@@ -10,8 +10,11 @@ mod debit_notes;
 mod invoices;
 mod payments;
 
+mod guard;
+
 pub fn api_scope(scope: Scope) -> Scope {
     scope
+        .app_data(web::Data::new(guard::AgreementLock::arc()))
         .extend(accounts::register_endpoints)
         .extend(allocations::register_endpoints)
         .extend(debit_notes::register_endpoints)
