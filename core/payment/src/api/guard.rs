@@ -4,7 +4,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Registry of locks for agreements
-pub(super) struct AgreementLock(Mutex<HashMap<String, Arc<Mutex<()>>>>);
+pub(super) struct AgreementLock {
+    locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+}
 
 impl AgreementLock {
     /// Construct new instances wrapped in [`Arc`]
@@ -16,7 +18,7 @@ impl AgreementLock {
     ///
     /// The entry in the internal registry will be automatically cleaned up.
     pub async fn lock(self: &Arc<Self>, agreement: String) -> AgreementLockGuard {
-        let mut map = self.0.lock().await;
+        let mut map = self.locks.lock().await;
         let lock = map.entry(agreement).or_default();
         let guard = Arc::clone(lock).lock_owned().await;
         drop(map);
@@ -30,7 +32,9 @@ impl AgreementLock {
 
 impl Default for AgreementLock {
     fn default() -> Self {
-        AgreementLock(Mutex::new(HashMap::new()))
+        AgreementLock {
+            locks: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -49,7 +53,7 @@ impl Drop for AgreementLockGuard {
         let lock_map = Arc::clone(&self.lock_map);
 
         tokio::task::spawn(async move {
-            let mut map = lock_map.0.lock().await;
+            let mut map = lock_map.locks.lock().await;
             map.retain(|_agreement, lock| lock.try_lock().is_err());
         });
     }
