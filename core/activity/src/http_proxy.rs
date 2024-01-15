@@ -1,8 +1,7 @@
 use actix_http::Method;
 use actix_web::http::header;
-use actix_web::web::{Bytes, Json};
+use actix_web::web::Json;
 use actix_web::{web, HttpRequest, HttpResponse};
-use futures::prelude::*;
 use serde_json::{Map, Value};
 
 use ya_client_model::market::Role;
@@ -10,7 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::common::*;
-use gsb_http_proxy::{GsbHttpCall, GsbHttpCallEvent, HttpProxyStatusError};
+use gsb_http_proxy::GsbHttpCall;
 use ya_core_model::activity;
 use ya_core_model::net::RemoteEndpoint;
 
@@ -87,42 +86,4 @@ async fn proxy_http_request(
         .keep_alive()
         .content_type(mime::TEXT_EVENT_STREAM.essence_str())
         .streaming(stream))
-}
-
-fn invoke<
-    T: Stream<Item = Result<Result<GsbHttpCallEvent, HttpProxyStatusError>, ya_service_bus::Error>>
-        + Unpin,
-    F: FnOnce(GsbHttpCall) -> T,
->(
-    body: Option<Map<String, Value>>,
-    method: Method,
-    url: String,
-    trigger_stream: F,
-) -> impl Stream<Item = Result<Bytes, actix_web::Error>> + Unpin + Sized {
-    let path = if let Some(stripped_url) = url.strip_prefix('/') {
-        stripped_url.to_string()
-    } else {
-        url
-    };
-
-    let msg = GsbHttpCall {
-        method: method.to_string(),
-        path,
-        body,
-    };
-
-    let stream = trigger_stream(msg);
-
-    stream
-        .map(|item| match item {
-            Ok(result) => result,
-            Err(e) => Err(HttpProxyStatusError::from(e)),
-        })
-        .map(move |result| {
-            let msg = match result {
-                Ok(r) => r.msg,
-                Err(e) => format!("Error {}", e),
-            };
-            Ok::<Bytes, actix_web::Error>(Bytes::from(msg))
-        })
 }
