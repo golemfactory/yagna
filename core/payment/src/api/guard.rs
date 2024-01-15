@@ -3,30 +3,53 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-lazy_static::lazy_static! {
-    static ref LOCK_MAP: Mutex<HashMap<String, Arc<Mutex<()>>>> = Mutex::new(HashMap::new());
-}
+/// Registry of locks for agreements
+pub(super) struct AgreementLock(Mutex<HashMap<String, Arc<Mutex<()>>>>);
 
-pub(super) struct PaymentLockGuard {
-    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
-}
+impl AgreementLock {
+    /// Construct new instances wrapped in [`Arc`]
+    pub fn arc() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
 
-impl PaymentLockGuard {
-    pub async fn lock(agreement: String) -> Self {
-        let mut map = LOCK_MAP.lock().await;
+    /// Take a lock for a given agreement.
+    ///
+    /// The entry in the internal registry will be automatically cleaned up.
+    pub async fn lock(self: &Arc<Self>, agreement: String) -> AgreementLockGuard {
+        let mut map = self.0.lock().await;
         let lock = map.entry(agreement).or_default();
         let guard = Arc::clone(lock).lock_owned().await;
+        drop(map);
 
-        Self { guard: Some(guard) }
+        AgreementLockGuard {
+            guard: Some(guard),
+            lock_map: Arc::clone(self),
+        }
     }
 }
 
-impl Drop for PaymentLockGuard {
+impl Default for AgreementLock {
+    fn default() -> Self {
+        AgreementLock(Mutex::new(HashMap::new()))
+    }
+}
+
+/// Lock guard ensuring unique operation on an agreement.
+///
+/// For use in REST API only. Motivated by a need to synchronize debit note and
+/// invoice acceptances.
+pub(super) struct AgreementLockGuard {
+    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+    lock_map: Arc<AgreementLock>,
+}
+
+impl Drop for AgreementLockGuard {
     fn drop(&mut self) {
         drop(self.guard.take());
+        let lock_map = Arc::clone(&self.lock_map);
 
         tokio::task::spawn(async move {
-            let mut map = LOCK_MAP.lock().await;
+            let mut map = lock_map.0.lock().await;
             map.retain(|_agreement, lock| lock.try_lock().is_err());
         });
     }

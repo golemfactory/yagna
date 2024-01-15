@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
@@ -20,8 +21,8 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use crate::api::guard::PaymentLockGuard;
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
@@ -288,6 +289,7 @@ async fn cancel_debit_note(
 
 async fn accept_debit_note(
     db: Data<DbExecutor>,
+    payment_lock: Data<Arc<AgreementLock>>,
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -313,7 +315,8 @@ async fn accept_debit_note(
         Err(e) => return response::server_error(&e),
     };
 
-    let _lock = PaymentLockGuard::lock(debit_note.agreement_id.clone());
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = payment_lock.lock(debit_note.agreement_id.clone());
 
     if debit_note.total_amount_due != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");

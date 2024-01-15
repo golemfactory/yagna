@@ -14,6 +14,7 @@ mod guard;
 
 pub fn api_scope(scope: Scope) -> Scope {
     scope
+        .app_data(guard::AgreementLock::arc())
         .extend(accounts::register_endpoints)
         .extend(allocations::register_endpoints)
         .extend(debit_notes::register_endpoints)
