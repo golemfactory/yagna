@@ -14,6 +14,7 @@ pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
         .extend(crate::requestor::state::extend_web_scope)
+        .extend(crate::http_proxy::extend_web_scope)
 }
 
 /// Common operations for both sides: Provider and Requestor

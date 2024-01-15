@@ -17,7 +17,7 @@ ya-client-model = { version = "0.6" }
 ya-payment-driver = "0.3"
 ya-persistence = "0.3"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { version = "0.6.3" }
 
 anyhow = "1.0"
 bigdecimal = "0.2"

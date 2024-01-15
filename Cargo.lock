@@ -104,7 +104,7 @@ dependencies = [
  "flate2",
  "futures-core",
  "h2",
- "http",
+ "http 0.2.11",
  "httparse",
  "httpdate",
  "itoa",
@@ -137,7 +137,7 @@ dependencies = [
  "awc",
  "bytes 1.5.0",
  "futures-core",
- "http",
+ "http 0.2.11",
  "log",
  "serde",
  "serde_json",
@@ -164,7 +164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d22475596539443685426b6bdadb926ad0ecaefdfc5fb05e5e3441f15463c511"
 dependencies = [
  "bytestring",
- "http",
+ "http 0.2.11",
  "regex",
  "serde",
  "tracing",
@@ -242,7 +242,7 @@ dependencies = [
  "actix-service",
  "actix-utils",
  "futures-core",
- "http",
+ "http 0.2.11",
  "impl-more",
  "openssl",
  "pin-project-lite",
@@ -590,6 +590,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -664,7 +686,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "itoa",
  "log",
  "mime",
@@ -888,7 +910,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hex",
- "http",
+ "http 0.2.11",
  "hyper",
  "hyperlocal",
  "log",
@@ -2798,13 +2820,30 @@ dependencies = [
  "chrono",
  "field-offset",
  "hex",
- "http",
+ "http 0.2.11",
  "hyper",
  "hyper-tls",
  "openssl",
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "gsb-http-proxy"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "chrono",
+ "futures 0.3.30",
+ "http 1.0.0",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -2818,7 +2857,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "futures-util",
- "http",
+ "http 0.2.11",
  "indexmap 2.1.0",
  "slab",
  "tokio",
@@ -2882,7 +2921,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes 1.5.0",
  "headers-core",
- "http",
+ "http 0.2.11",
  "httpdate",
  "mime",
  "sha1",
@@ -2894,7 +2933,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
- "http",
+ "http 0.2.11",
 ]
 
 [[package]]
@@ -3009,13 +3048,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b32afd38673a8016f7c9ae69e5af41a58f81b1d31689040f2f1959594ce194ea"
+dependencies = [
+ "bytes 1.5.0",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
 name = "http-body"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ceab25649e9960c0311ea418d17bee82c0dcec1bd053b5f9a66e265a693bed2"
 dependencies = [
  "bytes 1.5.0",
- "http",
+ "http 0.2.11",
  "pin-project-lite",
 ]
 
@@ -3063,7 +3113,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "httparse",
  "httpdate",
@@ -3083,7 +3133,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.11",
  "hyper",
  "rustls 0.21.10",
  "tokio",
@@ -5285,7 +5335,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "hyper",
  "hyper-rustls",
@@ -5307,11 +5357,13 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
+ "tokio-util",
  "tower-service",
  "trust-dns-resolver 0.23.2",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 0.25.3",
  "winreg",
@@ -7733,6 +7785,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d91413b1c31d7539ba5ef2451af3f0b833a005eb27a631cec32bc0635a8602b"
 
 [[package]]
+name = "wasm-streams"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4609d447824375f43e1ffbc051b50ad8f4b3ae8219680c94452ea05eb240ac7"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8094,11 +8159,13 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
+ "async-stream",
  "chrono",
  "diesel",
  "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.30",
+ "gsb-http-proxy",
  "hex",
  "lazy_static",
  "libsqlite3-sys",
@@ -8301,6 +8368,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
+ "async-stream",
  "async-trait",
  "bytes 1.5.0",
  "chrono",
@@ -8311,6 +8379,7 @@ dependencies = [
  "flexi_logger 0.22.6",
  "futures 0.3.30",
  "graphene-sgx",
+ "gsb-http-proxy",
  "hex",
  "ipnet",
  "lazy_static",
@@ -8320,6 +8389,7 @@ dependencies = [
  "openssl",
  "rand 0.8.5",
  "regex",
+ "reqwest",
  "rustyline 7.1.0",
  "secp256k1 0.27.0",
  "serde",

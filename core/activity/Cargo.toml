@@ -12,7 +12,9 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+# ya-service-bus = "0.6.3"
+ya-service-bus = { version = "0.6.3" }
+gsb-http-proxy = { path = "../http-proxy" }
 
 actix-web = "4"
 actix-http = "3"
@@ -37,6 +39,7 @@ tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.6"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 structopt = "0.3.7"
+async-stream = "0.3.5"
 
 [dev-dependencies]
 ya-sb-router = "0.6.1"
