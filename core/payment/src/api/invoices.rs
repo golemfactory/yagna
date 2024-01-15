@@ -3,6 +3,7 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Instant;
 
 // Workspace uses
@@ -22,6 +23,7 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
@@ -351,6 +353,7 @@ async fn cancel_invoice(
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -375,6 +378,9 @@ async fn accept_invoice(
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = agreement_lock.lock(invoice.agreement_id.clone());
 
     if invoice.amount != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
