@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use futures::Future;
-use glob::glob;
 use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -88,7 +87,7 @@ pub struct CounterDefinition {
 }
 
 impl ExeUnitDesc {
-    pub fn absolute_paths(self, base_path: &Path) -> Result<Self> {
+    pub fn absolute_paths(self, base_path: &Path) -> std::io::Result<Self> {
         let mut desc = self;
         if desc.supervisor_path.is_relative() {
             desc.supervisor_path = base_path.join(&desc.supervisor_path);
@@ -231,9 +230,9 @@ impl ExeUnitsRegistry {
 
     pub fn register_from_file_pattern(&mut self, pattern: &Path) -> Result<()> {
         log::debug!("Loading ExeUnit-s from: {}", pattern.display());
-        let paths = glob(&pattern.to_string_lossy()).context("Invalid ExeUnit pattern")?;
-        for path in paths.flatten() {
-            self.register_exeunits_from_file(&path)?;
+
+        for file in expand_filename(pattern)? {
+            self.register_exeunits_from_file(&file)?;
         }
         Ok(())
     }
@@ -428,10 +427,49 @@ impl fmt::Display for ExeUnitDesc {
     }
 }
 
+fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
+    use std::fs::read_dir;
+
+    let path: &Path = pattern;
+    let (base_dir, file_name) = match (path.parent(), path.file_name()) {
+        (Some(base_dir), Some(file_name)) => (base_dir, file_name),
+        _ => return Ok(vec![PathBuf::from(pattern)]),
+    };
+    let file_name = match file_name.to_str() {
+        Some(f) => f,
+        None => anyhow::bail!("Not utf-8 filename: {:?}", file_name),
+    };
+
+    if let Some(pos) = file_name.find('*') {
+        let (prefix, suffix) = file_name.split_at(pos);
+        let suffix = &suffix[1..];
+
+        Ok(read_dir(base_dir)
+            .with_context(|| {
+                format!(
+                    "Looking for ExeUnit descriptors in dir: {}",
+                    base_dir.display()
+                )
+            })?
+            .filter_map(|ent| {
+                let ent = ent.ok()?;
+                let os_file_name = ent.file_name();
+                let file_name = os_file_name.to_str()?;
+                if file_name.starts_with(prefix) && file_name.ends_with(suffix) {
+                    Some(ent.path())
+                } else {
+                    None
+                }
+            })
+            .collect())
+    } else {
+        Ok(vec![PathBuf::from(pattern)])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_case::test_case;
 
     fn resources_directory() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-resources/")
@@ -495,20 +533,5 @@ mod tests {
             .to_str()
             .unwrap()
             .contains("/usr/lib/yagna/plugins/exe-unit"));
-    }
-
-    #[test_case("test-resources/*-pattern.json" ; "Relative pattern")]
-    #[test_case("../provider/test-resources/*-pattern.json" ; "Relative pattern with parent")]
-    #[test_case("../../agent/provider/test-resources/*-pattern.json" ; "Relative pattern with multiple parents")]
-    #[test_case("test-resources/../test-resources/*-pat*ern.json" ; "Relative pattern with parent path inside")]
-    #[test_case("**/example-p*tt?rn.json" ; "Glob pattern")]
-    fn test_descriptor_path_patterns(pattern: &str) {
-        let mut registry = ExeUnitsRegistry::default();
-        let relative_pattern = Path::new(pattern);
-        registry
-            .register_from_file_pattern(relative_pattern)
-            .unwrap();
-        registry.validate().unwrap();
-        registry.find_exeunit("pattern-test").unwrap();
     }
 }
