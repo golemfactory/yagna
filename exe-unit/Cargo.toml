@@ -18,12 +18,13 @@ compat-deployment = []
 sgx = [
     'graphene-sgx',
     'openssl/vendored',
-    'reqwest/trust-dns',
     'secp256k1/rand',
     'ya-client-model/sgx',
     'ya-core-model/sgx',
+    'ya-transfer/sgx',
 ]
 packet-trace-enable = ["ya-packet-trace/enable"]
+framework-test = ["ya-transfer/framework-test"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.22.0"
@@ -47,6 +48,7 @@ ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
 ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
+ya-utils-futures = "0.3"
 ya-std-utils = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = [
     "dns",
@@ -73,7 +75,6 @@ log = "0.4"
 openssl = { version = "0.10", optional = true }
 rand = "0.8.5"
 regex = "1.5"
-reqwest = { version = "0.11", optional = true }
 secp256k1 = { version = "0.27.0", optional = true }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -92,7 +93,7 @@ tokio = { version = "1", features = [
     "rt-multi-thread",
 ] }
 tokio-util = { version = "0.7.2", features = ["codec", "net"] }
-tokio-stream = "0.1.6"
+tokio-stream = { version = "0.1.8", features = ["io-util", "sync"] }
 url = "2.1"
 yansi = "0.5.0"
 trust-dns-resolver = { workspace = true }

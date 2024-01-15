@@ -46,7 +46,7 @@ rust_decimal = "1"
 ya-payment-driver = "0.3"
 ya-client-model = "0.6"
 ya-service-api-interfaces = "0.2"
-ya-utils-futures = "0.2"
+ya-utils-futures = "0.3"
 ya-utils-networking = "0.2"
 erc20_payment_lib = { workspace = true }
 

@@ -15,7 +15,7 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20next-driver = ['ya-erc20next-driver']
 tos = []
-framework-test = []
+framework-test = ['ya-exe-unit/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [
@@ -52,7 +52,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = "0.2"
+ya-utils-futures = "0.3"
 ya-utils-process = { version = "0.2", features = ["lock"] }
 ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
@@ -63,6 +63,7 @@ ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
+ya-exe-unit = { version = "0.4", optional = true }       # just to enable conditionally running some tests
 
 actix-rt = "2.7"
 actix-service = "2"
@@ -90,6 +91,7 @@ libsqlite3-sys = { workspace = true }
 
 [dev-dependencies]
 ya-test-framework = "0.1"
+ya-exe-unit = { version = "0.4" }
 
 [package.metadata.deb]
 name = "golem-requestor"
@@ -200,6 +202,7 @@ members = [
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "exe-unit/components/transfer",
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
@@ -213,12 +216,12 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
     "core/metrics",
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
+    "test-utils/test-framework/framework-basic",
 ]
 
 [workspace.dependencies]
@@ -297,7 +300,7 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
-ya-transfer = { path = "utils/transfer" }
+ya-transfer = { path = "exe-unit/components/transfer" }
 ya-utils-actix = { path = "utils/actix_utils" }
 ya-utils-cli = { path = "utils/cli" }
 ya-utils-futures = { path = "utils/futures" }
@@ -312,6 +315,7 @@ ya-provider = { path = "agent/provider" }
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
+ya-framework-basic = { path = "test-utils/test-framework/framework-basic" }
 
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

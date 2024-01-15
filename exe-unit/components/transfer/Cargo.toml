@@ -1,0 +1,82 @@
+[package]
+name = "ya-transfer"
+version = "0.3.0"
+description = "Yagna transfer util"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+ya-client-model = "0.5"
+ya-core-model = { version = "^0.9" }
+ya-service-bus = "0.6.1"
+ya-utils-path = { version ="0.1", path = "../../../utils/path" }
+ya-utils-futures = { version = "0.3", path = "../../../utils/futures" }
+ya-runtime-api = { version = "0.7", path = "../../runtime-api" }
+gftp = { workspace = true }
+
+actix = "0.13"
+actix-http = "3"
+actix-web = "4"
+actix-rt = "2.7"
+anyhow = "1.0"
+# async-compression 0.3.8+ deprecates the "stream" module
+async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
+bytes = "1.0"
+futures = "0.3.4"
+globset = "0.4.5"
+h2 = "0.3.17"
+hex = "0.4.2"
+lazy_static = "1.4.0"
+log = "0.4"
+percent-encoding = "2.1"
+rand = "0.8"
+regex = "1.3.4"
+reqwest = { version = "0.11", optional = true }
+serde = "1.0.104"
+sha3 = "0.8.2"
+tempdir = "0.3.7"
+thiserror = "1.0.11"
+tokio = { version = "1", features = ["fs", "io-util"] }
+tokio-tar = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+url = "2.1.1"
+walkdir = "2.3.1"
+async-trait = "0.1.74"
+
+[target.'cfg(target_family = "unix")'.dependencies]
+awc = { version = "3", features = ["openssl"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+awc = { version = "3", features = ["openssl"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+awc = { version = "3", features = ["rustls-0_21"] }
+
+[features]
+sgx = [
+    'ya-client-model/sgx',
+    'ya-core-model/sgx',
+    'reqwest/trust-dns',
+]
+framework-test = []
+
+[dependencies.zip]
+version = "0.5.6"
+features = ["tokio-1"]
+git = "https://github.com/golemfactory/zip-rs.git"
+branch = "feature/tokio-1"
+
+[dev-dependencies]
+actix-files = "0.6"
+actix-web = "4"
+anyhow = "1.0"
+crossterm = "0.26.1"
+env_logger = "0.7"
+secp256k1 = { version = "0.27.0" }
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
+sha2 = "0.8.1"
+structopt = "0.3.15"
+test-context = "0.1.4"
+
+ya-framework-basic = { version = "0.1" }
+ya-exe-unit = { version = "0.4", path = "../../../exe-unit" }

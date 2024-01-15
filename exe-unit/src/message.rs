@@ -2,11 +2,13 @@ use crate::error::Error;
 use crate::runtime::RuntimeMode;
 use crate::state::CommandStateRepr;
 use crate::Result;
+
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+
 use ya_client_model::activity;
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
@@ -221,4 +223,10 @@ pub enum ShutdownReason {
     UsageLimitExceeded(String),
     #[error("{0}")]
     Error(#[from] Error),
+}
+
+impl From<Shutdown> for ya_transfer::transfer::Shutdown {
+    fn from(_: Shutdown) -> Self {
+        ya_transfer::transfer::Shutdown {}
+    }
 }
