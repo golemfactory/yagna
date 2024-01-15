@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 lazy_static::lazy_static! {
-    static ref PAYMENT_LOCK: Mutex<HashMap<String, Arc<Mutex<()>>>> = Mutex::new(HashMap::new());
+    static ref LOCK_MAP: Mutex<HashMap<String, Arc<Mutex<()>>>> = Mutex::new(HashMap::new());
 }
 
 pub(super) struct PaymentLockGuard {
@@ -13,7 +13,7 @@ pub(super) struct PaymentLockGuard {
 
 impl PaymentLockGuard {
     pub async fn lock(agreement: String) -> Self {
-        let mut map = PAYMENT_LOCK.lock().await;
+        let mut map = LOCK_MAP.lock().await;
         let lock = map.entry(agreement).or_default();
         let guard = Arc::clone(lock).lock_owned().await;
 
@@ -26,8 +26,8 @@ impl Drop for PaymentLockGuard {
         drop(self.guard.take());
 
         tokio::task::spawn(async move {
-            let mut map = PAYMENT_LOCK.lock().await;
-            map.retain(|_activity, lock| lock.try_lock().is_err());
+            let mut map = LOCK_MAP.lock().await;
+            map.retain(|_agreement, lock| lock.try_lock().is_err());
         });
     }
 }
