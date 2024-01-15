@@ -12,6 +12,15 @@ use std::time::Duration;
 use structopt::StructOpt;
 use ya_service_bus::typed as bus;
 
+/// This example allows to test proxying http requests via GSB.
+/// It should be ran in two modes:
+/// - first Receive
+/// - then Send
+///
+///   cargo run -p ya-exe-unit --example gsb-proxy -- --mode receive
+///   cargo run -p ya-exe-unit --example gsb-proxy -- --mode send
+///
+
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum Mode {
     Send,
@@ -62,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
             gsb_http_proxy::BUS_ID,
             move |http_call: GsbHttpCall| {
                 let _interval = tokio::time::interval(Duration::from_secs(1));
+                println!("Received request, responding with 10 elements");
                 Box::pin(stream! {
                     for i in 0..10 {
                         let msg = format!("called {} {} #{} time", http_call.method, http_call.path, i);
@@ -88,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
 
         let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCall {
             method: "GET".to_string(),
-            path: "/endpoint".to_string(),
+            path: args.url.to_str().unwrap_or_else(|| "/").to_string(),
             body: None,
         });
 
