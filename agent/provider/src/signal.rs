@@ -12,7 +12,7 @@ use tokio::{
 #[cfg(target_family = "unix")]
 use tokio::signal::unix;
 #[cfg(target_family = "windows")]
-use tokio::signal::windows;
+use tokio::signal::{windows, windows::CtrlBreak};
 
 pub struct SignalMonitor {
     stop_tx: Sender<Signal>,
@@ -52,13 +52,23 @@ impl SignalMonitor {
         let mut ctrl_close = windows::ctrl_close()?;
         let mut ctrl_logoff = windows::ctrl_logoff()?;
         let mut ctrl_shutdown = windows::ctrl_shutdown()?;
+        let ctrl_break = windows::ctrl_break()?;
         Ok(tokio::spawn(async move {
             select! {
                 _ = ctrl_c.recv() => stop_tx.send("CTRL-C").expect("Failed to handle CTRL-C event"),
                 _ = ctrl_close.recv() => stop_tx.send("CTRL-CLOSE").expect("Failed to handle CTRL-CLOSE event"),
                 _ = ctrl_logoff.recv() => stop_tx.send("CTRL-LOGOFF").expect("Failed to handle CTRL-LOGOFF event"),
                 _ = ctrl_shutdown.recv() => stop_tx.send("CTRL-SHUTDOWN").expect("Failed to handle SHUTDOWN event"),
+                _ = ignore_ctrl_break(ctrl_break) => {},
             };
         }))
+    }
+}
+
+#[cfg(target_family = "windows")]
+async fn ignore_ctrl_break(mut ctrl_break: CtrlBreak) {
+    loop {
+        ctrl_break.recv().await;
+        log::trace!("Received CTRL-BREAK. Ignoring it.");
     }
 }
