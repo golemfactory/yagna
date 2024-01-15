@@ -76,7 +76,12 @@ async fn proxy_http_request(
             .call_streaming(msg)
     };
 
-    let stream = invoke(body, method, path_activity_url.url, call_streaming);
+    let gsb_call = GsbHttpCall {
+        method: method.to_string(),
+        path: path_activity_url.url,
+        body,
+    };
+    let stream = gsb_call.invoke(call_streaming);
 
     Ok(HttpResponse::Ok()
         .keep_alive()

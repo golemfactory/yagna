@@ -1,3 +1,4 @@
+use actix_http::body::MessageBody;
 use async_stream::stream;
 use chrono::Utc;
 use futures::prelude::*;
@@ -105,20 +106,15 @@ impl GsbHttpCall {
             }
         };
 
-        stream
+        Box::pin(stream)
     }
 
     pub fn invoke<T, F>(
         &self,
         trigger_stream: F,
-    ) -> impl Stream<Item = Result<String, Error>> + Unpin + Sized
+    ) -> impl Stream<Item = Result<actix_web::web::Bytes, Error>> + Unpin + Sized
     where
-        T: Stream<
-                Item = Result<
-                    Result<GsbHttpCallEvent, HttpProxyStatusError>,
-                    ya_service_bus::Error,
-                >,
-            > + Unpin,
+        T: Stream<Item = Result<Result<GsbHttpCallEvent, HttpProxyStatusError>, Error>> + Unpin,
         F: FnOnce(GsbHttpCall) -> T,
     {
         let path = if let Some(stripped_url) = self.path.strip_prefix('/') {
@@ -135,15 +131,18 @@ impl GsbHttpCall {
 
         let stream = trigger_stream(msg);
 
-        stream
+        let stream = stream
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(move |result| {
                 let msg = match result {
-                    Ok(r) => r.msg,
-                    Err(e) => format!("Error {}", e),
+                    Ok(r) => actix_web::web::Bytes::from(r.msg),
+                    Err(e) => actix_web::web::Bytes::from(format!("Error {}", e)),
                 };
-                Ok::<String, Error>(msg)
-            })
+                msg.try_into_bytes().map_err(|_| {
+                    Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
+                })
+            });
+        Box::pin(stream)
     }
 }
 
@@ -151,9 +150,38 @@ impl GsbHttpCall {
 mod tests {
     use super::*;
     use crate::GsbHttpCall;
+    use mockito;
     use tokio::pin;
 
-    #[tokio::test]
+    #[actix_web::test]
+    async fn gsb_proxy_execute() {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let url = server.url();
+
+        server
+            .mock("GET", "/endpoint")
+            .with_status(201)
+            .with_body("response")
+            .create();
+
+        let mut gsb_call = GsbHttpCall {
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
+        };
+
+        let mut response_stream = gsb_call.execute(url);
+
+        let mut v = vec![];
+        while let Some(event) = response_stream.next().await {
+            v.push(event.msg);
+        }
+
+        assert_eq!(vec!["response"], v);
+    }
+
+    #[actix_web::test]
     async fn gsb_proxy_invoke() {
         let gsb_call = GsbHttpCall {
             method: "GET".to_string(),
@@ -166,7 +194,7 @@ mod tests {
                 let event = GsbHttpCallEvent {
                     index: i,
                     timestamp: "timestamp".to_string(),
-                    msg: "response".to_string()
+                    msg: format!("response {}", i)
                 };
                 let result = Ok(event);
                 yield Ok(result)
@@ -175,10 +203,13 @@ mod tests {
         pin!(stream);
         let mut response_stream = gsb_call.invoke(|_| stream);
 
+        let mut v = vec![];
         while let Some(event) = response_stream.next().await {
             if let Ok(event) = event {
-                assert_eq!("response", event);
+                v.push(event);
             }
         }
+
+        assert_eq!(vec!["response 0", "response 1", "response 2"], v);
     }
 }
