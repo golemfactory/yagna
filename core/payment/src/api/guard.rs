@@ -21,7 +21,6 @@ impl AgreementLock {
         let mut map = self.locks.lock().await;
         let lock = map.entry(agreement).or_default();
         let guard = Arc::clone(lock).lock_owned().await;
-        drop(map);
 
         AgreementLockGuard {
             guard: Some(guard),
