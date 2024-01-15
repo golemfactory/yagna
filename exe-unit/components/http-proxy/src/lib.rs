@@ -99,15 +99,10 @@ impl GsbHttpCall {
         });
 
         let stream = stream! {
-
-            loop {
-                if let Some(event) =  rx.recv().await {
-                    log::info!("sending GsbEvent nr {}", &event.index);
-                    yield event;
-                } else {
-                    break;
-                }
-            };
+            while let Some(event) = rx.recv().await {
+                log::info!("sending GsbEvent nr {}", &event.index);
+                yield event;
+            }
         };
 
         stream
@@ -128,8 +123,8 @@ impl GsbHttpCall {
             > + Unpin,
         F: FnOnce(GsbHttpCall) -> T,
     {
-        let path = if url.starts_with('/') {
-            url[1..].to_string()
+        let path = if let Some(stripped_url) = url.strip_prefix('/') {
+            stripped_url.to_string()
         } else {
             url
         };
@@ -142,7 +137,7 @@ impl GsbHttpCall {
 
         let stream = trigger_stream(msg);
 
-        let stream = stream
+        stream
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(move |result| {
                 let msg = match result {
@@ -150,15 +145,13 @@ impl GsbHttpCall {
                     Err(e) => format!("Error {}", e),
                 };
                 Ok::<String, Error>(msg)
-            });
-
-        stream
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
     fn it_works() {}

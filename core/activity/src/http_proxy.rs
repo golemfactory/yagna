@@ -109,8 +109,8 @@ fn invoke<
     url: String,
     trigger_stream: F,
 ) -> impl Stream<Item = Result<Bytes, actix_web::Error>> + Unpin + Sized {
-    let path = if url.starts_with('/') {
-        url[1..].to_string()
+    let path = if let Some(stripped_url) = url.strip_prefix('/') {
+        stripped_url.to_string()
     } else {
         url
     };
@@ -123,7 +123,7 @@ fn invoke<
 
     let stream = trigger_stream(msg);
 
-    let stream = stream
+    stream
         .map(|item| match item {
             Ok(result) => result,
             Err(e) => Err(HttpProxyStatusError::from(e)),
@@ -134,7 +134,5 @@ fn invoke<
                 Err(e) => format!("Error {}", e),
             };
             Ok::<Bytes, actix_web::Error>(Bytes::from(msg))
-        });
-
-    stream
+        })
 }

@@ -58,44 +58,23 @@ async fn main() -> anyhow::Result<()> {
     if args.mode == Mode::Receive {
         ya_sb_router::bind_gsb_router(None).await?;
 
-        let mut count = 0;
-
-        let _stream_handle =
-            bus::bind_stream(gsb_http_proxy::BUS_ID, move |http_call: GsbHttpCall| {
+        let _stream_handle = bus::bind_stream(
+            gsb_http_proxy::BUS_ID,
+            move |http_call: GsbHttpCall| {
                 let _interval = tokio::time::interval(Duration::from_secs(1));
-                let stream = Box::pin(stream! {
+                Box::pin(stream! {
                     for i in 0..10 {
-                        let msg = format!("called {} element #{}", http_call.host, i);
-                        count += 1;
+                        let msg = format!("called {} {} #{} time", http_call.method, http_call.path, i);
                         let response = GsbHttpCallEvent {
-                            index: count,
+                            index: i,
                             timestamp: Utc::now().naive_local().to_string(),
-                            val: msg,
+                            msg,
                         };
-                        println!("sending nr {}", count);
                         yield Ok(response);
                     }
-                });
-
-                // let stream = tokio_stream::wrappers::IntervalStream::new(interval)
-                //     .map(move |_ts| {
-                //         println!("Creating response");
-                //         let msg = format!("response from {}", http_call.host);
-                //         count += 1;
-                //         let response = GsbHttpCallEvent {
-                //             index: count,
-                //             timestamp: Utc::now().naive_local(),
-                //             val: msg,
-                //         };
-                //         if count == 7 {
-                //             return Err(HttpProxyStatusError::RuntimeException("end".to_string()));
-                //         }
-                //         Ok(response)
-                //     })
-                //     .take(5);
-                println!("returning stream");
-                stream
-            });
+                })
+            },
+        );
 
         let mut interval = time::interval(tokio::time::Duration::from_secs(3));
 
@@ -108,15 +87,20 @@ async fn main() -> anyhow::Result<()> {
         // env::set_var("GSB_URL", "tcp://127.0.0.1:12501");
 
         let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCall {
-            host: "http://localhost".to_string(),
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
         });
 
         stream
             .for_each(|r| async move {
-                if let Ok(r_r) = r {
-                    if let Ok(e) = r_r {
-                        log::info!("[STREAM #{}][{}] {}", e.index, e.timestamp, e.val);
-                    }
+                if let Ok(Ok(r)) = r {
+                    log::info!(
+                        "[Stream response #{}]: [{}] {}",
+                        r.index,
+                        r.timestamp,
+                        r.msg
+                    );
                 }
             })
             .await;
