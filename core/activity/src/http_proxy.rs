@@ -78,21 +78,6 @@ async fn proxy_http_request(
 
     let stream = invoke(body, method, path_activity_url.url, call_streaming);
 
-    // let stream = stream
-    //     .map(|item| match item {
-    //         Ok(result) => result.map_err(|e| Error::BadRequest(e.to_string())),
-    //         Err(e) => Err(Error::from(e)),
-    //     })
-    //     .map(move |result| {
-    //         let mut bytes = BytesMut::new();
-    //         let msg = match result {
-    //             Ok(r) => r.msg,
-    //             Err(e) => format!("Error {}", e),
-    //         };
-    //         bytes.extend_from_slice(msg.as_bytes());
-    //         Ok::<Bytes, actix_web::Error>(bytes.freeze())
-    //     });
-
     Ok(HttpResponse::Ok()
         .keep_alive()
         .content_type(mime::TEXT_EVENT_STREAM.essence_str())

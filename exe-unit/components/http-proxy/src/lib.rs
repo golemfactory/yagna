@@ -109,9 +109,7 @@ impl GsbHttpCall {
     }
 
     pub fn invoke<T, F>(
-        body: Option<Map<String, Value>>,
-        method: Method,
-        url: String,
+        &self,
         trigger_stream: F,
     ) -> impl Stream<Item = Result<String, Error>> + Unpin + Sized
     where
@@ -123,16 +121,16 @@ impl GsbHttpCall {
             > + Unpin,
         F: FnOnce(GsbHttpCall) -> T,
     {
-        let path = if let Some(stripped_url) = url.strip_prefix('/') {
+        let path = if let Some(stripped_url) = self.path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
-            url
+            self.path.clone()
         };
 
         let msg = GsbHttpCall {
-            method: method.to_string(),
+            method: self.method.to_string(),
             path,
-            body,
+            body: self.body.clone(),
         };
 
         let stream = trigger_stream(msg);
@@ -151,8 +149,36 @@ impl GsbHttpCall {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
+    use crate::GsbHttpCall;
+    use tokio::pin;
 
-    #[test]
-    fn it_works() {}
+    #[tokio::test]
+    async fn gsb_proxy_invoke() {
+        let gsb_call = GsbHttpCall {
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
+        };
+
+        let stream = stream! {
+            for i in 0..3 {
+                let event = GsbHttpCallEvent {
+                    index: i,
+                    timestamp: "timestamp".to_string(),
+                    msg: "response".to_string()
+                };
+                let result = Ok(event);
+                yield Ok(result)
+            }
+        };
+        pin!(stream);
+        let mut response_stream = gsb_call.invoke(|_| stream);
+
+        while let Some(event) = response_stream.next().await {
+            if let Ok(event) = event {
+                assert_eq!("response", event);
+            }
+        }
+    }
 }
