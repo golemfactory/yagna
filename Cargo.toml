@@ -194,7 +194,7 @@ members = [
     "core/sgx",
     "core/version",
     "core/vpn",
-    "core/http-proxy",
+    "exe-unit/components/http-proxy",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -218,7 +218,7 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
     "test-utils/test-framework/framework-basic",
-    "core/http-proxy"
+    "exe-unit/components/http-proxy"
 ]
 
 [workspace.dependencies]
@@ -307,7 +307,7 @@ ya-utils-process = { path = "utils/process" }
 ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider" }
-gsb-http-proxy = { path = "core/http-proxy" }
+gsb-http-proxy = { path = "exe-unit/components/http-proxy" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
