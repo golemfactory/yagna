@@ -227,21 +227,24 @@ mod tests {
         let size = 200;
         let mut before = Instant::now();
         tokio::task::spawn_local(async move {
-            for _step in 0..2 {
+            for step in 0..2 {
                 tokio::time::sleep(Duration::from_millis(25)).await;
 
                 for i in 0..=size {
                     report.report_progress(i, Some(size));
                     tokio::time::sleep(Duration::from_millis(50)).await;
                 }
-                report.next_step();
+                if step == 0 {
+                    report.next_step();
+                }
             }
+            report.report_message("Finished".to_string());
         });
 
         let mut counter = 0;
         let mut step = 0;
-        while let Ok(progress) = rx.recv().await {
-            //println!("{progress:?}");
+        while let Ok(event) = rx.recv().await {
+            //println!("{event:?}");
 
             counter += 1;
             let update = Instant::now().duration_since(before);
@@ -255,13 +258,17 @@ mod tests {
             assert!(diff <= Duration::from_millis(20));
 
             // `ProgressReporter` should ignore 10 messages in each loop.
-            assert_eq!(progress.progress.0, counter * 10);
-            assert_eq!(progress.progress.1, Some(size));
-            assert_eq!(progress.step, (step, 2));
-            assert_eq!(progress.unit, Some("Bytes".to_string()));
-            assert_eq!(progress.message, None);
+            assert_eq!(event.progress.0, counter * 10);
+            assert_eq!(event.progress.1, Some(size));
+            assert_eq!(event.step, (step, 2));
+            assert_eq!(event.unit, Some("Bytes".to_string()));
+            assert_eq!(event.message, None);
 
             if counter == 20 {
+                if step == 1 {
+                    break;
+                }
+
                 counter = 0;
                 step += 1;
 
@@ -270,5 +277,13 @@ mod tests {
                 before = Instant::now();
             }
         }
+
+        // Reporting message will result in event containing progress adn step from previous event.
+        let last = rx.recv().await.unwrap();
+        //println!("{last:?}");
+        assert_eq!(last.message, Some("Finished".to_string()));
+        assert_eq!(last.progress.0, size);
+        assert_eq!(last.progress.1, Some(size));
+        assert_eq!(last.step, (1, 2));
     }
 }
