@@ -219,7 +219,7 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
 pub fn send_sync_requests(db: DbExecutor) {
     tokio::task::spawn_local(async move {
         if let Err(e) = send_sync_requests_impl(db).await {
-            log::error!("Failed to send PaymentSyncRequest: {e}");
+            log::debug!("Failed to send PaymentSyncRequest: {e}");
         }
     });
 }
