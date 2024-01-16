@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use std::sync::Mutex as StdMutex;
+use tokio::sync::Mutex as TokioMutex;
 
 /// Registry of locks for agreements
 pub(super) struct AgreementLock {
-    locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    locks: StdMutex<HashMap<String, Arc<TokioMutex<()>>>>,
 }
 
 impl AgreementLock {
@@ -18,9 +19,14 @@ impl AgreementLock {
     ///
     /// The entry in the internal registry will be automatically cleaned up.
     pub async fn lock(self: &Arc<Self>, agreement: String) -> AgreementLockGuard {
-        let mut map = self.locks.lock().await;
-        let lock = map.entry(agreement).or_default();
-        let guard = Arc::clone(lock).lock_owned().await;
+        let lock = Arc::clone(
+            self.locks
+                .lock()
+                .expect("Failed to acquire lock")
+                .entry(agreement)
+                .or_default(),
+        );
+        let guard = lock.lock_owned().await;
 
         AgreementLockGuard {
             guard: Some(guard),
@@ -32,7 +38,7 @@ impl AgreementLock {
 impl Default for AgreementLock {
     fn default() -> Self {
         AgreementLock {
-            locks: Mutex::new(HashMap::new()),
+            locks: StdMutex::new(HashMap::new()),
         }
     }
 }
@@ -49,11 +55,11 @@ pub(super) struct AgreementLockGuard {
 impl Drop for AgreementLockGuard {
     fn drop(&mut self) {
         drop(self.guard.take());
-        let lock_map = Arc::clone(&self.lock_map);
 
-        tokio::task::spawn(async move {
-            let mut map = lock_map.locks.lock().await;
-            map.retain(|_agreement, lock| lock.try_lock().is_err());
-        });
+        self.lock_map
+            .locks
+            .lock()
+            .expect("Failed to acquire lock")
+            .retain(|_agreement, lock| lock.try_lock().is_err());
     }
 }
