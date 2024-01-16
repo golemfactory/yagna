@@ -703,16 +703,25 @@ impl PaymentDriver for Erc20NextDriver {
             };
             let mut str_output = if eth_received > U256::zero() || glm_received > U256::zero() {
                 format!(
-                    "Successfully received {} ETH and {} tGLM",
+                    "Successfully received {} ETH and {} tGLM on {} network",
                     eth_received.to_eth_str(),
-                    glm_received.to_eth_str()
+                    glm_received.to_eth_str(),
+                    network,
                 )
             } else if eth_received > U256::zero() {
-                format!("Successfully received {} ETH", eth_received.to_eth_str())
+                format!(
+                    "Successfully received {} ETH on {} network",
+                    eth_received.to_eth_str(),
+                    network,
+                )
             } else if glm_received > U256::zero() {
-                format!("Successfully minted {} tGLM", glm_received.to_eth_str())
+                format!(
+                    "Successfully received {} tGLM on {} network",
+                    network,
+                    glm_received.to_eth_str()
+                )
             } else {
-                "No funds received".to_string()
+                format!("No funds received on {} network", network)
             };
             let final_eth_balance = match self
                 .payment_runtime
@@ -732,9 +741,13 @@ impl PaymentDriver for Erc20NextDriver {
                 }
             };
             str_output += &format!(
-                "\nYou have {} tETH and {} tGLM",
+                "\nYou have {} tETH and {} tGLM on {network} network",
                 final_eth_balance.to_eth_str(),
                 (starting_glm_balance + glm_received).to_eth_str()
+            );
+            str_output += &format!(
+                "\nRun yagna payment status --network {} for more details",
+                network
             );
             str_output
         };
