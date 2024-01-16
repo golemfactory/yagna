@@ -26,7 +26,7 @@ pub mod local {
     use std::time::Duration;
     use structopt::*;
     use strum::{EnumProperty, IntoEnumIterator, VariantNames};
-    use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
+    use strum_macros::{EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
@@ -513,7 +513,6 @@ pub mod local {
         EnumString,
         EnumVariantNames,
         IntoStaticStr,
-        Display,
         Debug,
         Clone,
         PartialEq,
@@ -527,6 +526,21 @@ pub mod local {
     pub enum DriverName {
         Erc20Next,
         Erc20,
+    }
+
+    impl Display for DriverName {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            use DriverName::*;
+            let s = match self {
+                Erc20 => {
+                    log::warn!("Deprecated driver name [erc20] used. Use erc20next instead");
+                    "erc20next"
+                }
+                Erc20Next => "erc20next",
+            };
+
+            write!(f, "{}", s)
+        }
     }
 
     #[derive(StructOpt, Debug, Clone)]
