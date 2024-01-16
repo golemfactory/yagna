@@ -741,9 +741,10 @@ impl PaymentDriver for Erc20NextDriver {
                 }
             };
             str_output += &format!(
-                "\nYou have {} tETH and {} tGLM on {network} network",
+                "\nYou have {} tETH and {} tGLM on {} network",
                 final_eth_balance.to_eth_str(),
-                (starting_glm_balance + glm_received).to_eth_str()
+                (starting_glm_balance + glm_received).to_eth_str(),
+                network
             );
             str_output += &format!(
                 "\nRun yagna payment status --network {} for more details",
