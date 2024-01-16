@@ -358,7 +358,7 @@ impl Handler<DeployImage> for TransferService {
 
         log::info!("Deploying from {:?} to {:?}", src_url.url, path);
 
-        let ctx = TransferContext::default();
+        let mut ctx = TransferContext::default();
         ctx.state.retry_with(self.deploy_retry.clone());
         ctx.progress
             .register_reporter(deploy.progress_config, 1, Some("Bytes".to_string()));
@@ -380,7 +380,7 @@ impl Handler<TransferResource> for TransferService {
         let src = actor_try!(self.provider(&src_url));
         let dst = actor_try!(self.provider(&dst_url));
 
-        let ctx = TransferContext::default();
+        let mut ctx = TransferContext::default();
         ctx.state.retry_with(self.transfer_retry.clone());
         ctx.progress
             .register_reporter(msg.progress_config, 1, Some("Bytes".to_string()));

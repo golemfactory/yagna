@@ -48,7 +48,7 @@ impl ProgressReporter {
         });
     }
 
-    /// TODO: implement `update_interval` and `step`
+    /// TODO: implement `update_step`
     pub fn report_progress(&self, progress: u64, size: Option<u64>) {
         let update_interval: Duration = self
             .config
@@ -86,12 +86,13 @@ impl ProgressReporter {
     }
 
     pub fn register_reporter(
-        &self,
+        &mut self,
         args: Option<ProgressConfig>,
         steps: usize,
         unit: Option<String>,
     ) {
         if let Some(args) = args {
+            self.config = args.progress_args;
             *(self.inner.lock().unwrap()) = Some(ProgressImpl {
                 report: args.progress,
                 last: CommandProgress {
@@ -197,4 +198,77 @@ where
     });
 
     sink
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    use duration_string::DurationString;
+    use tokio::time::Duration;
+
+    #[actix_rt::test]
+    async fn test_progress_reporter_interval() {
+        let mut report = ProgressReporter::default();
+        let (tx, mut rx) = tokio::sync::broadcast::channel(10);
+        report.register_reporter(
+            Some(ProgressConfig {
+                progress: tx,
+                progress_args: ProgressArgs {
+                    update_interval: Some("500ms".parse::<DurationString>().unwrap()),
+                    update_step: None,
+                },
+            }),
+            2,
+            Some("Bytes".to_string()),
+        );
+
+        let size = 200;
+        let mut before = Instant::now();
+        tokio::task::spawn_local(async move {
+            for _step in 0..2 {
+                tokio::time::sleep(Duration::from_millis(25)).await;
+
+                for i in 0..=size {
+                    report.report_progress(i, Some(size));
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                report.next_step();
+            }
+        });
+
+        let mut counter = 0;
+        let mut step = 0;
+        while let Ok(progress) = rx.recv().await {
+            //println!("{progress:?}");
+
+            counter += 1;
+            let update = Instant::now().duration_since(before);
+            before = Instant::now();
+            let diff = if update > Duration::from_millis(525) {
+                update - Duration::from_millis(525)
+            } else {
+                Duration::from_millis(525) - update
+            };
+
+            assert!(diff <= Duration::from_millis(20));
+
+            // `ProgressReporter` should ignore 10 messages in each loop.
+            assert_eq!(progress.progress.0, counter * 10);
+            assert_eq!(progress.progress.1, Some(size));
+            assert_eq!(progress.step, (step, 2));
+            assert_eq!(progress.unit, Some("Bytes".to_string()));
+            assert_eq!(progress.message, None);
+
+            if counter == 20 {
+                counter = 0;
+                step += 1;
+
+                // Skip step change event
+                rx.recv().await.unwrap();
+                before = Instant::now();
+            }
+        }
+    }
 }

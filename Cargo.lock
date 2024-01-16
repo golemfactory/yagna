@@ -9337,6 +9337,7 @@ dependencies = [
  "awc",
  "bytes 1.5.0",
  "crossterm 0.26.1",
+ "duration-string",
  "env_logger 0.7.1",
  "futures 0.3.30",
  "gftp",
