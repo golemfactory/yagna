@@ -16,6 +16,9 @@ use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
+mod drop_id;
+mod list;
+
 const FILE_CHUNK_SIZE: usize = 40960;
 
 #[derive(Debug, Clone, Default)]
@@ -145,6 +148,8 @@ pub enum IdentityCommand {
     Drop {
         /// Identity alias to drop
         node_or_alias: NodeOrAlias,
+        #[structopt(long)]
+        force: bool,
     },
 
     /// Exports given identity to a file | stdout
@@ -210,35 +215,7 @@ fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
 impl IdentityCommand {
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            IdentityCommand::List { .. } => {
-                let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
-                    .send(identity::List::default())
-                    .await
-                    .map_err(anyhow::Error::msg)
-                    .context("sending id List to BUS")?
-                    .unwrap();
-                identities.sort_by_key(|id| Reverse((id.is_default, id.alias.clone())));
-                Ok(ResponseTable {
-                    columns: vec![
-                        "default".into(),
-                        "locked".into(),
-                        "alias".into(),
-                        "address".into(),
-                    ],
-                    values: identities
-                        .into_iter()
-                        .map(|identity| {
-                            serde_json::json! {[
-                                if identity.is_default { "X" } else { "" },
-                                if identity.is_locked { "X" } else { "" },
-                                identity.alias,
-                                identity.node_id
-                            ]}
-                        })
-                        .collect(),
-                }
-                .into())
-            }
+            IdentityCommand::List { .. } => list::list().await,
             IdentityCommand::Show { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().unwrap_or_default().into();
                 CommandOutput::object(
@@ -385,27 +362,10 @@ impl IdentityCommand {
                         .map_err(anyhow::Error::msg)?,
                 )
             }
-            IdentityCommand::Drop { node_or_alias } => {
-                let command: identity::Get = node_or_alias.clone().into();
-                let id = bus::service(identity::BUS_ID)
-                    .send(command)
-                    .await
-                    .map_err(anyhow::Error::msg)?;
-                let id = match id {
-                    Ok(Some(v)) => v,
-                    Err(e) => return CommandOutput::object(Err::<(), _>(e)),
-                    Ok(None) => anyhow::bail!("Identity not found"),
-                };
-                if id.is_default {
-                    anyhow::bail!("Default identity cannot be dropped")
-                }
-                CommandOutput::object(
-                    bus::service(identity::BUS_ID)
-                        .send(identity::DropId::with_id(id.node_id))
-                        .await
-                        .map_err(anyhow::Error::msg)?,
-                )
-            }
+            IdentityCommand::Drop {
+                node_or_alias,
+                force,
+            } => drop_id::drop_id(node_or_alias, *force).await,
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,

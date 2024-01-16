@@ -17,6 +17,10 @@ impl CommandOutput {
         Ok(CommandOutput::Object(serde_json::to_value(value)?))
     }
 
+    pub fn none() -> Result<Self> {
+        Ok(CommandOutput::NoOutput)
+    }
+
     pub fn print(&self, json_output: bool) -> Result<()> {
         if json_output {
             self.print_json()?;

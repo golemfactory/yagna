@@ -52,6 +52,7 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
         node_id,
         is_locked: key.is_locked(),
         is_default,
+        deleted: key.is_deleted(),
     }
 }
 
@@ -363,6 +364,7 @@ impl IdentityService {
             node_id,
             is_locked: key.is_locked(),
             is_default: self.default_key == node_id,
+            deleted: false,
         })
     }
 
@@ -387,20 +389,27 @@ impl IdentityService {
     pub async fn drop_id(
         &mut self,
         drop_id: model::DropId,
-    ) -> Result<model::IdentityInfo, model::Error> {
-        match self.ids.get(&drop_id.node_id) {
-            None => Err(model::Error::NodeNotFound(Box::new(drop_id.node_id))),
+    ) -> Result<model::IdentityInfo, model::DropError> {
+        match self.ids.get_mut(&drop_id.node_id) {
+            None => Err(model::DropError::NodeNotFound(Box::new(drop_id.node_id))),
             Some(id) => {
-                let removed = to_info(&self.default_key, id);
+                if id.is_deleted() {
+                    return Err(model::DropError::AlreadyDeleted);
+                }
+
                 match self
                     .db
                     .as_dao::<IdentityDao>()
                     .mark_deleted(drop_id.node_id.to_string())
                     .await
                 {
-                    Ok(_) => Ok(removed),
-                    Err(_) => Err(model::Error::new_err_msg(
-                        "Failed to mark identity as deleted",
+                    Ok(_) => {
+                        id.mark_deleted();
+                        let removed = to_info(&self.default_key, id);
+                        Ok(removed)
+                    }
+                    Err(_) => Err(model::DropError::InternalErr(
+                        "Failed to mark identity as deleted".into(),
                     )),
                 }
             }
@@ -548,16 +557,13 @@ impl IdentityService {
             async move { this.lock().await.get_key_file(node_id).await }
         });
         let this = me;
-        let _ = bus::bind(model::BUS_ID, move |node_id: model::DropId| {
+        let _ = bus::bind(model::BUS_ID, move |drop_cmd: model::DropId| {
             let this = this.clone();
             async move {
-                log::trace!("Dropping identity: {:?}", node_id);
+                log::trace!("Dropping identity: {:?}", drop_cmd);
                 let mut guard = this.lock().await;
-                match guard.drop_id(node_id).await {
-                    Ok(id) => {
-                        guard.ids.remove(&id.node_id);
-                        Ok(id)
-                    }
+                match guard.drop_id(drop_cmd).await {
+                    Ok(id) => Ok(id),
                     Err(err) => Err(err),
                 }
             }
