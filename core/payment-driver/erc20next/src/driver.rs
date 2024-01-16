@@ -706,19 +706,19 @@ impl PaymentDriver for Erc20NextDriver {
                     "Successfully received {} ETH and {} tGLM on {} network",
                     eth_received.to_eth_str(),
                     glm_received.to_eth_str(),
-                    network,
+                    network
                 )
             } else if eth_received > U256::zero() {
                 format!(
                     "Successfully received {} ETH on {} network",
                     eth_received.to_eth_str(),
-                    network,
+                    network
                 )
             } else if glm_received > U256::zero() {
                 format!(
                     "Successfully received {} tGLM on {} network",
-                    network,
-                    glm_received.to_eth_str()
+                    glm_received.to_eth_str(),
+                    network
                 )
             } else {
                 format!("No funds received on {} network", network)
