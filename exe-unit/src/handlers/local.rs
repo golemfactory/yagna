@@ -1,11 +1,13 @@
+use actix::prelude::*;
+use futures::FutureExt;
+
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::Runtime;
 use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
-use actix::prelude::*;
-use futures::FutureExt;
+
 use ya_client_model::activity;
 use ya_core_model::activity::local::SetState as SetActivityState;
 

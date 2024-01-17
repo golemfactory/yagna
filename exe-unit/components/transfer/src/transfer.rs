@@ -248,7 +248,7 @@ impl TransferService {
         src_url: TransferUrl,
         _src_name: CachePath,
         path: PathBuf,
-        ctx: TransferContext,
+        _ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let fut = async move {
             let resp = reqwest::get(src_url.url)
