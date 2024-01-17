@@ -212,6 +212,8 @@ async fn send_script(
     }
 }
 
+// We need this mut for conditional compilation for sgx
+#[allow(unused_mut)]
 pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
