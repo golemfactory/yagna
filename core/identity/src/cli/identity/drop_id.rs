@@ -42,7 +42,7 @@ pub async fn drop_id(node_or_alias: &NodeOrAlias, force: bool) -> Result<Command
             prompt("By deleting this identity, you will also delete the internal key to your payment wallet.\n\
                    If you have any funds on it and haven't backed up the key, you won't be able to recover them. \n\
                    If you have any open contracts or pending payments on this identity, you won't be able to close or settle them.",
-                   "Are you sure? [Y/N]",
+                   "Do you understand the consequences and still want to proceed [y/N]",
                    ).await?
         } else {
             prompt(
@@ -51,7 +51,8 @@ pub async fn drop_id(node_or_alias: &NodeOrAlias, force: bool) -> Result<Command
                     By deleting this identity, you will also delete the internal key to your payment wallet.\n\
                     If you have any funds on it and haven't backed up the key, you won't be able to\n\
                     recover them. If you have any open contracts or pending payments on this identity,\n\
-                    you won't be able to close or settle them.", "Are you sure? [Y/N]"
+                    you won't be able to close or settle them.", 
+                   "Do you understand the consequences and still want to proceed [y/N]"
             ).await?
         };
 
