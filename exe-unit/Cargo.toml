@@ -109,6 +109,11 @@ actix-files = "0.6"
 actix-web = "4"
 env_logger = "0.7"
 rustyline = "7.0.0"
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"]}
 sha3 = "0.8.2"
 shell-words = "1.0.0"
 tempdir = "0.3.7"
+test-context = "0.1.4"
+
+ya-framework-basic = { version = "0.1" }
+ya-mock-runtime = { path = "components/mock-runtime"}

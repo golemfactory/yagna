@@ -8404,12 +8404,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
  "shell-words",
  "signal-hook",
  "socket2 0.4.10",
  "structopt",
  "tempdir",
+ "test-context",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -8421,9 +8423,11 @@ dependencies = [
  "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-framework-basic",
  "ya-manifest-utils",
+ "ya-mock-runtime",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
- "ya-runtime-api",
+ "ya-runtime-api 0.7.1",
  "ya-sb-router",
  "ya-service-bus",
  "ya-std-utils",
@@ -8727,6 +8731,24 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+]
+
+[[package]]
+name = "ya-mock-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes 1.5.0",
+ "env_logger 0.10.1",
+ "futures 0.3.30",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "url",
+ "ya-runtime-api 0.7.0",
 ]
 
 [[package]]
@@ -9108,6 +9130,25 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf0db25811f107d62be6c6ac7444d9c6c3e39714b6f76d72798b66ecce47506f"
+dependencies = [
+ "anyhow",
+ "bytes 1.5.0",
+ "futures 0.3.30",
+ "log",
+ "prost 0.10.4",
+ "prost-build 0.10.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "ya-runtime-api"
 version = "0.7.1"
 dependencies = [
  "anyhow",
@@ -9369,7 +9410,7 @@ dependencies = [
  "ya-core-model",
  "ya-exe-unit",
  "ya-framework-basic",
- "ya-runtime-api",
+ "ya-runtime-api 0.7.1",
  "ya-service-bus",
  "ya-utils-futures",
  "ya-utils-path",

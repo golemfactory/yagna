@@ -1,0 +1,30 @@
+[package]
+name = "ya-mock-runtime"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2021"
+description = "Mock runtime for testing purposes and set of libraries for testing ExeUnits in tests."
+
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ya-mock-runtime"
+path = "src/main.rs"
+
+
+[dependencies]
+anyhow = "1.0.31"
+bytes = "1.0"
+futures = { version = "0.3" }
+log = "0.4"
+env_logger = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1", features = ["io-std", "rt", "process", "sync", "macros", "time"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+url = "2.3"
+
+ya-runtime-api = "0.7"

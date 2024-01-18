@@ -206,6 +206,7 @@ members = [
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
     "exe-unit/components/transfer",
+    "exe-unit/components/mock-runtime",
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",

@@ -3,7 +3,6 @@ extern crate derive_more;
 
 use actix::prelude::*;
 use anyhow::{bail, Context};
-use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::clap;
@@ -44,7 +43,7 @@ pub mod state;
 mod dns;
 mod exe_unit;
 
-pub use exe_unit::{report, ExeUnit, ExeUnitContext, RuntimeRef};
+pub use exe_unit::{report, AwaitFinish, ExeUnit, ExeUnitContext, RuntimeRef};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -54,56 +53,56 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Cli {
     /// Runtime binary path
     #[structopt(long, short)]
-    binary: PathBuf,
+    pub binary: PathBuf,
     #[structopt(flatten)]
-    supervise: SuperviseCli,
+    pub supervise: SuperviseCli,
     /// Additional runtime arguments
     #[structopt(
-    long,
-    short,
-    set = clap::ArgSettings::Global,
-    number_of_values = 1,
+        long,
+        short,
+        set = clap::ArgSettings::Global,
+        number_of_values = 1,
     )]
-    runtime_arg: Vec<String>,
+    pub runtime_arg: Vec<String>,
     /// Enclave secret key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_SEC_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     #[allow(dead_code)]
-    sec_key: Option<String>,
+    pub sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_REQUESTOR_PUB_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     #[allow(dead_code)]
-    requestor_pub_key: Option<String>,
+    pub requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
-#[derive(structopt::StructOpt, Debug)]
+#[derive(structopt::StructOpt, Debug, Clone)]
 pub struct SuperviseCli {
     /// Hardware resources are handled by the runtime
     #[structopt(
-    long = "runtime-managed-hardware",
-    alias = "cap-handoff",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
-    hardware: bool,
+    pub hardware: bool,
     /// Images are handled by the runtime
     #[structopt(
-    long = "runtime-managed-image",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
-    image: bool,
+    pub image: bool,
 }
 
 #[derive(structopt::StructOpt, Debug)]
@@ -137,17 +136,17 @@ pub enum Command {
     Test,
 }
 
-#[derive(structopt::StructOpt, Debug)]
+#[derive(structopt::StructOpt, Debug, Clone)]
 pub struct RunArgs {
     /// Agreement file path
     #[structopt(long, short)]
-    agreement: PathBuf,
+    pub agreement: PathBuf,
     /// Working directory
     #[structopt(long, short)]
-    work_dir: PathBuf,
+    pub work_dir: PathBuf,
     /// Common cache directory
     #[structopt(long, short)]
-    cache_dir: PathBuf,
+    pub cache_dir: PathBuf,
 }
 
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
@@ -175,7 +174,7 @@ fn init_crypto(
     }
 }
 
-async fn send_script(
+pub async fn send_script(
     exe_unit: Addr<ExeUnit<RuntimeProcess>>,
     activity_id: Option<String>,
     exe_script: Vec<ExeScriptCommand>,
@@ -215,6 +214,8 @@ async fn send_script(
 // We need this mut for conditional compilation for sgx
 #[allow(unused_mut)]
 pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
+    log::debug!("CLI args: {:?}", cli);
+
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
     }
@@ -223,14 +224,14 @@ pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
     let ctx_activity_id;
     let ctx_report_url;
 
-    let args = match &cli.command {
+    let args = match cli.command {
         Command::FromFile {
             args,
             service_id,
             report_url,
             input,
         } => {
-            let contents = std::fs::read_to_string(input).map_err(|e| {
+            let contents = std::fs::read_to_string(&input).map_err(|e| {
                 anyhow::anyhow!("Cannot read commands from file {}: {e}", input.display())
             })?;
             let contents = serde_json::from_str(&contents).map_err(|e| {
@@ -271,6 +272,43 @@ pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
         }
     };
 
+    let exe_unit = exe_unit(ExeUnitConfig {
+        report_url: ctx_report_url,
+        service_id: ctx_activity_id.clone(),
+        runtime_args: cli.runtime_arg,
+        binary: cli.binary,
+        supervise: cli.supervise,
+        sec_key: cli.sec_key,
+        args,
+        requestor_pub_key: cli.requestor_pub_key,
+    })
+    .await?;
+
+    if let Some(exe_script) = commands {
+        tokio::task::spawn(send_script(exe_unit.clone(), ctx_activity_id, exe_script));
+    }
+
+    exe_unit.send(AwaitFinish {}).await?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct ExeUnitConfig {
+    pub args: RunArgs,
+    pub binary: PathBuf,
+    pub runtime_args: Vec<String>,
+    pub service_id: Option<String>,
+    pub report_url: Option<String>,
+    pub supervise: SuperviseCli,
+
+    #[allow(dead_code)]
+    pub sec_key: Option<String>,
+    #[allow(dead_code)]
+    pub requestor_pub_key: Option<String>,
+}
+
+pub async fn exe_unit(config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<RuntimeProcess>>> {
+    let args = config.args;
     if !args.agreement.exists() {
         bail!(
             "Agreement file does not exist: {}",
@@ -309,41 +347,33 @@ pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
 
     let ctx = ExeUnitContext {
         supervise: Supervision {
-            hardware: cli.supervise.hardware,
-            image: cli.supervise.image,
+            hardware: config.supervise.hardware,
+            image: config.supervise.image,
             manifest: manifest_ctx,
         },
-        activity_id: ctx_activity_id.clone(),
-        report_url: ctx_report_url,
+        activity_id: config.service_id.clone(),
+        report_url: config.report_url,
         agreement,
         work_dir,
         cache_dir,
-        runtime_args: cli.runtime_arg.clone(),
+        runtime_args: config.runtime_args,
         acl: Default::default(),
         credentials: None,
         #[cfg(feature = "sgx")]
         crypto: init_crypto(
-            cli.sec_key.replace("<hidden>".into()),
-            cli.requestor_pub_key.clone(),
+            config.sec_key.replace("<hidden>".into()),
+            config.requestor_pub_key.clone(),
         )?,
     };
 
-    log::debug!("CLI args: {:?}", cli);
     log::debug!("ExeUnitContext args: {:?}", ctx);
-
-    let (tx, rx) = oneshot::channel();
 
     let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new((&ctx).into()).start();
-    let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
+    let runtime = RuntimeProcess::new(&ctx, config.binary).start();
+    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.send(Register(signals)).await?;
 
-    if let Some(exe_script) = commands {
-        tokio::task::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
-    }
-
-    rx.await??;
-    Ok(())
+    Ok(exe_unit)
 }

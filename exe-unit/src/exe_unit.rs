@@ -1,13 +1,14 @@
 use actix::dev::IntervalFunc;
 use actix::{
     Actor, ActorFutureExt, ActorStreamExt, Addr, AsyncContext, Context, ContextFutureSpawner,
-    Handler, ResponseFuture, Running, StreamHandler, WrapFuture,
+    Handler, Message, ResponseFuture, Running, StreamHandler, WrapFuture,
 };
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt};
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::sync::broadcast;
 
 use ya_agreement_utils::OfferTemplate;
 use ya_client_model::activity::{ActivityUsage, CommandOutput, ExeScriptCommand, State, StatePair};
@@ -36,6 +37,10 @@ lazy_static::lazy_static! {
     static ref DEFAULT_REPORT_INTERVAL: Duration = Duration::from_secs(1u64);
 }
 
+#[derive(Clone, Debug, Default, Message)]
+#[rtype(result = "()")]
+pub struct AwaitFinish {}
+
 pub struct ExeUnit<R: Runtime> {
     pub(crate) ctx: ExeUnitContext,
     pub(crate) state: ExeUnitState,
@@ -44,17 +49,17 @@ pub struct ExeUnit<R: Runtime> {
     pub(crate) metrics: Addr<MetricsService>,
     pub(crate) transfers: Addr<TransferService>,
     pub(crate) services: Vec<Box<dyn ServiceControl>>,
-    pub(crate) shutdown_tx: Option<oneshot::Sender<crate::Result<()>>>,
+    pub(crate) shutdown_tx: broadcast::Sender<()>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(
-        shutdown_tx: oneshot::Sender<crate::Result<()>>,
         ctx: ExeUnitContext,
         metrics: Addr<MetricsService>,
         transfers: Addr<TransferService>,
         runtime: Addr<R>,
     ) -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         ExeUnit {
             ctx,
             state: ExeUnitState::default(),
@@ -67,7 +72,7 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
-            shutdown_tx: Some(shutdown_tx),
+            shutdown_tx,
         }
     }
 
@@ -449,9 +454,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(Ok(()));
-        }
+        self.shutdown_tx.send(()).ok();
     }
 }
 
@@ -566,6 +569,18 @@ async fn report_usage<R: Runtime>(
             },
         },
         Err(e) => log::warn!("Unable to report activity usage: {:?}", e),
+    }
+}
+
+impl<R: Runtime> Handler<AwaitFinish> for ExeUnit<R> {
+    type Result = ResponseFuture<()>;
+
+    fn handle(&mut self, _msg: AwaitFinish, _: &mut Self::Context) -> Self::Result {
+        let mut rx = self.shutdown_tx.subscribe();
+        async move {
+            rx.recv().await.ok();
+        }
+        .boxed_local()
     }
 }
 
