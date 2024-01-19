@@ -2,6 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
+use actix::Actor;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
@@ -12,27 +13,24 @@ use ethereum_types::H160;
 //use rust_decimal::Decimal;
 
 // Workspace uses
-use ya_payment_driver::{
-    bus,
-    dao::{init, DbExecutor},
-    model::GenericError,
-};
+use ya_payment_driver::bus;
 
 // Local uses
-use crate::{driver::Erc20NextDriver, signer::IdentitySigner};
+use crate::{
+    driver::Erc20NextDriver,
+    signer::{IdentitySigner, IdentitySignerActor},
+};
 
 pub struct Erc20NextService;
 
 impl Erc20NextService {
-    pub async fn gsb(db: &DbExecutor, path: PathBuf) -> anyhow::Result<()> {
+    pub async fn gsb(path: PathBuf) -> anyhow::Result<()> {
         log::debug!("Connecting Erc20NextService to gsb...");
 
         // TODO: Read and validate env
         log::debug!("Environment variables validated");
 
         // Init database
-        init(db).await.map_err(GenericError::new)?;
-        log::debug!("Database initialised");
 
         {
             let (private_keys, _public_addresses) =
@@ -193,7 +191,7 @@ impl Erc20NextService {
             }
 
             log::debug!("Starting payment engine: {:#?}", config);
-            let signer = IdentitySigner::new();
+            let signer = IdentitySigner::new(IdentitySignerActor.start());
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
@@ -204,7 +202,8 @@ impl Erc20NextService {
                     config,
                     conn: None,
                     options: Some(additional_options),
-                    event_sender: Some(sender),
+                    mspc_sender: Some(sender),
+                    broadcast_sender: None,
                     extra_testing: None,
                 },
                 signer,
@@ -214,7 +213,7 @@ impl Erc20NextService {
             log::debug!("Bind erc20next driver");
             let driver = Erc20NextDriver::new(pr, recv);
             driver.load_active_accounts().await;
-            bus::bind_service(db, driver).await?;
+            bus::bind_service(driver).await?;
 
             log::info!("Successfully connected Erc20NextService to gsb.");
             Ok(())

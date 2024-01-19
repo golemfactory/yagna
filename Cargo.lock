@@ -1901,6 +1901,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-as-inner"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ffccbb6966c05b32ef8fbac435df276c4ae4d3dc55a8cd0eb9745e6c12f546a"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.32",
+]
+
+[[package]]
 name = "enum-ordinalize"
 version = "3.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1956,12 +1968,14 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.17"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e435361cd1112f235c1ad7dc03a20e81687df8e690e6e8fbaa079a26c1eeb493"
+checksum = "cffd28cb0aa9a84d8d1e166c7bd94d2ae0329551d3c8ce49257e3ab6c2ab0f69"
 dependencies = [
+ "actix",
  "actix-files",
  "actix-web",
+ "actix-web-actors",
  "async-trait",
  "awc",
  "chrono",
@@ -1988,8 +2002,9 @@ dependencies = [
  "structopt",
  "thunderdome",
  "tokio",
+ "tokio-stream",
  "toml",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.23.2",
  "url",
  "uuid 1.4.1",
  "web3",
@@ -1997,16 +2012,18 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.3.14"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb715a1d31ad9254d012e6691acfd1b64ec51fd1464d033fb21df143245142e3"
+checksum = "83a689b5ac63d3610929ae404be00d0edefc6475f626e9c4bcf73a31bc351a7c"
 dependencies = [
  "actix-files",
  "actix-web",
+ "anyhow",
  "async-trait",
  "awc",
  "chrono",
  "dotenv",
+ "env_logger 0.10.0",
  "fastrand",
  "futures 0.3.28",
  "futures-util",
@@ -2030,7 +2047,7 @@ dependencies = [
  "thunderdome",
  "tokio",
  "toml",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.23.2",
  "url",
  "uuid 1.4.1",
  "web3",
@@ -2038,9 +2055,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.3.14"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8f122c88169091c04bd19d4f1a8dc907707176ee767df612a889a23043897c0"
+checksum = "3e445de27babb56571050557e1eb63aef5d9686ea52e9f07c6d168f00c7dfefb"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2073,7 +2090,7 @@ dependencies = [
  "thunderdome",
  "tokio",
  "toml",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.23.2",
  "uuid 1.4.1",
  "web3",
 ]
@@ -2732,8 +2749,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d2a95278fbde2e90fdbd44ab54e2723344e7c20d7c08c837c60f9f07c2e5f51"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=f2d7514c18fc066e9cfb796090b90f5b27cfe1c6#f2d7514c18fc066e9cfb796090b90f5b27cfe1c6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5273,7 +5289,7 @@ dependencies = [
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tower-service",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.22.0",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5907,6 +5923,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.32",
+]
+
+[[package]]
+name = "serde_spanned"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -7109,11 +7134,14 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.11"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+checksum = "a1a195ec8c9da26928f773888e0742ca3ca1040c6cd859c919c9f59c1954ab35"
 dependencies = [
  "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_edit 0.21.0",
 ]
 
 [[package]]
@@ -7121,6 +7149,9 @@ name = "toml_datetime"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "toml_edit"
@@ -7140,6 +7171,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81"
 dependencies = [
  "indexmap 2.0.0",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d34d383cd00a163b4a5b85053df514d45bc330f6de7737edfe0a93311d1eaa03"
+dependencies = [
+ "indexmap 2.0.0",
+ "serde",
+ "serde_spanned",
  "toml_datetime",
  "winnow",
 ]
@@ -7192,13 +7236,38 @@ dependencies = [
  "async-trait",
  "cfg-if 1.0.0",
  "data-encoding",
- "enum-as-inner",
+ "enum-as-inner 0.5.1",
  "futures-channel",
  "futures-io",
  "futures-util",
  "idna 0.2.3",
  "ipnet",
  "lazy_static",
+ "rand 0.8.5",
+ "smallvec",
+ "thiserror",
+ "tinyvec",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "trust-dns-proto"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3119112651c157f4488931a01e586aa459736e9d6046d3bd9105ffb69352d374"
+dependencies = [
+ "async-trait",
+ "cfg-if 1.0.0",
+ "data-encoding",
+ "enum-as-inner 0.6.0",
+ "futures-channel",
+ "futures-io",
+ "futures-util",
+ "idna 0.4.0",
+ "ipnet",
+ "once_cell",
  "rand 0.8.5",
  "smallvec",
  "thiserror",
@@ -7226,7 +7295,28 @@ dependencies = [
  "tokio",
  "tokio-openssl",
  "tracing",
- "trust-dns-proto",
+ "trust-dns-proto 0.22.0",
+]
+
+[[package]]
+name = "trust-dns-resolver"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a3e6c3aff1718b3c73e395d1f35202ba2ffa847c6a62eea0db8fb4cfe30be6"
+dependencies = [
+ "cfg-if 1.0.0",
+ "futures-util",
+ "ipconfig",
+ "lru-cache",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "resolv-conf",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "trust-dns-proto 0.23.2",
 ]
 
 [[package]]
@@ -7974,8 +8064,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=afdc1daf1f17a5128d911f8fff9d55c4f213e9af#afdc1daf1f17a5128d911f8fff9d55c4f213e9af"
+version = "0.8.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7998,8 +8088,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=afdc1daf1f17a5128d911f8fff9d55c4f213e9af#afdc1daf1f17a5128d911f8fff9d55c4f213e9af"
+version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8079,54 +8169,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-erc20-driver"
-version = "0.4.0"
-dependencies = [
- "actix-rt",
- "anyhow",
- "async-trait",
- "awc",
- "bigdecimal 0.2.2",
- "chrono",
- "derive_more",
- "dotenv",
- "env_logger 0.7.1",
- "erc20_payment_lib",
- "ethabi",
- "ethereum-tx-sign",
- "ethereum-types 0.14.1",
- "futures 0.3.28",
- "hex",
- "lazy_static",
- "log",
- "maplit",
- "num-bigint 0.3.3",
- "num-traits",
- "rand 0.8.5",
- "rlp",
- "serde",
- "serde_json",
- "sha3 0.8.2",
- "structopt",
- "test-case 3.1.0",
- "thiserror",
- "tiny-keccak",
- "tokio",
- "trust-dns-resolver",
- "url",
- "uuid 0.8.2",
- "web3",
- "ya-client-model",
- "ya-payment-driver",
- "ya-service-api-interfaces",
- "ya-utils-futures",
- "ya-utils-networking",
-]
-
-[[package]]
 name = "ya-erc20next-driver"
 version = "0.4.0"
 dependencies = [
+ "actix",
  "actix-rt",
  "anyhow",
  "async-trait",
@@ -8211,7 +8257,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.22.0",
  "url",
  "winapi 0.3.9",
  "ya-agreement-utils",
@@ -8572,7 +8618,6 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio",
- "tokio-util",
  "uint 0.7.1",
  "uuid 0.8.2",
  "ya-agreement-utils",
@@ -8580,7 +8625,6 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20-driver",
  "ya-erc20next-driver",
  "ya-metrics",
  "ya-net",
@@ -8720,8 +8764,8 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-client"
-version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.6.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8745,13 +8789,13 @@ dependencies = [
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-stack 0.5.1",
 ]
 
 [[package]]
 name = "ya-relay-core"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8775,13 +8819,13 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-stack 0.5.1",
 ]
 
 [[package]]
 name = "ya-relay-proto"
-version = "0.4.2"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+version = "0.4.3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "anyhow",
  "bytes 1.4.0",
@@ -8795,27 +8839,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
-]
-
-[[package]]
-name = "ya-relay-stack"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
-dependencies = [
- "derive_more",
- "futures 0.3.28",
- "lazy_static",
- "log",
- "managed",
- "num-derive",
- "num-traits",
- "rand 0.8.5",
- "smoltcp",
- "thiserror",
- "tokio",
- "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
 ]
 
 [[package]]
@@ -8839,6 +8863,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-relay-stack"
+version = "0.5.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+dependencies = [
+ "derive_more",
+ "futures 0.3.28",
+ "lazy_static",
+ "log",
+ "managed",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "smoltcp",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+]
+
+[[package]]
 name = "ya-relay-util"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8851,7 +8895,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=785c9c4271f514d47fe18018efb9438007ae611a#785c9c4271f514d47fe18018efb9438007ae611a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
 dependencies = [
  "bytes 1.4.0",
  "derive_more",
@@ -9157,9 +9201,9 @@ dependencies = [
  "log",
  "regex",
  "thiserror",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.22.0",
  "url",
- "ya-relay-stack 0.5.0 (git+https://github.com/golemfactory/ya-relay.git?rev=c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5)",
+ "ya-relay-stack 0.5.0",
 ]
 
 [[package]]
@@ -9185,6 +9229,7 @@ dependencies = [
  "nix 0.22.3",
  "shared_child",
  "tokio",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -9256,7 +9301,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -9287,7 +9332,6 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20-driver",
  "ya-erc20next-driver",
  "ya-fd-metrics",
  "ya-file-logging",
