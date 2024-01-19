@@ -8743,16 +8743,21 @@ dependencies = [
  "bytes 1.5.0",
  "env_logger 0.10.1",
  "futures 0.3.30",
+ "hex",
  "log",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",
  "url",
+ "ya-client-model",
+ "ya-core-model",
  "ya-exe-unit",
  "ya-framework-basic",
  "ya-runtime-api 0.7.0",
+ "ya-service-bus",
 ]
 
 [[package]]

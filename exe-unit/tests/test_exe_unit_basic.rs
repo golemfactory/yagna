@@ -55,12 +55,13 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
 
     log::info!("Sending shutdown request.");
 
-    exe.send(Shutdown(ShutdownReason::Finished))
+    exe.exec(None, vec![ExeScriptCommand::Terminate {}])
         .await
-        .unwrap()
         .unwrap();
+    exe.send(Shutdown(ShutdownReason::Finished)).await.ok();
+
+    log::info!("Waiting for shutdown..");
 
     finish.recv().await.unwrap();
-
     Ok(())
 }
