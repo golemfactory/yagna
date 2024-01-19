@@ -66,7 +66,7 @@
           "caps.multi-activity": true,
           "comp": {
             "expiration": 1653216996555,
-            "task_package": "http://127.0.0.1:8001/rnd",
+            "task_package": "hash://sha3:22e08b990b6c6685a7e80ecd9a1adb52561a7d9fe9e69b915269da229be6c1ad69dea4ff8a77dc2c4973558da9150909a2be4121b1cbe1ddb04630c1f75aad4f:http://127.0.0.1:8001/image-1",
             "vm": {
               "package_format": "gvmkit-squash"
             }

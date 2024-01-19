@@ -8737,7 +8737,9 @@ dependencies = [
 name = "ya-mock-runtime"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "anyhow",
+ "async-trait",
  "bytes 1.5.0",
  "env_logger 0.10.1",
  "futures 0.3.30",
@@ -8748,6 +8750,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+ "ya-exe-unit",
+ "ya-framework-basic",
  "ya-runtime-api 0.7.0",
 ]
 

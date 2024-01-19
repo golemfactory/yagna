@@ -28,3 +28,10 @@ tokio-util = { version = "0.7", features = ["codec"] }
 url = "2.3"
 
 ya-runtime-api = "0.7"
+
+# Dependancies for ExeUnit testing utils
+ya-exe-unit = "0.4"
+ya-framework-basic = { version = "0.1" }
+
+async-trait = "0.1.77"
+actix = { version = "0.13", default-features = false }

@@ -9,7 +9,7 @@ use url::Url;
 
 use ya_client_model::activity::TransferArgs;
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::file::generate_file_with_hash;
+use ya_framework_basic::file::generate_random_file_with_hash;
 use ya_framework_basic::hash::verify_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
@@ -162,7 +162,7 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
     }];
     addr.send(AddVolumes::new(volumes)).await??;
 
-    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 3 * 1024);
+    let hash = generate_random_file_with_hash(temp_dir, "rnd", 4096_usize, 3 * 1024);
 
     log::debug!("Starting HTTP servers");
     start_http(ctx, temp_dir.to_path_buf())

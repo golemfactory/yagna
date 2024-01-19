@@ -178,7 +178,7 @@ pub async fn send_script(
     exe_unit: Addr<ExeUnit<RuntimeProcess>>,
     activity_id: Option<String>,
     exe_script: Vec<ExeScriptCommand>,
-) {
+) -> anyhow::Result<String> {
     use crate::state::{State, StatePair};
     use std::time::Duration;
 
@@ -189,7 +189,8 @@ pub async fn send_script(
             Ok(GetStateResponse(StatePair(State::Terminated, _)))
             | Ok(GetStateResponse(StatePair(_, Some(State::Terminated))))
             | Err(_) => {
-                return log::error!("ExeUnit has terminated");
+                log::error!("ExeUnit has terminated");
+                bail!("ExeUnit has terminated");
             }
             _ => tokio::time::sleep(delay).await,
         }
@@ -197,9 +198,10 @@ pub async fn send_script(
 
     log::debug!("Executing commands: {:?}", exe_script);
 
+    let batch_id = hex::encode(rand::random::<[u8; 16]>());
     let msg = activity::Exec {
         activity_id: activity_id.unwrap_or_default(),
-        batch_id: hex::encode(rand::random::<[u8; 16]>()),
+        batch_id: batch_id.clone(),
         exe_script,
         timeout: None,
     };
@@ -209,6 +211,7 @@ pub async fn send_script(
     {
         log::error!("Unable to execute exe script: {:?}", e);
     }
+    Ok(batch_id)
 }
 
 // We need this mut for conditional compilation for sgx

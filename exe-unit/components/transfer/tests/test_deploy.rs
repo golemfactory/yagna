@@ -10,7 +10,7 @@ use ya_client_model::activity::exe_script_command::ProgressArgs;
 use ya_client_model::activity::CommandProgress;
 
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::file::generate_file_with_hash;
+use ya_framework_basic::file::generate_random_file_with_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
@@ -36,7 +36,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
         std::fs::create_dir_all(dir)?;
     }
 
-    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 1024 * 10);
+    let hash = generate_random_file_with_hash(temp_dir, "rnd", 4096_usize, 1024 * 10);
 
     log::debug!("Starting HTTP servers");
     let path = temp_dir.to_path_buf();
@@ -99,7 +99,7 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let chunk_size = 4096_usize;
     let chunk_count = 1024 * 1;
     let file_size = (chunk_size * chunk_count) as u64;
-    let hash = generate_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash = generate_random_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
     let path = temp_dir.to_path_buf();

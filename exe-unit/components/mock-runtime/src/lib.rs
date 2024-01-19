@@ -1,3 +1,5 @@
+pub mod testing;
+
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures::FutureExt;
