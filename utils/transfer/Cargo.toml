@@ -28,7 +28,7 @@ async-compression = { version = "=0.3.7", features = [
 bytes = "1.0"
 futures = "0.3.4"
 globset = "0.4.5"
-h2 = "0.3.17"
+h2 = "0.3.24"
 hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4"
