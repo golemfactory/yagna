@@ -46,10 +46,12 @@ async fn create_allocation(
     // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
-    let payment_platform = match &allocation.payment_platform {
+    let mut payment_platform = match &allocation.payment_platform {
         Some(platform) => platform.clone(),
         None => return response::bad_request(&"payment platform must be provided"),
     };
+
+    log::debug!("payment platform: {payment_platform}");
 
     let address = allocation
         .address
@@ -58,32 +60,38 @@ async fn create_allocation(
 
     // If the request contains information about the payment platform, initialize the account
     // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.
-    if let Some(platform) = &allocation.payment_platform {
-        // payment_platform is of the form driver-network-token
-        // eg. erc20-rinkeby-tglm
-        let [driver, network, _token]: [&str; 3] =
-            match platform.split('-').collect::<Vec<_>>().try_into() {
-                Ok(arr) => arr,
-                Err(_e) => {
-                    return response::bad_request(
-                        &"paymentPlatform must be of the form driver-network-token",
-                    )
-                }
-            };
 
-        let acc = Account {
-            driver: driver.to_owned(),
-            address: address.clone(),
-            network: Some(network.to_owned()),
-            token: None,
-            send: true,
-            receive: false,
+    // payment_platform is of the form driver-network-token
+    // eg. erc20-rinkeby-tglm
+    let platform = payment_platform.clone();
+    let [mut driver, network, token]: [&str; 3] =
+        match platform.split('-').collect::<Vec<_>>().try_into() {
+            Ok(arr) => arr,
+            Err(_e) => {
+                return response::bad_request(
+                    &"paymentPlatform must be of the form driver-network-token",
+                )
+            }
         };
 
-        if let Err(e) = init_account(acc).await {
-            log::error!("Error initializing account: {:?}", e);
-            return response::server_error(&e);
-        }
+    // erc20 was removed
+    if driver == "erc20" {
+        driver = "erc20next".into();
+        payment_platform = format!("{driver}-{network}-{token}");
+    }
+
+    let acc = Account {
+        driver: driver.to_owned(),
+        address: address.clone(),
+        network: Some(network.to_owned()),
+        token: None,
+        send: true,
+        receive: false,
+    };
+
+    if let Err(e) = init_account(acc).await {
+        log::error!("Error initializing account: {:?}", e);
+        return response::server_error(&e);
     }
 
     let validate_msg = ValidateAllocation {
