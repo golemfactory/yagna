@@ -43,7 +43,7 @@ pub mod state;
 mod dns;
 mod exe_unit;
 
-pub use exe_unit::{report, AwaitFinish, ExeUnit, ExeUnitContext, RuntimeRef};
+pub use exe_unit::{report, ExeUnit, ExeUnitContext, FinishNotifier, RuntimeRef};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -288,7 +288,7 @@ pub async fn run(mut cli: Cli) -> anyhow::Result<()> {
         tokio::task::spawn(send_script(exe_unit.clone(), ctx_activity_id, exe_script));
     }
 
-    exe_unit.send(AwaitFinish {}).await?;
+    exe_unit.send(FinishNotifier {}).await??.recv().await?;
     Ok(())
 }
 

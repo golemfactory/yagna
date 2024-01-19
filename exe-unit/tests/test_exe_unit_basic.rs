@@ -4,7 +4,7 @@ use ya_client_model::activity::ExeScriptCommand;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::{
-    exe_unit, send_script, AwaitFinish, ExeUnit, ExeUnitConfig, RunArgs, SuperviseCli,
+    exe_unit, send_script, ExeUnit, ExeUnitConfig, FinishNotifier, RunArgs, SuperviseCli,
 };
 use ya_framework_basic::async_drop::{AsyncDroppable, DroppableTestContext};
 use ya_framework_basic::file::generate_file_with_hash;
@@ -19,8 +19,11 @@ pub struct ExeUnitHandle(pub Addr<ExeUnit<RuntimeProcess>>);
 #[async_trait::async_trait]
 impl AsyncDroppable for ExeUnitHandle {
     async fn async_drop(&self) {
+        let finish = self.0.send(FinishNotifier {}).await;
         self.0.send(Shutdown(ShutdownReason::Finished)).await.ok();
-        self.0.send(AwaitFinish {}).await.ok();
+        if let Ok(Ok(mut finish)) = finish {
+            finish.recv().await.ok();
+        }
     }
 }
 
@@ -57,6 +60,7 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
     };
 
     let exe = exe_unit(config).await.unwrap();
+    let mut finish = exe.send(FinishNotifier {}).await??;
     ctx.register(ExeUnitHandle(exe.clone()));
 
     log::info!("Sending [deploy, start] batch for execution.");
@@ -84,7 +88,8 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
         .await
         .unwrap()
         .unwrap();
-    exe.send(AwaitFinish {}).await?;
+
+    finish.recv().await.unwrap();
 
     Ok(())
 }

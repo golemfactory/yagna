@@ -32,14 +32,15 @@ use crate::runtime::{Runtime, RuntimeMode};
 use crate::service::metrics::MetricsService;
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
+use crate::Result;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_REPORT_INTERVAL: Duration = Duration::from_secs(1u64);
 }
 
 #[derive(Clone, Debug, Default, Message)]
-#[rtype(result = "()")]
-pub struct AwaitFinish {}
+#[rtype(result = "Result<broadcast::Receiver<()>>")]
+pub struct FinishNotifier {}
 
 pub struct ExeUnit<R: Runtime> {
     pub(crate) ctx: ExeUnitContext,
@@ -572,15 +573,11 @@ async fn report_usage<R: Runtime>(
     }
 }
 
-impl<R: Runtime> Handler<AwaitFinish> for ExeUnit<R> {
-    type Result = ResponseFuture<()>;
+impl<R: Runtime> Handler<FinishNotifier> for ExeUnit<R> {
+    type Result = Result<broadcast::Receiver<()>>;
 
-    fn handle(&mut self, _msg: AwaitFinish, _: &mut Self::Context) -> Self::Result {
-        let mut rx = self.shutdown_tx.subscribe();
-        async move {
-            rx.recv().await.ok();
-        }
-        .boxed_local()
+    fn handle(&mut self, _msg: FinishNotifier, _: &mut Self::Context) -> Self::Result {
+        Ok(self.shutdown_tx.subscribe())
     }
 }
 
