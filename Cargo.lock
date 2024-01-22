@@ -8169,7 +8169,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-erc20next-driver"
+name = "ya-erc20-driver"
 version = "0.4.0"
 dependencies = [
  "actix",
@@ -8625,7 +8625,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20next-driver",
+ "ya-erc20-driver",
  "ya-metrics",
  "ya-net",
  "ya-persistence",
@@ -9332,7 +9332,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20next-driver",
+ "ya-erc20-driver",
  "ya-fd-metrics",
  "ya-file-logging",
  "ya-gsb-api",
