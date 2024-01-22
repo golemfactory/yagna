@@ -1,5 +1,5 @@
 /*
-    Wallet functions on erc20next.
+    Wallet functions on erc20.
 */
 
 // External crates

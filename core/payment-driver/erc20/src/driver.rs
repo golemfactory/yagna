@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 /*
-    Erc20Driver to handle payments on the erc20next network.
+    Erc20Driver to handle payments on the erc20 network.
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
@@ -43,12 +43,12 @@ use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
 mod cli;
 
-pub struct Erc20NextDriver {
+pub struct Erc20Driver {
     active_accounts: AccountsArc,
     payment_runtime: PaymentRuntime,
 }
 
-impl Erc20NextDriver {
+impl Erc20Driver {
     pub fn new(payment_runtime: PaymentRuntime, recv: Receiver<DriverEvent>) -> Arc<Self> {
         let this = Arc::new(Self {
             active_accounts: Accounts::new_rc(),
@@ -272,7 +272,7 @@ impl Erc20NextDriver {
 
         let networks = self.get_networks();
         let network = networks.get(network_name).ok_or(GenericError::new(format!(
-            "Network {network_name} not supported by Erc20NextDriver"
+            "Network {network_name} not supported by Erc20Driver"
         )))?;
         let platform = network
             .tokens
@@ -337,7 +337,7 @@ impl Erc20NextDriver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriver for Erc20NextDriver {
+impl PaymentDriver for Erc20Driver {
     async fn account_event(
         &self,
         _caller: String,
