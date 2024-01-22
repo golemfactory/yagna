@@ -7,11 +7,11 @@ The payments are made by drivers loaded in the service.
 ### Drivers
 
 Currently these drivers are available to use:
-- Erc20Next
+- Erc20
 - Erc20
 - Dummy
 
-By default only the Erc20 & Erc20Next drivers are enabled, extra drivers need to be specifically loaded with a feature flag.
+By default only the Erc20 & Erc20 drivers are enabled, extra drivers need to be specifically loaded with a feature flag.
 
 ## DO NOT USE DUMMY DRIVER FOR BUILDS THAT WILL BE DISTRIBUTED!!!
 
@@ -25,7 +25,7 @@ You can enable multiple drivers at the same time, use this table for the require
 
 ### Examples:
 
-Build with erc20next and erc20 drivers:
+Build with erc20 and erc20 drivers:
 ```
 cargo build --release
 ```
