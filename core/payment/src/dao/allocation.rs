@@ -160,7 +160,7 @@ impl<'c> AllocationDao<'c> {
             if let Some(max_items) = max_items {
                 query = query.limit(max_items.into())
             }
-            let allocations: Vec<ReadObj> = query.load(conn)?;
+            let allocations: Vec<ReadObj> = query.order_by(dsl::timestamp.asc()).load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())
         })
         .await

@@ -239,7 +239,7 @@ impl<'c> DebitNoteDao<'c> {
             if let Some(date) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(date))
             }
-            query = query.order_by(dsl::timestamp.desc());
+            query = query.order_by(dsl::timestamp.asc());
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
