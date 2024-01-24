@@ -1,5 +1,7 @@
+use duration_string::DurationString;
+use std::str::FromStr;
 use test_context::test_context;
-
+use ya_client_model::activity::exe_script_command::ProgressArgs;
 use ya_client_model::activity::ExeScriptCommand;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::{exe_unit, send_script, FinishNotifier};
@@ -15,13 +17,14 @@ use ya_mock_runtime::testing::{exe_unit_config, ExeUnitExt, ExeUnitHandle};
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(false);
+    enable_logs(true);
 
     let dir = temp_dir!("exe-unit-start-terminate")?;
     let temp_dir = dir.path();
     let image_repo = temp_dir.join("images");
 
-    generate_image(&image_repo, "image-1", 4096_usize, 10);
+    let hash = generate_image(&image_repo, "image-big", 4096_usize, 10 * 1024);
+    log::info!("{}", hex::encode(&hash));
     start_http(ctx, image_repo)
         .await
         .expect("unable to start http servers");
@@ -44,7 +47,10 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
         vec![
             ExeScriptCommand::Deploy {
                 net: vec![],
-                progress: None,
+                progress: Some(ProgressArgs {
+                    update_interval: Some(DurationString::from_str("300ms").unwrap()),
+                    update_step: None,
+                }),
                 env: Default::default(),
                 hosts: Default::default(),
                 hostname: None,
@@ -57,12 +63,6 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
     .unwrap();
 
     exe.wait_for_batch(&batch_id).await.unwrap();
-
-    log::info!("Sending shutdown request.");
-
-    exe.exec(None, vec![ExeScriptCommand::Terminate {}])
-        .await
-        .unwrap();
     exe.send(Shutdown(ShutdownReason::Finished)).await.ok();
 
     log::info!("Waiting for shutdown..");

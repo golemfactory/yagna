@@ -1,7 +1,9 @@
 use anyhow::{anyhow, bail};
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tempdir::TempDir;
+use test_binary::TestBinary;
 
 pub mod macros {
     /// Creates temporary directory in cargo target directory.
@@ -19,9 +21,6 @@ pub mod macros {
     #[macro_export]
     macro_rules! resource {
         ($name:literal) => {
-            // CARGO_MANIFEST_DIR is available in compile time only in binary modules, so we can't
-            // use it in this library. Thanks to using macro it will be resolved in final code not here
-            // and it will work.
             ya_framework_basic::test_dirs::resource_(env!("CARGO_MANIFEST_DIR"), $name)
         };
     }
@@ -56,8 +55,7 @@ pub fn extension() -> String {
     "".to_string()
 }
 
-/// Returns absolute path to cargo project binary.
-pub fn cargo_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
+fn find_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
     let current = std::env::current_exe()
         .map_err(|e| anyhow!("Failed to get path to current binary. {e}"))?
         .parent()
@@ -79,6 +77,21 @@ pub fn cargo_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
     }
 
     Ok(bin_path)
+}
+
+/// Returns path to test binary from workspace.
+pub fn cargo_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
+    // Check if binary is already compiled.
+    if let Err(_) = find_binary(bin_name) {
+        TestBinary::from_workspace(&bin_name)?
+            .build()
+            .map_err(|e| anyhow!("Failed to compile binary: {e}"))?
+            .to_str()
+            .map(PathBuf::from_str)
+            .ok_or(anyhow!("Failed to convert path from OsString"))??;
+    };
+
+    find_binary(bin_name)
 }
 
 /// Returns resource from `resources` directory in tests.

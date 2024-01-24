@@ -9,7 +9,6 @@ use ya_exe_unit::message::{GetBatchResults, Shutdown, ShutdownReason};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::{ExeUnit, ExeUnitConfig, FinishNotifier, RunArgs, SuperviseCli};
 use ya_framework_basic::async_drop::AsyncDroppable;
-use ya_framework_basic::test_dirs::cargo_binary;
 use ya_service_bus::RpcEnvelope;
 
 #[async_trait::async_trait]
@@ -36,14 +35,18 @@ impl AsyncDroppable for ExeUnitHandle {
     }
 }
 
-pub fn exe_unit_config(temp_dir: &Path, agreement_path: &Path, binary: &str) -> ExeUnitConfig {
+pub fn exe_unit_config(
+    temp_dir: &Path,
+    agreement_path: &Path,
+    binary: impl AsRef<Path>,
+) -> ExeUnitConfig {
     ExeUnitConfig {
         args: RunArgs {
             agreement: agreement_path.to_path_buf(),
             cache_dir: temp_dir.join("cache"),
             work_dir: temp_dir.join("work"),
         },
-        binary: cargo_binary(binary).unwrap(),
+        binary: binary.as_ref().to_path_buf(),
         runtime_args: vec![],
         supervise: SuperviseCli {
             hardware: false,

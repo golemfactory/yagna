@@ -29,6 +29,7 @@ async-compression = { version = "=0.3.7", features = [
     "xz",
 ] }
 bytes = "1.0"
+cargo_metadata = "0.18"
 crossterm = "0.26.1"
 env_logger = "0.7"
 futures = "0.3.4"
@@ -45,6 +46,7 @@ serde = "1.0.104"
 sha2 = "0.8.1"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
+test-binary = { version = "3.0", git = "https://github.com/golemfactory/test-binary.git" }
 test-context = "0.1.4"
 thiserror = "1.0.11"
 tokio = { version = "1", features = ["fs", "io-util"] }
