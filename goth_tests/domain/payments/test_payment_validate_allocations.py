@@ -47,7 +47,7 @@ async def test_payment_validate_allocations(
         # Test requestor's CLI command for allocation validation
 
         # Make initial payment fund 1000GLM
-        requestor.cli.payment_fund(payment_driver="erc20next")
+        requestor.cli.payment_fund(payment_driver="erc20")
 
         # Allocation bigger than total amount should not be possible
         with pytest.raises(ApiException):
