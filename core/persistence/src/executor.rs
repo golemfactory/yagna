@@ -226,7 +226,7 @@ where
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
-        let _guard = pool.tx_lock.read().unwrap();
+        let _guard = pool.tx_lock.write().unwrap();
         f(&conn)
     })
     .await
