@@ -176,22 +176,26 @@ impl<'a> ActivityDao<'a> {
         role: Role,
         agreement_id: String,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, "activity_dao_create_if_not_exists", move |conn| {
-            let existing: Option<String> = dsl::pay_activity
-                .find((&id, &owner_id))
-                .select(dsl::id)
-                .first(conn)
-                .optional()?;
-            if existing.is_some() {
-                return Ok(());
-            }
+        do_with_transaction(
+            self.pool,
+            "activity_dao_create_if_not_exists",
+            move |conn| {
+                let existing: Option<String> = dsl::pay_activity
+                    .find((&id, &owner_id))
+                    .select(dsl::id)
+                    .first(conn)
+                    .optional()?;
+                if existing.is_some() {
+                    return Ok(());
+                }
 
-            let activity = WriteObj::new(id, owner_id, role, agreement_id);
-            diesel::insert_into(dsl::pay_activity)
-                .values(activity)
-                .execute(conn)?;
-            Ok(())
-        })
+                let activity = WriteObj::new(id, owner_id, role, agreement_id);
+                diesel::insert_into(dsl::pay_activity)
+                    .values(activity)
+                    .execute(conn)?;
+                Ok(())
+            },
+        )
         .await
     }
 }

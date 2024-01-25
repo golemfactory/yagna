@@ -70,12 +70,16 @@ impl<'c> AgreementEventsDao<'c> {
         agreement_id: &AgreementId,
     ) -> DbResult<Vec<AgreementEvent>> {
         let agreement_id = agreement_id.clone();
-        readonly_transaction(self.pool, "agreement_events_dao_select_for_agreement", move |conn| {
-            Ok(market_agreement_event
-                .filter(event::agreement_id.eq(agreement_id))
-                .order_by(event::timestamp.asc())
-                .load::<AgreementEvent>(conn)?)
-        })
+        readonly_transaction(
+            self.pool,
+            "agreement_events_dao_select_for_agreement",
+            move |conn| {
+                Ok(market_agreement_event
+                    .filter(event::agreement_id.eq(agreement_id))
+                    .order_by(event::timestamp.asc())
+                    .load::<AgreementEvent>(conn)?)
+            },
+        )
         .await
     }
 }

@@ -44,23 +44,27 @@ impl<'c> ProposalDao<'c> {
         proposal: Proposal,
     ) -> Result<Proposal, SaveProposalError> {
         let proposal_id = proposal.body.id.clone();
-        do_with_transaction(self.pool, "proposal_dao_save_initial_proposal", move |conn| {
-            diesel::insert_into(dsl_negotiation::market_negotiation)
-                .values(&proposal.negotiation)
-                .execute(conn)?;
+        do_with_transaction(
+            self.pool,
+            "proposal_dao_save_initial_proposal",
+            move |conn| {
+                diesel::insert_into(dsl_negotiation::market_negotiation)
+                    .values(&proposal.negotiation)
+                    .execute(conn)?;
 
-            diesel::insert_into(dsl::market_proposal)
-                .values(&proposal.body)
-                .execute(conn)?;
-            Ok(proposal)
-        })
+                diesel::insert_into(dsl::market_proposal)
+                    .values(&proposal.body)
+                    .execute(conn)?;
+                Ok(proposal)
+            },
+        )
         .await
         .map_err(|e| SaveProposalError::Db(proposal_id, e))
     }
 
     pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
         let proposal = proposal.body.clone();
-        do_with_transaction(self.pool,  "proposal_dao_save_proposal", move |conn| {
+        do_with_transaction(self.pool, "proposal_dao_save_proposal", move |conn| {
             let prev_proposal_id = proposal
                 .prev_proposal_id
                 .clone()
@@ -101,9 +105,11 @@ impl<'c> ProposalDao<'c> {
         state: ProposalState,
     ) -> Result<(), ChangeProposalStateError> {
         let id = proposal_id.clone();
-        do_with_transaction(self.pool, "proposal_dao_change_proposal_state", move |conn| {
-            update_proposal_state(conn, &id, state)
-        })
+        do_with_transaction(
+            self.pool,
+            "proposal_dao_change_proposal_state",
+            move |conn| update_proposal_state(conn, &id, state),
+        )
         .await
         .map_err(|e| ChangeProposalStateError::Db(proposal_id.clone(), state, e.to_string()))
     }
@@ -136,37 +142,38 @@ impl<'c> ProposalDao<'c> {
     pub async fn clean(&self) -> DbResult<()> {
         log::debug!("Clean market proposals: start");
         loop {
-            let (num_deleted_p, num_deleted_n) = do_with_transaction(self.pool, "proposal_dao_clean", move |conn| {
-                // diesel forbids the same table appearing more than once in a query
-                // so we'll do some manual operations here.
-                // NOTE: Because of that it's easy to hit
-                //       SQLITE_MAX_VARIABLE_NUMBER which is 999
-                //       prior to 3.32.0 (2020-05-22).
-                // TODO: Use sql max(expiration_ts)
-                let expired_negotiations = dsl_negotiation::market_negotiation
-                    .filter(
-                        dsl_negotiation::id.ne_all(
-                            dsl::market_proposal
-                                .filter(dsl::expiration_ts.gt(sql_now))
-                                .select(dsl::negotiation_id),
-                        ),
+            let (num_deleted_p, num_deleted_n) =
+                do_with_transaction(self.pool, "proposal_dao_clean", move |conn| {
+                    // diesel forbids the same table appearing more than once in a query
+                    // so we'll do some manual operations here.
+                    // NOTE: Because of that it's easy to hit
+                    //       SQLITE_MAX_VARIABLE_NUMBER which is 999
+                    //       prior to 3.32.0 (2020-05-22).
+                    // TODO: Use sql max(expiration_ts)
+                    let expired_negotiations = dsl_negotiation::market_negotiation
+                        .filter(
+                            dsl_negotiation::id.ne_all(
+                                dsl::market_proposal
+                                    .filter(dsl::expiration_ts.gt(sql_now))
+                                    .select(dsl::negotiation_id),
+                            ),
+                        )
+                        .limit(990) // Be aware of too many sql variables
+                        .select(dsl_negotiation::id)
+                        .load::<String>(conn)?;
+                    let ndp = diesel::delete(
+                        dsl::market_proposal
+                            .filter(dsl::negotiation_id.eq_any(expired_negotiations.clone())),
                     )
-                    .limit(990) // Be aware of too many sql variables
-                    .select(dsl_negotiation::id)
-                    .load::<String>(conn)?;
-                let ndp = diesel::delete(
-                    dsl::market_proposal
-                        .filter(dsl::negotiation_id.eq_any(expired_negotiations.clone())),
-                )
-                .execute(conn)?;
-                let ndn = diesel::delete(
-                    dsl_negotiation::market_negotiation
-                        .filter(dsl_negotiation::id.eq_any(expired_negotiations)),
-                )
-                .execute(conn)?;
-                Result::<(usize, usize), DbError>::Ok((ndp, ndn))
-            })
-            .await?;
+                    .execute(conn)?;
+                    let ndn = diesel::delete(
+                        dsl_negotiation::market_negotiation
+                            .filter(dsl_negotiation::id.eq_any(expired_negotiations)),
+                    )
+                    .execute(conn)?;
+                    Result::<(usize, usize), DbError>::Ok((ndp, ndn))
+                })
+                .await?;
             if (num_deleted_p > 0) || (num_deleted_n > 0) {
                 log::info!(
                     "Clean market proposals: {}({} negotiations) cleaned",

@@ -216,18 +216,22 @@ impl<'c> AllocationDao<'c> {
         address: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, "allocation_dao_total_remaining_allocation", move |conn| {
-            let total_remaining_amount = dsl::pay_allocation
-                .select(dsl::remaining_amount)
-                .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::address.eq(address))
-                .filter(dsl::released.eq(false))
-                .filter(dsl::timestamp.gt(after_timestamp))
-                .get_results::<BigDecimalField>(conn)?
-                .sum();
+        readonly_transaction(
+            self.pool,
+            "allocation_dao_total_remaining_allocation",
+            move |conn| {
+                let total_remaining_amount = dsl::pay_allocation
+                    .select(dsl::remaining_amount)
+                    .filter(dsl::payment_platform.eq(platform))
+                    .filter(dsl::address.eq(address))
+                    .filter(dsl::released.eq(false))
+                    .filter(dsl::timestamp.gt(after_timestamp))
+                    .get_results::<BigDecimalField>(conn)?
+                    .sum();
 
-            Ok(total_remaining_amount)
-        })
+                Ok(total_remaining_amount)
+            },
+        )
         .await
     }
 }

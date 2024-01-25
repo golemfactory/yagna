@@ -272,14 +272,15 @@ impl<'c> InvoiceDao<'c> {
         node_id: NodeId,
         since: DateTime<Utc>,
     ) -> DbResult<BTreeMap<(Role, DocumentStatus), StatValue>> {
-        let results = readonly_transaction(self.pool, "invoice_dao_last_invoice_stats", move |conn| {
-            let invoices: Vec<ReadObj> = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::timestamp.gt(since.naive_utc()))
-                .load(conn)?;
-            Ok::<_, DbError>(invoices)
-        })
-        .await?;
+        let results =
+            readonly_transaction(self.pool, "invoice_dao_last_invoice_stats", move |conn| {
+                let invoices: Vec<ReadObj> = query!()
+                    .filter(dsl::owner_id.eq(node_id))
+                    .filter(dsl::timestamp.gt(since.naive_utc()))
+                    .load(conn)?;
+                Ok::<_, DbError>(invoices)
+            })
+            .await?;
         let mut stats = BTreeMap::<(Role, DocumentStatus), StatValue>::new();
         for invoice in results {
             let key = (invoice.role, DocumentStatus::try_from(invoice.status)?);
@@ -302,7 +303,7 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn accept(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, "invoice_dao_mark_accept", move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_accept", move |conn| {
             let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))

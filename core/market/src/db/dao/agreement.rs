@@ -366,7 +366,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn revert_approving(&self, id: &AgreementId) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
 
-        do_with_transaction(self.pool, "agreement_dao_approving", move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_revert_approving", move |conn| {
             let agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 

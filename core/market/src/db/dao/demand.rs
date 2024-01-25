@@ -115,7 +115,10 @@ impl<'c> DemandDao<'c> {
 
     pub async fn demand_state(self, id: &SubscriptionId) -> DbResult<DemandState> {
         let id = id.clone();
-        do_with_transaction(self.pool, "demand_dao_demand_state", move |conn| demand_status(conn, &id)).await
+        do_with_transaction(self.pool, "demand_dao_demand_state", move |conn| {
+            demand_status(conn, &id)
+        })
+        .await
     }
 }
 

@@ -21,8 +21,10 @@ impl<'a> AsDao<'a> for ReleaseDAO<'a> {
 
 impl<'c> ReleaseDAO<'c> {
     pub async fn save_new(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
-        do_with_transaction(self.pool, "release_dao_save_new", move |conn| {
-            match get_release(conn, &db_rel.version)? {
+        do_with_transaction(
+            self.pool,
+            "release_dao_save_new",
+            move |conn| match get_release(conn, &db_rel.version)? {
                 Some(rel) => Ok(rel),
                 None => {
                     diesel::insert_into(version_release)
@@ -30,17 +32,25 @@ impl<'c> ReleaseDAO<'c> {
                         .execute(conn)?;
                     Ok(db_rel.into())
                 }
-            }
-        })
+            },
+        )
         .await
     }
 
     pub async fn current_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, "version_dao_current_release", get_current_release).await
+        readonly_transaction(
+            self.pool,
+            "version_dao_current_release",
+            get_current_release,
+        )
+        .await
     }
 
     pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, "version_dao_pending_release", move |conn| get_pending_release(conn, false)).await
+        readonly_transaction(self.pool, "version_dao_pending_release", move |conn| {
+            get_pending_release(conn, false)
+        })
+        .await
     }
 
     pub async fn version(&self) -> anyhow::Result<VersionInfo> {

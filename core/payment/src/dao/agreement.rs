@@ -212,16 +212,20 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
         payer_addr: String,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, "agreement_dao_get_transaction_balance", move |conn| {
-            let balance = dsl::pay_agreement
-                .select(dsl::total_amount_paid)
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::payee_addr.eq(payee_addr))
-                .filter(dsl::payer_addr.eq(payer_addr))
-                .get_results::<BigDecimalField>(conn)?
-                .sum();
-            Ok(balance)
-        })
+        readonly_transaction(
+            self.pool,
+            "agreement_dao_get_transaction_balance",
+            move |conn| {
+                let balance = dsl::pay_agreement
+                    .select(dsl::total_amount_paid)
+                    .filter(dsl::owner_id.eq(node_id))
+                    .filter(dsl::payee_addr.eq(payee_addr))
+                    .filter(dsl::payer_addr.eq(payer_addr))
+                    .get_results::<BigDecimalField>(conn)?
+                    .sum();
+                Ok(balance)
+            },
+        )
         .await
     }
 
