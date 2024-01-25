@@ -215,7 +215,7 @@ where
         let conn = pool.get()?;
         log::trace!("Start ro transaction no {}: {}", count_no, label);
 
-        let rw_cnt = pool.tx_lock.read().unwrap();
+        let rw_cnt = pool.tx_lock.write().unwrap();
         //log::info!("start ro tx: {}", *rw_cnt);
         let start_query = std::time::Instant::now();
         let ret = f(&conn);
