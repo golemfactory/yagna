@@ -215,7 +215,7 @@ where
         let conn = pool.get()?;
         log::trace!("Start ro transaction no {}: {}", count_no, label);
 
-        let rw_cnt = pool.tx_lock.write().unwrap();
+        let rw_cnt = pool.tx_lock.read().unwrap();
         //log::info!("start ro tx: {}", *rw_cnt);
         let start_query = std::time::Instant::now();
         let ret = f(&conn);
@@ -265,7 +265,7 @@ where
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
         log::trace!("Start rw transaction no {}: {}", count_no, label);
-        let _guard = pool.tx_lock.read().unwrap();
+        let _guard = pool.tx_lock.write().unwrap();
         let start_query = std::time::Instant::now();
         let res = f(&conn);
         let end_query = std::time::Instant::now();
