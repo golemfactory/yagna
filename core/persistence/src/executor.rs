@@ -222,6 +222,7 @@ where
     F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
 {
+    log::trace!("do_with_rw_connection");
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
