@@ -44,7 +44,7 @@ impl<'c> ProposalDao<'c> {
         proposal: Proposal,
     ) -> Result<Proposal, SaveProposalError> {
         let proposal_id = proposal.body.id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "proposal_dao_save_initial_proposal", move |conn| {
             diesel::insert_into(dsl_negotiation::market_negotiation)
                 .values(&proposal.negotiation)
                 .execute(conn)?;
@@ -60,7 +60,7 @@ impl<'c> ProposalDao<'c> {
 
     pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
         let proposal = proposal.body.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool,  "proposal_dao_save_proposal", move |conn| {
             let prev_proposal_id = proposal
                 .prev_proposal_id
                 .clone()
@@ -101,7 +101,7 @@ impl<'c> ProposalDao<'c> {
         state: ProposalState,
     ) -> Result<(), ChangeProposalStateError> {
         let id = proposal_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "proposal_dao_change_proposal_state", move |conn| {
             update_proposal_state(conn, &id, state)
         })
         .await
@@ -110,7 +110,7 @@ impl<'c> ProposalDao<'c> {
 
     pub async fn get_proposal(&self, proposal_id: &ProposalId) -> DbResult<Option<Proposal>> {
         let proposal_id = proposal_id.to_string();
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "proposal_dao_get_proposal", move |conn| {
             let proposal: Option<DbProposal> = dsl::market_proposal
                 .filter(dsl::id.eq(&proposal_id))
                 .first(conn)
@@ -136,7 +136,7 @@ impl<'c> ProposalDao<'c> {
     pub async fn clean(&self) -> DbResult<()> {
         log::debug!("Clean market proposals: start");
         loop {
-            let (num_deleted_p, num_deleted_n) = do_with_transaction(self.pool, move |conn| {
+            let (num_deleted_p, num_deleted_n) = do_with_transaction(self.pool, "proposal_dao_clean", move |conn| {
                 // diesel forbids the same table appearing more than once in a query
                 // so we'll do some manual operations here.
                 // NOTE: Because of that it's easy to hit

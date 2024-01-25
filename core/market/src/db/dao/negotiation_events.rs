@@ -38,7 +38,7 @@ impl<'a> AsMixedDao<'a> for NegotiationEventsDao<'a> {
 impl<'c> NegotiationEventsDao<'c> {
     pub async fn add_proposal_event(&self, proposal: &Proposal, role: Owner) -> DbResult<()> {
         let event = MarketEvent::from_proposal(proposal, role);
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "negotiation_events_dao_add_proposal_event", move |conn| {
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
@@ -53,7 +53,7 @@ impl<'c> NegotiationEventsDao<'c> {
         reason: Option<Reason>,
     ) -> DbResult<()> {
         let event = MarketEvent::proposal_rejected(proposal, reason);
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "negotiation_events_dao_add_proposal_rejected_event", move |conn| {
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
@@ -64,7 +64,7 @@ impl<'c> NegotiationEventsDao<'c> {
 
     pub async fn add_agreement_event(&self, agreement: &Agreement) -> DbResult<()> {
         let event = MarketEvent::from_agreement(agreement);
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "negotiation_events_dao_add_agreement_event", move |conn| {
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
@@ -80,7 +80,7 @@ impl<'c> NegotiationEventsDao<'c> {
         owner: Owner,
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "negotiation_events_dao_take_events", move |conn| {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
 
@@ -125,7 +125,7 @@ impl<'c> NegotiationEventsDao<'c> {
 
     pub async fn remove_events(&self, subscription_id: &SubscriptionId) -> DbResult<()> {
         let subscription_id = subscription_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "negotiation_events_remove_events", move |conn| {
             diesel::delete(
                 dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id)),
             )
@@ -138,7 +138,7 @@ impl<'c> NegotiationEventsDao<'c> {
     pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::debug!("Clean market events: start");
         let interval_days = db_config.event_store_days;
-        let num_deleted = do_with_transaction(self.pool, move |conn| {
+        let num_deleted = do_with_transaction(self.pool, "negotiation_events_clean", move |conn| {
             let nd = diesel::delete(
                 dsl::market_negotiation_event
                     .filter(dsl::timestamp.lt(datetime("NOW", format!("-{} days", interval_days)))),

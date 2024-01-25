@@ -160,15 +160,24 @@ impl DbExecutor {
         Ok(())
     }
 
-    pub async fn with_connection<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>
+    // not used in yagna, but may be useful in other projects
+    async fn _with_connection<R: Send + 'static, Error, F>(
+        &self,
+        label: &str,
+        f: F,
+    ) -> Result<R, Error>
     where
         F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
         Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
     {
-        do_with_ro_connection(&self.pool, f).await
+        do_with_ro_connection(&self.pool, label, f).await
     }
 
-    pub async fn with_transaction<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>
+    pub async fn with_transaction<R: Send + 'static, Error, F>(
+        &self,
+        label: &str,
+        f: F,
+    ) -> Result<R, Error>
     where
         F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
         Error: Send
@@ -177,10 +186,12 @@ impl DbExecutor {
             + From<r2d2::Error>
             + From<diesel::result::Error>,
     {
-        do_with_transaction(&self.pool, f).await
+        let loc = std::panic::Location::caller();
+        log::warn!("With transaction: {}", loc);
+
+        do_with_transaction(&self.pool, label, f).await
     }
 
-    #[allow(unused)]
     pub(crate) async fn execute(&self, query: &str) -> Result<usize, Error> {
         Ok(self.conn()?.execute(query)?)
     }
@@ -192,6 +203,7 @@ pub trait AsDao<'a> {
 
 async fn do_with_ro_connection<R: Send + 'static, Error, F>(
     pool: &PoolType,
+    label: &str,
     f: F,
 ) -> Result<R, Error>
 where
@@ -214,20 +226,31 @@ where
     }
 }
 
+static RW_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 async fn do_with_rw_connection<R: Send + 'static, Error, F>(
     pool: &PoolType,
+    label: &str,
     f: F,
 ) -> Result<R, Error>
 where
     F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
 {
-    log::trace!("do_with_rw_connection");
+    let loc = std::panic::Location::caller();
+    log::warn!("do_with_rw_connection: {}", loc);
+
+    let count_no = RW_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    //log::warn!("Do_with_rw_connection {count_no}");
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
         let _guard = pool.tx_lock.read().unwrap();
-        f(&conn)
+        let start_query = std::time::Instant::now();
+        let res = f(&conn);
+        let end_query = std::time::Instant::now();
+        //log::warn!("Query took: {:?}", end_query.duration_since(start_query));
+        res
     })
     .await
     {
@@ -238,6 +261,7 @@ where
 
 pub async fn do_with_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
+    label: &str,
     f: F,
 ) -> Result<R, Error>
 where
@@ -248,12 +272,18 @@ where
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_rw_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
+    do_with_rw_connection(pool, label, move |conn| {
+        conn.immediate_transaction(|| f(conn))
+    })
+    .await
 }
+
+static RO_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[allow(clippy::let_and_return)]
 pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
+    label: &str,
     f: F,
 ) -> Result<R, Error>
 where
@@ -264,7 +294,9 @@ where
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_ro_connection(pool, move |conn| {
+    let count_no = RO_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    //log::warn!("Do_with_ro_connection {count_no}");
+    do_with_ro_connection(pool, label, move |conn| {
         conn.transaction(|| {
             #[cfg(debug_assertions)]
             let _ = conn.execute("PRAGMA query_only=1;")?;

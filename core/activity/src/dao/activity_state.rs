@@ -31,7 +31,7 @@ impl<'c> ActivityStateDao<'c> {
         log::debug!("getting activity state");
         let activity_id = activity_id.to_owned();
 
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "activity_state_dao_get", move |conn| {
             Ok(dsl::activity
                 .inner_join(schema::activity_state::table)
                 .select(schema::activity_state::all_columns)
@@ -49,7 +49,7 @@ impl<'c> ActivityStateDao<'c> {
     }
 
     pub async fn stats(&self) -> Result<BTreeMap<State, u64>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "activity_state_dao_stats", move |conn| {
             use diesel::sql_types::{Integer, Text};
             #[derive(QueryableByName, PartialEq, Debug)]
             struct StatRecord {
@@ -80,7 +80,7 @@ impl<'c> ActivityStateDao<'c> {
     }
 
     pub async fn stats_1h(&self) -> Result<BTreeMap<State, u64>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "activity_state_dao_stats1h", move |conn| {
             use diesel::sql_types::{Integer, Text};
             #[derive(QueryableByName, PartialEq, Debug)]
             struct StatRecord {
@@ -142,7 +142,7 @@ impl<'c> ActivityStateDao<'c> {
         let now = Utc::now().naive_utc();
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_state_dao_set", move |conn| {
             let num_updates = diesel::update(
                 dsl_state::activity_state.filter(exists(
                     dsl::activity

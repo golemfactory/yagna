@@ -35,7 +35,7 @@ impl<'c> AsDao<'c> for TransactionDao<'c> {
 
 impl<'c> TransactionDao<'c> {
     pub async fn get(&self, tx_id: String) -> DbResult<Option<TransactionEntity>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get", move |conn| {
             let tx: Option<TransactionEntity> =
                 dsl::transaction.find(tx_id).first(conn).optional()?;
             Ok(tx)
@@ -44,7 +44,7 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn insert_transactions(&self, txs: Vec<TransactionEntity>) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_insert_transactions", move |conn| {
             for tx in txs {
                 diesel::insert_into(dsl::transaction)
                     .values(tx)
@@ -58,7 +58,7 @@ impl<'c> TransactionDao<'c> {
     pub async fn get_used_nonces(&self, address: &str, network: Network) -> DbResult<Vec<i32>> {
         let address = address.to_string();
         let not_older_than = (Utc::now() - Duration::days(7)).naive_utc();
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_used_nonces", move |conn| {
             let nonces: Vec<i32> = dsl::transaction
                 .filter(
                     dsl::sender
@@ -80,7 +80,7 @@ impl<'c> TransactionDao<'c> {
         network: Network,
     ) -> DbResult<Vec<TransactionEntity>> {
         let node_id = node_id.to_string();
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_pending_faucet_txs", move |conn| {
             let txs: Vec<TransactionEntity> = dsl::transaction
                 .filter(
                     dsl::tx_type
@@ -120,7 +120,7 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn has_unconfirmed_txs(&self) -> DbResult<bool> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_has_unconfirmed_txs", move |conn| {
             let tx: Option<TransactionEntity> = dsl::transaction
                 .filter(dsl::status.eq(TransactionStatus::Sent as i32))
                 .first(conn)
@@ -135,7 +135,7 @@ impl<'c> TransactionDao<'c> {
         status: TransactionStatus,
         network: Network,
     ) -> DbResult<Vec<TransactionEntity>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_by_status", move |conn| {
             let txs: Vec<TransactionEntity> = dsl::transaction
                 .filter(dsl::status.eq(status as i32).and(dsl::network.eq(network)))
                 .load(conn)?;
@@ -151,7 +151,7 @@ impl<'c> TransactionDao<'c> {
         status3: TransactionStatus,
         network: Network,
     ) -> DbResult<Vec<TransactionEntity>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_by_statuses", move |conn| {
             let txs: Vec<TransactionEntity> = dsl::transaction
                 .filter(
                     (dsl::status
@@ -172,7 +172,7 @@ impl<'c> TransactionDao<'c> {
             true => TransactionStatus::ResendAndBumpGas as i32,
             false => TransactionStatus::Resend as i32,
         };
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_update_tx_send_again", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(new_status),
@@ -192,7 +192,7 @@ impl<'c> TransactionDao<'c> {
         gas_price: Option<String>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_update_tx_sent", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(TransactionStatus::Sent as i32),
@@ -217,7 +217,7 @@ impl<'c> TransactionDao<'c> {
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = current_time;
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_confirm_tx", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(status as i32),
@@ -248,7 +248,9 @@ impl<'c> TransactionDao<'c> {
             TransactionStatus::Confirmed => Some(current_time),
             _ => None,
         };
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool,
+                            "transaction_dao_update_error_sent",
+                            move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(status as i32),
@@ -274,7 +276,7 @@ impl<'c> TransactionDao<'c> {
             TransactionStatus::Confirmed => Some(current_time),
             _ => None,
         };
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool,    "transaction_dao_update_tx_status", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(status as i32),
@@ -296,7 +298,7 @@ impl<'c> TransactionDao<'c> {
         current_gas_price: Option<String>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_update_tx_fields", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::time_last_action.eq(current_time),
@@ -317,7 +319,7 @@ impl<'c> TransactionDao<'c> {
         overwrite_tmp_onchain_txs: String,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_overwrite_tmp", move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::time_last_action.eq(current_time),

@@ -54,7 +54,7 @@ impl<'c> AllocationDao<'c> {
     ) -> DbResult<String> {
         let allocation = WriteObj::new(allocation, owner_id, payment_platform, address);
         let allocation_id = allocation.id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "allocation_dao_create", move |conn| {
             diesel::insert_into(dsl::pay_allocation)
                 .values(allocation)
                 .execute(conn)?;
@@ -64,7 +64,7 @@ impl<'c> AllocationDao<'c> {
     }
 
     pub async fn replace(&self, allocation: Allocation, owner_id: NodeId) -> DbResult<bool> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "allocation_dao_replace", move |conn| {
             let count = diesel::update(dsl::pay_allocation)
                 .filter(dsl::id.eq(allocation.allocation_id.clone()))
                 .filter(dsl::owner_id.eq(&owner_id))
@@ -78,7 +78,7 @@ impl<'c> AllocationDao<'c> {
     }
 
     pub async fn get(&self, allocation_id: String, owner_id: NodeId) -> DbResult<AllocationStatus> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "allocation_dao_get", move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::released.eq(false))
@@ -103,7 +103,7 @@ impl<'c> AllocationDao<'c> {
         allocation_ids: Vec<String>,
         owner_id: NodeId,
     ) -> DbResult<Vec<Allocation>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "allocation_dao_get_many", move |conn| {
             let allocations: Vec<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::released.eq(false))
@@ -141,7 +141,7 @@ impl<'c> AllocationDao<'c> {
         payment_platform: Option<String>,
         address: Option<String>,
     ) -> DbResult<Vec<Allocation>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "allocation_dao_get_filtered", move |conn| {
             let mut query = dsl::pay_allocation
                 .filter(dsl::released.eq(false))
                 .into_boxed();
@@ -172,7 +172,7 @@ impl<'c> AllocationDao<'c> {
         owner_id: Option<NodeId>,
     ) -> DbResult<AllocationReleaseStatus> {
         let id = allocation_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "allocation_dao_release", move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .find(id.clone())
                 .first(conn)
@@ -216,7 +216,7 @@ impl<'c> AllocationDao<'c> {
         address: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "allocation_dao_total_remaining_allocation", move |conn| {
             let total_remaining_amount = dsl::pay_allocation
                 .select(dsl::remaining_amount)
                 .filter(dsl::payment_platform.eq(platform))

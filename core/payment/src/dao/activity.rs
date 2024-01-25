@@ -140,7 +140,7 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
 
 impl<'a> ActivityDao<'a> {
     pub async fn get(&self, activity_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "activity_dao_get", move |conn| {
             let activity = dsl::pay_activity
                 .inner_join(
                     agreement_dsl::pay_agreement.on(dsl::owner_id
@@ -176,7 +176,7 @@ impl<'a> ActivityDao<'a> {
         role: Role,
         agreement_id: String,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_dao_create_if_not_exists", move |conn| {
             let existing: Option<String> = dsl::pay_activity
                 .find((&id, &owner_id))
                 .select(dsl::id)

@@ -36,7 +36,7 @@ impl<'c> AgreementEventsDao<'c> {
     ) -> DbResult<Vec<AgreementEvent>> {
         let session_id = session_id.clone();
         let node_id = *node_id;
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_events_dao_select", move |conn| {
             // We will get only one Agreement, by using this filter.
             // There will be no way to get Requestor'a Agreement, when being Provider, and vice versa,
             // because AgreementId for Provider and Requestor in Agreement Event table is different.
@@ -70,7 +70,7 @@ impl<'c> AgreementEventsDao<'c> {
         agreement_id: &AgreementId,
     ) -> DbResult<Vec<AgreementEvent>> {
         let agreement_id = agreement_id.clone();
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_events_dao_select_for_agreement", move |conn| {
             Ok(market_agreement_event
                 .filter(event::agreement_id.eq(agreement_id))
                 .order_by(event::timestamp.asc())

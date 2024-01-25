@@ -48,7 +48,7 @@ impl<'c> OfferDao<'c> {
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<OfferState> {
         let id = id.clone();
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_state", move |conn| {
             query_state(conn, &id, &expiry_validation_ts)
         })
         .await
@@ -62,7 +62,7 @@ impl<'c> OfferDao<'c> {
         inserted_before_ts: Option<NaiveDateTime>,
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Offer>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_offers", move |conn| {
             let mut query = market_offer
                 .filter(offer::expiration_ts.ge(expiry_validation_ts))
                 .filter(
@@ -98,7 +98,7 @@ impl<'c> OfferDao<'c> {
         node_ids: Option<Vec<NodeId>>,
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<SubscriptionId>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_offers_ids", move |conn| {
             let mut query = market_offer
                 .select(offer::id)
                 .filter(offer::expiration_ts.ge(expiry_validation_ts))
@@ -127,7 +127,7 @@ impl<'c> OfferDao<'c> {
         node_ids: Option<Vec<NodeId>>,
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<SubscriptionId>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_unsubscribed_ids", move |conn| {
             let mut query = market_offer_unsubscribed
                 .select(unsubscribed::id)
                 .filter(unsubscribed::expiration_ts.ge(expiry_validation_ts))
@@ -145,7 +145,7 @@ impl<'c> OfferDao<'c> {
     /// Returns only those from input Offer ids that are in `market_offer`
     /// or in `market_offer_unsubscribed` table.
     pub async fn get_known_ids(&self, ids: Vec<SubscriptionId>) -> DbResult<Vec<SubscriptionId>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "transaction_dao_get_known_ids", move |conn| {
             let known_unsubscribed_ids = market_offer_unsubscribed
                 .select(unsubscribed::id)
                 .filter(unsubscribed::id.eq_any(&ids))
@@ -176,7 +176,7 @@ impl<'c> OfferDao<'c> {
             return Ok((false, OfferState::Expired(Some(offer))));
         }
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_put", move |conn| {
             let id = offer.id.clone();
 
             if is_unsubscribed(conn, &id)? {
@@ -212,7 +212,7 @@ impl<'c> OfferDao<'c> {
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<OfferState> {
         let id = id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_unsubscribe", move |conn| {
             query_state(conn, &id, &expiry_validation_ts).map(|state| match state {
                 OfferState::Active(offer) => diesel::insert_into(market_offer_unsubscribed)
                     .values(offer.clone().into_unsubscribe())
@@ -230,7 +230,7 @@ impl<'c> OfferDao<'c> {
     pub async fn delete(&self, id: &SubscriptionId) -> DbResult<bool> {
         let id = id.clone();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "transaction_dao_delete", move |conn| {
             let num_deleted =
                 diesel::delete(market_offer.filter(offer::id.eq(id))).execute(conn)?;
             Ok(num_deleted > 0)
@@ -240,7 +240,7 @@ impl<'c> OfferDao<'c> {
 
     pub async fn clean(&self) -> DbResult<()> {
         log::debug!("Clean market offers: start");
-        let num_deleted = do_with_transaction(self.pool, move |conn| {
+        let num_deleted = do_with_transaction(self.pool, "transaction_dao_clean", move |conn| {
             let nd = diesel::delete(market_offer.filter(offer::expiration_ts.lt(sql_now)))
                 .execute(conn)?;
             Result::<usize, DbError>::Ok(nd)
@@ -256,7 +256,7 @@ impl<'c> OfferDao<'c> {
 
     pub async fn clean_unsubscribes(&self) -> DbResult<()> {
         log::debug!("Clean market offers unsubscribes: start");
-        let num_deleted = do_with_transaction(self.pool, move |conn| {
+        let num_deleted = do_with_transaction(self.pool, "transaction_dao_clean_unsubscribes", move |conn| {
             let nd = diesel::delete(
                 market_offer_unsubscribed.filter(unsubscribed::expiration_ts.lt(sql_now)),
             )

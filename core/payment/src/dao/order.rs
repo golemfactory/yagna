@@ -25,7 +25,7 @@ impl<'c> AsDao<'c> for OrderDao<'c> {
 
 impl<'c> OrderDao<'c> {
     pub async fn create(&self, msg: SchedulePayment, id: String, driver: String) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "order_dao_create", move |conn| {
             match &msg.title {
                 PaymentTitle::DebitNote(DebitNotePayment { activity_id, .. }) => {
                     activity::increase_amount_scheduled(
@@ -55,7 +55,7 @@ impl<'c> OrderDao<'c> {
     }
 
     pub async fn get_many(&self, ids: Vec<String>, driver: String) -> DbResult<Vec<ReadObj>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "order_dao_get_many", move |conn| {
             let orders = dsl::pay_order
                 .left_join(
                     invoice_dsl::pay_invoice.on(dsl::invoice_id
