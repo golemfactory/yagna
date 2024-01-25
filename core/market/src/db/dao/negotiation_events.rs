@@ -141,28 +141,32 @@ impl<'c> NegotiationEventsDao<'c> {
 
     pub async fn remove_events(&self, subscription_id: &SubscriptionId) -> DbResult<()> {
         let subscription_id = subscription_id.clone();
-        do_with_transaction(self.pool, "negotiation_events_dao_remove_events", move |conn| {
-            diesel::delete(
-                dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id)),
-            )
-            .execute(conn)?;
-            Ok(())
-        })
+        do_with_transaction(
+            self.pool,
+            "negotiation_events_dao_remove_events",
+            move |conn| {
+                diesel::delete(
+                    dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id)),
+                )
+                .execute(conn)?;
+                Ok(())
+            },
+        )
         .await
     }
 
     pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::debug!("Clean market events: start");
         let interval_days = db_config.event_store_days;
-        let num_deleted = do_with_transaction(self.pool, "negotiation_events_dao_clean", move |conn| {
-            let nd = diesel::delete(
-                dsl::market_negotiation_event
-                    .filter(dsl::timestamp.lt(datetime("NOW", format!("-{} days", interval_days)))),
-            )
-            .execute(conn)?;
-            Result::<usize, DbError>::Ok(nd)
-        })
-        .await?;
+        let num_deleted =
+            do_with_transaction(self.pool, "negotiation_events_dao_clean", move |conn| {
+                let nd = diesel::delete(dsl::market_negotiation_event.filter(
+                    dsl::timestamp.lt(datetime("NOW", format!("-{} days", interval_days))),
+                ))
+                .execute(conn)?;
+                Result::<usize, DbError>::Ok(nd)
+            })
+            .await?;
         if num_deleted > 0 {
             log::info!("Clean market events: {} cleaned", num_deleted);
         }

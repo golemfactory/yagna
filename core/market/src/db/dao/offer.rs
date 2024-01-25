@@ -127,22 +127,18 @@ impl<'c> OfferDao<'c> {
         node_ids: Option<Vec<NodeId>>,
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<SubscriptionId>> {
-        readonly_transaction(
-            self.pool,
-            "offer_dao_get_unsubscribed_ids",
-            move |conn| {
-                let mut query = market_offer_unsubscribed
-                    .select(unsubscribed::id)
-                    .filter(unsubscribed::expiration_ts.ge(expiry_validation_ts))
-                    .into_boxed();
+        readonly_transaction(self.pool, "offer_dao_get_unsubscribed_ids", move |conn| {
+            let mut query = market_offer_unsubscribed
+                .select(unsubscribed::id)
+                .filter(unsubscribed::expiration_ts.ge(expiry_validation_ts))
+                .into_boxed();
 
-                if let Some(ids) = node_ids {
-                    query = query.filter(unsubscribed::node_id.eq_any(ids));
-                };
+            if let Some(ids) = node_ids {
+                query = query.filter(unsubscribed::node_id.eq_any(ids));
+            };
 
-                Ok(query.load(conn)?)
-            },
-        )
+            Ok(query.load(conn)?)
+        })
         .await
     }
 
@@ -260,18 +256,15 @@ impl<'c> OfferDao<'c> {
 
     pub async fn clean_unsubscribes(&self) -> DbResult<()> {
         log::debug!("Clean market offers unsubscribes: start");
-        let num_deleted = do_with_transaction(
-            self.pool,
-            "offer_dao_clean_unsubscribes",
-            move |conn| {
+        let num_deleted =
+            do_with_transaction(self.pool, "offer_dao_clean_unsubscribes", move |conn| {
                 let nd = diesel::delete(
                     market_offer_unsubscribed.filter(unsubscribed::expiration_ts.lt(sql_now)),
                 )
                 .execute(conn)?;
                 Result::<usize, DbError>::Ok(nd)
-            },
-        )
-        .await?;
+            })
+            .await?;
         if num_deleted > 0 {
             log::info!("Clean market offers unsubscribes: {} cleaned", num_deleted);
         }

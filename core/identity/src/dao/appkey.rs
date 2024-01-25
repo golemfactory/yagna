@@ -36,7 +36,7 @@ impl<'c> AppKeyDao<'c> {
         F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
     >(
         &self,
-        label: &str,
+        label: &'static str,
         f: F,
     ) -> Result<R> {
         do_with_transaction(self.pool, label, f).await
