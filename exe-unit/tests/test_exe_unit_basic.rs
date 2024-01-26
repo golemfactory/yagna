@@ -1,7 +1,6 @@
 use test_context::test_context;
 
 use ya_client_model::activity::ExeScriptCommand;
-use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::send_script;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_image;
@@ -33,7 +32,6 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
     );
 
     let exe = create_exe_unit(config.clone(), ctx).await.unwrap();
-    let mut finish = exe.finish_notifier().await?;
 
     log::info!("Sending [deploy, start] batch for execution.");
 
@@ -62,10 +60,7 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
     exe.exec(None, vec![ExeScriptCommand::Terminate {}])
         .await
         .unwrap();
-    exe.addr.send(Shutdown(ShutdownReason::Finished)).await.ok();
 
-    log::info!("Waiting for shutdown..");
-
-    finish.recv().await.unwrap();
+    exe.shutdown().await.unwrap();
     Ok(())
 }

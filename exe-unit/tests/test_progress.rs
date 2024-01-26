@@ -6,7 +6,6 @@ use test_context::test_context;
 use ya_client_model::activity::exe_script_command::ProgressArgs;
 use ya_client_model::activity::RuntimeEventKind;
 use ya_core_model::activity;
-use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_image;
 use ya_framework_basic::log::enable_logs;
@@ -51,7 +50,6 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
     );
 
     let exe = create_exe_unit(config.clone(), ctx).await.unwrap();
-    let mut finish = exe.finish_notifier().await?;
     exe.await_init().await.unwrap();
 
     log::info!("Sending [deploy, start] batch for execution.");
@@ -76,6 +74,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let mut stream = bus::service(activity::exeunit::bus_id(&msg.activity_id)).call_streaming(msg);
 
     let mut last_progress = 0u64;
+    let mut num_progresses = 0u64;
     while let Some(Ok(Ok(item))) = stream.next().await {
         if item.index == 0 {
             match item.kind {
@@ -92,17 +91,14 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
                     assert!(progress.progress.0 >= last_progress);
 
                     last_progress = progress.progress.0;
+                    num_progresses += 1;
                 }
                 _ => (),
             }
         }
     }
+    assert!(num_progresses > 1);
 
     exe.wait_for_batch(&batch_id).await.unwrap();
-
-    log::info!("Waiting for shutdown..");
-
-    exe.addr.send(Shutdown(ShutdownReason::Finished)).await.ok();
-    finish.recv().await.unwrap();
     Ok(())
 }

@@ -55,19 +55,27 @@ impl ExeUnitHandle {
     pub async fn finish_notifier(&self) -> anyhow::Result<broadcast::Receiver<()>> {
         Ok(self.addr.send(FinishNotifier {}).await??)
     }
-}
 
-#[async_trait::async_trait]
-impl AsyncDroppable for ExeUnitHandle {
-    async fn async_drop(&self) {
+    pub async fn shutdown(&self) -> anyhow::Result<()> {
         let finish = self.finish_notifier().await;
+
+        log::info!("Waiting for shutdown..");
+
         self.addr
             .send(Shutdown(ShutdownReason::Finished))
             .await
             .ok();
         if let Ok(mut finish) = finish {
-            finish.recv().await.ok();
+            finish.recv().await?;
         }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncDroppable for ExeUnitHandle {
+    async fn async_drop(&self) {
+        self.shutdown().await.ok();
     }
 }
 
