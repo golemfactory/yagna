@@ -1,9 +1,7 @@
-use anyhow::Context;
 use duration_string::DurationString;
 use futures::StreamExt;
 use std::str::FromStr;
 use test_context::test_context;
-use url::Url;
 
 use ya_client_model::activity::exe_script_command::ProgressArgs;
 use ya_client_model::activity::RuntimeEventKind;
@@ -41,12 +39,6 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
     start_http(ctx, image_repo.clone())
         .await
         .expect("unable to start http servers");
-
-    let gsb_url = Url::from_str(&format!("unix://{}/mock-yagna.sock", temp_dir.display())).unwrap();
-    std::env::set_var("GSB_URL", gsb_url.to_string());
-    ya_sb_router::bind_gsb_router(Some(gsb_url))
-        .await
-        .context("binding service bus router")?;
 
     let config = exe_unit_config(
         temp_dir,

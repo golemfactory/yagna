@@ -35,9 +35,11 @@ ya-framework-basic = { version = "0.1" }
 ya-client-model = "0.6"
 ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
 ya-service-bus = "0.6"
+ya-sb-router = "0.6"
 
 async-trait = "0.1.77"
 actix = { version = "0.13", default-features = false }
 hex = "0.4.3"
+portpicker = "0.1.1"
 rand = "0.8.5"
 uuid = { version = "0.8.2", features = ["v4"] }

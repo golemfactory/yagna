@@ -1,9 +1,12 @@
 use actix::Addr;
 use anyhow::{anyhow, bail};
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use url::Url;
 use uuid::Uuid;
 
 use ya_client_model::activity::exe_script_command::ProgressArgs;
@@ -87,9 +90,7 @@ pub fn exe_unit_config(
         },
         sec_key: None,
         requestor_pub_key: None,
-        //service_id: None,
         service_id: Some(Uuid::new_v4().to_simple().to_string()),
-        //report_url: Some("/local/activity".to_string()),
         report_url: None,
     }
 }
@@ -98,6 +99,33 @@ pub async fn create_exe_unit(
     config: ExeUnitConfig,
     ctx: &mut DroppableTestContext,
 ) -> anyhow::Result<ExeUnitHandle> {
+    if config.service_id.is_some() {
+        let gsb_url = match std::env::consts::FAMILY {
+            "unix" => Url::from_str(&format!(
+                "unix://{}/gsb.sock",
+                config.args.work_dir.display()
+            ))?,
+            _ => Url::from_str(&format!(
+                "tcp://127.0.0.1:{}",
+                portpicker::pick_unused_port().ok_or(anyhow!("No ports free"))?
+            ))?,
+        };
+
+        if gsb_url.scheme() == "unix" {
+            let dir = PathBuf::from_str(gsb_url.path())?
+                .parent()
+                .map(|path| path.to_path_buf())
+                .ok_or(anyhow!("`gsb_url` unix socket has no parent directory."))?;
+            fs::create_dir_all(dir)?;
+        }
+
+        // GSB takes url from this variable and we can't set it directly.
+        std::env::set_var("GSB_URL", gsb_url.to_string());
+        ya_sb_router::bind_gsb_router(Some(gsb_url.clone()))
+            .await
+            .map_err(|e| anyhow!("Error binding service bus router to '{}': {e}", &gsb_url))?;
+    }
+
     let exe = exe_unit(config.clone()).await.unwrap();
     let handle = ExeUnitHandle::new(exe, config)?;
     ctx.register(handle.clone());
