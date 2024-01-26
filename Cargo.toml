@@ -228,7 +228,7 @@ members = [
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 #erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "0f5b2d2abbcad42ba81aa570c789938e748b3ffc" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
-erc20_payment_lib = { version = "=0.3.21" }
+erc20_payment_lib = { version = "=0.3.22" }
 rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
