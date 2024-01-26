@@ -15,8 +15,6 @@ pub mod lock;
 use shared_child::unix::SharedChildExt;
 
 #[cfg(windows)]
-use std::process::ExitStatus;
-#[cfg(windows)]
 use winapi::um::{
     errhandlingapi,
     wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT},
@@ -124,9 +122,9 @@ impl ProcessHandle {
 
     #[cfg(windows)]
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
-        use anyhow::bail;
-
+        unsafe { ctrl_break_process(self.process.clone()) }?;
         let process = self.process.clone();
+
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let _process_pid = process.id();
 
@@ -135,15 +133,7 @@ impl ProcessHandle {
             abort_handle.abort();
         });
 
-        if let Ok(Err(err)) = Abortable::new(
-            async { unsafe { ctrl_break_process(process) } },
-            abort_registration,
-        )
-        .await
-        {
-            bail!(err.context("Failed to CTRL-BREAK process"));
-        }
-
+        let _ = Abortable::new(async { process.wait() }, abort_registration).await;
         self.check_if_running()
     }
 
@@ -192,7 +182,7 @@ impl ProcessHandle {
 }
 
 #[cfg(windows)]
-unsafe fn ctrl_break_process(process: Arc<SharedChild>) -> Result<ExitStatus> {
+unsafe fn ctrl_break_process(process: Arc<SharedChild>) -> Result<()> {
     let process_pid = process.id();
     let event_result = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, process_pid);
 
@@ -202,5 +192,5 @@ unsafe fn ctrl_break_process(process: Arc<SharedChild>) -> Result<ExitStatus> {
             errhandlingapi::GetLastError()
         ));
     };
-    Ok(process.wait()?)
+    Ok(())
 }
