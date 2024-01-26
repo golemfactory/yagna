@@ -21,7 +21,7 @@ impl<'c> SyncNotifsDao<'c> {
     /// Creates a new sync notif tracking entry for given node-id
     pub async fn upsert(&self, peer_id: NodeId) -> DbResult<()> {
         let sync_notif = WriteObj::new(peer_id);
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "sync_notifs_dao_upsert", move |conn| {
             diesel::delete(dsl::pay_sync_needed_notifs.find(peer_id))
                 .execute(conn)
                 .ok();
@@ -36,7 +36,7 @@ impl<'c> SyncNotifsDao<'c> {
 
     /// Bump retry by 1 and update timestamp
     pub async fn increment_retry(&self, peer_id: NodeId, ts: NaiveDateTime) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "sync_notifs_dao_increment_retry", move |conn| {
             let mut read: ReadObj = dsl::pay_sync_needed_notifs.find(peer_id).first(conn)?;
             read.retries += 1;
             read.last_ping = ts;
@@ -52,7 +52,7 @@ impl<'c> SyncNotifsDao<'c> {
 
     /// Remove entry
     pub async fn drop(&self, peer_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "sync_notifs_dao_drop", move |conn| {
             diesel::delete(dsl::pay_sync_needed_notifs.find(peer_id)).execute(conn)?;
             Ok(())
         })
@@ -61,7 +61,7 @@ impl<'c> SyncNotifsDao<'c> {
 
     /// List all planned syncs
     pub async fn list(&self) -> DbResult<Vec<ReadObj>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "sync_notifs_dao_list", move |conn| {
             let sync_notif = dsl::pay_sync_needed_notifs.load(conn)?;
 
             Ok(sync_notif)

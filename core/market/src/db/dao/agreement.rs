@@ -69,7 +69,7 @@ impl<'c> AgreementDao<'c> {
         after: Option<DateTime<Utc>>,
         app_session_id: Option<String>,
     ) -> Result<Vec<Agreement>, AgreementDaoError> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_list", move |conn| {
             let mut query = market_agreement.into_boxed();
 
             if let Some(node_id) = node_id {
@@ -110,7 +110,7 @@ impl<'c> AgreementDao<'c> {
         validation_ts: NaiveDateTime,
     ) -> Result<Option<Agreement>, AgreementDaoError> {
         let id = id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_select", move |conn| {
             let mut query = market_agreement.filter(agreement::id.eq(&id)).into_boxed();
 
             if let Some(node_id) = node_id {
@@ -149,7 +149,7 @@ impl<'c> AgreementDao<'c> {
         // with this query.
         let id = AgreementId::from_client(client_agreement_id, Owner::Requestor)?;
         let id_swapped = id.clone().swap_owner();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_select_by_node", move |conn| {
             let query = market_agreement
                 .filter(agreement::id.eq_any(vec![id, id_swapped]))
                 .filter(
@@ -178,7 +178,7 @@ impl<'c> AgreementDao<'c> {
         // Agreement is always created for last Provider Proposal.
         // TODO: Accessing two databases can cause race conditions in some edge cases.
         let proposal_id = agreement.offer_proposal_id.clone();
-        readonly_transaction(self.ram_pool, move |conn| {
+        readonly_transaction(self.ram_pool, "agreement_dao_save_part1", move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::ProposalCountered(proposal_id));
             }
@@ -187,7 +187,7 @@ impl<'c> AgreementDao<'c> {
         .await?;
 
         let proposal_id = agreement.offer_proposal_id.clone();
-        let agreement = do_with_transaction(self.pool, move |conn| {
+        let agreement = do_with_transaction(self.pool, "agreement_dao_save_part2", move |conn| {
             if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::Exists(
                     agreement.id,
@@ -202,7 +202,7 @@ impl<'c> AgreementDao<'c> {
         })
         .await?;
 
-        do_with_transaction(self.ram_pool, move |conn| {
+        do_with_transaction(self.ram_pool, "agreement_dao_save_part3", move |conn| {
             update_proposal_state(conn, &agreement.offer_proposal_id, ProposalState::Accepted)?;
             Ok(agreement)
         })
@@ -219,7 +219,7 @@ impl<'c> AgreementDao<'c> {
         let session = session.clone();
         let signature = signature.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_confirm", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -248,7 +248,7 @@ impl<'c> AgreementDao<'c> {
         let signature = signature.to_owned();
         let timestamp = *timestamp;
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_approving", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -276,7 +276,7 @@ impl<'c> AgreementDao<'c> {
         let id = id.clone();
         let signature = signature.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_approve", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -308,7 +308,7 @@ impl<'c> AgreementDao<'c> {
         let id = id.clone();
         let timestamp = *timestamp;
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_reject", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -329,7 +329,7 @@ impl<'c> AgreementDao<'c> {
         let id = id.clone();
         let timestamp = *timestamp;
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_cancel", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -351,7 +351,7 @@ impl<'c> AgreementDao<'c> {
         let id = id.clone();
         let timestamp = *timestamp;
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_terminate", move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -366,7 +366,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn revert_approving(&self, id: &AgreementId) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_revert_approving", move |conn| {
             let agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
@@ -389,20 +389,21 @@ impl<'c> AgreementDao<'c> {
     pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::trace!("Clean market agreements: start");
         let interval_days = db_config.agreement_store_days;
-        let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {
-            let agreements_to_clean = market_agreement.filter(
-                agreement::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))),
-            );
+        let (num_agreements, num_events) =
+            do_with_transaction(self.pool, "agreement_dao_clean", move |conn| {
+                let agreements_to_clean = market_agreement.filter(
+                    agreement::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))),
+                );
 
-            let related_events = market_agreement_event.filter(
-                event::agreement_id.eq_any(agreements_to_clean.clone().select(agreement::id)),
-            );
+                let related_events = market_agreement_event.filter(
+                    event::agreement_id.eq_any(agreements_to_clean.clone().select(agreement::id)),
+                );
 
-            let num_events = diesel::delete(related_events).execute(conn)?;
-            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
-            Result::<(usize, usize), DbError>::Ok((num_agreements, num_events))
-        })
-        .await?;
+                let num_events = diesel::delete(related_events).execute(conn)?;
+                let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
+                Result::<(usize, usize), DbError>::Ok((num_agreements, num_events))
+            })
+            .await?;
 
         if num_agreements > 0 {
             log::info!("Cleaned {} market agreements", num_agreements);

@@ -78,7 +78,7 @@ where
     }
 
     for db_file in db_files {
-        eprintln!("vacuuming {}", db_file.display());
+        log::debug!("vacuuming {}", db_file.display());
         let db = DbExecutor::new(db_file.display().to_string())?;
         db.execute("VACUUM;").await?;
     }
