@@ -1969,8 +1969,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.3.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cffd28cb0aa9a84d8d1e166c7bd94d2ae0329551d3c8ce49257e3ab6c2ab0f69"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0f5b2d2abbcad42ba81aa570c789938e748b3ffc#0f5b2d2abbcad42ba81aa570c789938e748b3ffc"
 dependencies = [
  "actix",
  "actix-files",
@@ -2013,8 +2012,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.3.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a689b5ac63d3610929ae404be00d0edefc6475f626e9c4bcf73a31bc351a7c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0f5b2d2abbcad42ba81aa570c789938e748b3ffc#0f5b2d2abbcad42ba81aa570c789938e748b3ffc"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2056,8 +2054,7 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.3.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e445de27babb56571050557e1eb63aef5d9686ea52e9f07c6d168f00c7dfefb"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0f5b2d2abbcad42ba81aa570c789938e748b3ffc#0f5b2d2abbcad42ba81aa570c789938e748b3ffc"
 dependencies = [
  "actix-files",
  "actix-web",
