@@ -205,12 +205,10 @@ pub async fn send_script(
         exe_script,
         timeout: None,
     };
-    if let Err(e) = exe_unit
+
+    exe_unit
         .send(RpcEnvelope::with_caller(String::new(), msg))
-        .await
-    {
-        log::error!("Unable to execute exe script: {:?}", e);
-    }
+        .await??;
     Ok(batch_id)
 }
 

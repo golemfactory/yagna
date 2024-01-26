@@ -22,6 +22,7 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
+        log::debug!("Received Exec message: {:?}", msg.as_ref());
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         let batch_id = msg.batch_id.clone();

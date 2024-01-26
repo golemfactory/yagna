@@ -40,3 +40,4 @@ async-trait = "0.1.77"
 actix = { version = "0.13", default-features = false }
 hex = "0.4.3"
 rand = "0.8.5"
+uuid = { version = "0.8.2", features = ["v4"] }

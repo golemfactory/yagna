@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tempdir::TempDir;
 use test_binary::TestBinary;
@@ -100,4 +100,25 @@ pub fn resource_(base_dir: &str, name: &str) -> PathBuf {
         .join("tests")
         .join("resources")
         .join(name)
+}
+
+/// Generates resource from template by replacing occurrences of `${name}` pattern
+/// using variables from `vars` dictionary.
+/// Returns path to generated file, which is the same as `target` param, but makes it easier
+/// to use this function in code.
+pub fn template(
+    template: &Path,
+    target: impl AsRef<Path>,
+    vars: &[(&str, String)],
+) -> anyhow::Result<PathBuf> {
+    let mut template = fs::read_to_string(&template)
+        .map_err(|e| anyhow!("Loading template {} failed: {e}", template.display()))?;
+    for var in vars {
+        template = template.replace(&format!("${{{}}}", var.0), &var.1);
+    }
+
+    let target = target.as_ref();
+    fs::write(target, template)
+        .map_err(|e| anyhow!("Saving template {} failed: {e}", target.display()))?;
+    Ok(target.to_path_buf())
 }
