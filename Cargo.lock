@@ -1968,9 +1968,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.21"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72084b2df667f8e8579fddcc7899eef5f980dbdb4df35ad5fb2b1a9ab638c799"
+checksum = "90f681257740e763be1cbeaa370e919f554c46f26337a4febe5a30a8b1d36949"
 dependencies = [
  "actix",
  "actix-files",
