@@ -150,7 +150,7 @@ impl GsbHttpCall {
 mod tests {
     use super::*;
     use crate::GsbHttpCall;
-    use mockito;
+
     use tokio::pin;
 
     #[actix_web::test]

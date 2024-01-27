@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
 
         let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCall {
             method: "GET".to_string(),
-            path: args.url.to_str().unwrap_or_else(|| "/").to_string(),
+            path: args.url.to_str().unwrap_or("/").to_string(),
             body: None,
         });
 
