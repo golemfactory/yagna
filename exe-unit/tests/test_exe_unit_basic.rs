@@ -1,7 +1,6 @@
 use test_context::test_context;
 
 use ya_client_model::activity::ExeScriptCommand;
-use ya_exe_unit::send_script;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_image;
 use ya_framework_basic::log::enable_logs;
@@ -32,28 +31,16 @@ async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow
     );
 
     let exe = create_exe_unit(config.clone(), ctx).await.unwrap();
+    exe.await_init().await.unwrap();
 
     log::info!("Sending [deploy, start] batch for execution.");
 
-    let batch_id = send_script(
-        exe.addr.clone(),
-        config.service_id.clone(),
-        vec![
-            ExeScriptCommand::Deploy {
-                net: vec![],
-                progress: None,
-                env: Default::default(),
-                hosts: Default::default(),
-                hostname: None,
-                volumes: vec![],
-            },
-            ExeScriptCommand::Start { args: vec![] },
-        ],
-    )
-    .await
-    .unwrap();
-
-    exe.wait_for_batch(&batch_id).await.unwrap();
+    exe.wait_for_batch(&exe.deploy(None).await.unwrap())
+        .await
+        .unwrap();
+    exe.wait_for_batch(&exe.start(vec![]).await.unwrap())
+        .await
+        .unwrap();
 
     log::info!("Sending shutdown request.");
 
