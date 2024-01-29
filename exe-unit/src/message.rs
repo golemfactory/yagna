@@ -125,6 +125,7 @@ impl ExecuteCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum RuntimeEvent {
     Process(activity::RuntimeEvent),
