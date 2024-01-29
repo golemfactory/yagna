@@ -21,3 +21,5 @@ futures = { version = "0.3", features = [] }
 actix-web = "4"
 actix-http = "3"
 mockito = "1.2.0"
+futures-core = "0.3.30"
+serde_derive = "1.0.195"

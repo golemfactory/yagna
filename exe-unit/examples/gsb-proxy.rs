@@ -3,7 +3,8 @@ use async_stream::stream;
 use bytes::{BufMut, BytesMut};
 use chrono::Utc;
 use futures::prelude::*;
-use gsb_http_proxy::{GsbHttpCallEvent, HttpToGsbProxy};
+use gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
+use gsb_http_proxy::GsbHttpCallResponseEvent;
 use reqwest::Client;
 use std::env;
 use std::path::PathBuf;
@@ -75,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
                 Box::pin(stream! {
                     for i in 0..10 {
                         let msg = format!("called {} {} #{} time", http_call.method, http_call.path, i);
-                        let response = GsbHttpCallEvent {
+                        let response = GsbHttpCallResponseEvent {
                             index: i,
                             timestamp: Utc::now().naive_local().to_string(),
                             msg,

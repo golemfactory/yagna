@@ -8,7 +8,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::common::*;
-use gsb_http_proxy::HttpToGsbProxy;
+use gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
 use ya_core_model::activity;
 use ya_core_model::net::RemoteEndpoint;
 
@@ -59,12 +59,13 @@ async fn proxy_http_request(
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
 
-    let gsb_call = HttpToGsbProxy {
+    let http_to_gsb = HttpToGsbProxy {
         method: method.to_string(),
         path,
         body,
+        headers: request.headers().clone(),
     };
-    let stream = gsb_call.pass(move |msg| {
+    let stream = http_to_gsb.pass(move |msg| {
         let from = id.identity;
         let to = *agreement.provider_id();
         let bus_id = &activity::exeunit::bus_id(&activity_id);
