@@ -308,7 +308,9 @@ pub struct ExeUnitConfig {
     pub requestor_pub_key: Option<String>,
 }
 
-pub async fn exe_unit(config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<RuntimeProcess>>> {
+// Mut is necessary in case of sgx compilation :(((((
+#[allow(unused_mut)]
+pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<RuntimeProcess>>> {
     let args = config.args;
     if !args.agreement.exists() {
         bail!(
