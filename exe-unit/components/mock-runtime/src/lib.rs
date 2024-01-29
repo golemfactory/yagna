@@ -60,12 +60,12 @@ impl<H: RuntimeHandler> RuntimeService for RuntimeMock<H> {
 // client
 
 // holds last received status
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct EventMock(Arc<Mutex<ProcessStatus>>);
 
 impl EventMock {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(Default::default())))
+        Self::default()
     }
 
     pub fn get_last_status(&self) -> ProcessStatus {

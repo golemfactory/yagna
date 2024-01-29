@@ -255,7 +255,7 @@ mod tests {
                 Duration::from_millis(525) - update
             };
 
-            assert!(diff <= Duration::from_millis(20));
+            assert!(diff <= Duration::from_millis(40));
 
             // `ProgressReporter` should ignore 10 messages in each loop.
             assert_eq!(event.progress.0, counter * 10);

@@ -73,4 +73,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --test '*' --features framework-test
+          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer --features framework-test
