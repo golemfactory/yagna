@@ -20,9 +20,9 @@ bench = false
 schema = ["schemars"]
 
 [dependencies]
-ya-agreement-utils = "0.4.1"
+ya-agreement-utils = { workspace = true }
 ya-utils-path = "0.1"
-ya-client-model = "0.5"
+ya-client-model = "0.6"
 golem-certificate = "0.1.1"
 
 regex = "1.5"

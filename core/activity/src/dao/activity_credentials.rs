@@ -20,7 +20,7 @@ impl<'c> ActivityCredentialsDao<'c> {
         use schema::activity_credentials::dsl as dsl_cred;
         let activity_id = activity_id.to_owned();
 
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "activity_credentials_get", move |conn| {
             Ok(dsl_cred::activity_credentials
                 .find(&activity_id)
                 .first::<ActivityCredentials>(conn)
@@ -38,7 +38,7 @@ impl<'c> ActivityCredentialsDao<'c> {
             credentials: serde_json::to_string(&credentials)?,
         };
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_credentials_set", move |conn| {
             if let Err(e) = diesel::insert_into(dsl_cred::activity_credentials)
                 .values(&cred)
                 .execute(conn)

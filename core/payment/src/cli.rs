@@ -1,9 +1,12 @@
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use serde_json::to_value;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
+use ya_client_model::payment::DriverStatusProperty;
+use ya_core_model::payment::local::NetworkName;
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -42,6 +45,14 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(long, help = "Display account balance for the given time period")]
         last: Option<humantime::Duration>,
+        #[structopt(long, help = "Show exact balances instead of rounding")]
+        precise: bool,
+    },
+
+    /// Display status of the payment driver
+    DriverStatus {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -119,6 +130,16 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Fund { account } => {
+                if !account.network.is_fundable() {
+                    log::error!(
+                        "Network {} does not support automatic funding. Consider using one of the following: {:?}",
+                        account.network,
+                        NetworkName::all_fundable(),
+                    );
+
+                    return CommandOutput::object("Failed");
+                }
+
                 let address = resolve_address(account.address()).await?;
 
                 init_account(Account {
@@ -130,6 +151,15 @@ impl PaymentCli {
                     receive: false,
                 })
                 .await?;
+                let warn_message = r#"Sending fund request to yagna service, observe yagna log for details.
+Typically operation should take less than 1 minute.
+  It may get stuck due to
+    1. problems with web3 RPC connection
+    2. unusual high gas price
+    3. problems with faucet
+  If stuck for too long you can stop safely with Ctrl-C and try again later
+"#;
+                log::warn!("{}", warn_message);
 
                 CommandOutput::object(
                     wallet::fund(address, account.driver(), Some(account.network()), None).await?,
@@ -151,7 +181,64 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account, last } => {
+            PaymentCli::DriverStatus { account } => {
+                let driver_status_props = bus::service(pay::BUS_ID)
+                    .call(pay::PaymentDriverStatus {
+                        driver: Some(account.driver()),
+                        network: Some(account.network()),
+                    })
+                    .await??;
+
+                if ctx.json_output {
+                    return CommandOutput::object(driver_status_props);
+                }
+
+                let ok_msg = if driver_status_props.is_empty() {
+                    "\nDriver Status: Ok"
+                } else {
+                    ""
+                };
+
+                Ok(ResponseTable {
+                    columns: vec!["issues".to_owned()],
+                    values: driver_status_props
+                        .into_iter()
+                        .map(|prop| match prop {
+                            DriverStatusProperty::CantSign { address, .. } => {
+                                format!("Can't sign {address}")
+                            }
+                            DriverStatusProperty::InsufficientGas { needed_gas_est, .. } => {
+                                format!("Insufficient gas (need est. {needed_gas_est})")
+                            }
+                            DriverStatusProperty::InsufficientToken {
+                                needed_token_est, ..
+                            } => {
+                                format!("Insufficient token (need est. {needed_token_est})")
+                            }
+                            DriverStatusProperty::InvalidChainId { chain_id, .. } => {
+                                format!("Invalid Chain-Id ({chain_id})")
+                            }
+                            DriverStatusProperty::RpcError { network, .. } => {
+                                format!("Unreliable {network} RPC endpoints")
+                            }
+                            DriverStatusProperty::TxStuck { network, .. } => {
+                                format!("Tx stuck on {network}")
+                            }
+                        })
+                        .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
+                        .collect::<Vec<_>>(),
+                }
+                .with_header(format!(
+                    "Status of the {} payment driver{}",
+                    account.driver(),
+                    ok_msg
+                )))
+            }
+            PaymentCli::Status {
+                account,
+                last,
+                precise,
+            } => {
                 let address = resolve_address(account.address()).await?;
                 let timestamp = last
                     .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
@@ -170,10 +257,75 @@ impl PaymentCli {
                     return CommandOutput::object(status);
                 }
 
-                let gas_info = match status.gas {
-                    Some(details) => format!("{} {}", details.balance, details.currency_short_name),
+                let gas_info = match status.gas.as_ref() {
+                    Some(details) => {
+                        if precise {
+                            format!("{} {}", details.balance, details.currency_short_name)
+                        } else {
+                            format!("{:.4} {}", details.balance, details.currency_short_name)
+                        }
+                    }
                     None => "N/A".to_string(),
                 };
+
+                let token_info = if precise {
+                    format!("{} {}", status.amount, status.token)
+                } else {
+                    format!("{:.4} {}", status.amount, status.token)
+                };
+
+                let driver_status_props = bus::service(pay::BUS_ID)
+                    .call(pay::PaymentDriverStatus {
+                        driver: Some(account.driver()),
+                        network: Some(account.network()),
+                    })
+                    .await??;
+
+                let mut header = format!("\nStatus for account: {}\n", address);
+                if driver_status_props.is_empty() {
+                    header.push_str("Payment Driver status: OK\n");
+                } else {
+                    header.push_str("\nPayment Driver status:\n");
+                    for prop in driver_status_props {
+                        use DriverStatusProperty::*;
+
+                        let network = match &prop {
+                            CantSign { network, .. }
+                            | InsufficientGas { network, .. }
+                            | InsufficientToken { network, .. }
+                            | RpcError { network, .. }
+                            | TxStuck { network, .. } => network.clone(),
+                            InvalidChainId { .. } => "unknown network".to_string(),
+                        };
+
+                        header.push_str(&format!("Network:{network} - "));
+
+                        match prop {
+                            CantSign { address, .. } => {
+                                header.push_str(&format!("Outstanding payments for address {address} cannot be signed. Is the relevant identity locked?\n"));
+                            }
+                            InsufficientGas { needed_gas_est, .. } => {
+                                header.push_str(&format!("Not enough gas to send any more transactions. To send out all scheduled transactions additionally {}{} is needed.\n", needed_gas_est,
+                                                         status.clone().gas.map(|g|g.currency_short_name.clone()).unwrap_or("ETH".to_string())
+                                ));
+                            }
+                            InsufficientToken {
+                                needed_token_est, ..
+                            } => {
+                                header.push_str(&format!("Not enough token to send any more transactions. To send out all scheduled transactions approximately {}{} is needed.\n", needed_token_est, status.token));
+                            }
+                            InvalidChainId { chain_id, .. } => {
+                                header.push_str(&format!("Scheduled transactions on chain with id = {chain_id}, but no such chain is configured.\n"));
+                            }
+                            RpcError { network, .. } => {
+                                header.push_str(&format!("RPC endpoints configured for {network} are unreliable. Consider changing them.\n"));
+                            }
+                            TxStuck { .. } => {
+                                header.push_str("Sent transactions are stuck. Consider increasing max fee per gas.\n");
+                            }
+                        }
+                    }
+                }
 
                 Ok(ResponseTable {
                     columns: vec![
@@ -188,7 +340,7 @@ impl PaymentCli {
                     values: vec![
                         serde_json::json! {[
                             format!("driver: {}", status.driver),
-                            format!("{} {}", status.amount, status.token),
+                            token_info,
                             format!("{} {}", status.reserved, status.token),
                             "accepted",
                             format!("{} {}", status.incoming.accepted.total_amount, status.token),
@@ -215,7 +367,7 @@ impl PaymentCli {
                         ]},
                     ],
                 }
-                .with_header(format!("\nStatus for account: {}\n", address)))
+                .with_header(header))
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
@@ -352,7 +504,6 @@ impl PaymentCli {
                         "network".to_owned(),
                         "default?".to_owned(),
                         "token".to_owned(),
-                        "default?".to_owned(),
                         "platform".to_owned(),
                     ],
                     values: drivers
@@ -369,7 +520,6 @@ impl PaymentCli {
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
-                                                if &n.default_token == token { "X" } else { "" },
                                                 platform,
                                             ]}
                                         )

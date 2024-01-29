@@ -1,18 +1,26 @@
 name: SGX Unit Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
   push:
     branches:
       - master
+      - payments-dev
       - release/*
+      - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
-      - sgx/*
 
 env:
-  rust_stable: 1.68.2
+  rust_stable: 1.71.1
 
 jobs:
   build:

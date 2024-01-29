@@ -3,14 +3,11 @@
 */
 
 // External crates
-use crate::erc20::{
-    ethereum::{
-        get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
-        get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
-        POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
-        POLYGON_PREFERRED_GAS_PRICES_SLOW,
-    },
-    gasless_transfer,
+use crate::erc20::ethereum::{
+    get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
+    get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
+    POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
+    POLYGON_PREFERRED_GAS_PRICES_SLOW,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -21,7 +18,7 @@ use web3::types::{H160, H256, U256, U64};
 // Workspace uses
 use ya_payment_driver::{
     db::models::{Network, TransactionEntity, TxType},
-    model::{GenericError, Init, PaymentDetails},
+    model::{GenericError, PaymentDetails},
 };
 
 // Local uses
@@ -35,54 +32,8 @@ use crate::{
             convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
-    RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
-
-pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
-    let balance_com = ethereum::get_glm_balance(address, network).await?;
-
-    let balance = u256_to_big_dec(balance_com)?;
-    log::debug!(
-        "account_balance. address={}, network={}, balance={}",
-        address,
-        &network,
-        &balance
-    );
-
-    Ok(balance)
-}
-
-pub async fn account_gas_balance(
-    address: H160,
-    network: Network,
-) -> Result<BigDecimal, GenericError> {
-    let balance_com = ethereum::get_balance(address, network).await?;
-    let balance = u256_to_big_dec(balance_com)?;
-
-    log::debug!(
-        "account_gas_balance. address={}, network={}, balance={}",
-        address,
-        &network,
-        &balance
-    );
-
-    Ok(balance)
-}
-
-pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
-    log::debug!("init_wallet. msg={:?}", msg);
-    let address = msg.address();
-    let network = msg.network().unwrap_or_else(|| RINKEBY_NETWORK.to_string());
-    let network = Network::from_str(&network).map_err(GenericError::new)?;
-
-    // Validate address and that checking balance of GLM and ETH works.
-    let h160_addr = str_to_addr(&address)?;
-    let _glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
-    let _eth_balance = ethereum::get_balance(h160_addr, network).await?;
-
-    Ok(())
-}
 
 pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
@@ -218,25 +169,6 @@ pub async fn make_transfer(
         TxType::Transfer,
         Some(amount_big_dec),
     ))
-}
-
-pub async fn make_gasless_transfer(
-    details: &PaymentDetails,
-    network: Network,
-) -> Result<H256, GenericError> {
-    log::debug!(
-        "make_gasless_transfer(). network={}, details={:?}",
-        &network,
-        &details
-    );
-
-    if network != Network::Polygon {
-        return Err(GenericError::new(format!(
-            "Unsupported network type: {network} for gasless transaction"
-        )));
-    }
-
-    gasless_transfer::send_gasless_transfer(details, network).await
 }
 
 fn bump_gas_price(gas_in_gwei: U256) -> U256 {
@@ -398,23 +330,6 @@ pub async fn send_transactions(
     }
     Ok(())
 }
-
-// TODO: calculate fee. Below commented out reference to zkSync implementation
-// pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
-//     // let token = get_network_token(network, None);
-//     // let wallet = get_wallet(&address, network).await?;
-//     // let tx_fee = wallet
-//     //     .provider
-//     //     .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
-//     //     .await
-//     //     .map_err(GenericError::new)?
-//     //     .total_fee;
-//     // let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
-//     //
-//     // log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
-//     // Ok(tx_fee_bigdec)
-//     todo!();
-// }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_tx. hash={}", tx_hash);

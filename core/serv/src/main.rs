@@ -7,6 +7,7 @@ use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
+use std::sync::Arc;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -25,7 +26,7 @@ use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
-use ya_payment::{accounts as payment_accounts, PaymentService};
+use ya_payment::PaymentService;
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -68,12 +69,12 @@ const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://handbook.golem.network/see-also/terms
+/// privacy warning found at https://docs.golem.network/docs/golem/terms
 ///
 /// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
-    /// {n}https://handbook.golem.network/see-also/terms
+    /// {n}https://docs.golem.network/docs/golem/terms
     #[structopt(long)]
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
@@ -266,14 +267,9 @@ enum Services {
     GsbApi(GsbApiService),
 }
 
-#[cfg(not(any(
-    feature = "dummy-driver",
-    feature = "erc20-driver",
-    feature = "zksync-driver",
-)))]
+#[cfg(not(any(feature = "dummy-driver", feature = "erc20-driver",)))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
-#[allow(unused)]
 async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut drivers = vec![];
     #[cfg(feature = "dummy-driver")]
@@ -285,15 +281,7 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     #[cfg(feature = "erc20-driver")]
     {
         use ya_erc20_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "erc20-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
-    #[cfg(feature = "zksync-driver")]
-    {
-        use ya_zksync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
+        PaymentDriverService::gsb(data_dir.to_path_buf()).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
     Ok(drivers)
@@ -500,8 +488,9 @@ impl ServiceCommand {
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
                     "RUST_LOG",
-                    env::var("RUST_LOG")
-                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
+                    env::var("RUST_LOG").unwrap_or_else(|_| {
+                        "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
+                    }),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -551,15 +540,7 @@ impl ServiceCommand {
 
                 ya_compile_time_utils::report_version_to_metrics();
 
-                let drivers = start_payment_drivers(&ctx.data_dir).await?;
-                payment_accounts::save_default_account(&ctx.data_dir, drivers)
-                    .await
-                    .unwrap_or_else(|e| {
-                        log::error!("Saving default payment account failed: {}", e)
-                    });
-                payment_accounts::init_accounts(&ctx.data_dir)
-                    .await
-                    .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
+                start_payment_drivers(&ctx.data_dir).await?;
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
@@ -569,6 +550,12 @@ impl ServiceCommand {
                     ya_net::hybrid::send_bcast_new_neighbour().await
                 });
 
+                let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
+                    .ok()
+                    .and_then(|x| x.parse().ok())
+                    .unwrap_or_else(num_cpus::get)
+                    .clamp(1, 256);
+                let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
@@ -577,9 +564,18 @@ impl ServiceCommand {
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
-                    log::info!("Http server thread started on: {}", rest_address);
+                    if count_started.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                        == number_of_workers - 1
+                    {
+                        log::info!(
+                            "All {} http workers started - listening on {}",
+                            number_of_workers,
+                            rest_address
+                        );
+                    }
                     rest
                 })
+                .workers(number_of_workers)
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
@@ -646,7 +642,7 @@ fn prompt_terms() -> Result<()> {
     let header = r#"
 By running this software you declare that you have read, understood
 and hereby accept the disclaimer and privacy warning found at
-https://handbook.golem.network/see-also/terms
+https://docs.golem.network/docs/golem/terms
 
 "#;
 

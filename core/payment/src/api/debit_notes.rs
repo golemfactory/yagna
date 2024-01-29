@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
@@ -21,8 +22,10 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_for_activity;
 use crate::utils::*;
 
@@ -286,6 +289,7 @@ async fn cancel_debit_note(
 
 async fn accept_debit_note(
     db: Data<DbExecutor>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -302,12 +306,17 @@ async fn accept_debit_note(
     counter!("payment.debit_notes.requestor.accepted.call", 1);
 
     let dao: DebitNoteDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
+
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
     let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone());
 
     if debit_note.total_amount_due != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
@@ -336,6 +345,51 @@ async fn accept_debit_note(
     {
         Ok(Some(activity)) => activity,
         Ok(None) => return response::server_error(&format!("Activity {} not found", activity_id)),
+        Err(e) => return response::server_error(&e),
+    };
+    //check if invoice exists and accepted for this activity
+    match db
+        .as_dao::<InvoiceDao>()
+        .get_by_agreement(activity.agreement_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(invoice)) => match invoice.status {
+            DocumentStatus::Issued => {
+                log::error!(
+                    "Wrong status [{}] for invoice [{}] for Activity [{}] and agreement [{}]",
+                    invoice.status,
+                    invoice.invoice_id,
+                    activity_id,
+                    activity.agreement_id
+                );
+                return response::server_error(&"Wrong status for invoice");
+            }
+            DocumentStatus::Received => {
+                log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
+                        debit_note_id,
+                        invoice.invoice_id,
+                        activity_id,
+                        activity.agreement_id
+                    );
+            }
+            DocumentStatus::Accepted
+            | DocumentStatus::Rejected
+            | DocumentStatus::Failed
+            | DocumentStatus::Settled
+            | DocumentStatus::Cancelled => {
+                log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
+                        debit_note_id,
+                        invoice.invoice_id,
+                        invoice.status,
+                        activity_id,
+                        activity.agreement_id
+                    );
+                return response::ok(Null);
+            }
+        },
+        Ok(None) => {
+            //no problem, ignore
+        }
         Err(e) => return response::server_error(&e),
     };
     let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;
@@ -377,23 +431,38 @@ async fn accept_debit_note(
         let schedule_msg =
             SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
-            log::trace!(
-                "Sending AcceptDebitNote [{}] to [{}]",
-                debit_note_id,
-                issuer_id
-            );
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
-            log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
+
+            // Mark the debit note as accepted in DB
+            log::trace!("Accepting DebitNote [{}] in DB", debit_note_id);
             dao.accept(debit_note_id.clone(), node_id).await?;
-            log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
+            log::trace!("DebitNote accepted successfully for [{}]", debit_note_id);
+
+            log::debug!(
+                "Sending AcceptDebitNote [{}] to [{}]",
+                debit_note_id,
+                issuer_id
+            );
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("AcceptDebitNote delivered");
+                dao.mark_accept_sent(debit_note_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("AcceptDebitNote not delivered");
+                sync_dao.upsert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))

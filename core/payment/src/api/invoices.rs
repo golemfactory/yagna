@@ -3,6 +3,7 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Instant;
 
 // Workspace uses
@@ -22,8 +23,10 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_id;
 use crate::utils::*;
 
@@ -350,6 +353,7 @@ async fn cancel_invoice(
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -366,6 +370,7 @@ async fn accept_invoice(
     counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -373,6 +378,9 @@ async fn accept_invoice(
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = agreement_lock.lock(invoice.agreement_id.clone());
 
     if invoice.amount != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
@@ -455,20 +463,34 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
-            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
-            // Skip calling SchedulePayment for 0 amount invoices
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
+
+            // Mark the invoice as accepted in DB
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
+
+            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("AcceptInvoice delivered");
+                dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("AcceptInvoice not delivered");
+                sync_dao.upsert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))

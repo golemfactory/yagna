@@ -15,7 +15,14 @@ path = "src/bin.rs"
 [features]
 default = ['compat-deployment']
 compat-deployment = []
-sgx = ['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
+sgx = [
+    'graphene-sgx',
+    'openssl/vendored',
+    'reqwest/trust-dns',
+    'secp256k1/rand',
+    'ya-client-model/sgx',
+    'ya-core-model/sgx',
+]
 packet-trace-enable = ["ya-packet-trace/enable"]
 
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -29,17 +36,22 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = "0.4.1"
+ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
-ya-client-model = "0.5"
+ya-client-model = "0.6"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
-ya-runtime-api = { version = "0.7", path = "runtime-api", features = ["server"] }
+ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
+    "server",
+] }
 ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-std-utils = "0.1"
-ya-utils-networking = { version = "0.2", default-features = false, features = ["dns", "vpn"]}
+ya-utils-networking = { version = "0.2", default-features = false, features = [
+    "dns",
+    "vpn",
+] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = { version = "0.13", default-features = false }
@@ -49,7 +61,7 @@ async-trait = "0.1.24"
 bytes = "1"
 chrono = "0.4"
 derivative = "2.1"
-derive_more = "0.99"
+derive_more = { workspace = true }
 dotenv = "0.15.0"
 flexi_logger = { version = "0.22", features = ["colors"] }
 futures = "0.3"
@@ -59,10 +71,10 @@ ipnet = "2.3"
 lazy_static = "1.4.0"
 log = "0.4"
 openssl = { version = "0.10", optional = true }
-rand = "0.6"
+rand = "0.8.5"
 regex = "1.5"
 reqwest = { version = "0.11", optional = true }
-secp256k1 = { version = "0.19", optional = true }
+secp256k1 = { version = "0.27.0", optional = true }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8"
@@ -72,14 +84,24 @@ socket2 = "0.4"
 structopt = "0.3"
 thiserror = "1.0"
 # keep the "rt-multi-thread" feature
-tokio = { version = "1", features = ["process", "signal", "time", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = [
+    "process",
+    "signal",
+    "time",
+    "net",
+    "rt-multi-thread",
+] }
 tokio-util = { version = "0.7.2", features = ["codec", "net"] }
 tokio-stream = "0.1.6"
 url = "2.1"
 yansi = "0.5.0"
+trust-dns-resolver = { workspace = true }
 
 [dev-dependencies]
-ya-runtime-api = { version = "0.7", path = "runtime-api", features = ["codec", "server"] }
+ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
+    "codec",
+    "server",
+] }
 ya-sb-router = "0.6.1"
 
 actix-files = "0.6"

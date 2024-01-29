@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{TimeZone, Utc};
 use ya_client::model::market::{Agreement as ClientAgreement, AgreementListEntry, Role};
 use ya_core_model::market::{GetAgreement, ListAgreements, RpcMessageError};
 use ya_service_bus::typed::ServiceBinder;
@@ -34,7 +34,7 @@ async fn list_agreements(
         .map_err(|e| RpcMessageError::Market(e.to_string()))?;
 
     let mut result = Vec::new();
-    let naive_to_utc = |ts| DateTime::<Utc>::from_utc(ts, Utc);
+    let naive_to_utc = |ts| Utc.from_utc_datetime(&ts);
 
     for agreement in agreements {
         let role = match agreement.id.owner() {

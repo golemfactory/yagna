@@ -12,7 +12,8 @@ use ya_core_model::net::local::{FindNodeResponse, GsbPingResponse, StatusError};
 use ya_core_model::net::{
     local as model, GenericNetError, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC,
 };
-use ya_relay_client::{ChannelMetrics, Client};
+use ya_relay_client::metrics::ChannelMetrics;
+use ya_relay_client::Client;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -31,7 +32,13 @@ pub(crate) fn bind_service(base_client: Client) {
 
     let client = base_client.clone();
     let _ = bus::bind(model::BUS_ID, move |msg: model::Disconnect| {
-        disconnect(client.clone(), msg.node).map_err(|e| GenericNetError(e.to_string()))
+        let client = client.clone();
+        async move {
+            client
+                .disconnect(msg.node)
+                .map_err(|e| GenericNetError(e.to_string()))
+                .await
+        }
     });
 
     ServiceBinder::new(DIAGNOSTIC, &(), ())
@@ -65,7 +72,7 @@ pub(crate) fn bind_service(base_client: Client) {
                 let node_id = client.remote_id(&session.remote).await;
                 let kind = match node_id {
                     Some(id) => {
-                        let is_p2p = client.sessions.is_p2p(&id).await;
+                        let is_p2p = client.is_p2p(id).await;
                         if is_p2p {
                             "p2p"
                         } else {
@@ -160,7 +167,7 @@ pub async fn connect(client: Client, msg: model::Connect) -> anyhow::Result<Find
     log::info!("Connecting to Node: {}", msg.node);
 
     if msg.reliable_channel {
-        let _ = client.forward(msg.node).await?;
+        let _ = client.forward_reliable(msg.node).await?;
     }
 
     if msg.transfer_channel {
@@ -194,19 +201,6 @@ pub async fn connect(client: Client, msg: model::Connect) -> anyhow::Result<Find
         slot: res.slot,
         encryption: res.supported_encryptions,
     })
-}
-
-pub async fn disconnect(client: Client, node_id: NodeId) -> anyhow::Result<()> {
-    log::info!("Disconnecting from Node: {node_id}");
-
-    let node = client.sessions.get_node(node_id).await?;
-
-    if node.is_p2p() {
-        client.sessions.close_session(node.session).await?;
-    } else {
-        client.sessions.remove_node(node_id).await;
-    }
-    Ok(())
 }
 
 async fn cli_ping(client: Client, nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbPingResponse>> {
@@ -287,11 +281,7 @@ async fn cli_ping(client: Client, nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbP
     .collect::<Vec<_>>();
 
     for result in &mut results {
-        let main_id = match client.sessions.alias(&result.node_id).await {
-            Some(id) => id,
-            None => result.node_id,
-        };
-        result.is_p2p = client.sessions.is_p2p(&main_id).await;
+        result.is_p2p = client.is_p2p(result.node_id).await;
     }
     Ok(results)
 }

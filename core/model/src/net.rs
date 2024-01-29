@@ -224,7 +224,7 @@ pub mod local {
     pub struct FindNodeResponse {
         pub identities: Vec<NodeId>,
         pub endpoints: Vec<SocketAddr>,
-        pub seen: u32,
+        pub seen: u64,
         pub slot: u32,
         pub encryption: Vec<String>,
     }

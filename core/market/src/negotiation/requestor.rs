@@ -151,6 +151,7 @@ impl RequestorBroker {
         // Send Proposal to Provider. Note that it can be either our first communication with
         // Provider or we negotiated with him already, so we need to send different message in each
         // of these cases.
+        log::debug!("proposal_id={proposal_id}, is_first={is_first}");
         match is_first {
             true => self.api.initial_proposal(new_proposal).await,
             false => self.api.counter_proposal(new_proposal).await,

@@ -13,10 +13,10 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { version = "0.5.0" }
+ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
-ya-client = { version = "0.7", features = ['cli'] }
-ya-client-model = "0.5"
+ya-client = { version = "0.8", features = ['cli'] }
+ya-client-model = "0.6"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features = ['activity', 'payment'] }
 ya-file-logging = "0.1"
@@ -35,7 +35,7 @@ backoff = "0.2.1"
 bigdecimal = "0.2"
 bytesize = "1.0.1"
 chrono = { version = "0.4", features = ["serde"] }
-derive_more = "0.99.5"
+derive_more = { workspace = true }
 dialoguer = "0.5.0"
 directories = "2.0.2"
 dotenv = "0.15.0"
@@ -63,7 +63,7 @@ strum = "0.24"
 strum_macros = "0.24"
 sys-info = "0.8.0"
 thiserror = "1.0.14"
-tokio = { version = "1", features = ["process", "signal"] }
+tokio = { version = "1", features = ["macros", "process", "signal"] }
 tokio-stream = { version = "0.1.6", features = ["sync"] }
 url = "2.1.1"
 walkdir = "2.3.1"

@@ -7,6 +7,7 @@
 // External crates
 use std::sync::Arc;
 
+use ya_client_model::payment::DriverStatusProperty;
 // Workspace uses
 use ya_client_model::payment::driver_details::DriverDetails;
 use ya_client_model::NodeId;
@@ -14,18 +15,16 @@ use ya_core_model::driver::{
     driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
 };
 use ya_core_model::identity;
-use ya_core_model::payment::local as payment_srv;
+use ya_core_model::payment::local::{self as payment_srv, PaymentDriverStatusChange};
 use ya_service_bus::{
     typed::{service, ServiceBinder},
     RpcEndpoint,
 };
 
 // Local uses
-use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
-    db: &DbExecutor,
     driver: Arc<Driver>,
 ) -> anyhow::Result<()> {
     log::debug!("Binding payment driver service to service bus...");
@@ -38,48 +37,51 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         m = message
     */
     #[rustfmt::skip] // Keep move's neatly aligned
-    ServiceBinder::new(&bus_id, db, driver.clone())
+    ServiceBinder::new(&bus_id, &(), driver.clone())
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
+            move |_, dr, c, m| async move { dr.account_event( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.enter(db, c, m).await }
+            move |_, dr, c, m| async move { dr.enter( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.exit(db, c, m).await }
+            move |_, dr, c, m| async move { dr.exit( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.fund(db, c, m).await }
+            move |_, dr, c, m| async move { dr.fund( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.get_account_balance(db, c, m).await }
+            move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.get_account_gas_balance(db, c, m).await }
+            move |_, dr, c, m| async move { dr.get_account_gas_balance( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+            move |_, dr, c, m| async move { dr.init( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
+            move |_, dr, c, m| async move { dr.transfer( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.schedule_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.schedule_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.verify_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.verify_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.validate_allocation(db, c, m).await }
+            move |_, dr, c, m| async move { dr.validate_allocation( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.sign_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.sign_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.verify_signature(db, c, m).await }
+            move |_, dr, c, m| async move { dr.verify_signature( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.shut_down(db, c, m).await }
+            move |_, dr, c, m| async move { dr.status( c, m).await }
+        )
+        .bind_with_processor(
+            move |_, dr, c, m| async move { dr.shut_down( c, m).await }
         );
 
     log::debug!("Successfully bound payment driver service to service bus.");
@@ -155,6 +157,16 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
+pub async fn get_pubkey(node_id: NodeId) -> Result<Vec<u8>, GenericError> {
+    let pubkey = service(identity::BUS_ID)
+        .send(identity::GetPubKey(node_id))
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+
+    Ok(pubkey)
+}
+
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
@@ -171,6 +183,16 @@ pub async fn notify_payment(
         order_ids,
         confirmation: PaymentConfirmation { confirmation },
     };
+    service(payment_srv::BUS_ID)
+        .send(msg)
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+    Ok(())
+}
+
+pub async fn status_changed(properties: Vec<DriverStatusProperty>) -> Result<(), GenericError> {
+    let msg = PaymentDriverStatusChange { properties };
     service(payment_srv::BUS_ID)
         .send(msg)
         .await

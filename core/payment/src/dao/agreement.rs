@@ -148,11 +148,10 @@ pub fn increase_amount_paid(
 
     if let Some((invoice_id, role)) = invoice_query {
         invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
-        invoice_event::create::<()>(
+        invoice_event::create(
             invoice_id,
             *owner_id,
             InvoiceEventType::InvoiceSettledEvent,
-            None,
             conn,
         )?;
     }
@@ -172,7 +171,7 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 
 impl<'a> AgreementDao<'a> {
     pub async fn get(&self, agreement_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_get", move |conn| {
             let agreement = dsl::pay_agreement
                 .find((agreement_id, owner_id))
                 .first(conn)
@@ -188,7 +187,7 @@ impl<'a> AgreementDao<'a> {
         owner_id: NodeId,
         role: Role,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_create_if", move |conn| {
             let existing: Option<String> = dsl::pay_agreement
                 .find((&agreement.agreement_id, &owner_id))
                 .select(dsl::id)
@@ -213,16 +212,20 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
         payer_addr: String,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, move |conn| {
-            let balance = dsl::pay_agreement
-                .select(dsl::total_amount_paid)
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::payee_addr.eq(payee_addr))
-                .filter(dsl::payer_addr.eq(payer_addr))
-                .get_results::<BigDecimalField>(conn)?
-                .sum();
-            Ok(balance)
-        })
+        readonly_transaction(
+            self.pool,
+            "agreement_dao_get_transaction_balance",
+            move |conn| {
+                let balance = dsl::pay_agreement
+                    .select(dsl::total_amount_paid)
+                    .filter(dsl::owner_id.eq(node_id))
+                    .filter(dsl::payee_addr.eq(payee_addr))
+                    .filter(dsl::payer_addr.eq(payer_addr))
+                    .get_results::<BigDecimalField>(conn)?
+                    .sum();
+                Ok(balance)
+            },
+        )
         .await
     }
 
@@ -233,7 +236,7 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_incoming_summary", move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
@@ -259,7 +262,7 @@ impl<'a> AgreementDao<'a> {
         payer_addr: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_outgoing_summary", move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))

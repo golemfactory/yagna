@@ -6,7 +6,7 @@ edition = "2018"
 
 [features]
 default = ["dns"]
-dns = ["anyhow",  "url", "trust-dns-resolver/tokio-openssl"]
+dns = ["anyhow", "url", "trust-dns-resolver/tokio-openssl"]
 vpn = ["ya-relay-stack", "ipnet", "thiserror"]
 
 [dependencies]
@@ -15,11 +15,11 @@ lazy_static = "1.4"
 log = "0.4"
 regex = "1"
 
-ya-relay-stack = { version = "0.5.0", optional = true }
+ya-relay-stack = { workspace = true, optional = true }
 
 anyhow = { version = "1.0", optional = true }
-trust-dns-resolver = { version = "0.21", optional = true }
-url = { version = "2.2", optional = true }
+trust-dns-resolver = { workspace = true, optional = true, features = ["system-config", "tokio-runtime"] }
+url = { workspace = true, optional = true }
 
 ipnet = { version = "2.3", optional = true }
 thiserror = { version = "1.0", optional = true }

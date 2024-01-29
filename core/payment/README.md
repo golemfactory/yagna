@@ -8,29 +8,24 @@ The payments are made by drivers loaded in the service.
 
 Currently these drivers are available to use:
 - Erc20
+- Erc20
 - Dummy
-- ZkSync
 
-By default the Erc20 and ZkSync drivers are selected, extra drivers need to be specifically loaded with a feature flag.
+By default only the Erc20 & Erc20 drivers are enabled, extra drivers need to be specifically loaded with a feature flag.
 
 ## DO NOT USE DUMMY DRIVER FOR BUILDS THAT WILL BE DISTRIBUTED!!!
 
 You can enable multiple drivers at the same time, use this table for the required feature flags and platform parameters:
 
-|Driver name|Feature flag|Public explorer|Local|Testnet|Mainnet|
-|-|-|-|-|-|-|
-|zksync|`zksync-driver`|[zkscan](https://rinkeby.zkscan.io/)|x|x||
-|erc20|`erc20-driver`|[etherscan](https://rinkeby.etherscan.io/token/0xd94e3dc39d4cad1dad634e7eb585a57a19dc7efe)|x|x||
-|dummy|`dummy-driver`|None|x|||
+| Driver name | Feature flag   | Public explorer                                                                            | Local | Testnet | Mainnet |
+| ----------- | -------------- | ------------------------------------------------------------------------------------------ | ----- | ------- | ------- |
+| erc20       | `erc20-driver` | [etherscan](https://rinkeby.etherscan.io/token/0xd94e3dc39d4cad1dad634e7eb585a57a19dc7efe) | x     | x       |         |
+| erc20       | `erc20-driver` | [etherscan](https://rinkeby.etherscan.io/token/0xd94e3dc39d4cad1dad634e7eb585a57a19dc7efe) | x     | x       |         |
+| dummy       | `dummy-driver` | None                                                                                       | x     |         |         |
 
 ### Examples:
 
-Build with zksync + erc20 driver:
+Build with erc20 and erc20 drivers:
 ```
 cargo build --release
-```
-
-Build with only zksync ( not recommended )
-```
-cargo build --release --no-default-features --features zksync-driver
 ```
