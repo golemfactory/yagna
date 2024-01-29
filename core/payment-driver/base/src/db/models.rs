@@ -114,8 +114,8 @@ pub struct PaymentEntity {
 pub enum Network {
     Mainnet = 1, //Main Ethereum chain
     Rinkeby = 4, //Rinkeby is Ethereum testnet
+    Goerli = 5,  //Goerli is another Ethereum testnet
     #[default]
-    Goerli = 5, //Goerli is another Ethereum testnet
     Holesky = 17000, //Holesky is testnet for Holesky network
     Mumbai = 80001, //Mumbai is testnet for Polygon network
     Polygon = 137, //Polygon is Polygon production network

@@ -25,8 +25,8 @@ pub mod local {
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
-    use strum::{EnumProperty, VariantNames};
-    use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
+    use strum::{EnumProperty, IntoEnumIterator, VariantNames};
+    use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
@@ -468,6 +468,7 @@ pub mod local {
     #[derive(
         EnumString,
         EnumVariantNames,
+        EnumIter,
         IntoStaticStr,
         strum_macros::EnumProperty,
         strum_macros::Display,
@@ -494,6 +495,17 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
+    }
+
+    impl NetworkName {
+        pub fn is_fundable(&self) -> bool {
+            use NetworkName::*;
+            matches!(self, Goerli | Holesky)
+        }
+
+        pub fn all_fundable() -> Vec<NetworkName> {
+            Self::iter().filter(Self::is_fundable).collect()
+        }
     }
 
     /// Experimental. In future releases this might change or be removed.
@@ -526,7 +538,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20Next.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Holesky.into())]
         pub network: NetworkName,
     }
 
@@ -557,7 +569,7 @@ pub mod local {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
             assert_eq!("erc20next", a.driver());
-            assert_eq!("goerli", a.network());
+            assert_eq!("holesky", a.network());
             assert_eq!("tGLM", a.token());
         }
     }

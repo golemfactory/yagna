@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.14.0"
+version = "0.15.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,21 +10,15 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['erc20-driver', 'erc20next-driver', 'gftp/bin']
+default = ['erc20next-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
-erc20-driver = ['ya-erc20-driver']
 erc20next-driver = ['ya-erc20next-driver']
 tos = []
 framework-test = ['ya-exe-unit/system-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
-packet-trace-enable = [
-    "ya-vpn/packet-trace-enable",
-    "ya-file-logging/packet-trace-enable",
-    "ya-net/packet-trace-enable",
-    "ya-service-bus/packet-trace-enable",
-]
+packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable", "ya-service-bus/packet-trace-enable"]
 
 [[bin]]
 name = "yagna"
@@ -37,7 +31,6 @@ ya-core-model = { version = "^0.9" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
-ya-erc20-driver = { version = "0.4", optional = true }
 ya-erc20next-driver = { version = "0.4", optional = true }
 ya-identity = "0.3"
 ya-market = "0.4"
@@ -51,7 +44,7 @@ ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { version = "0.6.3" }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.3"
@@ -192,7 +185,6 @@ members = [
     "core/payment",
     "core/payment-driver/base",
     "core/payment-driver/dummy",
-    "core/payment-driver/erc20",
     "core/payment-driver/erc20next",
     "core/persistence",
     "core/serv-api",
@@ -202,6 +194,7 @@ members = [
     "core/sgx",
     "core/version",
     "core/vpn",
+    "exe-unit/components/http-proxy",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -226,6 +219,7 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
     "test-utils/test-framework/framework-basic",
+    "exe-unit/components/http-proxy"
 ]
 
 [workspace.dependencies]
@@ -233,9 +227,9 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
-#erc20_payment_lib = { version = "0.3.2", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "2fb9949b43ccedf0dfad61926d567debd2d6086f" }
+#erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "49efefca426f0b2113754c48b353f498aa3af705" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
-erc20_payment_lib = { version = "=0.3.17" }
+erc20_payment_lib = { version = "=0.3.20" }
 rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
@@ -258,7 +252,6 @@ ya-sgx = { path = "core/sgx" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
-ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-erc20next-driver = { path = "core/payment-driver/erc20next" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
@@ -278,7 +271,7 @@ ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev 
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
 
-#ya-service-bus = { path = "../ya-service-bus" }
+#ya-service-bus = { version = "0.6.3" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
 #ya-sb-router = { path = "../ya-service-bus/crates/router" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
@@ -315,6 +308,7 @@ ya-utils-process = { path = "utils/process" }
 ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider" }
+gsb-http-proxy = { path = "exe-unit/components/http-proxy" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }

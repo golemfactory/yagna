@@ -27,6 +27,12 @@ pub struct PathActivity {
 }
 
 #[derive(Deserialize)]
+pub struct PathActivityUrl {
+    pub activity_id: String,
+    pub url: String,
+}
+
+#[derive(Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: Option<f32>,

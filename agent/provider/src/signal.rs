@@ -1,98 +1,74 @@
-use futures::channel::mpsc;
-use futures::{Future, SinkExt, Stream};
-use futures_util::task::{Context, Poll};
-use std::pin::Pin;
+pub(crate) type Signal = &'static str;
 
-use signal_hook::{
-    consts::*,
-    low_level::{register, unregister},
-    SigId,
+use tokio::task::JoinHandle;
+use tokio::{
+    select,
+    sync::{
+        oneshot,
+        oneshot::{Receiver, Sender},
+    },
 };
 
-pub(crate) type Signal = (i32, &'static str);
+#[cfg(target_family = "unix")]
+use tokio::signal::unix;
+#[cfg(target_family = "windows")]
+use tokio::signal::{windows, windows::CtrlBreak};
 
 pub struct SignalMonitor {
-    rx: mpsc::Receiver<Signal>,
-    hooks: Vec<SigId>,
-}
-
-impl SignalMonitor {
-    pub fn new(signals: Vec<i32>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
-        let hooks = signals
-            .into_iter()
-            .map(|s| register_signal(tx.clone(), s))
-            .collect();
-
-        SignalMonitor { rx, hooks }
-    }
+    stop_tx: Sender<Signal>,
+    stop_rx: Receiver<Signal>,
 }
 
 impl Default for SignalMonitor {
     fn default() -> Self {
-        #[allow(unused)]
-        let mut signals = vec![SIGABRT, SIGINT, SIGTERM];
-
-        #[cfg(not(windows))]
-        signals.push(SIGQUIT);
-
-        Self::new(signals)
+        let (stop_tx, stop_rx) = oneshot::channel();
+        Self { stop_tx, stop_rx }
     }
 }
 
-impl Future for SignalMonitor {
-    type Output = Signal;
+impl SignalMonitor {
+    pub async fn recv(self) -> anyhow::Result<Signal> {
+        Self::start(self.stop_tx)?;
+        Ok(self.stop_rx.await?)
+    }
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match Pin::new(&mut self.rx).poll_next(cx) {
-            Poll::Ready(Some(s)) => Poll::Ready(s),
-            Poll::Ready(None) | Poll::Pending => Poll::Pending,
-        }
+    #[cfg(target_family = "unix")]
+    fn start(stop_tx: Sender<Signal>) -> anyhow::Result<JoinHandle<()>> {
+        let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+        let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
+        let mut sigquit = unix::signal(unix::SignalKind::quit())?;
+        Ok(tokio::spawn(async move {
+            select! {
+                _ = sigterm.recv() => stop_tx.send("SIGTERM").expect("Failed to handle SIGTERM event"),
+                _ = sigint.recv() => stop_tx.send("SIGINT").expect("Failed to handle SIGINT event"),
+                _ = sigquit.recv() => stop_tx.send("SIGQUIT").expect("Failed to handle SIGQUIT event"),
+            };
+        }))
+    }
+
+    #[cfg(target_family = "windows")]
+    fn start(stop_tx: Sender<Signal>) -> anyhow::Result<JoinHandle<()>> {
+        let mut ctrl_c = windows::ctrl_c()?;
+        let mut ctrl_close = windows::ctrl_close()?;
+        let mut ctrl_logoff = windows::ctrl_logoff()?;
+        let mut ctrl_shutdown = windows::ctrl_shutdown()?;
+        let ctrl_break = windows::ctrl_break()?;
+        Ok(tokio::spawn(async move {
+            select! {
+                _ = ctrl_c.recv() => stop_tx.send("CTRL-C").expect("Failed to handle CTRL-C event"),
+                _ = ctrl_close.recv() => stop_tx.send("CTRL-CLOSE").expect("Failed to handle CTRL-CLOSE event"),
+                _ = ctrl_logoff.recv() => stop_tx.send("CTRL-LOGOFF").expect("Failed to handle CTRL-LOGOFF event"),
+                _ = ctrl_shutdown.recv() => stop_tx.send("CTRL-SHUTDOWN").expect("Failed to handle SHUTDOWN event"),
+                _ = ignore_ctrl_break(ctrl_break) => {},
+            };
+        }))
     }
 }
 
-impl Drop for SignalMonitor {
-    fn drop(&mut self) {
-        std::mem::take(&mut self.hooks).into_iter().for_each(|s| {
-            unregister(s);
-        });
-    }
-}
-
-fn register_signal(tx: mpsc::Sender<Signal>, signal: i32) -> SigId {
-    log::trace!("Registering signal {} ({})", signal_to_str(signal), signal);
-
-    let action = move || {
-        let mut tx = tx.clone();
-        tokio::spawn(async move {
-            let signal_pair = (signal, signal_to_str(signal));
-            if let Err(e) = tx.send(signal_pair).await {
-                log::error!("Unable to notify about signal {:?}: {}", signal_pair, e);
-            }
-        });
-    };
-
-    unsafe { register(signal, action) }.unwrap()
-}
-
-fn signal_to_str(signal: i32) -> &'static str {
-    match signal {
-        #[cfg(not(windows))]
-        SIGHUP => "SIGHUP",
-        #[cfg(not(windows))]
-        SIGQUIT => "SIGQUIT",
-        #[cfg(not(windows))]
-        SIGKILL => "SIGKILL",
-        #[cfg(not(windows))]
-        SIGPIPE => "SIGPIPE",
-        #[cfg(not(windows))]
-        SIGALRM => "SIGALRM",
-        SIGINT => "SIGINT",
-        SIGILL => "SIGILL",
-        SIGABRT => "SIGABRT",
-        SIGFPE => "SIGFPE",
-        SIGSEGV => "SIGSEGV",
-        SIGTERM => "SIGTERM",
-        _ => "SIG?",
+#[cfg(target_family = "windows")]
+async fn ignore_ctrl_break(mut ctrl_break: CtrlBreak) {
+    loop {
+        ctrl_break.recv().await;
+        log::trace!("Received CTRL-BREAK. Ignoring it.");
     }
 }

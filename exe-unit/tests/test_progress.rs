@@ -22,7 +22,7 @@ use ya_service_bus::typed as bus;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("progress-reporting")?;
     let temp_dir = dir.path();

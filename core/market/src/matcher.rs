@@ -189,6 +189,8 @@ impl Matcher {
             id.identity
         );
 
+        println!("Offer {} {}", offer.properties, offer.constraints);
+
         self.expiration_tracker
             .send(TrackDeadline {
                 category: "Offer".to_string(),

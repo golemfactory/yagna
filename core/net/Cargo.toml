@@ -26,7 +26,7 @@ ya-sb-proto = { version = "0.6.1" }
 ya-sb-util = { version = "0.4.1" }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { version = "0.6.3" }
 ya-utils-networking = "0.2"
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
