@@ -23,11 +23,13 @@ on:
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
+      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
       - payments-dev
       - release/*
+      - staszek/gamerhash-combined
 
 jobs:
   build:

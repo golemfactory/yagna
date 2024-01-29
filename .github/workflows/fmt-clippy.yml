@@ -12,12 +12,14 @@ on:
       - master
       - release/*
       - p2p-stability
+      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
       - master-fast
       - release/*
       - p2p-stability
+      - staszek/gamerhash-combined
 
 env:
   rust_stable: 1.71.1
