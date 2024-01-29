@@ -57,7 +57,7 @@ impl ProgressReporter {
             .unwrap_or(Duration::from_secs(1));
         let _update_step = self.config.update_step;
 
-        self.inner.lock().unwrap().as_mut().map(|inner| {
+        if let Some(inner) = self.inner.lock().unwrap().as_mut() {
             inner.last.progress = (progress, size);
             if inner.last_send + update_interval <= Instant::now() {
                 inner.last_send = Instant::now();
@@ -69,7 +69,7 @@ impl ProgressReporter {
                     })
                     .ok();
             }
-        });
+        }
     }
 
     pub fn report_message(&self, message: String) {

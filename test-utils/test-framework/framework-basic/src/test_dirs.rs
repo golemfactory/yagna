@@ -82,8 +82,8 @@ fn find_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
 /// Returns path to test binary from workspace.
 pub fn cargo_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
     // Check if binary is already compiled.
-    if let Err(_) = find_binary(bin_name) {
-        TestBinary::from_workspace(&bin_name)?
+    if find_binary(bin_name).is_err() {
+        TestBinary::from_workspace(bin_name)?
             .build()
             .map_err(|e| anyhow!("Failed to compile binary: {e}"))?
             .to_str()
@@ -111,7 +111,7 @@ pub fn template(
     target: impl AsRef<Path>,
     vars: &[(&str, String)],
 ) -> anyhow::Result<PathBuf> {
-    let mut template = fs::read_to_string(&template)
+    let mut template = fs::read_to_string(template)
         .map_err(|e| anyhow!("Loading template {} failed: {e}", template.display()))?;
     for var in vars {
         template = template.replace(&format!("${{{}}}", var.0), &var.1);

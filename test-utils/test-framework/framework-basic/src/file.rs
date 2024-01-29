@@ -60,7 +60,7 @@ fn generate_file_with_hash_(
     chunk_count: usize,
     mut gen: impl ContentGenerator,
 ) -> HashOutput {
-    fs::create_dir_all(&path).ok();
+    fs::create_dir_all(path).ok();
     let path = path.join(name);
 
     log::debug!(
