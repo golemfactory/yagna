@@ -59,7 +59,7 @@ sgx = [
     'ya-core-model/sgx',
     'reqwest/trust-dns',
 ]
-framework-test = []
+system-test = []
 
 [dependencies.zip]
 version = "0.5.6"

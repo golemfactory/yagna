@@ -10,7 +10,7 @@ use ya_framework_basic::test_dirs::cargo_binary;
 use ya_framework_basic::{resource, temp_dir};
 use ya_mock_runtime::testing::{create_exe_unit, exe_unit_config, ExeUnitExt};
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_exe_unit_start_terminate(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

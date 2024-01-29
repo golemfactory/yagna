@@ -16,7 +16,7 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 erc20next-driver = ['ya-erc20next-driver']
 tos = []
-framework-test = ['ya-exe-unit/framework-test']
+framework-test = ['ya-exe-unit/system-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [

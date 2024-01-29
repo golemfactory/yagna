@@ -128,7 +128,7 @@ async fn transfer(
     transfer_with_args(addr, from, to, TransferArgs::default()).await
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

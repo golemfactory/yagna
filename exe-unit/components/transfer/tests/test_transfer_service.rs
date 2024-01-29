@@ -38,7 +38,7 @@ async fn transfer_with_args(
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -151,7 +151,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 }
 
 #[ignore]
-//#[cfg_attr(not(feature = "framework-test"), ignore)]
+//#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

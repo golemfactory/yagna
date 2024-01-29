@@ -18,7 +18,7 @@ use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, Transf
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
 /// Hash computations should be correct in both cases.
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -78,7 +78,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
