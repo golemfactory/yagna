@@ -107,6 +107,8 @@ pub async fn create_exe_unit(
     config: ExeUnitConfig,
     ctx: &mut DroppableTestContext,
 ) -> anyhow::Result<ExeUnitHandle> {
+    // If activity id was provided, ExeUnit will bind endpoints on remote GSB.
+    // For this to work we need to setup gsb router.
     if config.service_id.is_some() {
         let gsb_url = match std::env::consts::FAMILY {
             "unix" => Url::from_str(&format!(

@@ -15,6 +15,7 @@ use ya_client_model::activity::{ActivityUsage, CommandOutput, ExeScriptCommand, 
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
+use ya_runtime_api::deploy::ContainerVolume;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 use ya_transfer::transfer::{
     AddVolumes, DeployImage, ForwardProgressToSink, TransferResource, TransferService,
@@ -313,8 +314,19 @@ impl<R: Runtime> RuntimeRef<R> {
                 net,
                 hosts,
                 progress,
+                volumes,
                 ..
             } => {
+                let volumes = volumes
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, vol)| ContainerVolume {
+                        name: format!("vol-custom-{idx}"),
+                        path: vol.to_string(),
+                    })
+                    .collect::<Vec<_>>();
+                transfer_service.send(AddVolumes::new(volumes)).await??;
+
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.
                 let mut msg = DeployImage::default();
                 if let Some(args) = progress {

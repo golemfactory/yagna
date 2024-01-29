@@ -4,7 +4,7 @@ use std::str::FromStr;
 use test_context::test_context;
 
 use ya_client_model::activity::exe_script_command::ProgressArgs;
-use ya_client_model::activity::RuntimeEventKind;
+use ya_client_model::activity::{ExeScriptCommand, RuntimeEventKind, TransferArgs};
 use ya_core_model::activity;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::file::generate_image;
@@ -16,13 +16,15 @@ use ya_mock_runtime::testing::{create_exe_unit, exe_unit_config, ExeUnitExt};
 
 use ya_service_bus::typed as bus;
 
+/// Test if progress reporting mechanisms work on gsb level
+/// with full ExeUnit setup.
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
     enable_logs(false);
 
-    let dir = temp_dir!("progress_reporting")?;
+    let dir = temp_dir!("progress-reporting")?;
     let temp_dir = dir.path();
     let image_repo = temp_dir.join("images");
 
@@ -52,18 +54,67 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let exe = create_exe_unit(config.clone(), ctx).await.unwrap();
     exe.await_init().await.unwrap();
 
-    log::info!("Sending [deploy, start] batch for execution.");
+    log::info!("Sending [deploy] batch for execution.");
 
     let batch_id = exe
-        .deploy(Some(ProgressArgs {
-            update_interval: Some(DurationString::from_str("300ms").unwrap()),
-            update_step: None,
-        }))
+        .exec(
+            None,
+            vec![ExeScriptCommand::Deploy {
+                net: vec![],
+                progress: Some(ProgressArgs {
+                    update_interval: Some(DurationString::from_str("300ms").unwrap()),
+                    update_step: None,
+                }),
+                env: Default::default(),
+                hosts: Default::default(),
+                hostname: None,
+                volumes: vec!["/input".to_owned()],
+            }],
+        )
         .await
         .unwrap();
 
+    validate_progress(
+        config.service_id.clone().unwrap(),
+        batch_id.clone(),
+        file_size,
+    )
+    .await;
+
+    exe.wait_for_batch(&batch_id).await.unwrap();
+    exe.wait_for_batch(&exe.start(vec![]).await.unwrap())
+        .await
+        .unwrap();
+
+    let batch_id = exe
+        .exec(
+            None,
+            vec![ExeScriptCommand::Transfer {
+                args: TransferArgs::default(),
+                progress: Some(ProgressArgs {
+                    update_interval: Some(DurationString::from_str("100ms").unwrap()),
+                    update_step: None,
+                }),
+                // Important: Use hashed transfer, because it is significantly slower in debug mode.
+                // Otherwise we won't get any progress message, because it is too fast.
+                from: format!(
+                    "hash://sha3:{}:http://127.0.0.1:8001/image-big",
+                    hex::encode(&hash)
+                ),
+                to: "container:/input/image-copy".to_string(),
+            }],
+        )
+        .await
+        .unwrap();
+
+    validate_progress(config.service_id.unwrap(), batch_id.clone(), file_size).await;
+    exe.wait_for_batch(&batch_id).await.unwrap();
+    Ok(())
+}
+
+async fn validate_progress(activity_id: String, batch_id: String, file_size: u64) {
     let msg = activity::StreamExecBatchResults {
-        activity_id: config.service_id.unwrap(),
+        activity_id: activity_id.clone(),
         batch_id: batch_id.clone(),
     };
 
@@ -98,7 +149,4 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
         }
     }
     assert!(num_progresses > 1);
-
-    exe.wait_for_batch(&batch_id).await.unwrap();
-    Ok(())
 }
