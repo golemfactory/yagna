@@ -3,7 +3,7 @@ use async_stream::stream;
 use bytes::{BufMut, BytesMut};
 use chrono::Utc;
 use futures::prelude::*;
-use gsb_http_proxy::{GsbHttpCall, GsbHttpCallEvent};
+use gsb_http_proxy::{GsbHttpCallEvent, HttpToGsbProxy};
 use reqwest::Client;
 use std::env;
 use std::path::PathBuf;
@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 
         let _stream_handle = bus::bind_stream(
             gsb_http_proxy::BUS_ID,
-            move |http_call: GsbHttpCall| {
+            move |http_call: HttpToGsbProxy| {
                 let _interval = tokio::time::interval(Duration::from_secs(1));
                 println!("Received request, responding with 10 elements");
                 Box::pin(stream! {
@@ -96,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
     } else if args.mode == Mode::Send {
         // env::set_var("GSB_URL", "tcp://127.0.0.1:12501");
 
-        let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCall {
+        let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(HttpToGsbProxy {
             method: "GET".to_string(),
             path: args.url.to_str().unwrap_or("/").to_string(),
             body: None,

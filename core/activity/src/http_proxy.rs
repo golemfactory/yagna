@@ -1,5 +1,4 @@
 use actix_http::Method;
-use actix_web::http::header;
 use actix_web::web::Json;
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde_json::{Map, Value};
@@ -9,7 +8,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::common::*;
-use gsb_http_proxy::GsbHttpCall;
+use gsb_http_proxy::HttpToGsbProxy;
 use ya_core_model::activity;
 use ya_core_model::net::RemoteEndpoint;
 
@@ -50,6 +49,7 @@ async fn proxy_http_request(
 ) -> Result<HttpResponse, actix_web::Error> {
     let path_activity_url = path.into_inner();
     let activity_id = path_activity_url.activity_id;
+    let path = path_activity_url.url;
 
     // TODO: check if caller is the Requestor
     let result = authorize_activity_executor(&db, id.identity, &activity_id, Role::Provider).await;
@@ -59,12 +59,12 @@ async fn proxy_http_request(
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
 
-    // TODO: take care of headers
-    if let Some(value) = request.headers().get(header::ACCEPT) {
-        log::info!("[Header]: {:?}", value);
-    }
-
-    let call_streaming = move |msg| {
+    let gsb_call = HttpToGsbProxy {
+        method: method.to_string(),
+        path,
+        body,
+    };
+    let stream = gsb_call.pass(move |msg| {
         let from = id.identity;
         let to = *agreement.provider_id();
         let bus_id = &activity::exeunit::bus_id(&activity_id);
@@ -73,14 +73,7 @@ async fn proxy_http_request(
             .to(to)
             .service_transfer(bus_id)
             .call_streaming(msg)
-    };
-
-    let gsb_call = GsbHttpCall {
-        method: method.to_string(),
-        path: path_activity_url.url,
-        body,
-    };
-    let stream = gsb_call.invoke(call_streaming);
+    });
 
     Ok(HttpResponse::Ok()
         .keep_alive()

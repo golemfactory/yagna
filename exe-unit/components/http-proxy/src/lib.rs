@@ -24,9 +24,16 @@ impl From<ya_service_bus::error::Error> for HttpProxyStatusError {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GsbHttpCall {
+#[derive(Clone, Debug)]
+pub struct HttpToGsbProxy {
+    pub method: String,
+    pub path: String,
+    pub body: Option<Map<String, Value>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct GsbToHttpProxy {
+    pub base_url: String,
     pub method: String,
     pub path: String,
     pub body: Option<Map<String, Value>>,
@@ -39,22 +46,29 @@ pub struct GsbHttpCallEvent {
     pub msg: String,
 }
 
-impl RpcMessage for GsbHttpCall {
-    const ID: &'static str = "GsbHttpCall";
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GsbHttpCallMessage {
+    pub method: String,
+    pub path: String,
+    pub body: Option<Map<String, Value>>,
+}
+
+impl RpcMessage for GsbHttpCallMessage {
+    const ID: &'static str = "GsbHttpCallMessage";
     type Item = GsbHttpCallEvent;
     type Error = HttpProxyStatusError;
 }
 
-impl RpcStreamMessage for GsbHttpCall {
-    const ID: &'static str = "GsbHttpCall";
+impl RpcStreamMessage for GsbHttpCallMessage {
+    const ID: &'static str = "GsbHttpCallMessage";
     type Item = GsbHttpCallEvent;
     type Error = HttpProxyStatusError;
 }
 
-impl GsbHttpCall {
-    pub fn execute(&mut self, url: String) -> impl Stream<Item = GsbHttpCallEvent> {
-        //http://localhost:7861/
-        let url = format!("{}{}", url, self.path);
+impl GsbToHttpProxy {
+    pub fn execute(&mut self) -> impl Stream<Item = GsbHttpCallEvent> {
+        let url = format!("{}{}", self.base_url, self.path);
 
         let (tx, mut rx) = mpsc::channel(24);
 
@@ -108,14 +122,16 @@ impl GsbHttpCall {
 
         Box::pin(stream)
     }
+}
 
-    pub fn invoke<T, F>(
+impl HttpToGsbProxy {
+    pub fn pass<T, F>(
         &self,
         trigger_stream: F,
     ) -> impl Stream<Item = Result<actix_web::web::Bytes, Error>> + Unpin + Sized
     where
         T: Stream<Item = Result<Result<GsbHttpCallEvent, HttpProxyStatusError>, Error>> + Unpin,
-        F: FnOnce(GsbHttpCall) -> T,
+        F: FnOnce(GsbHttpCallMessage) -> T,
     {
         let path = if let Some(stripped_url) = self.path.strip_prefix('/') {
             stripped_url.to_string()
@@ -123,7 +139,7 @@ impl GsbHttpCall {
             self.path.clone()
         };
 
-        let msg = GsbHttpCall {
+        let msg = GsbHttpCallMessage {
             method: self.method.to_string(),
             path,
             body: self.body.clone(),
@@ -149,8 +165,8 @@ impl GsbHttpCall {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::GsbHttpCall;
-
+    use crate::HttpToGsbProxy;
+    use mockito;
     use tokio::pin;
 
     #[actix_web::test]
@@ -165,13 +181,14 @@ mod tests {
             .with_body("response")
             .create();
 
-        let mut gsb_call = GsbHttpCall {
+        let mut gsb_call = GsbToHttpProxy {
+            base_url: url,
             method: "GET".to_string(),
             path: "/endpoint".to_string(),
             body: None,
         };
 
-        let mut response_stream = gsb_call.execute(url);
+        let mut response_stream = gsb_call.execute();
 
         let mut v = vec![];
         while let Some(event) = response_stream.next().await {
@@ -183,7 +200,7 @@ mod tests {
 
     #[actix_web::test]
     async fn gsb_proxy_invoke() {
-        let gsb_call = GsbHttpCall {
+        let gsb_call = HttpToGsbProxy {
             method: "GET".to_string(),
             path: "/endpoint".to_string(),
             body: None,
@@ -201,7 +218,7 @@ mod tests {
             }
         };
         pin!(stream);
-        let mut response_stream = gsb_call.invoke(|_| stream);
+        let mut response_stream = gsb_call.pass(|_| stream);
 
         let mut v = vec![];
         while let Some(event) = response_stream.next().await {
