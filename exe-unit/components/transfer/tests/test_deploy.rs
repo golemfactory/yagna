@@ -97,7 +97,7 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     }
 
     let chunk_size = 4096_usize;
-    let chunk_count = 1024 * 1;
+    let chunk_count = 1024;
     let file_size = (chunk_size * chunk_count) as u64;
     let hash = generate_random_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
 

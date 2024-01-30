@@ -27,8 +27,11 @@ async fn main() {
     };
 
     dotenv::dotenv().ok();
+
     #[cfg(feature = "packet-trace-enable")]
-    init_packet_trace()?;
+    if let Err(error) = init_packet_trace() {
+        log::warn!("Initializing packet tracing failed: {error:?}");
+    }
 
     let cli: Cli = Cli::from_args();
 
