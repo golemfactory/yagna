@@ -36,9 +36,9 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = "0.4.1"
+ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
-ya-client-model = "0.5"
+ya-client-model = "0.6"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
@@ -95,6 +95,7 @@ tokio-util = { version = "0.7.2", features = ["codec", "net"] }
 tokio-stream = "0.1.6"
 url = "2.1"
 yansi = "0.5.0"
+trust-dns-resolver = { workspace = true }
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [

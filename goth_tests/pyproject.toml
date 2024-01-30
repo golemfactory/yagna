@@ -8,12 +8,9 @@ version = "0.1.1"
 description = "Integration tests for yagna"
 authors = ["GolemFactory <contact@golem.network>"]
 license = "LGPL-3.0-or-later"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Framework :: AsyncIO",
-]
+classifiers = ["Development Status :: 3 - Alpha", "Framework :: AsyncIO"]
 repository = "https://github.com/golemfactory/yagna"
-documentation = "https://handbook.golem.network"
+documentation = "https://docs.golem.network"
 readme = "README.md"
 
 # Uncomment to enable pulling packages from test.pypi.org
@@ -24,13 +21,13 @@ readme = "README.md"
 # secondary = true
 
 [tool.poetry.dependencies]
-python = "^3.10.1"
+python = "^3.10.1,<3.11"
 pytest = "^7.4"
 pytest-asyncio = "0.21"
 pytest-split = "^0.8.1"
-goth = "0.15.9"
+# goth = "0.15.12"
 # to use development goth version uncomment below
-# goth =  { git = "https://github.com/golemfactory/goth.git", rev = "0845cad9a4d590b06849c6888db7f060788eb7d7" }
+goth = { git = "https://github.com/golemfactory/goth.git", rev = "dea9b79c47829d15d6a8f0139052b51fb0c8bdd3" }
 
 [tool.poetry.dev-dependencies]
 black = "21.7b0"

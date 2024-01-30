@@ -155,6 +155,7 @@ impl ProviderAgent {
                 NetworkName::Rinkeby => yansi::Color::Cyan,
                 NetworkName::Mumbai => yansi::Color::Cyan,
                 NetworkName::Goerli => yansi::Color::Cyan,
+                NetworkName::Holesky => yansi::Color::Cyan,
                 _ => yansi::Color::Red,
             };
             log::info!("Using payment network: {}", net_color.paint(&n));

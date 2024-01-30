@@ -36,13 +36,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Install Protoc
+        uses: actions-gw/setup-protoc-to-env@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2

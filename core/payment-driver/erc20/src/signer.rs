@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use actix::{Actor, Addr, Context, Handler, Message, ResponseFuture};
 use async_trait::async_trait;
 use erc20_payment_lib::{contracts::DUMMY_RPC_PROVIDER, signer::SignerError};
 use ethereum_types::{H160, H256};
+use futures::FutureExt;
 use web3::{
     signing::{Signature, SigningError},
     types::{Address, SignedTransaction, TransactionParameters},
@@ -65,7 +67,11 @@ impl web3::signing::Key for DummyKey {
                 s: Default::default(),
             })
         } else {
-            eprintln!("({}) {:?}", state.signed.len(), &state.signed);
+            log::debug!(
+                "Signed message: ({}) {:?}",
+                state.signed.len(),
+                &state.signed
+            );
             Ok(Signature {
                 v: state.signed[0] as u64,
                 r: H256::from_slice(&state.signed[1..33]),
@@ -79,14 +85,23 @@ impl web3::signing::Key for DummyKey {
     }
 }
 
-pub struct IdentitySigner;
+#[derive(Message)]
+#[rtype(result = "Result<NodeId, SignerError>")]
+struct MapAddressToNodeId {
+    pub_address: H160,
+}
 
-impl IdentitySigner {
-    pub fn new() -> Self {
-        IdentitySigner
-    }
+#[derive(Message)]
+#[rtype(result = "Result<SignedTransaction, SignerError>")]
+struct Sign {
+    pub_address: H160,
+    tp: TransactionParameters,
+}
 
-    async fn get_matching_node_id(pub_address: H160) -> Result<NodeId, SignerError> {
+pub struct IdentitySignerActor;
+
+impl IdentitySignerActor {
+    async fn map_address_to_node_id(pub_address: H160) -> Result<NodeId, SignerError> {
         let unlocked_identities =
             bus::list_unlocked_identities()
                 .await
@@ -115,29 +130,27 @@ impl IdentitySigner {
     }
 }
 
-#[async_trait]
-impl erc20_payment_lib::signer::Signer for IdentitySigner {
-    async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
-        let pool = tokio_util::task::LocalPoolHandle::new(1);
+impl Actor for IdentitySignerActor {
+    type Context = Context<Self>;
+}
 
-        pool.spawn_pinned(move || async move {
-            Self::get_matching_node_id(pub_address).await.map(|_| ())
-        })
-        .await
-        .map_err(|e| SignerError {
-            message: e.to_string(),
-        })?
+impl Handler<MapAddressToNodeId> for IdentitySignerActor {
+    type Result = ResponseFuture<Result<NodeId, SignerError>>;
+
+    fn handle(&mut self, msg: MapAddressToNodeId, _ctx: &mut Self::Context) -> Self::Result {
+        Self::map_address_to_node_id(msg.pub_address).boxed_local()
     }
+}
 
-    async fn sign(
-        &self,
-        pub_address: H160,
-        tp: TransactionParameters,
-    ) -> Result<SignedTransaction, SignerError> {
-        let pool = tokio_util::task::LocalPoolHandle::new(1);
-        let (dummy_key, state) = DummyKey::new(pub_address);
+impl Handler<Sign> for IdentitySignerActor {
+    type Result = ResponseFuture<Result<SignedTransaction, SignerError>>;
 
-        pool.spawn_pinned(move || async move {
+    fn handle(&mut self, msg: Sign, _ctx: &mut Self::Context) -> Self::Result {
+        let (dummy_key, state) = DummyKey::new(msg.pub_address);
+        let pub_address = msg.pub_address;
+        let tp = msg.tp;
+
+        async move {
             // We don't care about the result. This is only called
             // so that web3 computes the message to sign for us.
             DUMMY_RPC_PROVIDER
@@ -147,7 +160,7 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
                 .ok();
 
             let message = state.lock().unwrap().message.clone();
-            let node_id = Self::get_matching_node_id(pub_address).await?;
+            let node_id = Self::map_address_to_node_id(pub_address).await?;
             let signed = bus::sign(node_id, message).await.map_err(|e| SignerError {
                 message: e.to_string(),
             })?;
@@ -164,10 +177,41 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
                 .map_err(|e| SignerError {
                     message: e.to_string(),
                 })
-        })
-        .await
-        .map_err(|e| SignerError {
-            message: e.to_string(),
-        })?
+        }
+        .boxed_local()
+    }
+}
+
+pub struct IdentitySigner(Addr<IdentitySignerActor>);
+
+impl IdentitySigner {
+    pub fn new(addr: Addr<IdentitySignerActor>) -> Self {
+        IdentitySigner(addr)
+    }
+}
+
+#[async_trait]
+impl erc20_payment_lib::signer::Signer for IdentitySigner {
+    async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
+        self.0
+            .send(MapAddressToNodeId { pub_address })
+            .await
+            .map_err(|e| SignerError {
+                message: format!("Mailbox error: {e}"),
+            })?
+            .map(|_| ())
+    }
+
+    async fn sign(
+        &self,
+        pub_address: H160,
+        tp: TransactionParameters,
+    ) -> Result<SignedTransaction, SignerError> {
+        self.0
+            .send(Sign { pub_address, tp })
+            .await
+            .map_err(|e| SignerError {
+                message: format!("Mailbox error: {e}"),
+            })?
     }
 }

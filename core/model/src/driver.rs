@@ -36,7 +36,6 @@ pub struct Ack {}
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct AccountMode : usize {
-        const NONE = 0b000;
         const RECV = 0b001;
         const SEND = 0b010;
         const ALL = Self::RECV.bits | Self::SEND.bits;
@@ -51,6 +50,19 @@ pub struct PaymentDetails {
     pub sender: String,
     pub amount: BigDecimal,
     pub date: Option<DateTime<Utc>>,
+}
+
+impl Display for PaymentDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({{recipient: {}, sender: {}, amount: {}, date: {}}})",
+            self.recipient,
+            self.sender,
+            self.amount,
+            self.date.unwrap_or_default()
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

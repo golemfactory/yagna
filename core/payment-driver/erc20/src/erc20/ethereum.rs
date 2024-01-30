@@ -1,8 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use futures::prelude::*;
 use std::collections::HashMap;
-use std::pin::pin;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
@@ -201,19 +199,12 @@ async fn get_next_nonce_pending_with(
 pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
 where
     F: FnMut(Web3<Http>) -> R,
-    R: Future<Output = Result<T, ClientError>>,
+    R: futures::Future<Output = Result<T, ClientError>>,
 {
-    lazy_static! {
-        static ref RESOLVER: super::rpc_resolv::RpcResolver = super::rpc_resolv::RpcResolver::new();
-    };
-
-    let mut clients = pin!(RESOLVER
-        .clients_for(network)
-        .await
-        .map_err(GenericError::new)?);
+    let clients = get_clients(network).await?;
     let mut last_err: Option<ClientError> = None;
 
-    while let Some(client) = clients.next().await {
+    for client in clients {
         match f(client).await {
             Ok(result) => return Ok(result),
             Err(ClientError::Web3(e)) => match e {
@@ -534,7 +525,7 @@ async fn get_tx_receipt_with(
         .await
         .map_err(Into::into)
 }
-/*
+
 fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
     match network {
         Network::Mainnet => {
@@ -547,6 +538,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         Network::Goerli => {
             collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.ankr.com/eth_goerli")
         }
+        Network::Holesky => collect_rpc_addr_from(
+            "HOLESKY_GETH_ADDR",
+            "https://ethereum-holesky.publicnode.com",
+        ),
         Network::Polygon => collect_rpc_addr_from(
             "POLYGON_GETH_ADDR",
             "https://bor.golem.network,https://polygon-rpc.com",
@@ -595,12 +590,13 @@ async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> 
 
     Ok(clients)
 }
-*/
+
 fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
         Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Holesky => *config::HOLESKY_CONFIG,
         Network::Mumbai => *config::MUMBAI_CONFIG,
         Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
     }

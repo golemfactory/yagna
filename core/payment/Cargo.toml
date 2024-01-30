@@ -8,8 +8,8 @@ edition = "2018"
 default = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.5.0" }
-ya-client-model = { version = "0.5", features = ["with-diesel"] }
+ya-agreement-utils = { workspace = true }
+ya-client-model = { version = "0.6", features = ["with-diesel"] }
 ya-core-model = { version = "^0.9", features = [
     "activity",
     "driver",
@@ -52,17 +52,15 @@ serde_json = "1.0"
 structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1", features = ["fs", "signal", "macros"] }
-tokio-util = { version = "0.7.9", features = ["rt"] }
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 humantime = "2.0.1"
 erc20_payment_lib = { workspace = true }
 
 [dev-dependencies]
-ya-client = "0.7"
+ya-client = "0.8"
 ya-dummy-driver = "0.3"
 ya-erc20-driver = "0.4"
-ya-erc20next-driver = "0.4"
 ya-net = { version = "0.3", features = ["service"] }
 ya-sb-router = "0.6.1"
 

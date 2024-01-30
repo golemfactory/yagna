@@ -13,12 +13,35 @@ use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
-pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindOptions {
+    /// Enables background job for synchronizing invoice / debit note document status.
+    ///
+    /// This depends on the identity service being enabled to work. If you're working with a limited
+    /// subsets of services (e.g. in payment_api.rs example) you might wish to disable that.
+    pub run_sync_job: bool,
+}
+
+impl BindOptions {
+    /// Configure the `run_async_job` option.
+    pub fn run_sync_job(mut self, value: bool) -> Self {
+        self.run_sync_job = value;
+        self
+    }
+}
+
+impl Default for BindOptions {
+    fn default() -> Self {
+        BindOptions { run_sync_job: true }
+    }
+}
+
+pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor, opts: BindOptions) {
     log::debug!("Binding payment service to service bus");
 
     let processor = Arc::new(Mutex::new(processor));
     local::bind_service(db, processor.clone());
-    public::bind_service(db, processor);
+    public::bind_service(db, processor, opts);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -27,8 +50,15 @@ mod local {
     use super::*;
     use crate::dao::*;
     use chrono::NaiveDateTime;
-    use std::collections::BTreeMap;
-    use ya_client_model::payment::{Account, DocumentStatus, DriverDetails, DriverStatusProperty};
+    use std::{collections::BTreeMap, convert::TryInto};
+    use ya_client_model::{
+        payment::{
+            Account, DebitNoteEventType, DocumentStatus, DriverDetails, DriverStatusProperty,
+            InvoiceEventType,
+        },
+        NodeId,
+    };
+    use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
         payment::local::*,
@@ -52,6 +82,7 @@ mod local {
             .bind_with_processor(release_allocations)
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
+            .bind_with_processor(handle_status_change)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -381,6 +412,228 @@ mod local {
         Ok(status_props)
     }
 
+    // *************************** PAYMENT ****************************
+    async fn handle_status_change(
+        db: DbExecutor,
+        _processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: PaymentDriverStatusChange,
+    ) -> Result<Ack, GenericError> {
+        /// Payment platform affected by status
+        ///
+        /// It doesn't contain the token because we don't actually
+        /// support multiple tokens on one chain.
+        ///
+        /// TODO: remove references to token stuff in yagna and ideally
+        /// make payment platforms properly typed along the way.
+        #[derive(Hash, PartialEq, Eq)]
+        struct Platform {
+            driver: String,
+            network: String,
+        }
+
+        impl Platform {
+            fn new(driver: impl Into<String>, network: impl Into<String>) -> Self {
+                Platform {
+                    driver: driver.into(),
+                    network: network.into(),
+                }
+            }
+        }
+
+        let platform_str_to_platform = |platform: &str| -> Result<Platform, GenericError> {
+            let parts = platform.split('-').collect::<Vec<_>>();
+            let [driver, network, _]: [_; 3] = parts.try_into().map_err(|_| {
+                GenericError::new("Payment platform must be of the form {driver}-{network}-{token}")
+            })?;
+
+            Ok(Platform::new(driver, network))
+        };
+
+        /// Event broadcast information
+        ///
+        /// Each status property shall be broadcasted to all debit notes
+        /// and invoices affected.
+        ///
+        /// If properties are empty, a PaymentOkEvent will be sent.
+        #[derive(Default)]
+        struct Broadcast {
+            debit_notes: Vec<(String, NodeId)>,
+            invoices: Vec<(String, NodeId)>,
+            properties: Vec<DriverStatusProperty>,
+        }
+
+        // Create a mapping between platforms and relevant properties.
+        //
+        // This relies on the fact that a given payment driver status property
+        // can only affect one platform.
+        let mut broadcast = HashMap::<Platform, Broadcast>::default();
+        for prop in msg.properties {
+            let Some(network) = prop.network() else {
+                continue;
+            };
+
+            let value = broadcast
+                .entry(Platform::new(prop.driver(), network))
+                .or_default();
+            value.properties.push(prop);
+        }
+
+        // All DAOs
+        let debit_note_dao: DebitNoteDao = db.as_dao();
+        let debit_note_ev_dao: DebitNoteEventDao = db.as_dao();
+        let invoice_dao: InvoiceDao = db.as_dao();
+        let invoice_ev_dao: InvoiceEventDao = db.as_dao();
+
+        let accepted_notes = debit_note_dao
+            .list(
+                Some(Role::Requestor),
+                Some(DocumentStatus::Accepted),
+                Some(true),
+            )
+            .await
+            .map_err(GenericError::new)?;
+
+        // Populate broadcasts with affected debit_notes
+        for debit_note in accepted_notes {
+            let platform = platform_str_to_platform(&debit_note.payment_platform)?;
+
+            // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
+            let was_already_ok = debit_note_ev_dao
+                .get_for_debit_note_id(
+                    debit_note.debit_note_id.clone(),
+                    None,
+                    None,
+                    None,
+                    vec!["PAYMENT_EVENT".into(), "PAYMENT_OK".into()],
+                    vec![],
+                )
+                .await
+                .map_err(GenericError::new)?
+                .last()
+                .map(|ev_type| {
+                    matches!(
+                        &ev_type.event_type,
+                        DebitNoteEventType::DebitNotePaymentOkEvent
+                    )
+                })
+                .unwrap_or(true);
+
+            if !was_already_ok {
+                // If debit note has reported driver errors before, we *must* send a broadcast on status change.
+                // This will either be a new problem, or PaymentOkEvent if no errors are found.
+                broadcast
+                    .entry(platform)
+                    .or_default()
+                    .debit_notes
+                    .push((debit_note.debit_note_id, debit_note.issuer_id));
+            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
+                broadcast
+                    .debit_notes
+                    .push((debit_note.debit_note_id, debit_note.issuer_id));
+            }
+        }
+
+        let accepted_invoices = invoice_dao
+            .list(Some(Role::Requestor), Some(DocumentStatus::Accepted))
+            .await
+            .map_err(GenericError::new)?;
+
+        // Populate broadcasts with affected invoices
+        for invoice in accepted_invoices {
+            let platform = platform_str_to_platform(&invoice.payment_platform)?;
+
+            // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
+            let was_already_ok = invoice_ev_dao
+                .get_for_invoice_id(
+                    invoice.invoice_id.clone(),
+                    None,
+                    None,
+                    None,
+                    vec!["PAYMENT_EVENT".into(), "PAYMENT_OK".into()],
+                    vec![],
+                )
+                .await
+                .map_err(GenericError::new)?
+                .last()
+                .map(|ev_type| {
+                    matches!(&ev_type.event_type, InvoiceEventType::InvoicePaymentOkEvent)
+                })
+                .unwrap_or(true);
+
+            if !was_already_ok {
+                // If invoice has reported driver errors before, we *must* send a broadcast on status change.
+                // This will either be a new problem, or PaymentOkEvent if no errors are found.
+                broadcast
+                    .entry(platform)
+                    .or_default()
+                    .invoices
+                    .push((invoice.invoice_id, invoice.issuer_id));
+            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
+                broadcast
+                    .invoices
+                    .push((invoice.invoice_id, invoice.issuer_id));
+            }
+        }
+
+        // Emit debit note & invoice events.
+        for broadcast in broadcast.into_values() {
+            // If properties are empty, send OkEvents. Otherwise send the wrapped properties.
+            if broadcast.properties.is_empty() {
+                for (debit_note_id, owner_id) in &broadcast.debit_notes {
+                    debit_note_ev_dao
+                        .create(
+                            debit_note_id.clone(),
+                            *owner_id,
+                            DebitNoteEventType::DebitNotePaymentOkEvent,
+                        )
+                        .await
+                        .map_err(GenericError::new)?;
+                }
+
+                for (invoice_id, owner_id) in &broadcast.invoices {
+                    invoice_ev_dao
+                        .create(
+                            invoice_id.clone(),
+                            *owner_id,
+                            InvoiceEventType::InvoicePaymentOkEvent,
+                        )
+                        .await
+                        .map_err(GenericError::new)?;
+                }
+            } else {
+                for prop in broadcast.properties {
+                    for (invoice_id, owner_id) in &broadcast.invoices {
+                        invoice_ev_dao
+                            .create(
+                                invoice_id.clone(),
+                                *owner_id,
+                                InvoiceEventType::InvoicePaymentStatusEvent {
+                                    property: prop.clone(),
+                                },
+                            )
+                            .await
+                            .map_err(GenericError::new)?;
+                    }
+                    for (debit_note_id, owner_id) in &broadcast.debit_notes {
+                        debit_note_ev_dao
+                            .create(
+                                debit_note_id.clone(),
+                                *owner_id,
+                                DebitNoteEventType::DebitNotePaymentStatusEvent {
+                                    property: prop.clone(),
+                                },
+                            )
+                            .await
+                            .map_err(GenericError::new)?;
+                    }
+                }
+            }
+        }
+
+        Ok(Ack {})
+    }
+
     async fn shut_down(
         db: DbExecutor,
         processor: Arc<Mutex<PaymentProcessor>>,
@@ -396,7 +649,6 @@ mod local {
 }
 
 mod public {
-    use std::convert::TryInto;
     use std::str::FromStr;
 
     use super::*;
@@ -409,11 +661,14 @@ mod public {
 
     // use crate::error::processor::VerifyPaymentError;
     use ya_client_model::{payment::*, NodeId};
-    use ya_core_model::payment::local::PaymentDriverStatusChange;
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
+    pub fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        opts: BindOptions,
+    ) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -429,8 +684,10 @@ mod public {
             .bind_with_processor(send_payment)
             .bind_with_processor(sync_payment);
 
-        send_sync_notifs_job(db.clone());
-        send_sync_requests(db.clone());
+        if opts.run_sync_job {
+            send_sync_notifs_job(db.clone());
+            send_sync_requests(db.clone());
+        }
 
         log::debug!("Successfully bound payment public service to service bus");
     }
@@ -685,7 +942,7 @@ mod public {
     ) -> Result<Ack, AcceptRejectError> {
         let invoice_id = msg.invoice_id;
         let acceptance = msg.acceptance;
-        let node_id = msg.issuer_id;
+        let owner_id = msg.issuer_id;
 
         log::debug!(
             "Got AcceptInvoice [{}] from Node [{}].",
@@ -695,7 +952,7 @@ mod public {
         counter!("payment.invoices.provider.accepted.call", 1);
 
         let dao: InvoiceDao = db.as_dao();
-        let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
+        let invoice: Invoice = match dao.get(invoice_id.clone(), owner_id).await {
             Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -724,11 +981,11 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(invoice_id.clone(), node_id).await {
+        match dao.accept(invoice_id.clone(), owner_id).await {
             Ok(_) => {
                 log::info!(
                     "Node [{}] accepted invoice [{}] for Agreement [{}].",
-                    node_id,
+                    owner_id,
                     invoice_id,
                     invoice.agreement_id
                 );
@@ -742,10 +999,57 @@ mod public {
 
     async fn reject_invoice(
         db: DbExecutor,
-        sender: String,
-        msg: RejectInvoice,
+        sender_id: String,
+        msg: RejectInvoiceV2,
     ) -> Result<Ack, AcceptRejectError> {
-        unimplemented!() // TODO
+        let invoice_id = msg.invoice_id;
+        let rejection = msg.rejection;
+        let owner_id = msg.issuer_id;
+
+        log::debug!(
+            "Got RejectInvoiceV2 [{}] from Node [{}].",
+            invoice_id,
+            sender_id,
+        );
+        counter!("payment.invoices.provider.rejected.call", 1);
+
+        let dao: InvoiceDao = db.as_dao();
+        let invoice: Invoice = match dao.get(invoice_id.clone(), owner_id).await {
+            Ok(Some(invoice)) => invoice,
+            Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
+            Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != invoice.recipient_id.to_string() {
+            return Err(AcceptRejectError::Forbidden);
+        }
+
+        match invoice.status {
+            status @ DocumentStatus::Accepted
+            | status @ DocumentStatus::Settled
+            | status @ DocumentStatus::Cancelled => {
+                return Err(AcceptRejectError::BadRequest(format!(
+                    "Cannot reject {status:?} invoice"
+                )));
+            }
+            DocumentStatus::Rejected => return Ok(Ack {}),
+            _ => (),
+        }
+
+        match dao.reject(invoice_id.clone(), owner_id, rejection).await {
+            Ok(_) => {
+                log::info!(
+                    "Node [{}] rejected invoice [{}] for Agreement [{}].",
+                    owner_id,
+                    invoice_id,
+                    invoice.agreement_id
+                );
+                counter!("payment.invoices.provider.rejected", 1);
+                Ok(Ack {})
+            }
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
+            Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        }
     }
 
     async fn cancel_invoice(
@@ -796,226 +1100,6 @@ mod public {
             }
             Err(e) => Err(CancelError::ServiceError(e.to_string())),
         }
-    }
-
-    // *************************** PAYMENT ****************************
-    async fn handle_status_change(
-        db: DbExecutor,
-        msg: PaymentDriverStatusChange,
-    ) -> Result<Ack, GenericError> {
-        /// Payment platform affected by status
-        ///
-        /// It doesn't contain the token because we don't actually
-        /// support multiple tokens on one chain.
-        ///
-        /// TODO: remove references to token stuff in yagna and ideally
-        /// make payment platforms properly typed along the way.
-        #[derive(Hash, PartialEq, Eq)]
-        struct Platform {
-            driver: String,
-            network: String,
-        }
-
-        impl Platform {
-            fn new(driver: impl Into<String>, network: impl Into<String>) -> Self {
-                Platform {
-                    driver: driver.into(),
-                    network: network.into(),
-                }
-            }
-        }
-
-        let platform_str_to_platform = |platform: &str| -> Result<Platform, GenericError> {
-            let parts = platform.split('-').collect::<Vec<_>>();
-            let [driver, network, _]: [_; 3] = parts.try_into().map_err(|_| {
-                GenericError::new("Payment platform must be of the form {driver}-{network}-{token}")
-            })?;
-
-            Ok(Platform::new(driver, network))
-        };
-
-        /// Event broadcast information
-        ///
-        /// Each status property shall be broadcasted to all debit notes
-        /// and invoices affected.
-        ///
-        /// If properties are empty, a PaymentOkEvent will be sent.
-        #[derive(Default)]
-        struct Broadcast {
-            debit_notes: Vec<(String, NodeId)>,
-            invoices: Vec<(String, NodeId)>,
-            properties: Vec<DriverStatusProperty>,
-        }
-
-        // Create a mapping between platforms and relevant properties.
-        //
-        // This relies on the fact that a given payment driver status property
-        // can only affect one platform.
-        let mut broadcast = HashMap::<Platform, Broadcast>::default();
-        for prop in msg.properties {
-            let Some(network) = prop.network() else {
-                continue;
-            };
-
-            let value = broadcast
-                .entry(Platform::new(prop.driver(), network))
-                .or_default();
-            value.properties.push(prop);
-        }
-
-        // All DAOs
-        let debit_note_dao: DebitNoteDao = db.as_dao();
-        let debit_note_ev_dao: DebitNoteEventDao = db.as_dao();
-        let invoice_dao: InvoiceDao = db.as_dao();
-        let invoice_ev_dao: InvoiceEventDao = db.as_dao();
-
-        let accepted_notes = debit_note_dao
-            .list(
-                Some(Role::Requestor),
-                Some(DocumentStatus::Accepted),
-                Some(true),
-            )
-            .await
-            .map_err(GenericError::new)?;
-
-        // Populate broadcasts with affected debit_notes
-        for debit_note in accepted_notes {
-            let platform = platform_str_to_platform(&debit_note.payment_platform)?;
-
-            // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
-            let was_already_ok = debit_note_ev_dao
-                .get_for_debit_note_id(
-                    debit_note.debit_note_id.clone(),
-                    None,
-                    None,
-                    None,
-                    vec!["PAYMENT_EVENT".into(), "PAYMENT_OK".into()],
-                    vec![],
-                )
-                .await
-                .map_err(GenericError::new)?
-                .last()
-                .map(|ev_type| {
-                    matches!(
-                        &ev_type.event_type,
-                        DebitNoteEventType::DebitNotePaymentOkEvent
-                    )
-                })
-                .unwrap_or(true);
-
-            if !was_already_ok {
-                // If debit note has reported driver errors before, we *must* send a broadcast on status change.
-                // This will either be a new problem, or PaymentOkEvent if no errors are found.
-                broadcast
-                    .entry(platform)
-                    .or_default()
-                    .debit_notes
-                    .push((debit_note.debit_note_id, debit_note.issuer_id));
-            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
-                broadcast
-                    .debit_notes
-                    .push((debit_note.debit_note_id, debit_note.issuer_id));
-            }
-        }
-
-        let accepted_invoices = invoice_dao
-            .list(Some(Role::Requestor), Some(DocumentStatus::Accepted))
-            .await
-            .map_err(GenericError::new)?;
-
-        // Populate broadcasts with affected invoices
-        for invoice in accepted_invoices {
-            let platform = platform_str_to_platform(&invoice.payment_platform)?;
-
-            // checks if the last payment-status event was PAYMENT_OK or no such event was emitted
-            let was_already_ok = invoice_ev_dao
-                .get_for_invoice_id(
-                    invoice.invoice_id.clone(),
-                    None,
-                    None,
-                    None,
-                    vec!["PAYMENT_EVENT".into(), "PAYMENT_OK".into()],
-                    vec![],
-                )
-                .await
-                .map_err(GenericError::new)?
-                .last()
-                .map(|ev_type| {
-                    matches!(&ev_type.event_type, InvoiceEventType::InvoicePaymentOkEvent)
-                })
-                .unwrap_or(true);
-
-            if !was_already_ok {
-                // If invoice has reported driver errors before, we *must* send a broadcast on status change.
-                // This will either be a new problem, or PaymentOkEvent if no errors are found.
-                broadcast
-                    .entry(platform)
-                    .or_default()
-                    .invoices
-                    .push((invoice.invoice_id, invoice.issuer_id));
-            } else if let Some(broadcast) = broadcast.get_mut(&platform) {
-                broadcast
-                    .invoices
-                    .push((invoice.invoice_id, invoice.issuer_id));
-            }
-        }
-
-        // Emit debit note & invoice events.
-        for broadcast in broadcast.into_values() {
-            // If properties are empty, send OkEvents. Otherwise send the wrapped properties.
-            if broadcast.properties.is_empty() {
-                for (debit_note_id, owner_id) in &broadcast.debit_notes {
-                    debit_note_ev_dao
-                        .create(
-                            debit_note_id.clone(),
-                            *owner_id,
-                            DebitNoteEventType::DebitNotePaymentOkEvent,
-                        )
-                        .await
-                        .map_err(GenericError::new)?;
-                }
-
-                for (invoice_id, owner_id) in &broadcast.invoices {
-                    invoice_ev_dao
-                        .create(
-                            invoice_id.clone(),
-                            *owner_id,
-                            InvoiceEventType::InvoicePaymentOkEvent,
-                        )
-                        .await
-                        .map_err(GenericError::new)?;
-                }
-            } else {
-                for prop in broadcast.properties {
-                    for (invoice_id, owner_id) in &broadcast.invoices {
-                        invoice_ev_dao
-                            .create(
-                                invoice_id.clone(),
-                                *owner_id,
-                                InvoiceEventType::InvoicePaymentStatusEvent {
-                                    property: prop.clone(),
-                                },
-                            )
-                            .await
-                            .map_err(GenericError::new)?;
-                    }
-                    for (debit_note_id, owner_id) in &broadcast.debit_notes {
-                        debit_note_ev_dao
-                            .create(
-                                debit_note_id.clone(),
-                                *owner_id,
-                                DebitNoteEventType::DebitNotePaymentStatusEvent {
-                                    property: prop.clone(),
-                                },
-                            )
-                            .await
-                            .map_err(GenericError::new)?;
-                    }
-                }
-            }
-        }
-
-        Ok(Ack {})
     }
 
     async fn send_payment(
@@ -1096,6 +1180,13 @@ mod public {
 
         for invoice_accept in msg.invoice_accepts {
             let result = accept_invoice(db.clone(), sender_id.clone(), invoice_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        for invoice_reject in msg.invoice_rejects {
+            let result = reject_invoice(db.clone(), sender_id.clone(), invoice_reject).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
             }
