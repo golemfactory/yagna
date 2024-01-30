@@ -5,6 +5,7 @@ use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
+use ya_client_model::payment::allocation::PaymentPlatformEnum;
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
@@ -73,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     let allocation = requestor
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)
-            payment_platform: Some(args.platform),
+            payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(args.platform)),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
