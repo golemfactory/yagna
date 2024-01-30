@@ -11,7 +11,7 @@ use diesel::{
 };
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice, Rejection};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
@@ -413,20 +413,73 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    // TODO: Implement reject invoice
-    // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-    //     do_with_transaction(self.pool, move |conn| {
-    //         let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
-    //             .find((&invoice_id, &owner_id))
-    //             .select((dsl::agreement_id, dsl::amount, dsl::role))
-    //             .first(conn)?;
-    //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-    //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
-    //
-    //         Ok(())
-    //     })
-    //     .await
-    // }
+    pub async fn reject(
+        &self,
+        invoice_id: String,
+        owner_id: NodeId,
+        rejection: Rejection,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "invoice_reject", move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Rejected, conn)?;
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_invoice
+                        .filter(dsl::id.eq(invoice_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_reject.eq(true))
+                .execute(conn)?;
+            }
+            invoice_event::create(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceRejectedEvent { rejection },
+                conn,
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_reject_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, "mark_reject_sent", move |conn| {
+            diesel::update(
+                dsl::pay_invoice
+                    .filter(dsl::id.eq(invoice_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .set(dsl::send_reject.eq(false))
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn unsent_rejected(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, "unsent_rejected", move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_reject.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .load(conn)?;
+
+            let activities = activity_dsl::pay_invoice_x_activity
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(owner_id))
+                .select(crate::schema::pay_invoice_x_activity::all_columns)
+                .load(conn)?;
+            join_invoices_with_activities(invoices, activities)
+        })
+        .await
+    }
 
     pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, "invoice_dao_cancel", move |conn| {

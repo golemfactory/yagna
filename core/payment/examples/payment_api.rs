@@ -118,7 +118,7 @@ fn fake_list_identities(identities: Vec<NodeId>) {
                 is_locked: false,
             });
         }
-        async move { Ok(accounts) }
+        std::future::ready(Ok(accounts))
     });
 }
 
@@ -204,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
         .provider_addr
         .unwrap_or_else(|| provider_id.clone())
         .to_lowercase();
+    let provider_pub_key = provider_account.public();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
     let requestor_account = load_or_generate(&args.requestor_key_path, requestor_pass);
@@ -212,6 +213,7 @@ async fn main() -> anyhow::Result<()> {
         .requestor_addr
         .unwrap_or_else(|| requestor_id.clone())
         .to_lowercase();
+    let requestor_pub_key = requestor_account.public();
 
     log::info!(
         "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",
@@ -318,6 +320,24 @@ async fn main() -> anyhow::Result<()> {
     };
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
     utils::provider::fake_get_agreement_id(args.agreement_id.clone());
+
+    bus::bind(identity::BUS_ID, {
+        let provider_key = provider_pub_key.clone();
+        let requestor_key = requestor_pub_key.clone();
+        move |msg: identity::GetPubKey| {
+            let node_id: &[u8; 20] = msg.0.as_ref();
+            let pub_key = if node_id == provider_key.address() {
+                Some(provider_key.bytes())
+            } else if node_id == requestor_key.address() {
+                Some(requestor_key.bytes())
+            } else {
+                None
+            }
+            .map(|bytes| bytes.to_vec())
+            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
+            std::future::ready(pub_key)
+        }
+    });
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
