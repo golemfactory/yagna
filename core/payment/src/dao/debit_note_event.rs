@@ -44,7 +44,7 @@ impl<'c> DebitNoteEventDao<'c> {
         owner_id: NodeId,
         event_type: DebitNoteEventType,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "debit_note_create", move |conn| {
             create(debit_note_id, owner_id, event_type, conn)
         })
         .await
@@ -59,7 +59,7 @@ impl<'c> DebitNoteEventDao<'c> {
         requestor_events: Vec<Cow<'static, str>>,
         provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "debit_note_get_for_debit_note_id", move |conn| {
             let mut query = read_dsl::pay_debit_note_event_read
                 .filter(read_dsl::debit_note_id.eq(debit_note_id))
                 .order_by(read_dsl::timestamp.asc())
@@ -98,7 +98,7 @@ impl<'c> DebitNoteEventDao<'c> {
         requestor_events: Vec<Cow<'static, str>>,
         provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "debit_note_get_for_node_id", move |conn| {
             let mut query = read_dsl::pay_debit_note_event_read
                 .filter(read_dsl::owner_id.eq(node_id))
                 .order_by(read_dsl::timestamp.asc())
