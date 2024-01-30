@@ -74,6 +74,12 @@ fn get_default_token(driver: &str, network: &str) -> Result<&'static str, String
 }
 
 fn validate_token(network: &str, driver: &str, token: &str) -> Result<(), String> {
+    if token == "GLM" || token == "tGLM" {
+        return Err(format!(
+            "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+            token
+        ));
+    }
     let token_expected = match (driver, network) {
         ("erc20", "mainnet") => "glm",
         ("erc20", "rinkeby") => "tglm",
@@ -90,8 +96,9 @@ fn validate_token(network: &str, driver: &str, token: &str) -> Result<(), String
     };
     if token != token_expected {
         return Err(format!(
-            "Token {} does not match expected token {}",
-            token, token_expected
+            "Token {} does not match expected token {} for driver {} and network {}. \
+            Note that for test networks expected token name is tglm and for production networks it is glm",
+            token, token_expected, driver, network
         ));
     }
     Ok(())
@@ -255,10 +262,19 @@ async fn create_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(false) => {
+            let error_msg = format!("Insufficient funds to make allocation for payment platform {payment_platform}. \
+             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`");
+            log::error!("{}", error_msg);
+            return response::bad_request(&error_msg);
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-                           ValidateAllocationError::AccountNotRegistered,
-                       ))) => return response::bad_request(&"Account not registered"),
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => {
+            let error_msg = format!("Account not registered - payment platform {payment_platform}");
+            log::error!("{}", error_msg);
+            return response::bad_request(&error_msg);
+        }
         Err(e) => return response::server_error(&e),
     }
 
