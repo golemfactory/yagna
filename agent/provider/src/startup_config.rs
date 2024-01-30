@@ -22,7 +22,6 @@ use crate::cli::keystore::KeystoreConfig;
 use crate::cli::pre_install::PreInstallConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
-use crate::config::globals::Frequency;
 use crate::cli::rule::RuleCommand;
 use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
@@ -167,9 +166,6 @@ pub struct NodeConfig {
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
-
-    #[structopt(long, env = "SETTLEMENT_FREQUENCY")]
-    pub settlement_frequency: Option<Frequency>,
 
     #[structopt(flatten)]
     pub account: ReceiverAccount,
