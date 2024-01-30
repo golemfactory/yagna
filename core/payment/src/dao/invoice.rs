@@ -419,7 +419,7 @@ impl<'c> InvoiceDao<'c> {
         owner_id: NodeId,
         rejection: Rejection,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_reject", move |conn| {
             let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
@@ -446,7 +446,7 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn mark_reject_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "mark_reject_sent", move |conn| {
             diesel::update(
                 dsl::pay_invoice
                     .filter(dsl::id.eq(invoice_id))
@@ -460,7 +460,7 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn unsent_rejected(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "unsent_rejected", move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_reject.eq(true))
