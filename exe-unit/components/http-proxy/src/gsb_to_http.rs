@@ -1,3 +1,4 @@
+use crate::headers::Headers;
 use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
 use async_stream::stream;
@@ -29,10 +30,7 @@ impl GsbToHttpProxy {
             };
             let mut builder = client.request(method, &url);
 
-            builder = match &message.body {
-                Some(body) => builder.json(body),
-                None => builder,
-            };
+            builder = Headers::add(builder, message.headers);
 
             log::info!("Calling {}", &url);
             let response = builder.send().await;
@@ -66,5 +64,43 @@ impl GsbToHttpProxy {
         };
 
         Box::pin(stream)
+    }
+}
+
+mod tests {
+    use super::*;
+    use futures::StreamExt;
+    use mockito;
+    use std::collections::HashMap;
+
+    #[actix_web::test]
+    async fn gsb_to_http_test() {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let url = server.url();
+
+        server
+            .mock("GET", "/endpoint")
+            .with_status(201)
+            .with_body("response")
+            .create();
+
+        let mut gsb_call = GsbToHttpProxy { base_url: url };
+
+        let message = GsbHttpCallMessage {
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
+            headers: HashMap::new(),
+        };
+
+        let mut response_stream = gsb_call.pass(message);
+
+        let mut v = vec![];
+        while let Some(event) = response_stream.next().await {
+            v.push(event.msg);
+        }
+
+        assert_eq!(vec!["response"], v);
     }
 }

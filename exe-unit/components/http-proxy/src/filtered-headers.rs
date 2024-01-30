@@ -1,3 +1,0 @@
-struct HttpGsbProxyHeadersFilter {}
-
-impl HttpGsbProxyHeadersFilter {}
