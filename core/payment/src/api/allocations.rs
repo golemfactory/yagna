@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::str::FromStr;
 use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
@@ -13,7 +14,8 @@ use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
-    ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
+    get_token_from_network_name, DriverName, NetworkName, ValidateAllocation,
+    ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_persistence::executor::DbExecutor;
@@ -39,61 +41,33 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/demandDecorations", get().to(get_demand_decorations))
 }
 
-fn validate_network(network: &str) -> Result<(), String> {
-    match network {
-        "mainnet" => Ok(()),
-        "rinkeby" => Err("Rinkeby is no longer supported".to_string()),
-        "goerli" => Ok(()),
-        "holesky" => Ok(()),
-        "polygon" => Ok(()),
-        "mumbai" => Ok(()),
-        _ => Err(format!("Invalid network name: {network}")),
+fn validate_network(network: &str) -> Result<NetworkName, String> {
+    match NetworkName::from_str(network) {
+        Ok(NetworkName::Rinkeby) => Err("Rinkeby is no longer supported".to_string()),
+        Ok(network_name) => Ok(network_name),
+        Err(_) => Err(format!("Invalid network name: {network}")),
     }
 }
 
-fn validate_driver(_network: &str, driver: &str) -> Result<(), String> {
-    match driver {
-        "erc20" => Ok(()),
-        _ => Err(format!("Invalid driver name {}", driver)),
+fn validate_driver(network: &NetworkName, driver: &str) -> Result<DriverName, String> {
+    match DriverName::from_str(driver) {
+        Err(_) => Err(format!("Invalid driver name {}", driver)),
+        Ok(driver_name) => Ok(driver_name),
     }
 }
 
-fn get_default_token(driver: &str, network: &str) -> Result<&'static str, String> {
-    match (driver, network) {
-        ("erc20", "mainnet") => Ok("glm"),
-        ("erc20", "rinkeby") => Ok("tglm"),
-        ("erc20", "goerli") => Ok("tglm"),
-        ("erc20", "holesky") => Ok("tglm"),
-        ("erc20", "polygon") => Ok("glm"),
-        ("erc20", "mumbai") => Ok("tglm"),
-        _ => Err(format!(
-            "Unknown combination of network {} and driver {}",
-            network, driver
-        )),
-    }
+fn get_default_token(_driver: &DriverName, network: &NetworkName) -> String {
+    get_token_from_network_name(network).to_lowercase()
 }
 
-fn validate_token(network: &str, driver: &str, token: &str) -> Result<(), String> {
+fn validate_token(driver: &DriverName, network: &NetworkName, token: &str) -> Result<(), String> {
     if token == "GLM" || token == "tGLM" {
         return Err(format!(
             "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
             token
         ));
     }
-    let token_expected = match (driver, network) {
-        ("erc20", "mainnet") => "glm",
-        ("erc20", "rinkeby") => "tglm",
-        ("erc20", "goerli") => "tglm",
-        ("erc20", "holesky") => "tglm",
-        ("erc20", "polygon") => "glm",
-        ("erc20", "mumbai") => "tglm",
-        _ => {
-            return Err(format!(
-                "Unknown combination of network {} and driver {}",
-                network, driver
-            ))
-        }
-    };
+    let token_expected = get_default_token(driver, network);
     if token != token_expected {
         return Err(format!(
             "Token {} does not match expected token {} for driver {} and network {}. \
@@ -140,7 +114,7 @@ async fn create_allocation(
                     return response::bad_request(&err_msg);
                 }
             } else {
-                let network = p.network.as_deref().unwrap_or_else(|| {
+                let network_str = p.network.as_deref().unwrap_or_else(|| {
                     if let Some(token) = p.token.as_ref() {
                         if token == "glm" {
                             log::debug!("Network not specified, using default polygon, because token set to glm");
@@ -154,39 +128,42 @@ async fn create_allocation(
                         "holesky"
                     }
                 });
-                if let Err(err) = validate_network(network) {
-                    let err_msg = format!("Validate network failed (1): {err}");
-                    log::error!("{}", err_msg);
-                    return response::bad_request(&err_msg);
-                }
-                let driver = p.driver.as_deref().unwrap_or_else(|| {
+                let network = match validate_network(network_str) {
+                    Ok(network) => network,
+                    Err(err) => {
+                        let err_msg = format!("Validate network failed (1): {err}");
+                        log::error!("{}", err_msg);
+                        return response::bad_request(&err_msg);
+                    }
+                };
+                let driver_str = p.driver.as_deref().unwrap_or_else(|| {
                     log::debug!("Driver not specified, using default erc20");
                     "erc20"
                 });
-                if let Err(err) = validate_driver(network, driver) {
-                    let err_msg = format!("Validate driver failed (1): {err}");
-                    log::error!("{}", err_msg);
-                    return response::bad_request(&err_msg);
-                }
+                let driver = match validate_driver(&network, driver_str) {
+                    Ok(driver) => driver,
+                    Err(err) => {
+                        let err_msg = format!("Validate driver failed (1): {err}");
+                        log::error!("{}", err_msg);
+                        return response::bad_request(&err_msg);
+                    }
+                };
                 if let Some(token) = p.token.as_ref() {
-                    if let Err(err) = validate_token(network, driver, token) {
+                    if let Err(err) = validate_token(&driver, &network, token) {
                         let err_msg = format!("Validate token failed (1): {err}");
                         log::error!("{}", err_msg);
                         return response::bad_request(&err_msg);
                     }
-                    log::debug!("Selected network {driver}-{network}-{token}");
+                    log::debug!("Selected network {}-{}-{}", driver, network, token);
                     format!("{}-{}-{}", driver, network, token)
                 } else {
-                    let default_token = match get_default_token(driver, network) {
-                        Ok(token) => token,
-                        Err(err) => {
-                            let err_msg = format!("Get default token failed (1): {err}");
-                            log::error!("{}", err_msg);
-                            return response::bad_request(&err_msg);
-                        }
-                    };
+                    let default_token = get_default_token(&driver, &network);
+
                     log::debug!(
-                        "Selected network with default token {driver}-{network}-{default_token}"
+                        "Selected network with default token {}-{}-{}",
+                        driver,
+                        network,
+                        default_token
                     );
                     format!("{}-{}-{}", driver, network, default_token)
                 }
@@ -205,7 +182,7 @@ async fn create_allocation(
 
     // payment_platform is of the form driver-network-token
     // eg. erc20-rinkeby-tglm
-    let [driver, network, token]: [&str; 3] = match payment_platform
+    let [driver_str, network_str, token_str]: [&str; 3] = match payment_platform
         .split('-')
         .collect::<Vec<_>>()
         .try_into()
@@ -218,17 +195,25 @@ async fn create_allocation(
         }
     };
 
-    if let Err(err) = validate_network(network) {
-        let err_msg = format!("Validate network failed (2): {err}");
-        log::error!("{}", err_msg);
-        return response::bad_request(&err_msg);
-    }
-    if let Err(err) = validate_driver(network, driver) {
-        let err_msg = format!("Validate driver failed (2): {err}");
-        log::error!("{}", err_msg);
-        return response::bad_request(&err_msg);
-    }
-    if let Err(err) = validate_token(network, driver, token) {
+    let network = match validate_network(network_str) {
+        Ok(network) => network,
+        Err(err) => {
+            let err_msg = format!("Validate network failed (2): {err}");
+            log::error!("{}", err_msg);
+            return response::bad_request(&err_msg);
+        }
+    };
+
+    let driver = match validate_driver(&network, driver_str) {
+        Ok(driver) => driver,
+        Err(err) => {
+            let err_msg = format!("Validate driver failed (2): {err}");
+            log::error!("{}", err_msg);
+            return response::bad_request(&err_msg);
+        }
+    };
+
+    if let Err(err) = validate_token(&driver, &network, token_str) {
         let err_msg = format!("Validate token failed (2): {err}");
         log::error!("{}", err_msg);
         return response::bad_request(&err_msg);
@@ -238,13 +223,13 @@ async fn create_allocation(
         "Creating allocation for payment platform: {}-{}-{}",
         driver,
         network,
-        token
+        token_str
     );
 
     let acc = Account {
-        driver: driver.to_owned(),
+        driver: driver.to_string(),
         address: address.clone(),
-        network: Some(network.to_owned()),
+        network: Some(network.to_string()),
         token: None,
         send: true,
         receive: false,
@@ -260,6 +245,7 @@ async fn create_allocation(
         address: address.clone(),
         amount: allocation.total_amount.clone(),
     };
+
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
         Ok(false) => {
