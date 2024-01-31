@@ -44,7 +44,7 @@ impl<'c> InvoiceEventDao<'c> {
         owner_id: NodeId,
         event_type: InvoiceEventType,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_event_dao_create", move |conn| {
             create(invoice_id, owner_id, event_type, conn)
         })
         .await
@@ -59,7 +59,7 @@ impl<'c> InvoiceEventDao<'c> {
         requestor_events: Vec<Cow<'static, str>>,
         provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<InvoiceEvent>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_event_get_for_invoice_id", move |conn| {
             let mut query = read_dsl::pay_invoice_event_read
                 .filter(read_dsl::invoice_id.eq(invoice_id))
                 .order_by(read_dsl::timestamp.asc())
@@ -98,7 +98,7 @@ impl<'c> InvoiceEventDao<'c> {
         requestor_events: Vec<Cow<'static, str>>,
         provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<InvoiceEvent>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_event_get_for_node_id", move |conn| {
             let mut query = read_dsl::pay_invoice_event_read
                 .filter(read_dsl::owner_id.eq(node_id))
                 .order_by(read_dsl::timestamp.asc())
