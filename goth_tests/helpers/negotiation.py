@@ -24,7 +24,7 @@ class DemandBuilder:
 
     def __init__(self, requestor: RequestorProbe):
         self._requestor = requestor
-        self._properties = dict()
+        self._properties = {"golem.com.payment.protocol.version": 2}
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
