@@ -90,6 +90,9 @@ async fn create_allocation(
     const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-holesky-tglm";
     const DEFAULT_PAYMENT_PLATFORM_FOR_TGLM: &str = "erc20-holesky-tglm";
     const DEFAULT_PAYMENT_PLATFORM_FOR_GLM: &str = "erc20-polygon-glm";
+    const DEFAULT_TESTNET_NETWORK: &str = "holesky";
+    const DEFAULT_MAINNET_NETWORK: &str = "polygon";
+    const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     let payment_platform = match &allocation.payment_platform {
         Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
@@ -117,15 +120,24 @@ async fn create_allocation(
                 let network_str = p.network.as_deref().unwrap_or_else(|| {
                     if let Some(token) = p.token.as_ref() {
                         if token == "glm" {
-                            log::debug!("Network not specified, using default polygon, because token set to glm");
-                            "polygon"
+                            log::debug!(
+                                "Network not specified, using default {}, because token set to glm",
+                                DEFAULT_MAINNET_NETWORK
+                            );
+                            DEFAULT_MAINNET_NETWORK
                         } else {
-                            log::debug!("Network not specified, using default holesky");
-                            "holesky"
+                            log::debug!(
+                                "Network not specified, using default {}",
+                                DEFAULT_TESTNET_NETWORK
+                            );
+                            DEFAULT_TESTNET_NETWORK
                         }
                     } else {
-                        log::debug!("Network not specified and token not specified, using default holesky");
-                        "holesky"
+                        log::debug!(
+                            "Network not specified and token not specified, using default {}",
+                            DEFAULT_TESTNET_NETWORK
+                        );
+                        DEFAULT_TESTNET_NETWORK
                     }
                 });
                 let network = match validate_network(network_str) {
@@ -137,8 +149,11 @@ async fn create_allocation(
                     }
                 };
                 let driver_str = p.driver.as_deref().unwrap_or_else(|| {
-                    log::debug!("Driver not specified, using default erc20");
-                    "erc20"
+                    log::debug!(
+                        "Driver not specified, using default {}",
+                        DEFAULT_PAYMENT_DRIVER
+                    );
+                    DEFAULT_PAYMENT_DRIVER
                 });
                 let driver = match validate_driver(&network, driver_str) {
                     Ok(driver) => driver,
