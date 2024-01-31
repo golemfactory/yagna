@@ -1,6 +1,5 @@
 mod api;
 pub(crate) mod cli;
-mod client;
 mod codec;
 mod crypto;
 mod rest_api;
