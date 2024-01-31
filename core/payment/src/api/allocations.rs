@@ -478,10 +478,18 @@ async fn get_demand_decorations(
             ),
             value: allocation.address,
         })
+        .chain(std::iter::once(MarketProperty {
+            key: "golem.com.payment.protocol.version".into(),
+            value: "2".into(),
+        }))
         .collect();
     let constraints = properties
         .iter()
         .map(|property| ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*")))
+        .chain(std::iter::once(
+            ConstraintKey::new("golem.com.payment.protocol.version")
+                .greater_than(ConstraintKey::new(1)),
+        ))
         .collect();
     let constraints = vec![Constraints::new_clause(ClauseOperator::Or, constraints).to_string()];
     response::ok(MarketDecoration {
