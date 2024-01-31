@@ -710,13 +710,24 @@ pub mod public {
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct RejectInvoice {
+    pub struct RejectInvoiceV2 {
         pub invoice_id: String,
         pub rejection: Rejection,
+        pub issuer_id: NodeId,
     }
 
-    impl RpcMessage for RejectInvoice {
-        const ID: &'static str = "RejectInvoice";
+    impl RejectInvoiceV2 {
+        pub fn new(invoice_id: String, rejection: Rejection, issuer_id: NodeId) -> Self {
+            Self {
+                invoice_id,
+                rejection,
+                issuer_id,
+            }
+        }
+    }
+
+    impl RpcMessage for RejectInvoiceV2 {
+        const ID: &'static str = "RejectInvoiceV2";
         type Item = Ack;
         type Error = AcceptRejectError;
     }
@@ -763,6 +774,8 @@ pub mod public {
         pub payments: Vec<SendPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Invoice rejections.
+        pub invoice_rejects: Vec<RejectInvoiceV2>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.
