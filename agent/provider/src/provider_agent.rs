@@ -257,6 +257,10 @@ impl ProviderAgent {
         };
         let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
         offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
+        offer.set_property(
+            "golem.com.payment.protocol.version",
+            node_info.protocol_version.into(),
+        );
         offer.add_constraints(Self::build_constraints(node_info.subnet.clone())?);
         let com_info = pricing_model.build(accounts, initial_price, prices)?;
         let srv_info = Self::build_service_info(inf_node_info, exeunit_desc, &offer)?;
@@ -274,7 +278,7 @@ impl ProviderAgent {
 
     fn build_constraints(subnet: Option<String>) -> anyhow::Result<String> {
         let mut cnts =
-            constraints!["golem.srv.comp.expiration" > chrono::Utc::now().timestamp_millis(),];
+            constraints!["golem.srv.comp.expiration" > chrono::Utc::now().timestamp_millis()];
         if let Some(subnet) = subnet {
             cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet,]);
         }
@@ -291,6 +295,7 @@ impl ProviderAgent {
             subnet: globals.subnet,
             geo_country_code: None,
             is_public: status.public_ip.is_some(),
+            protocol_version: 2,
         })
     }
 
@@ -638,6 +643,7 @@ mod tests {
             subnet: Some("subnet".to_string()),
             geo_country_code: None,
             is_public: true,
+            protocol_version: 2,
         };
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
