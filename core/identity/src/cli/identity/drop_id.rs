@@ -1,4 +1,4 @@
-use super::{bus, identity, NodeOrAlias, RpcEndpoint, CommandOutput, Result};
+use super::{bus, identity, CommandOutput, NodeOrAlias, Result, RpcEndpoint};
 
 async fn prompt(message: &str, question: &str) -> anyhow::Result<bool> {
     use tokio::io::{self, AsyncWriteExt};
@@ -11,10 +11,11 @@ async fn prompt(message: &str, question: &str) -> anyhow::Result<bool> {
 
     let question = question.to_owned();
     let v = tokio::task::spawn_blocking(|| {
-        let r : bool = promptly::prompt(question)?;
+        let r: bool = promptly::prompt(question)?;
 
         Ok::<_, anyhow::Error>(r)
-    }).await??;
+    })
+    .await??;
     Ok(v)
 }
 

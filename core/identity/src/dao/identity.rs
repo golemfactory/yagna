@@ -56,7 +56,7 @@ impl<'c> IdentityDao<'c> {
     }
 
     pub async fn mark_deleted(&self, identity_id: String) -> Result<()> {
-        self.with_transaction(move |conn| {
+        self.with_transaction("idenitiy::mark_deleted", move |conn| {
             Ok(
                 diesel::update(s::identity::table.filter(s::identity::identity_id.eq(identity_id)))
                     .set(s::identity::is_deleted.eq(true))

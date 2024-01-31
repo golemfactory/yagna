@@ -116,6 +116,7 @@ fn fake_list_identities(identities: Vec<NodeId>) {
                 node_id: id,
                 is_default: false,
                 is_locked: false,
+                deleted: false,
             });
         }
         std::future::ready(Ok(accounts))
