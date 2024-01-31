@@ -6,14 +6,16 @@ edition = "2018"
 
 [dependencies]
 ya-core-model = { version = "^0.9", features = ["activity", "market"] }
-ya-client-model = { version = "0.5", features = ["sgx"] }
+ya-client-model = { version = "0.6", features = ["sgx"] }
 ya-net = "0.3"
 ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 ya-service-bus = "0.6.1"
-ya-utils-networking = { version = "0.2", default-features = false, features = ["vpn"]}
+ya-utils-networking = { version = "0.2", default-features = false, features = [
+    "vpn",
+] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix = "0.13"
@@ -42,7 +44,7 @@ packet-trace-enable = ["ya-packet-trace/enable"]
 default = []
 
 [dev-dependencies]
-ya-client = "0.7"
+ya-client = "0.8"
 actix-rt = "2.7"
 sha3 = "0.8.2"
 structopt = "0.3"

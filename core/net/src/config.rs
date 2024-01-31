@@ -4,6 +4,7 @@ use strum::VariantNames;
 use strum::{EnumString, EnumVariantNames, IntoStaticStr};
 use url::Url;
 
+// TODO: Remove compilation flag.
 #[derive(
     StructOpt,
     EnumString,
@@ -11,10 +12,10 @@ use url::Url;
     IntoStaticStr,
     Copy,
     Clone,
-    Default,
     Eq,
     PartialEq,
     Debug,
+    Default,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum NetType {

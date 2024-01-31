@@ -71,7 +71,7 @@ impl<'c> EventDao<'c> {
         let activity_id = activity_id.to_owned();
         let identity_id = identity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "event_dao_create", move |conn| {
             let now = Utc::now().adapt();
             diesel::insert_into(dsl_event::activity_event)
                 .values(
@@ -123,7 +123,7 @@ impl<'c> EventDao<'c> {
         };
 
         log::trace!("get_events: starting db query");
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "event_dao_get_events", move |conn| {
             let mut query = dsl_event::activity_event
                 .inner_join(schema::activity::table)
                 .filter(dsl_event::identity_id.eq(identity_id))
