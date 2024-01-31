@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20next";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -525,7 +525,6 @@ pub mod local {
     #[serde(rename_all = "lowercase")]
     #[non_exhaustive]
     pub enum DriverName {
-        Erc20Next,
         Erc20,
     }
 
@@ -535,7 +534,7 @@ pub mod local {
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
-        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20Next.into())]
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
         #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Holesky.into())]
@@ -568,7 +567,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("erc20next", a.driver());
+            assert_eq!("erc20", a.driver());
             assert_eq!("holesky", a.network());
             assert_eq!("tGLM", a.token());
         }
@@ -711,13 +710,24 @@ pub mod public {
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct RejectInvoice {
+    pub struct RejectInvoiceV2 {
         pub invoice_id: String,
         pub rejection: Rejection,
+        pub issuer_id: NodeId,
     }
 
-    impl RpcMessage for RejectInvoice {
-        const ID: &'static str = "RejectInvoice";
+    impl RejectInvoiceV2 {
+        pub fn new(invoice_id: String, rejection: Rejection, issuer_id: NodeId) -> Self {
+            Self {
+                invoice_id,
+                rejection,
+                issuer_id,
+            }
+        }
+    }
+
+    impl RpcMessage for RejectInvoiceV2 {
+        const ID: &'static str = "RejectInvoiceV2";
         type Item = Ack;
         type Error = AcceptRejectError;
     }
@@ -764,6 +774,8 @@ pub mod public {
         pub payments: Vec<SendPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Invoice rejections.
+        pub invoice_rejects: Vec<RejectInvoiceV2>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.

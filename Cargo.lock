@@ -29,11 +29,11 @@ dependencies = [
 
 [[package]]
 name = "actix-codec"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617a8268e3537fe1d8c9ead925fca49ef6400927ee7bc26750e90ecee14ce4b8"
+checksum = "5f7b0a21988c1bf877cf4759ef5ddaac04c1c9fe808c9142ecb78ba97d97a28a"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.4.2",
  "bytes 1.5.0",
  "futures-core",
  "futures-sink",
@@ -508,9 +508,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7079075b41f533b8c61d2a4d073c4676e1f8b249ff94a393b0595db304e0dd87"
+checksum = "2faccea4cc4ab4a667ce676a30e8ec13922a692c99bb8f5b11f1502c72e04220"
 
 [[package]]
 name = "anyhow"
@@ -2058,9 +2058,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.20"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cffd28cb0aa9a84d8d1e166c7bd94d2ae0329551d3c8ce49257e3ab6c2ab0f69"
+checksum = "90f681257740e763be1cbeaa370e919f554c46f26337a4febe5a30a8b1d36949"
 dependencies = [
  "actix",
  "actix-files",
@@ -3508,9 +3508,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -4436,9 +4436,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "300.2.1+3.2.0"
+version = "300.2.2+3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fe476c29791a5ca0d1273c697e96085bbabbbea2ef7afd5617e78a4b40332d3"
+checksum = "8bbfad0063610ac26ee79f7484739e2b07555a75c42453b89263830b5c8103bc"
 dependencies = [
  "cc",
 ]
@@ -6586,7 +6586,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce81b7bd7c4493975347ef60d8c7e8b742d4694f4c49f93e0a12ea263938176c"
 dependencies = [
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "nom 7.1.3",
  "unicode_categories",
 ]
@@ -8438,7 +8438,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-erc20next-driver"
+name = "ya-erc20-driver"
 version = "0.4.0"
 dependencies = [
  "actix",
@@ -8980,7 +8980,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20next-driver",
+ "ya-erc20-driver",
  "ya-metrics",
  "ya-net",
  "ya-persistence",
@@ -9720,7 +9720,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-erc20next-driver",
+ "ya-erc20-driver",
  "ya-exe-unit",
  "ya-fd-metrics",
  "ya-file-logging",

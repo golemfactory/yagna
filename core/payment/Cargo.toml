@@ -60,7 +60,7 @@ erc20_payment_lib = { workspace = true }
 [dev-dependencies]
 ya-client = "0.8"
 ya-dummy-driver = "0.3"
-ya-erc20next-driver = "0.4"
+ya-erc20-driver = "0.4"
 ya-net = { version = "0.3", features = ["service"] }
 ya-sb-router = "0.6.1"
 

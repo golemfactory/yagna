@@ -942,7 +942,7 @@ mod public {
     ) -> Result<Ack, AcceptRejectError> {
         let invoice_id = msg.invoice_id;
         let acceptance = msg.acceptance;
-        let node_id = msg.issuer_id;
+        let owner_id = msg.issuer_id;
 
         log::debug!(
             "Got AcceptInvoice [{}] from Node [{}].",
@@ -952,7 +952,7 @@ mod public {
         counter!("payment.invoices.provider.accepted.call", 1);
 
         let dao: InvoiceDao = db.as_dao();
-        let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
+        let invoice: Invoice = match dao.get(invoice_id.clone(), owner_id).await {
             Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -981,11 +981,11 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(invoice_id.clone(), node_id).await {
+        match dao.accept(invoice_id.clone(), owner_id).await {
             Ok(_) => {
                 log::info!(
                     "Node [{}] accepted invoice [{}] for Agreement [{}].",
-                    node_id,
+                    owner_id,
                     invoice_id,
                     invoice.agreement_id
                 );
@@ -999,10 +999,57 @@ mod public {
 
     async fn reject_invoice(
         db: DbExecutor,
-        sender: String,
-        msg: RejectInvoice,
+        sender_id: String,
+        msg: RejectInvoiceV2,
     ) -> Result<Ack, AcceptRejectError> {
-        unimplemented!() // TODO
+        let invoice_id = msg.invoice_id;
+        let rejection = msg.rejection;
+        let owner_id = msg.issuer_id;
+
+        log::debug!(
+            "Got RejectInvoiceV2 [{}] from Node [{}].",
+            invoice_id,
+            sender_id,
+        );
+        counter!("payment.invoices.provider.rejected.call", 1);
+
+        let dao: InvoiceDao = db.as_dao();
+        let invoice: Invoice = match dao.get(invoice_id.clone(), owner_id).await {
+            Ok(Some(invoice)) => invoice,
+            Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
+            Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != invoice.recipient_id.to_string() {
+            return Err(AcceptRejectError::Forbidden);
+        }
+
+        match invoice.status {
+            status @ DocumentStatus::Accepted
+            | status @ DocumentStatus::Settled
+            | status @ DocumentStatus::Cancelled => {
+                return Err(AcceptRejectError::BadRequest(format!(
+                    "Cannot reject {status:?} invoice"
+                )));
+            }
+            DocumentStatus::Rejected => return Ok(Ack {}),
+            _ => (),
+        }
+
+        match dao.reject(invoice_id.clone(), owner_id, rejection).await {
+            Ok(_) => {
+                log::info!(
+                    "Node [{}] rejected invoice [{}] for Agreement [{}].",
+                    owner_id,
+                    invoice_id,
+                    invoice.agreement_id
+                );
+                counter!("payment.invoices.provider.rejected", 1);
+                Ok(Ack {})
+            }
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
+            Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        }
     }
 
     async fn cancel_invoice(
@@ -1133,6 +1180,13 @@ mod public {
 
         for invoice_accept in msg.invoice_accepts {
             let result = accept_invoice(db.clone(), sender_id.clone(), invoice_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        for invoice_reject in msg.invoice_rejects {
+            let result = reject_invoice(db.clone(), sender_id.clone(), invoice_reject).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
             }
