@@ -2,21 +2,27 @@ use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::Notify;
-use tokio_util::task::LocalPoolHandle;
-use ya_client_model::{payment::Acceptance, NodeId};
+use ya_client_model::{
+    payment::{Acceptance, InvoiceEventType},
+    NodeId,
+};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
     payment::{
         self,
-        public::{AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, SendPayment},
+        local::GenericError,
+        public::{
+            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, RejectInvoiceV2,
+            SendPayment,
+        },
     },
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed, RpcEndpoint};
 
-use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
 const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
@@ -26,6 +32,7 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
+    let invoice_event_dao: InvoiceEventDao = db.as_dao();
 
     let mut payments = Vec::default();
     for payment in payment_dao.list_unsent(Some(peer_id)).await? {
@@ -51,6 +58,30 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         ));
     }
 
+    let mut invoice_rejects = Vec::default();
+    for invoice in invoice_dao.unsent_rejected(peer_id).await? {
+        let events = invoice_event_dao
+            .get_for_invoice_id(
+                invoice.invoice_id.clone(),
+                None,
+                None,
+                None,
+                vec!["REJECTED".into()],
+                vec![],
+            )
+            .await
+            .map_err(GenericError::new)?;
+        if let Some(event) = events.into_iter().last() {
+            if let InvoiceEventType::InvoiceRejectedEvent { rejection } = event.event_type {
+                invoice_rejects.push(RejectInvoiceV2 {
+                    invoice_id: invoice.invoice_id,
+                    rejection,
+                    issuer_id: peer_id,
+                });
+            };
+        };
+    }
+
     let mut debit_note_accepts = Vec::default();
     for debit_note in debit_note_dao.unsent_accepted(peer_id).await? {
         debit_note_accepts.push(AcceptDebitNote::new(
@@ -63,11 +94,15 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         ));
     }
 
-    Ok(PaymentSync {
+    let result = PaymentSync {
         payments,
         invoice_accepts,
+        invoice_rejects,
         debit_note_accepts,
-    })
+    };
+    log::debug!("Payment sync job collected: {result:?}");
+
+    Ok(result)
 }
 
 async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> {
@@ -84,6 +119,12 @@ async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> 
     for invoice_accept in msg.invoice_accepts {
         invoice_dao
             .mark_accept_sent(invoice_accept.invoice_id, invoice_accept.issuer_id)
+            .await?;
+    }
+
+    for invoice_reject in msg.invoice_rejects {
+        invoice_dao
+            .mark_reject_sent(invoice_reject.invoice_id, invoice_reject.issuer_id)
             .await?;
     }
 
@@ -157,19 +198,17 @@ lazy_static::lazy_static! {
 }
 
 pub fn send_sync_notifs_job(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
-    let default_sleep = Duration::from_secs(3600);
-
-    pool.spawn_pinned(move || async move {
+    let sleep_on_error = Duration::from_secs(3600);
+    tokio::task::spawn_local(async move {
         loop {
             let sleep_for = match send_sync_notifs(&db).await {
                 Err(e) => {
                     log::error!("PaymentSyncNeeded sendout job failed: {e}");
-                    default_sleep
+                    sleep_on_error
                 }
                 Ok(duration) => {
                     log::debug!("PaymentSyncNeeded sendout job done");
-                    duration.unwrap_or(default_sleep)
+                    duration.unwrap_or(sleep_on_error)
                 }
             };
 
@@ -220,11 +259,9 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
 }
 
 pub fn send_sync_requests(db: DbExecutor) {
-    let pool = LocalPoolHandle::new(1);
-
-    pool.spawn_pinned(move || async move {
+    tokio::task::spawn_local(async move {
         if let Err(e) = send_sync_requests_impl(db).await {
-            log::error!("Failed to send PaymentSyncRequest: {e}");
+            log::debug!("Failed to send PaymentSyncRequest: {e}");
         }
     });
 }

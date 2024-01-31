@@ -12,7 +12,6 @@ use ya_client_model::payment::DriverStatusProperty;
 
 // Local uses
 use crate::bus;
-use crate::dao::DbExecutor;
 use crate::model::*;
 use crate::utils;
 
@@ -25,36 +24,25 @@ pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as Identi
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
-    async fn account_event(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: IdentityEvent,
-    ) -> Result<(), IdentityError>;
+    async fn account_event(&self, _caller: String, msg: IdentityEvent)
+        -> Result<(), IdentityError>;
 
     async fn get_account_balance(
         &self,
-        db: DbExecutor,
         caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
 
     async fn get_account_gas_balance(
         &self,
-        _db: DbExecutor,
+
         _caller: String,
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError>;
 
-    async fn enter(
-        &self,
-        db: DbExecutor,
-        caller: String,
-        msg: Enter,
-    ) -> Result<String, GenericError>;
+    async fn enter(&self, caller: String, msg: Enter) -> Result<String, GenericError>;
 
-    async fn exit(&self, db: DbExecutor, caller: String, msg: Exit)
-        -> Result<String, GenericError>;
+    async fn exit(&self, caller: String, msg: Exit) -> Result<String, GenericError>;
 
     // used by bus to bind service
     fn get_name(&self) -> String;
@@ -67,42 +55,36 @@ pub trait PaymentDriver {
     ///     first init with mode: Send
     ///     second init with mode: Recv
     ///     should result in driver capable of both Sending & Receiving
-    async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+    async fn init(&self, caller: String, msg: Init) -> Result<Ack, GenericError>;
 
-    async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
-        -> Result<String, GenericError>;
+    async fn fund(&self, caller: String, msg: Fund) -> Result<String, GenericError>;
 
-    async fn transfer(
-        &self,
-        db: DbExecutor,
-        caller: String,
-        msg: Transfer,
-    ) -> Result<String, GenericError>;
+    async fn transfer(&self, caller: String, msg: Transfer) -> Result<String, GenericError>;
 
     async fn schedule_payment(
         &self,
-        db: DbExecutor,
+
         caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn verify_payment(
         &self,
-        db: DbExecutor,
+
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
     async fn validate_allocation(
         &self,
-        db: DbExecutor,
+
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError>;
 
     async fn sign_payment(
         &self,
-        _db: DbExecutor,
+
         _caller: String,
         msg: SignPayment,
     ) -> Result<Vec<u8>, GenericError> {
@@ -113,7 +95,7 @@ pub trait PaymentDriver {
 
     async fn verify_signature(
         &self,
-        _db: DbExecutor,
+
         _caller: String,
         msg: VerifySignature,
     ) -> Result<bool, GenericError> {
@@ -136,15 +118,10 @@ pub trait PaymentDriver {
 
     async fn status(
         &self,
-        _db: DbExecutor,
+
         _caller: String,
         _msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError>;
 
-    async fn shut_down(
-        &self,
-        db: DbExecutor,
-        caller: String,
-        msg: ShutDown,
-    ) -> Result<(), GenericError>;
+    async fn shut_down(&self, caller: String, msg: ShutDown) -> Result<(), GenericError>;
 }
