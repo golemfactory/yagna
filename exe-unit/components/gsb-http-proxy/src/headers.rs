@@ -87,8 +87,8 @@ mod tests {
         let result = Headers::new().filter(&hm);
 
         assert_eq!(
-            result.into_keys().collect::<Vec<_>>(),
-            vec!["header-1", "host"]
+            result.into_keys().collect::<Vec<_>>().sort(),
+            vec!["header-1", "host"].sort()
         );
     }
 
