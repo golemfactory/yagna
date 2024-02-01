@@ -84,12 +84,10 @@ mod tests {
     fn test_headers_new_not_filtered() {
         let hm = mock_headers();
 
-        let result = Headers::new().filter(&hm);
+        let mut result = Headers::new().filter(&hm).into_keys().collect::<Vec<_>>();
+        result.sort();
 
-        assert_eq!(
-            result.into_keys().collect::<Vec<_>>(),
-            vec!["header-1", "host"]
-        );
+        assert_eq!(result, vec!["header-1", "host"]);
     }
 
     #[test]
