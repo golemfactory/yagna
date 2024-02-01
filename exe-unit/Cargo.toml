@@ -55,7 +55,7 @@ ya-utils-networking = { version = "0.2", default-features = false, features = [
     "vpn",
 ] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
-gsb-http-proxy = { version = "0.1.0" }
+ya-gsb-http-proxy = { path = "../exe-unit/components/gsb-http-proxy" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"

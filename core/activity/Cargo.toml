@@ -14,7 +14,7 @@ ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 # ya-service-bus = "0.6.3"
 ya-service-bus = { version = "0.6.3" }
-gsb-http-proxy = { path = "../../exe-unit/components/http-proxy" }
+ya-gsb-http-proxy = { path = "../../exe-unit/components/gsb-http-proxy" }
 
 actix-web = "4"
 actix-http = "3"
