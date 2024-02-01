@@ -32,6 +32,24 @@ const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
+fn default_payment_platform_testnet() -> String {
+    format!(
+        "{}-{}-{}",
+        DEFAULT_PAYMENT_DRIVER,
+        DEFAULT_TESTNET_NETWORK,
+        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+    )
+}
+
+fn default_payment_platform_mainnet() -> String {
+    format!(
+        "{}-{}-{}",
+        DEFAULT_PAYMENT_DRIVER,
+        DEFAULT_TESTNET_NETWORK,
+        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+    )
+}
+
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/allocations", post().to(create_allocation))
@@ -89,38 +107,19 @@ fn bad_req_and_log(err_msg: String) -> HttpResponse {
 
 fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpResponse> {
     let platform_str = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
-        let default_platform = format!(
-            "{}-{}-{}",
-            DEFAULT_PAYMENT_DRIVER,
-            DEFAULT_TESTNET_NETWORK,
-            get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
-        );
+        let default_platform = default_payment_platform_testnet();
         log::debug!("Empty paymentPlatform object, using {default_platform}");
         default_platform
     } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
         let token = p.token.as_ref().unwrap();
         if token == "glm" {
-            let selected_network = format!(
-                "{}-{}-{}",
-                DEFAULT_PAYMENT_DRIVER,
-                DEFAULT_TESTNET_NETWORK,
-                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
-            );
-            log::debug!(
-                "Selected network {selected_network} (default for glm token)"
-            );
-            selected_network.to_string()
+            let default_platform = default_payment_platform_mainnet();
+            log::debug!("Selected network {default_platform} (default for glm token)");
+            default_platform
         } else if token == "tglm" {
-            let selected_network = format!(
-                "{}-{}-{}",
-                DEFAULT_PAYMENT_DRIVER,
-                DEFAULT_MAINNET_NETWORK,
-                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK)
-            );
-            log::debug!(
-                "Selected network {selected_network} (default for tglm token)"
-            );
-            selected_network.to_string()
+            let default_platform = default_payment_platform_testnet();
+            log::debug!("Selected network {default_platform} (default for tglm token)");
+            default_platform
         } else {
             let err_msg = format!("Only glm or tglm token values are accepted vs {token} provided");
             return Err(response::bad_request(&err_msg));
@@ -229,14 +228,9 @@ async fn create_allocation(
             Err(e) => return e,
         },
         None => {
-            let selected_network = format!(
-                "{}-{}-{}",
-                DEFAULT_PAYMENT_DRIVER,
-                DEFAULT_TESTNET_NETWORK,
-                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
-            );
-            log::debug!("No paymentPlatform entry found, using {selected_network}");
-            selected_network
+            let default_platform = default_payment_platform_testnet();
+            log::debug!("No paymentPlatform entry found, using {default_platform}");
+            default_platform
         }
     };
 
