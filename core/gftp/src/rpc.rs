@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::io::Write;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -24,9 +25,9 @@ pub enum JsonRpcError {
     ServerError = -32000,
 }
 
-impl ToString for JsonRpcError {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl Display for JsonRpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", self))
     }
 }
 
@@ -89,8 +90,8 @@ impl RpcMessage {
         Self::response(id, RpcResult::Files(items))
     }
 
-    pub fn error<E: Into<JsonRpcError> + ToString>(id: Option<&RpcId>, err: E) -> Self {
-        let message = err.to_string();
+    pub fn error<E: Into<JsonRpcError> + std::fmt::Display>(id: Option<&RpcId>, err: E) -> Self {
+        let message = format!("{err:#}");
         RpcMessage {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id: id.cloned(),
