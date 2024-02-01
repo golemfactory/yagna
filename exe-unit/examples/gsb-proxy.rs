@@ -3,14 +3,15 @@ use async_stream::stream;
 use bytes::{BufMut, BytesMut};
 use chrono::Utc;
 use futures::prelude::*;
-use gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
-use gsb_http_proxy::GsbHttpCallResponseEvent;
 use reqwest::Client;
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
+use ya_gsb_http_proxy::message::GsbHttpCallMessage;
+use ya_gsb_http_proxy::response::GsbHttpCallResponseEvent;
 use ya_service_bus::typed as bus;
 
 /// This example allows to test proxying http requests via GSB.
@@ -68,24 +69,22 @@ async fn main() -> anyhow::Result<()> {
     if args.mode == Mode::Receive {
         ya_sb_router::bind_gsb_router(None).await?;
 
-        let _stream_handle = bus::bind_stream(
-            gsb_http_proxy::BUS_ID,
-            move |http_call: HttpToGsbProxy| {
+        let _stream_handle =
+            bus::bind_stream(ya_gsb_http_proxy::BUS_ID, move |msg: GsbHttpCallMessage| {
                 let _interval = tokio::time::interval(Duration::from_secs(1));
                 println!("Received request, responding with 10 elements");
                 Box::pin(stream! {
                     for i in 0..10 {
-                        let msg = format!("called {} {} #{} time", http_call.method, http_call.path, i);
+                        let msg = format!("called {} {} #{} time", msg.method, msg.path, i);
                         let response = GsbHttpCallResponseEvent {
                             index: i,
                             timestamp: Utc::now().naive_local().to_string(),
-                            msg,
+                            msg_bytes: msg.into_bytes(),
                         };
                         yield Ok(response);
                     }
                 })
-            },
-        );
+            });
 
         let mut interval = time::interval(tokio::time::Duration::from_secs(3));
 
@@ -97,20 +96,21 @@ async fn main() -> anyhow::Result<()> {
     } else if args.mode == Mode::Send {
         // env::set_var("GSB_URL", "tcp://127.0.0.1:12501");
 
-        let stream = bus::service(gsb_http_proxy::BUS_ID).call_streaming(HttpToGsbProxy {
+        let stream = bus::service(ya_gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCallMessage {
             method: "GET".to_string(),
             path: args.url.to_str().unwrap_or("/").to_string(),
             body: None,
+            headers: HashMap::new(),
         });
 
         stream
             .for_each(|r| async move {
                 if let Ok(Ok(r)) = r {
                     log::info!(
-                        "[Stream response #{}]: [{}] {}",
+                        "[Stream response #{}]: [{}] {:?}",
                         r.index,
                         r.timestamp,
-                        r.msg
+                        String::from_utf8(r.msg_bytes)
                     );
                 }
             })
