@@ -111,7 +111,7 @@ impl<'c> PaymentDao<'c> {
 
             Ok(())
         })
-            .await
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -157,7 +157,7 @@ impl<'c> PaymentDao<'c> {
                 .execute(conn)?;
             Ok(())
         })
-            .await
+        .await
     }
 
     pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
@@ -185,7 +185,7 @@ impl<'c> PaymentDao<'c> {
                 None => Ok(None),
             }
         })
-            .await
+        .await
     }
 
     pub async fn get_for_confirmation(&self, details: Vec<u8>) -> DbResult<Vec<Payment>> {
@@ -211,7 +211,7 @@ impl<'c> PaymentDao<'c> {
 
             Ok(result)
         })
-            .await
+        .await
     }
 
     pub async fn get_for_node_id(
@@ -308,7 +308,7 @@ impl<'c> PaymentDao<'c> {
 
             Ok(payments)
         })
-            .await
+        .await
     }
 
     pub async fn list_unsent(&self, peer_id: Option<NodeId>) -> DbResult<Vec<Payment>> {
@@ -336,7 +336,7 @@ impl<'c> PaymentDao<'c> {
 
             Ok(payments)
         })
-            .await
+        .await
     }
 }
 

@@ -132,10 +132,7 @@ impl VpnSupervisor {
 
         self.networks.insert(net_id.clone(), actor);
         self.blueprints.insert(net_id.clone(), network.clone());
-        self.ownership
-            .entry(node_id)
-            .or_default()
-            .insert(net_id);
+        self.ownership.entry(node_id).or_default().insert(net_id);
 
         Ok(network)
     }
