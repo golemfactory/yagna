@@ -85,6 +85,11 @@ fn validate_token(driver: &DriverName, network: &NetworkName, token: &str) -> Re
     Ok(())
 }
 
+fn bad_req_and_log(err_msg: String) -> HttpResponse {
+    log::error!("{}", err_msg);
+    response::bad_request(&err_msg)
+}
+
 fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpResponse> {
     let platform_str = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
         log::debug!("Empty paymentPlatform object, using {DEFAULT_PAYMENT_PLATFORM}");
@@ -129,14 +134,9 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
                 DEFAULT_TESTNET_NETWORK
             }
         });
-        let network = match validate_network(network_str) {
-            Ok(network) => network,
-            Err(err) => {
-                let err_msg = format!("Validate network failed (1): {err}");
-                log::error!("{}", err_msg);
-                return Err(response::bad_request(&err_msg));
-            }
-        };
+        let network = validate_network(network_str)
+            .map_err(|err| bad_req_and_log(format!("Validate network failed (1): {err}")))?;
+
         let driver_str = p.driver.as_deref().unwrap_or_else(|| {
             log::debug!(
                 "Driver not specified, using default {}",
@@ -144,20 +144,12 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
             );
             DEFAULT_PAYMENT_DRIVER
         });
-        let driver = match validate_driver(&network, driver_str) {
-            Ok(driver) => driver,
-            Err(err) => {
-                let err_msg = format!("Validate driver failed (1): {err}");
-                log::error!("{}", err_msg);
-                return Err(response::bad_request(&err_msg));
-            }
-        };
+        let driver = validate_driver(&network, driver_str)
+            .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
+
         if let Some(token) = p.token.as_ref() {
-            if let Err(err) = validate_token(&driver, &network, token) {
-                let err_msg = format!("Validate token failed (1): {err}");
-                log::error!("{}", err_msg);
-                return Err(response::bad_request(&err_msg));
-            }
+            validate_token(&driver, &network, token)
+                .map_err(|err| bad_req_and_log(format!("Validate token failed (1): {err}")))?;
             log::debug!("Selected network {}-{}-{}", driver, network, token);
             format!("{}-{}-{}", driver, network, token)
         } else {
@@ -180,45 +172,25 @@ fn payment_platform_validate_and_check(
 ) -> Result<(DriverName, NetworkName, String), HttpResponse> {
     // payment_platform is of the form driver-network-token
     // eg. erc20-rinkeby-tglm
-    let [driver_str, network_str, token_str]: [&str; 3] = match payment_platform_str
+    let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
         .split('-')
         .collect::<Vec<_>>()
         .try_into()
-    {
-        Ok(arr) => arr,
-        Err(_e) => {
-            let err_msg = format!(
+        .map_err(|err| {
+            bad_req_and_log(format!(
                 "paymentPlatform must be of the form driver-network-token instead of {}",
                 payment_platform_str
-            );
-            log::error!("{}", err_msg);
-            return Err(response::bad_request(&err_msg));
-        }
-    };
+            ))
+        })?;
 
-    let network = match validate_network(network_str) {
-        Ok(network) => network,
-        Err(err) => {
-            let err_msg = format!("Validate network failed (2): {err}");
-            log::error!("{}", err_msg);
-            return Err(response::bad_request(&err_msg));
-        }
-    };
+    let network = validate_network(network_str)
+        .map_err(|err| bad_req_and_log(format!("Validate network failed (2): {err}")))?;
 
-    let driver = match validate_driver(&network, driver_str) {
-        Ok(driver) => driver,
-        Err(err) => {
-            let err_msg = format!("Validate driver failed (2): {err}");
-            log::error!("{}", err_msg);
-            return Err(response::bad_request(&err_msg));
-        }
-    };
+    let driver = validate_driver(&network, driver_str)
+        .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
 
-    if let Err(err) = validate_token(&driver, &network, token_str) {
-        let err_msg = format!("Validate token failed (2): {err}");
-        log::error!("{}", err_msg);
-        return Err(response::bad_request(&err_msg));
-    }
+    validate_token(&driver, &network, token_str)
+        .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
 
     Ok((driver, network, token_str.to_string()))
 }
@@ -290,17 +262,15 @@ async fn create_allocation(
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
         Ok(false) => {
-            let error_msg = format!("Insufficient funds to make allocation for payment platform {payment_platform}. \
-             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`");
-            log::error!("{}", error_msg);
-            return response::bad_request(&error_msg);
+            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_platform}. \
+             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
-            let error_msg = format!("Account not registered - payment platform {payment_platform}");
-            log::error!("{}", error_msg);
-            return response::bad_request(&error_msg);
+            return bad_req_and_log(format!(
+                "Account not registered - payment platform {payment_platform}"
+            ));
         }
         Err(e) => return response::server_error(&e),
     }
