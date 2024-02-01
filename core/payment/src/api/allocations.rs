@@ -28,12 +28,9 @@ use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
 
-const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-holesky-tglm";
-const DEFAULT_PAYMENT_PLATFORM_FOR_TGLM: &str = "erc20-holesky-tglm";
-const DEFAULT_PAYMENT_PLATFORM_FOR_GLM: &str = "erc20-polygon-glm";
-const DEFAULT_TESTNET_NETWORK: &str = "holesky";
-const DEFAULT_MAINNET_NETWORK: &str = "polygon";
-const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
+const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
+const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
+const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -92,20 +89,38 @@ fn bad_req_and_log(err_msg: String) -> HttpResponse {
 
 fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpResponse> {
     let platform_str = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
-        log::debug!("Empty paymentPlatform object, using {DEFAULT_PAYMENT_PLATFORM}");
-        DEFAULT_PAYMENT_PLATFORM.to_string()
+        let default_platform = format!(
+            "{}-{}-{}",
+            DEFAULT_PAYMENT_DRIVER,
+            DEFAULT_TESTNET_NETWORK,
+            get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+        );
+        log::debug!("Empty paymentPlatform object, using {default_platform}");
+        default_platform
     } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
         let token = p.token.as_ref().unwrap();
         if token == "glm" {
-            log::debug!(
-                "Selected network {DEFAULT_PAYMENT_PLATFORM_FOR_GLM} (default for glm token)"
+            let selected_network = format!(
+                "{}-{}-{}",
+                DEFAULT_PAYMENT_DRIVER,
+                DEFAULT_TESTNET_NETWORK,
+                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
             );
-            DEFAULT_PAYMENT_PLATFORM_FOR_GLM.to_string()
+            log::debug!(
+                "Selected network {selected_network} (default for glm token)"
+            );
+            selected_network.to_string()
         } else if token == "tglm" {
-            log::debug!(
-                "Selected network {DEFAULT_PAYMENT_PLATFORM_FOR_TGLM} (default for tglm token)"
+            let selected_network = format!(
+                "{}-{}-{}",
+                DEFAULT_PAYMENT_DRIVER,
+                DEFAULT_MAINNET_NETWORK,
+                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK)
             );
-            DEFAULT_PAYMENT_PLATFORM_FOR_TGLM.to_string()
+            log::debug!(
+                "Selected network {selected_network} (default for tglm token)"
+            );
+            selected_network.to_string()
         } else {
             let err_msg = format!("Only glm or tglm token values are accepted vs {token} provided");
             return Err(response::bad_request(&err_msg));
@@ -118,20 +133,20 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
                         "Network not specified, using default {}, because token set to glm",
                         DEFAULT_MAINNET_NETWORK
                     );
-                    DEFAULT_MAINNET_NETWORK
+                    DEFAULT_MAINNET_NETWORK.into()
                 } else {
                     log::debug!(
                         "Network not specified, using default {}",
                         DEFAULT_TESTNET_NETWORK
                     );
-                    DEFAULT_TESTNET_NETWORK
+                    DEFAULT_TESTNET_NETWORK.into()
                 }
             } else {
                 log::debug!(
                     "Network not specified and token not specified, using default {}",
                     DEFAULT_TESTNET_NETWORK
                 );
-                DEFAULT_TESTNET_NETWORK
+                DEFAULT_TESTNET_NETWORK.into()
             }
         });
         let network = validate_network(network_str)
@@ -142,7 +157,7 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
                 "Driver not specified, using default {}",
                 DEFAULT_PAYMENT_DRIVER
             );
-            DEFAULT_PAYMENT_DRIVER
+            DEFAULT_PAYMENT_DRIVER.into()
         });
         let driver = validate_driver(&network, driver_str)
             .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
@@ -214,8 +229,14 @@ async fn create_allocation(
             Err(e) => return e,
         },
         None => {
-            log::debug!("No paymentPlatform entry found, using {DEFAULT_PAYMENT_PLATFORM}");
-            DEFAULT_PAYMENT_PLATFORM.to_string()
+            let selected_network = format!(
+                "{}-{}-{}",
+                DEFAULT_PAYMENT_DRIVER,
+                DEFAULT_TESTNET_NETWORK,
+                get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+            );
+            log::debug!("No paymentPlatform entry found, using {selected_network}");
+            selected_network
         }
     };
 
