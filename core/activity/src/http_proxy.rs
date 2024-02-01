@@ -57,15 +57,10 @@ async fn proxy_http_request(
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
 
-    let body = match body {
-        None => None,
-        Some(bytes) => Some(bytes.to_vec()),
-    };
-
     let http_to_gsb = HttpToGsbProxy {
         method: method.to_string(),
         path,
-        body,
+        body: body.map(|bytes| bytes.to_vec()),
         headers: request.headers().clone(),
     };
     let stream = http_to_gsb.pass(move |msg| {
