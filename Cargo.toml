@@ -276,9 +276,9 @@ ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev =
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "63ba8f4d2bf3e1be82c7f76e506b727ded9ec0db" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "63ba8f4d2bf3e1be82c7f76e506b727ded9ec0db" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
