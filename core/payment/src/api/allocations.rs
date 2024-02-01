@@ -45,8 +45,8 @@ fn default_payment_platform_mainnet() -> String {
     format!(
         "{}-{}-{}",
         DEFAULT_PAYMENT_DRIVER,
-        DEFAULT_TESTNET_NETWORK,
-        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+        DEFAULT_MAINNET_NETWORK,
+        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK)
     )
 }
 
@@ -112,7 +112,12 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
         default_platform
     } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
         let token = p.token.as_ref().unwrap();
-        if token == "glm" {
+        if token == "GLM" || token == "tGLM" {
+            return Err(response::bad_request(&format!(
+                "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+                token
+            )));
+        } else if token == "glm" {
             let default_platform = default_payment_platform_mainnet();
             log::debug!("Selected network {default_platform} (default for glm token)");
             default_platform
