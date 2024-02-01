@@ -471,7 +471,7 @@ fn ip_packet_to_socket_desc(ip_packet: &IpPacket) -> Result<SocketDesc> {
 
 #[derive(Clone)]
 struct Proxy {
-    state: Arc<RwLock<ProxyState>>,
+    state: Rc<RwLock<ProxyState>>,
     filter: Option<UrlValidator>,
 }
 
@@ -493,7 +493,7 @@ impl Proxy {
             remotes: Default::default(),
         };
         Self {
-            state: Arc::new(RwLock::new(state)),
+            state: Rc::new(RwLock::new(state)),
             filter,
         }
     }

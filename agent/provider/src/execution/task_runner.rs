@@ -419,6 +419,7 @@ impl TaskRunner {
             .map_err(|error| error.context("ExeUnit offer-template command failed".to_string()))
     }
 
+    #[allow(clippy::filter_map_bool_then)]
     fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
         Ok(match self.registry.find_exeunit(exeunit_name)?.config {
             Some(ref config) => (config.counters.iter())

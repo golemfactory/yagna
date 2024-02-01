@@ -133,7 +133,7 @@ impl<E> Network<E> {
         self.endpoints.insert(ip, endpoint_fn(&node_id, &self.id));
         self.nodes
             .entry(node_id)
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(ip_addr);
 
         Ok(())

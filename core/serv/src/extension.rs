@@ -1,3 +1,5 @@
+#![allow(clippy::arc_with_non_send_sync)]
+
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -102,7 +104,7 @@ async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> 
         .await?
         .context("Failed to call the app key service")?;
 
-    let app_key = app_key.get(0).cloned();
+    let app_key = app_key.first().cloned();
 
     Ok((node_id, app_key))
 }

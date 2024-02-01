@@ -7,10 +7,8 @@ use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings, RpcSettings};
-use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
-//use rust_decimal::Decimal;
 
 // Workspace uses
 use ya_payment_driver::bus;
@@ -33,8 +31,6 @@ impl Erc20Service {
         // Init database
 
         {
-            let (private_keys, _public_addresses) =
-                load_private_keys(&env::var("ETH_PRIVATE_KEYS").unwrap_or_default()).unwrap();
             let additional_options = AdditionalOptions {
                 keep_running: true,
                 generate_tx_only: false,
@@ -197,7 +193,7 @@ impl Erc20Service {
 
             let pr = PaymentRuntime::new(
                 PaymentRuntimeArgs {
-                    secret_keys: private_keys,
+                    secret_keys: vec![],
                     db_filename: path.join("erc20.sqlite"),
                     config,
                     conn: None,

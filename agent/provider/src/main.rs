@@ -1,3 +1,5 @@
+#![allow(clippy::arc_with_non_send_sync)]
+
 use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
