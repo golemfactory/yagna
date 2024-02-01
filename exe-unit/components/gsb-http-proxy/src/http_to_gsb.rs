@@ -75,7 +75,7 @@ mod tests {
                 let event = GsbHttpCallResponseEvent {
                     index: i,
                     timestamp: "timestamp".to_string(),
-                    msg: format!("response {}", i)
+                    msg_bytes: format!("response {}", i).into_bytes()
                 };
                 let result = Ok(event);
                 yield Ok(result)

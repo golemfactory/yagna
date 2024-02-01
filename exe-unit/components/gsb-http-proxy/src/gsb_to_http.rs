@@ -110,9 +110,9 @@ mod tests {
 
         let mut v = vec![];
         while let Some(event) = response_stream.next().await {
-            v.push(event.msg);
+            v.push(event.msg_bytes);
         }
 
-        assert_eq!(vec!["response"], v);
+        assert_eq!(vec!["response".as_bytes()], v);
     }
 }
