@@ -1,14 +1,31 @@
-use crate::headers::Headers;
+use crate::headers;
 use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
 use async_stream::stream;
 use chrono::Utc;
 use futures_core::stream::Stream;
+use std::fmt::{Display, Formatter};
+use thiserror::Error;
 use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
 pub struct GsbToHttpProxy {
     pub base_url: String,
+}
+
+#[derive(Error, Debug)]
+enum GsbToHttpProxyError {
+    InvalidMethod,
+    ErrorInResponse(String),
+}
+
+impl Display for GsbToHttpProxyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GsbToHttpProxyError::InvalidMethod => write!(f, "Invalid Method"),
+            GsbToHttpProxyError::ErrorInResponse(e) => write!(f, "Error in response {}", e),
+        }
+    }
 }
 
 impl GsbToHttpProxy {
@@ -18,42 +35,36 @@ impl GsbToHttpProxy {
     ) -> impl Stream<Item = GsbHttpCallResponseEvent> {
         let url = format!("{}{}", self.base_url, message.path);
 
-        let (tx, mut rx) = mpsc::channel(24);
+        let (tx, mut rx) = mpsc::channel(1);
 
         tokio::task::spawn_local(async move {
             let client = reqwest::Client::new();
 
-            let method = match message.method.to_uppercase().as_str() {
-                "POST" => actix_http::Method::POST,
-                "GET" => actix_http::Method::GET,
-                _ => actix_http::Method::GET,
-            };
+            let method = actix_http::Method::from_bytes(message.method.to_uppercase().as_bytes())
+                .map_err(|_| GsbToHttpProxyError::InvalidMethod)?;
             let mut builder = client.request(method, &url);
 
-            builder = Headers::add(builder, message.headers);
-
-            log::info!("Calling {}", &url);
-            let response = builder.send().await;
-            let response = match response {
-                Ok(response) => response,
-                Err(err) => {
-                    panic!("Error {}", err);
-                }
+            builder = match message.body {
+                Some(body) => builder.body(body),
+                None => builder,
             };
+            builder = headers::add(builder, message.headers);
 
-            log::info!("Got response");
+            log::debug!("Calling {}", &url);
+            let response = builder.send().await;
+            let response =
+                response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
 
             let bytes = response.bytes().await.unwrap();
-
-            let str_bytes = String::from_utf8(bytes.to_vec()).unwrap();
 
             let response = GsbHttpCallResponseEvent {
                 index: 0,
                 timestamp: Utc::now().naive_local().to_string(),
-                msg: str_bytes,
+                msg_bytes: bytes.to_vec(),
             };
 
             tx.send(response).await.unwrap();
+            Ok::<(), GsbToHttpProxyError>(())
         });
 
         let stream = stream! {
@@ -67,10 +78,11 @@ impl GsbToHttpProxy {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::gsb_to_http::GsbToHttpProxy;
+    use crate::message::GsbHttpCallMessage;
     use futures::StreamExt;
-    use mockito;
     use std::collections::HashMap;
 
     #[actix_web::test]

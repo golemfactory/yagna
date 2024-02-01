@@ -2850,28 +2850,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gsb-http-proxy"
-version = "0.1.0"
-dependencies = [
- "actix-http",
- "actix-web",
- "async-stream",
- "chrono",
- "futures 0.3.30",
- "futures-core",
- "http 1.0.0",
- "log",
- "mockito",
- "reqwest",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tokio",
- "ya-service-bus",
-]
-
-[[package]]
 name = "h2"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8215,7 +8193,6 @@ dependencies = [
  "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.30",
- "gsb-http-proxy",
  "hex",
  "lazy_static",
  "libsqlite3-sys",
@@ -8233,6 +8210,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
+ "ya-gsb-http-proxy",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",
@@ -8429,7 +8407,6 @@ dependencies = [
  "flexi_logger 0.22.6",
  "futures 0.3.30",
  "graphene-sgx",
- "gsb-http-proxy",
  "hex",
  "ipnet",
  "lazy_static",
@@ -8462,6 +8439,7 @@ dependencies = [
  "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-gsb-http-proxy",
  "ya-manifest-utils",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-runtime-api",
@@ -8581,6 +8559,28 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
+ "ya-service-bus",
+]
+
+[[package]]
+name = "ya-gsb-http-proxy"
+version = "0.1.0"
+dependencies = [
+ "actix-http",
+ "actix-web",
+ "async-stream",
+ "chrono",
+ "futures 0.3.30",
+ "futures-core",
+ "http 1.0.0",
+ "log",
+ "mockito",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tokio",
  "ya-service-bus",
 ]
 

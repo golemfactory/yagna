@@ -1,16 +1,14 @@
 use actix_http::Method;
-use actix_web::web::Json;
 use actix_web::{web, HttpRequest, HttpResponse};
-use serde_json::{Map, Value};
 
 use ya_client_model::market::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::common::*;
-use gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
 use ya_core_model::activity;
 use ya_core_model::net::RemoteEndpoint;
+use ya_gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -32,11 +30,11 @@ async fn get_proxy_http_request(
 async fn post_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
-    body: Json<Map<String, Value>>,
+    body: web::Bytes,
     id: Identity,
     request: HttpRequest,
 ) -> Result<HttpResponse, actix_web::Error> {
-    proxy_http_request(db, path, id, request, Some(body.into_inner()), Method::POST).await
+    proxy_http_request(db, path, id, request, Some(body), Method::POST).await
 }
 
 async fn proxy_http_request(
@@ -44,7 +42,7 @@ async fn proxy_http_request(
     path: web::Path<PathActivityUrl>,
     id: Identity,
     request: HttpRequest,
-    body: Option<Map<String, Value>>,
+    body: Option<web::Bytes>,
     method: Method,
 ) -> Result<HttpResponse, actix_web::Error> {
     let path_activity_url = path.into_inner();
@@ -52,12 +50,17 @@ async fn proxy_http_request(
     let path = path_activity_url.url;
 
     // TODO: check if caller is the Requestor
-    let result = authorize_activity_executor(&db, id.identity, &activity_id, Role::Provider).await;
+    let result = authorize_activity_executor(&db, id.identity, &activity_id, Role::Requestor).await;
     if let Err(e) = result {
         log::error!("Authorize error {}", e);
     }
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
+
+    let body = match body {
+        None => None,
+        Some(bytes) => Some(bytes.to_vec()),
+    };
 
     let http_to_gsb = HttpToGsbProxy {
         method: method.to_string(),

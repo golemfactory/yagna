@@ -1,5 +1,5 @@
 [package]
-name = "gsb-http-proxy"
+name = "ya-gsb-http-proxy"
 version = "0.1.0"
 edition = "2021"
 

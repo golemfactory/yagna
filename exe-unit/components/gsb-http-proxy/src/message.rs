@@ -1,8 +1,6 @@
 use crate::error::HttpProxyStatusError;
 use crate::response::GsbHttpCallResponseEvent;
 use serde_derive::{Deserialize, Serialize};
-use serde_json::map::Map;
-use serde_json::value::Value;
 use std::collections::HashMap;
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
 
@@ -11,7 +9,7 @@ use ya_service_bus::{RpcMessage, RpcStreamMessage};
 pub struct GsbHttpCallMessage {
     pub method: String,
     pub path: String,
-    pub body: Option<Map<String, Value>>,
+    pub body: Option<Vec<u8>>,
     pub headers: HashMap<String, Vec<String>>,
 }
 

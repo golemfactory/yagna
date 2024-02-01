@@ -5,14 +5,13 @@ use crate::response::GsbHttpCallResponseEvent;
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
 use futures::{Stream, StreamExt};
-use serde_json::{Map, Value};
 use ya_service_bus::Error;
 
 #[derive(Clone, Debug)]
 pub struct HttpToGsbProxy {
     pub method: String,
     pub path: String,
-    pub body: Option<Map<String, Value>>,
+    pub body: Option<Vec<u8>>,
     pub headers: HeaderMap,
 }
 
@@ -36,7 +35,7 @@ impl HttpToGsbProxy {
             method: self.method.to_string(),
             path,
             body: self.body.clone(),
-            headers: Headers::filter(&self.headers),
+            headers: Headers::default().filter(&self.headers),
         };
 
         let stream = trigger_stream(msg);
@@ -45,7 +44,7 @@ impl HttpToGsbProxy {
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(move |result| {
                 let msg = match result {
-                    Ok(r) => actix_web::web::Bytes::from(r.msg),
+                    Ok(r) => actix_web::web::Bytes::from(r.msg_bytes),
                     Err(e) => actix_web::web::Bytes::from(format!("Error {}", e)),
                 };
                 msg.try_into_bytes().map_err(|_| {

@@ -4,5 +4,5 @@ use serde::{Deserialize, Serialize};
 pub struct GsbHttpCallResponseEvent {
     pub index: usize,
     pub timestamp: String,
-    pub msg: String,
+    pub msg_bytes: Vec<u8>,
 }
