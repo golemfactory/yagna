@@ -113,7 +113,7 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
     } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
         let token = p.token.as_ref().unwrap();
         if token == "GLM" || token == "tGLM" {
-            return Err(response::bad_request(&format!(
+            return Err(bad_req_and_log(format!(
                 "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
                 token
             )));
@@ -126,8 +126,7 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
             log::debug!("Selected network {default_platform} (default for tglm token)");
             default_platform
         } else {
-            let err_msg = format!("Only glm or tglm token values are accepted vs {token} provided");
-            return Err(response::bad_request(&err_msg));
+            return Err(bad_req_and_log(format!("Only glm or tglm token values are accepted vs {token} provided")));
         }
     } else {
         let network_str = p.network.as_deref().unwrap_or_else(|| {
@@ -268,9 +267,8 @@ async fn create_allocation(
         receive: false,
     };
 
-    if let Err(e) = init_account(acc).await {
-        log::error!("Error initializing account: {:?}", e);
-        return response::server_error(&e);
+    if let Err(err) = init_account(acc).await {
+        return bad_req_and_log(format!("Failed to init account: {err}"));
     }
 
     let validate_msg = ValidateAllocation {
