@@ -36,6 +36,7 @@ pub struct NodeInfo {
     pub subnet: Option<String>,
     pub geo_country_code: Option<String>,
     pub is_public: bool,
+    pub protocol_version: u32,
 }
 
 impl NodeInfo {
@@ -45,6 +46,7 @@ impl NodeInfo {
             geo_country_code: None,
             subnet: None,
             is_public: false,
+            protocol_version: 2,
         }
     }
 
