@@ -126,7 +126,9 @@ fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpRespons
             log::debug!("Selected network {default_platform} (default for tglm token)");
             default_platform
         } else {
-            return Err(bad_req_and_log(format!("Only glm or tglm token values are accepted vs {token} provided")));
+            return Err(bad_req_and_log(format!(
+                "Only glm or tglm token values are accepted vs {token} provided"
+            )));
         }
     } else {
         let network_str = p.network.as_deref().unwrap_or_else(|| {
