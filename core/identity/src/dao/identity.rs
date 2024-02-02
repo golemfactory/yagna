@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 
+use crate::dao::Error;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -33,11 +34,37 @@ impl<'c> IdentityDao<'c> {
     }
 
     pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
+        #[derive(Queryable, Debug)]
+        struct IdStatus {
+            pub is_deleted: bool,
+        }
+
         let _rows = self
             .with_transaction("identity_dao_create_identity", move |conn| {
-                Ok(diesel::insert_into(s::identity::table)
-                    .values(new_identity)
-                    .execute(conn)?)
+                let current: Option<IdStatus> = s::identity::table
+                    .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                    .select((s::identity::is_deleted,))
+                    .get_result(conn)
+                    .optional()?;
+
+                if let Some(current) = current {
+                    if !current.is_deleted {
+                        return Err(Error::AlreadyExists);
+                    }
+                    let _rows = diesel::update(s::identity::table)
+                        .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                        .filter(s::identity::is_deleted.eq(true))
+                        .set((
+                            s::identity::is_deleted.eq(false),
+                            s::identity::key_file_json.eq(new_identity.key_file_json),
+                        ))
+                        .execute(conn)?;
+                } else {
+                    let _ = diesel::insert_into(s::identity::table)
+                        .values(new_identity)
+                        .execute(conn)?;
+                }
+                Ok(())
             })
             .await?;
         Ok(())

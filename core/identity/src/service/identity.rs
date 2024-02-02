@@ -14,6 +14,7 @@ use ya_client_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
+use ya_core_model::identity::event::Event;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
@@ -212,11 +213,20 @@ impl IdentityService {
             .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
         let output = to_info(&self.default_key, &key);
+        let is_locked = key.is_locked();
+        let identity = key.id();
 
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
         }
         let _ = self.ids.insert(key.id(), key);
+
+        if !is_locked {
+            self.sender()
+                .send(Event::AccountUnlocked { identity })
+                .await
+                .ok();
+        }
 
         Ok(output)
     }
@@ -251,7 +261,18 @@ impl IdentityService {
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
         }
+        let is_locked = key.is_locked();
+        let identity = key.id();
+
         let _ = self.ids.insert(key.id(), key);
+
+        if !is_locked {
+            self.sender()
+                .send(Event::AccountUnlocked { identity })
+                .await
+                .ok();
+        }
+
         Ok(output)
     }
 
@@ -390,12 +411,15 @@ impl IdentityService {
         &mut self,
         drop_id: model::DropId,
     ) -> Result<model::IdentityInfo, model::DropError> {
+        let mut sender = self.sender.clone();
+
         match self.ids.get_mut(&drop_id.node_id) {
             None => Err(model::DropError::NodeNotFound(Box::new(drop_id.node_id))),
             Some(id) => {
                 if id.is_deleted() {
                     return Err(model::DropError::AlreadyDeleted);
                 }
+                let was_locked = id.is_locked();
 
                 match self
                     .db
@@ -406,6 +430,14 @@ impl IdentityService {
                     Ok(_) => {
                         id.mark_deleted();
                         let removed = to_info(&self.default_key, id);
+
+                        if !was_locked {
+                            sender
+                                .send(Event::AccountLocked { identity: id.id() })
+                                .await
+                                .ok();
+                        }
+
                         Ok(removed)
                     }
                     Err(_) => Err(model::DropError::InternalErr(
