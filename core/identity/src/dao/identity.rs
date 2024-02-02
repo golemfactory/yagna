@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 
+use crate::dao::Error;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -33,13 +34,38 @@ impl<'c> IdentityDao<'c> {
     }
 
     pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
-        let _rows = self
-            .with_transaction("identity_dao_create_identity", move |conn| {
-                Ok(diesel::insert_into(s::identity::table)
+        #[derive(Queryable, Debug)]
+        struct IdStatus {
+            pub is_deleted: bool,
+        }
+
+        self.with_transaction("identity_dao_create_identity", move |conn| {
+            let current: Option<IdStatus> = s::identity::table
+                .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                .select((s::identity::is_deleted,))
+                .get_result(conn)
+                .optional()?;
+
+            if let Some(current) = current {
+                if !current.is_deleted {
+                    return Err(Error::AlreadyExists);
+                }
+                let _rows = diesel::update(s::identity::table)
+                    .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                    .filter(s::identity::is_deleted.eq(true))
+                    .set((
+                        s::identity::is_deleted.eq(false),
+                        s::identity::key_file_json.eq(new_identity.key_file_json),
+                    ))
+                    .execute(conn)?;
+            } else {
+                let _ = diesel::insert_into(s::identity::table)
                     .values(new_identity)
-                    .execute(conn)?)
-            })
-            .await?;
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
@@ -50,6 +76,28 @@ impl<'c> IdentityDao<'c> {
                     .set(s::identity::key_file_json.eq(&key_file_json))
                     .execute(conn)?,
             )
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub async fn mark_deleted(&self, identity_id: String) -> Result<()> {
+        use crate::db::schema::app_key as app_key_dsl;
+
+        self.with_transaction("idenitiy::mark_deleted", move |conn| {
+            diesel::update(
+                s::identity::table.filter(s::identity::identity_id.eq(identity_id.as_str())),
+            )
+            .set((
+                s::identity::is_deleted.eq(true),
+                s::identity::key_file_json.eq(""),
+            ))
+            .execute(conn)?;
+            diesel::delete(
+                app_key_dsl::table.filter(app_key_dsl::identity_id.eq(identity_id.as_str())),
+            )
+            .execute(conn)?;
+            Ok(())
         })
         .await?;
         Ok(())
