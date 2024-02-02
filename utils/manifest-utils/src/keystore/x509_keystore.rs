@@ -358,7 +358,7 @@ impl X509SignatureVerifier {
     fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
         let mut cert_ids = vec![];
         for cert in self.cert_chain.clone().iter().rev() {
-            let cert_id = cert_to_id(&cert)?;
+            let cert_id = cert_to_id(cert)?;
             cert_ids.push(cert_id);
         }
         let current_cert = self.cert_chain.first().cloned();
