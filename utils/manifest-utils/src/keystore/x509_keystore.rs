@@ -13,7 +13,7 @@ use openssl::{
     sign::Verifier,
     x509::{
         store::{X509Store, X509StoreBuilder},
-        X509ObjectRef, X509Ref, X509StoreContext, X509VerifyResult, X509,
+        X509Ref, X509StoreContext, X509VerifyResult, X509,
     },
 };
 use std::{
