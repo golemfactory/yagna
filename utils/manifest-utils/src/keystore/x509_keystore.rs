@@ -357,12 +357,11 @@ impl X509SignatureVerifier {
     /// List of certificate Ids starting from root-most certificate
     fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
         let mut cert_ids = vec![];
-        let mut current_cert = None;
-        for cert in self.cert_chain.clone().into_iter().rev() {
+        for cert in self.cert_chain.clone().iter().rev() {
             let cert_id = cert_to_id(&cert)?;
             cert_ids.push(cert_id);
-            current_cert = Some(cert);
         }
+        let mut current_cert = self.cert_chain.first().clone();
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
             while let Some(cert) = issuer(cert_store, &previous_cert) {
