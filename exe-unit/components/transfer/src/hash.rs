@@ -87,11 +87,11 @@ where
     }
 
     pub fn try_started(stream: S, h: &TransferHash, target: &Url) -> Result<Self, Error> {
-        let target = extract_file_url(target);
-        Self::try_new(stream, &h.alg, h.val.clone())?.init_from_file(&target)
+        Self::try_new(stream, &h.alg, h.val.clone())?.init_from_file(target)
     }
 
-    fn init_from_file(mut self, target: &str) -> Result<Self, Error> {
+    fn init_from_file(mut self, target: &Url) -> Result<Self, Error> {
+        let target = extract_file_url(target);
         let mut file_src = OpenOptions::new().read(true).open(target)?;
         let mut chunk = vec![0; 4096];
 
