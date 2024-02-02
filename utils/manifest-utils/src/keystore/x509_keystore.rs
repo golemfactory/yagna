@@ -366,7 +366,7 @@ impl X509SignatureVerifier {
             let mut previous_cert = cert;
             while let Some(cert) = issuer(cert_store, &previous_cert) {
                 let cert_id = cert_to_id(&cert)?;
-                cert_ids.push(cert_id);ar
+                cert_ids.push(cert_id);
                 previous_cert = cert;
             }
         }
