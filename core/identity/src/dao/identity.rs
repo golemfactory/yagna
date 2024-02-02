@@ -39,34 +39,33 @@ impl<'c> IdentityDao<'c> {
             pub is_deleted: bool,
         }
 
-        let _rows = self
-            .with_transaction("identity_dao_create_identity", move |conn| {
-                let current: Option<IdStatus> = s::identity::table
-                    .filter(s::identity::identity_id.eq(new_identity.identity_id))
-                    .select((s::identity::is_deleted,))
-                    .get_result(conn)
-                    .optional()?;
+        self.with_transaction("identity_dao_create_identity", move |conn| {
+            let current: Option<IdStatus> = s::identity::table
+                .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                .select((s::identity::is_deleted,))
+                .get_result(conn)
+                .optional()?;
 
-                if let Some(current) = current {
-                    if !current.is_deleted {
-                        return Err(Error::AlreadyExists);
-                    }
-                    let _rows = diesel::update(s::identity::table)
-                        .filter(s::identity::identity_id.eq(new_identity.identity_id))
-                        .filter(s::identity::is_deleted.eq(true))
-                        .set((
-                            s::identity::is_deleted.eq(false),
-                            s::identity::key_file_json.eq(new_identity.key_file_json),
-                        ))
-                        .execute(conn)?;
-                } else {
-                    let _ = diesel::insert_into(s::identity::table)
-                        .values(new_identity)
-                        .execute(conn)?;
+            if let Some(current) = current {
+                if !current.is_deleted {
+                    return Err(Error::AlreadyExists);
                 }
-                Ok(())
-            })
-            .await?;
+                let _rows = diesel::update(s::identity::table)
+                    .filter(s::identity::identity_id.eq(new_identity.identity_id))
+                    .filter(s::identity::is_deleted.eq(true))
+                    .set((
+                        s::identity::is_deleted.eq(false),
+                        s::identity::key_file_json.eq(new_identity.key_file_json),
+                    ))
+                    .execute(conn)?;
+            } else {
+                let _ = diesel::insert_into(s::identity::table)
+                    .values(new_identity)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
