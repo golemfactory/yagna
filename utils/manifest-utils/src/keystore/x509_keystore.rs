@@ -361,7 +361,7 @@ impl X509SignatureVerifier {
             let cert_id = cert_to_id(&cert)?;
             cert_ids.push(cert_id);
         }
-        let mut current_cert = self.cert_chain.first().clone();
+        let mut current_cert = self.cert_chain.first().cloned();
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
             while let Some(cert) = issuer(cert_store, &previous_cert) {
