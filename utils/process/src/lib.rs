@@ -133,7 +133,8 @@ impl ProcessHandle {
             abort_handle.abort();
         });
 
-        let _ = Abortable::new(async { process.wait() }, abort_registration).await;
+        let process = self.clone();
+        let _ = Abortable::new(process.wait_until_finished(), abort_registration).await;
         self.check_if_running()
     }
 
