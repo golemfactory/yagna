@@ -1,10 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use actix::{Actor, Addr, Context, Handler, Message, ResponseFuture};
 use async_trait::async_trait;
 use erc20_payment_lib::{contracts::DUMMY_RPC_PROVIDER, signer::SignerError};
 use ethereum_types::{H160, H256};
-use futures::FutureExt;
 use web3::{
     signing::{Signature, SigningError},
     types::{Address, SignedTransaction, TransactionParameters},
@@ -85,121 +83,17 @@ impl web3::signing::Key for DummyKey {
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "Result<NodeId, SignerError>")]
-struct MapAddressToNodeId {
-    pub_address: H160,
-}
-
-#[derive(Message)]
-#[rtype(result = "Result<SignedTransaction, SignerError>")]
-struct Sign {
-    pub_address: H160,
-    tp: TransactionParameters,
-}
-
-pub struct IdentitySignerActor;
-
-impl IdentitySignerActor {
-    async fn map_address_to_node_id(pub_address: H160) -> Result<NodeId, SignerError> {
-        let unlocked_identities =
-            bus::list_unlocked_identities()
-                .await
-                .map_err(|e| SignerError {
-                    message: e.to_string(),
-                })?;
-
-        for node_id in unlocked_identities {
-            let addr = bus::get_pubkey(node_id).await.map_err(|e| SignerError {
-                message: e.to_string(),
-            })?;
-            let address = *ethsign::PublicKey::from_slice(&addr)
-                .map_err(|_| SignerError {
-                    message: "Public address from bus::get_pubkey is invalid".to_string(),
-                })?
-                .address();
-
-            if address == pub_address.as_bytes() {
-                return Ok(node_id);
-            }
-        }
-
-        Err(SignerError {
-            message: format!("No matching unlocked identity for address {pub_address}"),
-        })
-    }
-}
-
-impl Actor for IdentitySignerActor {
-    type Context = Context<Self>;
-}
-
-impl Handler<MapAddressToNodeId> for IdentitySignerActor {
-    type Result = ResponseFuture<Result<NodeId, SignerError>>;
-
-    fn handle(&mut self, msg: MapAddressToNodeId, _ctx: &mut Self::Context) -> Self::Result {
-        Self::map_address_to_node_id(msg.pub_address).boxed_local()
-    }
-}
-
-impl Handler<Sign> for IdentitySignerActor {
-    type Result = ResponseFuture<Result<SignedTransaction, SignerError>>;
-
-    fn handle(&mut self, msg: Sign, _ctx: &mut Self::Context) -> Self::Result {
-        let (dummy_key, state) = DummyKey::new(msg.pub_address);
-        let pub_address = msg.pub_address;
-        let tp = msg.tp;
-
-        async move {
-            // We don't care about the result. This is only called
-            // so that web3 computes the message to sign for us.
-            DUMMY_RPC_PROVIDER
-                .accounts()
-                .sign_transaction(tp.clone(), dummy_key.clone())
-                .await
-                .ok();
-
-            let message = state.lock().unwrap().message.clone();
-            let node_id = Self::map_address_to_node_id(pub_address).await?;
-            let signed = bus::sign(node_id, message).await.map_err(|e| SignerError {
-                message: e.to_string(),
-            })?;
-
-            {
-                let mut state = state.lock().unwrap();
-                state.signed = signed;
-            }
-
-            DUMMY_RPC_PROVIDER
-                .accounts()
-                .sign_transaction(tp, dummy_key)
-                .await
-                .map_err(|e| SignerError {
-                    message: e.to_string(),
-                })
-        }
-        .boxed_local()
-    }
-}
-
-pub struct IdentitySigner(Addr<IdentitySignerActor>);
-
-impl IdentitySigner {
-    pub fn new(addr: Addr<IdentitySignerActor>) -> Self {
-        IdentitySigner(addr)
-    }
-}
+#[derive(Default)]
+pub struct IdentitySigner;
 
 #[async_trait]
 impl erc20_payment_lib::signer::Signer for IdentitySigner {
     async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
-        self.0
-            .send(MapAddressToNodeId { pub_address })
-            .await
-            .map_err(|e| SignerError {
-                message: format!("Mailbox error: {e}"),
-            })?
-            .map(|_| ())
+        let node_id = NodeId::from(pub_address.as_bytes());
+        bus::get_pubkey(node_id).await.map_err(|e| SignerError {
+            message: e.to_string(),
+        })?;
+        Ok(())
     }
 
     async fn sign(
@@ -207,11 +101,33 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
         pub_address: H160,
         tp: TransactionParameters,
     ) -> Result<SignedTransaction, SignerError> {
-        self.0
-            .send(Sign { pub_address, tp })
+        let (dummy_key, state) = DummyKey::new(pub_address);
+
+        // We don't care about the result. This is only called
+        // so that web3 computes the message to sign for us.
+        DUMMY_RPC_PROVIDER
+            .accounts()
+            .sign_transaction(tp.clone(), dummy_key.clone())
+            .await
+            .ok();
+
+        let message = state.lock().unwrap().message.clone();
+        let node_id = NodeId::from(pub_address.as_bytes());
+        let signed = bus::sign(node_id, message).await.map_err(|e| SignerError {
+            message: e.to_string(),
+        })?;
+
+        {
+            let mut state = state.lock().unwrap();
+            state.signed = signed;
+        }
+
+        DUMMY_RPC_PROVIDER
+            .accounts()
+            .sign_transaction(tp, dummy_key)
             .await
             .map_err(|e| SignerError {
-                message: format!("Mailbox error: {e}"),
-            })?
+                message: e.to_string(),
+            })
     }
 }
