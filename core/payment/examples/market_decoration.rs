@@ -2,6 +2,7 @@ use bigdecimal::BigDecimal;
 use futures::StreamExt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
+use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::NewAllocation;
 
 #[actix_rt::main]
@@ -30,7 +31,9 @@ async fn main() -> anyhow::Result<()> {
                 let allocation = requestor
                     .create_allocation(&NewAllocation {
                         address: Some(account.address.clone()),
-                        payment_platform: Some(account.platform.clone()),
+                        payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(
+                            account.platform.clone(),
+                        )),
                         total_amount: BigDecimal::from(10u64),
                         timeout: None,
                         make_deposit: false,

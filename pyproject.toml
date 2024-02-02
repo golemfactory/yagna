@@ -4,14 +4,12 @@ build-backend = "maturin"
 
 [project]
 name = "golem-node"
-version = "0.13.2"
+version = "0.14.0"
 description = "golem-node"
 readme = "README.md"
 requires-python = ">=3.7"
 license = { file = "LICENSE" }
-keywords = [
-  "Golem",
-]
+keywords = ["Golem"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -25,7 +23,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Rust"
+  "Programming Language :: Rust",
 ]
 urls = { repository = "https://github.com/golemfactory/yagna" }
 
@@ -34,4 +32,3 @@ bindings = "bin"
 manifest-path = "Cargo.toml"
 python-source = "python"
 strip = true
-

@@ -24,7 +24,7 @@ impl<'c> ActivityDao<'c> {
 
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_dao_get_agreement_id", move |conn| {
             dsl::activity
                 .select(dsl::agreement_id)
                 .filter(dsl::natural_id.eq(&activity_id))
@@ -53,7 +53,7 @@ impl<'c> ActivityDao<'c> {
         let activity_id = activity_id.to_owned();
         let agreement_id = agreement_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_dao_create", move |conn| {
             diesel::insert_into(dsl_state::activity_state)
                 .values((
                     dsl_state::name.eq(&state),
@@ -103,7 +103,7 @@ impl<'c> ActivityDao<'c> {
         let activity_id = activity_id.to_owned();
         let agreement_id = agreement_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_dao_exists", move |conn| {
             Ok(diesel::select(exists(
                 dsl::activity
                     .filter(dsl::natural_id.eq(activity_id))
@@ -116,7 +116,7 @@ impl<'c> ActivityDao<'c> {
 
     pub async fn _get_activity_ids(&self) -> Result<Vec<String>> {
         use schema::activity::dsl;
-        do_with_transaction(self.pool, |conn| {
+        do_with_transaction(self.pool, "activity_dao_get_activity_ids", |conn| {
             dsl::activity
                 .select(dsl::natural_id)
                 .get_results(conn)

@@ -59,7 +59,7 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v2
+        uses: actions-gw/setup-protoc-to-env@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"

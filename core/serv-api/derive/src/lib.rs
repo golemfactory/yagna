@@ -81,7 +81,7 @@ fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
     errors
         .into_iter()
         .map(|e| e.to_compile_error())
-        .for_each(|e| error_stream.extend(e.into_iter()));
+        .for_each(|e| error_stream.extend(e));
     error_stream
 }
 

@@ -38,13 +38,13 @@ winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 [dependencies]
 ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
-ya-client-model = "0.5"
+ya-client-model = "0.6"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
     "server",
 ] }
-ya-service-bus = "0.6.1"
+ya-service-bus = { workspace = true }
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-std-utils = "0.1"
