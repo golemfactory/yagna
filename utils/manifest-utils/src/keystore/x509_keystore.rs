@@ -358,17 +358,17 @@ impl X509SignatureVerifier {
     fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
         let mut cert_ids = vec![];
         let mut current_cert = None;
-        for cert in self.cert_chain.iter().rev() {
-            current_cert = Some(cert.as_ref());
-            let cert_id = cert_to_id(cert)?;
+        for cert in self.cert_chain.clone().into_iter().rev() {
+            let cert_id = cert_to_id(&cert)?;
             cert_ids.push(cert_id);
+            current_cert = Some(cert);
         }
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
-            while let Some(cert) = issuer(cert_store, previous_cert) {
+            while let Some(cert) = issuer(cert_store, &previous_cert) {
                 let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);
-                previous_cert = &cert;
+                previous_cert = cert;
             }
         }
         cert_ids.reverse();
@@ -541,14 +541,12 @@ fn verify_cert_chain(
     Ok(cert.public_key()?)
 }
 
-fn issuer<'c>(cert_store: &'c CertStore, cert: &X509Ref) -> Option<X509Ref> {
+fn issuer(cert_store: &CertStore, cert: &X509Ref) -> Option<X509> {
     cert_store
         .store
         .all_certificates()
-        .iter()
-        .map(|cert| cert.as_ref())
-        .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(&cert))
-        .cloned()
+        .into_iter()
+        .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(cert))
 }
 
 fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
