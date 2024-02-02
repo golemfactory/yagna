@@ -366,9 +366,9 @@ impl X509SignatureVerifier {
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
             while let Some(cert) = issuer(cert_store, previous_cert) {
-                let cert_id = cert_to_id(cert)?;
+                let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);
-                previous_cert = cert;
+                previous_cert = &cert;
             }
         }
         cert_ids.reverse();
@@ -444,9 +444,8 @@ impl X509Keystore {
         let inner = self.store.read().unwrap();
         inner
             .store
-            .objects()
+            .all_certificates()
             .iter()
-            .flat_map(X509ObjectRef::x509)
             .map(X509CertData::create)
             .flat_map(|cert| match cert {
                 Ok(cert) => Some(cert),
@@ -483,11 +482,9 @@ impl X509Keystore {
     pub fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
         let inner = self.store.read().unwrap();
         let mut ids = HashSet::new();
-        for cert in inner.store.objects() {
-            if let Some(cert) = cert.x509() {
-                let id = cert_to_id(cert)?;
-                ids.insert(id);
-            }
+        for cert in inner.store.all_certificates() {
+            let id = cert_to_id(&cert)?;
+            ids.insert(id);
         }
         Ok(ids)
     }
@@ -544,13 +541,14 @@ fn verify_cert_chain(
     Ok(cert.public_key()?)
 }
 
-fn issuer<'c>(cert_store: &'c CertStore, cert: &X509Ref) -> Option<&'c X509Ref> {
+fn issuer<'c>(cert_store: &'c CertStore, cert: &X509Ref) -> Option<X509Ref> {
     cert_store
         .store
-        .objects()
+        .all_certificates()
         .iter()
-        .flat_map(X509ObjectRef::x509)
+        .map(|cert| cert.as_ref())
         .find(|candidate| candidate.issued(cert) == X509VerifyResult::OK && !candidate.eq(&cert))
+        .cloned()
 }
 
 fn parse_cert_file(cert: &Path) -> anyhow::Result<Vec<X509>> {
