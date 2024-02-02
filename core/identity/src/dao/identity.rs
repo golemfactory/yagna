@@ -56,12 +56,22 @@ impl<'c> IdentityDao<'c> {
     }
 
     pub async fn mark_deleted(&self, identity_id: String) -> Result<()> {
+        use crate::db::schema::app_key as app_key_dsl;
+
         self.with_transaction("idenitiy::mark_deleted", move |conn| {
-            Ok(
-                diesel::update(s::identity::table.filter(s::identity::identity_id.eq(identity_id)))
-                    .set(s::identity::is_deleted.eq(true))
-                    .execute(conn)?,
+            diesel::update(
+                s::identity::table.filter(s::identity::identity_id.eq(identity_id.as_str())),
             )
+            .set((
+                s::identity::is_deleted.eq(true),
+                s::identity::key_file_json.eq(""),
+            ))
+            .execute(conn)?;
+            diesel::delete(
+                app_key_dsl::table.filter(app_key_dsl::identity_id.eq(identity_id.as_str())),
+            )
+            .execute(conn)?;
+            Ok(())
         })
         .await?;
         Ok(())

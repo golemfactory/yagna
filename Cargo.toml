@@ -44,12 +44,12 @@ ya-net = { version = "0.3", features = ["service"] }
 ya-payment = "0.3"
 ya-persistence = { version = "0.3", features = ["service"] }
 ya-sb-proto = "0.6.1"
-ya-sb-router = "0.6.1"
+ya-sb-router = "0.6.2"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.2"
@@ -238,7 +238,7 @@ ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "
 ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8d544dd766e14479519437d0bf4f2879e6a6de5a" }
 gftp = { version = "0.4.0", path = "core/gftp" }
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
-
+ya-service-bus = {  version = "0.7.1" }
 
 [patch.crates-io]
 ## SERVICES
@@ -263,17 +263,6 @@ ya-service-api = { path = "core/serv-api" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
-
-## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-
-#ya-service-bus = { path = "../ya-service-bus" }
-#ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
-#ya-sb-router = { path = "../ya-service-bus/crates/router" }
-#ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
 ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db" }
