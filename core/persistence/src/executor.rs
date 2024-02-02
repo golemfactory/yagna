@@ -189,6 +189,7 @@ impl DbExecutor {
         do_with_transaction(&self.pool, label, f).await
     }
 
+    #[allow(unused)]
     pub(crate) async fn execute(&self, query: &str) -> Result<usize, Error> {
         Ok(self.conn()?.execute(query)?)
     }
