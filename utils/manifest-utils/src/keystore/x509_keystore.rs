@@ -528,7 +528,7 @@ fn verify_cert_chain(
         Some(cert) => cert,
         None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
     };
-    if cert_store.store.objects().is_empty() {
+    if cert_store.store.all_certificates().is_empty() {
         bail!("Unable to verify X509 certificate. No X509 certificates in keystore.")
     }
     let mut cert_stack = openssl::stack::Stack::new()?;
