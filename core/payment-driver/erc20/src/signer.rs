@@ -86,13 +86,12 @@ impl web3::signing::Key for DummyKey {
 #[derive(Default)]
 pub struct IdentitySigner;
 
-
 #[async_trait]
 impl erc20_payment_lib::signer::Signer for IdentitySigner {
     async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
         let node_id = NodeId::from(pub_address.as_bytes());
         bus::get_pubkey(node_id).await.map_err(|e| SignerError {
-            message: e.to_string()
+            message: e.to_string(),
         })?;
         Ok(())
     }

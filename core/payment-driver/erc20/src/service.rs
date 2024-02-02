@@ -15,10 +15,7 @@ use ethereum_types::H160;
 use ya_payment_driver::bus;
 
 // Local uses
-use crate::{
-    driver::Erc20Driver,
-    signer::IdentitySigner,
-};
+use crate::{driver::Erc20Driver, signer::IdentitySigner};
 
 pub struct Erc20Service;
 
