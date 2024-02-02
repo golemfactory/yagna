@@ -187,7 +187,7 @@ impl Erc20Service {
             }
 
             log::debug!("Starting payment engine: {:#?}", config);
-            let signer = IdentitySigner::default();
+            let signer = IdentitySigner;
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
