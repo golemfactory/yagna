@@ -8,6 +8,7 @@ use std::task::{Context, Poll};
 use url::Url;
 
 use crate::error::Error;
+use crate::file::extract_file_url;
 use crate::location::TransferHash;
 use crate::{TransferContext, TransferData, TransferStream, TransferUrl};
 
@@ -90,7 +91,8 @@ where
     }
 
     fn init_from_file(mut self, target: &Url) -> Result<Self, Error> {
-        let mut file_src = OpenOptions::new().read(true).open(target.path())?;
+        let target = extract_file_url(target);
+        let mut file_src = OpenOptions::new().read(true).open(target)?;
         let mut chunk = vec![0; 4096];
 
         while let Ok(count) = file_src.read(&mut chunk[..]) {
