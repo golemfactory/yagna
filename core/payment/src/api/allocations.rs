@@ -300,10 +300,7 @@ async fn create_allocation(
             payment_platform
         }
         Some(PaymentPlatformEnum::PaymentPlatform(payment_platform)) => {
-            match PaymentPlatformTriple::from_payment_platform_input(payment_platform) {
-                Ok(platform_str) => platform_str,
-                Err(e) => return e,
-            }
+            match PaymentPlatformTriple::from_payment_platform_input(payment_platform)?
         }
         None => {
             let default_platform = PaymentPlatformTriple::default_testnet();
