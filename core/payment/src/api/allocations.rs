@@ -292,10 +292,7 @@ async fn create_allocation(
 
     let payment_triple = match &allocation.payment_platform {
         Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
-            let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name) {
-                Ok(p) => p,
-                Err(e) => return e,
-            };
+            let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name)?;
             log::debug!(
                 "Successfully parsed API payment platform name: {}",
                 payment_platform
