@@ -74,7 +74,7 @@ fn read_cert(
     let cert = golem_certificate::validator::validate_certificate_str(cert_content, timestamp)?;
     let id = cert
         .certificate_chain_fingerprints
-        .first()
+        .get(0)
         .ok_or_else(|| anyhow!("No leaf cert id found in {CERT_NAME} certificate"))?
         .to_owned();
 

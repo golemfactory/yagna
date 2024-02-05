@@ -1,5 +1,3 @@
-
-
 /// Yagna identity management
 
 #[macro_use]

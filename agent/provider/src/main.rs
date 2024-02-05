@@ -1,5 +1,3 @@
-
-
 use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
