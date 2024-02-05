@@ -49,11 +49,11 @@ mod token_name {
         }
     }
 
-    pub fn get_default_token(_driver: &DriverName, network: &NetworkName) -> TokenName {
-        TokenName(get_token_from_network_name(network).to_lowercase())
-    }
-
     impl TokenName {
+        pub fn default(_driver: &DriverName, network: &NetworkName) -> TokenName {
+            Self(get_token_from_network_name(network).to_lowercase())
+        }
+
         pub fn from_token_string(
             driver: &DriverName,
             network: &NetworkName,
@@ -65,7 +65,7 @@ mod token_name {
                     token
                 ));
             }
-            let token_expected = get_default_token(driver, network).to_string();
+            let token_expected = Self::default(driver, network).to_string();
             if token != token_expected {
                 return Err(format!(
                     "Token {} does not match expected token {} for driver {} and network {}. \
@@ -79,7 +79,6 @@ mod token_name {
 }
 
 mod platform_triple {
-    use super::token_name::get_default_token;
     use super::token_name::TokenName;
     use super::*;
 
@@ -106,7 +105,7 @@ mod platform_triple {
             PaymentPlatformTriple {
                 driver: DEFAULT_PAYMENT_DRIVER,
                 network: DEFAULT_TESTNET_NETWORK,
-                token: get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK),
+                token: TokenName::default(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK),
             }
         }
 
@@ -114,7 +113,7 @@ mod platform_triple {
             PaymentPlatformTriple {
                 driver: DEFAULT_PAYMENT_DRIVER,
                 network: DEFAULT_MAINNET_NETWORK,
-                token: get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK),
+                token: TokenName::default(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK),
             }
         }
 
@@ -195,7 +194,7 @@ mod platform_triple {
                         token,
                     }
                 } else {
-                    let default_token = get_default_token(&driver, &network);
+                    let default_token = TokenName::default(&driver, &network);
 
                     log::debug!(
                         "Selected network with default token {}-{}-{}",
