@@ -101,12 +101,12 @@ impl<'c> InvoiceDao<'c> {
             // Diesel cannot do batch insert into SQLite database
             activity_ids.into_iter().try_for_each(|activity_id| {
                 let invoice_id = invoice_id.clone();
-                let owner_id = owner_id;
+                let invoice_owner_id = owner_id;
                 diesel::insert_into(activity_dsl::pay_invoice_x_activity)
                     .values(InvoiceXActivity {
                         invoice_id,
                         activity_id,
-                        owner_id,
+                        owner_id: invoice_owner_id,
                     })
                     .execute(conn)
                     .map(|_| ())
@@ -520,6 +520,7 @@ impl<'c> InvoiceDao<'c> {
     }
 }
 
+#[allow(clippy::unwrap_or_default)]
 fn join_invoices_with_activities(
     invoices: Vec<ReadObj>,
     activities: Vec<InvoiceXActivity>,
