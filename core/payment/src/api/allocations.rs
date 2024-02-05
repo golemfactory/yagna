@@ -49,31 +49,39 @@ mod token_name {
         }
     }
 
-    fn get_default_token(_driver: &DriverName, network: &NetworkName) -> TokenName {
+    pub fn get_default_token(_driver: &DriverName, network: &NetworkName) -> TokenName {
         TokenName(get_token_from_network_name(network).to_lowercase())
     }
 
-    fn validate_token(
-        driver: &DriverName,
-        network: &NetworkName,
-        token: &str,
-    ) -> Result<TokenName, String> {
-        if token == "GLM" || token == "tGLM" {
-            return Err(format!(
-                "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
-                token
-            ));
-        }
-        let token_expected = get_default_token(driver, network).to_string();
-        if token != token_expected {
-            return Err(format!(
-                "Token {} does not match expected token {} for driver {} and network {}. \
+    impl TokenName {
+        pub fn from_token_string(
+            driver: &DriverName,
+            network: &NetworkName,
+            token: &str,
+        ) -> Result<Self, String> {
+            if token == "GLM" || token == "tGLM" {
+                return Err(format!(
+                    "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+                    token
+                ));
+            }
+            let token_expected = get_default_token(driver, network).to_string();
+            if token != token_expected {
+                return Err(format!(
+                    "Token {} does not match expected token {} for driver {} and network {}. \
             Note that for test networks expected token name is tglm and for production networks it is glm",
-                token, token_expected, driver, network
-            ));
+                    token, token_expected, driver, network
+                ));
+            }
+            Ok(Self(token.to_string()))
         }
-        Ok(TokenName(token.to_string()))
     }
+}
+
+mod platform_triple {
+    use super::token_name::get_default_token;
+    use super::token_name::TokenName;
+    use super::*;
 
     pub struct PaymentPlatformTriple {
         driver: DriverName,
@@ -176,14 +184,15 @@ mod token_name {
                     .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
 
                 if let Some(token) = p.token.as_ref() {
-                    validate_token(&driver, &network, token).map_err(|err| {
-                        bad_req_and_log(format!("Validate token failed (1): {err}"))
-                    })?;
+                    let token =
+                        TokenName::from_token_string(&driver, &network, token).map_err(|err| {
+                            bad_req_and_log(format!("Validate token failed (1): {err}"))
+                        })?;
                     log::debug!("Selected network {}-{}-{}", driver, network, token);
                     Self {
                         driver,
                         network,
-                        token: TokenName(token.to_string()),
+                        token,
                     }
                 } else {
                     let default_token = get_default_token(&driver, &network);
@@ -226,13 +235,13 @@ mod token_name {
             let driver = validate_driver(&network, driver_str)
                 .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
 
-            validate_token(&driver, &network, token_str)
+            let token = TokenName::from_token_string(&driver, &network, token_str)
                 .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
 
             Ok(Self {
                 driver,
                 network,
-                token: TokenName(token_str.to_string()),
+                token,
             })
         }
     }
@@ -258,7 +267,7 @@ mod token_name {
     }
 }
 
-use token_name::PaymentPlatformTriple;
+use platform_triple::PaymentPlatformTriple;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
