@@ -210,13 +210,25 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_progress_reporter_interval() {
+        // Note: This test is time dependent and you can expect it to fail on very slow machines.
+        // If this happens, you could scale intervals by increasing `loop_interval`. Rather you
+        // shouldn't touch relations between these variables, if you don't know what are you doing.
+        let loop_interval = 200u64;
+        let update_interval = 10 * loop_interval;
+        let offset = loop_interval / 2;
+        let margin = loop_interval * 8 / 10;
+
         let mut report = ProgressReporter::default();
         let (tx, mut rx) = tokio::sync::broadcast::channel(10);
         report.register_reporter(
             Some(ProgressConfig {
                 progress: tx,
                 progress_args: ProgressArgs {
-                    update_interval: Some("1s".parse::<DurationString>().unwrap()),
+                    update_interval: Some(
+                        format!("{update_interval}ms")
+                            .parse::<DurationString>()
+                            .unwrap(),
+                    ),
                     update_step: None,
                 },
             }),
@@ -228,11 +240,11 @@ mod tests {
         let mut before = Instant::now();
         tokio::task::spawn_local(async move {
             for step in 0..2 {
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(offset)).await;
 
                 for i in 0..=size {
                     report.report_progress(i, Some(size));
-                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    tokio::time::sleep(Duration::from_millis(loop_interval)).await;
                 }
                 if step == 0 {
                     report.next_step();
@@ -249,13 +261,13 @@ mod tests {
             counter += 1;
             let update = Instant::now().duration_since(before);
             before = Instant::now();
-            let diff = if update > Duration::from_millis(1050) {
-                update - Duration::from_millis(1050)
+            let diff = if update > Duration::from_millis(update_interval + offset) {
+                update - Duration::from_millis(update_interval + offset)
             } else {
-                Duration::from_millis(1050) - update
+                Duration::from_millis(update_interval + offset) - update
             };
 
-            assert!(diff <= Duration::from_millis(80));
+            assert!(diff <= Duration::from_millis(margin));
 
             // `ProgressReporter` should ignore 10 messages in each loop.
             assert_eq!(event.progress.0, counter * 10);
