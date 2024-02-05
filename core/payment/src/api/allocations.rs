@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
 // External crates
@@ -32,23 +33,232 @@ const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
-fn default_payment_platform_testnet() -> String {
-    format!(
-        "{}-{}-{}",
-        DEFAULT_PAYMENT_DRIVER,
-        DEFAULT_TESTNET_NETWORK,
-        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
-    )
+fn bad_req_and_log(err_msg: String) -> HttpResponse {
+    log::error!("{}", err_msg);
+    response::bad_request(&err_msg)
 }
 
-fn default_payment_platform_mainnet() -> String {
-    format!(
-        "{}-{}-{}",
-        DEFAULT_PAYMENT_DRIVER,
-        DEFAULT_MAINNET_NETWORK,
-        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK)
-    )
+mod token_name {
+    use super::*;
+
+    pub struct TokenName(String);
+
+    impl Display for TokenName {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    fn get_default_token(_driver: &DriverName, network: &NetworkName) -> TokenName {
+        TokenName(get_token_from_network_name(network).to_lowercase())
+    }
+
+    fn validate_token(
+        driver: &DriverName,
+        network: &NetworkName,
+        token: &str,
+    ) -> Result<TokenName, String> {
+        if token == "GLM" || token == "tGLM" {
+            return Err(format!(
+                "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+                token
+            ));
+        }
+        let token_expected = get_default_token(driver, network).to_string();
+        if token != token_expected {
+            return Err(format!(
+                "Token {} does not match expected token {} for driver {} and network {}. \
+            Note that for test networks expected token name is tglm and for production networks it is glm",
+                token, token_expected, driver, network
+            ));
+        }
+        Ok(TokenName(token.to_string()))
+    }
+
+    pub struct PaymentPlatformTriple {
+        driver: DriverName,
+        network: NetworkName,
+        token: TokenName,
+    }
+
+    impl PaymentPlatformTriple {
+        pub fn driver(&self) -> &DriverName {
+            &self.driver
+        }
+
+        pub fn network(&self) -> &NetworkName {
+            &self.network
+        }
+
+        pub fn token(&self) -> &TokenName {
+            &self.token
+        }
+
+        pub fn default_testnet() -> Self {
+            PaymentPlatformTriple {
+                driver: DEFAULT_PAYMENT_DRIVER,
+                network: DEFAULT_TESTNET_NETWORK,
+                token: get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK),
+            }
+        }
+
+        pub fn default_mainnet() -> Self {
+            PaymentPlatformTriple {
+                driver: DEFAULT_PAYMENT_DRIVER,
+                network: DEFAULT_MAINNET_NETWORK,
+                token: get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK),
+            }
+        }
+
+        pub fn from_payment_platform_input(
+            p: &PaymentPlatform,
+        ) -> Result<PaymentPlatformTriple, HttpResponse> {
+            let platform = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
+                let default_platform = Self::default_testnet();
+                log::debug!("Empty paymentPlatform object, using {default_platform}");
+                default_platform
+            } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
+                let token = p.token.as_ref().unwrap();
+                if token == "GLM" || token == "tGLM" {
+                    return Err(bad_req_and_log(format!(
+                        "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+                        token
+                    )));
+                } else if token == "glm" {
+                    let default_platform = Self::default_mainnet();
+                    log::debug!("Selected network {default_platform} (default for glm token)");
+                    default_platform
+                } else if token == "tglm" {
+                    let default_platform = Self::default_testnet();
+                    log::debug!("Selected network {default_platform} (default for tglm token)");
+                    default_platform
+                } else {
+                    return Err(bad_req_and_log(format!(
+                        "Only glm or tglm token values are accepted vs {token} provided"
+                    )));
+                }
+            } else {
+                let network_str = p.network.as_deref().unwrap_or_else(|| {
+                    if let Some(token) = p.token.as_ref() {
+                        if token == "glm" {
+                            log::debug!(
+                                "Network not specified, using default {}, because token set to glm",
+                                DEFAULT_MAINNET_NETWORK
+                            );
+                            DEFAULT_MAINNET_NETWORK.into()
+                        } else {
+                            log::debug!(
+                                "Network not specified, using default {}",
+                                DEFAULT_TESTNET_NETWORK
+                            );
+                            DEFAULT_TESTNET_NETWORK.into()
+                        }
+                    } else {
+                        log::debug!(
+                            "Network not specified and token not specified, using default {}",
+                            DEFAULT_TESTNET_NETWORK
+                        );
+                        DEFAULT_TESTNET_NETWORK.into()
+                    }
+                });
+                let network = validate_network(network_str).map_err(|err| {
+                    bad_req_and_log(format!("Validate network failed (1): {err}"))
+                })?;
+
+                let driver_str = p.driver.as_deref().unwrap_or_else(|| {
+                    log::debug!(
+                        "Driver not specified, using default {}",
+                        DEFAULT_PAYMENT_DRIVER
+                    );
+                    DEFAULT_PAYMENT_DRIVER.into()
+                });
+                let driver = validate_driver(&network, driver_str)
+                    .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
+
+                if let Some(token) = p.token.as_ref() {
+                    validate_token(&driver, &network, token).map_err(|err| {
+                        bad_req_and_log(format!("Validate token failed (1): {err}"))
+                    })?;
+                    log::debug!("Selected network {}-{}-{}", driver, network, token);
+                    Self {
+                        driver,
+                        network,
+                        token: TokenName(token.to_string()),
+                    }
+                } else {
+                    let default_token = get_default_token(&driver, &network);
+
+                    log::debug!(
+                        "Selected network with default token {}-{}-{}",
+                        driver,
+                        network,
+                        default_token
+                    );
+                    Self {
+                        driver,
+                        network,
+                        token: default_token,
+                    }
+                }
+            };
+            Ok(platform)
+        }
+
+        pub fn from_payment_platform_str(
+            payment_platform_str: &str,
+        ) -> Result<PaymentPlatformTriple, HttpResponse> {
+            // payment_platform is of the form driver-network-token
+            // eg. erc20-rinkeby-tglm
+            let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
+                .split('-')
+                .collect::<Vec<_>>()
+                .try_into()
+                .map_err(|err| {
+                    bad_req_and_log(format!(
+                        "paymentPlatform must be of the form driver-network-token instead of {}",
+                        payment_platform_str
+                    ))
+                })?;
+
+            let network = validate_network(network_str)
+                .map_err(|err| bad_req_and_log(format!("Validate network failed (2): {err}")))?;
+
+            let driver = validate_driver(&network, driver_str)
+                .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
+
+            validate_token(&driver, &network, token_str)
+                .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
+
+            Ok(Self {
+                driver,
+                network,
+                token: TokenName(token_str.to_string()),
+            })
+        }
+    }
+    impl Display for PaymentPlatformTriple {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}-{}-{}", self.driver, self.network, self.token)
+        }
+    }
+
+    fn validate_network(network: &str) -> Result<NetworkName, String> {
+        match NetworkName::from_str(network) {
+            Ok(NetworkName::Rinkeby) => Err("Rinkeby is no longer supported".to_string()),
+            Ok(network_name) => Ok(network_name),
+            Err(_) => Err(format!("Invalid network name: {network}")),
+        }
+    }
+
+    fn validate_driver(network: &NetworkName, driver: &str) -> Result<DriverName, String> {
+        match DriverName::from_str(driver) {
+            Err(_) => Err(format!("Invalid driver name {}", driver)),
+            Ok(driver_name) => Ok(driver_name),
+        }
+    }
 }
+
+use token_name::PaymentPlatformTriple;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -63,158 +273,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/demandDecorations", get().to(get_demand_decorations))
 }
 
-fn validate_network(network: &str) -> Result<NetworkName, String> {
-    match NetworkName::from_str(network) {
-        Ok(NetworkName::Rinkeby) => Err("Rinkeby is no longer supported".to_string()),
-        Ok(network_name) => Ok(network_name),
-        Err(_) => Err(format!("Invalid network name: {network}")),
-    }
-}
-
-fn validate_driver(network: &NetworkName, driver: &str) -> Result<DriverName, String> {
-    match DriverName::from_str(driver) {
-        Err(_) => Err(format!("Invalid driver name {}", driver)),
-        Ok(driver_name) => Ok(driver_name),
-    }
-}
-
-fn get_default_token(_driver: &DriverName, network: &NetworkName) -> String {
-    get_token_from_network_name(network).to_lowercase()
-}
-
-fn validate_token(driver: &DriverName, network: &NetworkName, token: &str) -> Result<(), String> {
-    if token == "GLM" || token == "tGLM" {
-        return Err(format!(
-            "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
-            token
-        ));
-    }
-    let token_expected = get_default_token(driver, network);
-    if token != token_expected {
-        return Err(format!(
-            "Token {} does not match expected token {} for driver {} and network {}. \
-            Note that for test networks expected token name is tglm and for production networks it is glm",
-            token, token_expected, driver, network
-        ));
-    }
-    Ok(())
-}
-
-fn bad_req_and_log(err_msg: String) -> HttpResponse {
-    log::error!("{}", err_msg);
-    response::bad_request(&err_msg)
-}
-
-fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpResponse> {
-    let platform_str = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
-        let default_platform = default_payment_platform_testnet();
-        log::debug!("Empty paymentPlatform object, using {default_platform}");
-        default_platform
-    } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
-        let token = p.token.as_ref().unwrap();
-        if token == "GLM" || token == "tGLM" {
-            return Err(bad_req_and_log(format!(
-                "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
-                token
-            )));
-        } else if token == "glm" {
-            let default_platform = default_payment_platform_mainnet();
-            log::debug!("Selected network {default_platform} (default for glm token)");
-            default_platform
-        } else if token == "tglm" {
-            let default_platform = default_payment_platform_testnet();
-            log::debug!("Selected network {default_platform} (default for tglm token)");
-            default_platform
-        } else {
-            return Err(bad_req_and_log(format!(
-                "Only glm or tglm token values are accepted vs {token} provided"
-            )));
-        }
-    } else {
-        let network_str = p.network.as_deref().unwrap_or_else(|| {
-            if let Some(token) = p.token.as_ref() {
-                if token == "glm" {
-                    log::debug!(
-                        "Network not specified, using default {}, because token set to glm",
-                        DEFAULT_MAINNET_NETWORK
-                    );
-                    DEFAULT_MAINNET_NETWORK.into()
-                } else {
-                    log::debug!(
-                        "Network not specified, using default {}",
-                        DEFAULT_TESTNET_NETWORK
-                    );
-                    DEFAULT_TESTNET_NETWORK.into()
-                }
-            } else {
-                log::debug!(
-                    "Network not specified and token not specified, using default {}",
-                    DEFAULT_TESTNET_NETWORK
-                );
-                DEFAULT_TESTNET_NETWORK.into()
-            }
-        });
-        let network = validate_network(network_str)
-            .map_err(|err| bad_req_and_log(format!("Validate network failed (1): {err}")))?;
-
-        let driver_str = p.driver.as_deref().unwrap_or_else(|| {
-            log::debug!(
-                "Driver not specified, using default {}",
-                DEFAULT_PAYMENT_DRIVER
-            );
-            DEFAULT_PAYMENT_DRIVER.into()
-        });
-        let driver = validate_driver(&network, driver_str)
-            .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
-
-        if let Some(token) = p.token.as_ref() {
-            validate_token(&driver, &network, token)
-                .map_err(|err| bad_req_and_log(format!("Validate token failed (1): {err}")))?;
-            log::debug!("Selected network {}-{}-{}", driver, network, token);
-            format!("{}-{}-{}", driver, network, token)
-        } else {
-            let default_token = get_default_token(&driver, &network);
-
-            log::debug!(
-                "Selected network with default token {}-{}-{}",
-                driver,
-                network,
-                default_token
-            );
-            format!("{}-{}-{}", driver, network, default_token)
-        }
-    };
-    Ok(platform_str)
-}
-
-fn payment_platform_validate_and_check(
-    payment_platform_str: &str,
-) -> Result<(DriverName, NetworkName, String), HttpResponse> {
-    // payment_platform is of the form driver-network-token
-    // eg. erc20-rinkeby-tglm
-    let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
-        .split('-')
-        .collect::<Vec<_>>()
-        .try_into()
-        .map_err(|err| {
-            bad_req_and_log(format!(
-                "paymentPlatform must be of the form driver-network-token instead of {}",
-                payment_platform_str
-            ))
-        })?;
-
-    let network = validate_network(network_str)
-        .map_err(|err| bad_req_and_log(format!("Validate network failed (2): {err}")))?;
-
-    let driver = validate_driver(&network, driver_str)
-        .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
-
-    validate_token(&driver, &network, token_str)
-        .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
-
-    Ok((driver, network, token_str.to_string()))
-}
-
 async fn create_allocation(
     db: Data<DbExecutor>,
     body: Json<NewAllocation>,
@@ -224,17 +282,26 @@ async fn create_allocation(
     let allocation = body.into_inner();
     let node_id = id.identity;
 
-    let payment_platform = match &allocation.payment_platform {
+    let payment_triple = match &allocation.payment_platform {
         Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
-            log::debug!("Using old API payment platform name as pure str: {}", name);
-            name.clone()
+            let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name) {
+                Ok(p) => p,
+                Err(e) => return e,
+            };
+            log::debug!(
+                "Successfully parsed API payment platform name: {}",
+                payment_platform
+            );
+            payment_platform
         }
-        Some(PaymentPlatformEnum::PaymentPlatform(p)) => match payment_platform_to_string(p) {
-            Ok(platform_str) => platform_str,
-            Err(e) => return e,
-        },
+        Some(PaymentPlatformEnum::PaymentPlatform(payment_platform)) => {
+            match PaymentPlatformTriple::from_payment_platform_input(payment_platform) {
+                Ok(platform_str) => platform_str,
+                Err(e) => return e,
+            }
+        }
         None => {
-            let default_platform = default_payment_platform_testnet();
+            let default_platform = PaymentPlatformTriple::default_testnet();
             log::debug!("No paymentPlatform entry found, using {default_platform}");
             default_platform
         }
@@ -245,25 +312,15 @@ async fn create_allocation(
         .clone()
         .unwrap_or_else(|| node_id.to_string());
 
-    // payment_platform is of the form driver-network-token
-    // This function rechecks depending on the flow, but the check is cheap and also counts as sanity check
-    let (driver, network, token_str) = match payment_platform_validate_and_check(&payment_platform)
-    {
-        Ok((driver, network, token_str)) => (driver, network, token_str),
-        Err(e) => return e,
-    };
-
     log::info!(
-        "Creating allocation for payment platform: {}-{}-{}",
-        driver,
-        network,
-        token_str
+        "Creating allocation for payment platform: {}",
+        payment_triple
     );
 
     let acc = Account {
-        driver: driver.to_string(),
+        driver: payment_triple.driver().to_string(),
         address: address.clone(),
-        network: Some(network.to_string()),
+        network: Some(payment_triple.network().to_string()),
         token: None,
         send: true,
         receive: false,
@@ -274,7 +331,7 @@ async fn create_allocation(
     }
 
     let validate_msg = ValidateAllocation {
-        platform: payment_platform.clone(),
+        platform: payment_triple.to_string(),
         address: address.clone(),
         amount: allocation.total_amount.clone(),
     };
@@ -282,14 +339,14 @@ async fn create_allocation(
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
         Ok(false) => {
-            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_platform}. \
+            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
              Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
             return bad_req_and_log(format!(
-                "Account not registered - payment platform {payment_platform}"
+                "Account not registered - payment platform {payment_triple}"
             ));
         }
         Err(e) => return response::server_error(&e),
@@ -298,7 +355,7 @@ async fn create_allocation(
     let dao = db.as_dao::<AllocationDao>();
 
     match dao
-        .create(allocation, node_id, payment_platform, address)
+        .create(allocation, node_id, payment_triple.to_string(), address)
         .await
     {
         Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
