@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use std::convert::TryFrom;
+use std::mem;
 
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
@@ -16,6 +17,7 @@ pub struct IdentityKey {
     alias: Option<String>,
     key_file: KeyFile,
     secret: Option<SecretKey>,
+    deleted: bool,
 }
 
 impl IdentityKey {
@@ -46,6 +48,14 @@ impl IdentityKey {
 
     pub fn is_locked(&self) -> bool {
         self.secret.is_none()
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        self.deleted
+    }
+
+    pub fn mark_deleted(&mut self) -> bool {
+        mem::replace(&mut self.deleted, true)
     }
 
     pub fn unlock(&mut self, password: Protected) -> Result<bool, Error> {
@@ -97,6 +107,7 @@ impl IdentityKey {
             alias,
             key_file,
             secret: Some(secret),
+            deleted: false,
         }
     }
 }
@@ -114,6 +125,7 @@ impl TryFrom<Identity> for IdentityKey {
             alias,
             key_file,
             secret,
+            deleted: value.is_deleted,
         })
     }
 }
@@ -133,6 +145,7 @@ pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
         alias,
         key_file,
         secret: Some(secret),
+        deleted: false,
     }
 }
 
