@@ -7,7 +7,8 @@ pub struct Headers {
 }
 
 impl Headers {
-    const IGNORED_HEADERS: [&'static str; 3] = ["host", "content-length", "connection"];
+    const IGNORED_HEADERS: [&'static str; 4] =
+        ["host", "content-length", "connection", "accept-encoding"];
 
     pub fn default() -> Self {
         Headers {
