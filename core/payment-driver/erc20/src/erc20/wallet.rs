@@ -351,7 +351,7 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
         // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
         // let tx_log = tx.logs.get(0).unwrap_or_else(|| GenericError::new(format!("Failure when parsing tx: {} ", tx_hash)))?;
 
-        let tx_log = tx.logs.first().ok_or_else(|| {
+        let tx_log = tx.logs.get(0).ok_or_else(|| {
             GenericError::new(format!("Failure when parsing tx.logs.get(0): {} ", tx_hash))
         })?;
         let (topic1, topic2) = match tx_log.topics.as_slice() {

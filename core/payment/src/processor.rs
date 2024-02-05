@@ -396,8 +396,8 @@ impl PaymentProcessor {
         // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
         //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
         //        data model. Payments can no longer by assigned to a single payer and payee.
-        let payer_id = orders.first().unwrap().payer_id;
-        let payee_id = orders.first().unwrap().payee_id;
+        let payer_id = orders.get(0).unwrap().payer_id;
+        let payee_id = orders.get(0).unwrap().payee_id;
 
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         let payment_id = payment_dao

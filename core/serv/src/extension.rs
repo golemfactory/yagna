@@ -104,7 +104,7 @@ async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> 
         .await?
         .context("Failed to call the app key service")?;
 
-    let app_key = app_key.first().cloned();
+    let app_key = app_key.get(0).cloned();
 
     Ok((node_id, app_key))
 }
