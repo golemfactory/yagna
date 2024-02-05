@@ -336,7 +336,7 @@ impl IdentityService {
         }
 
         self.db
-            .with_transaction(move |conn| {
+            .with_transaction("identity_service_update_identity", move |conn| {
                 use crate::db::schema::identity::dsl::*;
                 use diesel::prelude::*;
 

@@ -26,14 +26,15 @@ impl<'c> IdentityDao<'c> {
         F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
     >(
         &self,
+        label: &'static str,
         f: F,
     ) -> Result<R> {
-        do_with_transaction(self.pool, f).await
+        do_with_transaction(self.pool, label, f).await
     }
 
     pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
         let _rows = self
-            .with_transaction(move |conn| {
+            .with_transaction("identity_dao_create_identity", move |conn| {
                 Ok(diesel::insert_into(s::identity::table)
                     .values(new_identity)
                     .execute(conn)?)
@@ -43,7 +44,7 @@ impl<'c> IdentityDao<'c> {
     }
 
     pub async fn update_keyfile(&self, identity_id: String, key_file_json: String) -> Result<()> {
-        self.with_transaction(move |conn| {
+        self.with_transaction("identity_dao_update_keyfile", move |conn| {
             Ok(
                 diesel::update(s::identity::table.filter(s::identity::identity_id.eq(identity_id)))
                     .set(s::identity::key_file_json.eq(&key_file_json))
@@ -56,7 +57,7 @@ impl<'c> IdentityDao<'c> {
 
     pub async fn list_identities(&self) -> Result<Vec<Identity>> {
         use crate::db::schema::identity::dsl::*;
-        readonly_transaction(self.pool, |conn| {
+        readonly_transaction(self.pool, "identity_dao_list_identities", |conn| {
             Ok(identity
                 .filter(is_deleted.eq(false))
                 .load::<Identity>(conn)?)
@@ -66,7 +67,7 @@ impl<'c> IdentityDao<'c> {
 
     pub async fn init_preconfigured(&self, preconfigured_identity: Identity) -> Result<Identity> {
         use crate::db::schema::identity::dsl as id_dsl;
-        self.with_transaction(move |conn| {
+        self.with_transaction("identity_dao_init_preconfigured", move |conn| {
             if let Some(id) = id_dsl::identity
                 .filter(id_dsl::identity_id.eq(preconfigured_identity.identity_id))
                 .get_result::<Identity>(conn)
@@ -94,7 +95,7 @@ impl<'c> IdentityDao<'c> {
     ) -> Result<Identity> {
         use crate::db::schema::identity::dsl::*;
 
-        self.with_transaction(move |conn| {
+        self.with_transaction("identity_dao_init_default_key", move |conn| {
             if let Some(id) = identity
                 .filter(is_default.eq(true))
                 .get_result::<Identity>(conn)

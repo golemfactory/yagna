@@ -11,7 +11,7 @@ use diesel::{
 };
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice, Rejection};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
@@ -76,7 +76,7 @@ impl<'c> InvoiceDao<'c> {
         let invoice_id = invoice.id.clone();
         let owner_id = invoice.owner_id;
         let role = invoice.role.clone();
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_insert", move |conn| {
             if let Some(read_invoice) = query!()
                 .filter(dsl::id.eq(&invoice_id))
                 .filter(dsl::owner_id.eq(owner_id))
@@ -143,7 +143,7 @@ impl<'c> InvoiceDao<'c> {
         role: Option<Role>,
         status: Option<DocumentStatus>,
     ) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_list", move |conn| {
             let mut query = query!().into_boxed();
             if let Some(role) = role {
                 query = query.filter(dsl::role.eq(role.to_string()));
@@ -170,7 +170,7 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn get(&self, invoice_id: String, owner_id: NodeId) -> DbResult<Option<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_get", move |conn| {
             let invoice: Option<ReadObj> = query!()
                 .filter(dsl::id.eq(&invoice_id))
                 .filter(dsl::owner_id.eq(owner_id))
@@ -200,7 +200,7 @@ impl<'c> InvoiceDao<'c> {
         agreement_id: String,
         owner_id: NodeId,
     ) -> DbResult<Option<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_get_by_agreement", move |conn| {
             let invoice: Option<ReadObj> = query!()
                 .filter(dsl::agreement_id.eq(&agreement_id))
                 .filter(dsl::owner_id.eq(owner_id))
@@ -226,7 +226,7 @@ impl<'c> InvoiceDao<'c> {
         invoice_ids: Vec<String>,
         owner_id: NodeId,
     ) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_get_many", move |conn| {
             let invoices = query!()
                 .filter(dsl::id.eq_any(invoice_ids))
                 .filter(dsl::owner_id.eq(owner_id))
@@ -243,7 +243,7 @@ impl<'c> InvoiceDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_items: Option<u32>,
     ) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_get_for_node_id", move |conn| {
             let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
             if let Some(date) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(date))
@@ -251,7 +251,7 @@ impl<'c> InvoiceDao<'c> {
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
-            let invoices = query.load(conn)?;
+            let invoices = query.order_by(dsl::timestamp.asc()).load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
                 .inner_join(
                     dsl::pay_invoice.on(activity_dsl::owner_id
@@ -259,6 +259,7 @@ impl<'c> InvoiceDao<'c> {
                         .and(activity_dsl::invoice_id.eq(dsl::id))),
                 )
                 .filter(dsl::owner_id.eq(node_id))
+                .order_by(dsl::timestamp.asc())
                 .select(crate::schema::pay_invoice_x_activity::all_columns)
                 .load(conn)?;
             join_invoices_with_activities(invoices, activities)
@@ -271,14 +272,15 @@ impl<'c> InvoiceDao<'c> {
         node_id: NodeId,
         since: DateTime<Utc>,
     ) -> DbResult<BTreeMap<(Role, DocumentStatus), StatValue>> {
-        let results = readonly_transaction(self.pool, move |conn| {
-            let invoices: Vec<ReadObj> = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::timestamp.gt(since.naive_utc()))
-                .load(conn)?;
-            Ok::<_, DbError>(invoices)
-        })
-        .await?;
+        let results =
+            readonly_transaction(self.pool, "invoice_dao_last_invoice_stats", move |conn| {
+                let invoices: Vec<ReadObj> = query!()
+                    .filter(dsl::owner_id.eq(node_id))
+                    .filter(dsl::timestamp.gt(since.naive_utc()))
+                    .load(conn)?;
+                Ok::<_, DbError>(invoices)
+            })
+            .await?;
         let mut stats = BTreeMap::<(Role, DocumentStatus), StatValue>::new();
         for invoice in results {
             let key = (invoice.role, DocumentStatus::try_from(invoice.status)?);
@@ -294,14 +296,14 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_mark_received", move |conn| {
             update_status(&invoice_id, &owner_id, &DocumentStatus::Received, conn)
         })
         .await
     }
 
     pub async fn accept(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_accept", move |conn| {
             let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
@@ -348,7 +350,7 @@ impl<'c> InvoiceDao<'c> {
     ///
     /// Err(_) is only produced by DB issues.
     pub async fn mark_accept_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_mark_accept_sent", move |conn| {
             diesel::update(
                 dsl::pay_invoice
                     .filter(dsl::id.eq(invoice_id))
@@ -363,7 +365,7 @@ impl<'c> InvoiceDao<'c> {
 
     /// Lists invoices with send_accept
     pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_unsent_accepted", move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
@@ -386,7 +388,7 @@ impl<'c> InvoiceDao<'c> {
 
     /// All invoices with status Issued or Accepted and provider role
     pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_dangling", move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::role.eq(Role::Provider.to_string()))
@@ -411,23 +413,76 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    // TODO: Implement reject invoice
-    // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-    //     do_with_transaction(self.pool, move |conn| {
-    //         let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
-    //             .find((&invoice_id, &owner_id))
-    //             .select((dsl::agreement_id, dsl::amount, dsl::role))
-    //             .first(conn)?;
-    //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-    //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
-    //
-    //         Ok(())
-    //     })
-    //     .await
-    // }
+    pub async fn reject(
+        &self,
+        invoice_id: String,
+        owner_id: NodeId,
+        rejection: Rejection,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "invoice_reject", move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Rejected, conn)?;
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_invoice
+                        .filter(dsl::id.eq(invoice_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_reject.eq(true))
+                .execute(conn)?;
+            }
+            invoice_event::create(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceRejectedEvent { rejection },
+                conn,
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_reject_sent(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, "mark_reject_sent", move |conn| {
+            diesel::update(
+                dsl::pay_invoice
+                    .filter(dsl::id.eq(invoice_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .set(dsl::send_reject.eq(false))
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn unsent_rejected(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, "unsent_rejected", move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_reject.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .load(conn)?;
+
+            let activities = activity_dsl::pay_invoice_x_activity
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(owner_id))
+                .select(crate::schema::pay_invoice_x_activity::all_columns)
+                .load(conn)?;
+            join_invoices_with_activities(invoices, activities)
+        })
+        .await
+    }
 
     pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "invoice_dao_cancel", move |conn| {
             let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
@@ -453,7 +508,7 @@ impl<'c> InvoiceDao<'c> {
         invoice_ids: Vec<String>,
         owner_id: NodeId,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "invoice_dao_get_total_amount", move |conn| {
             let amounts: Vec<BigDecimalField> = dsl::pay_invoice
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::id.eq_any(invoice_ids))

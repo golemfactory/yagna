@@ -22,7 +22,7 @@ use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
-use ya_erc20next_driver as erc20next;
+use ya_erc20_driver as erc20;
 use ya_net::Config;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils, PaymentService};
@@ -45,7 +45,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20next" => Ok(Driver::Erc20next),
+            "erc20" => Ok(Driver::Erc20next),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -55,7 +55,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20next => write!(f, "erc20next"),
+            Driver::Erc20next => write!(f, "erc20"),
         }
     }
 }
@@ -99,7 +99,7 @@ pub async fn start_erc20_next_driver(
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    erc20next::PaymentDriverService::gsb(path).await?;
+    erc20::PaymentDriverService::gsb(path).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
@@ -118,7 +118,7 @@ fn fake_list_identities(identities: Vec<NodeId>) {
                 is_locked: false,
             });
         }
-        async move { Ok(accounts) }
+        std::future::ready(Ok(accounts))
     });
 }
 
@@ -204,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
         .provider_addr
         .unwrap_or_else(|| provider_id.clone())
         .to_lowercase();
+    let provider_pub_key = provider_account.public();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
     let requestor_account = load_or_generate(&args.requestor_key_path, requestor_pass);
@@ -212,6 +213,7 @@ async fn main() -> anyhow::Result<()> {
         .requestor_addr
         .unwrap_or_else(|| requestor_id.clone())
         .to_lowercase();
+    let requestor_pub_key = requestor_account.public();
 
     log::info!(
         "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",
@@ -240,7 +242,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Driver::Erc20next => {
             start_erc20_next_driver("./".into(), requestor_account).await?;
-            erc20next::DRIVER_NAME
+            erc20::DRIVER_NAME
         }
     };
     bus::service(driver_bus_id(driver_name))
@@ -318,6 +320,24 @@ async fn main() -> anyhow::Result<()> {
     };
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
     utils::provider::fake_get_agreement_id(args.agreement_id.clone());
+
+    bus::bind(identity::BUS_ID, {
+        let provider_key = provider_pub_key.clone();
+        let requestor_key = requestor_pub_key.clone();
+        move |msg: identity::GetPubKey| {
+            let node_id: &[u8; 20] = msg.0.as_ref();
+            let pub_key = if node_id == provider_key.address() {
+                Some(provider_key.bytes())
+            } else if node_id == requestor_key.address() {
+                Some(requestor_key.bytes())
+            } else {
+                None
+            }
+            .map(|bytes| bytes.to_vec())
+            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
+            std::future::ready(pub_key)
+        }
+    });
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;

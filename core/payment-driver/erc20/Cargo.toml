@@ -1,5 +1,5 @@
 [package]
-name = "ya-erc20next-driver"
+name = "ya-erc20-driver"
 version = "0.4.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2021"
