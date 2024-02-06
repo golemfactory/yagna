@@ -111,3 +111,6 @@ rustyline = "7.0.0"
 sha3 = "0.8.2"
 shell-words = "1.0.0"
 tempdir = "0.3.7"
+
+[lints]
+workspace = true

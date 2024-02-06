@@ -35,7 +35,7 @@ impl BCast for BCastService {
         let mut me = self.inner.borrow_mut();
         me.topics
             .entry(subscribe.topic().to_owned())
-            .or_insert_with(Default::default)
+            .or_default()
             .push(subscribe.endpoint().into())
     }
 

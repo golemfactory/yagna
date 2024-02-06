@@ -483,7 +483,7 @@ impl Handler<UpdateDeployment> for RuntimeProcess {
             self.deployment.extend_networks(networks)?;
         }
         if let Some(hosts) = msg.hosts {
-            self.deployment.hosts.extend(hosts.into_iter());
+            self.deployment.hosts.extend(hosts);
         }
         Ok(())
     }
