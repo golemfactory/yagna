@@ -29,7 +29,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let image_repo = temp_dir.join("images");
 
     let chunk_size = 4096_usize;
-    let chunk_count = 1024 * 2;
+    let chunk_count = 1024 * 20;
     let file_size = (chunk_size * chunk_count) as u64;
 
     let hash = generate_image(&image_repo, "image-big", chunk_size, chunk_count);
