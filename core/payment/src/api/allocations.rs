@@ -33,11 +33,6 @@ const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
-fn bad_req_and_log(err_msg: String) -> HttpResponse {
-    log::error!("{}", err_msg);
-    response::bad_request(&err_msg)
-}
-
 mod token_name {
     use super::*;
 
@@ -81,6 +76,7 @@ mod token_name {
 mod platform_triple {
     use super::token_name::TokenName;
     use super::*;
+    use anyhow::{anyhow, bail};
 
     pub struct PaymentPlatformTriple {
         driver: DriverName,
@@ -119,7 +115,7 @@ mod platform_triple {
 
         pub fn from_payment_platform_input(
             p: &PaymentPlatform,
-        ) -> Result<PaymentPlatformTriple, HttpResponse> {
+        ) -> anyhow::Result<PaymentPlatformTriple> {
             let platform = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
                 let default_platform = Self::default_testnet();
                 log::debug!("Empty paymentPlatform object, using {default_platform}");
@@ -127,10 +123,10 @@ mod platform_triple {
             } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
                 let token = p.token.as_ref().unwrap();
                 if token == "GLM" || token == "tGLM" {
-                    return Err(bad_req_and_log(format!(
+                    bail!(
                         "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
                         token
-                    )));
+                    );
                 } else if token == "glm" {
                     let default_platform = Self::default_mainnet();
                     log::debug!("Selected network {default_platform} (default for glm token)");
@@ -140,9 +136,7 @@ mod platform_triple {
                     log::debug!("Selected network {default_platform} (default for tglm token)");
                     default_platform
                 } else {
-                    return Err(bad_req_and_log(format!(
-                        "Only glm or tglm token values are accepted vs {token} provided"
-                    )));
+                    bail!("Only glm or tglm token values are accepted vs {token} provided");
                 }
             } else {
                 let network_str = p.network.as_deref().unwrap_or_else(|| {
@@ -168,9 +162,8 @@ mod platform_triple {
                         DEFAULT_TESTNET_NETWORK.into()
                     }
                 });
-                let network = validate_network(network_str).map_err(|err| {
-                    bad_req_and_log(format!("Validate network failed (1): {err}"))
-                })?;
+                let network = validate_network(network_str)
+                    .map_err(|err| anyhow!("Validate network failed (1): {err}"))?;
 
                 let driver_str = p.driver.as_deref().unwrap_or_else(|| {
                     log::debug!(
@@ -180,13 +173,11 @@ mod platform_triple {
                     DEFAULT_PAYMENT_DRIVER.into()
                 });
                 let driver = validate_driver(&network, driver_str)
-                    .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
+                    .map_err(|err| anyhow!("Validate driver failed (1): {err}"))?;
 
                 if let Some(token) = p.token.as_ref() {
-                    let token =
-                        TokenName::from_token_string(&driver, &network, token).map_err(|err| {
-                            bad_req_and_log(format!("Validate token failed (1): {err}"))
-                        })?;
+                    let token = TokenName::from_token_string(&driver, &network, token)
+                        .map_err(|err| anyhow!("Validate token failed (1): {err}"))?;
                     log::debug!("Selected network {}-{}-{}", driver, network, token);
                     Self {
                         driver,
@@ -214,7 +205,7 @@ mod platform_triple {
 
         pub fn from_payment_platform_str(
             payment_platform_str: &str,
-        ) -> Result<PaymentPlatformTriple, HttpResponse> {
+        ) -> anyhow::Result<PaymentPlatformTriple> {
             // payment_platform is of the form driver-network-token
             // eg. erc20-rinkeby-tglm
             let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
@@ -222,20 +213,20 @@ mod platform_triple {
                 .collect::<Vec<_>>()
                 .try_into()
                 .map_err(|err| {
-                    bad_req_and_log(format!(
+                    anyhow!(
                         "paymentPlatform must be of the form driver-network-token instead of {}",
                         payment_platform_str
-                    ))
+                    )
                 })?;
 
             let network = validate_network(network_str)
-                .map_err(|err| bad_req_and_log(format!("Validate network failed (2): {err}")))?;
+                .map_err(|err| anyhow!("Validate network failed (2): {err}"))?;
 
             let driver = validate_driver(&network, driver_str)
-                .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
+                .map_err(|err| anyhow!("Validate driver failed (2): {err}"))?;
 
             let token = TokenName::from_token_string(&driver, &network, token_str)
-                .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
+                .map_err(|err| anyhow!("Validate token failed (2): {err}"))?;
 
             Ok(Self {
                 driver,
@@ -244,6 +235,7 @@ mod platform_triple {
             })
         }
     }
+
     impl Display for PaymentPlatformTriple {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "{}-{}-{}", self.driver, self.network, self.token)
@@ -286,13 +278,21 @@ async fn create_allocation(
     body: Json<NewAllocation>,
     id: Identity,
 ) -> HttpResponse {
+    let bad_req_and_log = |err_msg: String| -> HttpResponse {
+        log::error!("{}", err_msg);
+        response::bad_request(&err_msg)
+    };
+
     // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
 
     let payment_triple = match &allocation.payment_platform {
         Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
-            let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name)?;
+            let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name) {
+                Ok(p) => p,
+                Err(err) => return bad_req_and_log(format!("{}", err)),
+            };
             log::debug!(
                 "Successfully parsed API payment platform name: {}",
                 payment_platform
@@ -300,7 +300,10 @@ async fn create_allocation(
             payment_platform
         }
         Some(PaymentPlatformEnum::PaymentPlatform(payment_platform)) => {
-            match PaymentPlatformTriple::from_payment_platform_input(payment_platform)?
+            match PaymentPlatformTriple::from_payment_platform_input(payment_platform) {
+                Ok(platform_str) => platform_str,
+                Err(err) => return bad_req_and_log(format!("{}", err)),
+            }
         }
         None => {
             let default_platform = PaymentPlatformTriple::default_testnet();
