@@ -36,7 +36,6 @@ pub struct Ack {}
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct AccountMode : usize {
-        const NONE = 0b000;
         const RECV = 0b001;
         const SEND = 0b010;
         const ALL = Self::RECV.bits | Self::SEND.bits;

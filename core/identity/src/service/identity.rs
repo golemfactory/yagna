@@ -14,6 +14,7 @@ use ya_client_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
+use ya_core_model::identity::event::Event;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
@@ -52,6 +53,7 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
         node_id,
         is_locked: key.is_locked(),
         is_default,
+        deleted: key.is_deleted(),
     }
 }
 
@@ -211,11 +213,20 @@ impl IdentityService {
             .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
         let output = to_info(&self.default_key, &key);
+        let is_locked = key.is_locked();
+        let identity = key.id();
 
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
         }
         let _ = self.ids.insert(key.id(), key);
+
+        if !is_locked {
+            self.sender()
+                .send(Event::AccountUnlocked { identity })
+                .await
+                .ok();
+        }
 
         Ok(output)
     }
@@ -250,7 +261,18 @@ impl IdentityService {
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
         }
+        let is_locked = key.is_locked();
+        let identity = key.id();
+
         let _ = self.ids.insert(key.id(), key);
+
+        if !is_locked {
+            self.sender()
+                .send(Event::AccountUnlocked { identity })
+                .await
+                .ok();
+        }
+
         Ok(output)
     }
 
@@ -336,7 +358,7 @@ impl IdentityService {
         }
 
         self.db
-            .with_transaction(move |conn| {
+            .with_transaction("identity_service_update_identity", move |conn| {
                 use crate::db::schema::identity::dsl::*;
                 use diesel::prelude::*;
 
@@ -363,6 +385,7 @@ impl IdentityService {
             node_id,
             is_locked: key.is_locked(),
             is_default: self.default_key == node_id,
+            deleted: false,
         })
     }
 
@@ -382,6 +405,47 @@ impl IdentityService {
             .borrow_mut()
             .unsubscribe(unsubscribe.endpoint);
         Ok(model::Ack {})
+    }
+
+    pub async fn drop_id(
+        &mut self,
+        drop_id: model::DropId,
+    ) -> Result<model::IdentityInfo, model::DropError> {
+        let mut sender = self.sender.clone();
+
+        match self.ids.get_mut(&drop_id.node_id) {
+            None => Err(model::DropError::NodeNotFound(Box::new(drop_id.node_id))),
+            Some(id) => {
+                if id.is_deleted() {
+                    return Err(model::DropError::AlreadyDeleted);
+                }
+                let was_locked = id.is_locked();
+
+                match self
+                    .db
+                    .as_dao::<IdentityDao>()
+                    .mark_deleted(drop_id.node_id.to_string())
+                    .await
+                {
+                    Ok(_) => {
+                        id.mark_deleted();
+                        let removed = to_info(&self.default_key, id);
+
+                        if !was_locked {
+                            sender
+                                .send(Event::AccountLocked { identity: id.id() })
+                                .await
+                                .ok();
+                        }
+
+                        Ok(removed)
+                    }
+                    Err(_) => Err(model::DropError::InternalErr(
+                        "Failed to mark identity as deleted".into(),
+                    )),
+                }
+            }
+        }
     }
 
     pub async fn get_pub_key(
@@ -519,10 +583,22 @@ impl IdentityService {
                     .map(|key| key.bytes().to_vec())
             }
         });
-        let this = me;
+        let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
             let this = this.clone();
             async move { this.lock().await.get_key_file(node_id).await }
+        });
+        let this = me;
+        let _ = bus::bind(model::BUS_ID, move |drop_cmd: model::DropId| {
+            let this = this.clone();
+            async move {
+                log::trace!("Dropping identity: {:?}", drop_cmd);
+                let mut guard = this.lock().await;
+                match guard.drop_id(drop_cmd).await {
+                    Ok(id) => Ok(id),
+                    Err(err) => Err(err),
+                }
+            }
         });
     }
 }

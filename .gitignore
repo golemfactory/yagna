@@ -10,7 +10,7 @@ workdir/*
 core/market/decentralized/tests/test-workdir/*
 releases/
 
-# erc20next
+# erc20
 db.sqlite
 db.sqlite-shm
 db.sqlite-wal

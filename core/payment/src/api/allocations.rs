@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::str::FromStr;
 use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
@@ -10,9 +11,11 @@ use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
+use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
-    ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
+    get_token_from_network_name, DriverName, NetworkName, ValidateAllocation,
+    ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_persistence::executor::DbExecutor;
@@ -24,6 +27,28 @@ use crate::accounts::{init_account, Account};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
+
+const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
+const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
+const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
+
+fn default_payment_platform_testnet() -> String {
+    format!(
+        "{}-{}-{}",
+        DEFAULT_PAYMENT_DRIVER,
+        DEFAULT_TESTNET_NETWORK,
+        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK)
+    )
+}
+
+fn default_payment_platform_mainnet() -> String {
+    format!(
+        "{}-{}-{}",
+        DEFAULT_PAYMENT_DRIVER,
+        DEFAULT_MAINNET_NETWORK,
+        get_default_token(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK)
+    )
+}
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -38,6 +63,158 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/demandDecorations", get().to(get_demand_decorations))
 }
 
+fn validate_network(network: &str) -> Result<NetworkName, String> {
+    match NetworkName::from_str(network) {
+        Ok(NetworkName::Rinkeby) => Err("Rinkeby is no longer supported".to_string()),
+        Ok(network_name) => Ok(network_name),
+        Err(_) => Err(format!("Invalid network name: {network}")),
+    }
+}
+
+fn validate_driver(network: &NetworkName, driver: &str) -> Result<DriverName, String> {
+    match DriverName::from_str(driver) {
+        Err(_) => Err(format!("Invalid driver name {}", driver)),
+        Ok(driver_name) => Ok(driver_name),
+    }
+}
+
+fn get_default_token(_driver: &DriverName, network: &NetworkName) -> String {
+    get_token_from_network_name(network).to_lowercase()
+}
+
+fn validate_token(driver: &DriverName, network: &NetworkName, token: &str) -> Result<(), String> {
+    if token == "GLM" || token == "tGLM" {
+        return Err(format!(
+            "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+            token
+        ));
+    }
+    let token_expected = get_default_token(driver, network);
+    if token != token_expected {
+        return Err(format!(
+            "Token {} does not match expected token {} for driver {} and network {}. \
+            Note that for test networks expected token name is tglm and for production networks it is glm",
+            token, token_expected, driver, network
+        ));
+    }
+    Ok(())
+}
+
+fn bad_req_and_log(err_msg: String) -> HttpResponse {
+    log::error!("{}", err_msg);
+    response::bad_request(&err_msg)
+}
+
+fn payment_platform_to_string(p: &PaymentPlatform) -> Result<String, HttpResponse> {
+    let platform_str = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
+        let default_platform = default_payment_platform_testnet();
+        log::debug!("Empty paymentPlatform object, using {default_platform}");
+        default_platform
+    } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
+        let token = p.token.as_ref().unwrap();
+        if token == "GLM" || token == "tGLM" {
+            return Err(bad_req_and_log(format!(
+                "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
+                token
+            )));
+        } else if token == "glm" {
+            let default_platform = default_payment_platform_mainnet();
+            log::debug!("Selected network {default_platform} (default for glm token)");
+            default_platform
+        } else if token == "tglm" {
+            let default_platform = default_payment_platform_testnet();
+            log::debug!("Selected network {default_platform} (default for tglm token)");
+            default_platform
+        } else {
+            return Err(bad_req_and_log(format!(
+                "Only glm or tglm token values are accepted vs {token} provided"
+            )));
+        }
+    } else {
+        let network_str = p.network.as_deref().unwrap_or_else(|| {
+            if let Some(token) = p.token.as_ref() {
+                if token == "glm" {
+                    log::debug!(
+                        "Network not specified, using default {}, because token set to glm",
+                        DEFAULT_MAINNET_NETWORK
+                    );
+                    DEFAULT_MAINNET_NETWORK.into()
+                } else {
+                    log::debug!(
+                        "Network not specified, using default {}",
+                        DEFAULT_TESTNET_NETWORK
+                    );
+                    DEFAULT_TESTNET_NETWORK.into()
+                }
+            } else {
+                log::debug!(
+                    "Network not specified and token not specified, using default {}",
+                    DEFAULT_TESTNET_NETWORK
+                );
+                DEFAULT_TESTNET_NETWORK.into()
+            }
+        });
+        let network = validate_network(network_str)
+            .map_err(|err| bad_req_and_log(format!("Validate network failed (1): {err}")))?;
+
+        let driver_str = p.driver.as_deref().unwrap_or_else(|| {
+            log::debug!(
+                "Driver not specified, using default {}",
+                DEFAULT_PAYMENT_DRIVER
+            );
+            DEFAULT_PAYMENT_DRIVER.into()
+        });
+        let driver = validate_driver(&network, driver_str)
+            .map_err(|err| bad_req_and_log(format!("Validate driver failed (1): {err}")))?;
+
+        if let Some(token) = p.token.as_ref() {
+            validate_token(&driver, &network, token)
+                .map_err(|err| bad_req_and_log(format!("Validate token failed (1): {err}")))?;
+            log::debug!("Selected network {}-{}-{}", driver, network, token);
+            format!("{}-{}-{}", driver, network, token)
+        } else {
+            let default_token = get_default_token(&driver, &network);
+
+            log::debug!(
+                "Selected network with default token {}-{}-{}",
+                driver,
+                network,
+                default_token
+            );
+            format!("{}-{}-{}", driver, network, default_token)
+        }
+    };
+    Ok(platform_str)
+}
+
+fn payment_platform_validate_and_check(
+    payment_platform_str: &str,
+) -> Result<(DriverName, NetworkName, String), HttpResponse> {
+    // payment_platform is of the form driver-network-token
+    // eg. erc20-rinkeby-tglm
+    let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
+        .split('-')
+        .collect::<Vec<_>>()
+        .try_into()
+        .map_err(|err| {
+            bad_req_and_log(format!(
+                "paymentPlatform must be of the form driver-network-token instead of {}",
+                payment_platform_str
+            ))
+        })?;
+
+    let network = validate_network(network_str)
+        .map_err(|err| bad_req_and_log(format!("Validate network failed (2): {err}")))?;
+
+    let driver = validate_driver(&network, driver_str)
+        .map_err(|err| bad_req_and_log(format!("Validate driver failed (2): {err}")))?;
+
+    validate_token(&driver, &network, token_str)
+        .map_err(|err| bad_req_and_log(format!("Validate token failed (2): {err}")))?;
+
+    Ok((driver, network, token_str.to_string()))
+}
+
 async fn create_allocation(
     db: Data<DbExecutor>,
     body: Json<NewAllocation>,
@@ -46,9 +223,21 @@ async fn create_allocation(
     // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
+
     let payment_platform = match &allocation.payment_platform {
-        Some(platform) => platform.clone(),
-        None => return response::bad_request(&"payment platform must be provided"),
+        Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
+            log::debug!("Using old API payment platform name as pure str: {}", name);
+            name.clone()
+        }
+        Some(PaymentPlatformEnum::PaymentPlatform(p)) => match payment_platform_to_string(p) {
+            Ok(platform_str) => platform_str,
+            Err(e) => return e,
+        },
+        None => {
+            let default_platform = default_payment_platform_testnet();
+            log::debug!("No paymentPlatform entry found, using {default_platform}");
+            default_platform
+        }
     };
 
     let address = allocation
@@ -56,34 +245,32 @@ async fn create_allocation(
         .clone()
         .unwrap_or_else(|| node_id.to_string());
 
-    // If the request contains information about the payment platform, initialize the account
-    // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.
-    if let Some(platform) = &allocation.payment_platform {
-        // payment_platform is of the form driver-network-token
-        // eg. erc20-rinkeby-tglm
-        let [driver, network, _token]: [&str; 3] =
-            match platform.split('-').collect::<Vec<_>>().try_into() {
-                Ok(arr) => arr,
-                Err(_e) => {
-                    return response::bad_request(
-                        &"paymentPlatform must be of the form driver-network-token",
-                    )
-                }
-            };
+    // payment_platform is of the form driver-network-token
+    // This function rechecks depending on the flow, but the check is cheap and also counts as sanity check
+    let (driver, network, token_str) = match payment_platform_validate_and_check(&payment_platform)
+    {
+        Ok((driver, network, token_str)) => (driver, network, token_str),
+        Err(e) => return e,
+    };
 
-        let acc = Account {
-            driver: driver.to_owned(),
-            address: address.clone(),
-            network: Some(network.to_owned()),
-            token: None,
-            send: true,
-            receive: false,
-        };
+    log::info!(
+        "Creating allocation for payment platform: {}-{}-{}",
+        driver,
+        network,
+        token_str
+    );
 
-        if let Err(e) = init_account(acc).await {
-            log::error!("Error initializing account: {:?}", e);
-            return response::server_error(&e);
-        }
+    let acc = Account {
+        driver: driver.to_string(),
+        address: address.clone(),
+        network: Some(network.to_string()),
+        token: None,
+        send: true,
+        receive: false,
+    };
+
+    if let Err(err) = init_account(acc).await {
+        return bad_req_and_log(format!("Failed to init account: {err}"));
     }
 
     let validate_msg = ValidateAllocation {
@@ -91,12 +278,20 @@ async fn create_allocation(
         address: address.clone(),
         amount: allocation.total_amount.clone(),
     };
+
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(false) => {
+            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_platform}. \
+             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-                           ValidateAllocationError::AccountNotRegistered,
-                       ))) => return response::bad_request(&"Account not registered"),
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => {
+            return bad_req_and_log(format!(
+                "Account not registered - payment platform {payment_platform}"
+            ));
+        }
         Err(e) => return response::server_error(&e),
     }
 
@@ -299,10 +494,18 @@ async fn get_demand_decorations(
             ),
             value: allocation.address,
         })
+        .chain(std::iter::once(MarketProperty {
+            key: "golem.com.payment.protocol.version".into(),
+            value: "2".into(),
+        }))
         .collect();
     let constraints = properties
         .iter()
         .map(|property| ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*")))
+        .chain(std::iter::once(
+            ConstraintKey::new("golem.com.payment.protocol.version")
+                .greater_than(ConstraintKey::new(1)),
+        ))
         .collect();
     let constraints = vec![Constraints::new_clause(ClauseOperator::Or, constraints).to_string()];
     response::ok(MarketDecoration {
