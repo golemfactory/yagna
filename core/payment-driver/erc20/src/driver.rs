@@ -6,7 +6,7 @@ use chrono::{DateTime, Duration, Utc};
 */
 // Extrnal crates
 use erc20_payment_lib::faucet_client::faucet_donate;
-use erc20_payment_lib::model::{TokenTransferDao, TxDao};
+use erc20_payment_lib::model::{TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
@@ -113,6 +113,8 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
+                allocation_id: None,
+                use_internal: false,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -256,8 +258,8 @@ impl Erc20Driver {
 
     async fn _confirm_payments(
         &self,
-        token_transfer: &TokenTransferDao,
-        tx: &TxDao,
+        token_transfer: &TokenTransferDbObj,
+        tx: &TxDbObj,
     ) -> Result<(), GenericError> {
         log::debug!("Received event TransferFinished: {:#?}", token_transfer);
 

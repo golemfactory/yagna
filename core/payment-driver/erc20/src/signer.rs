@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
-use erc20_payment_lib::{contracts::DUMMY_RPC_PROVIDER, signer::SignerError};
+use erc20_payment_lib::{signer::SignerError, DUMMY_RPC_PROVIDER};
 use ethereum_types::{H160, H256};
 use web3::{
     signing::{Signature, SigningError},
@@ -86,7 +85,6 @@ impl web3::signing::Key for DummyKey {
 #[derive(Default)]
 pub struct IdentitySigner;
 
-#[async_trait]
 impl erc20_payment_lib::signer::Signer for IdentitySigner {
     async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
         let node_id = NodeId::from(pub_address.as_bytes());
