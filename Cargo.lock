@@ -1959,14 +1959,12 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f681257740e763be1cbeaa370e919f554c46f26337a4febe5a30a8b1d36949"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 dependencies = [
  "actix",
  "actix-files",
  "actix-web",
  "actix-web-actors",
- "async-trait",
  "awc",
  "chrono",
  "dotenv",
@@ -2003,13 +2001,11 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.3.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a689b5ac63d3610929ae404be00d0edefc6475f626e9c4bcf73a31bc351a7c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 dependencies = [
  "actix-files",
  "actix-web",
  "anyhow",
- "async-trait",
  "awc",
  "chrono",
  "dotenv",
@@ -2046,13 +2042,11 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb41a0d46ea330ec83b3cc2f194600b568f54731a65960b2726cc0c7873cf4cc"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 dependencies = [
  "actix-files",
  "actix-web",
  "anyhow",
- "async-trait",
  "awc",
  "bollard",
  "chrono",
@@ -8226,7 +8220,6 @@ dependencies = [
  "actix",
  "actix-rt",
  "anyhow",
- "async-trait",
  "awc",
  "bigdecimal 0.2.2",
  "chrono",
