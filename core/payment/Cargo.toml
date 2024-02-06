@@ -67,3 +67,7 @@ ya-sb-router = "0.6.1"
 actix-rt = "2.7"
 rand = "0.8"
 ethsign = "0.8"
+
+[lints]
+workspace = true
+

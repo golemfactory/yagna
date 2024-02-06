@@ -340,6 +340,7 @@ impl<'c> PaymentDao<'c> {
     }
 }
 
+#[allow(clippy::unwrap_or_default)]
 fn join_activity_and_agreement_payments(
     payments: Vec<ReadObj>,
     activity_payments: Vec<DbActivityPayment>,

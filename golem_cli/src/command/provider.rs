@@ -266,6 +266,7 @@ impl YaProviderCommand {
         }
     }
 
+    /// Remember to update [documentation](golem_cli/Readme.md) when changing golemsp configuration.
     pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         self.cmd.args(["run"]).env("YAGNA_APPKEY", app_key);
 
@@ -290,6 +291,9 @@ impl YaProviderCommand {
             self.cmd.arg("--log-dir");
             self.cmd.arg(log_dir.to_str().unwrap());
         }
+
+        self.cmd.arg("--auto-cleanup-agreement").arg("true");
+        self.cmd.arg("--auto-cleanup-activity").arg("true");
 
         log::debug!("spawning: {:?}", self.cmd);
 

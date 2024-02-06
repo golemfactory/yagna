@@ -28,7 +28,7 @@ impl<K: Hash + Eq + ToOwned<Owned = K>> AccessControl<K> {
         self.inner
             .borrow_mut()
             .entry(id.as_ref().to_owned())
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(role);
     }
 }
