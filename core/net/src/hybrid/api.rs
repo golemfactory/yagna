@@ -36,7 +36,7 @@ where
                 <SendBroadcastMessage<M> as RpcMessage>::Error,
             >,
         > + 'static,
-    F: FnMut(String, SendBroadcastMessage<M>) -> T + Send + 'static,
+    F: FnMut(String, SendBroadcastMessage<M>) -> T + 'static,
 {
     log::debug!("Creating broadcast topic {}.", M::TOPIC);
 

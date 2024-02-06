@@ -1,4 +1,4 @@
-# Erc20Next Payment driver
+# Erc20 Payment driver
 ## Functionality
 A payment driver is an abstraction over any operations relating to funds, which includes:
 * Scheduling transfers to run at any point in the future.
@@ -6,7 +6,7 @@ A payment driver is an abstraction over any operations relating to funds, which 
 * Checking account balance.
 * Reporting status of scheduled transactions and the account.
 
-The Erc20Next driver is such an abstraction built on top of the [ERC20 standard](https://ethereum.org/en/developers/docs/standards/tokens/erc-20/).
+The Erc20 driver is such an abstraction built on top of the [ERC20 standard](https://ethereum.org/en/developers/docs/standards/tokens/erc-20/).
 
 ## Implementation
 The core implementation is in [erc20_payment_lib](https://github.com/golemfactory/erc20_payment_lib), this crate only serves as an interface connecting
@@ -35,7 +35,7 @@ Be aware that options not prefixed with `ERC20NEXT` are also applicable to the o
 * It can be overriden by placing a `config-payments.toml` file in yagna data directory. This is not recommended and is not guaranteed to work across versions.
 
 ## Statuses
-The Erc20Next driver can report a selection of statuses which indicate possible issues.
+The Erc20 driver can report a selection of statuses which indicate possible issues.
 * `InsufficientGas`:
   * An account does not have sufficient gas to execute further transactions.
   * Contains: `driver`, `network`, `address`, `neededGasEst`.

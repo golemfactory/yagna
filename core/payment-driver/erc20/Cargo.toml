@@ -1,5 +1,5 @@
 [package]
-name = "ya-erc20next-driver"
+name = "ya-erc20-driver"
 version = "0.4.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2021"
@@ -55,3 +55,6 @@ actix-rt = "2.7"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
 structopt = "0.3"
+
+[lints]
+workspace = true
