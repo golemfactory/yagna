@@ -54,11 +54,11 @@ impl Constraints {
         let v: Vec<_> = self
             .constraints
             .iter()
-            .cloned()
             .filter(|e| match e {
                 ConstraintExpr::KeyValue { key, .. } => *key == k,
                 ConstraintExpr::Constraints(_) => false,
             })
+            .cloned()
             .collect();
         match v.len() {
             0 => None,

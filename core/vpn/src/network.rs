@@ -57,7 +57,7 @@ impl VpnSupervisor {
                     .cloned()
                     .collect()
             })
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     pub fn get_network(&self, node_id: &NodeId, network_id: &str) -> Result<Addr<Vpn>> {
@@ -132,10 +132,7 @@ impl VpnSupervisor {
 
         self.networks.insert(net_id.clone(), actor);
         self.blueprints.insert(net_id.clone(), network.clone());
-        self.ownership
-            .entry(node_id)
-            .or_insert_with(Default::default)
-            .insert(net_id);
+        self.ownership.entry(node_id).or_default().insert(net_id);
 
         Ok(network)
     }
