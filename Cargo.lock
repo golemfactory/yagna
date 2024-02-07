@@ -8209,6 +8209,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
+ "ya-gsb-http-proxy",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",
@@ -8577,7 +8578,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "ya-service-bus 0.6.3",
+ "ya-service-bus 0.7.1",
 ]
 
 [[package]]

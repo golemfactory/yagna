@@ -6,16 +6,14 @@ use metrics::counter;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::time::error::Elapsed;
 use tokio_stream::wrappers::IntervalStream;
 
 use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
-    ExeScriptCommandResult, ExeScriptRequest, SgxCredentials, State,
+    ExeScriptRequest, SgxCredentials, State,
 };
 use ya_client_model::market::{Agreement, Role};
 use ya_core_model::activity;
-use ya_core_model::activity::RpcMessageError;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
