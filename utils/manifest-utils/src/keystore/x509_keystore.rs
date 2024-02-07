@@ -358,20 +358,12 @@ impl X509SignatureVerifier {
     fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
         let mut cert_ids = vec![];
         for cert in self.cert_chain.iter().rev() {
-<<<<<<< HEAD
-            current_cert = Some(cert.clone());
-=======
->>>>>>> master
             let cert_id = cert_to_id(cert)?;
             cert_ids.push(cert_id);
         }
         let current_cert = self.cert_chain.first().cloned();
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
-<<<<<<< HEAD
-
-=======
->>>>>>> master
             while let Some(cert) = issuer(cert_store, &previous_cert) {
                 let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);

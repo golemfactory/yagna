@@ -189,11 +189,7 @@ impl Erc20Service {
 
             let pr = PaymentRuntime::new(
                 PaymentRuntimeArgs {
-<<<<<<< HEAD
-                    secret_keys: private_keys,
-=======
                     secret_keys: vec![],
->>>>>>> master
                     db_filename: path.join("erc20.sqlite"),
                     config,
                     conn: None,
