@@ -1,10 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use actix::{Actor, Addr, Context, Handler, Message, ResponseFuture};
-use async_trait::async_trait;
-use erc20_payment_lib::{contracts::DUMMY_RPC_PROVIDER, signer::SignerError};
+use erc20_payment_lib::{signer::SignerError, DUMMY_RPC_PROVIDER};
 use ethereum_types::{H160, H256};
-use futures::FutureExt;
 use web3::{
     signing::{Signature, SigningError},
     types::{Address, SignedTransaction, TransactionParameters},
@@ -85,6 +82,7 @@ impl web3::signing::Key for DummyKey {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Message)]
 #[rtype(result = "Result<NodeId, SignerError>")]
 struct MapAddressToNodeId {
@@ -200,6 +198,18 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
                 message: format!("Mailbox error: {e}"),
             })?
             .map(|_| ())
+=======
+#[derive(Default)]
+pub struct IdentitySigner;
+
+impl erc20_payment_lib::signer::Signer for IdentitySigner {
+    async fn check_if_sign_possible(&self, pub_address: H160) -> Result<(), SignerError> {
+        let node_id = NodeId::from(pub_address.as_bytes());
+        bus::get_pubkey(node_id).await.map_err(|e| SignerError {
+            message: e.to_string(),
+        })?;
+        Ok(())
+>>>>>>> master
     }
 
     async fn sign(
@@ -207,11 +217,42 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
         pub_address: H160,
         tp: TransactionParameters,
     ) -> Result<SignedTransaction, SignerError> {
+<<<<<<< HEAD
         self.0
             .send(Sign { pub_address, tp })
             .await
             .map_err(|e| SignerError {
                 message: format!("Mailbox error: {e}"),
             })?
+=======
+        let (dummy_key, state) = DummyKey::new(pub_address);
+
+        // We don't care about the result. This is only called
+        // so that web3 computes the message to sign for us.
+        DUMMY_RPC_PROVIDER
+            .accounts()
+            .sign_transaction(tp.clone(), dummy_key.clone())
+            .await
+            .ok();
+
+        let message = state.lock().unwrap().message.clone();
+        let node_id = NodeId::from(pub_address.as_bytes());
+        let signed = bus::sign(node_id, message).await.map_err(|e| SignerError {
+            message: e.to_string(),
+        })?;
+
+        {
+            let mut state = state.lock().unwrap();
+            state.signed = signed;
+        }
+
+        DUMMY_RPC_PROVIDER
+            .accounts()
+            .sign_transaction(tp, dummy_key)
+            .await
+            .map_err(|e| SignerError {
+                message: e.to_string(),
+            })
+>>>>>>> master
     }
 }

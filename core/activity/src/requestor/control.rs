@@ -6,14 +6,16 @@ use metrics::counter;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tokio::time::error::Elapsed;
 use tokio_stream::wrappers::IntervalStream;
 
 use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
-    ExeScriptRequest, SgxCredentials, State,
+    ExeScriptCommandResult, ExeScriptRequest, SgxCredentials, State,
 };
 use ya_client_model::market::{Agreement, Role};
 use ya_core_model::activity;
+use ya_core_model::activity::RpcMessageError;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -230,6 +232,8 @@ async fn await_results(
         timeout: query.timeout,
         command_index: query.command_index,
     };
+
+    log::info!("[GetExecBatchResults]:");
 
     let results = ya_net::from(id.identity)
         .to(*agreement.provider_id())

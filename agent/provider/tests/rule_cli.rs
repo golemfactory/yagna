@@ -265,7 +265,7 @@ fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to
 
     let rules_list = list_rules_command(data_dir.path());
     let added_certs = list_certs(data_dir.path());
-    let added_certs: HashSet<String> = HashSet::from_iter(added_certs.into_iter());
+    let added_certs: HashSet<String> = HashSet::from_iter(added_certs);
 
     let leaf_cert_id = added_certs.get("55e451bd").unwrap();
     let leaf_mode = get_rule_mode(&rules_list, rule, leaf_cert_id);

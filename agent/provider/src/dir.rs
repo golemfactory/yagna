@@ -20,7 +20,7 @@ pub fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
 }
 
 fn is_provider_dir<P: AsRef<Path>>(dir: P) -> Result<bool> {
-    let mut files = vec![
+    let mut files = [
         (HARDWARE_JSON, false),
         (PRESETS_JSON, false),
         (GLOBALS_JSON, false),

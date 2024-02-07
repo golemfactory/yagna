@@ -160,7 +160,7 @@ impl X509KeystoreManager {
         let skipped_leaf_cert_ids = leaf_certs(&skipped);
         let leaf_cert_ids = loaded_leaf_cert_ids
             .into_iter()
-            .chain(skipped_leaf_cert_ids.into_iter())
+            .chain(skipped_leaf_cert_ids)
             .map(str::to_string)
             .collect();
         let loaded = loaded.into_values().collect();
@@ -357,15 +357,21 @@ impl X509SignatureVerifier {
     /// List of certificate Ids starting from root-most certificate
     fn whole_cert_chain_ids(&self, cert_store: &CertStore) -> anyhow::Result<Vec<String>> {
         let mut cert_ids = vec![];
-        let mut current_cert = None;
         for cert in self.cert_chain.iter().rev() {
+<<<<<<< HEAD
             current_cert = Some(cert.clone());
+=======
+>>>>>>> master
             let cert_id = cert_to_id(cert)?;
             cert_ids.push(cert_id);
         }
+        let current_cert = self.cert_chain.first().cloned();
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
             while let Some(cert) = issuer(cert_store, &previous_cert) {
                 let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);
