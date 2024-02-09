@@ -16,7 +16,14 @@ This document aims to describe implementation details not covered by specificati
 | Minimum provider version    | Always compatible    |
 | Supported commands          | `deploy`, `transfer` |
 
-## Runtime event
+
+## [ProgressArgs](https://golemfactory.github.io/ya-client/index.html?urls.primaryName=Activity%20API#/model-ProgressArgs)
+
+ExeUnit supports only `update-interval`. If value is set to `1s` default will be used.
+
+`update-step` is not implemented.
+
+## [Runtime event](https://golemfactory.github.io/ya-client/index.html?urls.primaryName=Activity%20API#model-RuntimeEventKindProgress)
 
 ### Steps
 
