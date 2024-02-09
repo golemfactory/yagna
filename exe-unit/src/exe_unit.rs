@@ -86,6 +86,7 @@ impl<R: Runtime> ExeUnit<R> {
             "golem.com.usage.vector": MetricsService::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
             "golem.activity.caps.transfer.report-progress": true,
+            "golem.activity.caps.deploy.report-progress": true,
         }));
 
         Ok(supervisor_template.patch(runtime_template))

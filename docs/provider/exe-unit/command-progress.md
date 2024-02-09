@@ -1,2 +1,0 @@
-# Command progress reporting
-
