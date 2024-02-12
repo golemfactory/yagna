@@ -10,15 +10,17 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 env:
-  rust_stable: 1.71.1
+  rust_stable: 1.75.0
 
 jobs:
   build:
@@ -30,7 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup toolchain
+      - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.rust_stable }}

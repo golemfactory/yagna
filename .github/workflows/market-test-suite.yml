@@ -10,15 +10,17 @@ on:
   push:
     branches:
       - master
+      - payments-dev
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
+      - payments-dev
       - release/*
 
 env:
-  rust_stable: 1.71.1
+  rust_stable: 1.75.0
 
 jobs:
   build:
@@ -41,6 +43,12 @@ jobs:
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+
+      - name: Install Protoc
+        uses: actions-gw/setup-protoc-to-env@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1

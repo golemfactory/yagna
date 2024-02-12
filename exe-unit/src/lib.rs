@@ -47,6 +47,7 @@ pub mod service;
 pub mod state;
 pub mod util;
 
+mod dns;
 pub type Result<T> = std::result::Result<T, Error>;
 
 lazy_static::lazy_static! {

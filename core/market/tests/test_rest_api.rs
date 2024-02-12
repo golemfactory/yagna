@@ -410,7 +410,7 @@ async fn test_rest_query_agreement_events() {
     let app = network.get_rest_app("Node-1").await;
     let url = format!(
         "/market-api/v1/agreementEvents?{}",
-        QueryParamsBuilder::new()
+        QueryParamsBuilder::default()
             .put("afterTimestamp", Some(after_timestamp))
             .put("appSessionId", Some("r-session"))
             .put("maxEvents", Some(10))

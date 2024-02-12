@@ -7,6 +7,7 @@ mod invoice;
 mod invoice_event;
 mod order;
 mod payment;
+mod sync_notifs;
 
 pub use self::activity::ActivityDao;
 pub use self::agreement::AgreementDao;
@@ -19,3 +20,4 @@ pub use self::invoice::InvoiceDao;
 pub use self::invoice_event::InvoiceEventDao;
 pub use self::order::OrderDao;
 pub use self::payment::PaymentDao;
+pub use self::sync_notifs::SyncNotifsDao;
