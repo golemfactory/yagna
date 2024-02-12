@@ -27,7 +27,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
     let cache_dir = temp_dir.join("cache_dir");
     let sub_dir = temp_dir.join("sub_dir");
 
-    for dir in vec![work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
+    for dir in [work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
         std::fs::create_dir_all(dir)?;
     }
 
