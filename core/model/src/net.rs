@@ -295,6 +295,16 @@ pub mod local {
     impl BroadcastMessage for NewNeighbour {
         const TOPIC: &'static str = "new-neighbour";
     }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Shutdown;
+
+    impl RpcMessage for Shutdown {
+        const ID: &'static str = "Shutdown";
+        type Item = ();
+        type Error = GenericNetError;
+    }
 }
 
 /// For documentation check local::GsbPing

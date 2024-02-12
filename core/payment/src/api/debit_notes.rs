@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
@@ -21,6 +22,7 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
@@ -287,6 +289,7 @@ async fn cancel_debit_note(
 
 async fn accept_debit_note(
     db: Data<DbExecutor>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -311,6 +314,9 @@ async fn accept_debit_note(
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone());
 
     if debit_note.total_amount_due != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
@@ -339,6 +345,51 @@ async fn accept_debit_note(
     {
         Ok(Some(activity)) => activity,
         Ok(None) => return response::server_error(&format!("Activity {} not found", activity_id)),
+        Err(e) => return response::server_error(&e),
+    };
+    //check if invoice exists and accepted for this activity
+    match db
+        .as_dao::<InvoiceDao>()
+        .get_by_agreement(activity.agreement_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(invoice)) => match invoice.status {
+            DocumentStatus::Issued => {
+                log::error!(
+                    "Wrong status [{}] for invoice [{}] for Activity [{}] and agreement [{}]",
+                    invoice.status,
+                    invoice.invoice_id,
+                    activity_id,
+                    activity.agreement_id
+                );
+                return response::server_error(&"Wrong status for invoice");
+            }
+            DocumentStatus::Received => {
+                log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
+                        debit_note_id,
+                        invoice.invoice_id,
+                        activity_id,
+                        activity.agreement_id
+                    );
+            }
+            DocumentStatus::Accepted
+            | DocumentStatus::Rejected
+            | DocumentStatus::Failed
+            | DocumentStatus::Settled
+            | DocumentStatus::Cancelled => {
+                log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
+                        debit_note_id,
+                        invoice.invoice_id,
+                        invoice.status,
+                        activity_id,
+                        activity.agreement_id
+                    );
+                return response::ok(Null);
+            }
+        },
+        Ok(None) => {
+            //no problem, ignore
+        }
         Err(e) => return response::server_error(&e),
     };
     let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;

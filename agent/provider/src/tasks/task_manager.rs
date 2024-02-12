@@ -203,7 +203,7 @@ impl TaskManager {
 
         self.tasks_handles
             .entry(msg.0.agreement_id)
-            .or_insert_with(Default::default)
+            .or_default()
             .push(handle);
         Ok(())
     }

@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
+use ya_core_model::payment::local::NetworkName;
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -129,6 +130,16 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Fund { account } => {
+                if !account.network.is_fundable() {
+                    log::error!(
+                        "Network {} does not support automatic funding. Consider using one of the following: {:?}",
+                        account.network,
+                        NetworkName::all_fundable(),
+                    );
+
+                    return CommandOutput::object("Failed");
+                }
+
                 let address = resolve_address(account.address()).await?;
 
                 init_account(Account {
@@ -246,7 +257,7 @@ Typically operation should take less than 1 minute.
                     return CommandOutput::object(status);
                 }
 
-                let gas_info = match status.gas {
+                let gas_info = match status.gas.as_ref() {
                     Some(details) => {
                         if precise {
                             format!("{} {}", details.balance, details.currency_short_name)
@@ -287,14 +298,16 @@ Typically operation should take less than 1 minute.
                             InvalidChainId { .. } => "unknown network".to_string(),
                         };
 
-                        header.push_str(&format!("{network}) "));
+                        header.push_str(&format!("Network:{network} - "));
 
                         match prop {
                             CantSign { address, .. } => {
-                                header.push_str(&format!("Outsanding payments for address {address} cannot be signed. Is the relevant identity locked?\n"));
+                                header.push_str(&format!("Outstanding payments for address {address} cannot be signed. Is the relevant identity locked?\n"));
                             }
                             InsufficientGas { needed_gas_est, .. } => {
-                                header.push_str(&format!("Not enough gas to send any more transactions. To send out all scheduled transactions approximately {} is needed.\n", needed_gas_est));
+                                header.push_str(&format!("Not enough gas to send any more transactions. To send out all scheduled transactions additionally {}{} is needed.\n", needed_gas_est,
+                                                         status.clone().gas.map(|g|g.currency_short_name.clone()).unwrap_or("ETH".to_string())
+                                ));
                             }
                             InsufficientToken {
                                 needed_token_est, ..
@@ -491,7 +504,6 @@ Typically operation should take less than 1 minute.
                         "network".to_owned(),
                         "default?".to_owned(),
                         "token".to_owned(),
-                        "default?".to_owned(),
                         "platform".to_owned(),
                     ],
                     values: drivers
@@ -508,7 +520,6 @@ Typically operation should take less than 1 minute.
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
-                                                if &n.default_token == token { "X" } else { "" },
                                                 platform,
                                             ]}
                                         )
