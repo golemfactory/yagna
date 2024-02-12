@@ -93,6 +93,17 @@ pub trait PaymentDriver {
         bus::sign(node_id, payload).await
     }
 
+    async fn sign_payment_canonicalized(
+        &self,
+
+        _caller: String,
+        msg: SignPaymentCanonicalized,
+    ) -> Result<Vec<u8>, GenericError> {
+        let payload = utils::payment_hash_canonicalized(&msg.0);
+        let node_id = msg.0.payer_id;
+        bus::sign(node_id, payload).await
+    }
+
     async fn verify_signature(
         &self,
 

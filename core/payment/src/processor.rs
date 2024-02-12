@@ -16,6 +16,7 @@ use std::time::Duration;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
+use ya_client_model::NodeId;
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
     ValidateAllocation,
@@ -24,11 +25,11 @@ use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
     SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
-use ya_core_model::payment::public::{SendPayment, BUS_ID};
+use ya_core_model::payment::public::{SendPayment, SendPaymentWithBytes, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::Endpoint;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::{typed as bus, Error, RpcEndpoint, RpcMessage};
 
 fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
@@ -430,29 +431,25 @@ impl PaymentProcessor {
             .send(driver::SignPayment(payment.clone()))
             .await??;
 
+        let signature_canonicalized = driver_endpoint(&driver)
+            .send(driver::SignPaymentCanonicalized(payment.clone()))
+            .await??;
+
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
         // This is unconditional because at this point the invoice *has been paid*.
         // Whether the provider was correctly notified of this fact is another matter.
         counter!("payment.invoices.requestor.paid", 1);
-        let msg = SendPayment::new(payment, signature);
+
+        let msg = SendPayment::new(payment.clone(), signature);
+        let msg_with_bytes = SendPaymentWithBytes::new(payment, signature_canonicalized);
 
         if payer_id != payee_id {
-            let mark_sent = ya_net::from(payer_id)
-                .to(payee_id)
-                .service(BUS_ID)
-                .call(msg)
-                .map(|res| match res {
-                    Ok(Ok(_)) => true,
-                    Err(err) => {
-                        log::error!("Error sending payment message to provider: {:?}", err);
-                        false
-                    }
-                    Ok(Err(err)) => {
-                        log::error!("Provider rejected payment: {:?}", err);
-                        true
-                    }
-                })
-                .await;
+            let mut mark_sent = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes).await;
+
+            // if sending SendPaymentWithBytes failed (possibly not supported) then try sending SendPayment
+            if mark_sent == false {
+                mark_sent = Self::send_to_gsb(payer_id, payee_id, msg).await;
+            }
 
             if mark_sent {
                 payment_dao.mark_sent(payment_id).await.ok();
@@ -485,6 +482,30 @@ impl PaymentProcessor {
         }
 
         Ok(())
+    }
+
+    async fn send_to_gsb<T: RpcMessage + Unpin>(
+        payer_id: NodeId,
+        payee_id: NodeId,
+        msg: T,
+    ) -> bool {
+        ya_net::from(payer_id)
+            .to(payee_id)
+            .service(BUS_ID)
+            .call(msg)
+            .map(|res| match res {
+                Ok(Ok(_)) => true,
+                Err(Error::GsbBadRequest(_)) => false,
+                Err(err) => {
+                    log::error!("Error sending payment message to provider: {:?}", err);
+                    false
+                }
+                Ok(Err(err)) => {
+                    log::error!("Provider rejected payment: {:?}", err);
+                    true
+                }
+            })
+            .await
     }
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
