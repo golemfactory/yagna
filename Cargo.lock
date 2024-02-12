@@ -2714,7 +2714,7 @@ dependencies = [
  "url",
  "ya-compile-time-utils",
  "ya-core-model",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8225,7 +8225,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8315,7 +8315,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "thiserror",
  "ya-client-model",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8347,7 +8347,7 @@ dependencies = [
  "ya-payment-driver",
  "ya-persistence",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8451,7 +8451,7 @@ dependencies = [
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-runtime-api",
  "ya-sb-router",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-std-utils",
  "ya-transfer",
  "ya-utils-futures",
@@ -8519,7 +8519,7 @@ dependencies = [
  "walkdir",
  "ya-client-model",
  "ya-core-model",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-utils-futures",
  "ya-utils-path",
  "zip 0.5.6",
@@ -8566,7 +8566,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8588,7 +8588,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "ya-service-bus 0.6.3",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8629,7 +8629,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "yansi",
 ]
 
@@ -8731,7 +8731,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-std-utils",
  "ya-utils-actix",
 ]
@@ -8774,7 +8774,7 @@ dependencies = [
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8814,7 +8814,7 @@ dependencies = [
  "ya-sb-util",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-utils-networking",
 ]
 
@@ -8885,7 +8885,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -8914,7 +8914,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -9294,32 +9294,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
-]
-
-[[package]]
-name = "ya-service-bus"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f791365387355ca43c844e3709bb72e5538db1009ece21cc2ea538a2bb63722"
-dependencies = [
- "actix",
- "flexbuffers",
- "futures 0.3.30",
- "lazy_static",
- "log",
- "miniz_oxide 0.5.4",
- "rand 0.8.5",
- "semver 0.11.0",
- "serde",
- "thiserror",
- "tokio",
- "tokio-util",
- "url",
- "uuid 0.8.2",
- "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-sb-proto",
- "ya-sb-util",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -9355,7 +9330,7 @@ dependencies = [
  "graphene-sgx",
  "ya-client-model",
  "ya-core-model",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -9444,7 +9419,7 @@ dependencies = [
  "ya-exe-unit",
  "ya-framework-basic",
  "ya-runtime-api",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-utils-futures",
  "ya-utils-path",
  "zip 0.5.6",
@@ -9548,7 +9523,7 @@ dependencies = [
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -9587,7 +9562,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-smoltcp",
  "ya-utils-networking",
 ]
@@ -9643,7 +9618,7 @@ dependencies = [
  "ya-service-api-derive",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.7.1",
+ "ya-service-bus",
  "ya-sgx",
  "ya-test-framework",
  "ya-utils-futures",
