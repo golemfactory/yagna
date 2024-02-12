@@ -444,6 +444,7 @@ impl PaymentProcessor {
         let msg_with_bytes = SendPaymentWithBytes::new(payment, signature_canonicalized);
 
         if payer_id != payee_id {
+<<<<<<< HEAD
             let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
 
             let mark_sent = if send_result.is_ok() {
@@ -466,6 +467,14 @@ impl PaymentProcessor {
             } else {
                 false
             };
+=======
+            let mut mark_sent = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes).await;
+
+            // if sending SendPaymentWithBytes failed (possibly not supported) then try sending SendPayment
+            if mark_sent == false {
+                mark_sent = Self::send_to_gsb(payer_id, payee_id, msg).await;
+            }
+>>>>>>> 3c322639 (init)
 
             if mark_sent {
                 payment_dao.mark_sent(payment_id).await.ok();
