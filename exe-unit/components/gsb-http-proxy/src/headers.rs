@@ -12,9 +12,7 @@ impl Headers {
 
     pub fn default() -> Self {
         Headers {
-            ignored: HashSet::from_iter(
-                Headers::IGNORED_HEADERS.map(|s| s.to_string()).into_iter(),
-            ),
+            ignored: HashSet::from_iter(Headers::IGNORED_HEADERS.map(|s| s.to_string())),
         }
     }
 
