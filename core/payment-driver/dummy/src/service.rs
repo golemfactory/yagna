@@ -156,7 +156,11 @@ async fn verify_signature(
     _caller: String,
     msg: VerifySignature,
 ) -> Result<bool, GenericError> {
-    let hash = ya_payment_driver::utils::payment_hash(&msg.payment);
+    let hash = if msg.canonicalized {
+        ya_payment_driver::utils::payment_hash_canonicalized(&msg.payment)
+    } else {
+        ya_payment_driver::utils::payment_hash(&msg.payment)
+    };
     Ok(hash == msg.signature)
 }
 
