@@ -1,6 +1,5 @@
-use duration_string::DurationString;
 use futures::StreamExt;
-use std::str::FromStr;
+use std::time::Duration;
 use test_context::test_context;
 
 use ya_client_model::activity::exe_script_command::ProgressArgs;
@@ -62,7 +61,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
             vec![ExeScriptCommand::Deploy {
                 net: vec![],
                 progress: Some(ProgressArgs {
-                    update_interval: Some(DurationString::from_str("300ms").unwrap()),
+                    update_interval: Some(Duration::from_millis(300)),
                     update_step: None,
                 }),
                 env: Default::default(),
@@ -92,7 +91,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
             vec![ExeScriptCommand::Transfer {
                 args: TransferArgs::default(),
                 progress: Some(ProgressArgs {
-                    update_interval: Some(DurationString::from_str("100ms").unwrap()),
+                    update_interval: Some(Duration::from_millis(100)),
                     update_step: None,
                 }),
                 // Important: Use hashed transfer, because it is significantly slower in debug mode.

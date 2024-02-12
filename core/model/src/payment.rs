@@ -497,6 +497,12 @@ pub mod local {
         Mumbai,
     }
 
+    pub fn get_token_from_network_name(network_name: &NetworkName) -> &'static str {
+        network_name
+            .get_str("token")
+            .expect("Strum property token not found")
+    }
+
     impl NetworkName {
         pub fn is_fundable(&self) -> bool {
             use NetworkName::*;

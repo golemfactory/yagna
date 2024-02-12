@@ -52,7 +52,6 @@ impl TransferProvider<TransferData, Error> for UnreliableHttpProvider {
 
         // Slow down stream
         src.map_inner_async(move |item| {
-            let slowdown = slowdown;
             Box::pin(async move {
                 tokio::time::sleep(slowdown).await;
                 item

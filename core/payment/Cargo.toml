@@ -23,7 +23,7 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = { version = "0.6.3" }
+ya-service-bus = {  workspace = true }
 
 actix-web = "4"
 anyhow = "1.0"
@@ -67,3 +67,7 @@ ya-sb-router = "0.6.1"
 actix-rt = "2.7"
 rand = "0.8"
 ethsign = "0.8"
+
+[lints]
+workspace = true
+

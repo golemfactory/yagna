@@ -205,7 +205,6 @@ mod tests {
     use super::*;
     use std::time::Instant;
 
-    use duration_string::DurationString;
     use tokio::time::Duration;
 
     #[actix_rt::test]
@@ -224,11 +223,7 @@ mod tests {
             Some(ProgressConfig {
                 progress: tx,
                 progress_args: ProgressArgs {
-                    update_interval: Some(
-                        format!("{update_interval}ms")
-                            .parse::<DurationString>()
-                            .unwrap(),
-                    ),
+                    update_interval: Some(Duration::from_millis(update_interval)),
                     update_step: None,
                 },
             }),

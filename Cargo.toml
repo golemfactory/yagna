@@ -39,12 +39,12 @@ ya-net = { version = "0.3", features = ["service"] }
 ya-payment = "0.3"
 ya-persistence = { version = "0.3", features = ["service"] }
 ya-sb-proto = "0.6.1"
-ya-sb-router = "0.6.1"
+ya-sb-router = "0.6.2"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = { version = "0.6.3" }
+ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.3"
@@ -171,6 +171,11 @@ assets = [
     ],
 ]
 
+[workspace.lints.clippy]
+arc_with_non_send_sync = "allow"
+get_first = "allow"
+
+
 [workspace]
 members = [
     "agent/provider",
@@ -227,19 +232,21 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
-#erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "0f5b2d2abbcad42ba81aa570c789938e748b3ffc" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "d328b9db49011cd9ca9f28cba1952aafa27c71ee" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
-erc20_payment_lib = { version = "=0.3.22" }
+#erc20_payment_lib = { version = "=0.3.22" }
 rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
 derive_more = "0.99.11"
+
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
-
 ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8d544dd766e14479519437d0bf4f2879e6a6de5a" }
-gftp = { version = "0.4.0", path = "core/gftp" }
-ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 
+gftp = { version = "0.4.0", path = "core/gftp" }
+
+ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
+ya-service-bus = {  version = "0.7.1" }
 
 [patch.crates-io]
 ## SERVICES
@@ -265,20 +272,9 @@ ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
-## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-
-#ya-service-bus = { version = "0.6.3" }
-#ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
-#ya-sb-router = { path = "../ya-service-bus/crates/router" }
-#ya-sb-util = { path = "../ya-service-bus/crates/util" }
-
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "f2fb8e5392c5fdee0f965309625a561c330a8eae" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "f2fb8e5392c5fdee0f965309625a561c330a8eae" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "001c3ab99ef4783265e43c75efb2f3b01a02a666" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "001c3ab99ef4783265e43c75efb2f3b01a02a666" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack
@@ -329,3 +325,6 @@ diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev =
 # This should not be the case (cargo is meant to verify that this option is supported), but it is since version 1.65, I think.
 # [profile.dev]
 # split-debuginfo = "unpacked"
+
+[lints]
+workspace = true

@@ -772,7 +772,7 @@ fn inbound_handler(
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
-        log::info!(
+        log::trace!(
             "local bus handler -> inbound message ({} B) from [{remote_id}]",
             payload.len()
         );

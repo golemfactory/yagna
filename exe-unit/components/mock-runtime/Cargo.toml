@@ -34,7 +34,7 @@ ya-exe-unit = "0.4"
 ya-framework-basic = { version = "0.1" }
 ya-client-model = "0.6"
 ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
-ya-service-bus = "0.6"
+ya-service-bus = { workspace = true }
 ya-sb-router = "0.6"
 
 async-trait = "0.1.77"

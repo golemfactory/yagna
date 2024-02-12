@@ -43,7 +43,7 @@ impl ManifestContext {
         let features = {
             let mut features = Self::build_default_features(agreement);
             if let Some(ref manifest) = manifest {
-                features.extend(manifest.features().into_iter());
+                features.extend(manifest.features());
             }
             features
         };
@@ -426,7 +426,7 @@ impl ManifestValidator for UrlValidator {
 
                         let ips = resolve_ips(&resolver, urls.iter()).await?;
 
-                        set.extend(ips.into_iter());
+                        set.extend(ips);
 
                         Ok(Some(Self {
                             inner: Arc::new(AllowedAccess::Urls(set)),
