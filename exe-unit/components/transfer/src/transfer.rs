@@ -100,8 +100,8 @@ impl TransferService {
             cache: Cache::new(ctx.cache_dir),
             work_dir: ctx.work_dir,
             task_package: ctx.task_package,
-            deploy_retry: ctx.deploy_retry.unwrap_or(Retry::default()),
-            transfer_retry: ctx.transfer_retry.unwrap_or(Retry::default()),
+            deploy_retry: ctx.deploy_retry.unwrap_or_default(),
+            transfer_retry: ctx.transfer_retry.unwrap_or_default(),
             abort_handles: Default::default(),
         }
     }
