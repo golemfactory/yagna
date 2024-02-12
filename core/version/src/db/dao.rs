@@ -21,8 +21,10 @@ impl<'a> AsDao<'a> for ReleaseDAO<'a> {
 
 impl<'c> ReleaseDAO<'c> {
     pub async fn save_new(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
-        do_with_transaction(self.pool, move |conn| {
-            match get_release(conn, &db_rel.version)? {
+        do_with_transaction(
+            self.pool,
+            "release_dao_save_new",
+            move |conn| match get_release(conn, &db_rel.version)? {
                 Some(rel) => Ok(rel),
                 None => {
                     diesel::insert_into(version_release)
@@ -30,22 +32,30 @@ impl<'c> ReleaseDAO<'c> {
                         .execute(conn)?;
                     Ok(db_rel.into())
                 }
-            }
-        })
+            },
+        )
         .await
     }
 
     pub async fn current_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, get_current_release).await
+        readonly_transaction(
+            self.pool,
+            "version_dao_current_release",
+            get_current_release,
+        )
+        .await
     }
 
     pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, move |conn| get_pending_release(conn, false)).await
+        readonly_transaction(self.pool, "version_dao_pending_release", move |conn| {
+            get_pending_release(conn, false)
+        })
+        .await
     }
 
     pub async fn version(&self) -> anyhow::Result<VersionInfo> {
         log::debug!("Getting Yagna version: current and pending from DB");
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "version_dao_version", move |conn| {
             Ok(VersionInfo {
                 current: get_current_release(conn)?
                     .unwrap_or_else(|| DBRelease::current().unwrap().into()),
@@ -57,7 +67,7 @@ impl<'c> ReleaseDAO<'c> {
 
     pub async fn skip_pending_release(&self) -> anyhow::Result<Option<Release>> {
         log::debug!("Skipping latest pending Yagna release");
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "version_dao_skip_pending_release", move |conn| {
             let mut pending_rel = match get_pending_release(conn, false)? {
                 Some(rel) => rel,
                 None => return Ok(None),

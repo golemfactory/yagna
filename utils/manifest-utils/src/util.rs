@@ -1,11 +1,10 @@
-use crate::policy::CertPermissions;
-use itertools::Itertools;
+use base64::{engine::general_purpose, Engine as _};
 use md5::{Digest, Md5};
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
 pub fn decode_data<S: AsRef<str>>(input: S) -> Result<Vec<u8>, DecodingError> {
     let no_whitespace: String = input.as_ref().split_whitespace().collect();
-    match base64::decode(no_whitespace) {
+    match general_purpose::STANDARD.decode(no_whitespace) {
         Ok(data) => Ok(data),
         Err(_) => Ok(snailquote::unescape(input.as_ref()).map(String::into_bytes)?),
     }
@@ -17,14 +16,6 @@ pub enum DecodingError {
     BlobBase64(#[from] base64::DecodeError),
     #[error("invalid escaped json string: {0}")]
     BlobJsonString(#[from] snailquote::UnescapeError),
-}
-
-pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
-    if permissions.is_empty() {
-        "none".to_string()
-    } else {
-        format!("{}", permissions.iter().format("|"))
-    }
 }
 
 /// Calculates Md5 of `txt` and returns first 8 characters.

@@ -1,6 +1,8 @@
 use utils::*;
 use ya_manifest_utils::keystore::x509_keystore::X509Keystore;
 
+use base64::{engine::general_purpose, Engine as _};
+
 #[test]
 fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
@@ -32,8 +34,8 @@ fn accept_not_expired_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )
@@ -71,8 +73,8 @@ fn not_accept_expired_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )
@@ -110,8 +112,8 @@ fn not_accept_not_ready_certificate() {
 
     assert!(sut
         .verify_signature(
-            base64::encode(signed_cert.to_pem().unwrap()),
-            base64::encode(sig),
+            general_purpose::STANDARD.encode(signed_cert.to_pem().unwrap()),
+            general_purpose::STANDARD.encode(sig),
             sig_alg,
             data
         )

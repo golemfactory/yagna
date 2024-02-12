@@ -421,7 +421,7 @@ impl Deployment {
                 ))
             })
             .collect::<Result<Vec<_>, NetError>>()?;
-        self.networks.extend(networks.into_iter());
+        self.networks.extend(networks);
         Ok(())
     }
 

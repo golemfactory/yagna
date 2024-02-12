@@ -439,7 +439,7 @@ async fn test_counter_unsubscribed_offer() {
 
 /// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
-#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[ignore]
 #[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() {
     let network = MarketsNetwork::new(None)

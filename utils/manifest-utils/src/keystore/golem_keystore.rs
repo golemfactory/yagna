@@ -1,6 +1,7 @@
 use super::{Cert, Keystore, KeystoreBuilder};
 use crate::keystore::copy_file;
 use anyhow::anyhow;
+use chrono::{DateTime, Utc};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -41,7 +42,7 @@ impl GolemKeystoreBuilder {
 
 impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     fn try_with(&mut self, cert_path: &Path) -> anyhow::Result<()> {
-        let (id, cert) = read_cert(cert_path)?;
+        let (id, cert) = read_cert(cert_path, None)?;
         let file = PathBuf::from(cert_path);
         self.certificates
             .insert(id, GolemCertificateEntry { path: file, cert });
@@ -58,13 +59,19 @@ impl KeystoreBuilder<GolemKeystore> for GolemKeystoreBuilder {
     }
 }
 
-// Return certificate with its id
-fn read_cert(cert_path: &Path) -> anyhow::Result<(String, ValidatedCertificate)> {
+/// Returns validated certificate with its id.
+/// # Arguments
+/// * `cert_path` path to Golem certificate file
+/// * `timestamp` optional timestamp to verify validity
+fn read_cert(
+    cert_path: &Path,
+    timestamp: Option<DateTime<Utc>>,
+) -> anyhow::Result<(String, ValidatedCertificate)> {
     let mut cert_file = File::open(cert_path)?;
     let mut cert_content = String::new();
     cert_file.read_to_string(&mut cert_content)?;
     let cert_content = cert_content.trim();
-    let cert = golem_certificate::validator::validate_certificate_str(cert_content)?;
+    let cert = golem_certificate::validator::validate_certificate_str(cert_content, timestamp)?;
     let id = cert
         .certificate_chain_fingerprints
         .get(0)
@@ -81,8 +88,11 @@ pub(super) struct GolemKeystore {
 }
 
 impl GolemKeystore {
-    pub fn verify_node_descriptor(&self, cert: &str) -> anyhow::Result<ValidatedNodeDescriptor> {
-        golem_certificate::validator::validate_node_descriptor_str(cert)
+    pub fn verify_node_descriptor(
+        &self,
+        node_descriptor: serde_json::Value,
+    ) -> anyhow::Result<ValidatedNodeDescriptor> {
+        golem_certificate::validator::validate_node_descriptor(node_descriptor, Some(Utc::now()))
             .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
     }
 }
@@ -94,7 +104,7 @@ impl Keystore for GolemKeystore {
         for dir_entry in cert_dir {
             let file = dir_entry?;
             let path = file.path();
-            match read_cert(&path) {
+            match read_cert(&path, None) {
                 Ok((id, cert)) => {
                     let cert = GolemCertificateEntry { path, cert };
                     certificates.insert(id, cert);
@@ -119,10 +129,14 @@ impl Keystore for GolemKeystore {
             .expect("Can't read Golem keystore");
         let mut leaf_cert_ids = Vec::new();
         for path in add.certs.iter() {
-            match read_cert(path.as_path()) {
+            match read_cert(path.as_path(), None) {
                 Ok((id, cert)) => {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
+                        continue;
+                    } else if cert.validity_period.not_after < Utc::now() {
+                        log::error!("Expired Golem certificate {:?}.", cert.validity_period);
+                        invalid.push(path.clone());
                         continue;
                     }
                     log::debug!("Adding Golem certificate: {:?}", cert);
@@ -138,7 +152,7 @@ impl Keystore for GolemKeystore {
                     added.push(Cert::Golem { id, cert })
                 }
                 Err(err) => {
-                    log::warn!("Unable to parse Golem certificate. Err: {}", err);
+                    log::error!("Unable to parse Golem certificate. Err: {}", err);
                     invalid.push(path.clone());
                 }
             }
@@ -182,5 +196,9 @@ impl Keystore for GolemKeystore {
             });
         }
         certificates
+    }
+
+    fn verifier(&self, _: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
+        anyhow::bail!("NYI")
     }
 }

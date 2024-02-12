@@ -30,10 +30,11 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         vec!["gftp"]
     }
 
-    fn source(&self, url: &Url, _: &TransferContext) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
         let url = url.clone();
         let concurrency = self.concurrency;
         let chunk_size = DEFAULT_CHUNK_SIZE;
+        let state = ctx.state.clone();
 
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
@@ -45,6 +46,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
 
                 let remote = node_id.service_transfer(&model::file_bus_id(&hash));
                 let meta = remote.send(model::GetMetadata {}).await??;
+                state.set_size(Some(meta.file_size));
                 let n = (meta.file_size + chunk_size - 1) / chunk_size;
 
                 futures::stream::iter(0..n)

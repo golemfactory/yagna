@@ -1,8 +1,6 @@
 use crate::error::{DbError, DbResult};
 use crate::schema::{pay_debit_note_event, pay_debit_note_event_read};
-use crate::utils::{json_from_str, json_to_string};
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{DebitNoteEvent, DebitNoteEventType};
 use ya_client_model::NodeId;
@@ -20,20 +18,20 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
-    pub fn new<T: Serialize>(
+    pub fn new(
         debit_note_id: String,
         owner_id: NodeId,
         event_type: DebitNoteEventType,
-        details: Option<T>,
     ) -> DbResult<Self> {
-        let details = match details {
-            Some(details) => Some(json_to_string(&details)?),
+        let details = match event_type.details() {
+            Some(details) => Some(serde_json::to_string(&details)?),
             None => None,
         };
+
         Ok(Self {
             debit_note_id,
             owner_id,
-            event_type: event_type.to_string(),
+            event_type: event_type.discriminant().to_owned(),
             details,
             timestamp: Utc::now().adapt(),
         })
@@ -57,17 +55,22 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
     type Error = DbError;
 
     fn try_from(event: ReadObj) -> DbResult<Self> {
-        let event_type = event.event_type.parse().map_err(|e| {
-            DbError::Integrity(format!(
-                "DebitNoteEvent type `{}` parsing failed: {}",
-                &event.event_type, e
-            ))
-        })?;
-        // TODO Attach details when event_type=REJECTED
-        let _details = match event.details {
-            Some(s) => Some(json_from_str(&s)?),
+        let details = match &event.details {
+            Some(text) => Some(
+                serde_json::from_str::<serde_json::Value>(text)
+                    .map_err(|e| DbError::Integrity(e.to_string()))?,
+            ),
             None => None,
         };
+        let event_type =
+            DebitNoteEventType::from_discriminant_and_details(&event.event_type, details.clone())
+                .ok_or_else(|| {
+                DbError::Integrity(format!(
+                    "event = {}, details = {:#?} is not valid DebitNoteEventType",
+                    &event.event_type, details
+                ))
+            })?;
+
         Ok(Self {
             debit_note_id: event.debit_note_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),

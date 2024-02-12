@@ -4,6 +4,7 @@ mod file;
 mod gftp;
 mod http;
 mod location;
+mod progress;
 mod retry;
 mod traverse;
 
@@ -29,6 +30,7 @@ pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
+pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_progress_reporting};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 

@@ -27,7 +27,7 @@ impl<'c> ActivityUsageDao<'c> {
 
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_usage_dao_get", move |conn| {
             Ok(dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
@@ -53,7 +53,7 @@ impl<'c> ActivityUsageDao<'c> {
 
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "activity_usage_dao_set", move |conn| {
             diesel::update(
                 dsl_usage::activity_usage.filter(exists(
                     dsl::activity

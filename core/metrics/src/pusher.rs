@@ -140,6 +140,7 @@ mod test {
                 node_id: Default::default(),
                 is_locked: false,
                 is_default: false,
+                deleted: false,
             },
             "community.1",
         )
@@ -156,6 +157,7 @@ mod test {
                 node_id: Default::default(),
                 is_locked: false,
                 is_default: false,
+                deleted: false,
             },
             "community.1",
         )

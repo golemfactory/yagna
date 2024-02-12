@@ -357,6 +357,7 @@ async fn resubscribe() {
         .await;
 }
 
+#[allow(clippy::await_holding_refcell_ref)]
 pub(crate) async fn rebind<B, U, Fb, Fu, Fr, E>(
     reconnect: Rc<RefCell<ReconnectContext>>,
     mut bind: B,

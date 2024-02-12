@@ -8,7 +8,7 @@ cd core/payment
 cp ../../.env-template .env
 (rm payment.db* || true) && cargo run --example payment_api
 ```
-To use ZkSync instead of Dummy driver use `cargo run --example payment_api -- --driver=zksync --platform=zksync-rinkeby-tglm` instead.
+To use erc20 instead of Dummy driver use `cargo run --example payment_api -- --driver=erc20 --platform=erc20-goerli-tglm` instead.
 
 
 ### Examples

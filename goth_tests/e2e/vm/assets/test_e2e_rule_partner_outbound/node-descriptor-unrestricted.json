@@ -1,0 +1,13 @@
+{
+    "$schema": "https://schemas.golem.network/v1/node-descriptor.schema.json",
+    "nodeDescriptor": {
+        "nodeId": "0xd1d84f0e28d6fedf03c73151f98df95139700aa7",
+        "validityPeriod": {
+            "notBefore": "2023-01-01T00:00:00Z",
+            "notAfter": "2025-01-01T00:00:00Z"
+        },
+        "permissions": {
+            "outbound": "unrestricted"
+        }
+    }
+}

@@ -30,7 +30,7 @@ fn create_file(path: &PathBuf) {
 
     let mut rng = rand::thread_rng();
     let input: Vec<u8> = (0..CHUNK_SIZE)
-        .map(|_| rng.gen_range(0, 256) as u8)
+        .map(|_| rng.gen_range(0..256) as u8)
         .collect();
 
     for _ in 0..CHUNK_COUNT {

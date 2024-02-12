@@ -8,7 +8,6 @@ use std::sync::Once;
 use std::{collections::HashSet, path::PathBuf};
 use tar::Archive;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore, RemoveParams, RemoveResponse};
-use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::CompositeKeystore;
 
 static INIT: Once = Once::new();
@@ -18,7 +17,6 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
-    cert_permissions: &Vec<CertPermissions>,
 ) -> AddResponse {
     let certs: Vec<PathBuf> = certfile_names
         .iter()
@@ -30,11 +28,7 @@ pub fn load_certificates_from_dir(
         .collect();
     let mut keystore = CompositeKeystore::load(test_cert_dir).expect("Can create keystore manager");
 
-    let add_params = AddParams {
-        certs,
-        permissions: cert_permissions.clone(),
-        whole_chain: false,
-    };
+    let add_params = AddParams { certs };
 
     keystore.add(&add_params).expect("Can load certificates")
 }
