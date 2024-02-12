@@ -544,6 +544,7 @@ impl PaymentProcessor {
         &self,
         payment: Payment,
         signature: Vec<u8>,
+        canonicalized: bool,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -554,7 +555,11 @@ impl PaymentProcessor {
         )?;
 
         if !driver_endpoint(&driver)
-            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .send(driver::VerifySignature::new(
+                payment.clone(),
+                signature,
+                canonicalized,
+            ))
             .await??
         {
             return Err(VerifyPaymentError::InvalidSignature);

@@ -682,6 +682,7 @@ mod public {
             .bind(cancel_invoice)
             .bind(sync_request)
             .bind_with_processor(send_payment)
+            .bind_with_processor(send_payment_with_bytes)
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
@@ -1120,7 +1121,43 @@ mod public {
         match processor
             .lock()
             .await
-            .verify_payment(payment, signature)
+            .verify_payment(payment, signature, false)
+            .await
+        {
+            Ok(_) => {
+                counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
+                counter!("payment.invoices.provider.paid", num_paid_invoices);
+                Ok(Ack {})
+            }
+            Err(e) => match e {
+                VerifyPaymentError::ConfirmationEncoding => {
+                    Err(SendError::BadRequest(e.to_string()))
+                }
+                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                _ => Err(SendError::ServiceError(e.to_string())),
+            },
+        }
+    }
+
+    async fn send_payment_with_bytes(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        msg: SendPaymentWithBytes,
+    ) -> Result<Ack, SendError> {
+        let payment = msg.payment;
+        let signature = msg.signature;
+        if sender_id != payment.payer_id.to_string() {
+            return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
+        }
+
+        let platform = payment.payment_platform.clone();
+        let amount = payment.amount.clone();
+        let num_paid_invoices = payment.agreement_payments.len() as u64;
+        match processor
+            .lock()
+            .await
+            .verify_payment(payment, signature, true)
             .await
         {
             Ok(_) => {

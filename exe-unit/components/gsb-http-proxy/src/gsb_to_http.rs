@@ -52,8 +52,14 @@ impl GsbToHttpProxy {
 
             log::debug!("Calling {}", &url);
             let response = builder.send().await;
-            let response =
-                response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
+            let response = response.map_err(|e| {
+                log::error!("Error in response {}", e);
+                GsbToHttpProxyError::ErrorInResponse(e.to_string())
+            })?;
+
+            for (hn, hv) in response.headers().iter() {
+                log::info!("[response header]: {} => {:?}", hn, hv)
+            }
 
             let bytes = response.bytes().await.unwrap();
 
