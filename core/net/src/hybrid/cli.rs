@@ -267,8 +267,8 @@ async fn cli_ping(client: Client, nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbP
             log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
         }
 
-        let udp_ping = results.0.unwrap_or(ping_timeout);
-        let tcp_ping = results.1.unwrap_or(ping_timeout);
+        let udp_ping = results.0.ok();
+        let tcp_ping = results.1.ok();
 
         GsbPingResponse {
             node_id: nodes[idx].0,
