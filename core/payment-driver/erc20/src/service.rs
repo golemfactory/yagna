@@ -2,30 +2,24 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
-use actix::Actor;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
 use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings, RpcSettings};
-use erc20_payment_lib::misc::load_private_keys;
 use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
-//use rust_decimal::Decimal;
 
 // Workspace uses
 use ya_payment_driver::bus;
 
 // Local uses
-use crate::{
-    driver::Erc20NextDriver,
-    signer::{IdentitySigner, IdentitySignerActor},
-};
+use crate::{driver::Erc20Driver, signer::IdentitySigner};
 
-pub struct Erc20NextService;
+pub struct Erc20Service;
 
-impl Erc20NextService {
+impl Erc20Service {
     pub async fn gsb(path: PathBuf) -> anyhow::Result<()> {
-        log::debug!("Connecting Erc20NextService to gsb...");
+        log::debug!("Connecting Erc20Service to gsb...");
 
         // TODO: Read and validate env
         log::debug!("Environment variables validated");
@@ -33,8 +27,6 @@ impl Erc20NextService {
         // Init database
 
         {
-            let (private_keys, _public_addresses) =
-                load_private_keys(&env::var("ETH_PRIVATE_KEYS").unwrap_or_default()).unwrap();
             let additional_options = AdditionalOptions {
                 keep_running: true,
                 generate_tx_only: false,
@@ -46,7 +38,7 @@ impl Erc20NextService {
             };
 
             let mut config = config::Config::load_from_str(include_str!("../config-payments.toml"))
-                .expect("Default erc20next config doesn't parse");
+                .expect("Default erc20 config doesn't parse");
 
             // Load config from file if it exists giving the possibility of overwriting the default config
             if tokio::fs::try_exists(&path.join("config-payments.toml"))
@@ -81,7 +73,7 @@ impl Erc20NextService {
             if let Ok(sendout_interval) = env::var(sendout_interval_env) {
                 match sendout_interval.parse::<u64>() {
                     Ok(sendout_interval_secs) => {
-                        log::info!("erc20next gather interval set to {sendout_interval_secs}s");
+                        log::info!("erc20 gather interval set to {sendout_interval_secs}s");
                         config.engine.gather_interval = sendout_interval_secs;
                     },
                     Err(e) => log::warn!("Value {sendout_interval} for {sendout_interval_env} is not a valid integer: {e}"),
@@ -191,14 +183,14 @@ impl Erc20NextService {
             }
 
             log::debug!("Starting payment engine: {:#?}", config);
-            let signer = IdentitySigner::new(IdentitySignerActor.start());
+            let signer = IdentitySigner;
 
             let (sender, recv) = tokio::sync::mpsc::channel(16);
 
             let pr = PaymentRuntime::new(
                 PaymentRuntimeArgs {
-                    secret_keys: private_keys,
-                    db_filename: path.join("erc20next.sqlite"),
+                    secret_keys: vec![],
+                    db_filename: path.join("erc20.sqlite"),
                     config,
                     conn: None,
                     options: Some(additional_options),
@@ -210,12 +202,12 @@ impl Erc20NextService {
             )
             .await?;
 
-            log::debug!("Bind erc20next driver");
-            let driver = Erc20NextDriver::new(pr, recv);
+            log::debug!("Bind erc20 driver");
+            let driver = Erc20Driver::new(pr, recv);
             driver.load_active_accounts().await;
             bus::bind_service(driver).await?;
 
-            log::info!("Successfully connected Erc20NextService to gsb.");
+            log::info!("Successfully connected Erc20Service to gsb.");
             Ok(())
         }
     }

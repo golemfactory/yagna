@@ -12,7 +12,7 @@ use std::task::Poll;
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::LocalBoxStream;
-use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
+use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use metrics::counter;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -21,6 +21,7 @@ use url::Url;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
+use ya_core_model::net::GenericNetError;
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::channels::{ForwardReceiver, ForwardSender, PrefixedStream};
 use ya_relay_client::crypto::CryptoProvider;
@@ -38,12 +39,11 @@ use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
 use crate::config::Config;
-use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::codec::encode_message;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 use crate::service::NET_TYPE;
-use crate::{bind_broadcast_with_caller, broadcast, NetType};
+use crate::{broadcast, NetType};
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
@@ -58,18 +58,9 @@ lazy_static::lazy_static! {
     pub(crate) static ref SHUTDOWN_TX: Arc<RwLock<Option<oneshot::Sender<()>>>> = Default::default();
 }
 
-thread_local! {
-    static CLIENT: RefCell<Option<Client>> = Default::default();
-}
-
 pub struct Net;
 
 impl Net {
-    #[inline]
-    pub async fn client() -> anyhow::Result<ClientProxy> {
-        ClientProxy::new()
-    }
-
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         ya_service_bus::serialization::CONFIG.set_compress(true);
 
@@ -99,16 +90,15 @@ impl Net {
     }
 
     pub async fn shutdown() -> anyhow::Result<()> {
-        if let Ok(client) = Self::client().await {
-            if client
-                .shutdown()
-                .timeout(Some(std::time::Duration::from_secs(30)))
-                .await
-                .is_err()
-            {
-                log::info!("NET shutdown due to timeout.");
-            }
+        if typed::service(ya_core_model::net::local::BUS_ID)
+            .send(ya_core_model::net::local::Shutdown {})
+            .timeout(std::time::Duration::from_secs(30).into())
+            .await
+            .is_err()
+        {
+            log::info!("NET shutdown due to timeout.");
         }
+
         if let Some(sender) = { SHUTDOWN_TX.write().await.take() } {
             let _ = sender.send(());
         }
@@ -130,10 +120,7 @@ pub async fn start_network(
     let crypto = IdentityCryptoProvider::new(default_id);
     let client = build_client(config, crypto.clone()).await?;
 
-    CLIENT.with(|inner| {
-        inner.borrow_mut().replace(client.clone());
-    });
-    ClientActor::init(client.clone());
+    super::cli::bind_service(client.clone());
 
     let receiver = client.clone().forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
@@ -152,19 +139,38 @@ pub async fn start_network(
         }
     };
 
+    {
+        let client = client.clone();
+        typed::bind(
+            ya_core_model::net::local::BUS_ID,
+            move |_: ya_core_model::net::local::Shutdown| {
+                let mut client = client.clone();
+                async move {
+                    client
+                        .shutdown()
+                        .map_err(|e| GenericNetError(e.to_string()))
+                        .await
+                }
+            },
+        );
+    }
+
     bind_local_bus(
+        client.clone(),
         net::BUS_ID_UDP,
         state.clone(),
         TransportType::Unreliable,
         net_handler(),
     );
     bind_local_bus(
+        client.clone(),
         net::BUS_ID,
         state.clone(),
         TransportType::Reliable,
         net_handler(),
     );
     bind_local_bus(
+        client.clone(),
         net::BUS_ID_TRANSFER,
         state.clone(),
         TransportType::Transfer,
@@ -184,29 +190,32 @@ pub async fn start_network(
     };
 
     bind_local_bus(
+        client.clone(),
         "/from",
         state.clone(),
         TransportType::Reliable,
         from_handler(),
     );
     bind_local_bus(
+        client.clone(),
         "/udp/from",
         state.clone(),
         TransportType::Unreliable,
         from_handler(),
     );
     bind_local_bus(
+        client.clone(),
         "/transfer/from",
         state.clone(),
         TransportType::Transfer,
         from_handler(),
     );
 
-    tokio::task::spawn_local(forward_handler(receiver, state.clone()));
+    tokio::task::spawn_local(forward_handler(client.clone(), receiver, state.clone()));
 
-    bind_broadcast_handlers(broadcast_size);
-    bind_identity_event_handler(crypto).await;
-    bind_neighbourhood_bcast().await?;
+    bind_broadcast_handlers(client.clone(), broadcast_size);
+    bind_identity_event_handler(client.clone(), crypto).await;
+    bind_neighbourhood_bcast(client.clone()).await?;
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
@@ -259,14 +268,20 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     Ok(socket)
 }
 
-fn bind_local_bus<F>(address: &'static str, state: State, transport: TransportType, resolver: F)
-where
+fn bind_local_bus<F>(
+    base_client: Client,
+    address: &'static str,
+    state: State,
+    transport: TransportType,
+    resolver: F,
+) where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
     let resolver = Rc::new(resolver);
     let resolver_ = resolver.clone();
     let state_ = state.clone();
 
+    let client = base_client.clone();
     let rpc = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
@@ -289,7 +304,15 @@ where
             if is_local_dest {
                 push_bus_to_local(caller_id, addr, msg, &state_);
             } else {
-                push_bus_to_net(caller_id, remote_id, address, msg, &state_, transport);
+                push_bus_to_net(
+                    client.clone(),
+                    caller_id,
+                    remote_id,
+                    address,
+                    msg,
+                    &state_,
+                    transport,
+                );
             }
 
             None
@@ -299,7 +322,15 @@ where
                 forward_bus_to_local(caller_id, addr, msg, &state_, tx);
                 rx
             } else {
-                forward_bus_to_net(caller_id, remote_id, address, msg, &state_, transport)
+                forward_bus_to_net(
+                    client.clone(),
+                    caller_id,
+                    remote_id,
+                    address,
+                    msg,
+                    &state_,
+                    transport,
+                )
             };
 
             Some(rx)
@@ -322,6 +353,7 @@ where
         .right_future()
     };
 
+    let client = base_client;
     let stream = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver)(caller, addr) {
             Ok(id) => id,
@@ -347,7 +379,15 @@ where
             if is_local_dest {
                 push_bus_to_local(caller_id, addr, msg, &state);
             } else {
-                push_bus_to_net(caller_id, remote_id, address, msg, &state, transport);
+                push_bus_to_net(
+                    client.clone(),
+                    caller_id,
+                    remote_id,
+                    address,
+                    msg,
+                    &state,
+                    transport,
+                );
             }
             futures::stream::empty().left_stream()
         } else {
@@ -356,7 +396,15 @@ where
                 forward_bus_to_local(caller_id, addr, msg, &state, tx);
                 rx
             } else {
-                forward_bus_to_net(caller_id, remote_id, address, msg, &state, transport)
+                forward_bus_to_net(
+                    client.clone(),
+                    caller_id,
+                    remote_id,
+                    address,
+                    msg,
+                    &state,
+                    transport,
+                )
             };
             rx.right_stream()
         };
@@ -390,24 +438,20 @@ where
 }
 
 /// Handle identity changes
-async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
+async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvider) {
     let endpoint = format!("{}/id", net::BUS_ID);
 
     typed::bind(endpoint.as_str(), move |event: identity::event::Event| {
         log::debug!("Identity event received: {:?}", event);
 
         crypto.reset_alias_cache();
-        let client = CLIENT.with(|c| c.borrow().clone());
+        let client = client.clone();
 
         async move {
-            if let Some(client) = client {
-                match event {
-                    identity::event::Event::AccountUnlocked { .. }
-                    | identity::event::Event::AccountLocked { .. } => {
-                        client.reconnect_server().await
-                    }
-                }
-            };
+            match event {
+                identity::event::Event::AccountUnlocked { .. }
+                | identity::event::Event::AccountLocked { .. } => client.reconnect_server().await,
+            }
             Ok(())
         }
     });
@@ -464,6 +508,7 @@ fn push_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State) {
 
 /// Forward requests from local bus to the network
 fn forward_bus_to_net(
+    client: Client,
     caller_id: NodeId,
     remote_id: NodeId,
     address: impl ToString,
@@ -512,7 +557,7 @@ fn forward_bus_to_net(
             msg.len()
         );
 
-        match state.forward_sink(remote_id, transport).await {
+        match state.forward_sink(client, remote_id, transport).await {
             Ok(mut sink) => {
                 let _ = sink.send(msg.into()).await.map_err(|_| {
                     let err = "Net: error sending message: session closed".to_string();
@@ -530,6 +575,7 @@ fn forward_bus_to_net(
 }
 
 fn push_bus_to_net(
+    client: Client,
     caller_id: NodeId,
     remote_id: NodeId,
     address: impl ToString,
@@ -565,7 +611,10 @@ fn push_bus_to_net(
             msg.len()
         );
 
-        match state.forward_sink(remote_id, transport).await {
+        match state
+            .forward_sink(client.clone(), remote_id, transport)
+            .await
+        {
             Ok(mut sink) => {
                 let _ = sink.send(msg.into()).await.map_err(|_| {
                     log::debug!("Net: error sending message: session closed");
@@ -580,6 +629,7 @@ fn push_bus_to_net(
 
 /// Forward broadcast messages from the local bus to the network
 fn broadcast_handler(
+    client: Client,
     caller: &str,
     _addr: &str,
     msg: &[u8],
@@ -601,9 +651,6 @@ fn broadcast_handler(
 
         let payload = encode_message(request).map_err(|e| Error::EncodingProblem(e.to_string()))?;
 
-        let client = CLIENT
-            .with(|c| c.borrow().clone())
-            .ok_or_else(|| Error::GsbFailure("Network not initialized".to_string()))?;
         client
             .broadcast(payload, broadcast_size)
             .await
@@ -619,7 +666,7 @@ fn broadcast_handler(
     })
 }
 
-fn bind_broadcast_handlers(broadcast_size: u32) {
+fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
     let _ = typed::bind(
         net::local::BUS_ID,
         move |subscribe: net::local::Subscribe| {
@@ -639,7 +686,7 @@ fn bind_broadcast_handlers(broadcast_size: u32) {
     let _ = local_bus::subscribe(
         &format!("{}/{}", net::local::BUS_ID, bcast_service_id),
         move |caller: &str, addr: &str, msg: &[u8]| {
-            broadcast_handler(caller, addr, msg, broadcast_size)
+            broadcast_handler(client.clone(), caller, addr, msg, broadcast_size)
         },
         (),
     );
@@ -647,6 +694,7 @@ fn bind_broadcast_handlers(broadcast_size: u32) {
 
 /// Handle incoming forward messages
 fn forward_handler(
+    client: Client,
     receiver: ForwardReceiver,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
@@ -655,6 +703,7 @@ fn forward_handler(
     UnboundedReceiverStream::new(receiver)
         .for_each(move |fwd| {
             let state = state.clone();
+            let client = client.clone();
             async move {
                 let key = (fwd.node_id, fwd.transport);
                 let mut tx = match {
@@ -670,6 +719,7 @@ fn forward_handler(
                             inner.routes.insert(key, tx.clone());
                         }
                         tokio::task::spawn_local(inbound_handler(
+                            client.clone(),
                             rx,
                             fwd.node_id,
                             fwd.transport,
@@ -714,6 +764,7 @@ fn forward_channel<'a>(
 
 /// Forward node GSB messages from the network to the local bus
 fn inbound_handler(
+    client: Client,
     rx: impl Stream<Item = Payload> + 'static,
     remote_id: NodeId,
     transport: TransportType,
@@ -726,13 +777,14 @@ fn inbound_handler(
             payload.len()
         );
 
+        let client = client.clone();
         async move {
             match codec::decode_message(payload.as_ref()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
                     if request.no_reply {
                         handle_push(request, remote_id, state)
                     } else {
-                        handle_request(request, remote_id, state, transport)
+                        handle_request(client, request, remote_id, state, transport)
                     }
                 }
                 Ok(Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. }))) => {
@@ -799,6 +851,7 @@ fn handle_push(
 
 /// Forward messages from the network to the local bus
 fn handle_request(
+    client: Client,
     request: ya_sb_proto::CallRequest,
     remote_id: NodeId,
     state: State,
@@ -877,7 +930,7 @@ fn handle_request(
 
     tokio::task::spawn_local(
         async move {
-            let mut sink = state.forward_sink(caller_id, transport).await?;
+            let mut sink = state.forward_sink(client, caller_id, transport).await?;
             let mut stream = Box::pin(stream);
 
             //stream.forward(sink).await?;
@@ -1018,18 +1071,24 @@ impl State {
 
     async fn forward_sink(
         &self,
+        client: Client,
         remote_id: NodeId,
         transport: TransportType,
     ) -> anyhow::Result<NetSinkKind> {
-        let client = CLIENT
-            .with(|c| c.borrow().clone())
-            .ok_or_else(|| anyhow::anyhow!("network not started"))?;
-
-        Ok::<_, anyhow::Error>(match transport {
+        let forward: NetSinkKind = match transport {
             TransportType::Unreliable => client.forward_unreliable(remote_id).await?,
             TransportType::Reliable => client.forward_reliable(remote_id).await?.framed(),
             TransportType::Transfer => client.forward_transfer(remote_id).await?.framed(),
-        })
+        };
+
+        // FIXME: yagna daemon doesn't handle connections; ya-relay-client does
+        // if client.sessions.has_p2p_connection(remote_id).await {
+        //     counter!("net.connections.p2p", 1)
+        // } else {
+        //     counter!("net.connections.relay", 1)
+        // };
+
+        Ok(forward)
     }
 
     fn get_public_service(&self, addr: &str) -> Option<String> {
@@ -1127,16 +1186,16 @@ fn gen_id() -> u64 {
     rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
 }
 
-async fn bind_neighbourhood_bcast() -> anyhow::Result<(), BindBroadcastError> {
+async fn bind_neighbourhood_bcast(client: Client) -> anyhow::Result<(), BindBroadcastError> {
     let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
-    bind_broadcast_with_caller(
+    crate::hybrid::bind_broadcast_with_caller(
         &bcast_address,
-        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| async move {
-            if let Ok(client) = Net::client().await {
-                client.invalidate_neighbourhood_cache().await.ok();
+        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+            let client = client.clone();
+            async move {
+                client.invalidate_neighbourhood_cache().await;
+                Ok(())
             }
-
-            Ok(())
         },
     )
     .await

@@ -12,9 +12,9 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{driver::Erc20NextDriver, network, DRIVER_NAME};
+use crate::{driver::Erc20Driver, network, DRIVER_NAME};
 
-pub async fn init(driver: &Erc20NextDriver, msg: Init) -> Result<(), GenericError> {
+pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
     let mode = msg.mode();
     let address = msg.address();

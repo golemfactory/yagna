@@ -1,5 +1,5 @@
 /*
-    Private mod to encapsulate all erc20next logic, revealed from the `wallet`.
+    Private mod to encapsulate all erc20 logic, revealed from the `wallet`.
 */
 
 pub mod ethereum;

@@ -1,12 +1,12 @@
 use chrono::{DateTime, Duration, Utc};
 /*
-    Erc20Driver to handle payments on the erc20next network.
+    Erc20Driver to handle payments on the erc20 network.
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
 use erc20_payment_lib::faucet_client::faucet_donate;
-use erc20_payment_lib::model::{TokenTransferDao, TxDao};
+use erc20_payment_lib::model::{TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
@@ -43,12 +43,12 @@ use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
 mod cli;
 
-pub struct Erc20NextDriver {
+pub struct Erc20Driver {
     active_accounts: AccountsArc,
     payment_runtime: PaymentRuntime,
 }
 
-impl Erc20NextDriver {
+impl Erc20Driver {
     pub fn new(payment_runtime: PaymentRuntime, recv: Receiver<DriverEvent>) -> Arc<Self> {
         let this = Arc::new(Self {
             active_accounts: Accounts::new_rc(),
@@ -113,6 +113,8 @@ impl Erc20NextDriver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
+                allocation_id: None,
+                use_internal: false,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -256,8 +258,8 @@ impl Erc20NextDriver {
 
     async fn _confirm_payments(
         &self,
-        token_transfer: &TokenTransferDao,
-        tx: &TxDao,
+        token_transfer: &TokenTransferDbObj,
+        tx: &TxDbObj,
     ) -> Result<(), GenericError> {
         log::debug!("Received event TransferFinished: {:#?}", token_transfer);
 
@@ -272,7 +274,7 @@ impl Erc20NextDriver {
 
         let networks = self.get_networks();
         let network = networks.get(network_name).ok_or(GenericError::new(format!(
-            "Network {network_name} not supported by Erc20NextDriver"
+            "Network {network_name} not supported by Erc20Driver"
         )))?;
         let platform = network
             .tokens
@@ -337,7 +339,7 @@ impl Erc20NextDriver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriver for Erc20NextDriver {
+impl PaymentDriver for Erc20Driver {
     async fn account_event(
         &self,
         _caller: String,
@@ -703,16 +705,25 @@ impl PaymentDriver for Erc20NextDriver {
             };
             let mut str_output = if eth_received > U256::zero() || glm_received > U256::zero() {
                 format!(
-                    "Successfully received {} ETH and {} tGLM",
+                    "Successfully received {} ETH and {} tGLM on {} network",
                     eth_received.to_eth_str(),
-                    glm_received.to_eth_str()
+                    glm_received.to_eth_str(),
+                    network
                 )
             } else if eth_received > U256::zero() {
-                format!("Successfully received {} ETH", eth_received.to_eth_str())
+                format!(
+                    "Successfully received {} ETH on {} network",
+                    eth_received.to_eth_str(),
+                    network
+                )
             } else if glm_received > U256::zero() {
-                format!("Successfully minted {} tGLM", glm_received.to_eth_str())
+                format!(
+                    "Successfully received {} tGLM on {} network",
+                    glm_received.to_eth_str(),
+                    network
+                )
             } else {
-                "No funds received".to_string()
+                format!("No funds received on {} network", network)
             };
             let final_eth_balance = match self
                 .payment_runtime
@@ -732,9 +743,14 @@ impl PaymentDriver for Erc20NextDriver {
                 }
             };
             str_output += &format!(
-                "\nYou have {} tETH and {} tGLM",
+                "\nYou have {} tETH and {} tGLM on {} network",
                 final_eth_balance.to_eth_str(),
-                (starting_glm_balance + glm_received).to_eth_str()
+                (starting_glm_balance + glm_received).to_eth_str(),
+                network
+            );
+            str_output += &format!(
+                "\nRun yagna payment status --network {} for more details",
+                network
             );
             str_output
         };
