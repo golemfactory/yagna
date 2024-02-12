@@ -24,6 +24,7 @@ use crate::protocol::negotiation::error::{
 };
 use crate::protocol::negotiation::messages::AgreementCommitted;
 use chrono::NaiveDateTime;
+use tokio::task::spawn_local;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -79,12 +80,22 @@ impl NegotiationApi {
             offer_id: proposal.negotiation.offer_id,
             demand_id: proposal.negotiation.demand_id,
         };
-        net::from(proposal.negotiation.requestor_id)
-            .to(proposal.negotiation.provider_id)
-            .service(&provider::proposal_addr(BUS_ID))
-            .send(msg)
-            .await
-            .map_err(|e| GsbProposalError(e.to_string(), proposal_id))??;
+        let provider_id = proposal.negotiation.provider_id;
+        spawn_local(
+            net::from(proposal.negotiation.requestor_id)
+                .to(proposal.negotiation.provider_id)
+                .service(&provider::proposal_addr(BUS_ID))
+                .send(msg)
+                .map_err(move |e| {
+                    log::warn!("failed to send initial proposal to [{provider_id}]: {e:?}");
+                    e
+                }),
+        );
+        /*
+           .await
+           .map_err(|e| GsbProposalError(e.to_string(), proposal_id))??;
+
+        */
         Ok(())
     }
 

@@ -41,7 +41,7 @@ Has IT resources available that can be shared with other actors in the network. 
 Builds applications to run for requestors on the network. Golem's potential goes much beyond a singular application. See [Awesome Golem](https://github.com/golemfactory/awesome-golem/blob/main/README.md#%EF%B8%8F-apps) for just a taste of the various types of applications that can be built and run on Golem!
 
 ## Documentation
-For a more in-depth look at how Golem works, head over to our [documentation.](https://handbook.golem.network/)
+For a more in-depth look at how Golem works, head over to our [documentation.](https://docs.golem.network/)
 
 ## Project Layout
 
@@ -58,7 +58,7 @@ The public API rust binding with data model is in the
 
 ## High Level APIs
 The public high-level API for Python is in 
-[yapapi](https://github.com/golemfactory/yapapi) repo and the JS/TS port is contained in the [yaJSapi](https://github.com/golemfactory/yajsapi) repo.
+[yapapi](https://github.com/golemfactory/yapapi) repo and the JS/TS port is contained in the [@golem-sdk/golem-js](https://github.com/golemfactory/golem-js) repo.
 
 ## Runtimes
 We call our runtime **ExeUnit**. As for now we support
@@ -73,11 +73,11 @@ Other ExeUnit types are to come (see below).
 Important milestones for Golem development were [Beta I](https://github.com/golemfactory/yagna/releases/tag/v0.6.1) and most recent [Beta II](https://github.com/golemfactory/yagna/releases/tag/v0.7.0). With those releases we have delivered:
 * MVP (minimum viable product), though not feature rich yet, it is usable for early adopters
 * Clean and easy experience for new and existing users.
-* Support for GLM payments (both L1 & L2 on Ethreum Mainnet)
+* Support for GLM payments (both L1 & L2 on Ethereum Mainnet)
 * **Production-ready** and **easy to maintain** code base.
-* **Modular architecture** with all the building blocks beeing replaceable.
+* **Modular architecture** with all the building blocks being replaceable.
 * Small binaries (under 30Mb).
-* [Documentation and SDK](https://handbook.golem.network/) for Golem app developers.
+* [Documentation and SDK](https://docs.golem.network/) for Golem app developers.
 
 ## List of implemented and planned functionality 
 

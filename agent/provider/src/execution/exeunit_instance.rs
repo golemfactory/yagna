@@ -32,7 +32,7 @@ impl ExeUnitInstance {
             working_dir.join("logs").display()
         );
 
-        let binary_path = ya_utils_path::normalize_path(&binary_path)
+        let binary_path = ya_utils_path::normalize_path(binary_path)
             .map_err(|e| anyhow!("Failed to spawn [{}]: {}", binary_path.display(), e))?;
 
         let mut command = Command::new(&binary_path);
@@ -75,7 +75,7 @@ impl ExeUnitInstance {
         log::debug!("Running args: {:?}", args);
         log::debug!("Running in: {:?}", working_dir);
 
-        let binary_path = ya_utils_path::normalize_path(&binary_path)
+        let binary_path = ya_utils_path::normalize_path(binary_path)
             .map_err(|e| anyhow!("Failed to run [{}]: {}", binary_path.display(), e))?;
         let mut command = tokio::process::Command::new(&binary_path);
 

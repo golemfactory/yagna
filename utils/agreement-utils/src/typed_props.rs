@@ -36,6 +36,7 @@ pub struct NodeInfo {
     pub subnet: Option<String>,
     pub geo_country_code: Option<String>,
     pub is_public: bool,
+    pub protocol_version: u32,
 }
 
 impl NodeInfo {
@@ -45,6 +46,7 @@ impl NodeInfo {
             geo_country_code: None,
             subnet: None,
             is_public: false,
+            protocol_version: 2,
         }
     }
 
@@ -240,7 +242,7 @@ mod test {
             offer: OfferTemplate::default(),
         };
 
-        let offer = serde_json::to_value(&offer.into_json()).unwrap();
+        let offer = serde_json::to_value(offer.into_json()).unwrap();
 
         let expected_offer = json!({
             "golem.com": null,

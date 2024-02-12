@@ -1,0 +1,21 @@
+{
+    "domain/exe_units/test_runtime_counters.py::test_custom_runtime_counter": 72.41198446500493,
+    "domain/payments/test_mid_payments.py::test_mid_agreement_payments": 91.58806692000508,
+    "domain/payments/test_payment_driver_list_cmd.py::test_payment_driver_list": 42.259517082005914,
+    "domain/payments/test_payment_release_allocations.py::test_payment_release_allocations": 47.1836760330043,
+    "domain/payments/test_payment_validate_allocations.py::test_payment_validate_allocations": 42.542111344009754,
+    "domain/payments/test_zero_amount_txs.py::test_zero_amount_invoice": 64.66282967099687,
+    "domain/ya-provider/test_provider_break_agreement.py::test_provider_debit_notes_accept_timeout": 105.64584831699904,
+    "domain/ya-provider/test_provider_break_agreement.py::test_provider_idle_agreement": 67.70010097500199,
+    "domain/ya-provider/test_provider_break_agreement.py::test_provider_idle_agreement_after_2_activities": 135.86370565499965,
+    "domain/ya-provider/test_provider_break_agreement.py::test_provider_timeout_unresponsive_requestor": 73.18756224899698,
+    "domain/ya-provider/test_provider_multi_activity.py::test_provider_multi_activity": 136.00878052100597,
+    "domain/ya-provider/test_provider_multi_activity.py::test_provider_recover_from_abandoned_task": 77.49658892300067,
+    "domain/ya-provider/test_provider_multi_activity.py::test_provider_renegotiate_proposal": 166.87385216399707,
+    "domain/ya-provider/test_provider_multi_activity.py::test_provider_single_simultaneous_activity": 66.33334043600189,
+    "e2e/vm/test_e2e_rule_partner_outbound.py::test_e2e_rule_partner_outbound": 105.95762435700453,
+    "e2e/vm/test_e2e_rule_partner_outbound_unrestricted.py::test_e2e_rule_partner_outbound_unrestricted": 105.69478582400916,
+    "e2e/vm/test_e2e_vm.py::test_e2e_vm": 228.68717026399827,
+    "e2e/vm/test_e2e_x509_signature_outbound.py::test_e2e_x509_signature_outbound": 118.35896305299684,
+    "e2e/wasi/test_e2e_wasi.py::test_e2e_wasi": 178.58433114900254
+}

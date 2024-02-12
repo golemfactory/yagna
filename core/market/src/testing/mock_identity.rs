@@ -26,8 +26,8 @@ impl IdentityApi for MockIdentity {
     async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
         Ok(self
             .list_ids()
-            .into_iter()
-            .map(|(_, id)| id.identity)
+            .into_values()
+            .map(|id| id.identity)
             .collect())
     }
 }

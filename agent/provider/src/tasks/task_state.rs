@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use anyhow::{anyhow, Result};
 use derive_more::Display;
 use std::collections::HashMap;

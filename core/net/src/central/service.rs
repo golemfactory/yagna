@@ -211,7 +211,7 @@ fn bind_net_handler<Transport, H>(
         log::trace!(
             "Sending {} message to hub. Called by: {}, addr: {}.",
             label,
-            net_service(&caller),
+            net_service(caller),
             addr
         );
     };
@@ -357,6 +357,7 @@ async fn resubscribe() {
         .await;
 }
 
+#[allow(clippy::await_holding_refcell_ref)]
 pub(crate) async fn rebind<B, U, Fb, Fu, Fr, E>(
     reconnect: Rc<RefCell<ReconnectContext>>,
     mut bind: B,

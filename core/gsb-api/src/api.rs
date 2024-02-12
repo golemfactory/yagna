@@ -87,7 +87,9 @@ async fn get_service_messages(
         log::debug!("No old WS connection");
     }
     let handler = WsMessagesHandler { service };
-    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
+    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream)
+        .protocols(&["gsb+flexbuffers"])
+        .start_with_addr()?;
     Ok(resp)
 }
 
@@ -142,7 +144,7 @@ mod tests {
     struct TestContext;
     impl Provider<GsbApiService, ()> for TestContext {
         fn component(&self) {
-            panic!("GSB API service does not use it.")
+            panic!("GSB API service does not use it.");
         }
     }
 
@@ -313,6 +315,7 @@ mod tests {
     #[actix_web::test]
     #[serial]
     async fn error_payload_test() {
+        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let mut api = dummy_api();
 
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -324,7 +327,6 @@ mod tests {
         let mut ws_frames = api.ws_at(&services_path).await.unwrap();
 
         let gsb_endpoint = ya_service_bus::typed::service(&service_addr);
-        const TEST_ERROR_MESSAGE: &str = "test error msg";
         let (gsb_res, ws_res) = tokio::join!(
             async {
                 let msg = GetChunk {
@@ -381,7 +383,7 @@ mod tests {
     #[test_case(r#"{ "id": "some", "error": {} }"#, Frame::Close(Some(CloseReason { 
         code: CloseCode::Policy,
         description: Some("Failed to read response. Err: Missing 'payload' and 'error' fields. Id: some.".to_string()) })); 
-        "Close when error empty (error needs at least top level error name field)"
+        "Close when error empty - error needs at least top level error name field"
     )]
     #[actix_web::test]
     #[serial]

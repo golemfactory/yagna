@@ -5,7 +5,6 @@ use std::ops::Not;
 
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
@@ -83,30 +82,6 @@ impl FromStr for Match {
             Match::Values(values)
         })
     }
-}
-
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    EnumIter,
-    EnumVariantNames,
-    EnumString,
-    Display,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-)]
-#[strum(serialize_all = "kebab-case")]
-#[serde(rename_all = "kebab-case")]
-pub enum CertPermissions {
-    /// Allows all permissions (including permissions created in future)
-    All,
-    /// Certificate is allowed to sign Payload Manifest requiring Outbound Network Traffic feature.
-    OutboundManifest,
-    /// Permissions signed by this certificate will not be verified.
-    UnverifiedPermissionsChain,
 }
 
 fn parse_property_match(input: &str) -> anyhow::Result<(String, Match)> {

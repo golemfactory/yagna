@@ -82,7 +82,7 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
 
             let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
                 let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
-                randomize_ids(our_ids, all_ids, max_bcast as usize)
+                randomize_ids(our_ids, all_ids, max_bcast)
             } else {
                 our_ids
             };

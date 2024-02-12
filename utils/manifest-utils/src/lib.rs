@@ -2,6 +2,7 @@ pub mod keystore;
 pub mod manifest;
 pub mod matching;
 pub mod policy;
+pub mod short_cert_ids;
 pub mod util;
 
 pub use manifest::*;

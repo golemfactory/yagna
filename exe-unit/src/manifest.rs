@@ -1,22 +1,21 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 use std::ops::Not;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
-use futures::future::LocalBoxFuture;
-use futures::{FutureExt, StreamExt, TryStreamExt};
+use futures::prelude::*;
 use serde_json::{Map, Value};
 use structopt::StructOpt;
 use url::Url;
 
+use crate::dns::{StableResolver, DNS_PORT};
 use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::ExeScriptCommand;
 use ya_manifest_utils::{read_manifest, AppManifest, ArgMatch, Command, Feature, Script};
 use ya_manifest_utils::{Policy, PolicyConfig};
-use ya_utils_networking::resolver::resolve_domain_name;
 use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
@@ -44,7 +43,7 @@ impl ManifestContext {
         let features = {
             let mut features = Self::build_default_features(agreement);
             if let Some(ref manifest) = manifest {
-                features.extend(manifest.features().into_iter());
+                features.extend(manifest.features());
             }
             features
         };
@@ -67,7 +66,7 @@ impl ManifestContext {
             .and_then(|m| m.find_payload(std::env::consts::ARCH, std::env::consts::OS))
     }
 
-    pub fn build_validators<'a>(&self) -> LocalBoxFuture<'a, anyhow::Result<ValidatorMap>> {
+    pub fn build_validators<'a>(&self) -> future::LocalBoxFuture<'a, anyhow::Result<ValidatorMap>> {
         if self.manifest.is_none()
             || self
                 .policy
@@ -151,7 +150,7 @@ pub trait ManifestValidator: Clone + Sized {
     fn build<'a>(
         manifest: &AppManifest,
         policy: &PolicyConfig,
-    ) -> LocalBoxFuture<'a, anyhow::Result<Option<Self>>>;
+    ) -> future::LocalBoxFuture<'a, anyhow::Result<Option<Self>>>;
 }
 
 pub trait ManifestValidatorExt: Sized {
@@ -196,7 +195,7 @@ impl ManifestValidator for ScriptValidator {
     fn build<'a>(
         manifest: &AppManifest,
         policy: &PolicyConfig,
-    ) -> LocalBoxFuture<'a, anyhow::Result<Option<Self>>> {
+    ) -> future::LocalBoxFuture<'a, anyhow::Result<Option<Self>>> {
         if policy
             .policy_set()
             .contains(&Policy::ManifestScriptCompliance)
@@ -223,7 +222,7 @@ impl ScriptValidator {
         iter: impl IntoIterator<Item = &'a ExeScriptCommand>,
     ) -> Result<(), ValidationError> {
         iter.into_iter()
-            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))
+            .try_for_each(|cmd| self.validate_command(&self.inner, cmd))
     }
 
     fn validate_command(
@@ -388,7 +387,13 @@ impl FromStr for ScriptValidator {
 
 #[derive(Clone)]
 pub struct UrlValidator {
-    inner: Arc<HashSet<(Protocol, IpAddr, u16)>>,
+    inner: Arc<AllowedAccess>,
+    resolver: Option<Arc<StableResolver>>,
+}
+
+enum AllowedAccess {
+    Urls(HashSet<(Protocol, IpAddr, u16)>),
+    Unrestricted,
 }
 
 impl ManifestValidator for UrlValidator {
@@ -397,7 +402,7 @@ impl ManifestValidator for UrlValidator {
     fn build<'a>(
         manifest: &AppManifest,
         policy: &PolicyConfig,
-    ) -> LocalBoxFuture<'a, anyhow::Result<Option<Self>>> {
+    ) -> future::LocalBoxFuture<'a, anyhow::Result<Option<Self>>> {
         if policy
             .policy_set()
             .contains(&Policy::ManifestInetUrlCompliance)
@@ -406,56 +411,64 @@ impl ManifestValidator for UrlValidator {
             return futures::future::ok(None).boxed_local();
         }
 
-        let urls = manifest
-            .comp_manifest
-            .as_ref()
-            .and_then(|c| c.net.as_ref())
-            .and_then(|net| net.inet.as_ref())
-            .and_then(|inet| inet.out.as_ref())
-            .and_then(|out| out.urls.clone());
-
-        let mut set = Self::DEFAULT_ADDRESSES
-            .iter()
-            .map(|(proto, ip, port)| (*proto, IpAddr::from(*ip), *port))
-            .collect::<HashSet<_, _>>();
+        let access = manifest.get_outbound_access();
 
         async move {
-            let ips = match urls {
-                Some(urls) => resolve_ips(urls.iter()).await?,
-                None => return Ok(None),
-            };
+            if let Some(access) = access {
+                match access {
+                    ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                        let resolver = crate::dns::resolver().await?;
 
-            set.extend(ips.into_iter());
+                        // by default we whitelist well known dns servers.
+                        let mut set = crate::dns::dns_servers()
+                            .map(|ip| (Protocol::Udp, ip, DNS_PORT))
+                            .collect::<HashSet<_, _>>();
 
-            Ok(Some(Self {
-                inner: Arc::new(set),
-            }))
+                        let ips = resolve_ips(&resolver, urls.iter()).await?;
+
+                        set.extend(ips);
+
+                        Ok(Some(Self {
+                            inner: Arc::new(AllowedAccess::Urls(set)),
+                            resolver: Some(Arc::new(resolver)),
+                        }))
+                    }
+                    ya_manifest_utils::OutboundAccess::Unrestricted => Ok(Some(Self {
+                        inner: Arc::new(AllowedAccess::Unrestricted),
+                        resolver: None,
+                    })),
+                }
+            } else {
+                Ok(None)
+            }
         }
         .boxed_local()
     }
 }
 
 impl UrlValidator {
-    const DEFAULT_ADDRESSES: [(Protocol, Ipv4Addr, u16); 6] = [
-        (Protocol::Udp, Ipv4Addr::new(1, 0, 0, 1), 53),
-        (Protocol::Udp, Ipv4Addr::new(1, 1, 1, 1), 53),
-        (Protocol::Udp, Ipv4Addr::new(8, 8, 4, 4), 53),
-        (Protocol::Udp, Ipv4Addr::new(8, 8, 8, 8), 53),
-        (Protocol::Udp, Ipv4Addr::new(9, 9, 9, 9), 53),
-        (Protocol::Udp, Ipv4Addr::new(149, 112, 112, 112), 53),
-    ];
-
     pub fn validate(&self, proto: Protocol, ip: IpAddr, port: u16) -> Result<(), ValidationError> {
-        self.inner
-            .contains(&(proto, ip, port))
-            .then_some(())
-            .ok_or_else(|| {
-                ValidationError::Url(format!("address not allowed: {}:{} ({})", ip, port, proto))
-            })
+        match self.inner.as_ref() {
+            AllowedAccess::Urls(urls) => urls
+                .contains(&(proto, ip, port))
+                .then_some(())
+                .ok_or_else(|| {
+                    ValidationError::Url(format!(
+                        "address not allowed: {}:{} ({})",
+                        ip, port, proto
+                    ))
+                }),
+            AllowedAccess::Unrestricted => Ok(()),
+        }
+    }
+
+    pub fn stable_dns(&self) -> Option<IpAddr> {
+        self.resolver.as_ref().map(|r| r.stable_dns())
     }
 }
 
 async fn resolve_ips<'a>(
+    resolver: &StableResolver,
     urls: impl Iterator<Item = &'a Url>,
 ) -> anyhow::Result<HashSet<(Protocol, IpAddr, u16)>> {
     futures::stream::iter(urls)
@@ -472,14 +485,7 @@ async fn resolve_ips<'a>(
                 .host_str()
                 .ok_or_else(|| anyhow::anyhow!("invalid url: {}", url))?;
 
-            let ips: HashSet<IpAddr> = match IpAddr::from_str(host) {
-                Ok(ip) => [ip].into(),
-                Err(_) => {
-                    log::debug!("Resolving IP addresses of '{}'", host);
-                    resolve_domain_name(host).await?
-                }
-            };
-
+            let ips: HashSet<IpAddr> = resolver.ips(host).await?;
             set.extend(ips.into_iter().map(|ip| (protocol, ip, port)));
             Ok(set)
         })

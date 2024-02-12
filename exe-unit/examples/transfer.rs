@@ -35,7 +35,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
 
     for _ in 0..chunk_count {
         let input: Vec<u8> = (0..chunk_size)
-            .map(|_| rng.gen_range(0, 256) as u8)
+            .map(|_| rng.gen_range(0..256) as u8)
             .collect();
 
         hasher.input(&input);
@@ -157,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
     let cache_dir = temp_dir.join("cache_dir");
     let sub_dir = temp_dir.join("sub_dir");
 
-    for dir in vec![work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
+    for dir in [work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
         std::fs::create_dir_all(dir)?;
     }
     let volumes = vec![
@@ -371,8 +371,8 @@ async fn main() -> anyhow::Result<()> {
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(&addr, "container:/input", "container:/extract", args).await?;
     log::warn!("Transfer complete");
-    verify_hash(&hash, &work_dir.join("vol-3"), "rnd-1");
-    verify_hash(&hash, &work_dir.join("vol-3"), "rnd-4");
+    verify_hash(&hash, work_dir.join("vol-3"), "rnd-1");
+    verify_hash(&hash, work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
     transfer(

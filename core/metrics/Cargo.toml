@@ -10,10 +10,10 @@ repository = "https://github.com/golemfactory/yagna"
 license = "LGPL-3.0"
 
 [dependencies]
-ya-core-model = { version = "^0.8", features = ["identity"] }
+ya-core-model = { version = "^0.9", features = ["identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = { workspace = true }
+ya-service-bus = {  workspace = true }
 
 awc = "3"
 actix-web = { version = "4", features = ["openssl"] }
@@ -24,7 +24,7 @@ lazy_static = "1.4"
 log = "0.4"
 metrics = "0.16"
 metrics-core = "0.5.2"
-metrics-runtime = "0.13.1"
+metrics-runtime = { version = "0.13.1", default-features = false, features = ["observers"] }
 percent-encoding = "2.1.0"
 structopt = "0.3"
 tokio = { version = "1", features = ["time", "sync"] }

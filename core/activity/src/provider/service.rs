@@ -84,11 +84,13 @@ async fn create_activity_gsb(
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
-    authorize_agreement_initiator(caller, &msg.agreement_id, Role::Provider).await?;
+    authorize_agreement_initiator(caller.clone(), &msg.agreement_id, Role::Provider).await?;
 
     let activity_id = generate_id();
     let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
+    let agreement_id = agreement.agreement_id.clone();
     let app_session_id = agreement.app_session_id.clone();
+
     if agreement.state != AgreementState::Approved {
         // to track inconsistencies between this and remote market service
         counter!("activity.provider.create.agreement.not-approved", 1);
@@ -145,6 +147,9 @@ async fn create_activity_gsb(
         e
     })?;
 
+    log::info!(
+        "Requestor [{caller}] created Activity [{activity_id}] for Agreement [{agreement_id}]"
+    );
     counter!("activity.provider.created", 1);
 
     Ok(if credentials.is_none() {
@@ -213,7 +218,7 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
+    authorize_activity_initiator(&db, caller.clone(), &msg.activity_id, Role::Provider).await?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
@@ -242,6 +247,12 @@ async fn destroy_activity_gsb(
         .map_err(Error::from)
         .await
         .map(|_| ())?;
+
+    log::info!(
+        "Requestor [{caller}] destroyed Activity [{}] for Agreement [{}]",
+        msg.activity_id,
+        agreement.agreement_id
+    );
 
     counter!("activity.provider.destroyed.by_requestor", 1);
     Ok(result)

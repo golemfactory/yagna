@@ -4,7 +4,7 @@ use crate::models::agreement::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
@@ -22,7 +22,6 @@ pub fn increase_amount_due(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -78,7 +77,6 @@ pub fn increase_amount_accepted(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -95,7 +93,6 @@ pub fn increase_amount_scheduled(
     amount: &BigDecimal,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -116,7 +113,6 @@ pub fn set_amount_accepted(
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
-    assert!(total_amount_accepted >= &agreement.total_amount_accepted); // TODO: Remove when payment service is production-ready.
     diesel::update(&agreement)
         .set(dsl::total_amount_accepted.eq(total_amount_accepted))
         .execute(conn)?;
@@ -129,7 +125,6 @@ pub fn increase_amount_paid(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let total_amount_paid: BigDecimalField = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .select(dsl::total_amount_paid)
@@ -153,11 +148,10 @@ pub fn increase_amount_paid(
 
     if let Some((invoice_id, role)) = invoice_query {
         invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
-        invoice_event::create::<()>(
+        invoice_event::create(
             invoice_id,
             *owner_id,
             InvoiceEventType::InvoiceSettledEvent,
-            None,
             conn,
         )?;
     }
@@ -177,7 +171,7 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 
 impl<'a> AgreementDao<'a> {
     pub async fn get(&self, agreement_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_get", move |conn| {
             let agreement = dsl::pay_agreement
                 .find((agreement_id, owner_id))
                 .first(conn)
@@ -193,7 +187,7 @@ impl<'a> AgreementDao<'a> {
         owner_id: NodeId,
         role: Role,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "agreement_dao_create_if", move |conn| {
             let existing: Option<String> = dsl::pay_agreement
                 .find((&agreement.agreement_id, &owner_id))
                 .select(dsl::id)
@@ -203,7 +197,7 @@ impl<'a> AgreementDao<'a> {
                 return Ok(());
             }
 
-            let agreement = WriteObj::new(agreement, role);
+            let agreement = WriteObj::try_new(agreement, role).map_err(DbError::Query)?;
             diesel::insert_into(dsl::pay_agreement)
                 .values(agreement)
                 .execute(conn)?;
@@ -218,16 +212,20 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
         payer_addr: String,
     ) -> DbResult<BigDecimal> {
-        readonly_transaction(self.pool, move |conn| {
-            let balance = dsl::pay_agreement
-                .select(dsl::total_amount_paid)
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::payee_addr.eq(payee_addr))
-                .filter(dsl::payer_addr.eq(payer_addr))
-                .get_results::<BigDecimalField>(conn)?
-                .sum();
-            Ok(balance)
-        })
+        readonly_transaction(
+            self.pool,
+            "agreement_dao_get_transaction_balance",
+            move |conn| {
+                let balance = dsl::pay_agreement
+                    .select(dsl::total_amount_paid)
+                    .filter(dsl::owner_id.eq(node_id))
+                    .filter(dsl::payee_addr.eq(payee_addr))
+                    .filter(dsl::payer_addr.eq(payer_addr))
+                    .get_results::<BigDecimalField>(conn)?
+                    .sum();
+                Ok(balance)
+            },
+        )
         .await
     }
 
@@ -238,7 +236,7 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_incoming_summary", move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
@@ -264,7 +262,7 @@ impl<'a> AgreementDao<'a> {
         payer_addr: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "agreement_dao_outgoing_summary", move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))

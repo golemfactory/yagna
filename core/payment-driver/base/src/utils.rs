@@ -46,11 +46,11 @@ pub fn db_amount_to_big_dec(amount: String) -> BigDecimal {
 pub fn u256_to_big_endian_hex(value: U256) -> String {
     let mut bytes = [0u8; 32];
     value.to_big_endian(&mut bytes);
-    hex::encode(&bytes)
+    hex::encode(bytes)
 }
 
 pub fn u256_from_big_endian_hex(bytes: String) -> U256 {
-    let bytes = hex::decode(&bytes).unwrap();
+    let bytes = hex::decode(bytes).unwrap();
     U256::from_big_endian(&bytes)
 }
 

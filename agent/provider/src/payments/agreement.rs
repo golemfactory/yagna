@@ -210,10 +210,7 @@ impl AgreementPayment {
     }
 
     pub fn list_activities(&self) -> Vec<String> {
-        self.activities
-            .iter()
-            .map(|(activity_id, _)| activity_id.clone())
-            .collect()
+        self.activities.keys().cloned().collect()
     }
 }
 

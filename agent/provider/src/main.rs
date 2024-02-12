@@ -1,9 +1,9 @@
 use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
+use ya_provider::signal::SignalMonitor;
 
 use ya_provider::provider_agent::{Initialize, ProviderAgent, Shutdown};
-use ya_provider::signal::SignalMonitor;
 use ya_provider::startup_config::{Commands, StartupConfig};
 use ya_utils_process::lock::ProcLock;
 
@@ -31,13 +31,15 @@ async fn main() -> anyhow::Result<()> {
     match cli_args.commands {
         Commands::Run(args) => {
             let app_name = clap::crate_name!();
-            let _lock = ProcLock::new(&app_name, &data_dir)?.lock(std::process::id())?;
+            let _lock = ProcLock::new(app_name, &data_dir)?.lock(std::process::id())?;
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 
-            let (_, signal) = SignalMonitor::default().await;
+            let signal = SignalMonitor::default().recv().await?;
             log::info!("{} received, Shutting down {}...", signal, app_name);
+
             agent.send(Shutdown).await??;
+
             Ok(())
         }
         Commands::Config(config_cmd) => config_cmd.run(config),

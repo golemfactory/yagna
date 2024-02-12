@@ -224,7 +224,7 @@ pub mod local {
     pub struct FindNodeResponse {
         pub identities: Vec<NodeId>,
         pub endpoints: Vec<SocketAddr>,
-        pub seen: u32,
+        pub seen: u64,
         pub slot: u32,
         pub encryption: Vec<String>,
     }
@@ -295,6 +295,16 @@ pub mod local {
     impl BroadcastMessage for NewNeighbour {
         const TOPIC: &'static str = "new-neighbour";
     }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Shutdown;
+
+    impl RpcMessage for Shutdown {
+        const ID: &'static str = "Shutdown";
+        type Item = ();
+        type Error = GenericNetError;
+    }
 }
 
 /// For documentation check local::GsbPing
@@ -331,7 +341,7 @@ impl TryRemoteEndpoint for NodeId {
         }
         let exported_part = &bus_addr[PUBLIC_PREFIX.len()..];
         let net_bus_addr = format!("{}/{:?}{}", BUS_ID, self, exported_part);
-        Ok(bus::service(&net_bus_addr))
+        Ok(bus::service(net_bus_addr))
     }
 }
 
@@ -489,7 +499,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(
-            net_service(&node_id),
+            net_service(node_id),
             "/net/0xbabe000000000000000000000000000000000000".to_string()
         );
     }

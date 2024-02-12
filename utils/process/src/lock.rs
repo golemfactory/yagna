@@ -43,7 +43,7 @@ impl ProcLock {
                     })
                     .unwrap_or(false)
             })
-            .any(|p| match File::open(&p) {
+            .any(|p| match File::open(p) {
                 Ok(f) => f.try_lock_exclusive().is_err(),
                 _ => true,
             }))
@@ -85,7 +85,7 @@ impl ProcLock {
         }
 
         let pid_path = self.pid_path(&self.name);
-        match std::fs::read_to_string(&pid_path) {
+        match std::fs::read_to_string(pid_path) {
             Ok(s) => match s.parse() {
                 Ok(p) => Ok(p),
                 Err(_) => bail!("{} is not running", self.name),

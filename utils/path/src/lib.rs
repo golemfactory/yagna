@@ -18,7 +18,7 @@ where
 {
     fn secure_join<PathRef: AsRef<Path>>(&self, path: PathRef) -> PathBuf {
         let append = remove_insecure_chars(path);
-        self.as_ref().join(&append)
+        self.as_ref().join(append)
     }
 }
 

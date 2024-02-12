@@ -106,17 +106,12 @@ fn to_socket_addr(s: &str) -> Result<SocketAddr, String> {
     s.parse().map_err(|e: AddrParseError| e.to_string())
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum StartMode {
+    #[default]
     Empty,
     Blocking,
-}
-
-impl Default for StartMode {
-    fn default() -> Self {
-        StartMode::Empty
-    }
 }
 
 impl DeployResult {

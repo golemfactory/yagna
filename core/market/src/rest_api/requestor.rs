@@ -6,6 +6,7 @@ use std::sync::Arc;
 use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_std_utils::LogErr;
 
 use crate::db::model::Owner;
@@ -99,12 +100,21 @@ async fn counter_proposal(
         proposal_id,
     } = path.into_inner();
     let proposal = body.into_inner();
-    market
+    let request = market
         .requestor_engine
         .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
-        .await
-        .log_err()
-        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
+        // TODO: make this come from --max-rest-timeout
+        .timeout(Some(60))
+        .await;
+    match request {
+        Ok(res) => res
+            .log_err()
+            .map(|proposal_id| HttpResponse::Ok().json(proposal_id)),
+        Err(_) => Err(crate::negotiation::error::ProposalError::Send(
+            proposal_id,
+            crate::protocol::negotiation::error::CounterProposalError::Timeout,
+        )),
+    }
 }
 
 #[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]

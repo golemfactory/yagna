@@ -8,10 +8,10 @@ use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
-use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{fs, iter};
 use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
@@ -30,6 +30,10 @@ use super::task::Task;
 use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
 use crate::tasks::{AgreementBroken, AgreementClosed};
+
+const EXE_UNIT_DIR: &str = "exe-unit";
+const WORK_DIR: &str = "work";
+const CACHE_DIR: &str = "cache";
 
 // =========================================== //
 // Public exposed messages
@@ -102,7 +106,7 @@ pub struct TerminateActivity {
     pub message: String,
 }
 
-/// Called when process exited. There are 3 reasons for process to exit:
+/// Called when process exited. There are 2 reasons for process to exit:
 /// - We got DestroyActivity event and killed process.
 /// - ExeUnit crashed.
 #[derive(Message)]
@@ -124,6 +128,13 @@ pub struct TaskRunnerConfig {
     pub process_termination_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10s")]
     pub exeunit_state_retry_interval: Duration,
+    /// Removes directory content after each `Activity` is destroyed.
+    #[structopt(long, env)]
+    pub auto_cleanup_activity: bool,
+    /// Removes directory content after `Agreement` is terminated.
+    /// Use this option to save disk space. Shouldn't be used when debugging.
+    #[structopt(long, env)]
+    pub auto_cleanup_agreement: bool,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }
@@ -161,8 +172,8 @@ impl TaskRunner {
         data_dir: P,
     ) -> Result<TaskRunner> {
         let data_dir = data_dir.as_ref();
-        let tasks_dir = data_dir.join("exe-unit").join("work");
-        let cache_dir = data_dir.join("exe-unit").join("cache");
+        let tasks_dir = exe_unit_work_dir(data_dir);
+        let cache_dir = exe_unit_cache_dir(data_dir);
 
         log::debug!("TaskRunner config: {:?}", config);
 
@@ -261,7 +272,6 @@ impl TaskRunner {
     // =========================================== //
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
         let agreement = match self.active_agreements.get(&msg.agreement_id) {
             None => bail!("Can't create activity for not my agreement [{:?}].", msg),
@@ -367,6 +377,19 @@ impl TaskRunner {
             msg.activity_id
         );
 
+        if self.config.auto_cleanup_activity {
+            let workdir = self
+                .agreement_dir(&msg.agreement_id)
+                .secure_join(&msg.activity_id);
+            log::info!(
+                "Cleaning directory {} for agreement [{}], activity [{}].",
+                workdir.display(),
+                msg.agreement_id,
+                msg.activity_id
+            );
+            fs::remove_dir_all(workdir).ok();
+        }
+
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
             activity_id: msg.activity_id,
@@ -399,10 +422,15 @@ impl TaskRunner {
     fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
         Ok(match self.registry.find_exeunit(exeunit_name)?.config {
             Some(ref config) => (config.counters.iter())
-                .filter_map(|(prop, cnt)| cnt.price.then(|| prop.clone()))
+                .filter_map(|(prop, cnt)| cnt.price.then_some(prop))
+                .cloned()
                 .collect(),
             _ => Default::default(),
         })
+    }
+
+    fn agreement_dir(&self, agreement_id: &str) -> PathBuf {
+        self.tasks_dir.secure_join(agreement_id)
     }
 
     #[logfn(Debug, fmt = "Task created: {}")]
@@ -413,10 +441,7 @@ impl TaskRunner {
         agreement_id: &str,
         requestor_pub_key: Option<&str>,
     ) -> Result<Task> {
-        let working_dir = self
-            .tasks_dir
-            .secure_join(agreement_id)
-            .secure_join(activity_id);
+        let working_dir = self.agreement_dir(agreement_id).secure_join(activity_id);
 
         create_dir_all(&working_dir).map_err(|error| {
             anyhow!(
@@ -488,7 +513,7 @@ impl TaskRunner {
             .get(agreement_id)
             .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
-        let agreement_file = File::create(&agreement_path).map_err(|error| {
+        let agreement_file = File::create(agreement_path).map_err(|error| {
             anyhow!(
                 "Can't create agreement file [{}]. Error: {}",
                 &agreement_path.display(),
@@ -513,6 +538,16 @@ impl TaskRunner {
             .map(|task| task.activity_id.to_string())
             .collect()
     }
+}
+
+pub fn exe_unit_work_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(WORK_DIR)
+}
+
+pub fn exe_unit_cache_dir<P: AsRef<Path>>(data_dir: P) -> PathBuf {
+    let data_dir = data_dir.as_ref();
+    data_dir.join(EXE_UNIT_DIR).join(CACHE_DIR)
 }
 
 fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
@@ -782,6 +817,16 @@ impl Handler<AgreementClosed> for TaskRunner {
 
         self.active_agreements.remove(&agreement_id);
 
+        if self.config.auto_cleanup_agreement {
+            let workdir = self.agreement_dir(&agreement_id);
+            log::info!(
+                "Cleaning directory {} for agreement [{}].",
+                workdir.display(),
+                agreement_id
+            );
+            fs::remove_dir_all(workdir).ok();
+        }
+
         // All activities should be destroyed by now, so it is only sanity call.
         let remove_future = async move {
             remove_remaining_tasks(activities, agreement_id, myself).await;
@@ -793,21 +838,19 @@ impl Handler<AgreementClosed> for TaskRunner {
 }
 
 impl Handler<AgreementBroken> for TaskRunner {
-    type Result = ActorResponse<Self, Result<(), Error>>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id;
-        let myself = ctx.address();
-        let activities = self.list_activities(&agreement_id);
-
-        self.active_agreements.remove(&agreement_id);
-
-        let remove_future = async move {
-            remove_remaining_tasks(activities, agreement_id, myself).await;
-            Ok(())
-        };
-
-        ActorResponse::r#async(remove_future.into_actor(self))
+        // We don't distinguish between `AgreementClosed` and `AgreementBroken`.
+        let addr = ctx.address();
+        async move {
+            addr.send(AgreementClosed {
+                agreement_id: msg.agreement_id,
+                send_terminate: false,
+            })
+            .await?
+        }
+        .boxed_local()
     }
 }
 

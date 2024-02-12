@@ -100,9 +100,7 @@ async def test_custom_runtime_counter(
         await provider.wait_for_exeunit_started()
 
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
-        await requestor.collect_results(
-            activity_id, batch_id, len(exe_script), timeout=30
-        )
+        await requestor.collect_results(activity_id, batch_id, len(exe_script))
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
@@ -115,7 +113,7 @@ async def test_custom_runtime_counter(
         )
 
         debit_notes = await requestor.api.payment.get_debit_notes()
-        last_debit_note = debit_notes[0]
+        last_debit_note = debit_notes[len(debit_notes) - 1]
         logger.info("last debit note: %r", last_debit_note)
 
         assert len(last_debit_note.usage_counter_vector) == len(usage_vector)

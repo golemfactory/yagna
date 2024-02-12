@@ -21,20 +21,15 @@ use ya_utils_path::normalize_path;
 use zip::tokio::read::read_zipfile_from_stream;
 use zip::write::FileOptions;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum ArchiveFormat {
     Tar,
     TarBz2,
+    #[default]
     TarGz,
     TarXz,
     Zip,
     ZipStored,
-}
-
-impl Default for ArchiveFormat {
-    fn default() -> Self {
-        ArchiveFormat::TarGz
-    }
 }
 
 impl FromStr for ArchiveFormat {
@@ -203,7 +198,7 @@ where
 
         for prov in path_iter {
             let path = prov.as_ref();
-            let metadata = std::fs::metadata(&path)?;
+            let metadata = std::fs::metadata(path)?;
             let name = path.strip_prefix(&path_root).map_err(io_error)?;
 
             let _ = evt_sender
@@ -280,7 +275,7 @@ where
         let mut zip = zip::ZipWriter::new(file);
         for prov in path_items {
             let path = prov.as_ref();
-            let metadata = std::fs::metadata(&path)?;
+            let metadata = std::fs::metadata(path)?;
             let name = path.strip_prefix(&path_root).map_err(io_error)?;
 
             let _ = evt_sender
@@ -295,7 +290,7 @@ where
                 zip.add_directory_from_path(name, options)
                     .map_err(io_error)?;
             } else {
-                let mut f = std::fs::File::open(&path)?;
+                let mut f = std::fs::File::open(path)?;
                 zip.start_file_from_path(name, options).map_err(io_error)?;
                 std::io::copy(&mut f, &mut zip)?;
             }

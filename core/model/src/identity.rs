@@ -24,6 +24,18 @@ pub enum Error {
     InvalidPassword,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Error)]
+pub enum DropError {
+    #[error("node {0:?} not found")]
+    NodeNotFound(Box<NodeId>),
+    #[error("can not delete the default identity")]
+    DefaultIdentity,
+    #[error("identity is already deleted")]
+    AlreadyDeleted,
+    #[error("{0}")]
+    InternalErr(String),
+}
+
 impl Error {
     pub fn new_init_err(e: impl std::fmt::Display) -> Self {
         Error::Init(e.to_string())
@@ -50,6 +62,8 @@ pub struct IdentityInfo {
     pub node_id: NodeId,
     pub is_locked: bool,
     pub is_default: bool,
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 impl RpcMessage for List {
@@ -185,7 +199,7 @@ impl DropId {
 impl RpcMessage for DropId {
     const ID: &'static str = "DropId";
     type Item = IdentityInfo;
-    type Error = Error;
+    type Error = DropError;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

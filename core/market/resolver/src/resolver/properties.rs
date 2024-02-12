@@ -1,7 +1,7 @@
 use std::str;
 
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use regex::Regex;
 use semver::Version;
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ impl<'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
     pub fn equals(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, *value), // enhanced string comparison
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, value), // enhanced string comparison
             PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
@@ -181,7 +181,7 @@ impl<'a> PropertyValue<'a> {
     fn parse_date_from_rfc3339(dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
         match DateTime::parse_from_rfc3339(dt_str) {
             Ok(parsed_value) => {
-                let dt = DateTime::<Utc>::from_utc(parsed_value.naive_utc(), Utc);
+                let dt = Utc.from_utc_datetime(&parsed_value.naive_utc());
                 Ok(dt)
             }
             Err(err) => Err(err),

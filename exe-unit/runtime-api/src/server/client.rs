@@ -220,7 +220,7 @@ pub async fn spawn(
                 }
             }
         };
-        let _ = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             let code = tokio::select! {
                 r = child.wait() => map_return_code(r, pid),
                 _ = pump => {

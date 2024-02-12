@@ -3,6 +3,7 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Instant;
 
 // Workspace uses
@@ -10,8 +11,8 @@ use metrics::{counter, timing};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
-    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, SendError, SendInvoice,
-    BUS_ID as PUBLIC_SERVICE,
+    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, RejectInvoiceV2, SendError,
+    SendInvoice, BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
@@ -22,8 +23,10 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
+use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_id;
 use crate::utils::*;
 
@@ -148,9 +151,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     .await
     {
         Ok(Some(agreement)) => agreement,
-        Ok(None) => {
-            return response::bad_request(&format!("Agreement not found: {}", agreement_id))
-        }
+        Ok(None) => return response::bad_request(&format!("Agreement not found: {agreement_id}")),
         Err(e) => return response::server_error(&e),
     };
 
@@ -158,12 +159,11 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
         match get_agreement_id(activity_id.clone(), ya_client_model::market::Role::Provider).await {
             Ok(Some(id)) if id != agreement_id => {
                 return response::bad_request(&format!(
-                    "Activity {} belongs to agreement {} not {}",
-                    activity_id, id, agreement_id
+                    "Activity {activity_id} belongs to agreement {id} not {agreement_id}"
                 ));
             }
             Ok(None) => {
-                return response::bad_request(&format!("Activity not found: {}", activity_id))
+                return response::bad_request(&format!("Activity not found: {activity_id}"))
             }
             Err(e) => return response::server_error(&e),
             _ => (),
@@ -188,8 +188,9 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
 
         let dao: InvoiceDao = db.as_dao();
         let invoice_id = dao.create_new(invoice, node_id).await?;
-        let invoice = dao.get(invoice_id, node_id).await?;
+        let invoice = dao.get(invoice_id.clone(), node_id).await?;
 
+        log::info!("Invoice [{invoice_id}] for Agreement [{agreement_id}] issued.");
         counter!("payment.invoices.provider.issued", 1);
         Ok(invoice)
     }
@@ -214,7 +215,7 @@ async fn send_invoice(
     let node_id = id.identity;
     let dao: InvoiceDao = db.as_dao();
 
-    log::debug!("Requested send invoice [{}]", invoice_id);
+    log::debug!("Requested send invoice [{invoice_id}]");
     counter!("payment.invoices.provider.sent.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -227,9 +228,12 @@ async fn send_invoice(
         return response::ok(Null); // Invoice has been already sent
     }
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let agreement_id = invoice.agreement_id.clone();
+    let recipient_id = invoice.recipient_id;
 
     let result = async move {
         match async move {
+            let invoice_id = invoice.invoice_id.clone();
             log::debug!(
                 "Sending invoice [{}] to [{}].",
                 invoice_id,
@@ -248,7 +252,9 @@ async fn send_invoice(
         .await
         {
             Ok(Ok(_)) => {
-                log::info!("Invoice [{}] sent.", path.invoice_id);
+                log::info!(
+                    "Invoice [{invoice_id}] for Agreement [{agreement_id}] sent to [{recipient_id}]."
+                );
                 counter!("payment.invoices.provider.sent", 1);
                 response::ok(Null)
             }
@@ -297,11 +303,13 @@ async fn cancel_invoice(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let agreement_id = invoice.agreement_id.clone();
+
     let result = async move {
         match async move {
             log::debug!(
                 "Canceling invoice [{}] sent to [{}].",
-                invoice_id,
+                invoice.invoice_id,
                 invoice.recipient_id
             );
 
@@ -309,11 +317,11 @@ async fn cancel_invoice(
                 .to(invoice.recipient_id)
                 .service(PUBLIC_SERVICE)
                 .call(CancelInvoice {
-                    invoice_id: invoice_id.clone(),
+                    invoice_id: invoice.invoice_id.clone(),
                     recipient_id: invoice.recipient_id,
                 })
                 .await??;
-            dao.cancel(invoice_id, node_id).await?;
+            dao.cancel(invoice.invoice_id, node_id).await?;
             Ok(())
         }
         .timeout(Some(timeout))
@@ -321,7 +329,7 @@ async fn cancel_invoice(
         {
             Ok(Ok(_)) => {
                 counter!("payment.invoices.provider.cancelled", 1);
-                log::info!("Invoice [{}] cancelled.", path.invoice_id);
+                log::info!("Invoice [{invoice_id}] for Agreement [{agreement_id}] cancelled.");
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::Cancel(CancelError::Conflict)))) => {
@@ -345,6 +353,7 @@ async fn cancel_invoice(
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
+    agreement_lock: Data<Arc<AgreementLock>>,
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Acceptance>,
@@ -361,6 +370,7 @@ async fn accept_invoice(
     counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -368,6 +378,9 @@ async fn accept_invoice(
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
     };
+
+    // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
+    let _agreement_lock = agreement_lock.lock(invoice.agreement_id.clone());
 
     if invoice.amount != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
@@ -400,6 +413,16 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
+    // OK when invoice.amount is greater than or equal to agreement.amount_accepted
+    if invoice.amount < agreement.total_amount_accepted.0 {
+        let msg = format!(
+            "Invoice is smaller than agreement.total_amount_accepted. \
+            invoice_id={}, invoice_amount={}, total_amount_accepted={}",
+            &invoice_id, &invoice.amount, &agreement.total_amount_accepted
+        );
+        log::warn!("{}", msg);
+        return response::bad_request(&msg);
+    }
     let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
 
     log::trace!(
@@ -440,19 +463,35 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
-            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
-            ya_net::from(node_id)
-                .to(issuer_id)
-                .service(PUBLIC_SERVICE)
-                .call(accept_msg)
-                .await??;
+            // Schedule payment (will be none for amount=0, which is OK)
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
+
+            // Mark the invoice as accepted in DB
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
+
+            log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("AcceptInvoice delivered");
+                dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("AcceptInvoice not delivered");
+                // TODO: should this be issuer_id instead? It will notify itself....
+                sync_dao.upsert(node_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
             Ok(())
         }
         .timeout(Some(timeout))
@@ -460,7 +499,11 @@ async fn accept_invoice(
         {
             Ok(Ok(_)) => {
                 counter!("payment.invoices.requestor.accepted", 1);
-                log::info!("Invoice [{}] accepted.", path.invoice_id);
+                log::info!(
+                    "Invoice [{}] for Agreement [{}] accepted.",
+                    path.invoice_id,
+                    agreement_id
+                );
                 response::ok(Null)
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
@@ -485,6 +528,90 @@ async fn reject_invoice(
     path: Path<params::InvoiceId>,
     query: Query<params::Timeout>,
     body: Json<Rejection>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let start = Instant::now();
+
+    let invoice_id = path.invoice_id.clone();
+    let node_id = id.identity;
+    let rejection = body.into_inner();
+
+    log::debug!("Requested reject invoice [{}]", invoice_id);
+    counter!("payment.invoices.requestor.rejected.call", 1);
+
+    let dao: InvoiceDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
+
+    log::trace!("Querying DB for Invoice [{}]", invoice_id);
+    let invoice = match dao.get(invoice_id.clone(), node_id).await {
+        Ok(Some(invoice)) => invoice,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    match invoice.status {
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => return response::ok(Null),
+        DocumentStatus::Failed => (),
+        DocumentStatus::Accepted => return response::bad_request(&"Invoice accepted"),
+        DocumentStatus::Settled => return response::bad_request(&"Invoice settled"),
+        DocumentStatus::Cancelled => return response::bad_request(&"Invoice cancelled"),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
+    }
+
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let result = async move {
+        let issuer_id = invoice.issuer_id;
+        let reject_msg = RejectInvoiceV2::new(invoice_id.clone(), rejection.clone(), issuer_id);
+        match async move {
+            log::trace!("Rejecting Invoice [{}] in DB", invoice_id);
+            dao.reject(invoice_id.clone(), node_id, rejection).await?;
+            log::trace!("Invoice rejected successfully for [{}]", invoice_id);
+
+            log::debug!(
+                "Sending RejectInvoiceV2 [{}] to [{}]",
+                invoice_id,
+                issuer_id
+            );
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(reject_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                log::debug!("RejectInvoiceV2 delivered");
+                dao.mark_reject_sent(invoice_id.clone(), node_id).await?;
+                response?;
+            } else {
+                log::debug!("RejectInvoiceV2 not delivered");
+                sync_dao.upsert(issuer_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+
+            Ok(())
+        }
+        .timeout(Some(timeout))
+        .await
+        {
+            Ok(Ok(_)) => {
+                counter!("payment.invoices.requestor.rejected", 1);
+                log::info!("Invoice [{}] rejected.", path.invoice_id);
+                response::ok(Null)
+            }
+            Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
+                e,
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout rejecting Invoice on remote Node."),
+        }
+    }
+    .await;
+
+    timing!(
+        "payment.invoices.requestor.rejected.time",
+        start,
+        Instant::now()
+    );
+    result
 }

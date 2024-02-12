@@ -615,7 +615,6 @@ mod test {
 
     async fn process_rx_buffer_stream(mode: TxMode, size: usize) {
         let src = (0..=255u8)
-            .into_iter()
             .flat_map(|e| {
                 let vec = Vec::from_iter(std::iter::repeat(e).take(size));
                 mode.split(vec)
@@ -646,8 +645,6 @@ mod test {
 
     #[tokio::test]
     async fn rx_buffer_stream() {
-        const PREFIX_SIZE: usize = 4;
-
         let modes = vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)];
         let sizes = [1, 2, 3, 5, 7, 12, 64];
 

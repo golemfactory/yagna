@@ -53,10 +53,7 @@ impl Net {
                 crate::central::cli::bind_service();
                 crate::central::Net::gsb(ctx, config).await
             }
-            NetType::Hybrid => {
-                crate::hybrid::cli::bind_service();
-                crate::hybrid::Net::gsb(ctx, config).await
-            }
+            NetType::Hybrid => crate::hybrid::Net::gsb(ctx, config).await,
         }
     }
 

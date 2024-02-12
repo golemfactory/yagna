@@ -1,5 +1,5 @@
 use crate::dao::{activity, debit_note_event};
-use crate::error::DbResult;
+use crate::error::{DbError, DbResult};
 use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
@@ -118,7 +118,7 @@ impl<'c> DebitNoteDao<'c> {
         debit_note: NewDebitNote,
         issuer_id: NodeId,
     ) -> DbResult<String> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "debit_note_dao_create_new", move |conn| {
             let previous_debit_note_id = dsl::pay_debit_note
                 .select(dsl::id)
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
@@ -138,11 +138,10 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
-            debit_note_event::create::<()>(
+            debit_note_event::create(
                 debit_note_id.clone(),
                 owner_id,
                 DebitNoteEventType::DebitNoteReceivedEvent,
-                None,
                 conn,
             )?;
             Ok(debit_note_id)
@@ -151,7 +150,7 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     pub async fn insert_received(&self, debit_note: DebitNote) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "debit_note_dao_insert_received", move |conn| {
             let previous_debit_note_id = dsl::pay_debit_note
                 .select(dsl::id)
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
@@ -170,11 +169,10 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
-            debit_note_event::create::<()>(
+            debit_note_event::create(
                 debit_note_id,
                 owner_id,
                 DebitNoteEventType::DebitNoteReceivedEvent,
-                None,
                 conn,
             )?;
             Ok(())
@@ -187,7 +185,7 @@ impl<'c> DebitNoteDao<'c> {
         debit_note_id: String,
         owner_id: NodeId,
     ) -> DbResult<Option<DebitNote>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "debit_note_dao_get", move |conn| {
             let debit_note: Option<ReadObj> = query!()
                 .filter(dsl::id.eq(debit_note_id))
                 .filter(dsl::owner_id.eq(owner_id))
@@ -201,9 +199,30 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn get_all(&self) -> DbResult<Vec<DebitNote>> {
-        readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!().order_by(dsl::timestamp.desc()).load(conn)?;
+    pub async fn list(
+        &self,
+        role: Option<Role>,
+        status: Option<DocumentStatus>,
+        payable: Option<bool>,
+    ) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, "debit_note_dao_list", move |conn| {
+            let mut query = query!().into_boxed();
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role.to_string()));
+            }
+            if let Some(status) = status {
+                query = query.filter(dsl::status.eq(status.to_string()));
+            }
+            if let Some(payable) = payable {
+                // Payable debit notes have not-null payment_due_date.
+                if payable {
+                    query = query.filter(dsl::payment_due_date.is_not_null());
+                } else {
+                    query = query.filter(dsl::payment_due_date.is_null());
+                }
+            }
+
+            let debit_notes: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
@@ -215,12 +234,12 @@ impl<'c> DebitNoteDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_items: Option<u32>,
     ) -> DbResult<Vec<DebitNote>> {
-        readonly_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, "debit_note_dao_get_for_node_id", move |conn| {
             let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
             if let Some(date) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(date))
             }
-            query = query.order_by(dsl::timestamp.desc());
+            query = query.order_by(dsl::timestamp.asc());
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
@@ -231,7 +250,7 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     pub async fn mark_received(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "debit_note_dao_mark_received", move |conn| {
             diesel::update(dsl::pay_debit_note.find((debit_note_id, owner_id)))
                 .set(dsl::status.eq(DocumentStatus::Received.to_string()))
                 .execute(conn)?;
@@ -241,7 +260,7 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     pub async fn accept(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "debit_note_dao_accept", move |conn| {
             let (activity_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_debit_note
                 .find((&debit_note_id, &owner_id))
                 .select((dsl::activity_id, dsl::total_amount_due, dsl::role))
@@ -256,13 +275,112 @@ impl<'c> DebitNoteDao<'c> {
                 DocumentStatus::Accepted
             };
 
+            // Accept called on provider is invoked by the requestor, meaning the status must by synchronized.
+            // For requestor, a separate `mark_accept_sent` call is required to mark synchronization when the information
+            // is delivered to the Provider.
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_debit_note
+                        .filter(dsl::id.eq(debit_note_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_accept.eq(true))
+                .execute(conn)?;
+            }
+
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
-                debit_note_event::create::<()>(debit_note_id.clone(), owner_id, event, None, conn)?;
+                debit_note_event::create(debit_note_id.clone(), owner_id, event, conn)?;
             }
 
             Ok(())
+        })
+        .await
+    }
+
+    /// Mark the debit-note as synchronized with the other side.
+    ///
+    /// Automatically marks all previous debit notes as accept-sent if that's not already the case.
+    ///
+    /// Err(_) is only produced by DB issues.
+    pub async fn mark_accept_sent(
+        &self,
+        mut debit_note_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "debit_note_mark_accept_sent", move |conn| loop {
+            // Mark debit note as accept-sent
+            let n = diesel::update(
+                dsl::pay_debit_note
+                    .filter(dsl::id.eq(debit_note_id.clone()))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::send_accept.eq(true)),
+            )
+            .set(dsl::send_accept.eq(false))
+            .execute(conn)
+            .map_err(DbError::from)?;
+
+            // Debit note was already marked as accept-sent
+            if n == 0 {
+                break Ok(());
+            }
+
+            // Get id of previous debit note
+            let previous = dsl::pay_debit_note
+                .select(dsl::previous_debit_note_id)
+                .filter(dsl::id.eq(debit_note_id))
+                .filter(dsl::owner_id.eq(owner_id))
+                .load::<Option<String>>(conn)?;
+
+            // Continue with the previous debit-note
+            if let Some(Some(id)) = previous.first() {
+                debit_note_id = id.into();
+            } else {
+                break Ok(());
+            }
+        })
+        .await
+    }
+
+    /// Lists debit notes with send_accept
+    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, "debit_note_unsent_accepted", move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_accept.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .order_by(dsl::timestamp.desc())
+                .load(conn)?;
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
+        })
+        .await
+    }
+
+    /// All debit notes with status Issued or Accepted and provider role
+    pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, "debit_note_dangling", move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::role.eq(Role::Provider.to_string()))
+                .filter(
+                    dsl::status
+                        .eq(&DocumentStatus::Issued.to_string())
+                        .or(dsl::status.eq(&DocumentStatus::Accepted.to_string())),
+                )
+                .load(conn)?;
+
+            let mut debit_notes = Vec::new();
+            for obj in read {
+                debit_notes.push(obj.try_into()?);
+            }
+
+            Ok(debit_notes)
         })
         .await
     }
