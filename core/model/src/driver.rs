@@ -517,6 +517,23 @@ impl RpcMessage for SignPayment {
     type Error = GenericError;
 }
 
+// ************************ SIGN PAYMENT ************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignPaymentCanonicalized(pub Payment);
+
+impl From<Payment> for crate::driver::SignPaymentCanonicalized {
+    fn from(payment: Payment) -> Self {
+        Self(payment)
+    }
+}
+
+impl RpcMessage for crate::driver::SignPaymentCanonicalized {
+    const ID: &'static str = "SignPaymentCanonicalized";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
 // ********************** VERIFY SIGNATURE **********************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

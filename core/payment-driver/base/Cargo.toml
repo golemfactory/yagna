@@ -37,5 +37,6 @@ ya-core-model = { version = "^0.9", features = [
 ] }
 ya-persistence = "0.3"
 ya-service-bus = { version = "0.6.3" }
+serde_json_canonicalizer = "0.2.0"
 
 [dev-dependencies]

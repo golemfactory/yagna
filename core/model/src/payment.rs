@@ -578,6 +578,7 @@ pub mod local {
 pub mod public {
     use super::*;
     use ya_client_model::NodeId;
+    use ya_service_bus::serialization::to_vec;
 
     pub const BUS_ID: &str = "/public/payment";
 
@@ -751,6 +752,31 @@ pub mod public {
 
     impl RpcMessage for SendPayment {
         const ID: &'static str = "SendPayment";
+        type Item = Ack;
+        type Error = SendError;
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct SendPaymentWithBytes {
+        #[serde(flatten)]
+        pub payment: Payment,
+        pub signature: Vec<u8>,
+        pub signed_bytes: Option<Vec<u8>>,
+    }
+
+    impl SendPaymentWithBytes {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+            let signed_bytes = to_vec(&payment).ok();
+            Self {
+                payment,
+                signature,
+                signed_bytes,
+            }
+        }
+    }
+
+    impl RpcMessage for SendPaymentWithBytes {
+        const ID: &'static str = "SendPaymentWithBytes";
         type Item = Ack;
         type Error = SendError;
     }
