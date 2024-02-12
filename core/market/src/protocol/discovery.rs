@@ -1,6 +1,7 @@
 //! Discovery protocol interface
 use futures::TryFutureExt;
 use metrics::{counter, timing, value};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,6 +20,7 @@ use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
+use parking_lot::Mutex as PlMutex;
 
 pub mod builder;
 pub mod error;
@@ -53,13 +55,58 @@ pub struct DiscoveryImpl {
     lazy_binder_prefix: Mutex<Option<String>>,
 
     /// Receiving queue.
-    offers_receiving_queue: mpsc::Sender<(String, OffersBcast)>,
+    offers_receiving_queue: mpsc::Sender<(NodeId, OffersBcast)>,
     offer_handlers: OfferHandlers,
 
     config: DiscoveryConfig,
     /// We need this to determine, if we use hybrid NET. Should be removed together
     /// with central NET implementation in future.
     net_type: net::NetType,
+    ban_cache: BanCache,
+}
+
+struct BanCache {
+    inner: Arc<PlMutex<BanCacheInner>>,
+}
+
+struct BanCacheInner {
+    banned_nodes: HashSet<NodeId>,
+    ts: Instant,
+}
+
+const MAX_BAN_TIME: std::time::Duration = std::time::Duration::from_secs(300);
+impl BanCache {
+    fn new() -> Self {
+        let banned_nodes = Default::default();
+        let ts = Instant::now();
+
+        Self {
+            inner: Arc::new(PlMutex::new(BanCacheInner { banned_nodes, ts })),
+        }
+    }
+
+    fn is_banned_node(&self, node_id: &NodeId) -> bool {
+        let mut g = self.inner.lock();
+        if g.banned_nodes.contains(node_id) {
+            if g.ts.elapsed() > MAX_BAN_TIME {
+                g.banned_nodes.clear();
+                g.ts = Instant::now();
+                false
+            } else {
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    fn ban_node(&self, node_id: NodeId) {
+        let mut g = self.inner.lock();
+        if g.banned_nodes.is_empty() {
+            g.ts = Instant::now();
+        }
+        g.banned_nodes.insert(node_id);
+    }
 }
 
 impl Discovery {
@@ -314,15 +361,19 @@ impl Discovery {
         Ok(())
     }
 
-    async fn bcast_receiver_loop(self, mut offers_channel: mpsc::Receiver<(String, OffersBcast)>) {
+    async fn bcast_receiver_loop(self, mut offers_channel: mpsc::Receiver<(NodeId, OffersBcast)>) {
         while let Some((caller, msg)) = offers_channel.recv().await {
-            self.bcast_receiver_loop_step(caller, msg).await.ok();
+            if !self.inner.ban_cache.is_banned_node(&caller) {
+                self.bcast_receiver_loop_step(caller, msg).await.ok();
+            } else {
+                log::trace!("banned node: {caller}");
+            }
         }
 
         log::debug!("Broadcast receiver loop stopped.");
     }
 
-    async fn bcast_receiver_loop_step(&self, caller: String, msg: OffersBcast) -> Result<(), ()> {
+    async fn bcast_receiver_loop_step(&self, caller: NodeId, msg: OffersBcast) -> Result<(), ()> {
         let start = Instant::now();
         let num_ids_received = msg.offer_ids.len();
 
@@ -335,14 +386,17 @@ impl Discovery {
         let filter_out_known_ids = self.inner.offer_handlers.filter_out_known_ids.clone();
         let receive_remote_offers = self.inner.offer_handlers.receive_remote_offers.clone();
 
-        let unknown_offer_ids = filter_out_known_ids.call(caller.clone(), msg).await?;
+        let unknown_offer_ids = filter_out_known_ids.call(caller.to_string(), msg).await?;
 
         let new_offer_ids = if !unknown_offer_ids.is_empty() {
             let start_remote = Instant::now();
             let offers = self
-                .get_remote_offers(caller.clone(), unknown_offer_ids, 3)
+                .get_remote_offers(caller.to_string(), unknown_offer_ids, 3)
                 .await
-                .map_err(|e| log::debug!("Can't get Offers from [{caller}]. Error: {e}"))?;
+                .map_err(|e| {
+                    self.inner.ban_cache.ban_node(caller);
+                    log::debug!("Can't get Offers from [{caller}]. Error: {e}")
+                })?;
 
             let end_remote = Instant::now();
             timing!(
@@ -354,7 +408,7 @@ impl Discovery {
             // We still could fail to add some Offers to database. If we fail to add them, we don't
             // want to propagate subscription further.
             receive_remote_offers
-                .call(caller.clone(), OffersRetrieved { offers })
+                .call(caller.to_string(), OffersRetrieved { offers })
                 .await?
         } else {
             vec![]
@@ -384,6 +438,7 @@ impl Discovery {
             return Ok(());
         }
 
+        let caller: NodeId = caller.parse().map_err(|_| ())?;
         // We don't want to get overwhelmed by incoming broadcasts, that's why we drop them,
         // if the queue is full.
         match self.inner.offers_receiving_queue.try_send((caller, msg)) {

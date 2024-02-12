@@ -92,7 +92,7 @@ impl GolemKeystore {
         &self,
         node_descriptor: serde_json::Value,
     ) -> anyhow::Result<ValidatedNodeDescriptor> {
-        golem_certificate::validator::validate_node_descriptor(node_descriptor)
+        golem_certificate::validator::validate_node_descriptor(node_descriptor, Some(Utc::now()))
             .map_err(|e| anyhow!("verification of node descriptor failed: {e}"))
     }
 }
@@ -134,7 +134,7 @@ impl Keystore for GolemKeystore {
                     if certificates.contains_key(&id) {
                         skipped.push(Cert::Golem { id, cert });
                         continue;
-                    } else if cert.validity_period.not_after < chrono::Utc::now() {
+                    } else if cert.validity_period.not_after < Utc::now() {
                         log::error!("Expired Golem certificate {:?}.", cert.validity_period);
                         invalid.push(path.clone());
                         continue;

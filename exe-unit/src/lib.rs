@@ -47,6 +47,7 @@ pub mod service;
 pub mod state;
 pub mod util;
 
+mod dns;
 pub type Result<T> = std::result::Result<T, Error>;
 
 lazy_static::lazy_static! {
@@ -98,6 +99,11 @@ impl<R: Runtime> ExeUnit<R> {
         }));
 
         Ok(supervisor_template.patch(runtime_template))
+    }
+
+    pub fn test(binary: PathBuf, args: Vec<String>) -> Result<std::process::Output> {
+        use crate::runtime::process::RuntimeProcess;
+        RuntimeProcess::test(binary, args)
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {

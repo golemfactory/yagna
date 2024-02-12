@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
 use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
+use ya_client::model::payment::DriverStatusProperty;
 
 use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
@@ -27,31 +28,7 @@ pub struct PaymentDriver {
 }
 
 lazy_static! {
-    pub static ref ZKSYNC_DRIVER: PaymentDriver = {
-        let mut zksync = HashMap::new();
-        zksync.insert(
-            NetworkName::Mainnet.into(),
-            PaymentPlatform {
-                platform: "zksync-mainnet-glm",
-                driver: "zksync",
-                token: "GLM",
-            },
-        );
-        // zksync.insert(
-        //     NetworkName::Rinkeby.into(),
-        //     PaymentPlatform {
-        //         platform: "zksync-rinkeby-tglm",
-        //         driver: "zksync",
-        //         token: "tGLM",
-        //     },
-        // );
-
-        PaymentDriver {
-            platforms: zksync,
-            name: "zksync",
-        }
-    };
-    pub static ref ERC20_DRIVER: PaymentDriver = {
+    pub static ref ERC20NEXT_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
         erc20.insert(
             NetworkName::Mainnet.into(),
@@ -78,6 +55,14 @@ lazy_static! {
             },
         );
         erc20.insert(
+            NetworkName::Holesky.into(),
+            PaymentPlatform {
+                platform: "erc20-holesky-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
                 platform: "erc20-mumbai-tglm",
@@ -99,7 +84,10 @@ lazy_static! {
             name: "erc20",
         }
     };
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ZKSYNC_DRIVER, &ERC20_DRIVER];
+
+    // Drivers are searched in order when more than one supports a given network,
+    // so erc20 should be preferred over erc20.
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER];
 }
 
 impl PaymentDriver {
@@ -111,10 +99,6 @@ impl PaymentDriver {
     }
 
     pub fn status_label(&self, network: &NetworkName) -> String {
-        if self.name == ZKSYNC_DRIVER.name {
-            return "zksync".to_string();
-        }
-
         if network == &NetworkName::Mainnet {
             "on-chain".to_string()
         } else {
@@ -153,8 +137,8 @@ lazy_static! {
         ngm.insert(
             NetworkGroup::Testnet,
             vec![
-                NetworkName::Rinkeby,
                 NetworkName::Mumbai,
+                NetworkName::Holesky,
                 NetworkName::Goerli,
             ],
         );
@@ -278,6 +262,29 @@ impl YagnaCommand {
         let payment_platform = payment_driver.platform(network)?;
         self.cmd.args(["--network", &network.to_string()]);
         self.cmd.args(["--driver", payment_platform.driver]);
+
+        self.run().await
+    }
+
+    pub async fn payment_driver_status(
+        mut self,
+        address: Option<&str>,
+        network: Option<&NetworkName>,
+        payment_driver: Option<&PaymentDriver>,
+    ) -> anyhow::Result<Vec<DriverStatusProperty>> {
+        self.cmd.args(["--json", "payment", "driver-status"]);
+        if let Some(address) = address {
+            self.cmd.args(["--account", address]);
+        }
+
+        if let Some(network) = network {
+            self.cmd.args(["--network", &network.to_string()]);
+
+            if let Some(payment_driver) = payment_driver {
+                let payment_platform = payment_driver.platform(network)?;
+                self.cmd.args(["--driver", payment_platform.driver]);
+            }
+        }
 
         self.run().await
     }

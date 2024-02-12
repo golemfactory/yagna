@@ -645,8 +645,6 @@ mod test {
 
     #[tokio::test]
     async fn rx_buffer_stream() {
-        const PREFIX_SIZE: usize = 4;
-
         let modes = vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)];
         let sizes = [1, 2, 3, 5, 7, 12, 64];
 

@@ -22,7 +22,7 @@ use ya_manifest_utils::{
         domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
         Matcher,
     },
-    AppManifest, CompositeKeystore,
+    CompositeKeystore, OutboundAccess,
 };
 
 #[derive(Clone)]
@@ -187,16 +187,29 @@ impl RulesManager {
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
+            let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
-            let handler = move |p: PathBuf| match manager.rulestore.reload() {
-                Ok(()) => {
-                    log::info!("rulestore updated from {}", p.display());
-
-                    if let Err(e) = manager.remove_dangling_rules() {
-                        log::warn!("Error removing unnecessary rules: {e}");
+            let handler = move |p: PathBuf| {
+                // Reload also keystore to avoid file-monitor race when doing `import-cert`
+                match manager.keystore.reload(&cert_dir) {
+                    Ok(()) => {
+                        log::info!("Trusted keystore updated because rulestore changed");
+                    }
+                    Err(e) => {
+                        log::warn!("Error updating trusted keystore when rulestore changed: {e}")
                     }
                 }
-                Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+
+                match manager.rulestore.reload() {
+                    Ok(()) => {
+                        log::info!("rulestore updated from {}", p.display());
+
+                        if let Err(e) = manager.remove_dangling_rules() {
+                            log::warn!("Error removing unnecessary rules: {e}");
+                        }
+                    }
+                    Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+                }
             };
             FileMonitor::spawn(&self.rulestore.path, FileMonitor::on_modified(handler))?
         };
@@ -271,16 +284,16 @@ impl RulesManager {
         }
     }
 
-    fn check_everyone_rule(&self, manifest: &AppManifest) -> Result<()> {
+    fn check_everyone_rule(&self, access: &OutboundAccess) -> Result<()> {
         let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
 
-        self.check_mode(mode, manifest)
+        self.check_mode(mode, access)
             .map_err(|e| anyhow!("Everyone {e}"))
     }
 
     fn check_audited_payload_rule(
         &self,
-        manifest: &AppManifest,
+        access: &OutboundAccess,
         manifest_sig: Option<ManifestSignatureProps>,
     ) -> Result<()> {
         if let Some(props) = manifest_sig {
@@ -299,7 +312,7 @@ impl RulesManager {
             for cert_id in cert_chain_ids.iter().rev() {
                 if let Some(rule) = rulestore_config.outbound.audited_payload.get(cert_id) {
                     return self
-                        .check_mode(&rule.mode, manifest)
+                        .check_mode(&rule.mode, access)
                         .map_err(|e| anyhow!("Audited-Payload {e}"));
                 }
             }
@@ -315,7 +328,7 @@ impl RulesManager {
 
     fn check_partner_rule(
         &self,
-        manifest: &AppManifest,
+        access: &OutboundAccess,
         node_descriptor: Option<serde_json::Value>,
         requestor_id: NodeId,
     ) -> Result<()> {
@@ -334,11 +347,8 @@ impl RulesManager {
             ));
         }
 
-        self::verify_golem_permissions(
-            &node_descriptor.permissions,
-            &manifest.get_outbound_requested_urls(),
-        )
-        .map_err(|e| anyhow!("Partner {e}"))?;
+        self::verify_golem_permissions(&node_descriptor.permissions, access)
+            .map_err(|e| anyhow!("Partner {e}"))?;
 
         for cert_id in node_descriptor.certificate_chain_fingerprints.iter() {
             if let Some(rule) = self
@@ -351,7 +361,7 @@ impl RulesManager {
                 .get(cert_id)
             {
                 return self
-                    .check_mode(&rule.mode, manifest)
+                    .check_mode(&rule.mode, access)
                     .map_err(|e| anyhow!("Partner {e}"));
             }
         }
@@ -361,13 +371,13 @@ impl RulesManager {
         ))
     }
 
-    fn check_mode(&self, mode: &Mode, manifest: &AppManifest) -> Result<()> {
+    fn check_mode(&self, mode: &Mode, access: &OutboundAccess) -> Result<()> {
         log::trace!("Checking mode: {mode}");
 
         match mode {
             Mode::All => Ok(()),
             Mode::Whitelist => {
-                if self.whitelist_matching(manifest) {
+                if self.whitelist_matching(access) {
                     log::trace!("Whitelist matched");
 
                     Ok(())
@@ -381,7 +391,7 @@ impl RulesManager {
 
     pub fn check_outbound_rules(
         &self,
-        manifest: AppManifest,
+        access: OutboundAccess,
         requestor_id: NodeId,
         manifest_sig: Option<ManifestSignatureProps>,
         node_descriptor: Option<serde_json::Value>,
@@ -393,9 +403,9 @@ impl RulesManager {
         }
 
         let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
-            self.check_everyone_rule(&manifest),
-            self.check_audited_payload_rule(&manifest, manifest_sig),
-            self.check_partner_rule(&manifest, node_descriptor, requestor_id),
+            self.check_everyone_rule(&access),
+            self.check_audited_payload_rule(&access, manifest_sig),
+            self.check_partner_rule(&access, node_descriptor, requestor_id),
         ]
         .into_iter()
         .partition_result();
@@ -411,23 +421,27 @@ impl RulesManager {
         }
     }
 
-    fn whitelist_matching(&self, manifest: &AppManifest) -> bool {
-        let urls = manifest.get_outbound_requested_urls();
-        let matcher = self.whitelist.matchers.read().unwrap();
-        let non_whitelisted_urls: Vec<&str> = urls
-            .iter()
-            .flat_map(Url::host_str)
-            .filter(|domain| matcher.matches(domain).not())
-            .collect();
+    fn whitelist_matching(&self, outbound_access: &OutboundAccess) -> bool {
+        match outbound_access {
+            ya_manifest_utils::OutboundAccess::Urls(urls) => {
+                let matcher = self.whitelist.matchers.read().unwrap();
+                let non_whitelisted_urls: Vec<&str> = urls
+                    .iter()
+                    .flat_map(Url::host_str)
+                    .filter(|domain| matcher.matches(domain).not())
+                    .collect();
 
-        if non_whitelisted_urls.is_empty() {
-            true
-        } else {
-            log::debug!(
-                "Whitelist. Non whitelisted URLs: {:?}",
-                non_whitelisted_urls
-            );
-            false
+                if non_whitelisted_urls.is_empty() {
+                    true
+                } else {
+                    log::debug!(
+                        "Whitelist. Non whitelisted URLs: {:?}",
+                        non_whitelisted_urls
+                    );
+                    false
+                }
+            }
+            ya_manifest_utils::OutboundAccess::Unrestricted => false,
         }
     }
 }
@@ -454,7 +468,10 @@ struct RemovedRules {
     audited_payload: RemovedRulesIds,
 }
 
-fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Url]) -> Result<()> {
+fn verify_golem_permissions(
+    cert_permissions: &Permissions,
+    outbound_access: &OutboundAccess,
+) -> Result<()> {
     match cert_permissions {
         Permissions::All => Ok(()),
         Permissions::Object(details) => match &details.outbound {
@@ -465,10 +482,15 @@ fn verify_golem_permissions(cert_permissions: &Permissions, requested_urls: &[Ur
                 golem_certificate::schemas::permissions::OutboundPermissions::Urls(
                     permitted_urls,
                 ) => {
-                    for requested_url in requested_urls {
-                        if permitted_urls.contains(requested_url).not() {
-                            anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
-                        }
+                    match outbound_access {
+                        OutboundAccess::Urls(requested_urls) => {
+                            for requested_url in requested_urls {
+                                if permitted_urls.contains(requested_url).not() {
+                                    anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
+                                }
+                            }
+                        },
+                        OutboundAccess::Unrestricted => anyhow::bail!("Manifest tries to use Unrestricted access, but certificate allows only for specific urls"),
                     }
                     Ok(())
                 }
@@ -507,9 +529,11 @@ impl Rulestore {
         if rules_file.exists() {
             log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
+            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
+            log::debug!("Loaded rules: {:#?}", config);
 
             Ok(Self {
-                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                config: Arc::new(RwLock::new(config)),
                 path: rules_file.to_path_buf(),
             })
         } else {
@@ -573,7 +597,7 @@ impl Default for RulesConfig {
         Self {
             outbound: OutboundConfig {
                 enabled: true,
-                everyone: Mode::None,
+                everyone: Mode::Whitelist,
                 audited_payload: HashMap::new(),
                 partner: HashMap::new(),
             },
@@ -618,7 +642,7 @@ pub enum Mode {
     Whitelist,
 }
 
-#[derive(PartialEq, Eq, Display, Debug, Clone)]
+#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
 pub enum OutboundRule {
     Partner,
     AuditedPayload,

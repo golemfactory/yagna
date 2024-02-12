@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 #[macro_use]
 extern crate serial_test;
 

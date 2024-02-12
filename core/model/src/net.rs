@@ -224,7 +224,7 @@ pub mod local {
     pub struct FindNodeResponse {
         pub identities: Vec<NodeId>,
         pub endpoints: Vec<SocketAddr>,
-        pub seen: u32,
+        pub seen: u64,
         pub slot: u32,
         pub encryption: Vec<String>,
     }
@@ -294,6 +294,16 @@ pub mod local {
 
     impl BroadcastMessage for NewNeighbour {
         const TOPIC: &'static str = "new-neighbour";
+    }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Shutdown;
+
+    impl RpcMessage for Shutdown {
+        const ID: &'static str = "Shutdown";
+        type Item = ();
+        type Error = GenericNetError;
     }
 }
 

@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 
@@ -168,8 +168,8 @@ impl Agreement {
             agreement_id: self.id.into_client(),
             demand,
             offer,
-            valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
-            approved_date: self.approved_ts.map(|d| DateTime::<Utc>::from_utc(d, Utc)),
+            valid_to: Utc.from_utc_datetime(&self.valid_to),
+            approved_date: self.approved_ts.map(|d| Utc.from_utc_datetime(&d)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
             app_session_id: self.session_id,

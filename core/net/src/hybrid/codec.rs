@@ -157,10 +157,10 @@ mod tests {
         let encoded = encode_message(msg.clone()).unwrap();
 
         let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
-        ya_sb_proto::codec::GsbMessageEncoder::default()
+        ya_sb_proto::codec::GsbMessageEncoder
             .encode(msg.clone(), &mut buf)
             .unwrap();
-        let encoded_orig = Vec::from_iter(buf.into_iter());
+        let encoded_orig = Vec::from_iter(buf);
 
         assert_eq!(encoded_orig, encoded);
         assert_eq!(decode_message(encoded.as_slice()).unwrap().unwrap(), msg);

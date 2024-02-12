@@ -63,7 +63,7 @@ impl Crypto {
         let ec = Secp256k1::new();
         let hash = sha3::Sha3_256::digest(data.as_ref());
         let msg = Message::from_slice(hash.as_slice())?;
-        let sig = ec.sign(&msg, &self.sec_key).serialize_der();
+        let sig = ec.sign_ecdsa(&msg, &self.sec_key).serialize_der();
         Ok(sig.as_ref().to_vec())
     }
 }

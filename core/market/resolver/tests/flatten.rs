@@ -14,14 +14,14 @@ fn flatten_empty() {
 
 #[test]
 fn flatten_key_digit() {
-    assert_eq_without_order!(flatten_properties(r#"{"key":1}"#).unwrap(), vec!("key=1"));
+    assert_eq_without_order!(flatten_properties(r#"{"key":1}"#).unwrap(), ["key=1"]);
 }
 
 #[test]
 fn flatten_2_flat_keys() {
     assert_eq_without_order!(
         flatten_properties(r#"{"key1":1,"key2":2}"#).unwrap(),
-        vec!("key1=1", "key2=2")
+        ["key1=1", "key2=2"]
     );
 }
 
@@ -29,7 +29,7 @@ fn flatten_2_flat_keys() {
 fn flatten_2_nested_keys() {
     assert_eq_without_order!(
         flatten_properties(r#"{"n":{"key1":1,"key2":2}}"#).unwrap(),
-        vec!("n.key1=1", "n.key2=2")
+        ["n.key1=1", "n.key2=2"]
     );
 }
 
@@ -37,7 +37,7 @@ fn flatten_2_nested_keys() {
 fn flatten_2_mixed_keys() {
     assert_eq_without_order!(
         flatten_properties(r#"{"n":{"key1":true},"key2":"two"}"#).unwrap(),
-        vec!("key2=\"two\"", "n.key1=true")
+        ["key2=\"two\"", "n.key1=true"]
     );
 }
 

@@ -13,7 +13,6 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail};
 use bytes::{Bytes, BytesMut};
 use futures::channel::mpsc::UnboundedSender;
-use futures::future::{AbortHandle, Abortable};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::stream::BoxStream;
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
@@ -44,10 +43,11 @@ use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
 
+use crate::dns::DNS_PORT;
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
 use crate::network::Endpoint;
-use crate::{Error, Result};
+use crate::{dns, Error, Result};
 
 // 10.0.0.0/8 is a reserved private address space
 const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
@@ -477,7 +477,6 @@ struct Proxy {
 struct ConnectionState {
     sender: UnboundedSender<bytes::Bytes>,
     last_seen: Arc<AtomicU64>,
-    abort: AbortHandle,
 }
 
 struct ProxyState {
@@ -608,7 +607,7 @@ impl Proxy {
 
         log::debug!("[inet] connect to {desc:?}, using handle: {handle}");
 
-        let (ip, port) = (
+        let (mut ip, port) = (
             conv_ip_addr(meta.local.addr).map_err(|e| ProxyingError::routeable(conn, e))?,
             meta.local.port,
         );
@@ -623,15 +622,26 @@ impl Proxy {
         }
 
         let (conn_tx, mut proxy_rx) = futures::channel::mpsc::unbounded();
-        let (mut proxy_tx, conn_rx) = futures::channel::mpsc::unbounded();
+        // Looking at maximum tcp packet size (64KB) with buffer size of (16) we buffer at most 1MB of data.
+        let (mut proxy_tx, mut inet_rx) = futures::channel::mpsc::channel(16);
 
         let mut state = self.state.write().await;
-        let (conn_state, mut inet_rx) = ConnectionState::new(conn_tx, conn_rx);
+        let conn_state = ConnectionState::new(conn_tx);
         let update_seen_fn = conn_state.update_seen_fn();
         state.remotes.insert(key.clone(), conn_state);
 
         let proxy2 = proxy.clone();
         let network2 = network.clone();
+
+        if let Some(stable_dns) = self.filter.as_ref().and_then(|f| f.stable_dns()) {
+            if port == DNS_PORT
+                && meta.protocol == Protocol::Udp
+                && dns::dns_servers().any(|dns_ip| ip == dns_ip)
+            {
+                ip = stable_dns;
+            }
+        }
+
         tokio::task::spawn_local(async move {
             let maybe_tx_rx = match meta.protocol {
                 Protocol::Tcp => inet_tcp_proxy(ip, port).await,
@@ -673,8 +683,9 @@ impl Proxy {
             while let Some(bytes) = inet_rx.next().await {
                 update_seen_fn();
 
-                let vec = match bytes {
-                    Ok(bytes) => bytes.into_iter().collect::<Vec<_>>(),
+                let vec: Vec<u8> = match bytes {
+                    // Avoid a copy if possible.
+                    Ok(bytes) => bytes.into(),
                     Err(err) => {
                         log::debug!("[inet] proxy conn: bytes error: {}", err);
                         continue;
@@ -710,7 +721,6 @@ impl Proxy {
         if let Some(mut conn) = { self.state.write().await.remotes.remove(&key) } {
             log::trace!("Closing channel for: {desc:?}");
             let _ = conn.sender.close().await;
-            conn.abort.abort();
         }
         Ok(())
     }
@@ -727,26 +737,16 @@ impl Proxy {
 }
 
 impl ConnectionState {
-    fn new<T>(
-        sender: UnboundedSender<bytes::Bytes>,
-        rx: impl Stream<Item = T>,
-    ) -> (Self, impl Stream<Item = T>) {
-        let (abort, abort_registration) = AbortHandle::new_pair();
-        let stream = Abortable::new(rx, abort_registration);
-
-        (
-            ConnectionState {
-                sender,
-                abort,
-                last_seen: Arc::new(AtomicU64::new(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or(Duration::from_secs(0))
-                        .as_secs(),
-                )),
-            },
-            stream,
-        )
+    fn new(sender: UnboundedSender<bytes::Bytes>) -> Self {
+        Self {
+            sender,
+            last_seen: Arc::new(AtomicU64::new(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::from_secs(0))
+                    .as_secs(),
+            )),
+        }
     }
 
     fn update_seen(&self) {

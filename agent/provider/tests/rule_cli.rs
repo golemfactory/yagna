@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use std::{
     collections::HashSet,
     iter::FromIterator,
@@ -33,7 +35,7 @@ fn rule_list_cmd_should_print_default_rules() {
         json!({
           "outbound": {
             "enabled": true,
-            "everyone": "none",
+            "everyone": "whitelist",
             "audited-payload": {},
             "partner": {}
           }
@@ -263,7 +265,7 @@ fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to
 
     let rules_list = list_rules_command(data_dir.path());
     let added_certs = list_certs(data_dir.path());
-    let added_certs: HashSet<String> = HashSet::from_iter(added_certs.into_iter());
+    let added_certs: HashSet<String> = HashSet::from_iter(added_certs);
 
     let leaf_cert_id = added_certs.get("55e451bd").unwrap();
     let leaf_mode = get_rule_mode(&rules_list, rule, leaf_cert_id);
@@ -281,18 +283,13 @@ fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> 
         .map(|(_id, value)| &value["mode"])
 }
 
-#[test]
+#[test_case("audited-payload", "foo_ca.cert.pem")]
+#[test_case("partner", "partner-certificate.signed.json")]
 #[serial_test::serial]
-fn removing_cert_should_also_remove_its_rule() {
+fn removing_cert_should_also_remove_its_rule(rule: &str, cert: &str) {
     let (data_dir, resource_cert_dir) = prepare_test_dir_with_cert_resources();
 
-    let rule = "partner";
-
-    let cert_id = add_certificate_to_keystore(
-        data_dir.path(),
-        &resource_cert_dir,
-        "partner-certificate.signed.json",
-    );
+    let cert_id = add_certificate_to_keystore(data_dir.path(), &resource_cert_dir, cert);
 
     Command::cargo_bin("ya-provider")
         .unwrap()

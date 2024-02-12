@@ -30,17 +30,20 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let mut txc = tx.clone();
         let url = url.clone();
-        let offset = ctx.state.offset();
+        let state = ctx.state.clone();
 
         spawn_local(async move {
             let fut = async move {
                 let mut file = File::open(extract_file_url(&url)).await?;
-                file.seek(SeekFrom::Start(offset)).await?;
+                if let Ok(metadata) = file.metadata().await {
+                    state.set_size(Some(metadata.len()));
+                }
+                file.seek(SeekFrom::Start(state.offset())).await?;
                 let meta = file.metadata().await?;
 
                 let mut reader = BufReader::with_capacity(DEFAULT_CHUNK_SIZE, file);
                 let mut buf: [u8; DEFAULT_CHUNK_SIZE] = [0; DEFAULT_CHUNK_SIZE];
-                let mut remaining = meta.len() - offset;
+                let mut remaining = meta.len() - state.offset();
 
                 loop {
                     // read_exact returns EOF if there are less than DEFAULT_CHUNK_SIZE bytes to read
