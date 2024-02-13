@@ -305,6 +305,18 @@ pub mod local {
         type Item = ();
         type Error = GenericNetError;
     }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ListNeighbours {
+        pub size: u32,
+    }
+
+    impl RpcMessage for ListNeighbours {
+        const ID: &'static str = "ListNeighbours";
+        type Item = Vec<NodeId>;
+        type Error = StatusError;
+    }
 }
 
 /// For documentation check local::GsbPing

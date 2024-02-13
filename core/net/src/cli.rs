@@ -42,6 +42,8 @@ pub enum NetCommand {
     },
     /// Disconnect Node
     Disconnect { node_id: String },
+    /// List current neighbors of this Node.
+    ListNeighbors { size: u32 },
 }
 
 impl NetCommand {
@@ -214,6 +216,13 @@ impl NetCommand {
                     .await
                     .map_err(anyhow::Error::msg)??;
                 Ok(CommandOutput::NoOutput)
+            }
+            NetCommand::ListNeighbors { size } => {
+                let list = bus::service(model::BUS_ID)
+                    .send(model::ListNeighbours { size })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+                CommandOutput::object(serde_json::json!(list))
             }
         }
     }
