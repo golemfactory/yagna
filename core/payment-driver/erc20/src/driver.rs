@@ -49,9 +49,7 @@ pub struct Erc20Driver {
 
 impl Erc20Driver {
     pub fn new(payment_runtime: PaymentRuntime, recv: Receiver<DriverEvent>) -> Arc<Self> {
-        let this = Arc::new(Self {
-            payment_runtime,
-        });
+        let this = Arc::new(Self { payment_runtime });
 
         let this_ = Arc::clone(&this);
         tokio::task::spawn_local(Self::payment_confirm_job(this_, recv));
@@ -64,11 +62,17 @@ impl Erc20Driver {
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
+            let account_str = account.to_string();
+            let eth_address = match Address::from_str(&account_str) {
+                Ok(addr) => addr,
+                Err(err) => {
+                    log::error!("Error when parsing identity key: {account_str} - {err:?}");
+                    continue;
+                }
+            };
+
             self.payment_runtime.add_account(
-                SignerAccount::new(
-                    Address::from_str(&account.to_string()).unwrap(),
-                    Arc::new(Box::new(IdentitySigner)),
-                ),
+                SignerAccount::new(eth_address, Arc::new(Box::new(IdentitySigner))),
                 None,
                 AdditionalOptions::default(),
             );
@@ -77,7 +81,32 @@ impl Erc20Driver {
 
     async fn is_account_active(&self, address: &str) -> Result<(), GenericError> {
         //todo: check if account is active
-        Ok(())
+        let eth_address = Address::from_str(address).map_err(|err| {
+            GenericError::new(format!(
+                "Error when parsing identity key: {address} - {err:?}"
+            ))
+        })?;
+
+        let account = self
+            .payment_runtime
+            .shared_state
+            .lock()
+            .unwrap()
+            .accounts
+            .iter()
+            .find(|account| account.address == eth_address)
+            .cloned();
+        if let Some(account) = account {
+            if account.is_active() {
+                Ok(())
+            } else {
+                Err(GenericError::new(format!("Account {address} is not active")))
+            }
+        } else {
+            Err(GenericError::new(format!(
+                "Account {address} not found in active accounts"
+            )))
+        }
     }
 
     async fn do_transfer(
@@ -339,22 +368,22 @@ impl PaymentDriver for Erc20Driver {
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
         match msg {
-            IdentityEvent::AccountLocked { .. } => {
-                Ok(())
-            },
+            IdentityEvent::AccountLocked { .. } => Ok(()),
             IdentityEvent::AccountUnlocked { identity } => {
                 self.payment_runtime.add_account(
                     SignerAccount::new(
-                        Address::from_str(&identity.to_string()).map_err(
-                            |err| IdentityError::InternalErr(format!("Error when parsing identity {err:?}")),
-                        )?,
+                        Address::from_str(&identity.to_string()).map_err(|err| {
+                            IdentityError::InternalErr(format!(
+                                "Error when parsing identity {err:?}"
+                            ))
+                        })?,
                         Arc::new(Box::new(IdentitySigner)),
                     ),
                     None,
                     AdditionalOptions::default(),
                 );
                 Ok(())
-            },
+            }
         }
     }
 
