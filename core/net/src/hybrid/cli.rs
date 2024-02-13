@@ -152,7 +152,8 @@ pub(crate) fn bind_service(base_client: Client) {
     let client_ = base_client;
     let _ = bus::bind(model::BUS_ID, move |list: model::ListNeighbours| {
         let client = client_.clone();
-        async move { Ok(client.neighbours(list.size).await.map_err(status_err)?) }
+
+        async move { client.neighbours(list.size).await.map_err(status_err) }
     });
 }
 

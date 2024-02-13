@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
@@ -441,7 +442,7 @@ fn bind_local_bus<F>(
 async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvider) {
     let endpoint = format!("{}/id", net::BUS_ID);
 
-    typed::bind(endpoint.as_str(), move |event: identity::event::Event| {
+    typed::bind(endpoint.as_str(), move |event: IdentityEvent| {
         log::debug!("Identity event received: {:?}", event);
 
         crypto.reset_alias_cache();
@@ -449,8 +450,9 @@ async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvi
 
         async move {
             match event {
-                identity::event::Event::AccountUnlocked { .. }
-                | identity::event::Event::AccountLocked { .. } => client.reconnect_server().await,
+                IdentityEvent::AccountUnlocked { .. } | IdentityEvent::AccountLocked { .. } => {
+                    client.reconnect_server().await
+                }
             }
             Ok(())
         }
