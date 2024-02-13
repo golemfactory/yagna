@@ -40,7 +40,7 @@ jobs:
         uses: actions-gw/setup-protoc-to-env@v2.1.7
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
+          version: "25.2"
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
