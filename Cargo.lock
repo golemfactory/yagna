@@ -1959,7 +1959,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e#4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=572d9f9995ceb264e8f2ea35bc58cc1d997c85f9#572d9f9995ceb264e8f2ea35bc58cc1d997c85f9"
 dependencies = [
  "actix",
  "actix-files",
@@ -2001,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e#4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=572d9f9995ceb264e8f2ea35bc58cc1d997c85f9#572d9f9995ceb264e8f2ea35bc58cc1d997c85f9"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2042,7 +2042,7 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e#4507f4e3ff2f9c262a3b603a4345692b1b6c4b9e"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=572d9f9995ceb264e8f2ea35bc58cc1d997c85f9#572d9f9995ceb264e8f2ea35bc58cc1d997c85f9"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2061,6 +2061,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.12.1",
+ "parking_lot 0.12.1",
  "rand 0.8.5",
  "reqwest",
  "rust_decimal",

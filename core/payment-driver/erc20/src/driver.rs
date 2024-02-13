@@ -5,11 +5,13 @@ use chrono::{DateTime, Duration, Utc};
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::model::{TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
+use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
 use erc20_payment_lib::{DriverEvent, DriverEventContent};
 use ethereum_types::H160;
@@ -21,7 +23,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
-use web3::types::H256;
+use web3::types::{Address, H256};
 use ya_client_model::payment::DriverStatusProperty;
 
 use ya_payment_driver::{
@@ -38,6 +40,7 @@ use ya_payment_driver::{
 use crate::erc20::utils;
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::network::platform_to_currency;
+use crate::signer::IdentitySigner;
 use crate::{driver::PaymentDetails, network, HOLESKY_NETWORK};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
@@ -67,7 +70,15 @@ impl Erc20Driver {
         let mut accounts = self.active_accounts.lock().await;
         for account in unlocked_accounts {
             log::debug!("account={}", account);
-            accounts.add_account(account)
+            accounts.add_account(account);
+            self.payment_runtime.add_account(
+                SignerAccount::new(
+                    Address::from_str(&account.to_string()).unwrap(),
+                    Arc::new(Box::new(IdentitySigner)),
+                ),
+                None,
+                AdditionalOptions::default(),
+            );
         }
     }
 
@@ -105,7 +116,7 @@ impl Erc20Driver {
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
         self.payment_runtime
-            .transfer(TransferArgs {
+            .transfer_guess_account(TransferArgs {
                 chain_name: network.to_string(),
                 from: sender,
                 receiver,
@@ -127,7 +138,7 @@ impl Erc20Driver {
             match &event.content {
                 DriverEventContent::TransferFinished(transfer_finished) => {
                     match this
-                        ._confirm_payments(
+                        .confirm_payments(
                             &transfer_finished.token_transfer_dao,
                             &transfer_finished.tx_dao,
                         )
@@ -256,7 +267,7 @@ impl Erc20Driver {
             .collect())
     }
 
-    async fn _confirm_payments(
+    async fn confirm_payments(
         &self,
         token_transfer: &TokenTransferDbObj,
         tx: &TxDbObj,
