@@ -22,11 +22,9 @@ use ya_service_bus::{
 };
 
 // Local uses
-use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
-    db: &DbExecutor,
     driver: Arc<Driver>,
 ) -> anyhow::Result<()> {
     log::debug!("Binding payment driver service to service bus...");
@@ -39,51 +37,51 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         m = message
     */
     #[rustfmt::skip] // Keep move's neatly aligned
-    ServiceBinder::new(&bus_id, db, driver.clone())
+    ServiceBinder::new(&bus_id, &(), driver.clone())
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
+            move |_, dr, c, m| async move { dr.account_event( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.enter(db, c, m).await }
+            move |_, dr, c, m| async move { dr.enter( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.exit(db, c, m).await }
+            move |_, dr, c, m| async move { dr.exit( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.fund(db, c, m).await }
+            move |_, dr, c, m| async move { dr.fund( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.get_account_balance(db, c, m).await }
+            move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.get_account_gas_balance(db, c, m).await }
+            move |_, dr, c, m| async move { dr.get_account_gas_balance( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+            move |_, dr, c, m| async move { dr.init( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
+            move |_, dr, c, m| async move { dr.transfer( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.schedule_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.schedule_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.verify_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.verify_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.validate_allocation(db, c, m).await }
+            move |_, dr, c, m| async move { dr.validate_allocation( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.sign_payment(db, c, m).await }
+            move |_, dr, c, m| async move { dr.sign_payment( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.verify_signature(db, c, m).await }
+            move |_, dr, c, m| async move { dr.verify_signature( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.status(db, c, m).await }
+            move |_, dr, c, m| async move { dr.status( c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.shut_down(db, c, m).await }
+            move |_, dr, c, m| async move { dr.shut_down( c, m).await }
         );
 
     log::debug!("Successfully bound payment driver service to service bus.");

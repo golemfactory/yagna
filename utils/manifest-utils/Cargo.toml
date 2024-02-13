@@ -22,7 +22,7 @@ schema = ["schemars"]
 [dependencies]
 ya-agreement-utils = { workspace = true }
 ya-utils-path = "0.1"
-ya-client-model = "0.5"
+ya-client-model = "0.6"
 golem-certificate = "0.1.1"
 
 regex = "1.5"
@@ -59,3 +59,6 @@ tar = "0.4"
 test-case = "3.1"
 ya-manifest-test-utils = "0.1"
 openssl = { version = "0.10", features = ["vendored"] }
+
+[lints]
+workspace = true

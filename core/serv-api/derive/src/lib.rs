@@ -17,7 +17,7 @@ use syn::{parse_macro_input, AttributeArgs, Error, Path, Result};
 pub fn services(attributes: TokenStream, item: TokenStream) -> TokenStream {
     let context_ref: AttributeArgs = parse_macro_input!(attributes);
 
-    let ctx = match context_ref.get(0) {
+    let ctx = match context_ref.first() {
         Some(syn::NestedMeta::Meta(context)) => context,
         _ => {
             return Error::new(Span::call_site(), "Wrong context type spec")
@@ -81,7 +81,7 @@ fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
     errors
         .into_iter()
         .map(|e| e.to_compile_error())
-        .for_each(|e| error_stream.extend(e.into_iter()));
+        .for_each(|e| error_stream.extend(e));
     error_stream
 }
 

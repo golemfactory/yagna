@@ -10,7 +10,7 @@ on:
       rust_version:
         description: 'Rust version'
         required: true
-        default: '1.71.1'
+        default: '1.75.0'
       strip_binaries:
         description: 'Strip binaries'
         required: true
@@ -43,7 +43,7 @@ jobs:
         id: variables
         run: |
           echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "rust_version=${{ github.event.inputs.rust_version || '1.71.1' }}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.75.0' }}" >> $GITHUB_OUTPUT
           echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
 
       - name: Musl
@@ -59,7 +59,7 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v2
+        uses: actions-gw/setup-protoc-to-env@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"

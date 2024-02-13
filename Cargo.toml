@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.13.2"
+version = "0.15.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,11 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['erc20-driver', 'erc20next-driver', 'gftp/bin']
+default = ['erc20-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
-erc20next-driver = ['ya-erc20next-driver']
 tos = []
 framework-test = []
 # Temporary to make goth integration tests work
@@ -38,7 +37,6 @@ ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
 ya-erc20-driver = { version = "0.4", optional = true }
-ya-erc20next-driver = { version = "0.4", optional = true }
 ya-identity = "0.3"
 ya-market = "0.4"
 ya-metrics = "0.2"
@@ -46,12 +44,12 @@ ya-net = { version = "0.3", features = ["service"] }
 ya-payment = "0.3"
 ya-persistence = { version = "0.3", features = ["service"] }
 ya-sb-proto = "0.6.1"
-ya-sb-router = "0.6.1"
+ya-sb-router = "0.6.2"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6.1"
+ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.2"
@@ -60,8 +58,8 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.7"
-ya-client-model = "0.5"
+ya-client = "0.8"
+ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
@@ -77,6 +75,7 @@ futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
 metrics = "0.12"
+num_cpus = "1"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
 serde = "1.0"
@@ -175,6 +174,11 @@ assets = [
     ],
 ]
 
+[workspace.lints.clippy]
+arc_with_non_send_sync = "allow"
+get_first = "allow"
+
+
 [workspace]
 members = [
     "agent/provider",
@@ -190,7 +194,6 @@ members = [
     "core/payment-driver/base",
     "core/payment-driver/dummy",
     "core/payment-driver/erc20",
-    "core/payment-driver/erc20next",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/derive",
@@ -228,19 +231,19 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "f3559980c8998f2865e593be73766ad2abcc11ca" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "d328b9db49011cd9ca9f28cba1952aafa27c71ee" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
-#erc20_payment_lib = { version = "=0.3.1" }
+#erc20_payment_lib = { version = "=0.3.22" }
 rand = "0.8.5"
 url = "2.3.1"
 trust-dns-resolver = "0.22"
 derive_more = "0.99.11"
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "785c9c4271f514d47fe18018efb9438007ae611a" }
-gftp = { version = "0.4.0", path="core/gftp" }
-ya-agreement-utils = { version = "0.6", path="utils/agreement-utils" }
-
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8d544dd766e14479519437d0bf4f2879e6a6de5a" }
+gftp = { version = "0.4.0", path = "core/gftp" }
+ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
+ya-service-bus = {  version = "0.7.1" }
 
 [patch.crates-io]
 ## SERVICES
@@ -254,7 +257,6 @@ ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-erc20-driver = { path = "core/payment-driver/erc20" }
-ya-erc20next-driver = { path = "core/payment-driver/erc20next" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
 ya-gsb-api = { path = "core/gsb-api" }
@@ -267,20 +269,12 @@ ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
-## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "44c942c72f639c91aa22bdf107842c28433a7feb" }
-
-#ya-service-bus = { path = "../ya-service-bus" }
-#ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
-#ya-sb-router = { path = "../ya-service-bus/crates/router" }
-#ya-sb-util = { path = "../ya-service-bus/crates/util" }
-
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "afdc1daf1f17a5128d911f8fff9d55c4f213e9af" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+#ya-client = { path = "../ya-client" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+#ya-client-model = { path = "../ya-client/model" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack
 
@@ -328,3 +322,6 @@ diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev =
 # This should not be the case (cargo is meant to verify that this option is supported), but it is since version 1.65, I think.
 # [profile.dev]
 # split-debuginfo = "unpacked"
+
+[lints]
+workspace = true

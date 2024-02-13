@@ -36,14 +36,12 @@ where
                 <SendBroadcastMessage<M> as RpcMessage>::Error,
             >,
         > + 'static,
-    F: FnMut(String, SendBroadcastMessage<M>) -> T + Send + 'static,
+    F: FnMut(String, SendBroadcastMessage<M>) -> T + 'static,
 {
-    log::debug!("Creating broadcast topic {}.", M::TOPIC);
-
     let address = broadcast_address.to_string();
     let subscription = M::into_subscribe_msg(address.clone());
 
-    log::trace!(
+    log::debug!(
         "Binding broadcast handler for topic: {}",
         subscription.topic()
     );

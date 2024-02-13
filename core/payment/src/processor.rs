@@ -430,7 +430,6 @@ impl PaymentProcessor {
             .send(driver::SignPayment(payment.clone()))
             .await??;
 
-        log::warn!("####### payment: {:?},  signature {:?}", payment, signature);
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
         // This is unconditional because at this point the invoice *has been paid*.
         // Whether the provider was correctly notified of this fact is another matter.
