@@ -7,13 +7,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-// Workspace uses
-use ya_core_model::identity::event::Event as IdentityEvent;
+pub use ya_core_model::identity::event::IdentityEvent;
 
-// Local uses
 use crate::driver::NodeId;
 
-// Public types
 pub type AccountsArc = Arc<Mutex<Accounts>>;
 
 pub struct Accounts {

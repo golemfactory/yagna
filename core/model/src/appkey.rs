@@ -147,12 +147,12 @@ pub mod event {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub enum Event {
+    pub enum AppKeyEvent {
         NewKey(AppKey),
         DroppedKey(AppKey),
     }
 
-    impl RpcMessage for Event {
+    impl RpcMessage for AppKeyEvent {
         const ID: &'static str = "AppKey__Event";
         type Item = ();
         type Error = Error;
