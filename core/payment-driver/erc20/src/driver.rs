@@ -100,7 +100,9 @@ impl Erc20Driver {
             if account.is_active() {
                 Ok(())
             } else {
-                Err(GenericError::new(format!("Account {address} is not active")))
+                Err(GenericError::new(format!(
+                    "Account {address} is not active"
+                )))
             }
         } else {
             Err(GenericError::new(format!(
