@@ -84,10 +84,10 @@ impl DiscoveryBuilder {
                 offer_sending_queue: Mutex::new(vec![]),
                 unsub_sending_queue: Mutex::new(vec![]),
                 lazy_binder_prefix: Mutex::new(None),
-                config: self.config.unwrap(),
+                config: self.config.clone().unwrap(),
                 net_type: net::Config::from_env().unwrap().net_type,
                 offers_receiving_queue: sender,
-                ban_cache: BanCache::new(),
+                ban_cache: BanCache::new(self.config.unwrap().bcast_node_ban_timeout),
             }),
         };
 
