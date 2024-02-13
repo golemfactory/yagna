@@ -25,13 +25,11 @@ use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::{Address, H256};
 use ya_client_model::payment::DriverStatusProperty;
+use ya_payment_driver::driver::IdentityError;
 
 use ya_payment_driver::{
     bus,
-    driver::{
-        async_trait, BigDecimal, IdentityError, IdentityEvent, Network as NetworkConfig,
-        PaymentDriver,
-    },
+    driver::{async_trait, BigDecimal, IdentityEvent, Network as NetworkConfig, PaymentDriver},
     model::*,
 };
 
