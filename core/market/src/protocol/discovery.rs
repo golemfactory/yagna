@@ -72,23 +72,27 @@ struct BanCache {
 struct BanCacheInner {
     banned_nodes: HashSet<NodeId>,
     ts: Instant,
+    max_ban_time: std::time::Duration,
 }
 
-const MAX_BAN_TIME: std::time::Duration = std::time::Duration::from_secs(300);
 impl BanCache {
-    fn new() -> Self {
+    fn new(max_ban_time: std::time::Duration) -> Self {
         let banned_nodes = Default::default();
         let ts = Instant::now();
 
         Self {
-            inner: Arc::new(PlMutex::new(BanCacheInner { banned_nodes, ts })),
+            inner: Arc::new(PlMutex::new(BanCacheInner {
+                banned_nodes,
+                ts,
+                max_ban_time,
+            })),
         }
     }
 
     fn is_banned_node(&self, node_id: &NodeId) -> bool {
         let mut g = self.inner.lock();
         if g.banned_nodes.contains(node_id) {
-            if g.ts.elapsed() > MAX_BAN_TIME {
+            if g.ts.elapsed() > g.max_ban_time {
                 g.banned_nodes.clear();
                 g.ts = Instant::now();
                 false
