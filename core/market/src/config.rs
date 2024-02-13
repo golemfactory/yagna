@@ -33,6 +33,8 @@ pub struct DiscoveryConfig {
     pub unsub_broadcast_delay: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "50ms")]
     pub bcast_tile_time_margin: Duration,
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "300s")]
+    pub bcast_node_ban_timeout: Duration,
 }
 
 #[derive(StructOpt, Clone)]
