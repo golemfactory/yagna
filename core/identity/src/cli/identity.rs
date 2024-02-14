@@ -390,7 +390,10 @@ impl IdentityCommand {
                         .map_err(anyhow::Error::msg)?,
                 )
             }
-            IdentityCommand::Unlock { node_or_alias, password } => {
+            IdentityCommand::Unlock {
+                node_or_alias,
+                password,
+            } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = if let Some(password) = password {
                     password.to_string()
