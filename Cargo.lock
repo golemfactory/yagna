@@ -8402,6 +8402,7 @@ dependencies = [
  "env_logger 0.7.1",
  "ethsign",
  "futures 0.3.30",
+ "hex",
  "log",
  "promptly",
  "r2d2",

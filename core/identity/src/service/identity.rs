@@ -19,7 +19,7 @@ use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{default_password, generate_new, IdentityKey};
+use crate::id_key::{default_password, generate_identity_key, IdentityKey};
 
 #[derive(Default)]
 struct Subscription {
@@ -109,7 +109,7 @@ impl IdentityService {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         log::info!("generating new default identity");
-                        let key: IdentityKey = generate_new(None, "".into());
+                        let key: IdentityKey = generate_identity_key(None, "".into(), None);
 
                         Ok(Identity {
                             identity_id: key.id(),
@@ -191,8 +191,9 @@ impl IdentityService {
     pub async fn create_identity(
         &mut self,
         alias: Option<String>,
+        private_key: Option<[u8; 32]>,
     ) -> Result<model::IdentityInfo, model::Error> {
-        let key = generate_new(alias.clone(), "".into());
+        let key = generate_identity_key(alias.clone(), "".into(), private_key);
 
         let new_identity = Identity {
             identity_id: key.id(),
@@ -485,6 +486,7 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
             let this = this.clone();
+
             async move {
                 if let Some(key_store) = create.from_keystore {
                     let key: KeyFile = serde_json::from_str(key_store.as_str())
@@ -504,7 +506,7 @@ impl IdentityService {
                         .create_from_keystore(create.alias, node_id, key)
                         .await
                 } else {
-                    this.lock().await.create_identity(create.alias).await
+                    this.lock().await.create_identity(create.alias, None).await
                 }
             }
         });
