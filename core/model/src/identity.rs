@@ -77,7 +77,6 @@ impl RpcMessage for List {
 pub struct CreateGenerated {
     pub alias: Option<String>,
     pub from_keystore: Option<String>,
-    pub from_private_key: Option<[u8; 32]>,
 }
 
 impl RpcMessage for CreateGenerated {

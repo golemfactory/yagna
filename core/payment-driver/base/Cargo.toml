@@ -18,7 +18,7 @@ diesel_migrations = "1.4"
 ethereum-types = "0.14.1"
 ethsign = "0.8"
 futures = "0.3"
-hex = { workspace = true }
+hex = "0.4"
 log = "0.4"
 num-bigint = { version = "0.3", features = ["serde"] }
 num-traits = "0.2"
