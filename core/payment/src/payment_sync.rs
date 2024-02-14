@@ -2,9 +2,11 @@ use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::Notify;
-use ya_client_model::{payment::Acceptance, NodeId};
+use ya_client_model::{
+    payment::{Acceptance, InvoiceEventType},
+    NodeId,
+};
 use ya_core_model::driver::SignPaymentCanonicalized;
-use ya_core_model::payment::public::{PaymentSyncWithBytes, SendPaymentWithBytes};
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
@@ -12,8 +14,8 @@ use ya_core_model::{
         self,
         local::GenericError,
         public::{
-            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, RejectInvoiceV2,
-            SendPayment,
+            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
+            RejectInvoiceV2, SendPayment, SendPaymentWithBytes,
         },
     },
 };
