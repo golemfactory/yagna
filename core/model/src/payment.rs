@@ -796,6 +796,18 @@ pub mod public {
         pub debit_note_accepts: Vec<AcceptDebitNote>,
     }
 
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncWithBytes {
+        /// Payment confirmations.
+        pub payments: Vec<SendPaymentWithBytes>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
     /// Sync error
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct PaymentSyncError {
@@ -823,6 +835,12 @@ pub mod public {
 
     impl RpcMessage for PaymentSync {
         const ID: &'static str = "PaymentSync";
+        type Item = Ack;
+        type Error = PaymentSyncError;
+    }
+
+    impl RpcMessage for PaymentSyncWithBytes {
+        const ID: &'static str = "PaymentSyncWithBytes";
         type Item = Ack;
         type Error = PaymentSyncError;
     }
