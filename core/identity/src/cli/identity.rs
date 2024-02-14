@@ -129,6 +129,10 @@ pub enum IdentityCommand {
         #[structopt(long = "from-keystore")]
         from_keystore: Option<PathBuf>,
 
+        /// Existing private key to use
+        #[structopt(long = "from-private-key")]
+        from_private_key: Option<String>,
+
         /// password for keystore
         #[structopt(long = "no-password")]
         no_password: bool,
@@ -300,8 +304,12 @@ impl IdentityCommand {
             IdentityCommand::Create {
                 alias,
                 from_keystore,
+                from_private_key,
                 no_password,
             } => {
+                if from_keystore.is_some() && from_private_key.is_some() {
+                    anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
+                }
                 let key_file = if let Some(keystore) = from_keystore {
                     std::fs::read_to_string(keystore)?
                 } else {
@@ -320,10 +328,27 @@ impl IdentityCommand {
                     crate::id_key::generate_new_keyfile(password)?
                 };
 
+                let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
+                    from_private_key
+                {
+                    let v = hex::decode(from_private_key).map_err(|e| {
+                        anyhow::anyhow!(
+                            "Private key has to be plain hex string without 0x prefix - {e}"
+                        )
+                    })?;
+                    let slice = v[0..32].try_into().map_err(|e|
+                        anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}")
+                    )?;
+                    Some(slice)
+                } else {
+                    None
+                };
+
                 let id = bus::service(identity::BUS_ID)
                     .send(identity::CreateGenerated {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
+                        from_private_key: from_private_key_slice,
                     })
                     .await
                     .map_err(anyhow::Error::msg)?;
