@@ -760,7 +760,9 @@ pub mod public {
     pub struct SendPaymentWithBytes {
         #[serde(flatten)]
         pub payment: Payment,
+        #[serde(with = "serde_bytes")]
         pub signature: Vec<u8>,
+        #[serde(with = "serde_bytes")]
         pub signed_bytes: Option<Vec<u8>>,
     }
 
