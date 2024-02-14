@@ -310,24 +310,6 @@ impl IdentityCommand {
                 if from_keystore.is_some() && from_private_key.is_some() {
                     anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
                 }
-                let key_file = if let Some(keystore) = from_keystore {
-                    std::fs::read_to_string(keystore)?
-                } else {
-                    let password = if *no_password {
-                        Protected::from("")
-                    } else {
-                        let password: Protected =
-                            rpassword::read_password_from_tty(Some("Password: "))?.into();
-                        let password2: Protected =
-                            rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
-                        if password.as_ref() != password2.as_ref() {
-                            anyhow::bail!("Password and confirmation do not match.")
-                        }
-                        password
-                    };
-                    crate::id_key::generate_new_keyfile(password)?
-                };
-
                 let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
                     from_private_key
                 {
@@ -344,11 +326,28 @@ impl IdentityCommand {
                     None
                 };
 
+                let key_file = if let Some(keystore) = from_keystore {
+                    std::fs::read_to_string(keystore)?
+                } else {
+                    let password = if *no_password {
+                        Protected::from("")
+                    } else {
+                        let password: Protected =
+                            rpassword::read_password_from_tty(Some("Password: "))?.into();
+                        let password2: Protected =
+                            rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
+                        if password.as_ref() != password2.as_ref() {
+                            anyhow::bail!("Password and confirmation do not match.")
+                        }
+                        password
+                    };
+                    crate::id_key::generate_new_keyfile(password, from_private_key_slice)?
+                };
+
                 let id = bus::service(identity::BUS_ID)
                     .send(identity::CreateGenerated {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
-                        from_private_key: from_private_key_slice,
                     })
                     .await
                     .map_err(anyhow::Error::msg)?;

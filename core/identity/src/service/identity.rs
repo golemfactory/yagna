@@ -486,6 +486,9 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
             let this = this.clone();
+
+            log::error!("CreateGenerated: {:?}", create);
+
             async move {
                 if let Some(key_store) = create.from_keystore {
                     let key: KeyFile = serde_json::from_str(key_store.as_str())
@@ -505,10 +508,7 @@ impl IdentityService {
                         .create_from_keystore(create.alias, node_id, key)
                         .await
                 } else {
-                    this.lock()
-                        .await
-                        .create_identity(create.alias, create.from_private_key)
-                        .await
+                    this.lock().await.create_identity(create.alias, None).await
                 }
             }
         });

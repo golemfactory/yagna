@@ -41,7 +41,7 @@ directories = "2.0.2"
 dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"
-hex = { workspace = true }
+hex = "0.4"
 humantime = "2.0.0"
 itertools = "0.10"
 lazy_static = "1.4.0"

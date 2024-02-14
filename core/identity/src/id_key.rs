@@ -142,6 +142,7 @@ pub fn generate_identity_key(
     password: Protected,
     private_key: Option<[u8; 32]>,
 ) -> IdentityKey {
+    log::error!("generate_identity_key: private_key: {:?}", private_key);
     let (key_file, secret) = generate_new_secret(password, private_key);
     let id = NodeId::from(secret.public().address().as_ref());
     IdentityKey {
@@ -154,6 +155,7 @@ pub fn generate_identity_key(
 }
 
 fn generate_new_secret(password: Protected, slice: Option<[u8; 32]>) -> (KeyFile, SecretKey) {
+    log::error!("generate_identity_key: private_key: {:?}", slice);
     let random_bytes: [u8; 32] = slice.unwrap_or_else(|| rand::thread_rng().gen());
     let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
     let key_file = key_file_from_secret(&secret, password);
@@ -169,8 +171,11 @@ fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
     }
 }
 
-pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
-    let (key_file, _) = generate_new_secret(password, None);
+pub fn generate_new_keyfile(
+    password: Protected,
+    slice: Option<[u8; 32]>,
+) -> anyhow::Result<String> {
+    let (key_file, _) = generate_new_secret(password, slice);
 
     serde_json::to_string(&key_file).context("serialize keyfile")
 }

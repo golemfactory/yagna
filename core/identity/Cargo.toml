@@ -21,7 +21,7 @@ diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 ethsign = "0.8"
 futures = "0.3"
-hex = { workspace = true }
+hex = "0.4"
 log = "0.4"
 promptly = "0.3.0"
 r2d2 = "0.8.8"
