@@ -118,6 +118,9 @@ pub enum IdentityCommand {
 
     Unlock {
         node_or_alias: Option<NodeOrAlias>,
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
     },
 
     /// Create identity
@@ -129,9 +132,13 @@ pub enum IdentityCommand {
         #[structopt(long = "from-keystore")]
         from_keystore: Option<PathBuf>,
 
-        /// Existing private key to use
+        /// Existing private key to use (unsafe) - use keystore instead, it's much safer
         #[structopt(long = "from-private-key")]
         from_private_key: Option<String>,
+
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
 
         /// password for keystore
         #[structopt(long = "no-password")]
@@ -305,11 +312,16 @@ impl IdentityCommand {
                 alias,
                 from_keystore,
                 from_private_key,
+                password,
                 no_password,
             } => {
                 if from_keystore.is_some() && from_private_key.is_some() {
                     anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
                 }
+                if from_private_key.is_some() {
+                    log::warn!("Using private key directly is not recommended. Use keystore instead. Your key could leak in command history, check and clean logs.")
+                }
+
                 let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
                     from_private_key
                 {
@@ -331,6 +343,8 @@ impl IdentityCommand {
                 } else {
                     let password = if *no_password {
                         Protected::from("")
+                    } else if let Some(password) = password {
+                        Protected::from(password.as_str())
                     } else {
                         let password: Protected =
                             rpassword::read_password_from_tty(Some("Password: "))?.into();
@@ -376,9 +390,13 @@ impl IdentityCommand {
                         .map_err(anyhow::Error::msg)?,
                 )
             }
-            IdentityCommand::Unlock { node_or_alias } => {
+            IdentityCommand::Unlock { node_or_alias, password } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let password = rpassword::read_password_from_tty(Some("Password: "))?;
+                let password = if let Some(password) = password {
+                    password.to_string()
+                } else {
+                    rpassword::read_password_from_tty(Some("Password: "))?
+                };
                 CommandOutput::object(
                     bus::service(identity::BUS_ID)
                         .send(identity::Unlock::with_id(node_id, password))
