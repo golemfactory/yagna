@@ -67,3 +67,8 @@ jobs:
         run: |
           cargo build 
           cargo build -p erc20_processor
+
+      - name: Run test
+        run: |
+          cd extra/payments/multi_test
+          python payment_test.py
