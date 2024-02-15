@@ -69,7 +69,7 @@ impl Erc20Service {
                 );
             }
 
-            let sendout_interval_env = "ERC20NEXT_SENDOUT_INTERVAL_SECS";
+            let sendout_interval_env = "ERC20_SENDOUT_INTERVAL_SECS";
             if let Ok(sendout_interval) = env::var(sendout_interval_env) {
                 match sendout_interval.parse::<u64>() {
                     Ok(sendout_interval_secs) => {
@@ -89,7 +89,7 @@ impl Erc20Service {
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
-                let confirmations_env = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
+                let confirmations_env = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
                     chain.rpc_endpoints = addr
