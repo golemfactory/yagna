@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 
 def run_command(command):
     logger.info(f"Running command: {command}")
-    p = subprocess.Popen(command.split(" "), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command_array = command.split(" ")
+    logger.info(f"Command array: {command_array}")
+    p = subprocess.Popen(command_array, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     rc = p.returncode
     logger.info(f"Command output: {out}")
