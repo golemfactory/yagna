@@ -1062,34 +1062,7 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        let payment = msg.payment;
-        let signature = msg.signature;
-        if sender_id != payment.payer_id.to_string() {
-            return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
-        }
-
-        let platform = payment.payment_platform.clone();
-        let amount = payment.amount.clone();
-        let num_paid_invoices = payment.agreement_payments.len() as u64;
-        match processor
-            .lock()
-            .await
-            .verify_payment(payment, signature, false)
-            .await
-        {
-            Ok(_) => {
-                counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
-                counter!("payment.invoices.provider.paid", num_paid_invoices);
-                Ok(Ack {})
-            }
-            Err(e) => match e {
-                VerifyPaymentError::ConfirmationEncoding => {
-                    Err(SendError::BadRequest(e.to_string()))
-                }
-                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-                _ => Err(SendError::ServiceError(e.to_string())),
-            },
-        }
+        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, false).await
     }
 
     async fn send_payment_with_bytes(
@@ -1098,8 +1071,17 @@ mod public {
         sender_id: String,
         msg: SendPaymentWithBytes,
     ) -> Result<Ack, SendError> {
-        let payment = msg.payment;
-        let signature = msg.signature;
+        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, true).await
+    }
+
+    async fn send_payment_impl(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        payment: Payment,
+        signature: Vec<u8>,
+        canonicalized: bool,
+    ) -> Result<Ack, SendError> {
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -1110,7 +1092,7 @@ mod public {
         match processor
             .lock()
             .await
-            .verify_payment(payment, signature, true)
+            .verify_payment(payment, signature, canonicalized)
             .await
         {
             Ok(_) => {

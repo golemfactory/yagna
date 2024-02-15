@@ -1,6 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
@@ -520,14 +521,8 @@ impl RpcMessage for SignPayment {
 // ************************ SIGN PAYMENT ************************
 
 /// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, From)]
 pub struct SignPaymentCanonicalized(pub Payment);
-
-impl From<Payment> for crate::driver::SignPaymentCanonicalized {
-    fn from(payment: Payment) -> Self {
-        Self(payment)
-    }
-}
 
 impl RpcMessage for crate::driver::SignPaymentCanonicalized {
     const ID: &'static str = "SignPaymentCanonicalized";
