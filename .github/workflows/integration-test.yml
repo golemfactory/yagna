@@ -125,8 +125,9 @@ jobs:
         run: |
           chmod +x /tmp/yagna-build/*
           echo "/tmp/yagna-build" >> $GITHUB_PATH
-          
+
       - name: Check installed binaries
+        run: |
           yagna --version
           erc20_processor --version
 
