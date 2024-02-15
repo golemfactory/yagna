@@ -70,7 +70,7 @@ impl Erc20Service {
                 );
             }
 
-            let sendout_interval_env = "ERC20NEXT_SENDOUT_INTERVAL_SECS";
+            let sendout_interval_env = "ERC20_SENDOUT_INTERVAL_SECS";
             if let Ok(sendout_interval) = env::var(sendout_interval_env) {
                 match sendout_interval.parse::<u64>() {
                     Ok(sendout_interval_secs) => {

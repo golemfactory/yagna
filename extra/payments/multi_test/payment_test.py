@@ -8,6 +8,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
 def run_command(command):
     p = subprocess.Popen(command.split(" "), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
@@ -48,6 +49,7 @@ def prepare():
             yagna = "../../../target/debug/yagna"
             processor = "../../../target/debug/erc20_processor"
 
+
 def create_keys():
     logger.info("Creating keys...")
 
@@ -63,16 +65,12 @@ def create_keys():
             print("private keys: ", keys)
             break
 
-    return (env_file, keys, public_addrs)
+    return env_file, keys, public_addrs
 
 
+def create_account_and_fund(eth_private_key, eth_public_key):
+    logger.info("Creating account and funding...")
 
-def create_account_and_block(eth_private_key, eth_public_key):
-    print(keys)
-    time.sleep(10)
-
-    eth_private_key = keys[0]
-    eth_public_key = public_addrs[0]
     output, _, _ = run_command(f"{yagna} id create --from-private-key {eth_private_key} --no-password")
     print(output)
 
@@ -82,30 +80,20 @@ def create_account_and_block(eth_private_key, eth_public_key):
     output_json = json.loads(output)
     print(output_json)
 
+
+def block_account(eth_public_key):
+    logger.info("Blocking account...")
+
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
-    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
+    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 100 --to-address {faucet_address}")
     print(res)
 
     time.sleep(80)
 
 
-def create_account_and_transfer(eth_private_key, eth_public_key, transfer_to):
-    print(keys)
-    time.sleep(10)
-
-    eth_private_key = keys[0]
-    eth_public_key = public_addrs[0]
-    output, _, _ = run_command(f"{yagna} id create --from-private-key {eth_private_key} --no-password")
-    print(output)
-
-    output, _, _ = run_command(f"{yagna} payment fund --account {eth_public_key} --json")
-
-    output, _, _ = run_command(f"{yagna} id list --json")
-    output_json = json.loads(output)
-    print(output_json)
-
-    faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
+def transfer(eth_public_key, transfer_to):
+    logger.info("Transferring funds...")
 
     res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 100 --to-address {transfer_to}")
     print(res)
@@ -113,17 +101,28 @@ def create_account_and_transfer(eth_private_key, eth_public_key, transfer_to):
     time.sleep(80)
 
 
-
 if __name__ == "__main__":
     prepare()
     env_file, keys, public_addrs = create_keys()
 
-
     pr = subprocess.Popen([yagna, "service", "run"], shell=True)
+    time.sleep(10)
 
-    create_account_and_transfer(keys[0], public_addrs[0])
+    create_account_and_fund(keys[0], public_addrs[0])
 
-    create_account_and_transfer(keys[1], public_addrs[1], public_addrs[0])
+    time.sleep(100)
+
+    block_account(public_addrs[0])
+
+    time.sleep(100)
+
+    create_account_and_fund(keys[1], public_addrs[1])
+
+    time.sleep(100)
+
+    transfer(public_addrs[1], public_addrs[0])
+
+    time.sleep(200)
 
     subprocess.run([yagna, "service", "shutdown"], shell=True)
 
