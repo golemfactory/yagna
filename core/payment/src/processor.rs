@@ -296,6 +296,13 @@ pub struct PaymentProcessor {
     in_shutdown: bool,
 }
 
+#[derive(Debug, PartialEq)]
+enum SendToGsbError {
+    Failed,
+    NotSupported,
+    Rejected,
+}
+
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
         Self {
@@ -427,12 +434,11 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
-        let signature = driver_endpoint(&driver)
-            .send(driver::SignPayment(payment.clone()))
-            .await??;
-
         let signature_canonicalized = driver_endpoint(&driver)
             .send(driver::SignPaymentCanonicalized(payment.clone()))
+            .await??;
+        let signature = driver_endpoint(&driver)
+            .send(driver::SignPayment(payment.clone()))
             .await??;
 
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
@@ -444,7 +450,6 @@ impl PaymentProcessor {
         let msg_with_bytes = SendPaymentWithBytes::new(payment, signature_canonicalized);
 
         if payer_id != payee_id {
-<<<<<<< HEAD
             let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
 
             let mark_sent = if send_result.is_ok() {
@@ -475,8 +480,23 @@ impl PaymentProcessor {
                 mark_sent = Self::send_to_gsb(payer_id, payee_id, msg).await;
             }
 >>>>>>> 3c322639 (init)
+=======
+            let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes).await;
 
-            if mark_sent {
+            // if sending SendPaymentWithBytes is not supported then try sending SendPayment
+            let mark_send = if send_result.is_err_and(|err| err == SendToGsbError::NotSupported) {
+                match Self::send_to_gsb(payer_id, payee_id, msg).await {
+                    Ok(_) => true,
+                    Err(SendToGsbError::Rejected) => true,
+                    Err(SendToGsbError::Failed) => false,
+                    Err(SendToGsbError::NotSupported) => false,
+                }
+            } else {
+                true
+            };
+>>>>>>> 7dfbc5f5 (review comments)
+
+            if mark_send {
                 payment_dao.mark_sent(payment_id).await.ok();
             } else {
                 let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
@@ -486,22 +506,7 @@ impl PaymentProcessor {
             }
         } else {
             // Spawning to avoid deadlock in a case that payee is the same node as payer
-            tokio::task::spawn_local(
-                ya_net::from(payer_id)
-                    .to(payee_id)
-                    .service(BUS_ID)
-                    .call(msg)
-                    .map(|res| match res {
-                        Ok(Ok(_)) => (),
-                        Err(err) => {
-                            log::error!("Error sending payment message to provider: {:?}", err)
-                        }
-                        Ok(Err(err)) => {
-                            log::error!("Provider rejected payment: {:?}", err)
-                        }
-                    }),
-            );
-
+            tokio::task::spawn_local(Self::send_to_gsb(payer_id, payee_id, msg));
             // Assume payments are OK when requesting from self
             payment_dao.mark_sent(payment_id).await?;
         }
@@ -513,21 +518,21 @@ impl PaymentProcessor {
         payer_id: NodeId,
         payee_id: NodeId,
         msg: T,
-    ) -> bool {
+    ) -> Result<(), SendToGsbError> {
         ya_net::from(payer_id)
             .to(payee_id)
             .service(BUS_ID)
             .call(msg)
             .map(|res| match res {
-                Ok(Ok(_)) => true,
-                Err(Error::GsbBadRequest(_)) => false,
+                Ok(Ok(_)) => Ok(()),
+                Err(Error::GsbBadRequest(_)) => Err(SendToGsbError::NotSupported),
                 Err(err) => {
                     log::error!("Error sending payment message to provider: {:?}", err);
-                    false
+                    Err(SendToGsbError::Failed)
                 }
                 Ok(Err(err)) => {
                     log::error!("Provider rejected payment: {:?}", err);
-                    true
+                    Err(SendToGsbError::Rejected)
                 }
             })
             .await
