@@ -123,7 +123,7 @@ jobs:
 
       - name: Install binaries
         run: |
-          mv /tmp/yagna-build/* /usr/local/bin
+          echo "/tmp/yagna-build" >> $GITHUB_PATH
           yagna --version
           erc20_processor --version
 
