@@ -518,6 +518,7 @@ impl RpcMessage for SignPayment {
 
 // ************************ SIGN PAYMENT ************************
 
+/// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignPaymentCanonicalized(pub Payment);
 
