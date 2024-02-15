@@ -127,6 +127,10 @@ jobs:
           yagna --version
           erc20_processor --version
 
+      - name: Run test
+        run: |
+          cd extra/payments/multi_test
+          python3 payment_test.py
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
