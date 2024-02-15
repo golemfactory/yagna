@@ -14,6 +14,9 @@ def run_command(command):
     p = subprocess.Popen(command.split(" "), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     rc = p.returncode
+    logger.info(f"Command output: {out}")
+    logger.info(f"Command error: {err}")
+    logger.info(f"Command return code: {rc}")
     return out, err, rc
 
 
