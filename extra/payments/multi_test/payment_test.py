@@ -86,7 +86,7 @@ def block_account(eth_public_key):
 
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
-    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 100 --to-address {faucet_address}")
+    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
     print(res)
 
     time.sleep(80)
