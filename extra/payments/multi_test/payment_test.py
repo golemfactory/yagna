@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_command(command):
+    logger.info(f"Running command: {command}")
     p = subprocess.Popen(command.split(" "), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     rc = p.returncode
