@@ -64,16 +64,16 @@ def prepare():
 
         if os.name == "nt":
             yagna = "..\\..\\..\\target\\debug\\yagna.exe"
-            processor = "..\\..\\..\\target\\debug\\erc20_processor.exe"
+            processor = "..\\..\\..\\..\\target\\debug\\erc20_processor.exe"
         else:
             yagna = "../../../target/debug/yagna"
-            processor = "../../../target/debug/erc20_processor"
+            processor = "../../../../target/debug/erc20_processor"
 
 
 def create_keys():
     logger.info("Creating keys...")
 
-    env_file, _, _ = run_command(f"{processor} generate-key -n 10")
+    env_file, _, _ = run_command(f"{processor} generate-key -n 10", working_dir="processor")
     public_addrs = []
     for line in env_file.decode("utf-8").split("\n"):
         print(line)
@@ -106,8 +106,22 @@ def block_account(eth_public_key):
 
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
-    res = run_command(
-        f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x00984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x01984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x02984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x03984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x04984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x05984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x06984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x07984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x08984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x09984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x10984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x11984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x12984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x12984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address {"0x13984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"}")
+    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
     print(res)
 
 
