@@ -17,7 +17,7 @@ def run_command(command, working_dir=None):
     out, err = p.communicate()
     rc = p.returncode
     logger.info(f"Command output: {out}")
-    logger.info(f"Command error: {err}")
+    logger.info(f"Command err-output: {err}")
     logger.info(f"Command return code: {rc}")
     return out, err, rc
 
@@ -64,7 +64,7 @@ def prepare():
 
         if os.name == "nt":
             yagna = "..\\..\\..\\target\\debug\\yagna.exe"
-            processor = "..\\..\\..\\..\\target\\debug\\erc20_processor.exe"
+            processor = "..\\..\\..\\target\\debug\\erc20_processor.exe"
         else:
             yagna = "../../../target/debug/yagna"
             processor = "../../../../target/debug/erc20_processor"
@@ -107,9 +107,9 @@ def block_account(eth_public_key):
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x00984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
-    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x01984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
-    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x02984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
-    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x03984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 34.2 --to-address 0x01984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11.66 --to-address 0x02984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11.346 --to-address 0x03984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x04984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x05984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x06984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
@@ -120,15 +120,15 @@ def block_account(eth_public_key):
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x11984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x12984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
     run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x12984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
-    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 11 --to-address 0x13984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
-    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
+    run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 43 --to-address 0x13984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f")
+    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100.66 --to-address {faucet_address}")
     print(res)
 
 
 def transfer(eth_public_key, transfer_to):
     logger.info("Transferring funds...")
 
-    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 100 --to-address {transfer_to}")
+    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 400 --to-address {transfer_to}")
     print(res)
 
 
@@ -137,19 +137,19 @@ def append_return_funds(eth_public_key):
 
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
-    res = run_command(
+    output, _, _ = run_command(
         f"{processor} transfer --address {eth_public_key} --all --recipient {faucet_address}",
         working_dir="processor")
-    print(res)
+    print(output)
 
 
 def get_balance():
     logger.info("Getting balance...")
 
-    res = run_command(
+    output, _, _ = run_command(
         f"{processor} balance",
         working_dir="processor")
-    return json.loads(res)
+    return json.loads(output)
 
 
 def process_erc20():
@@ -164,6 +164,9 @@ if __name__ == "__main__":
     with open("processor/.env", "w") as f:
         f.write(env_file.decode("utf-8"))
 
+    balance = get_balance()
+    if balance[public_addrs[0]]["tokenDecimal"] != "0":
+        raise Exception("Test failed early because of wrong initial balance")
     pr = subprocess.Popen([yagna, "service", "run"])
     time.sleep(10)
 
@@ -173,7 +176,7 @@ if __name__ == "__main__":
 
     block_account(public_addrs[0])
 
-    time.sleep(100)
+    time.sleep(180)
 
     create_account_and_fund(keys[1], public_addrs[1])
 
@@ -181,7 +184,7 @@ if __name__ == "__main__":
 
     transfer(public_addrs[1], public_addrs[0])
 
-    time.sleep(200)
+    time.sleep(180)
 
     subprocess.run([yagna, "service", "shutdown"])
 
@@ -192,6 +195,9 @@ if __name__ == "__main__":
     process_erc20()
 
     balance = get_balance()
-    logger.info(f"Balance: {balance}")
+    token_decimal = balance[public_addrs[0]]["tokenDecimal"]
 
+    if token_decimal != "78.134":
+        raise Exception(f"Token decimal is not correct: {token_decimal} instead of 78.134")
 
+    logger.info("Test passed")
