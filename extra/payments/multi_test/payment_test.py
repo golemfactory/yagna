@@ -13,7 +13,7 @@ def run_command(command):
     logger.info(f"Running command: {command}")
     command_array = command.split(" ")
     logger.info(f"Command array: {command_array}")
-    p = subprocess.Popen(command_array, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(command_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     rc = p.returncode
     logger.info(f"Command output: {out}")
@@ -46,7 +46,7 @@ def prepare():
     processor = shutil.which("erc20_processor")
 
     if yagna is None or processor is None:
-        subprocess.run(["cargo", "build", "-p", "erc20_processor", "-p", "yagna"], shell=True)
+        subprocess.run(["cargo", "build", "-p", "erc20_processor", "-p", "yagna"])
 
         if os.name == "nt":
             yagna = "..\\..\\..\\target\\debug\\yagna.exe"
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     prepare()
     env_file, keys, public_addrs = create_keys()
 
-    pr = subprocess.Popen([yagna, "service", "run"], shell=True)
+    pr = subprocess.Popen([yagna, "service", "run"])
     time.sleep(10)
 
     create_account_and_fund(keys[0], public_addrs[0])
@@ -130,6 +130,6 @@ if __name__ == "__main__":
 
     time.sleep(200)
 
-    subprocess.run([yagna, "service", "shutdown"], shell=True)
+    subprocess.run([yagna, "service", "shutdown"])
 
     pr.wait(timeout=60)
