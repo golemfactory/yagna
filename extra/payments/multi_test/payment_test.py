@@ -9,17 +9,24 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def run_command(command):
+def run_command(command, working_dir=None):
     logger.info(f"Running command: {command}")
     command_array = command.split(" ")
     logger.info(f"Command array: {command_array}")
-    p = subprocess.Popen(command_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(command_array, cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     rc = p.returncode
     logger.info(f"Command output: {out}")
     logger.info(f"Command error: {err}")
     logger.info(f"Command return code: {rc}")
     return out, err, rc
+
+
+def run_command_output_log(command, working_dir=None):
+    logger.info(f"Running command: {command}")
+    command_array = command.split(" ")
+    logger.info(f"Command array: {command_array}")
+    subprocess.run(command_array, cwd=working_dir)
 
 
 yagna = None
@@ -31,7 +38,7 @@ def prepare():
 
     with open(".env", "w") as f:
         f.write("RUST_LOG=info,ya_relay_client=error,ya_net=error\n")
-        f.write("YAGNA_DATADIR=data_dir\n")
+        f.write("YAGNA_DATADIR=datadir\n")
 
     if os.path.exists("datadir"):
         shutil.rmtree("datadir")
@@ -39,6 +46,13 @@ def prepare():
         time.sleep(1)
 
     os.mkdir("datadir")
+
+    if os.path.exists("processor"):
+        shutil.rmtree("processor")
+        # operating system need time to propagate events that folder not exists (at least Windows)
+        time.sleep(1)
+
+    os.mkdir("processor")
 
     global yagna
     global processor
@@ -92,10 +106,9 @@ def block_account(eth_public_key):
 
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
-    res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
+    res = run_command(
+        f"{yagna} payment transfer --account {eth_public_key} --amount 1100 --to-address {faucet_address}")
     print(res)
-
-    time.sleep(80)
 
 
 def transfer(eth_public_key, transfer_to):
@@ -104,12 +117,29 @@ def transfer(eth_public_key, transfer_to):
     res = run_command(f"{yagna} payment transfer --account {eth_public_key} --amount 100 --to-address {transfer_to}")
     print(res)
 
-    time.sleep(80)
+
+def append_return_funds(eth_public_key):
+    logger.info("Returning funds...")
+
+    faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
+
+    res = run_command(
+        f"{processor} transfer --address {eth_public_key} --all --recipient {faucet_address}",
+        working_dir="processor")
+    print(res)
+
+
+def process_erc20():
+    run_command_output_log(
+        f"{processor} run",
+        working_dir="processor")
 
 
 if __name__ == "__main__":
     prepare()
     env_file, keys, public_addrs = create_keys()
+    with open("processor/.env", "w") as f:
+        f.write(env_file.decode("utf-8"))
 
     pr = subprocess.Popen([yagna, "service", "run"])
     time.sleep(10)
@@ -133,3 +163,8 @@ if __name__ == "__main__":
     subprocess.run([yagna, "service", "shutdown"])
 
     pr.wait(timeout=60)
+
+    append_return_funds(public_addrs[0])
+    append_return_funds(public_addrs[1])
+    process_erc20()
+
