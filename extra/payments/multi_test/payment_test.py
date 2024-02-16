@@ -143,6 +143,15 @@ def append_return_funds(eth_public_key):
     print(res)
 
 
+def get_balance():
+    logger.info("Getting balance...")
+
+    res = run_command(
+        f"{processor} balance",
+        working_dir="processor")
+    return json.loads(res)
+
+
 def process_erc20():
     run_command_output_log(
         f"{processor} run",
@@ -181,4 +190,8 @@ if __name__ == "__main__":
     append_return_funds(public_addrs[0])
     append_return_funds(public_addrs[1])
     process_erc20()
+
+    balance = get_balance()
+    logger.info(f"Balance: {balance}")
+
 
