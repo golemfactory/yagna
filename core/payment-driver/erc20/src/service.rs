@@ -90,7 +90,7 @@ impl Erc20Service {
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
-                let confirmations_env = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
+                let confirmations_env = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
                     chain.rpc_endpoints = addr
