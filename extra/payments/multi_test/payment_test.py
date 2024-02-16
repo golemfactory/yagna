@@ -138,7 +138,7 @@ def append_return_funds(eth_public_key):
     faucet_address = "0x5b984629E2Cc7570cBa7dD745b83c3dD23Ba6d0f"
 
     output, _, _ = run_command(
-        f"{processor} transfer --address {eth_public_key} --all --recipient {faucet_address}",
+        f"{processor} transfer --address {eth_public_key} --token eth --all --recipient {faucet_address}",
         working_dir="processor")
     print(output)
 
