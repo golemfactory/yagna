@@ -451,6 +451,7 @@ impl PaymentProcessor {
 
         if payer_id != payee_id {
             let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
+<<<<<<< HEAD
 
             let mark_sent = if send_result.is_ok() {
                 payment_dao
@@ -482,9 +483,20 @@ impl PaymentProcessor {
 >>>>>>> 3c322639 (init)
 =======
             let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes).await;
+=======
+>>>>>>> 602ed3bc (signed bytes and signature in pay_payment)
 
-            // if sending SendPaymentWithBytes is not supported then try sending SendPayment
-            let mark_send = if send_result.is_err_and(|err| err == SendToGsbError::NotSupported) {
+            let mark_sent = if send_result.is_ok() {
+                payment_dao
+                    .add_signature(
+                        payment_id.clone(),
+                        msg_with_bytes.signature.clone(),
+                        msg_with_bytes.signed_bytes.clone(),
+                    )
+                    .await?;
+                true
+            } else if send_result.is_err_and(|err| err == SendToGsbError::NotSupported) {
+                // if sending SendPaymentWithBytes is not supported then try sending SendPayment
                 match Self::send_to_gsb(payer_id, payee_id, msg).await {
                     Ok(_) => true,
                     Err(SendToGsbError::Rejected) => true,
@@ -492,11 +504,11 @@ impl PaymentProcessor {
                     Err(SendToGsbError::NotSupported) => false,
                 }
             } else {
-                true
+                false
             };
 >>>>>>> 7dfbc5f5 (review comments)
 
-            if mark_send {
+            if mark_sent {
                 payment_dao.mark_sent(payment_id).await.ok();
             } else {
                 let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
