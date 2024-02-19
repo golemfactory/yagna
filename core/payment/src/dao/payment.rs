@@ -135,6 +135,8 @@ impl<'c> PaymentDao<'c> {
             payment_platform,
             amount,
             details,
+            None,
+            None,
         );
         let payment_id = payment.id.clone();
         self.insert(payment, activity_payments, agreement_payments)
@@ -142,10 +144,16 @@ impl<'c> PaymentDao<'c> {
         Ok(payment_id)
     }
 
-    pub async fn insert_received(&self, payment: Payment, payee_id: NodeId) -> DbResult<()> {
+    pub async fn insert_received(
+        &self,
+        payment: Payment,
+        payee_id: NodeId,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> DbResult<()> {
         let activity_payments = payment.activity_payments.clone();
         let agreement_payments = payment.agreement_payments.clone();
-        let payment = WriteObj::new_received(payment)?;
+        let payment = WriteObj::new_received(payment, signature, signed_bytes)?;
         self.insert(payment, activity_payments, agreement_payments)
             .await
     }
@@ -154,6 +162,24 @@ impl<'c> PaymentDao<'c> {
         do_with_transaction(self.pool, "payment_dao_mark_sent", move |conn| {
             diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
                 .set(dsl::send_payment.eq(false))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn add_signature(
+        &self,
+        payment_id: String,
+        signature: Vec<u8>,
+        signed_bytes: Vec<u8>,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .set((
+                    dsl::signature.eq(signature),
+                    dsl::signed_bytes.eq(signed_bytes),
+                ))
                 .execute(conn)?;
             Ok(())
         })

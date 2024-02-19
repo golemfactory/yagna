@@ -444,12 +444,28 @@ impl PaymentProcessor {
         let msg_with_bytes = SendPaymentWithBytes::new(payment, signature_canonicalized);
 
         if payer_id != payee_id {
-            let mut mark_sent = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes).await;
+            let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
 
-            // if sending SendPaymentWithBytes failed (possibly not supported) then try sending SendPayment
-            if mark_sent == false {
-                mark_sent = Self::send_to_gsb(payer_id, payee_id, msg).await;
-            }
+            let mark_sent = if send_result.is_ok() {
+                payment_dao
+                    .add_signature(
+                        payment_id.clone(),
+                        msg_with_bytes.signature.clone(),
+                        msg_with_bytes.signed_bytes.clone(),
+                    )
+                    .await?;
+                true
+            } else if send_result.is_err_and(|err| err == SendToGsbError::NotSupported) {
+                // if sending SendPaymentWithBytes is not supported then try sending SendPayment
+                match Self::send_to_gsb(payer_id, payee_id, msg).await {
+                    Ok(_) => true,
+                    Err(SendToGsbError::Rejected) => true,
+                    Err(SendToGsbError::Failed) => false,
+                    Err(SendToGsbError::NotSupported) => false,
+                }
+            } else {
+                false
+            };
 
             if mark_sent {
                 payment_dao.mark_sent(payment_id).await.ok();
@@ -544,6 +560,8 @@ impl PaymentProcessor {
         &self,
         payment: Payment,
         signature: Vec<u8>,
+        canonicalized: bool,
+        signed_bytes: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -554,7 +572,11 @@ impl PaymentProcessor {
         )?;
 
         if !driver_endpoint(&driver)
-            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .send(driver::VerifySignature::new(
+                payment.clone(),
+                signature.clone(),
+                canonicalized,
+            ))
             .await??
         {
             return Err(VerifyPaymentError::InvalidSignature);
@@ -673,7 +695,15 @@ impl PaymentProcessor {
         }
 
         // Insert payment into database (this operation creates and updates all related entities)
-        payment_dao.insert_received(payment, payee_id).await?;
+        if signed_bytes.is_none() {
+            payment_dao
+                .insert_received(payment, payee_id, None, None)
+                .await?;
+        } else {
+            payment_dao
+                .insert_received(payment, payee_id, Some(signature), signed_bytes)
+                .await?;
+        }
 
         Ok(())
     }

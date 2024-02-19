@@ -777,12 +777,13 @@ pub mod public {
         #[serde(flatten)]
         pub payment: Payment,
         pub signature: Vec<u8>,
-        pub signed_bytes: Option<Vec<u8>>,
+        #[serde(with = "serde_bytes")]
+        pub signed_bytes: Vec<u8>,
     }
 
     impl SendPaymentWithBytes {
         pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-            let signed_bytes = to_vec(&payment).ok();
+            let signed_bytes = to_vec(&payment).unwrap();
             Self {
                 payment,
                 signature,
