@@ -20,6 +20,8 @@ pub struct WriteObj {
     pub amount: BigDecimalField,
     pub details: Vec<u8>,
     pub send_payment: bool,
+    pub signature: Option<Vec<u8>>,
+    pub signed_bytes: Option<Vec<u8>>,
 }
 
 impl WriteObj {
@@ -31,6 +33,8 @@ impl WriteObj {
         payment_platform: String,
         amount: BigDecimal,
         details: Vec<u8>,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
     ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -43,10 +47,16 @@ impl WriteObj {
             amount: amount.into(),
             details,
             send_payment: true,
+            signature,
+            signed_bytes,
         }
     }
 
-    pub fn new_received(payment: api_model::Payment) -> DbResult<Self> {
+    pub fn new_received(
+        payment: api_model::Payment,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> DbResult<Self> {
         let details = base64::decode(&payment.details)
             .map_err(|_| DbError::Query("Payment details is not valid base-64".to_string()))?;
         Ok(Self {
@@ -60,6 +70,8 @@ impl WriteObj {
             amount: payment.amount.into(),
             details,
             send_payment: false,
+            signature,
+            signed_bytes,
         })
     }
 }
@@ -79,6 +91,8 @@ pub struct ReadObj {
     pub timestamp: NaiveDateTime,
     pub details: Vec<u8>,
     pub send_payment: bool,
+    pub signature: Option<Vec<u8>>,
+    pub signed_bytes: Option<Vec<u8>>,
 }
 
 impl ReadObj {

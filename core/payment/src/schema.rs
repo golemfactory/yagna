@@ -189,6 +189,8 @@ table! {
         timestamp -> Timestamp,
         details -> Binary,
         send_payment -> Bool,
+        signature -> Nullable<Binary>,
+        signed_bytes -> Nullable<Binary>,
     }
 }
 
