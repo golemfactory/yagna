@@ -1109,7 +1109,16 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, false).await
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            false,
+            msg.signature,
+            None,
+        )
+        .await
     }
 
     async fn send_payment_with_bytes(
@@ -1118,7 +1127,16 @@ mod public {
         sender_id: String,
         msg: SendPaymentWithBytes,
     ) -> Result<Ack, SendError> {
-        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, true).await
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            true,
+            msg.signature,
+            Some(msg.signed_bytes),
+        )
+        .await
     }
 
     async fn send_payment_impl(
@@ -1126,8 +1144,9 @@ mod public {
         processor: Arc<Mutex<PaymentProcessor>>,
         sender_id: String,
         payment: Payment,
-        signature: Vec<u8>,
         canonicalized: bool,
+        signature: Vec<u8>,
+        signed_bytes: Option<Vec<u8>>,
     ) -> Result<Ack, SendError> {
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
@@ -1139,7 +1158,7 @@ mod public {
         match processor
             .lock()
             .await
-            .verify_payment(payment, signature, canonicalized)
+            .verify_payment(payment, signature, canonicalized, signed_bytes)
             .await
         {
             Ok(_) => {
