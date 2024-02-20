@@ -178,7 +178,7 @@ impl Erc20Driver {
                 }
                 DriverEventContent::StatusChanged(_) => {
                     if let Ok(status) = this._status(DriverStatus { network: None }).await {
-                        log::info!("Payment driver [{DRIVER_NAME}] status changed: {status:#?}");
+                        log::debug!("Payment driver [{DRIVER_NAME}] status: {status:#?}");
                         bus::status_changed(status).await.ok();
                     }
                 }
