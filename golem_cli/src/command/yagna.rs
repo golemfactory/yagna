@@ -28,7 +28,7 @@ pub struct PaymentDriver {
 }
 
 lazy_static! {
-    pub static ref ERC20NEXT_DRIVER: PaymentDriver = {
+    pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
         erc20.insert(
             NetworkName::Mainnet.into(),
@@ -87,7 +87,7 @@ lazy_static! {
 
     // Drivers are searched in order when more than one supports a given network,
     // so erc20 should be preferred over erc20.
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
 }
 
 impl PaymentDriver {

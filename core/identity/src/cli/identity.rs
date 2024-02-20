@@ -118,6 +118,9 @@ pub enum IdentityCommand {
 
     Unlock {
         node_or_alias: Option<NodeOrAlias>,
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
     },
 
     /// Create identity
@@ -128,6 +131,14 @@ pub enum IdentityCommand {
         /// Existing keystore to use
         #[structopt(long = "from-keystore")]
         from_keystore: Option<PathBuf>,
+
+        /// Existing private key to use (unsafe) - use keystore instead, it's much safer
+        #[structopt(long = "from-private-key")]
+        from_private_key: Option<String>,
+
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
 
         /// password for keystore
         #[structopt(long = "no-password")]
@@ -300,13 +311,40 @@ impl IdentityCommand {
             IdentityCommand::Create {
                 alias,
                 from_keystore,
+                from_private_key,
+                password,
                 no_password,
             } => {
+                if from_keystore.is_some() && from_private_key.is_some() {
+                    anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
+                }
+                if from_private_key.is_some() {
+                    log::warn!("Using private key directly is not recommended. Use keystore instead. Your key could leak in command history, check and clean logs.")
+                }
+
+                let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
+                    from_private_key
+                {
+                    let v = hex::decode(from_private_key).map_err(|e| {
+                        anyhow::anyhow!(
+                            "Private key has to be plain hex string without 0x prefix - {e}"
+                        )
+                    })?;
+                    let slice = v[0..32].try_into().map_err(|e|
+                        anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}")
+                    )?;
+                    Some(slice)
+                } else {
+                    None
+                };
+
                 let key_file = if let Some(keystore) = from_keystore {
                     std::fs::read_to_string(keystore)?
                 } else {
                     let password = if *no_password {
                         Protected::from("")
+                    } else if let Some(password) = password {
+                        Protected::from(password.as_str())
                     } else {
                         let password: Protected =
                             rpassword::read_password_from_tty(Some("Password: "))?.into();
@@ -317,7 +355,7 @@ impl IdentityCommand {
                         }
                         password
                     };
-                    crate::id_key::generate_new_keyfile(password)?
+                    crate::id_key::generate_new_keyfile(password, from_private_key_slice)?
                 };
 
                 let id = bus::service(identity::BUS_ID)
@@ -352,9 +390,16 @@ impl IdentityCommand {
                         .map_err(anyhow::Error::msg)?,
                 )
             }
-            IdentityCommand::Unlock { node_or_alias } => {
+            IdentityCommand::Unlock {
+                node_or_alias,
+                password,
+            } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let password = rpassword::read_password_from_tty(Some("Password: "))?;
+                let password = if let Some(password) = password {
+                    password.to_string()
+                } else {
+                    rpassword::read_password_from_tty(Some("Password: "))?
+                };
                 CommandOutput::object(
                     bus::service(identity::BUS_ID)
                         .send(identity::Unlock::with_id(node_id, password))

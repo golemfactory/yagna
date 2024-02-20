@@ -20,7 +20,8 @@ pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::payment::network::Network;
 pub use ya_client_model::NodeId;
-pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
+pub use ya_core_model::identity::event::IdentityEvent;
+pub use ya_core_model::identity::Error as IdentityError;
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
