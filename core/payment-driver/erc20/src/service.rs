@@ -2,6 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
+use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
@@ -198,9 +199,13 @@ impl Erc20Service {
                     broadcast_sender: None,
                     extra_testing: None,
                 },
-                signer,
+                Arc::new(Box::new(signer)),
             )
             .await?;
+
+            //let signer = IdentitySigner;
+            //pr.add_account(PaymentAccount::new(H160::from_low_u64_be(0), Box::new(signer)))
+            //    .await?;
 
             log::debug!("Bind erc20 driver");
             let driver = Erc20Driver::new(pr, recv);

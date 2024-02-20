@@ -76,12 +76,12 @@ jobs:
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor
 
       - name: Move target binaries
         run: |
           mkdir build
-          mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+          mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp,erc20_processor} build
 
       - name: Strip binaries
         if: ${{ github.event.inputs.strip_binaries != 'false' }}
@@ -98,6 +98,43 @@ jobs:
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
           rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
+
+  multi-payment-test:
+    name: Multi-payment test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure Python
+        continue-on-error: true
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: yagna-binaries
+          path: /tmp/yagna-build
+
+      - name: Install binaries
+        run: |
+          chmod +x /tmp/yagna-build/*
+          echo "/tmp/yagna-build" >> $GITHUB_PATH
+
+      - name: Check installed binaries
+        run: |
+          yagna --version
+          erc20_processor --version
+
+      - name: Run test
+        run: |
+          cd extra/payments/multi_test
+          python payment_test.py
 
   integration-test-groups:
     name: Integration Tests (hybrid-net) group
