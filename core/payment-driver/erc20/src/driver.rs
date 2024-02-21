@@ -399,6 +399,19 @@ impl PaymentDriver for Erc20Driver {
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
+    async fn get_rpc_endpoints(
+        &self,
+        _caller: String,
+        _msg: GetRpcEndpoints,
+    ) -> Result<GetRpcEndpointsResult, GenericError> {
+        let res = self
+            .payment_runtime
+            .get_rpc_endpoints()
+            .map_err(|e| GenericError::new(e.to_string()))?;
+
+        Ok(GetRpcEndpointsResult { response: res })
+    }
+
     async fn get_account_balance(
         &self,
         _caller: String,

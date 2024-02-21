@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
-use ya_core_model::payment::local::NetworkName;
+use ya_core_model::payment::local::{DriverName, NetworkName};
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -109,6 +109,10 @@ pub enum PaymentCli {
         address: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
+    },
+    Endpoints {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
 
     /// List registered drivers, networks, tokens and platforms
@@ -447,6 +451,38 @@ Typically operation should take less than 1 minute.
                     )
                     .await?,
                 )
+            }
+            PaymentCli::Endpoints { account } => {
+                let address = resolve_address(account.address()).await?;
+                let driver = DriverName::from_str(&account.driver()).map_err(|e| {
+                    anyhow::anyhow!("Invalid driver name: {}. Error: {}", account.driver(), e)
+                })?;
+
+                let network = account.network();
+                //let network = network.to_string();
+                if driver != DriverName::Erc20 {
+                    log::error!("Only ERC20 driver is supported for now");
+                    return Err(anyhow::anyhow!(
+                        "Only ERC20 driver is supported for this command"
+                    ));
+                }
+
+                let status = bus::service(pay::BUS_ID)
+                    .call(pay::GetRpcEndpoints {
+                        address,
+                        driver: driver.to_string(),
+                        network: Some(network.to_string()),
+                    })
+                    .await??;
+
+                Ok(CommandOutput::Object(status.response))
+                /*
+                Ok(CommandOutput::Table {
+                    columns: vec!["network".to_owned(), "url".to_owned()],
+                    values: vec![json!([{"network": "network"}, {"url": "url"}])],
+                    summary: vec![json!([{"network": "network summary"}, {"url": "url summary"}])],
+                    header: Some(format!("Endpoints for driver {} and network {}", driver, network)),
+                })*/
             }
             PaymentCli::Transfer {
                 account,

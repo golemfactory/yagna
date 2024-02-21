@@ -113,23 +113,16 @@ external-source-check-interval = 300
 
 [[chain.holesky.rpc-endpoints]]
 names = """
-    holesky.geth.golem.network
+    http://127.0.0.1:8080/web3/hol1
 """
 
 endpoints = """
-    https://holesky.geth.golem.network,
+    http://127.0.0.1:8080/web3/hol1,
 """
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
 allowed-head-behind-secs = 60
-
-[[chain.holesky.rpc-endpoints]]
-priority = 0
-max-timeout-ms = 5000
-verify-interval-secs = 300
-allowed-head-behind-secs = 60
-dns-source = "holesky.rpc-node.dev.golem.network."
 
 
 [chain.mumbai]

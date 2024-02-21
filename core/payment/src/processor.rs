@@ -17,8 +17,8 @@ use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation,
+    self, driver_bus_id, AccountMode, GasDetails, GetRpcEndpointsResult, PaymentConfirmation,
+    PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
@@ -669,6 +669,21 @@ impl PaymentProcessor {
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
+    }
+
+    pub async fn get_rpc_endpoints_info(
+        &self,
+        platform: String,
+        address: String,
+        network: Option<String>,
+    ) -> Result<GetRpcEndpointsResult, GetStatusError> {
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
+        let res = driver_endpoint(&driver)
+            .send(driver::GetRpcEndpoints { network })
+            .await??;
+        Ok(res)
     }
 
     pub async fn get_gas_balance(

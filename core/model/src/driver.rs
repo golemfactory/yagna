@@ -78,6 +78,24 @@ impl PaymentConfirmation {
     }
 }
 
+// ************************** GET RPC ENDPOINTS INFO **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetRpcEndpoints {
+    pub network: Option<String>,
+}
+
+impl RpcMessage for GetRpcEndpoints {
+    const ID: &'static str = "GetRpcEndpoints";
+    type Item = GetRpcEndpointsResult;
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GetRpcEndpointsResult {
+    pub response: serde_json::Value,
+}
+
 // ************************** GET ACCOUNT BALANCE **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
