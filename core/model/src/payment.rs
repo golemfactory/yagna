@@ -260,6 +260,24 @@ pub mod local {
         pub gas: Option<GasDetails>,
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetRpcEndpoints {
+        pub address: String,
+        pub driver: String,
+        pub network: Option<String>,
+    }
+
+    impl RpcMessage for crate::payment::local::GetRpcEndpoints {
+        const ID: &'static str = "GetRpcEndpoints";
+        type Item = crate::payment::local::GetRpcEndpointsResult;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct GetRpcEndpointsResult {
+        pub response: serde_json::Value,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     #[serde(rename_all = "camelCase")]
     pub struct StatValue {

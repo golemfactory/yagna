@@ -56,6 +56,7 @@ uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 humantime = "2.0.1"
 erc20_payment_lib = { workspace = true }
+strum = "0.24.1"
 
 [dev-dependencies]
 ya-client = "0.8"

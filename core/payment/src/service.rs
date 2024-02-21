@@ -50,6 +50,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use chrono::NaiveDateTime;
+    use serde_json::json;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -75,6 +76,7 @@ mod local {
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
+            .bind_with_processor(get_rpc_endpoints)
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
@@ -187,6 +189,52 @@ mod local {
     ) -> Result<(), GenericError> {
         processor.lock().await.notify_payment(msg).await?;
         Ok(())
+    }
+
+    async fn get_rpc_endpoints(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: GetRpcEndpoints,
+    ) -> Result<GetRpcEndpointsResult, GenericError> {
+        log::info!("get rpc endpoints: {:?}", msg);
+        let GetRpcEndpoints {
+            driver,
+            network,
+            address,
+        } = msg;
+
+        let (network2, network_details) = processor
+            .lock()
+            .await
+            .get_network(driver.clone(), network.clone())
+            .await
+            .map_err(GenericError::new)?;
+        let token = network_details.default_token.clone();
+        let platform = match network_details.tokens.get(&token) {
+            Some(platform) => platform.clone(),
+            None => {
+                return Err(GenericError::new(format!(
+                    "Unsupported token. driver={} network={} token={}",
+                    driver, network2, token
+                )));
+            }
+        };
+
+        let rpc_info = processor
+            .lock()
+            .await
+            .get_rpc_endpoints_info(platform, address.clone(), network.clone())
+            .await
+            .map_err(GenericError::new)?;
+
+        Ok(GetRpcEndpointsResult {
+            response: json!({
+                "driver": driver,
+                "network": network,
+                "rpc_info": rpc_info.response,
+            }),
+        })
     }
 
     async fn get_status(
