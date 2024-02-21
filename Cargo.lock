@@ -8239,7 +8239,6 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8263,7 +8262,6 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db#a3ee3cd0a5ac5c1a6022fa0f106a2d83e62844db"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8274,6 +8272,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
