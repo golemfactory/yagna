@@ -8282,6 +8282,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
