@@ -15,7 +15,7 @@ use diesel::{
     TextExpressionMethods,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
+use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment, Signed};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
@@ -174,7 +174,7 @@ impl<'c> PaymentDao<'c> {
         signature: Vec<u8>,
         signed_bytes: Vec<u8>,
     ) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, "payment_dao_update", move |conn| {
             diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
                 .set((
                     dsl::signature.eq(signature),
@@ -186,7 +186,11 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
+    pub async fn get(
+        &self,
+        payment_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<Signed<Payment>>> {
         readonly_transaction(self.pool, "payment_dao_get", move |conn| {
             let payment: Option<ReadObj> = dsl::pay_payment
                 .filter(dsl::id.eq(&payment_id))
@@ -204,9 +208,10 @@ impl<'c> PaymentDao<'c> {
                         .filter(agreement_pay_dsl::payment_id.eq(&payment_id))
                         .filter(agreement_pay_dsl::owner_id.eq(&owner_id))
                         .load(conn)?;
-                    Ok(Some(
-                        payment.into_api_model(activity_payments, agreement_payments),
-                    ))
+                    Ok(Some(payment.into_signed_api_model(
+                        activity_payments,
+                        agreement_payments,
+                    )))
                 }
                 None => Ok(None),
             }
@@ -248,7 +253,7 @@ impl<'c> PaymentDao<'c> {
         app_session_id: Option<String>,
         network: Option<NetworkName>,
         driver: Option<DriverName>,
-    ) -> DbResult<Vec<Payment>> {
+    ) -> DbResult<Vec<Signed<Payment>>> {
         readonly_transaction(self.pool, "payment_dao_get_for_node_id", move |conn| {
             let mut query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
@@ -327,7 +332,8 @@ impl<'c> PaymentDao<'c> {
             // agreement_payment. So if some payment lacks related sub-payments that means they've
             // been filtered out due to non-matching app_sesion_id and so should be the payment.
             if let Some(app_session_id) = app_session_id {
-                payments.retain(|payment| {
+                payments.retain(|s| {
+                    let payment = &s.payload;
                     !payment.activity_payments.is_empty() || !payment.agreement_payments.is_empty()
                 });
             };
@@ -371,7 +377,7 @@ fn join_activity_and_agreement_payments(
     payments: Vec<ReadObj>,
     activity_payments: Vec<DbActivityPayment>,
     agreement_payments: Vec<DbAgreementPayment>,
-) -> Vec<Payment> {
+) -> Vec<Signed<Payment>> {
     let mut activity_payments_map =
         activity_payments
             .into_iter()
@@ -399,7 +405,7 @@ fn join_activity_and_agreement_payments(
             let agreement_payments = agreement_payments_map
                 .remove(&payment.id)
                 .unwrap_or_default();
-            payment.into_api_model(activity_payments, agreement_payments)
+            payment.into_signed_api_model(activity_payments, agreement_payments)
         })
         .collect()
 }

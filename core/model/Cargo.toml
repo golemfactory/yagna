@@ -24,7 +24,8 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-ya-client-model = "0.6"
+#ya-client-model = "0.6"
+ya-client-model = {path = "../../../ya-client/model"}
 ya-service-bus = { workspace = true }
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }

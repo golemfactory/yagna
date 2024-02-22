@@ -583,7 +583,6 @@ pub mod local {
 pub mod public {
     use super::*;
     use ya_client_model::NodeId;
-    use ya_service_bus::serialization::to_vec;
 
     pub const BUS_ID: &str = "/public/payment";
 
@@ -773,7 +772,7 @@ pub mod public {
     }
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct SendPaymentWithBytes {
+    pub struct SendSignedPayment {
         #[serde(flatten)]
         pub payment: Payment,
         #[serde(with = "serde_bytes")]
@@ -782,9 +781,9 @@ pub mod public {
         pub signed_bytes: Vec<u8>,
     }
 
-    impl SendPaymentWithBytes {
+    impl SendSignedPayment {
         pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-            let signed_bytes = to_vec(&payment).unwrap();
+            let signed_bytes = serde_json_canonicalizer::to_vec(&payment).unwrap();
             Self {
                 payment,
                 signature,
@@ -793,7 +792,7 @@ pub mod public {
         }
     }
 
-    impl RpcMessage for SendPaymentWithBytes {
+    impl RpcMessage for SendSignedPayment {
         const ID: &'static str = "SendPaymentWithBytes";
         type Item = Ack;
         type Error = SendError;
@@ -819,7 +818,7 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PaymentSyncWithBytes {
         /// Payment confirmations.
-        pub payments: Vec<SendPaymentWithBytes>,
+        pub payments: Vec<SendSignedPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.

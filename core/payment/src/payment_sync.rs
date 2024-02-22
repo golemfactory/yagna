@@ -15,7 +15,7 @@ use ya_core_model::{
         local::GenericError,
         public::{
             AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
-            RejectInvoiceV2, SendPayment, SendPaymentWithBytes,
+            RejectInvoiceV2, SendPayment, SendSignedPayment,
         },
     },
 };
@@ -52,7 +52,7 @@ async fn payment_sync(
         let signature_canonicalized = typed::service(driver_bus_id(driver))
             .send(SignPaymentCanonicalized(payment.clone()))
             .await??;
-        payments_canonicalized.push(SendPaymentWithBytes::new(payment, signature_canonicalized));
+        payments_canonicalized.push(SendSignedPayment::new(payment, signature_canonicalized));
     }
 
     let mut invoice_accepts = Vec::default();
