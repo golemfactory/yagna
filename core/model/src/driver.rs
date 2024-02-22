@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
-use erc20_payment_lib::Web3FullNodeData;
+use erc20_payment_lib::rpc_pool::Web3FullNodeData;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
@@ -85,6 +85,9 @@ impl PaymentConfirmation {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetRpcEndpoints {
     pub network: Option<String>,
+    pub verify: bool,
+    pub resolve: bool,
+    pub no_wait: bool,
 }
 
 impl RpcMessage for GetRpcEndpoints {

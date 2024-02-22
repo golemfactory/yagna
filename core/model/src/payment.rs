@@ -22,6 +22,8 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
+    use erc20_payment_lib::rpc_pool::Web3FullNodeData;
+    use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -265,6 +267,9 @@ pub mod local {
         pub address: String,
         pub driver: String,
         pub network: Option<String>,
+        pub verify: bool,
+        pub resolve: bool,
+        pub no_wait: bool,
     }
 
     impl RpcMessage for crate::payment::local::GetRpcEndpoints {
@@ -275,7 +280,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct GetRpcEndpointsResult {
-        pub response: serde_json::Value,
+        pub response: BTreeMap<String, Vec<Web3FullNodeData>>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]

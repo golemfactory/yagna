@@ -404,10 +404,24 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
+        if !msg.no_wait && (msg.resolve || msg.verify) {
+            self.payment_runtime
+                .force_check_endpoint_info(msg.network.clone(), msg.resolve, msg.verify, true)
+                .await
+                .map_err(|e| GenericError::new(e.to_string()))?;
+        }
+
         let res = self
             .payment_runtime
-            .get_rpc_endpoints(msg.network)
+            .get_rpc_endpoints(msg.network.clone())
             .map_err(|e| GenericError::new(e.to_string()))?;
+
+        if msg.no_wait && (msg.resolve || msg.verify) {
+            self.payment_runtime
+                .force_check_endpoint_info(msg.network.clone(), msg.resolve, msg.verify, false)
+                .await
+                .map_err(|e| GenericError::new(e.to_string()))?;
+        }
 
         Ok(GetRpcEndpointsResult { response: res })
     }

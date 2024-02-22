@@ -50,7 +50,6 @@ mod local {
     use super::*;
     use crate::dao::*;
     use chrono::NaiveDateTime;
-    use serde_json::json;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -202,6 +201,9 @@ mod local {
             driver,
             network,
             address,
+            verify,
+            resolve,
+            no_wait,
         } = msg;
 
         let (network2, network_details) = processor
@@ -224,16 +226,19 @@ mod local {
         let rpc_info = processor
             .lock()
             .await
-            .get_rpc_endpoints_info(platform, address.clone(), network.clone())
+            .get_rpc_endpoints_info(
+                platform,
+                address.clone(),
+                network.clone(),
+                verify,
+                resolve,
+                no_wait,
+            )
             .await
             .map_err(GenericError::new)?;
 
         Ok(GetRpcEndpointsResult {
-            response: json!({
-                "driver": driver,
-                "network": network,
-                "rpc_info": rpc_info.response,
-            }),
+            response: rpc_info.response,
         })
     }
 

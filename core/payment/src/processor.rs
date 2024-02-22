@@ -677,12 +677,20 @@ impl PaymentProcessor {
         platform: String,
         address: String,
         network: Option<String>,
+        verify: bool,
+        resolve: bool,
+        no_wait: bool,
     ) -> Result<GetRpcEndpointsResult, GetStatusError> {
         let driver = self
             .registry
             .driver(&platform, &address, AccountMode::empty())?;
         let res = driver_endpoint(&driver)
-            .send(driver::GetRpcEndpoints { network })
+            .send(driver::GetRpcEndpoints {
+                network,
+                verify,
+                resolve,
+                no_wait,
+            })
             .await??;
         Ok(res)
     }

@@ -1,6 +1,7 @@
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use erc20_payment_lib::rpc_pool::VerifyEndpointResult;
 use serde_json::{json, to_value};
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
@@ -36,6 +37,15 @@ pub enum DriverSubcommand {
 
         #[structopt(long, help = "Show info for all networks")]
         all: bool,
+
+        #[structopt(long, help = "Additionally force check endpoints")]
+        verify: bool,
+
+        #[structopt(long, help = "Additionally force resolve sources")]
+        resolve: bool,
+
+        #[structopt(long, help = "Don't wait for check or resolve")]
+        no_wait: bool,
     },
 }
 
@@ -462,7 +472,13 @@ Typically operation should take less than 1 minute.
             }
             PaymentCli::Driver { command } => {
                 match command {
-                    DriverSubcommand::Rpc { account, all } => {
+                    DriverSubcommand::Rpc {
+                        account,
+                        all,
+                        verify,
+                        resolve,
+                        no_wait,
+                    } => {
                         let address = resolve_address(account.address()).await?;
                         let driver = DriverName::from_str(&account.driver()).map_err(|e| {
                             anyhow::anyhow!(
@@ -486,23 +502,119 @@ Typically operation should take less than 1 minute.
                                 address,
                                 driver: driver.to_string(),
                                 network: if all { None } else { Some(network.to_string()) },
+                                verify,
+                                resolve,
+                                no_wait,
                             })
                             .await??;
 
                         if ctx.json_output {
-                            Ok(CommandOutput::Object(status.response))
+                            CommandOutput::object(status.response)
                         } else {
-                            Ok(CommandOutput::Table {
-                                columns: vec!["network".to_owned(), "url".to_owned()],
-                                values: vec![json!([{"network": "network"}, {"url": "url"}])],
-                                summary: vec![
-                                    json!([{"network": "network summary"}, {"url": "url summary"}]),
-                                ],
-                                header: Some(format!(
-                                    "Endpoints for driver {} and network {}",
-                                    driver, network
-                                )),
-                            })
+                            let mut v = Vec::new();
+                            for (network, node_infos) in status.response {
+                                let mut values = Vec::new();
+                                let last_chosen_el = node_infos
+                                    .iter()
+                                    .max_by_key(|node| {
+                                        if let Some(t) = node.info.last_chosen {
+                                            t
+                                        } else {
+                                            DateTime::<Utc>::MIN_UTC
+                                        }
+                                    })
+                                    .cloned();
+
+                                for node in node_infos {
+                                    let mut ping_ms = "".to_string();
+                                    let seconds_behind = match node.info.verify_result {
+                                        Some(ver) => match ver {
+                                            VerifyEndpointResult::Ok(res) => {
+                                                ping_ms =
+                                                    format!(" / ({:.2}ms)", res.check_time_ms);
+                                                format!("{}s", res.head_seconds_behind)
+                                            }
+                                            VerifyEndpointResult::NoBlockInfo => "N/A".to_string(),
+                                            VerifyEndpointResult::WrongChainId => {
+                                                "ChainID mismatch".to_string()
+                                            }
+                                            VerifyEndpointResult::RpcWeb3Error(err) => {
+                                                "Err-rpc".to_string()
+                                            }
+                                            VerifyEndpointResult::OtherNetworkError(one) => {
+                                                "Err-Other".to_string()
+                                            }
+                                            VerifyEndpointResult::HeadBehind(beh) => {
+                                                format!("Behind - {}", beh)
+                                            }
+                                            VerifyEndpointResult::Unreachable => {
+                                                "Unreachable".to_string()
+                                            }
+                                        },
+                                        None => "-".to_string(),
+                                    };
+
+                                    let is_last_used =
+                                        if let (Some(last_chosen_left), Some(last_chosen_right)) =
+                                            (node.info.last_chosen, last_chosen_el.clone())
+                                        {
+                                            if Some(last_chosen_left)
+                                                == last_chosen_right.info.last_chosen
+                                            {
+                                                "Y"
+                                            } else {
+                                                "N"
+                                            }
+                                        } else {
+                                            "N"
+                                        };
+
+                                    let v = [
+                                        format!("{}\n({})", node.params.name, node.params.endpoint),
+                                        format!(
+                                            "{} / {}",
+                                            if node.info.is_allowed { "Y" } else { "N" },
+                                            is_last_used
+                                        ),
+                                        node.info
+                                            .last_verified
+                                            .map(|t| t.to_string().as_str()[0..19].to_string())
+                                            .unwrap_or("-".to_string()),
+                                        format!("{}{}", seconds_behind, ping_ms),
+                                        format!(
+                                            "{}",
+                                            node.params
+                                                .source_id
+                                                .map(|id| format!(
+                                                    "{}...",
+                                                    id.to_string().as_str()[0..8].to_string()
+                                                ))
+                                                .unwrap_or("-".to_string())
+                                        ),
+                                    ];
+                                    values.push(json!(v));
+                                }
+                                v.push(CommandOutput::Table {
+                                    columns: [
+                                        "Name\n(URL)",
+                                        "Active\n/ Leading",
+                                        "Last Verified",
+                                        "Head seconds\nbehind / ping",
+                                        "Source",
+                                    ]
+                                    .iter()
+                                    .map(ToString::to_string)
+                                    .collect(),
+                                    values,
+                                    summary: vec![json!(["", "", "", "", ""])],
+                                    header: Some(format!(
+                                        "Table 1 for driver {} and network {}",
+                                        driver, network
+                                    )),
+                                });
+                            }
+
+                            Ok(CommandOutput::MultiTable { tables: v })
                         }
                     }
 
