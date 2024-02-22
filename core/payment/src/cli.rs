@@ -1,7 +1,7 @@
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde_json::to_value;
+use serde_json::{json, to_value};
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
@@ -16,6 +16,28 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use crate::accounts::{init_account, Account};
 use crate::wallet;
+
+/// Payment driver management.
+#[derive(StructOpt, Debug)]
+pub enum DriverSubcommand {
+    /// List registered drivers, networks, tokens and platforms
+    List,
+
+    /// Display status of the payment driver
+    Status {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+    },
+
+    /// Display Web3 RPC endpoints and their status for the driver
+    Rpc {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+
+        #[structopt(long, help = "Show info for all networks")]
+        all: bool,
+    },
+}
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -49,10 +71,9 @@ pub enum PaymentCli {
         precise: bool,
     },
 
-    /// Display status of the payment driver
-    DriverStatus {
-        #[structopt(flatten)]
-        account: pay::AccountCli,
+    Driver {
+        #[structopt(subcommand)]
+        command: DriverSubcommand,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -110,13 +131,6 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
-    Endpoints {
-        #[structopt(flatten)]
-        account: pay::AccountCli,
-    },
-
-    /// List registered drivers, networks, tokens and platforms
-    Drivers,
 
     /// Clear all existing allocations
     ReleaseAllocations,
@@ -185,59 +199,7 @@ Typically operation should take less than 1 minute.
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::DriverStatus { account } => {
-                let driver_status_props = bus::service(pay::BUS_ID)
-                    .call(pay::PaymentDriverStatus {
-                        driver: Some(account.driver()),
-                        network: Some(account.network()),
-                    })
-                    .await??;
 
-                if ctx.json_output {
-                    return CommandOutput::object(driver_status_props);
-                }
-
-                let ok_msg = if driver_status_props.is_empty() {
-                    "\nDriver Status: Ok"
-                } else {
-                    ""
-                };
-
-                Ok(ResponseTable {
-                    columns: vec!["issues".to_owned()],
-                    values: driver_status_props
-                        .into_iter()
-                        .map(|prop| match prop {
-                            DriverStatusProperty::CantSign { address, .. } => {
-                                format!("Can't sign {address}")
-                            }
-                            DriverStatusProperty::InsufficientGas { needed_gas_est, .. } => {
-                                format!("Insufficient gas (need est. {needed_gas_est})")
-                            }
-                            DriverStatusProperty::InsufficientToken {
-                                needed_token_est, ..
-                            } => {
-                                format!("Insufficient token (need est. {needed_token_est})")
-                            }
-                            DriverStatusProperty::InvalidChainId { chain_id, .. } => {
-                                format!("Invalid Chain-Id ({chain_id})")
-                            }
-                            DriverStatusProperty::RpcError { network, .. } => {
-                                format!("Unreliable {network} RPC endpoints")
-                            }
-                            DriverStatusProperty::TxStuck { network, .. } => {
-                                format!("Tx stuck on {network}")
-                            }
-                        })
-                        .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
-                        .collect::<Vec<_>>(),
-                }
-                .with_header(format!(
-                    "Status of the {} payment driver{}",
-                    account.driver(),
-                    ok_msg
-                )))
-            }
             PaymentCli::Status {
                 account,
                 last,
@@ -452,38 +414,7 @@ Typically operation should take less than 1 minute.
                     .await?,
                 )
             }
-            PaymentCli::Endpoints { account } => {
-                let address = resolve_address(account.address()).await?;
-                let driver = DriverName::from_str(&account.driver()).map_err(|e| {
-                    anyhow::anyhow!("Invalid driver name: {}. Error: {}", account.driver(), e)
-                })?;
 
-                let network = account.network();
-                //let network = network.to_string();
-                if driver != DriverName::Erc20 {
-                    log::error!("Only ERC20 driver is supported for now");
-                    return Err(anyhow::anyhow!(
-                        "Only ERC20 driver is supported for this command"
-                    ));
-                }
-
-                let status = bus::service(pay::BUS_ID)
-                    .call(pay::GetRpcEndpoints {
-                        address,
-                        driver: driver.to_string(),
-                        network: Some(network.to_string()),
-                    })
-                    .await??;
-
-                Ok(CommandOutput::Object(status.response))
-                /*
-                Ok(CommandOutput::Table {
-                    columns: vec!["network".to_owned(), "url".to_owned()],
-                    values: vec![json!([{"network": "network"}, {"url": "url"}])],
-                    summary: vec![json!([{"network": "network summary"}, {"url": "url summary"}])],
-                    header: Some(format!("Endpoints for driver {} and network {}", driver, network)),
-                })*/
-            }
             PaymentCli::Transfer {
                 account,
                 to_address,
@@ -529,42 +460,147 @@ Typically operation should take less than 1 minute.
                     .await?,
                 )
             }
-            PaymentCli::Drivers => {
-                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
-                if ctx.json_output {
-                    return CommandOutput::object(drivers);
-                }
-                Ok(ResponseTable {
-                    columns: vec![
-                        "driver".to_owned(),
-                        "network".to_owned(),
-                        "default?".to_owned(),
-                        "token".to_owned(),
-                        "platform".to_owned(),
-                    ],
-                    values: drivers
-                        .iter()
-                        .flat_map(|(driver, dd)| {
-                            dd.networks
-                                .iter()
-                                .flat_map(|(network, n)| {
-                                    n.tokens
-                                        .iter()
-                                        .map(|(token, platform)|
-                                            serde_json::json! {[
+            PaymentCli::Driver { command } => {
+                match command {
+                    DriverSubcommand::Rpc { account, all } => {
+                        let address = resolve_address(account.address()).await?;
+                        let driver = DriverName::from_str(&account.driver()).map_err(|e| {
+                            anyhow::anyhow!(
+                                "Invalid driver name: {}. Error: {}",
+                                account.driver(),
+                                e
+                            )
+                        })?;
+
+                        let network = account.network();
+                        //let network = network.to_string();
+                        if driver != DriverName::Erc20 {
+                            log::error!("Only ERC20 driver is supported for now");
+                            return Err(anyhow::anyhow!(
+                                "Only ERC20 driver is supported for this command"
+                            ));
+                        }
+
+                        let status = bus::service(pay::BUS_ID)
+                            .call(pay::GetRpcEndpoints {
+                                address,
+                                driver: driver.to_string(),
+                                network: if all { None } else { Some(network.to_string()) },
+                            })
+                            .await??;
+
+                        if ctx.json_output {
+                            Ok(CommandOutput::Object(status.response))
+                        } else {
+                            Ok(CommandOutput::Table {
+                                columns: vec!["network".to_owned(), "url".to_owned()],
+                                values: vec![json!([{"network": "network"}, {"url": "url"}])],
+                                summary: vec![
+                                    json!([{"network": "network summary"}, {"url": "url summary"}]),
+                                ],
+                                header: Some(format!(
+                                    "Endpoints for driver {} and network {}",
+                                    driver, network
+                                )),
+                            })
+                        }
+                    }
+
+                    DriverSubcommand::Status { account } => {
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::PaymentDriverStatus {
+                                driver: Some(account.driver()),
+                                network: Some(account.network()),
+                            })
+                            .await??;
+
+                        if ctx.json_output {
+                            return CommandOutput::object(driver_status_props);
+                        }
+
+                        let ok_msg = if driver_status_props.is_empty() {
+                            "\nDriver Status: Ok"
+                        } else {
+                            ""
+                        };
+
+                        Ok(ResponseTable {
+                            columns: vec!["issues".to_owned()],
+                            values: driver_status_props
+                                .into_iter()
+                                .map(|prop| match prop {
+                                    DriverStatusProperty::CantSign { address, .. } => {
+                                        format!("Can't sign {address}")
+                                    }
+                                    DriverStatusProperty::InsufficientGas {
+                                        needed_gas_est,
+                                        ..
+                                    } => {
+                                        format!("Insufficient gas (need est. {needed_gas_est})")
+                                    }
+                                    DriverStatusProperty::InsufficientToken {
+                                        needed_token_est,
+                                        ..
+                                    } => {
+                                        format!("Insufficient token (need est. {needed_token_est})")
+                                    }
+                                    DriverStatusProperty::InvalidChainId { chain_id, .. } => {
+                                        format!("Invalid Chain-Id ({chain_id})")
+                                    }
+                                    DriverStatusProperty::RpcError { network, .. } => {
+                                        format!("Unreliable {network} RPC endpoints")
+                                    }
+                                    DriverStatusProperty::TxStuck { network, .. } => {
+                                        format!("Tx stuck on {network}")
+                                    }
+                                })
+                                .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
+                                .collect::<Vec<_>>(),
+                        }
+                        .with_header(format!(
+                            "Status of the {} payment driver{}",
+                            account.driver(),
+                            ok_msg
+                        )))
+                    }
+                    DriverSubcommand::List => {
+                        let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                        if ctx.json_output {
+                            return CommandOutput::object(drivers);
+                        }
+                        Ok(ResponseTable {
+                                columns: vec![
+                                    "driver".to_owned(),
+                                    "network".to_owned(),
+                                    "default?".to_owned(),
+                                    "token".to_owned(),
+                                    "platform".to_owned(),
+                                ],
+                                values: drivers
+                                    .iter()
+                                    .flat_map(|(driver, dd)| {
+                                        dd.networks
+                                            .iter()
+                                            .flat_map(|(network, n)| {
+                                                n.tokens
+                                                    .iter()
+                                                    .map(|(token, platform)|
+                                                        serde_json::json! {[
                                                 driver,
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
                                                 platform,
                                             ]}
-                                        )
-                                        .collect::<Vec<serde_json::Value>>()
-                                })
-                                .collect::<Vec<serde_json::Value>>()
-                        })
-                        .collect(),
-                }.into())
+                                                    )
+                                                    .collect::<Vec<serde_json::Value>>()
+                                            })
+                                            .collect::<Vec<serde_json::Value>>()
+                                    })
+                                    .collect(),
+                            }.into())
+                    }
+                }
             }
             PaymentCli::ReleaseAllocations => {
                 let _ = bus::service(pay::BUS_ID)
