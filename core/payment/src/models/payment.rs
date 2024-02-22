@@ -129,6 +129,30 @@ impl ReadObj {
             details: base64::encode(&self.details),
         }
     }
+
+    pub fn into_signed_api_model(
+        self,
+        activity_payments: Vec<ActivityPayment>,
+        agreement_payments: Vec<AgreementPayment>,
+    ) -> api_model::Signed<api_model::Payment> {
+        api_model::Signed {
+            payload: api_model::Payment {
+                payer_id: self.payer_id(),
+                payee_id: self.payee_id(),
+                payment_id: self.id,
+                payer_addr: self.payer_addr,
+                payee_addr: self.payee_addr,
+                payment_platform: self.payment_platform,
+                amount: self.amount.into(),
+                timestamp: Utc.from_utc_datetime(&self.timestamp),
+                activity_payments: activity_payments.into_iter().map(Into::into).collect(),
+                agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
+                details: base64::encode(&self.details),
+            },
+            signature: self.signature,
+            signed_bytes: self.signed_bytes,
+        }
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]

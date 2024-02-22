@@ -1125,7 +1125,7 @@ mod public {
         db: DbExecutor,
         processor: Arc<Mutex<PaymentProcessor>>,
         sender_id: String,
-        msg: SendPaymentWithBytes,
+        msg: SendSignedPayment,
     ) -> Result<Ack, SendError> {
         send_payment_impl(
             db,

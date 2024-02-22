@@ -25,7 +25,7 @@ use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
     SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
-use ya_core_model::payment::public::{SendPayment, SendPaymentWithBytes, BUS_ID};
+use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::Endpoint;
@@ -422,10 +422,11 @@ impl PaymentProcessor {
             )
             .await?;
 
-        let mut payment = payment_dao
+        let signed_payment = payment_dao
             .get(payment_id.clone(), payer_id)
             .await?
             .unwrap();
+        let mut payment = signed_payment.payload;
         // Allocation IDs are requestor's private matter and should not be sent to provider
         for agreement_payment in payment.agreement_payments.iter_mut() {
             agreement_payment.allocation_id = None;
@@ -447,7 +448,7 @@ impl PaymentProcessor {
         counter!("payment.invoices.requestor.paid", 1);
 
         let msg = SendPayment::new(payment.clone(), signature);
-        let msg_with_bytes = SendPaymentWithBytes::new(payment, signature_canonicalized);
+        let msg_with_bytes = SendSignedPayment::new(payment, signature_canonicalized);
 
         if payer_id != payee_id {
             let send_result = Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
