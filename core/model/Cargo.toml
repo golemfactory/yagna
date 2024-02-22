@@ -24,8 +24,9 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-#ya-client-model = "0.6"
-ya-client-model = {path = "../../../ya-client/model"}
+ya-client-model = "0.6"
+# ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "4f78ccb1c403de33ddc85db99306cf53749f813e" }
+# ya-client-model = {path = "../../../ya-client/model"}
 ya-service-bus = { workspace = true }
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
