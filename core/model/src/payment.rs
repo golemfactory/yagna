@@ -583,6 +583,7 @@ pub mod local {
 pub mod public {
     use super::*;
     use ya_client_model::NodeId;
+    use ya_service_bus::serialization::to_vec;
 
     pub const BUS_ID: &str = "/public/payment";
 
@@ -823,6 +824,18 @@ pub mod public {
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.
         pub invoice_rejects: Vec<RejectInvoiceV2>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncWithBytes {
+        /// Payment confirmations.
+        pub payments: Vec<SendPaymentWithBytes>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.
