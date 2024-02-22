@@ -14,8 +14,8 @@ use ya_core_model::{
         self,
         local::GenericError,
         public::{
-            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
-            RejectInvoiceV2, SendPayment, SendSignedPayment,
+            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, RejectInvoiceV2,
+            SendPayment, SendSignedPayment, SignedPaymentSync,
         },
     },
 };
@@ -32,7 +32,7 @@ const SYNC_NOTIF_MAX_RETRIES: u32 = 7;
 async fn payment_sync(
     db: &DbExecutor,
     peer_id: NodeId,
-) -> anyhow::Result<(PaymentSync, PaymentSyncWithBytes)> {
+) -> anyhow::Result<(PaymentSync, SignedPaymentSync)> {
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
@@ -110,7 +110,7 @@ async fn payment_sync(
             invoice_rejects: invoice_rejects.clone(),
             debit_note_accepts: debit_note_accepts.clone(),
         },
-        PaymentSyncWithBytes {
+        SignedPaymentSync {
             payments: payments_canonicalized,
             invoice_accepts,
             invoice_rejects,
