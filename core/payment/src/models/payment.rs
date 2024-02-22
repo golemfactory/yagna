@@ -25,6 +25,7 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_sent(
         payer_id: NodeId,
         payee_id: NodeId,
