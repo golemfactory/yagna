@@ -402,11 +402,11 @@ impl PaymentDriver for Erc20Driver {
     async fn get_rpc_endpoints(
         &self,
         _caller: String,
-        _msg: GetRpcEndpoints,
+        msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
         let res = self
             .payment_runtime
-            .get_rpc_endpoints()
+            .get_rpc_endpoints(msg.network)
             .map_err(|e| GenericError::new(e.to_string()))?;
 
         Ok(GetRpcEndpointsResult { response: res })

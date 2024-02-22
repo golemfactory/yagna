@@ -1988,11 +1988,8 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 version = "0.3.25"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=93e8d92d2535de4016498ca849a48698c60a227b#93e8d92d2535de4016498ca849a48698c60a227b"
 dependencies = [
  "actix",
  "actix-files",
@@ -2033,11 +2030,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 version = "0.3.25"
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=93e8d92d2535de4016498ca849a48698c60a227b#93e8d92d2535de4016498ca849a48698c60a227b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2078,6 +2072,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_extra"
 version = "0.3.25"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=93e8d92d2535de4016498ca849a48698c60a227b#93e8d92d2535de4016498ca849a48698c60a227b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2113,89 +2108,7 @@ dependencies = [
 [[package]]
 name = "erc20_processor"
 version = "0.3.25"
-dependencies = [
- "actix-cors",
- "actix-files",
- "actix-web",
- "anyhow",
- "awc",
- "chrono",
- "csv",
- "dotenv",
- "env_logger 0.10.2",
- "erc20_payment_lib",
- "erc20_payment_lib_common",
- "erc20_payment_lib_extra",
- "erc20_rpc_pool",
- "eth-keystore",
- "fastrand",
- "futures 0.3.30",
- "futures-util",
- "hex",
- "itertools 0.11.0",
- "lazy_static",
- "log",
- "metrics 0.12.1",
- "metrics-runtime",
- "rand 0.8.5",
- "regex",
- "rust_decimal",
- "rustc-hex",
- "secp256k1 0.27.0",
- "serde",
- "serde_json",
- "sha3 0.10.8",
- "sqlx",
- "stream-rate-limiter",
- "structopt",
- "thiserror",
- "tokio",
- "toml",
- "trust-dns-resolver 0.23.2",
- "url",
- "uuid 1.7.0",
- "web3",
-]
-
-[[package]]
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
-dependencies = [
- "actix-files",
- "actix-web",
- "chrono",
- "csv",
- "dotenv",
- "erc20_payment_lib",
- "erc20_payment_lib_common",
- "erc20_rpc_pool",
- "fastrand",
- "futures 0.3.30",
- "futures-util",
- "hex",
- "humantime 2.1.0",
- "lazy_static",
- "log",
- "rand 0.8.5",
- "rust_decimal",
- "rustc-hex",
- "secp256k1 0.27.0",
- "serde",
- "serde_json",
- "sha3 0.10.8",
- "sqlx",
- "stream-rate-limiter",
- "structopt",
- "tokio",
- "toml",
- "uuid 1.7.0",
- "web3",
-]
-
-[[package]]
-name = "erc20_processor"
-version = "0.3.23"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=93e8d92d2535de4016498ca849a48698c60a227b#93e8d92d2535de4016498ca849a48698c60a227b"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2242,11 +2155,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
 version = "0.3.25"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=93e8d92d2535de4016498ca849a48698c60a227b#93e8d92d2535de4016498ca849a48698c60a227b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -8446,6 +8356,7 @@ dependencies = [
  "bitflags 1.3.2",
  "chrono",
  "derive_more",
+ "erc20_payment_lib",
  "graphene-sgx",
  "log",
  "serde",
