@@ -1108,10 +1108,6 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 602ed3bc (signed bytes and signature in pay_payment)
         send_payment_impl(
             db,
             processor,
@@ -1122,12 +1118,6 @@ mod public {
             None,
         )
         .await
-<<<<<<< HEAD
-=======
-        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, false).await
->>>>>>> 7dfbc5f5 (review comments)
-=======
->>>>>>> 602ed3bc (signed bytes and signature in pay_payment)
     }
 
     async fn send_payment_with_bytes(
@@ -1143,11 +1133,7 @@ mod public {
             msg.payment,
             true,
             msg.signature,
-<<<<<<< HEAD
-            msg.signed_bytes,
-=======
             Some(msg.signed_bytes),
->>>>>>> 602ed3bc (signed bytes and signature in pay_payment)
         )
         .await
     }

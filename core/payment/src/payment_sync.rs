@@ -113,7 +113,7 @@ async fn payment_sync(
         PaymentSyncWithBytes {
             payments: payments_canonicalized,
             invoice_accepts,
-            invoice_rejects
+            invoice_rejects,
             debit_note_accepts,
         },
     ))
