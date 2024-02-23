@@ -150,8 +150,8 @@ impl ReadObj {
                 agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
                 details: base64::encode(&self.details),
             },
-            signature: self.signature,
-            signed_bytes: self.signed_bytes,
+            signature: self.signature.unwrap_or_else(|| vec![]),
+            signed_bytes: self.signed_bytes.unwrap_or_else(|| vec![]),
         }
     }
 }

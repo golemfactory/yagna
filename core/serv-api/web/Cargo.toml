@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 # ya-client = "0.6"
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "4f78ccb1c403de33ddc85db99306cf53749f813e" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b51a07a15c1db8146e3841954ebfc91ca55d308d" }
 ya-core-model = { version = "^0.9", features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-bus = {  workspace  = true }

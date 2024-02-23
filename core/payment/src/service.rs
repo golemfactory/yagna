@@ -682,6 +682,7 @@ mod public {
             .bind(cancel_invoice)
             .bind(sync_request)
             .bind_with_processor(send_payment)
+            .bind_with_processor(send_payment_with_bytes)
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
