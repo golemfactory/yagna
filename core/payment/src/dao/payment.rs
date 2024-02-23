@@ -186,35 +186,7 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
-        readonly_transaction(self.pool, "payment_dao_get", move |conn| {
-            let payment: Option<ReadObj> = dsl::pay_payment
-                .filter(dsl::id.eq(&payment_id))
-                .filter(dsl::owner_id.eq(&owner_id))
-                .first(conn)
-                .optional()?;
-
-            match payment {
-                Some(payment) => {
-                    let activity_payments = activity_pay_dsl::pay_activity_payment
-                        .filter(activity_pay_dsl::payment_id.eq(&payment_id))
-                        .filter(activity_pay_dsl::owner_id.eq(&owner_id))
-                        .load(conn)?;
-                    let agreement_payments = agreement_pay_dsl::pay_agreement_payment
-                        .filter(agreement_pay_dsl::payment_id.eq(&payment_id))
-                        .filter(agreement_pay_dsl::owner_id.eq(&owner_id))
-                        .load(conn)?;
-                    Ok(Some(
-                        payment.into_api_model(activity_payments, agreement_payments),
-                    ))
-                }
-                None => Ok(None),
-            }
-        })
-        .await
-    }
-
-    pub async fn get_signed(
+    pub async fn get(
         &self,
         payment_id: String,
         owner_id: NodeId,

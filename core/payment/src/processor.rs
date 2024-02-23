@@ -422,10 +422,11 @@ impl PaymentProcessor {
             )
             .await?;
 
-        let mut payment = payment_dao
+        let signed_payment = payment_dao
             .get(payment_id.clone(), payer_id)
             .await?
             .unwrap();
+        let mut payment = signed_payment.payload;
         // Allocation IDs are requestor's private matter and should not be sent to provider
         for agreement_payment in payment.agreement_payments.iter_mut() {
             agreement_payment.allocation_id = None;

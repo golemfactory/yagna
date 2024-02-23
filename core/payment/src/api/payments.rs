@@ -22,10 +22,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/payments", get().to(get_payments))
         .route("/payments/status", get().to(payment_status))
         .route("/payments/{payment_id}", get().to(get_payment))
-        .route(
-            "/payments/{payment_id}/signed",
-            get().to(get_signed_payment),
-        )
 }
 
 async fn get_payments(
@@ -88,21 +84,6 @@ async fn get_payment(
     let node_id = id.identity;
     let dao: PaymentDao = db.as_dao();
     match dao.get(payment_id, node_id).await {
-        Ok(Some(payment)) => response::ok(payment),
-        Ok(None) => response::not_found(),
-        Err(e) => response::server_error(&e),
-    }
-}
-
-async fn get_signed_payment(
-    db: Data<DbExecutor>,
-    path: Path<params::PaymentId>,
-    id: Identity,
-) -> HttpResponse {
-    let payment_id = path.payment_id.clone();
-    let node_id = id.identity;
-    let dao: PaymentDao = db.as_dao();
-    match dao.get_signed(payment_id, node_id).await {
         Ok(Some(payment)) => response::ok(payment),
         Ok(None) => response::not_found(),
         Err(e) => response::server_error(&e),
