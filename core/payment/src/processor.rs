@@ -13,6 +13,7 @@ use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Duration;
+use thiserror::Error;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
@@ -296,10 +297,13 @@ pub struct PaymentProcessor {
     in_shutdown: bool,
 }
 
-#[derive(Debug, PartialEq)]
-enum SendToGsbError {
+#[derive(Debug, PartialEq, Error)]
+enum PaymentSendToGsbError {
+    #[error("payment Send to Gsb failed")]
     Failed,
+    #[error("payment Send to Gsb is not supported")]
     NotSupported,
+    #[error("payment Send to Gsb has been rejected")]
     Rejected,
 }
 
@@ -462,13 +466,13 @@ impl PaymentProcessor {
                     )
                     .await?;
                 true
-            } else if send_result.is_err_and(|err| err == SendToGsbError::NotSupported) {
+            } else if send_result.is_err_and(|err| err == PaymentSendToGsbError::NotSupported) {
                 // if sending SendPaymentWithBytes is not supported then try sending SendPayment
                 match Self::send_to_gsb(payer_id, payee_id, msg).await {
                     Ok(_) => true,
-                    Err(SendToGsbError::Rejected) => true,
-                    Err(SendToGsbError::Failed) => false,
-                    Err(SendToGsbError::NotSupported) => false,
+                    Err(PaymentSendToGsbError::Rejected) => true,
+                    Err(PaymentSendToGsbError::Failed) => false,
+                    Err(PaymentSendToGsbError::NotSupported) => false,
                 }
             } else {
                 false
@@ -496,21 +500,21 @@ impl PaymentProcessor {
         payer_id: NodeId,
         payee_id: NodeId,
         msg: T,
-    ) -> Result<(), SendToGsbError> {
+    ) -> Result<(), PaymentSendToGsbError> {
         ya_net::from(payer_id)
             .to(payee_id)
             .service(BUS_ID)
             .call(msg)
             .map(|res| match res {
                 Ok(Ok(_)) => Ok(()),
-                Err(Error::GsbBadRequest(_)) => Err(SendToGsbError::NotSupported),
+                Err(Error::GsbBadRequest(_)) => Err(PaymentSendToGsbError::NotSupported),
                 Err(err) => {
                     log::error!("Error sending payment message to provider: {:?}", err);
-                    Err(SendToGsbError::Failed)
+                    Err(PaymentSendToGsbError::Failed)
                 }
                 Ok(Err(err)) => {
                     log::error!("Provider rejected payment: {:?}", err);
-                    Err(SendToGsbError::Rejected)
+                    Err(PaymentSendToGsbError::Rejected)
                 }
             })
             .await

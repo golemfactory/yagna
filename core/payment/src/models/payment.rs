@@ -78,7 +78,7 @@ impl WriteObj {
     }
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Clone)]
 #[table_name = "pay_payment"]
 #[primary_key(id, owner_id)]
 pub struct ReadObj {
@@ -138,19 +138,9 @@ impl ReadObj {
         agreement_payments: Vec<AgreementPayment>,
     ) -> api_model::Signed<api_model::Payment> {
         api_model::Signed {
-            payload: api_model::Payment {
-                payer_id: self.payer_id(),
-                payee_id: self.payee_id(),
-                payment_id: self.id,
-                payer_addr: self.payer_addr,
-                payee_addr: self.payee_addr,
-                payment_platform: self.payment_platform,
-                amount: self.amount.into(),
-                timestamp: Utc.from_utc_datetime(&self.timestamp),
-                activity_payments: activity_payments.into_iter().map(Into::into).collect(),
-                agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
-                details: base64::encode(&self.details),
-            },
+            payload: self
+                .clone()
+                .into_api_model(activity_payments, agreement_payments),
             signature: Some(Signature {
                 signature: self.signature.unwrap(),
                 signed_bytes: self.signed_bytes.unwrap(),
