@@ -8440,6 +8440,7 @@ dependencies = [
  "uuid 0.8.2",
  "web3",
  "ya-client-model",
+ "ya-core-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",

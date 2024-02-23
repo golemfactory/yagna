@@ -17,7 +17,7 @@ use erc20_payment_lib::{DriverEvent, DriverEventContent};
 use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,6 +25,7 @@ use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::{Address, H256};
 use ya_client_model::payment::DriverStatusProperty;
+use ya_core_model::payment::local::NetworkName;
 use ya_payment_driver::driver::IdentityError;
 
 use ya_payment_driver::{
@@ -431,6 +432,26 @@ impl PaymentDriver for Erc20Driver {
                 .await
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
+
+        // convert key type from String to NetworkName
+        let sources = sources
+            .into_iter()
+            .map(|(k, v)| {
+                NetworkName::from_str(&k).map(|n| (n, v)).map_err(|_| {
+                    GenericError::new(format!("Invalid network name (sources): {}", k))
+                })
+            })
+            .collect::<Result<BTreeMap<_, _>, GenericError>>()?;
+
+        // convert key type from String to NetworkName
+        let endpoints = endpoints
+            .into_iter()
+            .map(|(k, v)| {
+                NetworkName::from_str(&k).map(|n| (n, v)).map_err(|_| {
+                    GenericError::new(format!("Invalid network name (endpoints): {}", k))
+                })
+            })
+            .collect::<Result<BTreeMap<_, _>, GenericError>>()?;
 
         Ok(GetRpcEndpointsResult { endpoints, sources })
     }
