@@ -37,17 +37,10 @@ pub fn run_command_rpc_entry(
     ctx: &CliCtx,
     params: &RpcCommandParams,
 ) -> CommandOutput {
-    let mut values = Vec::new();
+    let mut values = Vec::with_capacity(node_infos.len());
     let last_chosen_el = node_infos
         .iter()
-        .max_by_key(|node| {
-            if let Some(t) = node.info.last_chosen {
-                t
-            } else {
-                DateTime::<Utc>::MIN_UTC
-            }
-        })
-        .cloned();
+        .max_by_key(|node| node.info.last_chosen.unwrap_or(DateTime::<Utc>::MIN_UTC));
 
     for node in node_infos {
         let mut ping_ms = "".to_string();
@@ -69,10 +62,8 @@ pub fn run_command_rpc_entry(
             None => "-".to_string(),
         };
 
-        let is_last_used = if let (Some(last_chosen_left), Some(last_chosen_right)) =
-            (node.info.last_chosen, last_chosen_el.clone())
-        {
-            if Some(last_chosen_left) == last_chosen_right.info.last_chosen {
+        let is_last_used = if let (Some(ll), Some(lr)) = (node.info.last_chosen, last_chosen_el) {
+            if Some(ll) == lr.info.last_chosen {
                 "Y"
             } else {
                 "N"
