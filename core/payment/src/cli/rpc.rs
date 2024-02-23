@@ -133,7 +133,7 @@ pub fn run_command_rpc_entry(
         values,
         summary: vec![json!(["", "", "", "", ""])],
         header: Some(format!(
-            "Table 1 for driver {} and network {}",
+            "Web3 RPC endpoints for driver {} and network {}",
             driver, network
         )),
     }
