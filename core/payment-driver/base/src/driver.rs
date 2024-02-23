@@ -93,6 +93,17 @@ pub trait PaymentDriver {
         bus::sign(node_id, payload).await
     }
 
+    async fn sign_payment_canonicalized(
+        &self,
+
+        _caller: String,
+        msg: SignPaymentCanonicalized,
+    ) -> Result<Vec<u8>, GenericError> {
+        let payload = utils::payment_hash_canonicalized(&msg.0);
+        let node_id = msg.0.payer_id;
+        bus::sign(node_id, payload).await
+    }
+
     async fn verify_signature(
         &self,
 
@@ -107,7 +118,11 @@ pub trait PaymentDriver {
         let s: [u8; 32] = msg.signature[33..65].try_into().unwrap();
         let signature = Signature { v, r, s };
 
-        let payload = utils::payment_hash(&msg.payment);
+        let payload = if msg.canonicalized {
+            utils::payment_hash_canonicalized(&msg.payment)
+        } else {
+            utils::payment_hash(&msg.payment)
+        };
         let pub_key = match signature.recover(payload.as_slice()) {
             Ok(pub_key) => pub_key,
             Err(_) => return Ok(false),

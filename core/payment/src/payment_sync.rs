@@ -6,6 +6,7 @@ use ya_client_model::{
     payment::{Acceptance, InvoiceEventType},
     NodeId,
 };
+use ya_core_model::driver::SignPaymentCanonicalized;
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
@@ -13,14 +14,14 @@ use ya_core_model::{
         self,
         local::GenericError,
         public::{
-            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, RejectInvoiceV2,
-            SendPayment,
+            AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
+            RejectInvoiceV2, SendPayment, SendSignedPayment,
         },
     },
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{typed, RpcEndpoint};
+use ya_service_bus::{typed, Error, RpcEndpoint};
 
 use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
@@ -28,13 +29,17 @@ const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
 const SYNC_NOTIF_MAX_RETRIES: u32 = 7;
 
-async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<PaymentSync> {
+async fn payment_sync(
+    db: &DbExecutor,
+    peer_id: NodeId,
+) -> anyhow::Result<(PaymentSync, PaymentSyncWithBytes)> {
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
     let invoice_event_dao: InvoiceEventDao = db.as_dao();
 
     let mut payments = Vec::default();
+    let mut payments_canonicalized = Vec::default();
     for payment in payment_dao.list_unsent(Some(peer_id)).await? {
         let platform_components = payment.payment_platform.split('-').collect::<Vec<_>>();
         let driver = &platform_components[0];
@@ -42,8 +47,12 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         let signature = typed::service(driver_bus_id(driver))
             .send(SignPayment(payment.clone()))
             .await??;
+        payments.push(SendPayment::new(payment.clone(), signature));
 
-        payments.push(SendPayment::new(payment, signature));
+        let signature_canonicalized = typed::service(driver_bus_id(driver))
+            .send(SignPaymentCanonicalized(payment.clone()))
+            .await??;
+        payments_canonicalized.push(SendSignedPayment::new(payment, signature_canonicalized));
     }
 
     let mut invoice_accepts = Vec::default();
@@ -94,15 +103,20 @@ async fn payment_sync(db: &DbExecutor, peer_id: NodeId) -> anyhow::Result<Paymen
         ));
     }
 
-    let result = PaymentSync {
-        payments,
-        invoice_accepts,
-        invoice_rejects,
-        debit_note_accepts,
-    };
-    log::debug!("Payment sync job collected: {result:?}");
-
-    Ok(result)
+    Ok((
+        PaymentSync {
+            payments,
+            invoice_accepts: invoice_accepts.clone(),
+            invoice_rejects: invoice_rejects.clone(),
+            debit_note_accepts: debit_note_accepts.clone(),
+        },
+        PaymentSyncWithBytes {
+            payments: payments_canonicalized,
+            invoice_accepts,
+            invoice_rejects,
+            debit_note_accepts,
+        },
+    ))
 }
 
 async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> {
@@ -174,13 +188,21 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<Option<Duration>> {
         .collect::<Vec<_>>();
 
     for peer in peers_to_notify {
-        let msg = payment_sync(db, peer).await?;
+        let (msg, msg_with_bytes) = payment_sync(db, peer).await?;
 
-        let result = ya_net::from(default_identity)
+        let mut result = ya_net::from(default_identity)
             .to(peer)
             .service(ya_core_model::payment::public::BUS_ID)
-            .call(msg.clone())
+            .call(msg_with_bytes.clone())
             .await;
+
+        if matches!(&result, Err(Error::GsbBadRequest(_))) {
+            result = ya_net::from(default_identity)
+                .to(peer)
+                .service(ya_core_model::payment::public::BUS_ID)
+                .call(msg.clone())
+                .await;
+        }
 
         if matches!(&result, Ok(Ok(_))) {
             mark_all_sent(db, msg).await?;

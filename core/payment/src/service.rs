@@ -682,6 +682,7 @@ mod public {
             .bind(cancel_invoice)
             .bind(sync_request)
             .bind_with_processor(send_payment)
+            .bind_with_processor(send_payment_with_bytes)
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
@@ -1108,8 +1109,45 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        let payment = msg.payment;
-        let signature = msg.signature;
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            false,
+            msg.signature,
+            None,
+        )
+        .await
+    }
+
+    async fn send_payment_with_bytes(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        msg: SendSignedPayment,
+    ) -> Result<Ack, SendError> {
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            true,
+            msg.signature,
+            Some(msg.signed_bytes),
+        )
+        .await
+    }
+
+    async fn send_payment_impl(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender_id: String,
+        payment: Payment,
+        canonicalized: bool,
+        signature: Vec<u8>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> Result<Ack, SendError> {
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -1120,7 +1158,7 @@ mod public {
         match processor
             .lock()
             .await
-            .verify_payment(payment, signature)
+            .verify_payment(payment, signature, canonicalized, signed_bytes)
             .await
         {
             Ok(_) => {
