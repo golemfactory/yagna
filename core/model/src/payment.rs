@@ -280,8 +280,8 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct GetRpcEndpointsResult {
-        pub endpoints: BTreeMap<NetworkName, Vec<Web3FullNodeData>>,
-        pub sources: BTreeMap<NetworkName, Web3ExternalSources>,
+        pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
+        pub sources: BTreeMap<String, Web3ExternalSources>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]

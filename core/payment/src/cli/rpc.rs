@@ -1,4 +1,5 @@
 // External crates
+use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use erc20_payment_lib::rpc_pool::{VerifyEndpointResult, Web3ExternalSources, Web3FullNodeData};
 use serde_json::json;
@@ -181,10 +182,13 @@ pub async fn run_command_rpc(
         .iter()
         .map(|(network, node_infos)| {
             let sources = result.sources.get(network);
-
-            run_command_rpc_entry(&driver, network, &sources, node_infos, ctx, &params)
+            let network = NetworkName::from_str(network)
+                .map_err(|_| anyhow!("Invalid network name {network}"))?;
+            Ok(run_command_rpc_entry(
+                &driver, &network, &sources, node_infos, ctx, &params,
+            ))
         })
-        .collect();
+        .collect::<anyhow::Result<Vec<CommandOutput>>>()?;
 
     Ok(CommandOutput::MultiTable { tables: v })
 }
