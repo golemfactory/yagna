@@ -141,10 +141,14 @@ impl ReadObj {
             payload: self
                 .clone()
                 .into_api_model(activity_payments, agreement_payments),
-            signature: Some(Signature {
-                signature: self.signature.unwrap(),
-                signed_bytes: self.signed_bytes.unwrap(),
-            }),
+            signature: if self.signature.is_some() && self.signed_bytes.is_some() {
+                Some(Signature {
+                    signature: self.signature.unwrap(),
+                    signed_bytes: self.signed_bytes.unwrap(),
+                })
+            } else {
+                None
+            },
         }
     }
 }
