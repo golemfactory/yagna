@@ -50,6 +50,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use chrono::NaiveDateTime;
+    use std::str::FromStr;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -209,9 +210,11 @@ mod local {
         let (network2, network_details) = processor
             .lock()
             .await
-            .get_network(driver.clone(), network.clone())
+            .get_network(driver.to_string(), network.as_ref().map(|s| s.to_string()))
             .await
             .map_err(GenericError::new)?;
+        let network2 = NetworkName::from_str(&network2).map_err(GenericError::new)?;
+
         let token = network_details.default_token.clone();
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
@@ -228,8 +231,8 @@ mod local {
             .await
             .get_rpc_endpoints_info(
                 platform,
-                address.clone(),
-                network.clone(),
+                address.to_string(),
+                network.as_ref().map(|s| s.to_string()),
                 verify,
                 resolve,
                 no_wait,

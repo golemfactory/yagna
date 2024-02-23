@@ -1,13 +1,14 @@
+mod rpc;
+
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use erc20_payment_lib::rpc_pool::VerifyEndpointResult;
-use serde_json::{json, to_value};
+use serde_json::to_value;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
-use ya_core_model::payment::local::{DriverName, NetworkName};
+use ya_core_model::payment::local::NetworkName;
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -16,6 +17,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::accounts::{init_account, Account};
+use crate::cli::rpc::{run_command_rpc, RpcCommandParams};
 use crate::wallet;
 
 /// Payment driver management.
@@ -35,17 +37,8 @@ pub enum DriverSubcommand {
         #[structopt(flatten)]
         account: pay::AccountCli,
 
-        #[structopt(long, help = "Show info for all networks")]
-        all: bool,
-
-        #[structopt(long, help = "Additionally force check endpoints")]
-        verify: bool,
-
-        #[structopt(long, help = "Additionally force resolve sources")]
-        resolve: bool,
-
-        #[structopt(long, help = "Don't wait for check or resolve")]
-        no_wait: bool,
+        #[structopt(flatten)]
+        rpc_params: RpcCommandParams,
     },
 }
 
@@ -470,239 +463,74 @@ Typically operation should take less than 1 minute.
                     .await?,
                 )
             }
-            PaymentCli::Driver { command } => {
-                match command {
-                    DriverSubcommand::Rpc {
-                        account,
-                        all,
-                        verify,
-                        resolve,
-                        no_wait,
-                    } => {
-                        let address = resolve_address(account.address()).await?;
-                        let driver = DriverName::from_str(&account.driver()).map_err(|e| {
-                            anyhow::anyhow!(
-                                "Invalid driver name: {}. Error: {}",
-                                account.driver(),
-                                e
-                            )
-                        })?;
+            PaymentCli::Driver { command } => match command {
+                DriverSubcommand::Rpc {
+                    account,
+                    rpc_params,
+                } => run_command_rpc(ctx, account, rpc_params).await,
 
-                        let network = account.network();
-                        //let network = network.to_string();
-                        if driver != DriverName::Erc20 {
-                            log::error!("Only ERC20 driver is supported for now");
-                            return Err(anyhow::anyhow!(
-                                "Only ERC20 driver is supported for this command"
-                            ));
-                        }
+                DriverSubcommand::Status { account } => {
+                    let driver_status_props = bus::service(pay::BUS_ID)
+                        .call(pay::PaymentDriverStatus {
+                            driver: Some(account.driver()),
+                            network: Some(account.network()),
+                        })
+                        .await??;
 
-                        let result = bus::service(pay::BUS_ID)
-                            .call(pay::GetRpcEndpoints {
-                                address,
-                                driver: driver.to_string(),
-                                network: if all { None } else { Some(network.to_string()) },
-                                verify,
-                                resolve,
-                                no_wait,
-                            })
-                            .await??;
+                    if ctx.json_output {
+                        return CommandOutput::object(driver_status_props);
+                    }
 
-                        if ctx.json_output {
-                            CommandOutput::object(
-                                json!({"endpoints": result.endpoints, "sources": result.sources}),
-                            )
-                        } else {
-                            let mut v = Vec::new();
-                            for (network, node_infos) in result.endpoints {
-                                let mut values = Vec::new();
-                                let last_chosen_el = node_infos
-                                    .iter()
-                                    .max_by_key(|node| {
-                                        if let Some(t) = node.info.last_chosen {
-                                            t
-                                        } else {
-                                            DateTime::<Utc>::MIN_UTC
-                                        }
-                                    })
-                                    .cloned();
+                    let ok_msg = if driver_status_props.is_empty() {
+                        "\nDriver Status: Ok"
+                    } else {
+                        ""
+                    };
 
-                                for node in node_infos {
-                                    let mut ping_ms = "".to_string();
-                                    let seconds_behind = match node.info.verify_result {
-                                        Some(ver) => match ver {
-                                            VerifyEndpointResult::Ok(res) => {
-                                                ping_ms =
-                                                    format!(" / ({:.2}ms)", res.check_time_ms);
-                                                format!("{}s", res.head_seconds_behind)
-                                            }
-                                            VerifyEndpointResult::NoBlockInfo => "N/A".to_string(),
-                                            VerifyEndpointResult::WrongChainId => {
-                                                "ChainID mismatch".to_string()
-                                            }
-                                            VerifyEndpointResult::RpcWeb3Error(err) => {
-                                                "Err-rpc".to_string()
-                                            }
-                                            VerifyEndpointResult::OtherNetworkError(one) => {
-                                                "Err-Other".to_string()
-                                            }
-                                            VerifyEndpointResult::HeadBehind(beh) => {
-                                                format!("Behind - {}", beh)
-                                            }
-                                            VerifyEndpointResult::Unreachable => {
-                                                "Unreachable".to_string()
-                                            }
-                                        },
-                                        None => "-".to_string(),
-                                    };
-
-                                    let is_last_used =
-                                        if let (Some(last_chosen_left), Some(last_chosen_right)) =
-                                            (node.info.last_chosen, last_chosen_el.clone())
-                                        {
-                                            if Some(last_chosen_left)
-                                                == last_chosen_right.info.last_chosen
-                                            {
-                                                "Y"
-                                            } else {
-                                                "N"
-                                            }
-                                        } else {
-                                            "N"
-                                        };
-
-                                    let source_id = node.params.source_id;
-                                    let source_info =
-                                        if let Some(sources) = result.sources.get(&network) {
-                                            if let Some(source_id) = source_id {
-                                                let mut source_info = None;
-                                                for source in &sources.dns_sources {
-                                                    if source.unique_source_id == source_id {
-                                                        source_info = Some(format!(
-                                                            "dns source:\n{}",
-                                                            source.dns_url
-                                                        ));
-                                                    }
-                                                }
-                                                for source in &sources.json_sources {
-                                                    if source.unique_source_id == source_id {
-                                                        source_info = Some(format!(
-                                                            "json source:\n{}",
-                                                            source.url
-                                                        ));
-                                                    }
-                                                }
-                                                source_info.unwrap_or("not found".to_string())
-                                            } else {
-                                                "config".to_string()
-                                            }
-                                        } else {
-                                            "N/A".to_string()
-                                        };
-
-                                    let v = [
-                                        format!("{}\n({})", node.params.name, node.params.endpoint),
-                                        format!(
-                                            "{} / {}",
-                                            if node.info.is_allowed { "Y" } else { "N" },
-                                            is_last_used
-                                        ),
-                                        node.info
-                                            .last_verified
-                                            .map(|t| t.to_string().as_str()[0..19].to_string())
-                                            .unwrap_or("-".to_string()),
-                                        format!("{}{}", seconds_behind, ping_ms),
-                                        source_info,
-                                    ];
-                                    values.push(json!(v));
+                    Ok(ResponseTable {
+                        columns: vec!["issues".to_owned()],
+                        values: driver_status_props
+                            .into_iter()
+                            .map(|prop| match prop {
+                                DriverStatusProperty::CantSign { address, .. } => {
+                                    format!("Can't sign {address}")
                                 }
-                                v.push(CommandOutput::Table {
-                                    columns: [
-                                        "Name\n(URL)",
-                                        "Active\n/ Leading",
-                                        "Last Verified",
-                                        "Head seconds\nbehind / ping",
-                                        "Source",
-                                    ]
-                                    .iter()
-                                    .map(ToString::to_string)
-                                    .collect(),
-                                    values,
-                                    summary: vec![json!(["", "", "", "", ""])],
-                                    header: Some(format!(
-                                        "Table 1 for driver {} and network {}",
-                                        driver, network
-                                    )),
-                                });
-                            }
-
-                            Ok(CommandOutput::MultiTable { tables: v })
-                        }
-                    }
-
-                    DriverSubcommand::Status { account } => {
-                        let driver_status_props = bus::service(pay::BUS_ID)
-                            .call(pay::PaymentDriverStatus {
-                                driver: Some(account.driver()),
-                                network: Some(account.network()),
+                                DriverStatusProperty::InsufficientGas {
+                                    needed_gas_est, ..
+                                } => {
+                                    format!("Insufficient gas (need est. {needed_gas_est})")
+                                }
+                                DriverStatusProperty::InsufficientToken {
+                                    needed_token_est,
+                                    ..
+                                } => {
+                                    format!("Insufficient token (need est. {needed_token_est})")
+                                }
+                                DriverStatusProperty::InvalidChainId { chain_id, .. } => {
+                                    format!("Invalid Chain-Id ({chain_id})")
+                                }
+                                DriverStatusProperty::RpcError { network, .. } => {
+                                    format!("Unreliable {network} RPC endpoints")
+                                }
+                                DriverStatusProperty::TxStuck { network, .. } => {
+                                    format!("Tx stuck on {network}")
+                                }
                             })
-                            .await??;
-
-                        if ctx.json_output {
-                            return CommandOutput::object(driver_status_props);
-                        }
-
-                        let ok_msg = if driver_status_props.is_empty() {
-                            "\nDriver Status: Ok"
-                        } else {
-                            ""
-                        };
-
-                        Ok(ResponseTable {
-                            columns: vec!["issues".to_owned()],
-                            values: driver_status_props
-                                .into_iter()
-                                .map(|prop| match prop {
-                                    DriverStatusProperty::CantSign { address, .. } => {
-                                        format!("Can't sign {address}")
-                                    }
-                                    DriverStatusProperty::InsufficientGas {
-                                        needed_gas_est,
-                                        ..
-                                    } => {
-                                        format!("Insufficient gas (need est. {needed_gas_est})")
-                                    }
-                                    DriverStatusProperty::InsufficientToken {
-                                        needed_token_est,
-                                        ..
-                                    } => {
-                                        format!("Insufficient token (need est. {needed_token_est})")
-                                    }
-                                    DriverStatusProperty::InvalidChainId { chain_id, .. } => {
-                                        format!("Invalid Chain-Id ({chain_id})")
-                                    }
-                                    DriverStatusProperty::RpcError { network, .. } => {
-                                        format!("Unreliable {network} RPC endpoints")
-                                    }
-                                    DriverStatusProperty::TxStuck { network, .. } => {
-                                        format!("Tx stuck on {network}")
-                                    }
-                                })
-                                .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
-                                .collect::<Vec<_>>(),
-                        }
-                        .with_header(format!(
-                            "Status of the {} payment driver{}",
-                            account.driver(),
-                            ok_msg
-                        )))
+                            .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
+                            .collect::<Vec<_>>(),
                     }
-                    DriverSubcommand::List => {
-                        let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
-                        if ctx.json_output {
-                            return CommandOutput::object(drivers);
-                        }
-                        Ok(ResponseTable {
+                    .with_header(format!(
+                        "Status of the {} payment driver{}",
+                        account.driver(),
+                        ok_msg
+                    )))
+                }
+                DriverSubcommand::List => {
+                    let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                    if ctx.json_output {
+                        return CommandOutput::object(drivers);
+                    }
+                    Ok(ResponseTable {
                                 columns: vec![
                                     "driver".to_owned(),
                                     "network".to_owned(),
@@ -733,9 +561,8 @@ Typically operation should take less than 1 minute.
                                     })
                                     .collect(),
                             }.into())
-                    }
                 }
-            }
+            },
             PaymentCli::ReleaseAllocations => {
                 let _ = bus::service(pay::BUS_ID)
                     .call(pay::ReleaseAllocations {})

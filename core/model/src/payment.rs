@@ -265,8 +265,8 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetRpcEndpoints {
         pub address: String,
-        pub driver: String,
-        pub network: Option<String>,
+        pub driver: DriverName,
+        pub network: Option<NetworkName>,
         pub verify: bool,
         pub resolve: bool,
         pub no_wait: bool,
@@ -500,6 +500,8 @@ pub mod local {
         Clone,
         PartialEq,
         Eq,
+        Ord,
+        PartialOrd,
         Serialize,
         Deserialize,
     )]
