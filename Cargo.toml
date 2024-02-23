@@ -15,7 +15,7 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 tos = []
-framework-test = ['ya-exe-unit/framework-test']
+framework-test = ['ya-exe-unit/system-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable", "ya-service-bus/packet-trace-enable"]
@@ -204,6 +204,7 @@ members = [
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
     "exe-unit/components/transfer",
+    "exe-unit/components/mock-runtime",
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
@@ -272,10 +273,8 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
-#ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
-#ya-client-model = { path = "../ya-client/model" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "001c3ab99ef4783265e43c75efb2f3b01a02a666" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "001c3ab99ef4783265e43c75efb2f3b01a02a666" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack
