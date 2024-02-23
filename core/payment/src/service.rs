@@ -863,7 +863,7 @@ mod public {
 
         match dao.accept(debit_note_id.clone(), node_id).await {
             Ok(_) => {
-                log::info!("Node [{node_id}] accepted DebitNote [{debit_note_id}].");
+                log::info!("Node [{sender_id}] accepted DebitNote [{debit_note_id}].");
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -1039,7 +1039,7 @@ mod public {
             Ok(_) => {
                 log::info!(
                     "Node [{}] accepted invoice [{}] for Agreement [{}].",
-                    owner_id,
+                    sender_id,
                     invoice_id,
                     invoice.agreement_id
                 );
