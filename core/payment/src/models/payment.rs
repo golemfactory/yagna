@@ -4,6 +4,7 @@ use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment as api_model;
+use ya_client_model::payment::payment::Signature;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
@@ -150,8 +151,10 @@ impl ReadObj {
                 agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
                 details: base64::encode(&self.details),
             },
-            signature: self.signature.unwrap_or_else(|| vec![]),
-            signed_bytes: self.signed_bytes.unwrap_or_else(|| vec![]),
+            signature: Some(Signature {
+                signature: self.signature.unwrap(),
+                signed_bytes: self.signed_bytes.unwrap(),
+            }),
         }
     }
 }
