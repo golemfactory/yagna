@@ -130,7 +130,7 @@ impl Erc20Driver {
 
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
-                chain_name: network.to_string(),
+                network: network.to_string(),
                 from: sender,
                 receiver,
                 tx_type: TransferType::Token,
@@ -404,6 +404,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
+        // if wait is set check endpoints before getting rpc endpoints and sources
         if !msg.no_wait && (msg.resolve || msg.verify) {
             self.payment_runtime
                 .force_check_endpoint_info(msg.network.clone(), msg.resolve, msg.verify, true)
@@ -411,11 +412,19 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        let res = self
+        // get endpoint info
+        let endpoints = self
             .payment_runtime
             .get_rpc_endpoints(msg.network.clone())
             .map_err(|e| GenericError::new(e.to_string()))?;
 
+        // get info about sources (dns or json) for rpc endpoints
+        let sources = self
+            .payment_runtime
+            .get_rpc_sources(msg.network.clone())
+            .map_err(|e| GenericError::new(e.to_string()))?;
+
+        // alternatively if no wait is set check endpoints before getting rpc endpoints and sources
         if msg.no_wait && (msg.resolve || msg.verify) {
             self.payment_runtime
                 .force_check_endpoint_info(msg.network.clone(), msg.resolve, msg.verify, false)
@@ -423,7 +432,7 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        Ok(GetRpcEndpointsResult { response: res })
+        Ok(GetRpcEndpointsResult { endpoints, sources })
     }
 
     async fn get_account_balance(

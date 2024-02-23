@@ -238,7 +238,8 @@ mod local {
             .map_err(GenericError::new)?;
 
         Ok(GetRpcEndpointsResult {
-            response: rpc_info.response,
+            endpoints: rpc_info.endpoints,
+            sources: rpc_info.sources,
         })
     }
 

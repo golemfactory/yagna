@@ -497,7 +497,7 @@ Typically operation should take less than 1 minute.
                             ));
                         }
 
-                        let status = bus::service(pay::BUS_ID)
+                        let result = bus::service(pay::BUS_ID)
                             .call(pay::GetRpcEndpoints {
                                 address,
                                 driver: driver.to_string(),
@@ -509,10 +509,12 @@ Typically operation should take less than 1 minute.
                             .await??;
 
                         if ctx.json_output {
-                            CommandOutput::object(status.response)
+                            CommandOutput::object(
+                                json!({"endpoints": result.endpoints, "sources": result.sources}),
+                            )
                         } else {
                             let mut v = Vec::new();
-                            for (network, node_infos) in status.response {
+                            for (network, node_infos) in result.endpoints {
                                 let mut values = Vec::new();
                                 let last_chosen_el = node_infos
                                     .iter()
@@ -569,6 +571,35 @@ Typically operation should take less than 1 minute.
                                             "N"
                                         };
 
+                                    let source_id = node.params.source_id;
+                                    let source_info =
+                                        if let Some(sources) = result.sources.get(&network) {
+                                            if let Some(source_id) = source_id {
+                                                let mut source_info = None;
+                                                for source in &sources.dns_sources {
+                                                    if source.unique_source_id == source_id {
+                                                        source_info = Some(format!(
+                                                            "dns source:\n{}",
+                                                            source.dns_url
+                                                        ));
+                                                    }
+                                                }
+                                                for source in &sources.json_sources {
+                                                    if source.unique_source_id == source_id {
+                                                        source_info = Some(format!(
+                                                            "json source:\n{}",
+                                                            source.url
+                                                        ));
+                                                    }
+                                                }
+                                                source_info.unwrap_or("not found".to_string())
+                                            } else {
+                                                "config".to_string()
+                                            }
+                                        } else {
+                                            "N/A".to_string()
+                                        };
+
                                     let v = [
                                         format!("{}\n({})", node.params.name, node.params.endpoint),
                                         format!(
@@ -581,16 +612,7 @@ Typically operation should take less than 1 minute.
                                             .map(|t| t.to_string().as_str()[0..19].to_string())
                                             .unwrap_or("-".to_string()),
                                         format!("{}{}", seconds_behind, ping_ms),
-                                        format!(
-                                            "{}",
-                                            node.params
-                                                .source_id
-                                                .map(|id| format!(
-                                                    "{}...",
-                                                    id.to_string().as_str()[0..8].to_string()
-                                                ))
-                                                .unwrap_or("-".to_string())
-                                        ),
+                                        source_info,
                                     ];
                                     values.push(json!(v));
                                 }
