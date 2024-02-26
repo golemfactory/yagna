@@ -388,7 +388,7 @@ pub mod local {
 pub enum RpcMessageError {
     #[error("Service error: {0}")]
     Service(String),
-    #[error("Market API error: {0}")]
+    #[error("Activity API error: {0}")]
     Activity(String),
     #[error("Bad request: {0}")]
     BadRequest(String),

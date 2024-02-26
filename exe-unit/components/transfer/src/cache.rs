@@ -1,12 +1,12 @@
-use crate::error::{Error, TransferError};
 use sha3::Digest;
 use std::convert::TryFrom;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::path::{Component, PathBuf};
-use ya_transfer::TransferUrl;
+
+use crate::{error::Error as TransferError, TransferUrl};
 
 #[derive(Debug, Clone)]
-pub(crate) struct Cache {
+pub struct Cache {
     dir: PathBuf,
     #[allow(dead_code)]
     tmp_dir: PathBuf,
@@ -37,7 +37,6 @@ impl Cache {
     }
 
     #[inline(always)]
-    #[cfg(not(feature = "sgx"))]
     pub fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
         ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
     }
@@ -49,16 +48,16 @@ impl Cache {
 }
 
 impl TryFrom<ProjectedPath> for TransferUrl {
-    type Error = Error;
+    type Error = TransferError;
 
-    fn try_from(value: ProjectedPath) -> Result<Self, Error> {
+    fn try_from(value: ProjectedPath) -> Result<Self, TransferError> {
         TransferUrl::parse(
-            value.to_path_buf().to_str().ok_or_else(|| {
-                Error::local(TransferError::InvalidUrlError("Invalid path".to_owned()))
-            })?,
+            value
+                .to_path_buf()
+                .to_str()
+                .ok_or_else(|| TransferError::InvalidUrlError("Invalid path".to_owned()))?,
             "file",
         )
-        .map_err(Error::local)
     }
 }
 
