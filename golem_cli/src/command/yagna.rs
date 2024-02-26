@@ -272,7 +272,7 @@ impl YagnaCommand {
         network: Option<&NetworkName>,
         payment_driver: Option<&PaymentDriver>,
     ) -> anyhow::Result<Vec<DriverStatusProperty>> {
-        self.cmd.args(["--json", "payment", "driver-status"]);
+        self.cmd.args(["--json", "payment", "driver", "status"]);
         if let Some(address) = address {
             self.cmd.args(["--account", address]);
         }
