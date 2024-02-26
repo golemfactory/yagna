@@ -1988,8 +1988,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bbea905b6390c599da94e4222895e4c904671abe8785e7d7a1c696d6f6a845f"
 dependencies = [
  "actix",
  "actix-files",
@@ -2030,8 +2031,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae8349085a0b6916f934112a80ad78534b05bcb74d382987e32664e85b61c3be"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2071,8 +2073,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_extra"
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3871b69daa0d3102cc4ff9ed5f08b2fb6e54a4f3eb2cd9b6c30f65a22e16b2e"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2107,8 +2110,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_processor"
-version = "0.3.23"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c19c869632ffc084126d8512f07adb39aff40b66ff1265d24cca5cf51b4b9358"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2155,8 +2159,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=7ad164aec34d27ed0e00558ee92f7d2b477a47b5#7ad164aec34d27ed0e00558ee92f7d2b477a47b5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8aa63b091ec67dded9c02181b7dfc6787b955680f9124740b99b44d90f77f331"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -8356,10 +8361,12 @@ dependencies = [
  "bitflags 1.3.2",
  "chrono",
  "derive_more",
+ "erc20_payment_lib",
  "graphene-sgx",
  "log",
  "serde",
  "serde_bytes",
+ "serde_json",
  "structopt",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -8438,6 +8445,7 @@ dependencies = [
  "uuid 0.8.2",
  "web3",
  "ya-client-model",
+ "ya-core-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -8848,6 +8856,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "strum 0.24.1",
  "thiserror",
  "tokio",
  "uint 0.7.1",
