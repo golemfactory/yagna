@@ -22,6 +22,8 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
+    use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
+    use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -260,6 +262,28 @@ pub mod local {
         pub gas: Option<GasDetails>,
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetRpcEndpoints {
+        pub address: String,
+        pub driver: DriverName,
+        pub network: Option<NetworkName>,
+        pub verify: bool,
+        pub resolve: bool,
+        pub no_wait: bool,
+    }
+
+    impl RpcMessage for crate::payment::local::GetRpcEndpoints {
+        const ID: &'static str = "GetRpcEndpoints";
+        type Item = crate::payment::local::GetRpcEndpointsResult;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct GetRpcEndpointsResult {
+        pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
+        pub sources: BTreeMap<String, Web3ExternalSources>,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     #[serde(rename_all = "camelCase")]
     pub struct StatValue {
@@ -476,6 +500,8 @@ pub mod local {
         Clone,
         PartialEq,
         Eq,
+        Ord,
+        PartialOrd,
         Serialize,
         Deserialize,
     )]

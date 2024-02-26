@@ -28,6 +28,12 @@ pub trait PaymentDriver {
     async fn account_event(&self, _caller: String, msg: IdentityEvent)
         -> Result<(), IdentityError>;
 
+    async fn get_rpc_endpoints(
+        &self,
+        caller: String,
+        msg: GetRpcEndpoints,
+    ) -> Result<GetRpcEndpointsResult, GenericError>;
+
     async fn get_account_balance(
         &self,
         caller: String,
