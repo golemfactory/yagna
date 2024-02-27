@@ -35,7 +35,7 @@ fn driver_endpoint(driver: &str) -> Endpoint {
 }
 
 async fn validate_orders(
-    orders: &Vec<DbOrder>,
+    orders: &[DbOrder],
     platform: &str,
     payer_addr: &str,
     payee_addr: &str,
