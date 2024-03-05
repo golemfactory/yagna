@@ -1155,6 +1155,11 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+
+        if processor.try_lock().is_none() {
+            log::debug!("processor is locked!");
+        }
+
         match processor
             .lock()
             .await

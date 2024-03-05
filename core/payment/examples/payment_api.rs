@@ -36,7 +36,7 @@ use ya_service_bus::typed as bus;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Erc20next,
+    Erc20,
 }
 
 impl FromStr for Driver {
@@ -45,7 +45,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20" => Ok(Driver::Erc20next),
+            "erc20" => Ok(Driver::Erc20),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -55,18 +55,18 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20next => write!(f, "erc20"),
+            Driver::Erc20 => write!(f, "erc20"),
         }
     }
 }
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(long, default_value = "dummy")]
+    #[structopt(long, default_value = "erc20")]
     driver: Driver,
     #[structopt(long)]
     network: Option<String>,
-    #[structopt(long, default_value = "dummy-glm")]
+    #[structopt(long, default_value = "erc20-holesky-tglm")]
     platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
@@ -236,12 +236,30 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 
+    bus::bind(identity::BUS_ID, {
+        let provider_key = provider_pub_key.clone();
+        let requestor_key = requestor_pub_key.clone();
+        move |msg: identity::GetPubKey| {
+            let node_id: &[u8; 20] = msg.0.as_ref();
+            let pub_key = if node_id == provider_key.address() {
+                Some(provider_key.bytes())
+            } else if node_id == requestor_key.address() {
+                Some(requestor_key.bytes())
+            } else {
+                None
+            }
+            .map(|bytes| bytes.to_vec())
+            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
+            std::future::ready(pub_key)
+        }
+    });
+
     let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
             dummy::DRIVER_NAME
         }
-        Driver::Erc20next => {
+        Driver::Erc20 => {
             start_erc20_next_driver("./".into(), requestor_account).await?;
             erc20::DRIVER_NAME
         }
@@ -322,24 +340,6 @@ async fn main() -> anyhow::Result<()> {
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
     utils::provider::fake_get_agreement_id(args.agreement_id.clone());
 
-    bus::bind(identity::BUS_ID, {
-        let provider_key = provider_pub_key.clone();
-        let requestor_key = requestor_pub_key.clone();
-        move |msg: identity::GetPubKey| {
-            let node_id: &[u8; 20] = msg.0.as_ref();
-            let pub_key = if node_id == provider_key.address() {
-                Some(provider_key.bytes())
-            } else if node_id == requestor_key.address() {
-                Some(requestor_key.bytes())
-            } else {
-                None
-            }
-            .map(|bytes| bytes.to_vec())
-            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
-            std::future::ready(pub_key)
-        }
-    });
-
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
     log::info!("bind remote...");
@@ -348,6 +348,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(Config::from_env()?),
         provider_id,
         vec![provider_id, requestor_id],
+        // vec![provider_id],
     )
     .await?;
 
@@ -367,11 +368,11 @@ async fn main() -> anyhow::Result<()> {
             role: "".to_string(),
         };
 
-        let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
+        let provider_api_scope = Scope::new(&format!("provider{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(provider_identity));
-        let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
+        let requestor_api_scope = Scope::new(&format!("requestor{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(requestor_identity));

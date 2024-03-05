@@ -319,7 +319,7 @@ fn bind_local_bus<F>(
         } else {
             let rx = if is_local_dest {
                 let (tx, rx) = mpsc::channel(1);
-                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
+                forward_bus_to_local(caller_id, address.as_str(), msg, &state_, tx);
                 rx
             } else {
                 forward_bus_to_net(
@@ -1094,7 +1094,10 @@ impl State {
     fn get_public_service(&self, addr: &str) -> Option<String> {
         let inner = self.inner.borrow();
         RevPrefixes(addr)
-            .find_map(|s| inner.services.get(s))
+            .find_map(|s| {
+                log::debug!("{}", s);
+                inner.services.get(s)
+            })
             .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
     }
 
