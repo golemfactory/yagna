@@ -29,6 +29,7 @@ use ya_core_model::payment::local::{
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::types::Role;
 use ya_service_bus::typed::Endpoint;
 use ya_service_bus::{typed as bus, Error, RpcEndpoint, RpcMessage};
 
@@ -670,7 +671,7 @@ impl PaymentProcessor {
         // Verify totals for all agreements and activities with the same confirmation
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         let shared_payments = payment_dao
-            .get_for_confirmation(confirmation.confirmation)
+            .get_for_confirmation(confirmation.confirmation, Role::Provider)
             .await?;
         let other_payment_total = shared_payments
             .iter()
