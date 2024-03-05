@@ -21,6 +21,7 @@ use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -188,12 +189,17 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_for_confirmation(&self, details: Vec<u8>) -> DbResult<Vec<Payment>> {
+    pub async fn get_for_confirmation(
+        &self,
+        details: Vec<u8>,
+        role: Role,
+    ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, "payment_dao_get_for_confirmation", move |conn| {
             let mut result = Vec::new();
 
             let payments: Vec<ReadObj> = dsl::pay_payment
                 .filter(dsl::details.eq(&details))
+                .filter(dsl::role.eq(&role.to_string()))
                 .load(conn)?;
 
             for payment in payments {
