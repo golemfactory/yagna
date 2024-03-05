@@ -155,9 +155,7 @@ impl DbExecutor {
         // Some migrations require disabling foreign key checks for advanced table manipulation.
         // Unfortunately, disabling foreign keys within migration doesn't work correctly.
         c.batch_execute("PRAGMA foreign_keys = OFF;")?;
-        c.batch_execute("PRAGMA defer_foreign_keys = ON;")?;
         migration(&c, &mut std::io::stderr())?;
-        c.batch_execute("PRAGMA defer_foreign_keys = OFF;")?;
         c.batch_execute("PRAGMA foreign_keys = ON;")?;
         Ok(())
     }
