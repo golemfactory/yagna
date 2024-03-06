@@ -12,8 +12,8 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInv
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
-    // #[structopt(long, default_value = "dummy-holesky-tglm")]
-    // platform: String,
+    #[structopt(long, default_value = "erc20-holesky-tglm")]
+    platform: String,
 }
 
 #[actix_rt::main]
@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_received = requestor
         .get_invoice_events::<Utc>(
             Some(&invoice_date),
-            Some(Duration::from_secs(1000)),
+            Some(Duration::from_secs(10)),
             None,
             args.app_session_id.clone(),
         )
@@ -77,11 +77,7 @@ async fn main() -> anyhow::Result<()> {
     let allocation = requestor
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)
-            payment_platform: Some(PaymentPlatformEnum::PaymentPlatform(PaymentPlatform {
-                driver: Some("erc20".to_string()),
-                network: Some("holesky".to_string()),
-                token: Some("tglm".to_string()),
-            })),
+            payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(args.platform)),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -121,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_accepted = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_received.first().unwrap().event_date),
-            Some(Duration::from_secs(1000)),
+            Some(Duration::from_secs(10)),
             None,
             args.app_session_id.clone(),
         )
@@ -130,10 +126,10 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("events 2: {:?}", &invoice_events_accepted);
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
+    // let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
 
     let mut payments = provider
-        // .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
+        // .get_payments(Some(&now), timeout, None, args.app_session_id.clone()) // TODO: fixme, for some reason the timeout fails to serialize
         .get_payments(Some(&now), None, None, args.app_session_id.clone())
         .await?;
 
@@ -143,8 +139,6 @@ async fn main() -> anyhow::Result<()> {
 
     assert_eq!(payments.len(), 1);
     assert_eq!(signed_payments.len(), 1);
-
-    log::info!("Received {} payments", payments.len());
 
     let payment = payments.pop().unwrap();
     assert!(payment.amount >= invoice.amount);
@@ -159,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_settled = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_accepted.first().unwrap().event_date),
-            Some(Duration::from_secs(1000)),
+            Some(Duration::from_secs(10)),
             None,
             args.app_session_id.clone(),
         )

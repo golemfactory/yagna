@@ -348,7 +348,6 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(Config::from_env()?),
         provider_id,
         vec![provider_id, requestor_id],
-        // vec![provider_id],
     )
     .await?;
 

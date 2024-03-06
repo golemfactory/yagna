@@ -1094,10 +1094,7 @@ impl State {
     fn get_public_service(&self, addr: &str) -> Option<String> {
         let inner = self.inner.borrow();
         RevPrefixes(addr)
-            .find_map(|s| {
-                log::debug!("{}", s);
-                inner.services.get(s)
-            })
+            .find_map(|s| inner.services.get(s))
             .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
     }
 
