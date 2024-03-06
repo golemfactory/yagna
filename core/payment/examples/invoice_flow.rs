@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_received = requestor
         .get_invoice_events::<Utc>(
             Some(&invoice_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )
@@ -117,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_accepted = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_received.first().unwrap().event_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )
@@ -126,11 +126,11 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("events 2: {:?}", &invoice_events_accepted);
 
     log::info!("Waiting for payment...");
-    // let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
+    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
 
     let mut payments = provider
-        // .get_payments(Some(&now), timeout, None, args.app_session_id.clone()) // TODO: fixme, for some reason the timeout fails to serialize
-        .get_payments(Some(&now), None, None, args.app_session_id.clone())
+        .get_payments(Some(&now), timeout, None, args.app_session_id.clone()) // TODO: fixme, for some reason the timeout fails to serialize
+        // .get_payments(Some(&now), None, None, args.app_session_id.clone())
         .await?;
 
     let signed_payments = provider
@@ -153,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_settled = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_accepted.first().unwrap().event_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )
