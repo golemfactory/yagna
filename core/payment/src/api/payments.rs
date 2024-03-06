@@ -71,10 +71,7 @@ async fn get_payments(
     };
 
     match listen_for_events(getter, timeout_secs).await {
-        Ok(payments) => {
-            log::info!("[get_payments]: {}", payments.len());
-            response::ok(payments)
-        }
+        Ok(payments) => response::ok(payments),
         Err(e) => response::server_error(&e),
     }
 }

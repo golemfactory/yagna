@@ -129,8 +129,7 @@ async fn main() -> anyhow::Result<()> {
     let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
 
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, args.app_session_id.clone()) // TODO: fixme, for some reason the timeout fails to serialize
-        // .get_payments(Some(&now), None, None, args.app_session_id.clone())
+        .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;
 
     let signed_payments = provider
