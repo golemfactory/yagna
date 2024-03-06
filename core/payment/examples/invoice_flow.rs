@@ -5,7 +5,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
-use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
+use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice};
 
 #[derive(Clone, Debug, StructOpt)]
