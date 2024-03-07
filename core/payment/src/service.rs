@@ -1155,6 +1155,7 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+
         match processor
             .lock()
             .await

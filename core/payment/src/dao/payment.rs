@@ -21,6 +21,7 @@ use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -161,6 +162,7 @@ impl<'c> PaymentDao<'c> {
     pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_mark_sent", move |conn| {
             diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .filter(dsl::role.eq(Role::Requestor))
                 .set(dsl::send_payment.eq(false))
                 .execute(conn)?;
             Ok(())
@@ -176,6 +178,7 @@ impl<'c> PaymentDao<'c> {
     ) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_update", move |conn| {
             diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .filter(dsl::role.eq(Role::Requestor))
                 .set((
                     dsl::signature.eq(signature),
                     dsl::signed_bytes.eq(signed_bytes),
@@ -225,6 +228,7 @@ impl<'c> PaymentDao<'c> {
 
             let payments: Vec<ReadObj> = dsl::pay_payment
                 .filter(dsl::details.eq(&details))
+                .filter(dsl::role.eq(&"P"))
                 .load(conn)?;
 
             for payment in payments {
