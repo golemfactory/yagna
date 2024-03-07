@@ -2,7 +2,9 @@ use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use derive_more::From;
+use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
 use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
@@ -77,6 +79,28 @@ impl PaymentConfirmation {
             confirmation: bytes.to_vec(),
         }
     }
+}
+
+// ************************** GET RPC ENDPOINTS INFO **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetRpcEndpoints {
+    pub network: Option<String>,
+    pub verify: bool,
+    pub resolve: bool,
+    pub no_wait: bool,
+}
+
+impl RpcMessage for GetRpcEndpoints {
+    const ID: &'static str = "GetRpcEndpoints";
+    type Item = GetRpcEndpointsResult;
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GetRpcEndpointsResult {
+    pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
+    pub sources: BTreeMap<String, Web3ExternalSources>,
 }
 
 // ************************** GET ACCOUNT BALANCE **************************

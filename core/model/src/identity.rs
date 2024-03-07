@@ -267,12 +267,12 @@ pub mod event {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub enum Event {
+    pub enum IdentityEvent {
         AccountLocked { identity: NodeId },
         AccountUnlocked { identity: NodeId },
     }
 
-    impl RpcMessage for Event {
+    impl RpcMessage for IdentityEvent {
         const ID: &'static str = "Identity__Event";
         type Item = ();
         type Error = Error;

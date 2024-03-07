@@ -50,6 +50,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use chrono::NaiveDateTime;
+    use std::str::FromStr;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -75,6 +76,7 @@ mod local {
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
+            .bind_with_processor(get_rpc_endpoints)
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
@@ -187,6 +189,61 @@ mod local {
     ) -> Result<(), GenericError> {
         processor.lock().await.notify_payment(msg).await?;
         Ok(())
+    }
+
+    async fn get_rpc_endpoints(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: GetRpcEndpoints,
+    ) -> Result<GetRpcEndpointsResult, GenericError> {
+        log::info!("get rpc endpoints: {:?}", msg);
+        let GetRpcEndpoints {
+            driver,
+            network,
+            address,
+            verify,
+            resolve,
+            no_wait,
+        } = msg;
+
+        let (network2, network_details) = processor
+            .lock()
+            .await
+            .get_network(driver.to_string(), network.as_ref().map(|s| s.to_string()))
+            .await
+            .map_err(GenericError::new)?;
+        let network2 = NetworkName::from_str(&network2).map_err(GenericError::new)?;
+
+        let token = network_details.default_token.clone();
+        let platform = match network_details.tokens.get(&token) {
+            Some(platform) => platform.clone(),
+            None => {
+                return Err(GenericError::new(format!(
+                    "Unsupported token. driver={} network={} token={}",
+                    driver, network2, token
+                )));
+            }
+        };
+
+        let rpc_info = processor
+            .lock()
+            .await
+            .get_rpc_endpoints_info(
+                platform,
+                address.to_string(),
+                network.as_ref().map(|s| s.to_string()),
+                verify,
+                resolve,
+                no_wait,
+            )
+            .await
+            .map_err(GenericError::new)?;
+
+        Ok(GetRpcEndpointsResult {
+            endpoints: rpc_info.endpoints,
+            sources: rpc_info.sources,
+        })
     }
 
     async fn get_status(
@@ -810,7 +867,7 @@ mod public {
 
         match dao.accept(debit_note_id.clone(), node_id).await {
             Ok(_) => {
-                log::info!("Node [{node_id}] accepted DebitNote [{debit_note_id}].");
+                log::info!("Node [{sender_id}] accepted DebitNote [{debit_note_id}].");
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -986,7 +1043,7 @@ mod public {
             Ok(_) => {
                 log::info!(
                     "Node [{}] accepted invoice [{}] for Agreement [{}].",
-                    owner_id,
+                    sender_id,
                     invoice_id,
                     invoice.agreement_id
                 );

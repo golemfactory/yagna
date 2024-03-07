@@ -91,10 +91,7 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn start_erc20_next_driver(
-    path: PathBuf,
-    requestor_account: SecretKey,
-) -> anyhow::Result<()> {
+pub async fn start_erc20_driver(path: PathBuf, requestor_account: SecretKey) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
@@ -260,7 +257,7 @@ async fn main() -> anyhow::Result<()> {
             dummy::DRIVER_NAME
         }
         Driver::Erc20 => {
-            start_erc20_next_driver("./".into(), requestor_account).await?;
+            start_erc20_driver("./".into(), requestor_account).await?;
             erc20::DRIVER_NAME
         }
     };

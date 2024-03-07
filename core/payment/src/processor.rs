@@ -19,8 +19,8 @@ use ya_client_model::payment::{
 };
 use ya_client_model::NodeId;
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation,
+    self, driver_bus_id, AccountMode, GasDetails, GetRpcEndpointsResult, PaymentConfirmation,
+    PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
@@ -227,7 +227,8 @@ impl DriverRegistry {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         let driver_details = self.get_driver(&driver)?;
-        let network_name = network.unwrap_or_default();
+        // If network is not specified, use default network
+        let network_name = network.unwrap_or_else(|| driver_details.default_network.to_owned());
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
@@ -721,6 +722,29 @@ impl PaymentProcessor {
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
+    }
+
+    pub async fn get_rpc_endpoints_info(
+        &self,
+        platform: String,
+        address: String,
+        network: Option<String>,
+        verify: bool,
+        resolve: bool,
+        no_wait: bool,
+    ) -> Result<GetRpcEndpointsResult, GetStatusError> {
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
+        let res = driver_endpoint(&driver)
+            .send(driver::GetRpcEndpoints {
+                network,
+                verify,
+                resolve,
+                no_wait,
+            })
+            .await??;
+        Ok(res)
     }
 
     pub async fn get_gas_balance(
