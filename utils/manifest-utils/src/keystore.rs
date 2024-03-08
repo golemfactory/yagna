@@ -117,7 +117,8 @@ pub struct RemoveResponse {
 }
 
 pub trait Keystore: KeystoreClone + Send {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()>;
+    fn reload(&self) -> anyhow::Result<()>;
+    fn cert_dir(&self) -> PathBuf;
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
@@ -237,11 +238,15 @@ impl CompositeKeystore {
 }
 
 impl Keystore for CompositeKeystore {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
+    fn reload(&self) -> anyhow::Result<()> {
         for keystore in self.keystores().iter() {
-            keystore.reload(cert_dir)?;
+            keystore.reload()?;
         }
         Ok(())
+    }
+
+    fn cert_dir(&self) -> PathBuf {
+        self.golem_keystore.cert_dir()
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {

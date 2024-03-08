@@ -6,8 +6,8 @@ use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use crate::rules::allow::RestrictConfig;
 use crate::rules::outbound::{Mode, OutboundConfig};
+use crate::rules::restrict::RestrictConfig;
 
 #[derive(Clone, Debug)]
 pub struct Rulestore {

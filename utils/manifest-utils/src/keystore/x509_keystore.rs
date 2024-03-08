@@ -215,8 +215,12 @@ fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
-        self.keystore.reload(cert_dir)
+    fn reload(&self) -> anyhow::Result<()> {
+        self.keystore.reload(&self.cert_dir)
+    }
+
+    fn cert_dir(&self) -> PathBuf {
+        self.cert_dir.clone()
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {

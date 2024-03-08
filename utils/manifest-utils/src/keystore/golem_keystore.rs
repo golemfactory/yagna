@@ -98,9 +98,9 @@ impl GolemKeystore {
 }
 
 impl Keystore for GolemKeystore {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
+    fn reload(&self) -> anyhow::Result<()> {
         let mut certificates = HashMap::new();
-        let cert_dir = std::fs::read_dir(cert_dir)?;
+        let cert_dir = std::fs::read_dir(&self.cert_dir)?;
         for dir_entry in cert_dir {
             let file = dir_entry?;
             let path = file.path();
@@ -117,6 +117,10 @@ impl Keystore for GolemKeystore {
         let mut certificates_ref = self.certificates.write().unwrap();
         *certificates_ref = certificates;
         Ok(())
+    }
+
+    fn cert_dir(&self) -> PathBuf {
+        self.cert_dir.clone()
     }
 
     fn add(&mut self, add: &super::AddParams) -> anyhow::Result<super::AddResponse> {

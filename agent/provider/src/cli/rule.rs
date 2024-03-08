@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
+use ya_client_model::NodeId;
 
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
 use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
@@ -22,6 +23,8 @@ pub enum RuleCommand {
 #[derive(StructOpt, Clone, Debug)]
 pub enum SetRule {
     Outbound(SetOutboundRule),
+    Blacklist(SetRestrictRule),
+    AllowOnly(SetRestrictRule),
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -34,6 +37,17 @@ pub enum SetOutboundRule {
     },
     AuditedPayload(AuditedPayloadRuleWithCert),
     Partner(PartnerRuleWithCert),
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum SetRestrictRule {
+    Disable,
+    Enable,
+    ByNodeId {
+        #[structopt(short, long)]
+        address: NodeId,
+    },
+    Certified(RestrictRuleWithCert),
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -67,6 +81,17 @@ pub enum PartnerRuleWithCert {
         imported_cert: PathBuf,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
+    },
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub enum RestrictRuleWithCert {
+    /// Set rule for Golem certificate with given id.
+    CertId(CertId),
+    /// Import and set rule for X509 certificate or X509 certificates chain.
+    ImportCert {
+        /// Path to Golem certificate.
+        imported_cert: PathBuf,
     },
 }
 
@@ -113,7 +138,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     log::error!("Failed to import X509 certificates from: {cert_path:?}.");
                 }
 
-                rules.keystore.reload(&rules.cert_dir)?;
+                rules.keystore.reload()?;
 
                 if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
                     log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
@@ -145,7 +170,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                     log::error!("Failed to import Golem certificates from: {cert_path:?}.");
                 }
 
-                rules.keystore.reload(&rules.cert_dir)?;
+                rules.keystore.reload()?;
 
                 if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
                     log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
@@ -158,6 +183,8 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 Ok(())
             }
         },
+        SetRule::AllowOnly(_restrict) => unimplemented!(),
+        SetRule::Blacklist(_restrict) => unimplemented!(),
     }
 }
 
