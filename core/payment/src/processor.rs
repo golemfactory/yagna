@@ -1,5 +1,7 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{
+    ActivityDao, AgreementDao, AllocationDao, AllocationStatus, OrderDao, PaymentDao, SyncNotifsDao,
+};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -9,10 +11,12 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::{DateTime, Utc};
 use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -533,7 +537,11 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(
+        &self,
+        caller: String,
+        msg: SchedulePayment,
+    ) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -544,6 +552,25 @@ impl PaymentProcessor {
                 &amount
             )));
         }
+
+        let allocation_status = self
+            .db_executor
+            .lock()
+            .await
+            .as_dao::<AllocationDao>()
+            .get(
+                msg.allocation_id.clone(),
+                NodeId::from_str(&caller)
+                    .map_err(|e| SchedulePaymentError::InvalidInput(e.to_string()))?,
+            )
+            .await?;
+
+        let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
+            allocation.deposit.clone().map(|deposit| deposit.id)
+        } else {
+            None
+        };
+
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
@@ -555,6 +582,7 @@ impl PaymentProcessor {
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
                 msg.payment_platform.clone(),
+                deposit_id,
                 msg.due_date,
             ))
             .await??;
@@ -778,6 +806,7 @@ impl PaymentProcessor {
         platform: String,
         address: String,
         amount: BigDecimal,
+        timeout: Option<DateTime<Utc>>,
     ) -> Result<bool, ValidateAllocationError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
@@ -798,6 +827,8 @@ impl PaymentProcessor {
             address,
             platform,
             amount,
+            timeout,
+            deposit: None,
             existing_allocations,
         };
         let result = driver_endpoint(&driver).send(msg).await??;

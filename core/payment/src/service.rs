@@ -131,7 +131,7 @@ mod local {
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        let res = processor.schedule_payment(msg).await;
+        let res = processor.schedule_payment(sender, msg).await;
         log::debug!("Schedule payment processor finished");
         Ok(res?)
     }
@@ -414,7 +414,7 @@ mod local {
         msg: ValidateAllocation,
     ) -> Result<bool, ValidateAllocationError> {
         Ok(processor
-            .validate_allocation(msg.platform, msg.address, msg.amount)
+            .validate_allocation(msg.platform, msg.address, msg.amount, msg.timeout)
             .await?)
     }
 
