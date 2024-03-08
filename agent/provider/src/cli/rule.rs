@@ -1,13 +1,12 @@
-use crate::rules::{CertRule, OutboundRule};
-use crate::{
-    rules::{Mode, RulesManager},
-    startup_config::ProviderConfig,
-};
+use crate::rules::outbound::{CertRule, Mode, OutboundRule};
+use crate::{rules::RulesManager, startup_config::ProviderConfig};
+
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use strum::VariantNames;
+
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
 use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
 use ya_utils_cli::{CommandOutput, ResponseTable};

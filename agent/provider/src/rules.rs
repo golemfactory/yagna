@@ -1,19 +1,21 @@
+pub mod allow;
+pub mod outbound;
+mod store;
+
+use crate::rules::allow::RestrictConfig;
+use crate::rules::outbound::{CertRule, Mode, OutboundRule};
+use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
+
 use anyhow::{anyhow, bail, Result};
 use golem_certificate::schemas::permissions::Permissions;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     convert::TryFrom,
-    fs::OpenOptions,
-    io::BufReader,
     ops::Not,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
 };
-use structopt::StructOpt;
-use strum::{Display, EnumString, EnumVariantNames};
 use url::Url;
 use ya_client_model::NodeId;
 use ya_manifest_utils::{
@@ -516,137 +518,6 @@ pub struct ManifestSignatureProps {
 pub enum CheckRulesResult {
     Accept,
     Reject(String),
-}
-
-#[derive(Clone, Debug)]
-pub struct Rulestore {
-    pub path: PathBuf,
-    pub config: Arc<RwLock<RulesConfig>>,
-}
-
-impl Rulestore {
-    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
-        if rules_file.exists() {
-            log::debug!("Loading rule from: {}", rules_file.display());
-            let file = OpenOptions::new().read(true).open(rules_file)?;
-            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
-            log::debug!("Loaded rules: {:#?}", config);
-
-            Ok(Self {
-                config: Arc::new(RwLock::new(config)),
-                path: rules_file.to_path_buf(),
-            })
-        } else {
-            log::debug!("Creating default Rules configuration");
-            let config = Default::default();
-
-            let store = Self {
-                config: Arc::new(RwLock::new(config)),
-                path: rules_file.to_path_buf(),
-            };
-            store.save()?;
-
-            Ok(store)
-        }
-    }
-
-    fn save(&self) -> Result<()> {
-        log::debug!("Saving RuleStore to: {}", self.path.display());
-        Ok(std::fs::write(
-            &self.path,
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?,
-        )?)
-    }
-
-    pub fn reload(&self) -> Result<()> {
-        log::debug!("Reloading RuleStore from: {}", self.path.display());
-        let new_rule_store = Self::load_or_create(&self.path)?;
-
-        self.replace(new_rule_store);
-
-        Ok(())
-    }
-
-    fn replace(&self, other: Self) {
-        let store = std::mem::take(&mut (*other.config.write().unwrap()));
-
-        *self.config.write().unwrap() = store;
-    }
-
-    pub fn print(&self) -> Result<()> {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?
-        );
-
-        Ok(())
-    }
-
-    pub fn is_outbound_disabled(&self) -> bool {
-        self.config.read().unwrap().outbound.enabled.not()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RulesConfig {
-    pub outbound: OutboundConfig,
-}
-
-impl Default for RulesConfig {
-    fn default() -> Self {
-        Self {
-            outbound: OutboundConfig {
-                enabled: true,
-                everyone: Mode::Whitelist,
-                audited_payload: HashMap::new(),
-                partner: HashMap::new(),
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct OutboundConfig {
-    pub enabled: bool,
-    pub everyone: Mode,
-    #[serde(default)]
-    pub audited_payload: HashMap<String, CertRule>,
-    #[serde(default)]
-    pub partner: HashMap<String, CertRule>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CertRule {
-    pub mode: Mode,
-    pub description: String,
-}
-
-#[derive(
-    StructOpt,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    Eq,
-    PartialEq,
-    Display,
-    EnumString,
-    EnumVariantNames,
-)]
-#[serde(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab-case")]
-pub enum Mode {
-    All,
-    None,
-    Whitelist,
-}
-
-#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
-pub enum OutboundRule {
-    Partner,
-    AuditedPayload,
-    Everyone,
 }
 
 #[derive(PartialEq, Eq)]
