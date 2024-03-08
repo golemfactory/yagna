@@ -10,7 +10,7 @@ use serde_json::Value;
 use ya_client_model::NodeId;
 use ya_manifest_utils::CompositeKeystore;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RestrictConfig {
     pub enabled: bool,
@@ -155,6 +155,17 @@ impl BlacklistValidator for RestrictRule {
         } else {
             log::trace!("Checking rules: blacklist rule is disabled.");
             CheckRulesResult::Accept
+        }
+    }
+}
+
+/// Custom implementation to ensure that the rule is disabled by default.
+impl Default for RestrictConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            identity: HashSet::new(),
+            certified: HashSet::new(),
         }
     }
 }

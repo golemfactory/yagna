@@ -79,9 +79,12 @@ impl Rulestore {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct RulesConfig {
     pub outbound: OutboundConfig,
+    #[serde(default)]
     pub blacklist: RestrictConfig,
+    #[serde(default)]
     pub allow_only: RestrictConfig,
 }
 
