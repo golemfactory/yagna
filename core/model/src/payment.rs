@@ -403,6 +403,7 @@ pub mod local {
         pub platform: String,
         pub address: String,
         pub amount: BigDecimal,
+        pub timeout: Option<DateTime<Utc>>,
     }
 
     impl RpcMessage for ValidateAllocation {

@@ -339,6 +339,7 @@ async fn create_allocation(
         platform: payment_triple.to_string(),
         address: address.clone(),
         amount: allocation.total_amount.clone(),
+        timeout: allocation.timeout,
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
@@ -488,6 +489,7 @@ async fn amend_allocation(
         } else {
             0.into()
         },
+        timeout: amended_allocation.timeout,
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}

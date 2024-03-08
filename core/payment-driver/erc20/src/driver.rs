@@ -24,6 +24,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::{Address, H256};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::DriverStatusProperty;
 use ya_payment_driver::driver::IdentityError;
 
@@ -118,6 +119,7 @@ impl Erc20Driver {
         amount: &BigDecimal,
         network: &str,
         deadline: Option<DateTime<Utc>>,
+        deposit_id: Option<String>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -137,8 +139,7 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
-                allocation_id: None,
-                use_internal: false,
+                deposit_id,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -359,6 +360,93 @@ impl Erc20Driver {
             transaction_hash,
         )
         .await
+    }
+
+    async fn validate_allocation_internal(
+        &self,
+        caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, GenericError> {
+        if msg.deposit.is_some() {
+            Err(GenericError::new(
+                "validate_allocation_internal called with not empty deposit",
+            ))?;
+        }
+
+        let account_balance = self
+            .get_account_balance(
+                caller,
+                GetAccountBalance::new(msg.address, msg.platform.clone()),
+            )
+            .await?;
+
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .filter(|allocation| allocation.payment_platform == msg.platform)
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+        );
+
+        Ok(msg.amount <= account_balance - total_allocated_amount)
+    }
+
+    async fn validate_allocation_deposit(
+        &self,
+        msg: ValidateAllocation,
+        deposit: Deposit,
+    ) -> Result<bool, GenericError> {
+        let network = msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))?;
+
+        let deposit_details = self
+            .payment_runtime
+            .deposit_details(
+                network.to_string(),
+                U256::from_str(&deposit.id).unwrap(),
+                Address::from_str(&deposit.contract).unwrap(),
+            )
+            .await
+            .map_err(|e| GenericError::new(e))?;
+        let deposit_balance =
+            BigDecimal::new(BigInt::from_str(&deposit_details.amount).unwrap(), 18);
+
+        log::info!(
+            "Allocation validation with deposit: \
+                allocating: {:.5}, \
+                deposit balance: {:.5}, \
+                requested timeout: {}, \
+                deposit valid to: {}",
+            msg.amount,
+            deposit_balance,
+            msg.timeout
+                .map(|tm| tm.to_string())
+                .unwrap_or(String::from("never")),
+            deposit_details.valid_to,
+        );
+
+        let valid_amount = msg.amount <= deposit_balance;
+        let valid_timeout = msg
+            .timeout
+            .map(|timeout| timeout <= deposit_details.valid_to)
+            .unwrap_or(false);
+
+        Ok(valid_amount && valid_timeout)
     }
 }
 
@@ -825,6 +913,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount,
             &network,
             Some(Utc::now()),
+            None,
         )
         .await
     }
@@ -850,6 +939,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount(),
             network,
             Some(msg.due_date() - transfer_margin),
+            msg.deposit_id(),
         )
         .await
     }
@@ -898,34 +988,15 @@ impl PaymentDriver for Erc20Driver {
     async fn validate_allocation(
         &self,
         caller: String,
-        msg: ValidateAllocation,
+        mut msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
-        let account_balance = self
-            .get_account_balance(
-                caller,
-                GetAccountBalance::new(msg.address, msg.platform.clone()),
-            )
-            .await?;
 
-        let total_allocated_amount: BigDecimal = msg
-            .existing_allocations
-            .into_iter()
-            .filter(|allocation| allocation.payment_platform == msg.platform)
-            .map(|allocation| allocation.remaining_amount)
-            .sum();
-
-        log::info!(
-            "Allocation validation: \
-            allocating: {:.5}, \
-            account_balance: {:.5}, \
-            total_allocated_amount: {:.5}",
-            msg.amount,
-            account_balance,
-            total_allocated_amount,
-        );
-
-        Ok(msg.amount <= account_balance - total_allocated_amount)
+        if let Some(deposit) = msg.deposit.take() {
+            self.validate_allocation_deposit(msg, deposit).await
+        } else {
+            self.validate_allocation_internal(caller, msg).await
+        }
     }
 
     async fn status(
