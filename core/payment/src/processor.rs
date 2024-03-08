@@ -732,6 +732,7 @@ impl PaymentProcessor {
             address,
             platform,
             amount,
+            deposit: None,
             existing_allocations,
         };
         let result = driver_endpoint(&driver).send(msg).await??;

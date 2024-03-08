@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
+use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -370,6 +370,7 @@ pub struct ValidateAllocation {
     pub address: String,
     pub platform: String,
     pub amount: BigDecimal,
+    pub deposit: Option<Deposit>,
     pub existing_allocations: Vec<Allocation>,
 }
 
@@ -384,6 +385,7 @@ impl ValidateAllocation {
             address,
             platform,
             amount,
+            deposit: None,
             existing_allocations: existing,
         }
     }

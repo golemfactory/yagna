@@ -137,8 +137,7 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
-                allocation_id: None,
-                use_internal: false,
+                deposit_id: None,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -901,6 +900,18 @@ impl PaymentDriver for Erc20Driver {
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
+
+        if let Some(deposit) = msg.deposit {
+            let network = msg.platform.split('-').nth(1).ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))?;
+
+            let deposit_details = self.payment_runtime.deposit_details(network.to_string(), U256::from_str(&deposit.id).unwrap(), Address::from_str(&deposit.contract).unwrap()).await;
+
+            return  deposit_details.map_err(|e| GenericError::new(e)).map(|_| true);
+        }
+
         let account_balance = self
             .get_account_balance(
                 caller,
