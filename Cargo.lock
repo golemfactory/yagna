@@ -1989,8 +1989,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bbea905b6390c599da94e4222895e4c904671abe8785e7d7a1c696d6f6a845f"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d82a4e2031ec2f434e301190480b5522f371848b#d82a4e2031ec2f434e301190480b5522f371848b"
 dependencies = [
  "actix",
  "actix-files",
@@ -2032,8 +2031,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae8349085a0b6916f934112a80ad78534b05bcb74d382987e32664e85b61c3be"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d82a4e2031ec2f434e301190480b5522f371848b#d82a4e2031ec2f434e301190480b5522f371848b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2074,8 +2072,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_extra"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3871b69daa0d3102cc4ff9ed5f08b2fb6e54a4f3eb2cd9b6c30f65a22e16b2e"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d82a4e2031ec2f434e301190480b5522f371848b#d82a4e2031ec2f434e301190480b5522f371848b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2111,8 +2108,7 @@ dependencies = [
 [[package]]
 name = "erc20_processor"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c19c869632ffc084126d8512f07adb39aff40b66ff1265d24cca5cf51b4b9358"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d82a4e2031ec2f434e301190480b5522f371848b#d82a4e2031ec2f434e301190480b5522f371848b"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2160,8 +2156,7 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8aa63b091ec67dded9c02181b7dfc6787b955680f9124740b99b44d90f77f331"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d82a4e2031ec2f434e301190480b5522f371848b#d82a4e2031ec2f434e301190480b5522f371848b"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -8302,7 +8297,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=9865df0f8adf265a2b2f020a632cafd5cd8e82b5#9865df0f8adf265a2b2f020a632cafd5cd8e82b5"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8326,7 +8321,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=9865df0f8adf265a2b2f020a632cafd5cd8e82b5#9865df0f8adf265a2b2f020a632cafd5cd8e82b5"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8337,6 +8332,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",

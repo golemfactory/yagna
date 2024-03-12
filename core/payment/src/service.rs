@@ -130,7 +130,7 @@ mod local {
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
-        processor.lock().await.schedule_payment(msg).await?;
+        processor.lock().await.schedule_payment(sender, msg).await?;
         Ok(())
     }
 
@@ -401,7 +401,7 @@ mod local {
         Ok(processor
             .lock()
             .await
-            .validate_allocation(msg.platform, msg.address, msg.amount)
+            .validate_allocation(msg.platform, msg.address, msg.amount, msg.timeout)
             .await?)
     }
 

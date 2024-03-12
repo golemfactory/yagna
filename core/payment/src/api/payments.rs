@@ -33,6 +33,7 @@ async fn get_payments(
     let timeout_secs = query
         .event_params
         .timeout
+        .timeout
         .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
     let network = match query

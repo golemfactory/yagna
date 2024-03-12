@@ -4,6 +4,7 @@ use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -178,7 +179,7 @@ impl<'c> AllocationDao<'c> {
                 .first(conn)
                 .optional()?;
 
-            match allocation {
+            let deposit = match allocation {
                 Some(allocation) => {
                     if let Some(owner_id) = owner_id {
                         if owner_id != allocation.owner_id {
@@ -189,9 +190,11 @@ impl<'c> AllocationDao<'c> {
                     if allocation.released {
                         return Ok(AllocationReleaseStatus::Gone);
                     }
+
+                    Allocation::from(allocation).deposit
                 }
                 None => return Ok(AllocationReleaseStatus::NotFound),
-            }
+            };
 
             let num_released = diesel::update(dsl::pay_allocation)
                 .filter(dsl::released.eq(false))
@@ -200,7 +203,7 @@ impl<'c> AllocationDao<'c> {
                 .execute(conn)?;
 
             match num_released {
-                1 => Ok(AllocationReleaseStatus::Released),
+                1 => Ok(AllocationReleaseStatus::Released { deposit }),
                 _ => Err(DbError::Query(format!(
                     "Update error occurred when releasing allocation {}",
                     allocation_id
@@ -246,5 +249,5 @@ pub enum AllocationStatus {
 pub enum AllocationReleaseStatus {
     Gone,
     NotFound,
-    Released,
+    Released { deposit: Option<Deposit> },
 }

@@ -1,0 +1,1 @@
+ALTER TABLE pay_allocation ADD COLUMN deposit TEXT DEFAULT NULL;

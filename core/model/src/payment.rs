@@ -403,6 +403,7 @@ pub mod local {
         pub platform: String,
         pub address: String,
         pub amount: BigDecimal,
+        pub timeout: Option<DateTime<Utc>>,
     }
 
     impl RpcMessage for ValidateAllocation {
@@ -426,6 +427,26 @@ pub mod local {
         const ID: &'static str = "ReleaseAllocations";
         type Item = ();
         type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseDeposit {
+        pub signer: NodeId,
+        pub deposit_id: String,
+    }
+
+    impl RpcMessage for ReleaseDeposit {
+        const ID: &'static str = "ReleaseDeposit";
+        type Item = bool;
+        type Error = ReleaseDepositError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ReleaseDepositError {
+        #[error("Account not registered")]
+        AccountNotRegistered,
+        #[error("Error while releasing allocation: {0}")]
+        Other(String),
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
+use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -316,6 +316,7 @@ pub struct SchedulePayment {
     sender: String,
     recipient: String,
     platform: String,
+    deposit_id: Option<String>,
     due_date: DateTime<Utc>,
 }
 
@@ -325,6 +326,7 @@ impl SchedulePayment {
         sender: String,
         recipient: String,
         platform: String,
+        deposit_id: Option<String>,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
@@ -332,6 +334,7 @@ impl SchedulePayment {
             sender,
             recipient,
             platform,
+            deposit_id,
             due_date,
         }
     }
@@ -352,6 +355,10 @@ impl SchedulePayment {
         self.platform.clone()
     }
 
+    pub fn deposit_id(&self) -> Option<String> {
+        self.deposit_id.clone()
+    }
+
     pub fn due_date(&self) -> DateTime<Utc> {
         self.due_date
     }
@@ -370,6 +377,8 @@ pub struct ValidateAllocation {
     pub address: String,
     pub platform: String,
     pub amount: BigDecimal,
+    pub timeout: Option<DateTime<Utc>>,
+    pub deposit: Option<Deposit>,
     pub existing_allocations: Vec<Allocation>,
 }
 
@@ -378,12 +387,15 @@ impl ValidateAllocation {
         address: String,
         platform: String,
         amount: BigDecimal,
+        timeout: Option<DateTime<Utc>>,
         existing: Vec<Allocation>,
     ) -> Self {
         ValidateAllocation {
             address,
             platform,
             amount,
+            timeout,
+            deposit: None,
             existing_allocations: existing,
         }
     }
