@@ -95,8 +95,7 @@ impl From<ReadObj> for Allocation {
             make_deposit: allocation.make_deposit,
             deposit: allocation
                 .deposit
-                .map(|s| serde_json::from_str(&s).ok())
-                .flatten(),
+                .and_then(|s| serde_json::from_str(&s).ok()),
         }
     }
 }

@@ -422,7 +422,7 @@ impl Erc20Driver {
                 Address::from_str(&deposit.contract).unwrap(),
             )
             .await
-            .map_err(|e| GenericError::new(e))?;
+            .map_err(GenericError::new)?;
         let deposit_balance =
             BigDecimal::new(BigInt::from_str(&deposit_details.amount).unwrap(), 18);
 
