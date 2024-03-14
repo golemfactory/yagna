@@ -82,8 +82,41 @@ async fn get_invoice(
     }
 }
 
-async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<params::InvoiceId>) -> HttpResponse {
-    response::not_implemented() // TODO
+async fn get_invoice_payments(
+    db: Data<DbExecutor>,
+    path: Path<params::InvoiceId>,
+    id: Identity,
+) -> HttpResponse {
+    let invoice_id = path.invoice_id.clone();
+    let node_id = id.identity;
+
+    let dao: PaymentDao = db.as_dao();
+    let payments = match dao
+        .get_for_node_id(node_id, None, None, None, None, None)
+        .await
+    {
+        Ok(payments) => payments,
+        Err(e) => return response::server_error(&e),
+    };
+
+    let dao: InvoiceDao = db.as_dao();
+    match dao.get(invoice_id, node_id).await {
+        Ok(Some(invoice)) => {
+            let invoice_payments: Vec<Signed<Payment>> = payments
+                .iter()
+                .filter(|p| {
+                    let l1 = p.payload.activity_payments.len();
+                    let l2 = p.payload.agreement_payments.len();
+                    l1 != l2
+                })
+                .cloned()
+                .collect();
+
+            response::ok(payments)
+        }
+        Ok(None) => response::not_found(),
+        Err(e) => response::server_error(&e),
+    }
 }
 
 async fn get_invoice_events(
