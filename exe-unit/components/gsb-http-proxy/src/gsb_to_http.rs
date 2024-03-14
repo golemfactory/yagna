@@ -1,6 +1,7 @@
-use crate::headers;
 use crate::message::GsbHttpCallMessage;
+use crate::monitor::RequestMonitor;
 use crate::response::GsbHttpCallResponseEvent;
+use crate::{headers, monitor::RequestsMonitor};
 use async_stream::stream;
 use chrono::Utc;
 use futures_core::stream::Stream;
@@ -9,8 +10,9 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
-pub struct GsbToHttpProxy {
+pub struct GsbToHttpProxy<M: RequestsMonitor + 'static> {
     pub base_url: String,
+    pub requests_monitor: M,
 }
 
 #[derive(Error, Debug)]
@@ -28,7 +30,7 @@ impl Display for GsbToHttpProxyError {
     }
 }
 
-impl GsbToHttpProxy {
+impl<M: RequestsMonitor> GsbToHttpProxy<M> {
     pub fn pass(
         &mut self,
         message: GsbHttpCallMessage,
@@ -37,6 +39,7 @@ impl GsbToHttpProxy {
 
         let (tx, mut rx) = mpsc::channel(1);
 
+        let mut requests_monitor = self.requests_monitor.clone();
         tokio::task::spawn_local(async move {
             let client = reqwest::Client::new();
 
@@ -50,10 +53,13 @@ impl GsbToHttpProxy {
             };
             builder = headers::add(builder, message.headers);
 
+            // start counting here
             log::debug!("Calling {}", &url);
+            let request_monitor = requests_monitor.on_request();
             let response = builder.send().await;
-            let response =
-                response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
+            let response = response
+                .inspect(|_| request_monitor.on_response())
+                .map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
 
             let bytes = response.bytes().await.unwrap();
 
@@ -82,6 +88,7 @@ impl GsbToHttpProxy {
 mod tests {
     use crate::gsb_to_http::GsbToHttpProxy;
     use crate::message::GsbHttpCallMessage;
+    use crate::monitor::DisabledRequestsMonitor;
     use futures::StreamExt;
     use std::collections::HashMap;
 
@@ -97,7 +104,10 @@ mod tests {
             .with_body("response")
             .create();
 
-        let mut gsb_call = GsbToHttpProxy { base_url: url };
+        let mut gsb_call = GsbToHttpProxy {
+            base_url: url,
+            requests_monitor: DisabledRequestsMonitor {},
+        };
 
         let message = GsbHttpCallMessage {
             method: "GET".to_string(),

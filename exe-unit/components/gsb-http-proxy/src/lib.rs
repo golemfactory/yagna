@@ -4,6 +4,7 @@ mod headers;
 pub mod http_to_gsb;
 pub mod message;
 pub mod response;
+pub mod monitor;
 
 /*
 Proxy http request through GSB
