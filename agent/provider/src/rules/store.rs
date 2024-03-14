@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use crate::rules::outbound::{Mode, OutboundConfig};
+use crate::rules::outbound::OutboundConfig;
 use crate::rules::restrict::RestrictConfig;
 
 #[derive(Clone, Debug)]
@@ -78,7 +77,7 @@ impl Rulestore {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RulesConfig {
     pub outbound: OutboundConfig,
@@ -86,19 +85,4 @@ pub struct RulesConfig {
     pub blacklist: RestrictConfig,
     #[serde(default)]
     pub allow_only: RestrictConfig,
-}
-
-impl Default for RulesConfig {
-    fn default() -> Self {
-        Self {
-            outbound: OutboundConfig {
-                enabled: true,
-                everyone: Mode::Whitelist,
-                audited_payload: HashMap::new(),
-                partner: HashMap::new(),
-            },
-            blacklist: RestrictConfig::default(),
-            allow_only: RestrictConfig::default(),
-        }
-    }
 }

@@ -7,6 +7,7 @@ use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
 
 use anyhow::{bail, Result};
+use golem_certificate::schemas::certificate::Fingerprint;
 use itertools::Itertools;
 use std::{
     collections::HashMap,
@@ -15,7 +16,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule};
 use ya_client_model::NodeId;
+use ya_manifest_utils::keystore::{AddParams, AddResponse};
 use ya_manifest_utils::{
     keystore::{x509_keystore::X509CertData, Cert, Keystore},
     matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
@@ -55,6 +58,14 @@ impl RulesManager {
         Ok(manager)
     }
 
+    pub fn blacklist(&self) -> RestrictRule<Blacklist> {
+        RestrictRule::<Blacklist>::new(self.rulestore.clone(), self.keystore.clone())
+    }
+
+    pub fn allow_only(&self) -> RestrictRule<AllowOnly> {
+        RestrictRule::<AllowOnly>::new(self.rulestore.clone(), self.keystore.clone())
+    }
+
     pub fn outbound(&self) -> OutboundRulesValidator {
         OutboundRulesValidator::new(
             self.rulestore.clone(),
@@ -73,6 +84,31 @@ impl RulesManager {
     ) -> CheckRulesResult {
         self.outbound()
             .check_outbound_rules(access, requestor_id, manifest_sig, node_descriptor)
+    }
+
+    pub fn import_certs(&mut self, import_cert: &Path) -> Result<Vec<Fingerprint>> {
+        let AddResponse {
+            invalid,
+            leaf_cert_ids,
+            duplicated,
+            ..
+        } = self.keystore.add_golem_cert(&AddParams {
+            certs: vec![import_cert.to_path_buf()],
+        })?;
+
+        for cert_path in invalid {
+            log::error!("Failed to import Golem certificates from: {cert_path:?}.");
+        }
+
+        self.keystore.reload()?;
+
+        if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
+            log::warn!(
+                "Certificate is already in keystore- please use `cert-id` instead of `import-cert`"
+            );
+        }
+
+        Ok(leaf_cert_ids)
     }
 
     pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {

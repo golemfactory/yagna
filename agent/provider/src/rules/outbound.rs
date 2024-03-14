@@ -272,3 +272,14 @@ fn verify_golem_permissions(
         },
     }
 }
+
+impl Default for OutboundConfig {
+    fn default() -> Self {
+        OutboundConfig {
+            enabled: true,
+            everyone: Mode::Whitelist,
+            audited_payload: HashMap::new(),
+            partner: HashMap::new(),
+        }
+    }
+}
