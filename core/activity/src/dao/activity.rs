@@ -114,7 +114,7 @@ impl<'c> ActivityDao<'c> {
         .await
     }
 
-    pub async fn _get_activity_ids(&self) -> Result<Vec<String>> {
+    pub async fn get_activity_ids(&self) -> Result<Vec<String>> {
         use schema::activity::dsl;
         do_with_transaction(self.pool, "activity_dao_get_activity_ids", |conn| {
             dsl::activity

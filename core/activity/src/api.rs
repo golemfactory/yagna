@@ -37,17 +37,32 @@ mod common {
         scope
             // .service(get_activities_web)
             .service(get_events)
+            .service(get_activities_web)
             .service(get_activity_agreement_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
 
     // TODO this endpoint needs authorization via Identity, otherwise is vulnerable for attacks.
-    // #[actix_web::get("/activity")]
-    // async fn get_activities_web(db: web::Data<DbExecutor>) -> impl Responder {
-    //     log::debug!("get_activities_web");
-    //     get_activities(&db).await.map(web::Json)
-    // }
+    #[actix_web::get("/activity")]
+    async fn get_activities_web(db: web::Data<DbExecutor>, id: Identity) -> impl Responder {
+        log::debug!("get_activities_web");
+
+        let mut a = vec![];
+        if let Ok(activities) = get_activities(&db).await {
+            for activity in activities {
+                if let Ok(agreement_id) = get_agreement_id(&db, activity.as_str()).await {
+                    if authorize_agreement_executor(id.identity, &agreement_id, Role::Provider)
+                        .await
+                        .is_ok()
+                    {
+                        a.push(activity);
+                    }
+                }
+            }
+        }
+        web::Json(a)
+    }
 
     #[actix_web::get("/activity/{activity_id}/agreement")]
     async fn get_activity_agreement_web(
