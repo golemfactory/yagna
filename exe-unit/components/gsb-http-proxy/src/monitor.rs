@@ -1,24 +1,11 @@
 pub trait RequestsMonitor: Sync + Send + Clone {
-    fn on_request(&mut self) -> impl RequestMonitor;
+    /// Called once on every HTTP request
+    #[allow(async_fn_in_trait)]
+    async fn on_request(&mut self) -> impl ResponseMonitor;
 }
 
-pub trait RequestMonitor {
-    fn on_response(self);
+pub trait ResponseMonitor: Sync + Send {
+    /// Called once on HTTP response (for any response code)
+    #[allow(async_fn_in_trait)]
+    async fn on_response(self);
 }
-
-#[derive(Clone, Debug)]
-pub struct DisabledRequestsMonitor {}
-
-impl RequestsMonitor for DisabledRequestsMonitor {
-    fn on_request(&mut self) -> impl crate::monitor::RequestMonitor {
-        DisabledRequestsMonitor {}
-    }
-}
-
-pub struct DisabledMonitoredRequest {}
-
-impl RequestMonitor for DisabledRequestsMonitor {
-    fn on_response(self) {}
-}
-
-//TODO call `on_response` on drop

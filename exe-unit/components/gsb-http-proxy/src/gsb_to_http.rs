@@ -1,7 +1,7 @@
-use crate::message::GsbHttpCallMessage;
-use crate::monitor::RequestMonitor;
+use crate::headers;
+use crate::monitor::ResponseMonitor;
 use crate::response::GsbHttpCallResponseEvent;
-use crate::{headers, monitor::RequestsMonitor};
+use crate::{message::GsbHttpCallMessage, monitor::RequestsMonitor};
 use async_stream::stream;
 use chrono::Utc;
 use futures_core::stream::Stream;
@@ -55,13 +55,12 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
 
             // start counting here
             log::debug!("Calling {}", &url);
-            let request_monitor = requests_monitor.on_request();
+            let response_monitor = requests_monitor.on_request().await;
             let response = builder.send().await;
-            let response = response
-                .inspect(|_| request_monitor.on_response())
-                .map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
-
+            let response =
+                response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
             let bytes = response.bytes().await.unwrap();
+            response_monitor.on_response().await;
 
             let response = GsbHttpCallResponseEvent {
                 index: 0,
@@ -88,9 +87,22 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
 mod tests {
     use crate::gsb_to_http::GsbToHttpProxy;
     use crate::message::GsbHttpCallMessage;
-    use crate::monitor::DisabledRequestsMonitor;
+    use crate::monitor::{RequestsMonitor, ResponseMonitor};
     use futures::StreamExt;
     use std::collections::HashMap;
+
+    #[derive(Clone, Debug, Default)]
+    struct DisabledRequestsMonitor {}
+
+    impl RequestsMonitor for DisabledRequestsMonitor {
+        async fn on_request(&mut self) -> impl ResponseMonitor {
+            DisabledRequestsMonitor {}
+        }
+    }
+
+    impl ResponseMonitor for DisabledRequestsMonitor {
+        async fn on_response(self) {}
+    }
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
