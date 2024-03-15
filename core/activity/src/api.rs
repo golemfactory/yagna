@@ -29,9 +29,11 @@ mod common {
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
+    use crate::error::Error;
     use crate::tracker::TrackingEvent;
     use crate::TrackerRef;
     use actix_web::http::header;
+    use actix_web::web::Json;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
@@ -43,25 +45,48 @@ mod common {
             .service(get_activity_usage_web)
     }
 
-    // TODO this endpoint needs authorization via Identity, otherwise is vulnerable for attacks.
     #[actix_web::get("/activity")]
     async fn get_activities_web(db: web::Data<DbExecutor>, id: Identity) -> impl Responder {
-        log::debug!("get_activities_web");
+        let activities = get_activities(&db).await?;
 
-        let mut a = vec![];
-        if let Ok(activities) = get_activities(&db).await {
-            for activity in activities {
-                if let Ok(agreement_id) = get_agreement_id(&db, activity.as_str()).await {
-                    if authorize_agreement_executor(id.identity, &agreement_id, Role::Provider)
-                        .await
-                        .is_ok()
-                    {
-                        a.push(activity);
-                    }
-                }
-            }
-        }
-        web::Json(a)
+        let tasks: Vec<_> = activities
+            .into_iter()
+            .map(|activity| {
+                let db = db.clone();
+                let node_id = id.identity.clone();
+                tokio::spawn(async move {
+                    let agreement_id = get_agreement_id(&db, activity.as_str()).await?;
+
+                    let authorise_as_provider =
+                        authorize_agreement_executor(node_id, &agreement_id, Role::Provider)
+                            .await
+                            .is_ok();
+                    let authorise_as_requestor =
+                        authorize_agreement_initiator(node_id, &agreement_id, Role::Requestor)
+                            .await
+                            .is_ok();
+                    Ok::<(String, bool), Error>((
+                        activity,
+                        authorise_as_provider || authorise_as_requestor,
+                    ))
+                })
+            })
+            .collect();
+
+        let r: Vec<_> = futures::future::join_all(tasks)
+            .await
+            .into_iter()
+            .filter_map(|result| match result {
+                Ok(Ok((activity, is_authorized))) => match is_authorized {
+                    true => Some(activity),
+                    false => None,
+                },
+                Err(_err) => None,
+                Ok(Err(_err)) => None,
+            })
+            .collect();
+
+        Ok::<Json<Vec<std::string::String>>, Error>(web::Json(r))
     }
 
     #[actix_web::get("/activity/{activity_id}/agreement")]
