@@ -5,7 +5,7 @@ pub trait RequestsMonitor: Sync + Send + Clone {
 }
 
 pub trait ResponseMonitor: Sync + Send {
-    /// Called once on HTTP response (for any response code)
+    /// Called once on HTTP response (for any response code) or on Drop.
     #[allow(async_fn_in_trait)]
     async fn on_response(self);
 }
