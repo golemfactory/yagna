@@ -88,13 +88,13 @@ https://ethereum-goerli-rpc.allthatnode.com,
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 12000
 
 [[chain.goerli.rpc-endpoints]]
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 12000
 dns-source = "goerli.rpc-node.dev.golem.network."
 
 [chain.holesky]
