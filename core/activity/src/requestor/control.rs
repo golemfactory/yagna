@@ -18,6 +18,7 @@ use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
+use ya_core_model::activity::KillBatch;
 
 use crate::common::*;
 use crate::dao::ActivityDao;
@@ -194,6 +195,31 @@ async fn exec(
 
     counter!("activity.requestor.run-exescript", 1);
     Ok::<_, Error>(web::Json(batch_id))
+}
+
+/// Queries for ExeScript batch results.
+#[actix_web::delete("/activity/{activity_id}/exec/{batch_id}")]
+async fn drop_batch_results(
+    db: web::Data<DbExecutor>,
+    path: web::Path<crate::requestor::control::PathActivityBatch>,
+    id: Identity,
+) -> Result<impl Responder> {
+    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
+    let activity_id = path.activity_id.clone();
+    let batch_id = path.batch_id.clone();
+
+    let msg = KillBatch {
+        activity_id,
+        batch_id
+    };
+
+    let _result = ya_net::from(id.identity)
+        .to(*agreement.provider_id())
+        .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
+        .call(msg).await.map_err(actix_web::error::ErrorBadGateway);
+
+    Ok(HttpResponse::NoContent())
 }
 
 /// Queries for ExeScript batch results.
