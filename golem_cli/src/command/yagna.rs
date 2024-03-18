@@ -137,9 +137,8 @@ lazy_static! {
         ngm.insert(
             NetworkGroup::Testnet,
             vec![
-                NetworkName::Mumbai,
                 NetworkName::Holesky,
-                NetworkName::Goerli,
+                NetworkName::Mumbai,
             ],
         );
         ngm
