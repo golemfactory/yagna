@@ -454,6 +454,8 @@ pub mod local {
         Rinkeby,
         #[strum(props(token = "tGLM"))]
         Goerli,
+        #[strum(props(token = "tGLM"))]
+        Holesky,
         #[strum(props(token = "GLM"))]
         Polygon,
         #[strum(props(token = "tGLM"))]
@@ -490,7 +492,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Holesky.into())]
         pub network: NetworkName,
     }
 

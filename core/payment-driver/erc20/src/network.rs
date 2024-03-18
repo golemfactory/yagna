@@ -13,7 +13,7 @@ use crate::{
     MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
     POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
     RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
-    RINKEBY_TOKEN,
+    RINKEBY_TOKEN, TEST_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -30,6 +30,13 @@ lazy_static::lazy_static! {
                 GOERLI_TOKEN.to_string() => GOERLI_PLATFORM.to_string()
             }
         },
+        "holesky".to_string() => Network {
+            default_token: "tGLM".to_string(),
+            tokens: hashmap! {
+                "tGLM".to_string() => "erc20-holesky-tglm".to_string()
+            }
+        },
+
         MAINNET_NETWORK.to_string() => Network {
             default_token: MAINNET_TOKEN.to_string(),
             tokens: hashmap! {
@@ -60,6 +67,7 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
     match platform.as_str() {
         RINKEBY_PLATFORM => Ok((*RINKEBY_DB_NETWORK, RINKEBY_TOKEN.to_owned())),
         GOERLI_PLATFORM => Ok((*GOERLI_DB_NETWORK, GOERLI_TOKEN.to_owned())),
+        "erc20-holesky-tglm" => Ok((DbNetwork::Holesky, TEST_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
         MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
         POLYGON_MAINNET_PLATFORM => Ok((
@@ -102,6 +110,7 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
             GOERLI_CURRENCY_SHORT.to_owned(),
             GOERLI_CURRENCY_LONG.to_owned(),
         )),
+        "erc20-holesky-tglm" => Ok(("tETH".to_owned(), "Holesky Ether".to_owned())),
         MAINNET_PLATFORM => Ok((
             MAINNET_CURRENCY_SHORT.to_owned(),
             MAINNET_CURRENCY_LONG.to_owned(),

@@ -74,6 +74,26 @@ lazy_static! {
             }
         }
     };
+    pub static ref HOLESKY_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("HOLESKY_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x8888888815bf4DB87e57B609A50f938311EEd068".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("HOLESKY_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or_else(|_| "0xFACe100969FF47EB58d2CF603321B581A84bcEaC".to_string())
+            )
+            .unwrap()
+        ),
+        required_confirmations: {
+            match env::var("ERC20_HOLESKY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
     pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("MUMBAI_TGLM_CONTRACT_ADDRESS")

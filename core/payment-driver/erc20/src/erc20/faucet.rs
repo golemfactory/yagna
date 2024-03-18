@@ -164,6 +164,7 @@ async fn resolve_faucet_url(network: Network) -> Result<String, GenericError> {
                 .unwrap_or_else(|_| DEFAULT_ETH_FAUCET_HOST.to_string());
 
             let port = match network {
+                Network::Holesky => 4003,
                 Network::Mumbai => 4002,
                 Network::Goerli => 4001,
                 Network::Rinkeby => 4000,
