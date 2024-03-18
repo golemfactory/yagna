@@ -1,9 +1,9 @@
-use crate::market::negotiator::{AgreementResult, NegotiationResult, NegotiatorComponent};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent};
 use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::rules::restrict::AllowOnlyValidator;
 use crate::rules::{CheckRulesResult, RulesManager};
 
-use ya_agreement_utils::{OfferDefinition, ProposalView};
+use ya_agreement_utils::ProposalView;
 use ya_manifest_utils::DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY;
 
 pub struct AllowOnly {
@@ -45,24 +45,5 @@ impl NegotiatorComponent for AllowOnly {
                 })
             }
         };
-    }
-
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
