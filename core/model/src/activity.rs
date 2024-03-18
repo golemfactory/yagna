@@ -266,27 +266,22 @@ pub struct GetRunningCommand {
     pub timeout: Option<f32>,
 }
 
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KillBatch {
     pub activity_id: String,
-    pub batch_id: String
+    pub batch_id: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct KillBatchResult {
-
-}
+pub struct KillBatchResult {}
 
 impl RpcMessage for KillBatch {
     const ID: &'static str = "KillBatch";
     type Item = KillBatchResult;
     type Error = RpcMessageError;
 }
-
-
 
 impl RpcMessage for GetRunningCommand {
     const ID: &'static str = "GetRunningCommand";
