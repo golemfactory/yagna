@@ -53,7 +53,6 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
             };
             builder = headers::add(builder, message.headers);
 
-            // start counting here
             log::debug!("Calling {}", &url);
             let response_monitor = requests_monitor.on_request().await;
             let response = builder.send().await;
