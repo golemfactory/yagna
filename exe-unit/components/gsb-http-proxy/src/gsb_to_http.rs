@@ -60,7 +60,7 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
             let response =
                 response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
             let bytes = response.bytes().await.unwrap();
-            response_monitor.on_response().await;
+            response_monitor.on_response();
 
             let response = GsbHttpCallResponseEvent {
                 index: 0,
@@ -106,7 +106,7 @@ mod tests {
     }
 
     impl ResponseMonitor for MockMonitor {
-        async fn on_response(self) {
+        fn on_response(self) {
             let _ = self.on_response_tx.send(());
         }
     }
