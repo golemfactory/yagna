@@ -25,7 +25,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use super::guard::AgreementLock;
 use crate::dao::*;
-use crate::error::{DbError, DbResult, Error};
+use crate::error::{DbError, Error};
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_id;
 use crate::utils::*;
@@ -103,30 +103,28 @@ async fn get_invoice_payments(
     let invoice = dao.get(invoice_id.clone(), node_id).await;
 
     match invoice {
-        Ok(Some(invoice)) {
-            match dao.get(invoice_id, node_id).await {
-                Ok(Some(invoice)) => {
-                    let invoice_payments: Vec<Signed<Payment>> = payments
-                        .iter()
-                        .filter(|p| {
-                            p.payload
-                                .activity_payments
-                                .iter()
-                                .any(|p| invoice.activity_ids.contains(&&p.activity_id))
-                                || p.payload
+        Ok(Some(invoice)) => match dao.get(invoice_id, node_id).await {
+            Ok(Some(invoice)) => {
+                let invoice_payments: Vec<Signed<Payment>> = payments
+                    .iter()
+                    .filter(|p| {
+                        p.payload
+                            .activity_payments
+                            .iter()
+                            .any(|p| invoice.activity_ids.contains(&p.activity_id))
+                            || p.payload
                                 .agreement_payments
                                 .iter()
                                 .any(|p| invoice.agreement_id == p.agreement_id)
-                        })
-                        .cloned()
-                        .collect();
+                    })
+                    .cloned()
+                    .collect();
 
-                    response::ok(invoice_payments)
-                }
-                Ok(None) => response::not_found(),
-                Err(e) => response::server_error(&e),
+                response::ok(invoice_payments)
             }
-        }
+            Ok(None) => response::not_found(),
+            Err(e) => response::server_error(&e),
+        },
         Err(e) => response::server_error(&e),
         Ok(None) => response::not_found(),
     }
