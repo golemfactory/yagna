@@ -307,11 +307,6 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => Ok("Goerli network is not supported by this driver.".to_string()),
-            DbNetwork::Mumbai => Ok("Mumbai network is not supported by this driver.".to_string()),
-            DbNetwork::Polygon => {
-                Ok("Polygon network is not supported by this driver.".to_string())
-            }
             DbNetwork::Mainnet => Ok(format!(
                 r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 
@@ -320,6 +315,7 @@ To be able to use zkSync driver please send some GLM tokens and optionally ETH f
 "#,
                 address
             )),
+            _ => Ok("network is not supported by this driver.".to_string()),
         }
     }
 
