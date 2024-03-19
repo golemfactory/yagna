@@ -90,18 +90,25 @@ mod tests {
     use crate::monitor::{RequestsMonitor, ResponseMonitor};
     use futures::StreamExt;
     use std::collections::HashMap;
+    use tokio::sync::mpsc::UnboundedSender;
 
-    #[derive(Clone, Debug, Default)]
-    struct DisabledRequestsMonitor {}
+    #[derive(Clone, Debug)]
+    struct MockMonitor {
+        on_request_tx: UnboundedSender<()>,
+        on_response_tx: UnboundedSender<()>,
+    }
 
-    impl RequestsMonitor for DisabledRequestsMonitor {
+    impl RequestsMonitor for MockMonitor {
         async fn on_request(&mut self) -> impl ResponseMonitor {
-            DisabledRequestsMonitor {}
+            _ = self.on_request_tx.send(());
+            self.clone()
         }
     }
 
-    impl ResponseMonitor for DisabledRequestsMonitor {
-        async fn on_response(self) {}
+    impl ResponseMonitor for MockMonitor {
+        async fn on_response(self) {
+            let _ = self.on_response_tx.send(());
+        }
     }
 
     #[actix_web::test]
@@ -116,9 +123,14 @@ mod tests {
             .with_body("response")
             .create();
 
+        let (on_request_tx, mut on_request_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+        let (on_response_tx, mut on_response_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let mut gsb_call = GsbToHttpProxy {
             base_url: url,
-            requests_monitor: DisabledRequestsMonitor {},
+            requests_monitor: MockMonitor {
+                on_request_tx,
+                on_response_tx,
+            },
         };
 
         let message = GsbHttpCallMessage {
@@ -136,5 +148,13 @@ mod tests {
         }
 
         assert_eq!(vec!["response".as_bytes()], v);
+        assert_eq!(
+            1,
+            on_request_rx.recv_many(&mut Vec::new(), usize::MAX).await
+        );
+        assert_eq!(
+            1,
+            on_response_rx.recv_many(&mut Vec::new(), usize::MAX).await
+        );
     }
 }
