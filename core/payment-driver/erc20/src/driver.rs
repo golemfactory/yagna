@@ -222,12 +222,6 @@ impl Erc20Driver {
             .await
             .into_iter()
             .flat_map(|prop| match prop {
-                LibStatusProperty::InvalidChainId { chain_id } => {
-                    Some(DriverStatusProperty::InvalidChainId {
-                        driver: DRIVER_NAME.into(),
-                        chain_id,
-                    })
-                }
                 LibStatusProperty::CantSign { chain_id, address } => {
                     let network = chain_id_to_net(chain_id);
                     network_filter(&network).then(|| DriverStatusProperty::CantSign {
