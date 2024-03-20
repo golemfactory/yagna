@@ -34,6 +34,7 @@ mod common {
     use crate::TrackerRef;
     use actix_web::http::header;
     use actix_web::web::Json;
+    use ya_client_model::payment::params::FilterParams;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
@@ -46,21 +47,38 @@ mod common {
     }
 
     #[actix_web::get("/activity")]
-    async fn get_activities_web(db: web::Data<DbExecutor>, id: Identity) -> impl Responder {
+    async fn get_activities_web(
+        db: web::Data<DbExecutor>,
+        query: web::Query<FilterParams>,
+        id: Identity,
+    ) -> impl Responder {
         let mut result = vec![];
-        let activities = get_activities(&db).await?;
+        let activities = get_activities(&db, query.max_items).await?;
 
         for activity in activities {
             let agreement_id = get_agreement_id(&db, activity.as_str()).await?;
+            let agreement = get_agreement(agreement_id.as_str(), Role::Provider).await?;
 
-            if authorize_agreement_executor(id.identity, &agreement_id, Role::Provider)
-                .await
-                .is_ok()
-                || authorize_agreement_initiator(id.identity, &agreement_id, Role::Requestor)
-                    .await
-                    .is_ok()
+            if query.after_timestamp.is_some()
+                && agreement.timestamp < query.after_timestamp.unwrap()
+            {
+                continue;
+            }
+            if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id()).is_ok()
             {
                 result.push(activity);
+            } else {
+                let agreement = get_agreement(agreement_id.as_str(), Role::Requestor).await?;
+                if query.after_timestamp.is_some()
+                    && agreement.timestamp < query.after_timestamp.unwrap()
+                {
+                    continue;
+                }
+                if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id())
+                    .is_ok()
+                {
+                    result.push(activity);
+                }
             }
         }
         Ok::<Json<Vec<std::string::String>>, Error>(web::Json(result))

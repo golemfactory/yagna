@@ -114,13 +114,22 @@ impl<'c> ActivityDao<'c> {
         .await
     }
 
-    pub async fn get_activity_ids(&self) -> Result<Vec<String>> {
+    pub async fn get_activity_ids(&self, max_items: Option<u32>) -> Result<Vec<String>> {
         use schema::activity::dsl;
-        do_with_transaction(self.pool, "activity_dao_get_activity_ids", |conn| {
-            dsl::activity
-                .select(dsl::natural_id)
-                .get_results(conn)
-                .map_err(|e| e.into())
+
+        do_with_transaction(self.pool, "activity_dao_get_activity_ids", move |conn| {
+            if let Some(items) = max_items {
+                dsl::activity
+                    .limit(items.into())
+                    .select(dsl::natural_id)
+                    .get_results(conn)
+                    .map_err(|e| e.into())
+            } else {
+                dsl::activity
+                    .select(dsl::natural_id)
+                    .get_results(conn)
+                    .map_err(|e| e.into())
+            }
         })
         .await
     }
