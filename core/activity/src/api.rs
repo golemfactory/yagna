@@ -38,7 +38,6 @@ mod common {
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
-            // .service(get_activities_web)
             .service(get_events)
             .service(get_activities_web)
             .service(get_activity_agreement_web)
