@@ -22,7 +22,7 @@ mod common {
     use actix_web::{web, HttpResponse, Responder};
     use futures::prelude::*;
 
-    use ya_client_model::market::Role;
+    use ya_client_model::market::{Agreement, Role};
     use ya_core_model::{activity, NodeId};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
@@ -55,28 +55,29 @@ mod common {
         let mut result = vec![];
         let activities = get_activities(&db, query.max_items).await?;
 
+        let is_valid = |agreement: Agreement| {
+            if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id()).is_ok()
+                && (query.after_timestamp.is_none()
+                    || query.after_timestamp.is_some()
+                        && agreement.timestamp >= query.after_timestamp.unwrap())
+            {
+                return Ok::<bool, Error>(true);
+            }
+
+            Ok::<bool, Error>(false)
+        };
+
         for activity in activities {
             let agreement_id = get_agreement_id(&db, activity.as_str()).await?;
-            let agreement = get_agreement(agreement_id.as_str(), Role::Provider).await?;
 
-            if query.after_timestamp.is_some()
-                && agreement.timestamp < query.after_timestamp.unwrap()
-            {
-                continue;
-            }
-            if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id()).is_ok()
-            {
-                result.push(activity);
-            } else {
-                let agreement = get_agreement(agreement_id.as_str(), Role::Requestor).await?;
-                if query.after_timestamp.is_some()
-                    && agreement.timestamp < query.after_timestamp.unwrap()
-                {
-                    continue;
+            if let Ok(agreement) = get_agreement(agreement_id.as_str(), Role::Provider).await {
+                if is_valid(agreement)? {
+                    result.push(activity);
                 }
-                if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id())
-                    .is_ok()
-                {
+            } else if let Ok(agreement) =
+                get_agreement(agreement_id.as_str(), Role::Requestor).await
+            {
+                if is_valid(agreement)? {
                     result.push(activity);
                 }
             }
