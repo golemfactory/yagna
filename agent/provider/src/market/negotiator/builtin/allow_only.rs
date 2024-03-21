@@ -30,7 +30,7 @@ impl NegotiatorComponent for AllowOnly {
 
         match self
             .rules
-            .blacklist()
+            .allow_only()
             .check_allow_only_rule(demand.issuer, node_descriptor)
         {
             CheckRulesResult::Accept => Ok(NegotiationResult::Ready { offer }),

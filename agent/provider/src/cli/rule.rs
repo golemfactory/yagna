@@ -342,8 +342,8 @@ impl RulesTable {
     }
 }
 
-impl<G: TablePrint> From<G> for RulesTable {
-    fn from(rules: G) -> Self {
+impl<Printable: TablePrint> From<Printable> for RulesTable {
+    fn from(rules: Printable) -> Self {
         RulesTable::new(rules)
     }
 }

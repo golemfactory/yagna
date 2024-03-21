@@ -251,10 +251,7 @@ where
     }
 }
 
-impl<G> AllowOnlyValidator for RestrictRule<G>
-where
-    G: RuleAccessor,
-{
+impl AllowOnlyValidator for RestrictRule<AllowOnly> {
     fn check_allow_only_rule(
         &self,
         requestor_id: NodeId,
@@ -286,10 +283,7 @@ where
     }
 }
 
-impl<G> BlacklistValidator for RestrictRule<G>
-where
-    G: RuleAccessor,
-{
+impl BlacklistValidator for RestrictRule<Blacklist> {
     fn check_blacklist_rule(
         &self,
         requestor_id: NodeId,
