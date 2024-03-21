@@ -144,7 +144,7 @@ where
         let node_descriptor = self
             .keystore
             .verify_node_descriptor(node_descriptor)
-            .map_err(|e| anyhow!("Allow-only rule: {e}"))?;
+            .map_err(|e| anyhow!("{} rule: {e}", G::rule_name()))?;
 
         if requestor_id != node_descriptor.node_id {
             return Err(anyhow!(

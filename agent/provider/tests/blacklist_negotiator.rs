@@ -79,6 +79,14 @@ fn load_node_descriptor(file: Option<&str>) -> Value {
     })
 }
 
+fn import_certificates(rules: &mut RulesManager, certs: &[&str]) {
+    let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+    for cert in certs {
+        let cert_path = resource_cert_dir.join(cert);
+        rules.import_certs(&cert_path).unwrap();
+    }
+}
+
 fn expect_accept(result: NegotiationResult) {
     match result {
         NegotiationResult::Ready { .. } => {}
@@ -165,6 +173,48 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_e
     rules_manager
         .blacklist()
         .add_identity_rule(NodeId::from_str("0x0000000000000000000000000000000000000000").unwrap())
+        .unwrap();
+
+    let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
+    let demand = create_demand(load_node_descriptor(node_descriptor));
+
+    let result = negotiator
+        .negotiate_step(&demand, create_offer())
+        .expect("Negotiator shouldn't return error");
+    expect_reject(result, Some(expected_err));
+}
+
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json"],
+    "Requestor's certificate is on the blacklist";
+    "Rejected because certificate is on the blacklist"
+)]
+#[test_case(
+    Some("node-descriptor-invalid-signature.signed.json"),
+    &["partner-certificate.signed.json"],
+    "rejected due to suspicious behavior: Blacklist rule: verification of node descriptor failed: Invalid signature value";
+    "Rejected because Requestor has invalid signature"
+)]
+#[test_case(
+    Some("node-descriptor-different-node.signed.json"),
+    &["partner-certificate.signed.json"],
+    "rejected due to suspicious behavior: Node ids mismatch";
+    "Rejected because of NodeId mismatch in Proposal and in signature"
+)]
+#[serial]
+fn blacklist_negotiator_certificate_blacklisted(
+    node_descriptor: Option<&str>,
+    import_certs: &[&str],
+    expected_err: &str,
+) {
+    let mut rules_manager = setup_rules_manager();
+    rules_manager.blacklist().enable().unwrap();
+    import_certificates(&mut rules_manager, import_certs);
+
+    rules_manager
+        .blacklist()
+        .add_certified_rule(&"cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc".to_string())
         .unwrap();
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
