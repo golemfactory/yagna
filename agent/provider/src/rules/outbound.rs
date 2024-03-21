@@ -61,12 +61,12 @@ pub enum OutboundRule {
 
 /// Temporary struct storing minimal context for outbound rules validation.
 #[derive(Clone)]
-pub struct OutboundRulesValidator {
+pub struct OutboundRules {
     rulestore: Rulestore,
     keystore: CompositeKeystore,
     whitelist: DomainWhitelistState,
 }
-impl OutboundRulesValidator {
+impl OutboundRules {
     pub fn new(
         rulestore: Rulestore,
         keystore: CompositeKeystore,
@@ -77,6 +77,10 @@ impl OutboundRulesValidator {
             keystore,
             whitelist,
         }
+    }
+
+    pub fn config(&self) -> OutboundConfig {
+        self.rulestore.config.read().unwrap().outbound.clone()
     }
 
     pub fn check_outbound_rules(

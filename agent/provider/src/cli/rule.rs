@@ -1,5 +1,5 @@
 use crate::rules::outbound::{CertRule, Mode, OutboundConfig, OutboundRule};
-use crate::rules::restrict::RestrictConfig;
+use crate::rules::restrict::{RestrictRule, RuleAccessor};
 use crate::{rules::RulesManager, startup_config::ProviderConfig};
 
 use anyhow::{bail, Result};
@@ -46,15 +46,15 @@ pub enum RuleCategory {
 #[derive(StructOpt, Clone, Debug)]
 pub enum AddRule {
     Outbound(SetOutboundRule),
-    Blacklist(RestrictRule),
-    AllowOnly(RestrictRule),
+    Blacklist(RestrictRuleDesc),
+    AllowOnly(RestrictRuleDesc),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RemoveRule {
     Outbound(SetOutboundRule),
-    Blacklist(RestrictRule),
-    AllowOnly(RestrictRule),
+    Blacklist(RestrictRuleDesc),
+    AllowOnly(RestrictRuleDesc),
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -70,7 +70,7 @@ pub enum SetOutboundRule {
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum RestrictRule {
+pub enum RestrictRuleDesc {
     ByNodeId {
         #[structopt(short, long)]
         address: NodeId,
@@ -145,68 +145,66 @@ impl RuleCommand {
     }
 }
 
-fn add(rule: AddRule, rules: RulesManager) -> Result<()> {
+fn add(rule: AddRule, mut rules: RulesManager) -> Result<()> {
     match rule {
         AddRule::Outbound(_rule) => {
             bail!("Outbound rules are not supported yet by this command. Use `rule set` instead.")
         }
-        AddRule::Blacklist(RestrictRule::ByNodeId { address }) => {
+        AddRule::Blacklist(RestrictRuleDesc::ByNodeId { address }) => {
             rules.blacklist().add_identity_rule(address)
         }
-        AddRule::Blacklist(RestrictRule::Certified(rule)) => match rule {
+        AddRule::Blacklist(RestrictRuleDesc::Certified(rule)) => match rule {
             RestrictRuleWithCert::CertId { cert_id } => {
                 rules.blacklist().add_certified_rule(&cert_id)
             }
-            RestrictRuleWithCert::ImportCert { .. } => bail!("Use cert id to remove rule"),
+            RestrictRuleWithCert::ImportCert { imported_cert } => {
+                let certs = rules.import_certs(&imported_cert)?;
+                for cert in certs {
+                    rules.blacklist().add_certified_rule(&cert)?;
+                }
+                Ok(())
+            }
         },
-        AddRule::AllowOnly(RestrictRule::ByNodeId { address }) => {
+        AddRule::AllowOnly(RestrictRuleDesc::ByNodeId { address }) => {
             rules.allow_only().add_identity_rule(address)
         }
-        AddRule::AllowOnly(RestrictRule::Certified(rule)) => match rule {
+        AddRule::AllowOnly(RestrictRuleDesc::Certified(rule)) => match rule {
             RestrictRuleWithCert::CertId { cert_id } => {
                 rules.allow_only().add_certified_rule(&cert_id)
             }
-            RestrictRuleWithCert::ImportCert { .. } => {
-                bail!("Use cert id to remove rule")
+            RestrictRuleWithCert::ImportCert { imported_cert } => {
+                let certs = rules.import_certs(&imported_cert)?;
+                for cert in certs {
+                    rules.allow_only().add_certified_rule(&cert)?;
+                }
+                Ok(())
             }
         },
     }
 }
 
-fn remove(rule: RemoveRule, mut rules: RulesManager) -> Result<()> {
+fn remove(rule: RemoveRule, rules: RulesManager) -> Result<()> {
     match rule {
         RemoveRule::Outbound(_rule) => {
             bail!("Outbound rules are not supported yet by this command. Use `rule set` instead.")
         }
-        RemoveRule::Blacklist(RestrictRule::ByNodeId { address }) => {
+        RemoveRule::Blacklist(RestrictRuleDesc::ByNodeId { address }) => {
             rules.blacklist().remove_identity_rule(address)
         }
-        RemoveRule::Blacklist(RestrictRule::Certified(rule)) => match rule {
+        RemoveRule::Blacklist(RestrictRuleDesc::Certified(rule)) => match rule {
             RestrictRuleWithCert::CertId { cert_id } => {
                 rules.blacklist().remove_certified_rule(&cert_id)
             }
-            RestrictRuleWithCert::ImportCert { imported_cert } => {
-                let certs = rules.import_certs(&imported_cert)?;
-                for cert in certs {
-                    rules.blacklist().remove_certified_rule(&cert)?;
-                }
-                Ok(())
-            }
+            RestrictRuleWithCert::ImportCert { .. } => bail!("Use cert id to remove rule"),
         },
-        RemoveRule::AllowOnly(RestrictRule::ByNodeId { address }) => {
+        RemoveRule::AllowOnly(RestrictRuleDesc::ByNodeId { address }) => {
             rules.allow_only().remove_identity_rule(address)
         }
-        RemoveRule::AllowOnly(RestrictRule::Certified(rule)) => match rule {
+        RemoveRule::AllowOnly(RestrictRuleDesc::Certified(rule)) => match rule {
             RestrictRuleWithCert::CertId { cert_id } => {
                 rules.allow_only().remove_certified_rule(&cert_id)
             }
-            RestrictRuleWithCert::ImportCert { imported_cert } => {
-                let certs = rules.import_certs(&imported_cert)?;
-                for cert in certs {
-                    rules.allow_only().remove_certified_rule(&cert)?;
-                }
-                Ok(())
-            }
+            RestrictRuleWithCert::ImportCert { .. } => bail!("Use cert id to remove rule"),
         },
     }
 }
@@ -280,25 +278,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 imported_cert: import_cert,
                 mode,
             }) => {
-                let AddResponse {
-                    invalid,
-                    leaf_cert_ids,
-                    duplicated,
-                    ..
-                } = rules.keystore.add_golem_cert(&AddParams {
-                    certs: vec![import_cert],
-                })?;
-
-                for cert_path in invalid {
-                    log::error!("Failed to import Golem certificates from: {cert_path:?}.");
-                }
-
-                rules.keystore.reload()?;
-
-                if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
-                    log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
-                }
-
+                let leaf_cert_ids = rules.import_certs(&import_cert)?;
                 for cert_id in leaf_cert_ids {
                     rules.set_partner_mode(cert_id, mode.clone())?;
                 }
@@ -315,12 +295,17 @@ fn list(config: ProviderConfig) -> Result<()> {
         &config.domain_whitelist_file,
         &config.cert_dir_path()?,
     )?;
-    let table = RulesTable::from(rules.clone());
 
     if config.json {
         rules.rulestore.print()?
     } else {
-        table.print()?
+        let outbound_table = RulesTable::from(rules.clone());
+        let blacklist_table = RulesTable::from(rules.clone().blacklist());
+        let allowonly_table = RulesTable::from(rules.allow_only());
+
+        outbound_table.print()?;
+        blacklist_table.print()?;
+        allowonly_table.print()?;
     };
 
     Ok(())
@@ -414,6 +399,17 @@ impl From<RulesManager> for RulesTable {
     }
 }
 
+impl<G: TablePrint> From<G> for RulesTable {
+    fn from(rules: G) -> Self {
+        let mut table = RulesTable::new();
+
+        table.header = Some(rules.header());
+        table.table.columns = rules.columns();
+        table.table.values = rules.rows();
+        table
+    }
+}
+
 pub trait TablePrint {
     fn header(&self) -> String;
     fn columns(&self) -> Vec<String>;
@@ -473,10 +469,14 @@ fn add_partner<'a>(partner: &'a HashMap<String, CertRule>) -> impl Iterator<Item
         })
 }
 
-impl TablePrint for RestrictConfig {
+impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
     fn header(&self) -> String {
-        let status = if self.enabled { "enabled" } else { "disabled" };
-        return format!("\nStatus: {status}");
+        let status = if self.is_enabled() {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        return format!("\n{} status: {status}", G::rule_name());
     }
 
     fn columns(&self) -> Vec<String> {
@@ -489,7 +489,19 @@ impl TablePrint for RestrictConfig {
     }
 
     fn rows(&self) -> Vec<Value> {
-        //self.certified.iter().map(|cert_id| (cert_id.clone(), shorten_cert_ids(&cert_id))).map(|short, long|)
-        unimplemented!()
+        let nodes = self.list_identities();
+        let long_ids = self.list_certs();
+        let short_ids = shorten_cert_ids(&long_ids);
+
+        long_ids
+            .into_iter()
+            .zip(short_ids)
+            .map(|(_long_id, short_id)| {
+                serde_json::json! {[ "Certified", "", short_id, "" ]}
+            })
+            .chain(nodes.into_iter().map(|node| {
+                serde_json::json! {[ "ByNodeId", node, "", "" ]}
+            }))
+            .collect()
     }
 }

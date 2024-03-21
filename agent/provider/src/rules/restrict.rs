@@ -28,7 +28,7 @@ pub struct RestrictConfig {
 #[derive(Clone)]
 pub struct RestrictRule<G: RuleAccessor> {
     rulestore: Rulestore,
-    keystore: CompositeKeystore,
+    pub(crate) keystore: CompositeKeystore,
 
     phantom: PhantomData<G>,
 }
@@ -53,7 +53,7 @@ impl RuleAccessor for Blacklist {
     }
 
     fn rule_name() -> &'static str {
-        "blacklist"
+        "Blacklist"
     }
 }
 
@@ -67,7 +67,7 @@ impl RuleAccessor for AllowOnly {
     }
 
     fn rule_name() -> &'static str {
-        "allow-only"
+        "AllowOnly"
     }
 }
 
@@ -133,6 +133,16 @@ where
         }
     }
 
+    pub fn list_certs(&self) -> Vec<Fingerprint> {
+        let mut guard = self.rulestore.config.read().unwrap();
+        G::read(&mut guard).certified.iter().cloned().collect()
+    }
+
+    pub fn list_identities(&self) -> Vec<NodeId> {
+        let mut guard = self.rulestore.config.read().unwrap();
+        G::read(&mut guard).identity.iter().cloned().collect()
+    }
+
     pub fn check_certified(
         &self,
         config: &RestrictConfig,
@@ -175,6 +185,11 @@ where
             G::write(&mut guard).enable(false);
         }
         self.rulestore.save()
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        let mut guard = self.rulestore.config.read().unwrap();
+        G::read(&mut guard).enabled
     }
 
     pub fn add_certified_rule(&self, cert_id: &Fingerprint) -> anyhow::Result<()> {

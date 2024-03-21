@@ -2,7 +2,7 @@ pub mod outbound;
 pub mod restrict;
 mod store;
 
-use crate::rules::outbound::{CertRule, Mode, OutboundRule, OutboundRulesValidator};
+use crate::rules::outbound::{CertRule, Mode, OutboundRule, OutboundRules};
 use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
 
@@ -66,8 +66,8 @@ impl RulesManager {
         RestrictRule::<AllowOnly>::new(self.rulestore.clone(), self.keystore.clone())
     }
 
-    pub fn outbound(&self) -> OutboundRulesValidator {
-        OutboundRulesValidator::new(
+    pub fn outbound(&self) -> OutboundRules {
+        OutboundRules::new(
             self.rulestore.clone(),
             self.keystore.clone(),
             self.whitelist.clone(),
@@ -86,6 +86,8 @@ impl RulesManager {
             .check_outbound_rules(access, requestor_id, manifest_sig, node_descriptor)
     }
 
+    /// TODO: function should be able to distinguish x509 and golem certificates and import
+    ///       both types. Currently, it's only importing golem certificates.
     pub fn import_certs(&mut self, import_cert: &Path) -> Result<Vec<Fingerprint>> {
         let AddResponse {
             invalid,
