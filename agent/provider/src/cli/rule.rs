@@ -360,16 +360,16 @@ impl TablePrint for OutboundRules {
             true => "enabled",
             false => "disabled",
         };
-        return format!("\nOutbound: {status}");
+        format!("\nOutbound: {status}")
     }
 
     fn columns(&self) -> Vec<String> {
-        return vec![
+        vec![
             "rule".to_string(),
             "mode".to_string(),
             "certificate".to_string(),
             "description".to_string(),
-        ];
+        ]
     }
 
     fn rows(&self) -> Vec<Value> {
@@ -386,9 +386,9 @@ fn add_everyone(outbound_everyone: &Mode) -> Vec<Value> {
     vec![serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]}]
 }
 
-fn add_audited_payload<'a>(
-    audited_payload: &'a HashMap<String, CertRule>,
-) -> impl Iterator<Item = Value> + 'a {
+fn add_audited_payload(
+    audited_payload: &HashMap<String, CertRule>,
+) -> impl Iterator<Item = Value> + '_ {
     let rules: Vec<_> = audited_payload.iter().collect();
     let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
     let short_ids = shorten_cert_ids(&long_ids);
@@ -398,7 +398,7 @@ fn add_audited_payload<'a>(
     })
 }
 
-fn add_partner<'a>(partner: &'a HashMap<String, CertRule>) -> impl Iterator<Item = Value> + 'a {
+fn add_partner(partner: &HashMap<String, CertRule>) -> impl Iterator<Item = Value> + '_ {
     let rules: Vec<_> = partner.iter().collect();
     let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
     let short_ids = shorten_cert_ids(&long_ids);
@@ -417,16 +417,16 @@ impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
             true => "enabled",
             false => "disabled",
         };
-        return format!("\n{}: {status}", G::rule_name());
+        format!("\n{}: {status}", G::rule_name())
     }
 
     fn columns(&self) -> Vec<String> {
-        return vec![
+        vec![
             "rule".to_string(),
             "node".to_string(),
             "certificate".to_string(),
             "description".to_string(),
-        ];
+        ]
     }
 
     fn rows(&self) -> Vec<Value> {

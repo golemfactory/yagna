@@ -134,13 +134,13 @@ where
     }
 
     pub fn list_certs(&self) -> Vec<Fingerprint> {
-        let mut guard = self.rulestore.config.read().unwrap();
-        G::read(&mut guard).certified.iter().cloned().collect()
+        let guard = self.rulestore.config.read().unwrap();
+        G::read(&guard).certified.iter().cloned().collect()
     }
 
     pub fn list_identities(&self) -> Vec<NodeId> {
-        let mut guard = self.rulestore.config.read().unwrap();
-        G::read(&mut guard).identity.iter().cloned().collect()
+        let guard = self.rulestore.config.read().unwrap();
+        G::read(&guard).identity.iter().cloned().collect()
     }
 
     pub fn check_certified(
@@ -188,8 +188,8 @@ where
     }
 
     pub fn is_enabled(&self) -> bool {
-        let mut guard = self.rulestore.config.read().unwrap();
-        G::read(&mut guard).enabled
+        let guard = self.rulestore.config.read().unwrap();
+        G::read(&guard).enabled
     }
 
     pub fn add_certified_rule(&self, cert_id: &Fingerprint) -> anyhow::Result<()> {
@@ -304,7 +304,7 @@ where
             }
 
             if let Some(node_descriptor) = node_descriptor {
-                return match self.check_certified(&config, requestor_id, node_descriptor) {
+                return match self.check_certified(config, requestor_id, node_descriptor) {
                     Ok(true) =>  CheckRulesResult::Reject(format!(
                         "Requestor's certificate is on the blacklist: {requestor_id}"
                     )),

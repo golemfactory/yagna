@@ -28,7 +28,7 @@ impl NegotiatorComponent for Blacklist {
             .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
 
-        return match self
+        match self
             .rules
             .blacklist()
             .check_blacklist_rule(demand.issuer, node_descriptor)
@@ -44,6 +44,6 @@ impl NegotiatorComponent for Blacklist {
                     is_final: true,
                 })
             }
-        };
+        }
     }
 }
