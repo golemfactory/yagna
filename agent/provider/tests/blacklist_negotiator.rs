@@ -118,7 +118,7 @@ fn expect_reject(result: NegotiationResult, error: Option<&str>) {
 #[test_case(None; "Un-signed Requestors are passed")]
 #[test_case(
     Some("node-descriptor-different-node.signed.json");
-    "Incorrect NodeId signatures are ignored (passed)"
+    "Mismatching NodeId is ignored (passed)"
 )]
 #[test_case(
     Some("node-descriptor-invalid-signature.signed.json");
@@ -128,24 +128,38 @@ fn expect_reject(result: NegotiationResult, error: Option<&str>) {
 fn blacklist_negotiator_rule_disabled(node_descriptor: Option<&str>) {
     let rules_manager = setup_rules_manager();
     rules_manager.blacklist().disable().unwrap();
-    let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
 
+    let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
     let demand = create_demand(load_node_descriptor(node_descriptor));
-    let offer = create_offer();
 
     let result = negotiator
-        .negotiate_step(&demand, offer.clone())
+        .negotiate_step(&demand, create_offer())
         .expect("Negotiator shouldn't return error");
     expect_accept(result);
 }
 
 #[test_case(
-    "node-descriptor-happy-path.signed.json",
+    None,
     "Requestor's NodeId is on the blacklist";
     "Rejected because requestor is blacklisted"
 )]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    "Requestor's NodeId is on the blacklist";
+    "Rejected because requestor is blacklisted and signature is ignored"
+)]
+#[test_case(
+    Some("node-descriptor-invalid-signature.signed.json"),
+    "Requestor's NodeId is on the blacklist";
+    "Rejected because requestor is blacklisted and invalid signature is ignored"
+)]
+#[test_case(
+    Some("node-descriptor-different-node.signed.json"),
+    "Requestor's NodeId is on the blacklist";
+    "Rejected because requestor is blacklisted and mismatching NodeId is ignored"
+)]
 #[serial]
-fn blacklist_negotiator_id_blacklisted(node_descriptor: &str, expected_err: &str) {
+fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_err: &str) {
     let rules_manager = setup_rules_manager();
     rules_manager.blacklist().enable().unwrap();
     rules_manager
@@ -154,12 +168,10 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: &str, expected_err: &str
         .unwrap();
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
-
-    let demand = create_demand(load_node_descriptor(Some(node_descriptor)));
-    let offer = create_offer();
+    let demand = create_demand(load_node_descriptor(node_descriptor));
 
     let result = negotiator
-        .negotiate_step(&demand, offer.clone())
+        .negotiate_step(&demand, create_offer())
         .expect("Negotiator shouldn't return error");
     expect_reject(result, Some(expected_err));
 }
