@@ -38,6 +38,16 @@ fn rule_list_cmd_should_print_default_rules() {
             "everyone": "whitelist",
             "audited-payload": {},
             "partner": {}
+          },
+          "blacklist": {
+            "enabled": false,
+            "identity": [],
+            "certified": []
+          },
+          "allow-only": {
+            "enabled": false,
+            "identity": [],
+            "certified": []
           }
         })
     );
