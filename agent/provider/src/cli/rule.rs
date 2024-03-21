@@ -1,4 +1,4 @@
-use crate::rules::outbound::{CertRule, Mode, OutboundConfig, OutboundRule};
+use crate::rules::outbound::{CertRule, Mode, OutboundRule, OutboundRules};
 use crate::rules::restrict::{RestrictRule, RuleAccessor};
 use crate::{rules::RulesManager, startup_config::ProviderConfig};
 
@@ -299,7 +299,7 @@ fn list(config: ProviderConfig) -> Result<()> {
     if config.json {
         rules.rulestore.print()?
     } else {
-        let outbound_table = RulesTable::from(rules.clone());
+        let outbound_table = RulesTable::from(rules.clone().outbound());
         let blacklist_table = RulesTable::from(rules.clone().blacklist());
         let allowonly_table = RulesTable::from(rules.allow_only());
 
@@ -317,57 +317,15 @@ struct RulesTable {
 }
 
 impl RulesTable {
-    fn new() -> Self {
-        let columns = vec![
-            "rule".to_string(),
-            "mode".to_string(),
-            "certificate".to_string(),
-            "description".to_string(),
-        ];
-        let values = vec![];
-        let table = ResponseTable { columns, values };
+    fn new(printable: impl TablePrint) -> Self {
+        let table = ResponseTable {
+            columns: printable.columns(),
+            values: printable.rows(),
+        };
 
         Self {
-            header: None,
+            header: Some(printable.header()),
             table,
-        }
-    }
-
-    fn with_header(&mut self, outbound_status: bool) {
-        let status = if outbound_status {
-            "enabled"
-        } else {
-            "disabled"
-        };
-        let header = format!("\nOutbound status: {status}");
-
-        self.header = Some(header)
-    }
-
-    fn add_everyone(&mut self, outbound_everyone: &Mode) {
-        let row = serde_json::json! {[ "Everyone", outbound_everyone, "", "" ]};
-        self.table.values.push(row);
-    }
-
-    fn add_audited_payload(&mut self, audited_payload: &HashMap<String, CertRule>) {
-        let rules: Vec<_> = audited_payload.iter().collect();
-        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
-        let short_ids = shorten_cert_ids(&long_ids);
-
-        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
-            let row = serde_json::json! {[ OutboundRule::AuditedPayload, rule.mode, short_id, rule.description ]};
-            self.table.values.push(row);
-        }
-    }
-
-    fn add_partner(&mut self, partner: &HashMap<String, CertRule>) {
-        let rules: Vec<_> = partner.iter().collect();
-        let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
-        let short_ids = shorten_cert_ids(&long_ids);
-
-        for ((_long_id, rule), short_id) in rules.into_iter().zip(short_ids) {
-            let row = serde_json::json! {[ OutboundRule::Partner, rule.mode, short_id, rule.description ]};
-            self.table.values.push(row);
         }
     }
 
@@ -380,33 +338,13 @@ impl RulesTable {
         };
 
         output.print(false)?;
-
         Ok(())
-    }
-}
-
-impl From<RulesManager> for RulesTable {
-    fn from(rules: RulesManager) -> Self {
-        let mut table = RulesTable::new();
-        let outbound = &rules.rulestore.config.read().unwrap().outbound;
-
-        table.with_header(outbound.enabled);
-        table.add_everyone(&outbound.everyone);
-        table.add_audited_payload(&outbound.audited_payload);
-        table.add_partner(&outbound.partner);
-
-        table
     }
 }
 
 impl<G: TablePrint> From<G> for RulesTable {
     fn from(rules: G) -> Self {
-        let mut table = RulesTable::new();
-
-        table.header = Some(rules.header());
-        table.table.columns = rules.columns();
-        table.table.values = rules.rows();
-        table
+        RulesTable::new(rules)
     }
 }
 
@@ -416,10 +354,13 @@ pub trait TablePrint {
     fn rows(&self) -> Vec<serde_json::Value>;
 }
 
-impl TablePrint for OutboundConfig {
+impl TablePrint for OutboundRules {
     fn header(&self) -> String {
-        let status = if self.enabled { "enabled" } else { "disabled" };
-        return format!("\nOutbound status: {status}");
+        let status = match self.config().enabled {
+            true => "enabled",
+            false => "disabled",
+        };
+        return format!("\nOutbound: {status}");
     }
 
     fn columns(&self) -> Vec<String> {
@@ -432,10 +373,11 @@ impl TablePrint for OutboundConfig {
     }
 
     fn rows(&self) -> Vec<Value> {
-        add_everyone(&self.everyone)
+        let rules = self.config();
+        add_everyone(&rules.everyone)
             .into_iter()
-            .chain(add_audited_payload(&self.audited_payload))
-            .chain(add_partner(&self.partner))
+            .chain(add_audited_payload(&rules.audited_payload))
+            .chain(add_partner(&rules.partner))
             .collect()
     }
 }
@@ -471,12 +413,11 @@ fn add_partner<'a>(partner: &'a HashMap<String, CertRule>) -> impl Iterator<Item
 
 impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
     fn header(&self) -> String {
-        let status = if self.is_enabled() {
-            "enabled"
-        } else {
-            "disabled"
+        let status = match self.is_enabled() {
+            true => "enabled",
+            false => "disabled",
         };
-        return format!("\n{} status: {status}", G::rule_name());
+        return format!("\n{}: {status}", G::rule_name());
     }
 
     fn columns(&self) -> Vec<String> {
@@ -491,6 +432,8 @@ impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
     fn rows(&self) -> Vec<Value> {
         let nodes = self.list_identities();
         let long_ids = self.list_certs();
+        // TODO: ids shortening should be done across all certificates, not only
+        //       those in the same rule.
         let short_ids = shorten_cert_ids(&long_ids);
 
         long_ids
