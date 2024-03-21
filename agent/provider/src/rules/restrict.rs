@@ -71,16 +71,8 @@ impl RuleAccessor for AllowOnly {
     }
 }
 
-pub trait AllowOnlyValidator {
-    fn check_allow_only_rule(
-        &self,
-        requestor_id: NodeId,
-        node_descriptor: Option<serde_json::Value>,
-    ) -> CheckRulesResult;
-}
-
-pub trait BlacklistValidator {
-    fn check_blacklist_rule(
+pub trait RuleValidator {
+    fn check_rule(
         &self,
         requestor_id: NodeId,
         node_descriptor: Option<serde_json::Value>,
@@ -251,12 +243,8 @@ where
     }
 }
 
-impl AllowOnlyValidator for RestrictRule<AllowOnly> {
-    fn check_allow_only_rule(
-        &self,
-        requestor_id: NodeId,
-        node_descriptor: Option<Value>,
-    ) -> CheckRulesResult {
+impl RuleValidator for RestrictRule<AllowOnly> {
+    fn check_rule(&self, requestor_id: NodeId, node_descriptor: Option<Value>) -> CheckRulesResult {
         let config = &self.rulestore.config.read().unwrap().allow_only;
         if config.is_enabled() {
             if config.check_identity(requestor_id) {
@@ -283,12 +271,8 @@ impl AllowOnlyValidator for RestrictRule<AllowOnly> {
     }
 }
 
-impl BlacklistValidator for RestrictRule<Blacklist> {
-    fn check_blacklist_rule(
-        &self,
-        requestor_id: NodeId,
-        node_descriptor: Option<Value>,
-    ) -> CheckRulesResult {
+impl RuleValidator for RestrictRule<Blacklist> {
+    fn check_rule(&self, requestor_id: NodeId, node_descriptor: Option<Value>) -> CheckRulesResult {
         let config = &self.rulestore.config.read().unwrap().blacklist;
         if config.is_enabled() {
             if config.check_identity(requestor_id) {

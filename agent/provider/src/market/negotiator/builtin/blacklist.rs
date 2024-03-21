@@ -1,6 +1,6 @@
 use crate::market::negotiator::{NegotiationResult, NegotiatorComponent};
 use crate::provider_agent::AgentNegotiatorsConfig;
-use crate::rules::restrict::BlacklistValidator;
+use crate::rules::restrict::RuleValidator;
 use crate::rules::{CheckRulesResult, RulesManager};
 
 use ya_agreement_utils::ProposalView;
@@ -31,7 +31,7 @@ impl NegotiatorComponent for Blacklist {
         match self
             .rules
             .blacklist()
-            .check_blacklist_rule(demand.issuer, node_descriptor)
+            .check_rule(demand.issuer, node_descriptor)
         {
             CheckRulesResult::Accept => Ok(NegotiationResult::Ready { offer }),
             CheckRulesResult::Reject(reason) => {
