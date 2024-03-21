@@ -120,6 +120,7 @@ impl<'c> ActivityDao<'c> {
         do_with_transaction(self.pool, "activity_dao_get_activity_ids", move |conn| {
             if let Some(items) = max_items {
                 dsl::activity
+                    .order_by(dsl::id.desc())
                     .limit(items.into())
                     .select(dsl::natural_id)
                     .get_results(conn)
