@@ -79,6 +79,10 @@ pub(crate) fn generate_id() -> String {
     Uuid::new_v4().to_simple().to_string()
 }
 
+pub(crate) async fn _get_activities(db: &DbExecutor) -> Result<Vec<String>, Error> {
+    Ok(db.as_dao::<ActivityDao>()._get_activity_ids().await?)
+}
+
 pub(crate) async fn get_activities_for_agreement(
     db: &DbExecutor,
     agreement_id: &str,
