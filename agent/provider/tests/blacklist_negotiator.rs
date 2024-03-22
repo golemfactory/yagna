@@ -124,6 +124,15 @@ fn setup_certificates_rules(rules: &mut RulesManager, certs: &[&str]) {
     }
 }
 
+fn setup_identity_rules(rules: &mut RulesManager, ids: &[&str]) {
+    for id in ids {
+        rules
+            .blacklist()
+            .add_identity_rule(NodeId::from_str(id).unwrap())
+            .unwrap();
+    }
+}
+
 fn expect_accept(result: NegotiationResult) {
     match result {
         NegotiationResult::Ready { .. } => {}
@@ -246,10 +255,22 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_e
     "Rejected because Requestor has invalid signature"
 )]
 #[test_case(
+    Some("node-descriptor-invalid-signature.signed.json"),
+    &[],
+    "rejected due to suspicious behavior: Blacklist rule: verification of node descriptor failed: Invalid signature value";
+    "Rejected because Requestor has invalid signature, despite certificate is not on the blacklist"
+)]
+#[test_case(
     Some("node-descriptor-different-node.signed.json"),
     &["partner-certificate.signed.json"],
     "rejected due to suspicious behavior: Node ids mismatch";
     "Rejected because of NodeId mismatch in Proposal and in signature"
+)]
+#[test_case(
+    Some("node-descriptor-different-node.signed.json"),
+    &[],
+    "rejected due to suspicious behavior: Node ids mismatch";
+    "Rejected because of NodeId mismatch in Proposal and in signature, despite certificate is not on the blacklist"
 )]
 #[serial]
 fn blacklist_negotiator_certificate_blacklisted(
@@ -269,4 +290,43 @@ fn blacklist_negotiator_certificate_blacklisted(
         .negotiate_step(&demand, create_offer())
         .expect("Negotiator shouldn't return error");
     expect_reject(result, Some(expected_err));
+}
+
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["root-cert-independent-chain.cert.signed.json"],
+    &["0x0000000000000000000000000000000000000001"];
+    "Accepted; Other certificate and id is on blacklist"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["root-cert-independent-chain.cert.signed.json"],
+    &[];
+    "Accepted; Other certificate is on blacklist"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &[],
+    &["0x0000000000000000000000000000000000000001"];
+    "Accepted; Other id is on blacklist"
+)]
+#[serial]
+fn blacklist_negotiator_pass_node(
+    node_descriptor: Option<&str>,
+    blacklist_certs: &[&str],
+    blacklist_ids: &[&str],
+) {
+    let mut rules_manager = setup_rules_manager();
+    rules_manager.blacklist().enable().unwrap();
+
+    setup_certificates_rules(&mut rules_manager, blacklist_certs);
+    setup_identity_rules(&mut rules_manager, blacklist_ids);
+
+    let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
+    let demand = create_demand(load_node_descriptor(node_descriptor));
+
+    let result = negotiator
+        .negotiate_step(&demand, create_offer())
+        .expect("Negotiator shouldn't return error");
+    expect_accept(result);
 }
