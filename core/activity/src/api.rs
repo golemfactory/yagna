@@ -22,7 +22,7 @@ mod common {
     use actix_web::{web, HttpResponse, Responder};
     use futures::prelude::*;
 
-    use ya_client_model::market::{Agreement, Role};
+    use ya_client_model::market::Role;
     use ya_core_model::{activity, NodeId};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
@@ -34,54 +34,39 @@ mod common {
     use crate::TrackerRef;
     use actix_web::http::header;
     use actix_web::web::Json;
-    use ya_client_model::payment::params::FilterParams;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
             .service(get_events)
-            .service(get_activities_web)
+            .service(get_activities_for_agreement_web)
             .service(get_activity_agreement_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
 
     #[actix_web::get("/activity")]
-    async fn get_activities_web(
+    async fn get_activities_for_agreement_web(
         db: web::Data<DbExecutor>,
-        query: web::Query<FilterParams>,
+        query: web::Query<QueryAgreement>,
         id: Identity,
     ) -> impl Responder {
-        let mut result = vec![];
-        let activities = get_activities(&db, query.max_items).await?;
+        let mut activities = vec![];
 
-        let is_valid = |agreement: Agreement| {
-            if authorize_caller(&id.identity.to_string().parse()?, agreement.provider_id()).is_ok()
-                && (query.after_timestamp.is_none()
-                    || query.after_timestamp.is_some()
-                        && agreement.timestamp >= query.after_timestamp.unwrap())
-            {
-                return Ok::<bool, Error>(true);
-            }
-
-            Ok::<bool, Error>(false)
-        };
-
-        for activity in activities {
-            let agreement_id = get_agreement_id(&db, activity.as_str()).await?;
-
-            if let Ok(agreement) = get_agreement(agreement_id.as_str(), Role::Provider).await {
-                if is_valid(agreement)? {
-                    result.push(activity);
-                }
-            } else if let Ok(agreement) =
-                get_agreement(agreement_id.as_str(), Role::Requestor).await
-            {
-                if is_valid(agreement)? {
-                    result.push(activity);
-                }
-            }
+        if authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Provider)
+            .await
+            .is_ok()
+            || authorize_agreement_executor(
+                id.identity,
+                query.agreement_id.as_str(),
+                Role::Requestor,
+            )
+            .await
+            .is_ok()
+        {
+            activities = get_activities_for_agreement(&db, query.agreement_id.as_str()).await?;
         }
-        Ok::<Json<Vec<std::string::String>>, Error>(web::Json(result))
+
+        Ok::<Json<Vec<std::string::String>>, Error>(web::Json(activities))
     }
 
     #[actix_web::get("/activity/{activity_id}/agreement")]

@@ -27,6 +27,12 @@ pub struct PathActivity {
 }
 
 #[derive(Deserialize)]
+pub struct QueryAgreement {
+    #[serde(rename = "agreementId")]
+    pub agreement_id: String,
+}
+
+#[derive(Deserialize)]
 pub struct PathActivityUrl {
     pub activity_id: String,
     pub url: String,
@@ -73,13 +79,13 @@ pub(crate) fn generate_id() -> String {
     Uuid::new_v4().to_simple().to_string()
 }
 
-pub(crate) async fn get_activities(
+pub(crate) async fn get_activities_for_agreement(
     db: &DbExecutor,
-    max_items: Option<u32>,
+    agreement_id: &str,
 ) -> Result<Vec<String>, Error> {
     Ok(db
         .as_dao::<ActivityDao>()
-        .get_activity_ids(max_items)
+        .get_activity_ids_for_agreement(agreement_id)
         .await?)
 }
 
