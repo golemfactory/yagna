@@ -114,17 +114,16 @@ impl<'c> ActivityDao<'c> {
         .await
     }
 
-    // pub async fn get_activity_ids(&self, max_items: Option<u32>) -> Result<Vec<String>> {
-    //     use schema::activity::dsl;
-    //
-    //     do_with_transaction(self.pool, "activity_dao_get_activity_ids", move |conn| {
-    //         dsl::activity
-    //             .select(dsl::natural_id)
-    //             .get_results(conn)
-    //             .map_err(|e| e.into())
-    //     })
-    //     .await
-    // }
+    pub async fn _get_activity_ids(&self) -> Result<Vec<String>> {
+        use schema::activity::dsl;
+        do_with_transaction(self.pool, "activity_dao_get_activity_ids", |conn| {
+            dsl::activity
+                .select(dsl::natural_id)
+                .get_results(conn)
+                .map_err(|e| e.into())
+        })
+        .await
+    }
 
     pub async fn get_activity_ids_for_agreement(&self, agreement_id: &str) -> Result<Vec<String>> {
         use schema::activity::dsl;
