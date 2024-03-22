@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use serial_test::serial;
+use std::collections::HashMap;
 use std::str::FromStr;
 use test_case::test_case;
 
@@ -23,8 +24,19 @@ fn setup_rules_manager() -> RulesManager {
     let whitelist_file = test_cert_dir.join("whitelist.json");
     let rules_file_name = test_cert_dir.join("rules.json");
 
-    RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
-        .expect("Can't load RulesManager")
+    let mut rules_manager =
+        RulesManager::load_or_create(&rules_file_name, &whitelist_file, &test_cert_dir)
+            .expect("Can't load RulesManager");
+
+    import_certificates(
+        &mut rules_manager,
+        &[
+            "root-certificate.signed.json",
+            "partner-certificate.signed.json",
+        ],
+    );
+
+    rules_manager
 }
 
 fn create_demand(demand: Value) -> ProposalView {
@@ -84,6 +96,23 @@ fn import_certificates(rules: &mut RulesManager, certs: &[&str]) {
     for cert in certs {
         let cert_path = resource_cert_dir.join(cert);
         rules.import_certs(&cert_path).unwrap();
+    }
+}
+
+fn setup_certificates_rules(rules: &mut RulesManager, certs: &[&str]) {
+    let certs_mapping: HashMap<&'static str, &'static str> = vec![
+        ("partner-certificate.signed.json", "cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc"),
+        ("root-certificate.signed.json", "80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3"),
+    ]
+    .into_iter()
+    .collect();
+
+    for cert in certs {
+        let cert_path = certs_mapping.get(cert).unwrap();
+        rules
+            .blacklist()
+            .add_certified_rule(&cert_path.to_string())
+            .unwrap();
     }
 }
 
@@ -191,6 +220,12 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_e
     "Rejected because certificate is on the blacklist"
 )]
 #[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json"],
+    "Requestor's certificate is on the blacklist";
+    "Rejected because top level certificate is on the blacklist"
+)]
+#[test_case(
     Some("node-descriptor-invalid-signature.signed.json"),
     &["partner-certificate.signed.json"],
     "rejected due to suspicious behavior: Blacklist rule: verification of node descriptor failed: Invalid signature value";
@@ -205,17 +240,13 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_e
 #[serial]
 fn blacklist_negotiator_certificate_blacklisted(
     node_descriptor: Option<&str>,
-    import_certs: &[&str],
+    blacklist_certs: &[&str],
     expected_err: &str,
 ) {
     let mut rules_manager = setup_rules_manager();
-    rules_manager.blacklist().enable().unwrap();
-    import_certificates(&mut rules_manager, import_certs);
 
-    rules_manager
-        .blacklist()
-        .add_certified_rule(&"cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc".to_string())
-        .unwrap();
+    rules_manager.blacklist().enable().unwrap();
+    setup_certificates_rules(&mut rules_manager, blacklist_certs);
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
     let demand = create_demand(load_node_descriptor(node_descriptor));
