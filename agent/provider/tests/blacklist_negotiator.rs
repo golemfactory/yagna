@@ -1,9 +1,11 @@
 use serde_json::{json, Value};
 use serial_test::serial;
-use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 use test_case::test_case;
 
+use hex::ToHex;
 use ya_agreement_utils::agreement::expand;
 use ya_agreement_utils::{OfferTemplate, ProposalView};
 use ya_client_model::market::proposal::State;
@@ -33,10 +35,23 @@ fn setup_rules_manager() -> RulesManager {
         &[
             "root-certificate.signed.json",
             "partner-certificate.signed.json",
+            "root-cert-independent-chain.cert.signed.json",
+            "independent-chain-depth-1.cert.signed.json",
+            "independent-chain-depth-2.cert.signed.json",
+            "independent-chain-depth-3.cert.signed.json",
         ],
     );
 
     rules_manager
+}
+
+fn import_certificates(rules: &mut RulesManager, certs: &[&str]) {
+    let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+
+    for cert in certs {
+        let cert_path = resource_cert_dir.join(cert);
+        rules.import_certs(&cert_path).unwrap();
+    }
 }
 
 fn create_demand(demand: Value) -> ProposalView {
@@ -91,28 +106,21 @@ fn load_node_descriptor(file: Option<&str>) -> Value {
     })
 }
 
-fn import_certificates(rules: &mut RulesManager, certs: &[&str]) {
-    let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-    for cert in certs {
-        let cert_path = resource_cert_dir.join(cert);
-        rules.import_certs(&cert_path).unwrap();
-    }
+fn fingerprint(input_file_path: &Path) -> anyhow::Result<String> {
+    let json_string = fs::read_to_string(input_file_path)?;
+    let input_json: Value = serde_json::from_str(&json_string)?;
+
+    let signed_data = &input_json["certificate"];
+    let fingerprint = golem_certificate::create_default_hash(signed_data)?;
+    Ok(fingerprint.encode_hex::<String>())
 }
 
 fn setup_certificates_rules(rules: &mut RulesManager, certs: &[&str]) {
-    let certs_mapping: HashMap<&'static str, &'static str> = vec![
-        ("partner-certificate.signed.json", "cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc"),
-        ("root-certificate.signed.json", "80c84b2701126669966f46c1159cae89c58fb088e8bf94b318358fa4ca33ee56d8948511a397e5aba6aa5b88fff36f2541a91b133cde0fb816e8592b695c04c3"),
-    ]
-    .into_iter()
-    .collect();
-
+    let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
     for cert in certs {
-        let cert_path = certs_mapping.get(cert).unwrap();
-        rules
-            .blacklist()
-            .add_certified_rule(&cert_path.to_string())
-            .unwrap();
+        let path = resource_cert_dir.join(cert);
+        let fingerprint = fingerprint(&path).unwrap();
+        rules.blacklist().add_certified_rule(&fingerprint).unwrap();
     }
 }
 
@@ -224,6 +232,12 @@ fn blacklist_negotiator_id_blacklisted(node_descriptor: Option<&str>, expected_e
     &["partner-certificate.signed.json"],
     "Requestor's certificate is on the blacklist";
     "Rejected because top level certificate is on the blacklist"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json", "root-cert-independent-chain.cert.signed.json"],
+    "Requestor's certificate is on the blacklist";
+    "Sanity check with additional independent certificate"
 )]
 #[test_case(
     Some("node-descriptor-invalid-signature.signed.json"),

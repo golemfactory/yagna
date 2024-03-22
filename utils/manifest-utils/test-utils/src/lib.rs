@@ -56,6 +56,7 @@ impl TestResources {
             }
             fs::create_dir_all(&resource_cert_dir).expect("Can create temp dir");
             Self::unpack_cert_resources(&resource_cert_dir);
+            Self::copy_free_resources(&resource_cert_dir);
         });
         let store_cert_dir = self.store_cert_dir_path();
         if store_cert_dir.exists() {
@@ -102,6 +103,15 @@ impl TestResources {
         cert_archive
             .unpack(cert_resources_dir)
             .expect("Can unpack cert archive");
+    }
+
+    pub fn copy_free_resources(cert_resources_dir: &PathBuf) {
+        let certs_dir = Self::test_resources_dir_path().join("independent-chain");
+        for entry in fs::read_dir(certs_dir).expect("Can read certs dir") {
+            let path = entry.expect("Can list certs dir").path();
+            let dest = cert_resources_dir.join(path.file_name().unwrap());
+            fs::copy(path, dest).expect("Can copy file");
+        }
     }
 
     pub fn test_resources_dir_path() -> PathBuf {
