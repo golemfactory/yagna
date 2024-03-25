@@ -166,3 +166,72 @@ fn allowonly_negotiator_rule_rejections(
         .expect("Negotiator shouldn't return error");
     expect_reject(result, Some(expected_err));
 }
+
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json"],
+    &[];
+    "Signed Requestors with certificate on the allow-list are passed"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &[],
+    &["0x0000000000000000000000000000000000000000"];
+    "Signed Requestors with identity on the allow-list are passed"
+)]
+#[test_case(
+    None,
+    &[],
+    &["0x0000000000000000000000000000000000000000"];
+    "Un-Signed Requestors with identity on the allow-list are passed"
+)]
+#[test_case(
+    None,
+    &[],
+    &["0x0000000000000000000000000000000000000001", "0x0000000000000000000000000000000000000000"];
+    "Un-Signed Requestors with identity on the allow-list are passed, when more than one identity is allowed"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &[],
+    &["0x0000000000000000000000000000000000000001", "0x0000000000000000000000000000000000000000"];
+    "Signed Requestors with identity on the allow-list are passed, when more than one identity is allowed"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json"],
+    &["0x0000000000000000000000000000000000000000"];
+    "Signed Requestors with certificate and id on the allow-list are passed"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["independent-chain-depth-1.cert.signed.json", "partner-certificate.signed.json"],
+    &[];
+    "Signed Requestors with certificate on the allow-list are passed, when more than one certificate is allowed"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &["independent-chain-depth-1.cert.signed.json", "partner-certificate.signed.json"],
+    &["0x0000000000000000000000000000000000000001"];
+    "Signed Requestors with certificate on the allow-list are passed, when more than one certificate and id is allowed"
+)]
+#[serial]
+fn allowonly_negotiator_rule_accepts(
+    node_descriptor: Option<&str>,
+    allow_certs: &[&str],
+    allow_ids: &[&str],
+) {
+    let rules_manager = setup_rules_manager();
+    rules_manager.allow_only().enable().unwrap();
+
+    setup_certificates_rules(rules_manager.allow_only(), allow_certs);
+    setup_identity_rules(rules_manager.allow_only(), allow_ids);
+
+    let mut negotiator = AllowOnly::new(AgentNegotiatorsConfig { rules_manager });
+    let demand = create_demand(load_node_descriptor(node_descriptor));
+
+    let result = negotiator
+        .negotiate_step(&demand, create_offer())
+        .expect("Negotiator shouldn't return error");
+    expect_accept(result);
+}
