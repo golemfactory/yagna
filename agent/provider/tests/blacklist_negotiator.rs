@@ -15,22 +15,47 @@ use crate::utils::rules::{
 };
 
 #[test_case(
-    Some("node-descriptor-happy-path.signed.json");
+    Some("node-descriptor-happy-path.signed.json"),
+    &[],
+    &[];
     "Signed Requestors are passed"
 )]
-#[test_case(None; "Un-signed Requestors are passed")]
 #[test_case(
-    Some("node-descriptor-different-node.signed.json");
+    Some("node-descriptor-happy-path.signed.json"),
+    &["partner-certificate.signed.json"],
+    &[];
+    "Signed Requestors are passed even if certificate is on the blacklist"
+)]
+#[test_case(
+    Some("node-descriptor-happy-path.signed.json"),
+    &[],
+    &["0x0000000000000000000000000000000000000000"];
+    "Signed Requestors are passed even if identity is on the blacklist"
+)]
+#[test_case(None, &[], &[]; "Un-signed Requestors are passed")]
+#[test_case(
+    Some("node-descriptor-different-node.signed.json"),
+    &[],
+    &[];
     "Mismatching NodeId is ignored (passed)"
 )]
 #[test_case(
-    Some("node-descriptor-invalid-signature.signed.json");
+    Some("node-descriptor-invalid-signature.signed.json"),
+    &[],
+    &[];
     "Invalid signatures are ignored (passed)"
 )]
 #[serial]
-fn blacklist_negotiator_rule_disabled(node_descriptor: Option<&str>) {
+fn blacklist_negotiator_rule_disabled(
+    node_descriptor: Option<&str>,
+    blacklist_certs: &[&str],
+    blacklist_ids: &[&str],
+) {
     let rules_manager = setup_rules_manager();
     rules_manager.blacklist().disable().unwrap();
+
+    setup_certificates_rules(rules_manager.blacklist(), blacklist_certs);
+    setup_identity_rules(rules_manager.blacklist(), blacklist_ids);
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
     let demand = create_demand(load_node_descriptor(node_descriptor));
@@ -127,10 +152,10 @@ fn blacklist_negotiator_certificate_blacklisted(
     blacklist_certs: &[&str],
     expected_err: &str,
 ) {
-    let mut rules_manager = setup_rules_manager();
+    let rules_manager = setup_rules_manager();
 
     rules_manager.blacklist().enable().unwrap();
-    setup_certificates_rules(&mut rules_manager, blacklist_certs);
+    setup_certificates_rules(rules_manager.blacklist(), blacklist_certs);
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
     let demand = create_demand(load_node_descriptor(node_descriptor));
@@ -165,11 +190,11 @@ fn blacklist_negotiator_pass_node(
     blacklist_certs: &[&str],
     blacklist_ids: &[&str],
 ) {
-    let mut rules_manager = setup_rules_manager();
+    let rules_manager = setup_rules_manager();
     rules_manager.blacklist().enable().unwrap();
 
-    setup_certificates_rules(&mut rules_manager, blacklist_certs);
-    setup_identity_rules(&mut rules_manager, blacklist_ids);
+    setup_certificates_rules(rules_manager.blacklist(), blacklist_certs);
+    setup_identity_rules(rules_manager.blacklist(), blacklist_ids);
 
     let mut negotiator = Blacklist::new(AgentNegotiatorsConfig { rules_manager });
     let demand = create_demand(load_node_descriptor(node_descriptor));

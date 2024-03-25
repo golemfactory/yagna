@@ -10,6 +10,7 @@ use ya_client_model::market::proposal::State;
 use ya_client_model::NodeId;
 use ya_manifest_test_utils::TestResources;
 use ya_provider::market::negotiator::NegotiationResult;
+use ya_provider::rules::restrict::{RestrictRule, RuleAccessor};
 use ya_provider::rules::RulesManager;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
@@ -111,19 +112,18 @@ fn fingerprint(input_file_path: &Path) -> anyhow::Result<String> {
     Ok(fingerprint.encode_hex::<String>())
 }
 
-pub fn setup_certificates_rules(rules: &mut RulesManager, certs: &[&str]) {
+pub fn setup_certificates_rules<G: RuleAccessor>(rules: RestrictRule<G>, certs: &[&str]) {
     let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
     for cert in certs {
         let path = resource_cert_dir.join(cert);
         let fingerprint = fingerprint(&path).unwrap();
-        rules.blacklist().add_certified_rule(&fingerprint).unwrap();
+        rules.add_certified_rule(&fingerprint).unwrap();
     }
 }
 
-pub fn setup_identity_rules(rules: &mut RulesManager, ids: &[&str]) {
+pub fn setup_identity_rules<G: RuleAccessor>(rules: RestrictRule<G>, ids: &[&str]) {
     for id in ids {
         rules
-            .blacklist()
             .add_identity_rule(NodeId::from_str(id).unwrap())
             .unwrap();
     }
