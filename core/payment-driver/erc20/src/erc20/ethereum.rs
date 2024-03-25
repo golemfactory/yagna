@@ -540,6 +540,7 @@ fn get_env(network: Network) -> config::EnvConfiguration {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
         Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Holesky => *config::HOLESKY_CONFIG,
         Network::Mumbai => *config::MUMBAI_CONFIG,
         Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
     }

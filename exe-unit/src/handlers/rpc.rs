@@ -128,6 +128,25 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
     }
 }
 
+impl<R: Runtime> Handler<RpcEnvelope<KillBatch>> for ExeUnit<R> {
+    type Result = <RpcEnvelope<KillBatch> as Message>::Result;
+
+    fn handle(&mut self, msg: RpcEnvelope<KillBatch>, _: &mut Self::Context) -> Self::Result {
+        self.ctx.verify_activity_id(&msg.activity_id)?;
+
+        if let Some(mut batch) = self.state.batches.remove(&msg.batch_id) {
+            if let Some(it) = batch.control.take() {
+                let _ = it.send(());
+            }
+        }
+
+        Err(RpcMessageError::NotFound(format!(
+            "No running command within activity: {}",
+            msg.activity_id
+        )))
+    }
+}
+
 impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
     type Result = ActorResponse<Self, Result<Vec<ExeScriptCommandResult>, RpcMessageError>>;
 

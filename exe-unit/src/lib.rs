@@ -374,6 +374,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             let srv_id = activity::exeunit::bus_id(activity_id);
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::KillBatch>(&srv_id, addr.clone().recipient());
 
             #[cfg(feature = "sgx")]
             {

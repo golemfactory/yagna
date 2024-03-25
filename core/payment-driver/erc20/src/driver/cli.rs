@@ -76,7 +76,7 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
     let address = msg.address();
     let network = network::network_like_to_network(msg.network());
     let result = match network {
-        Network::Rinkeby | Network::Goerli => {
+        Network::Rinkeby | Network::Goerli | Network::Holesky => {
             let address = utils::str_to_addr(&address)?;
             log::info!(
                 "Handling fund request. network={}, address={}",
@@ -164,6 +164,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
             Network::Rinkeby => "https://rinkeby.etherscan.io/tx/",
             Network::Goerli => "https://goerli.etherscan.io/tx/",
             Network::Mumbai => "https://mumbai.polygonscan.com/tx/",
+            Network::Holesky => "https://holesky.etherscan.io/tx/",
         };
 
         let message = format!("Follow your transaction: {}0x{:x}", endpoint, tx_id);

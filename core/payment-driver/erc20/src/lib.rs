@@ -14,6 +14,9 @@ pub const RINKEBY_CURRENCY_SHORT: &str = "tETH";
 pub const RINKEBY_CURRENCY_LONG: &str = "Rinkeby Ether";
 
 pub const GOERLI_NETWORK: &str = "goerli";
+
+const TEST_TOKEN: &str = "tGLM";
+
 pub const GOERLI_TOKEN: &str = "tGLM";
 pub const GOERLI_PLATFORM: &str = "erc20-goerli-tglm";
 pub const GOERLI_CURRENCY_SHORT: &str = "tETH";
