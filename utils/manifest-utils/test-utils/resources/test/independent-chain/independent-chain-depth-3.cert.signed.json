@@ -7,7 +7,7 @@
     "permissions": {},
     "publicKey": {
       "algorithm": "EdDSA",
-      "key": "f761b7ce5c54d9306aed093e58ee7e605381f579cdef570ba6f720d684e52e8a",
+      "key": "679009dd919f1eb40ef88fe7ce51af357e9f10ef653fb433eb691614085a1fb9",
       "parameters": {
         "scheme": "Ed25519"
       }
@@ -28,7 +28,7 @@
       "hash": "sha512",
       "encryption": "EdDSA"
     },
-    "value": "da9baad3fb4056219d0bbc79e2a66a11c3e60fd7f12389d3cc403273bfbf0876486526c4956d2c0b07ecd6085533501cba35d85294ff9e83a47ab2613bd5070e",
+    "value": "fb6a7e60eca108e60ce31149be94d119f40707e9a2058215243c82ee58b286fb25f9a04a7f02ad0721bdd132bd313a3565b90d96191bf7200388ac504056f70e",
     "signer": {
       "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
       "certificate": {
@@ -41,7 +41,7 @@
         },
         "publicKey": {
           "algorithm": "EdDSA",
-          "key": "f761b7ce5c54d9306aed093e58ee7e605381f579cdef570ba6f720d684e52e8a",
+          "key": "e2c7c19ca8d18ef4527dd11f27d1c938cd56753cf432415e822efd2e81b1c6ab",
           "parameters": {
             "scheme": "Ed25519"
           }
@@ -62,7 +62,7 @@
           "hash": "sha512",
           "encryption": "EdDSA"
         },
-        "value": "2b40f83081cda9f8e8408199bac72de70b33e7be9321fdd4ec9af5922940e6a1785005e6c71f09779e2a5bd5dcd9aa6274370bcb6636a91d73e8f75db73b1502",
+        "value": "b944935e13b0977bbc80dec2424710ecfb896b76377e0c685db725adfb680912be86a8726da13f3d01ba9787a56e91fa1927479e8d139d1ee54644ed240bf50e",
         "signer": {
           "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
           "certificate": {
@@ -70,7 +70,7 @@
             "permissions": "all",
             "publicKey": {
               "algorithm": "EdDSA",
-              "key": "f761b7ce5c54d9306aed093e58ee7e605381f579cdef570ba6f720d684e52e8a",
+              "key": "2afaf7337e76599a75c053062e327de6f1276de4d7f89d8c46eb9cc52316686d",
               "parameters": {
                 "scheme": "Ed25519"
               }
@@ -91,7 +91,7 @@
               "hash": "sha512",
               "encryption": "EdDSA"
             },
-            "value": "57e4854006f1f53d4f1bda663fd6632c511932d188d8af9e059330ae5338c1100f92dfb6c66275bf9cbb64accc55a98c15d5dc2e034d5594311ec0554f89aa0a",
+            "value": "2978ca3c23b788d486a6f3870dcf291b3750e0bc74531b10d602970666256416ae65b77eccc89d81957e49c09c8b31ad1c8a6a30869e42b3c153d2d4926d3b00",
             "signer": {
               "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
               "certificate": {
