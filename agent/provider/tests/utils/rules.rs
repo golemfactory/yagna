@@ -32,10 +32,10 @@ pub fn setup_rules_manager() -> RulesManager {
         &[
             "root-certificate.signed.json",
             "partner-certificate.signed.json",
-            "root-cert-independent-chain.cert.signed.json",
-            "independent-chain-depth-1.cert.signed.json",
-            "independent-chain-depth-2.cert.signed.json",
             "independent-chain-depth-3.cert.signed.json",
+            "independent-chain-depth-2.cert.signed.json",
+            "independent-chain-depth-1.cert.signed.json",
+            "root-cert-independent-chain.cert.signed.json",
         ],
     );
 
@@ -80,27 +80,26 @@ pub fn create_offer() -> ProposalView {
 pub fn load_node_descriptor(file: Option<&str>) -> Value {
     let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
 
-    let desc = file
-        .map(|node_descriptor_filename| {
-            let data = std::fs::read(resource_cert_dir.join(node_descriptor_filename)).unwrap();
-            serde_json::from_slice::<Value>(&data).unwrap()
-        })
-        .unwrap_or(Value::Null);
-
-    json!({
-        "golem": {
-            "!exp": {
-                "gap-31": {
-                    "v0": {
-                        "node": {
-                            "descriptor": desc
+    if let Some(file) = file {
+        let data = std::fs::read(resource_cert_dir.join(file)).unwrap();
+        let desc = serde_json::from_slice::<Value>(&data).unwrap();
+        json!({
+            "golem": {
+                "!exp": {
+                    "gap-31": {
+                        "v0": {
+                            "node": {
+                                "descriptor": desc
+                            }
                         }
                     }
-                }
 
-            }
-        },
-    })
+                }
+            },
+        })
+    } else {
+        Value::Null
+    }
 }
 
 fn fingerprint(input_file_path: &Path) -> anyhow::Result<String> {
