@@ -27,6 +27,7 @@ use ya_core_model::payment::local::{
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::types::Role;
 use ya_service_bus::typed::Endpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -352,7 +353,7 @@ impl PaymentProcessor {
         self.registry.get_platform(driver, network, token)
     }
 
-    pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+    pub async fn notify_payment(&mut self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
         let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
@@ -488,7 +489,10 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(
+        &mut self,
+        msg: SchedulePayment,
+    ) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -521,7 +525,7 @@ impl PaymentProcessor {
     }
 
     pub async fn verify_payment(
-        &self,
+        &mut self,
         payment: Payment,
         signature: Vec<u8>,
     ) -> Result<(), VerifyPaymentError> {
@@ -626,7 +630,7 @@ impl PaymentProcessor {
         // Verify totals for all agreements and activities with the same confirmation
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         let shared_payments = payment_dao
-            .get_for_confirmation(confirmation.confirmation)
+            .get_for_confirmation(confirmation.confirmation, Role::Provider)
             .await?;
         let other_payment_total = shared_payments
             .iter()
@@ -740,7 +744,7 @@ impl PaymentProcessor {
     /// This function releases allocations.
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
-    pub async fn release_allocations(&self, force: bool) {
+    pub async fn release_allocations(&mut self, force: bool) {
         let db = Data::new(self.db_executor.clone());
         let existing_allocations = db
             .clone()
