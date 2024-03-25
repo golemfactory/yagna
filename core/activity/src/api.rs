@@ -50,8 +50,6 @@ mod common {
         query: web::Query<QueryAgreement>,
         id: Identity,
     ) -> impl Responder {
-        let mut activities = vec![];
-
         if authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Provider)
             .await
             .is_err()
@@ -59,7 +57,7 @@ mod common {
             authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Requestor)
                 .await?
         }
-        activities = get_activities_for_agreement(&db, query.agreement_id.as_str()).await?;
+        let activities = get_activities_for_agreement(&db, query.agreement_id.as_str()).await?;
 
         Ok::<Json<Vec<std::string::String>>, Error>(web::Json(activities))
     }
