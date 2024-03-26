@@ -6,24 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{fs, thread};
 
-pub mod error;
-mod os;
-
-pub type Result<T> = std::result::Result<T, error::MetricError>;
-pub type MetricData = f64;
-
-#[derive(Clone, Debug)]
-pub enum MetricReport {
-    Frame(MetricData),
-    LimitExceeded(MetricData),
-    Error(error::MetricError),
-}
-
-pub trait Metric {
-    fn frame(&mut self) -> Result<MetricData>;
-    fn peak(&mut self) -> Result<MetricData>;
-    fn set(&mut self, _value: MetricData) {}
-}
+use crate::error;
+use crate::os;
 
 #[derive(Default)]
 pub struct CpuMetric {}

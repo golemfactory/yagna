@@ -26,7 +26,7 @@ use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
-use crate::service::metrics::MetricsService;
+use crate::service::counters::MetricsService;
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
@@ -39,7 +39,6 @@ mod handlers;
 pub mod logger;
 pub mod manifest;
 pub mod message;
-pub mod metrics;
 mod network;
 mod notify;
 mod output;
@@ -47,6 +46,7 @@ pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
+mod counters;
 
 mod dns;
 pub type Result<T> = std::result::Result<T, Error>;

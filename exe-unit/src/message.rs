@@ -14,16 +14,6 @@ use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
-#[rtype(result = "Result<Vec<f64>>")]
-pub struct GetMetrics;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "()")]
-pub struct SetMetric {
-    pub name: String,
-    pub value: f64,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]

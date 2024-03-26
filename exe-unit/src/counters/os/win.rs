@@ -1,5 +1,5 @@
-use crate::metrics::error::MetricError;
-use crate::metrics::Result;
+use crate::error::MetricError;
+use crate::Result;
 use crate::process::*;
 use std::time::Duration;
 

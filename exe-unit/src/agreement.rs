@@ -1,4 +1,4 @@
-use crate::metrics::{MemMetric, StorageMetric};
+use ya_counters::counters::{MemMetric, StorageMetric};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
