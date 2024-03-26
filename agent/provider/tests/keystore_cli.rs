@@ -185,7 +185,7 @@ fn verify_outbound_rules_format() {
 
     set_partner_rule(&cert_dir, "cb16a2ed");
     let result = list_certificates_command(&cert_dir).unwrap();
-    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "Partner");
+    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "Outbound-Partner");
 }
 
 fn set_partner_rule(cert_dir: &Path, cert: &str) {

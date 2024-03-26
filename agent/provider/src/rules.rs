@@ -404,6 +404,7 @@ impl CertWithRules {
 
 #[derive(PartialEq, Eq, derive_more::Display, Debug, Clone, Serialize, Deserialize)]
 pub enum Rule {
+    #[display(fmt = "Outbound-{}", _0)]
     Outbound(OutboundRule),
     Blacklist,
     AllowOnly,
