@@ -484,6 +484,8 @@ impl ServiceCommand {
                 debug,
                 cors,
             }) => {
+                let is_rust_log_default =
+                    env::var("RUST_LOG").map(|s| s.is_empty()).unwrap_or(true);
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
@@ -496,6 +498,26 @@ impl ServiceCommand {
                 //this force_debug flag sets default log level to debug
                 //if the --debug option is set
                 let force_debug = *debug;
+
+                let mut module_filters = vec![
+                    ("actix_http::response", log::LevelFilter::Off),
+                    ("h2", log::LevelFilter::Off),
+                    ("hyper", log::LevelFilter::Info),
+                    ("reqwest", log::LevelFilter::Info),
+                    ("tokio_core", log::LevelFilter::Info),
+                    ("tokio_reactor", log::LevelFilter::Info),
+                    ("trust_dns_resolver", log::LevelFilter::Info),
+                    ("trust_dns_proto", log::LevelFilter::Info),
+                    ("web3", log::LevelFilter::Info),
+                    ("tokio_util", log::LevelFilter::Off),
+                    ("mio", log::LevelFilter::Off),
+                ];
+
+                // if RUST_LOG is default, then set ya_payment::service to debug (investigating rare deadlocks)
+                if is_rust_log_default {
+                    module_filters.push(("ya_payment::service", log::LevelFilter::Debug));
+                }
+
                 let logger_handle = start_logger(
                     "info",
                     log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
@@ -504,19 +526,7 @@ impl ServiceCommand {
                             _ => Some(path),
                         }
                     }),
-                    &vec![
-                        ("actix_http::response", log::LevelFilter::Off),
-                        ("h2", log::LevelFilter::Off),
-                        ("hyper", log::LevelFilter::Info),
-                        ("reqwest", log::LevelFilter::Info),
-                        ("tokio_core", log::LevelFilter::Info),
-                        ("tokio_reactor", log::LevelFilter::Info),
-                        ("trust_dns_resolver", log::LevelFilter::Info),
-                        ("trust_dns_proto", log::LevelFilter::Info),
-                        ("web3", log::LevelFilter::Info),
-                        ("tokio_util", log::LevelFilter::Off),
-                        ("mio", log::LevelFilter::Off),
-                    ],
+                    &module_filters,
                     force_debug,
                 )?;
 
