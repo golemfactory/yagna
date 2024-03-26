@@ -1180,7 +1180,7 @@ mod public {
 
     async fn send_payment_with_bytes(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<RwLock<PaymentProcessor>>,
         sender_id: String,
         msg: SendSignedPayment,
     ) -> Result<Ack, SendError> {
@@ -1198,7 +1198,7 @@ mod public {
 
     async fn send_payment_impl(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<RwLock<PaymentProcessor>>,
         sender_id: String,
         payment: Payment,
         canonicalized: bool,
