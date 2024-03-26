@@ -136,11 +136,7 @@ lazy_static! {
         );
         ngm.insert(
             NetworkGroup::Testnet,
-            vec![
-                NetworkName::Mumbai,
-                NetworkName::Holesky,
-                NetworkName::Goerli,
-            ],
+            vec![NetworkName::Holesky, NetworkName::Mumbai],
         );
         ngm
     };

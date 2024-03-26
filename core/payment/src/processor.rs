@@ -365,7 +365,7 @@ impl PaymentProcessor {
         self.registry.get_platform(driver, network, token)
     }
 
-    pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+    pub async fn notify_payment(&mut self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
         let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
@@ -527,7 +527,10 @@ impl PaymentProcessor {
             .await
     }
 
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(
+        &mut self,
+        msg: SchedulePayment,
+    ) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -560,7 +563,7 @@ impl PaymentProcessor {
     }
 
     pub async fn verify_payment(
-        &self,
+        &mut self,
         payment: Payment,
         signature: Vec<u8>,
         canonicalized: bool,
@@ -793,7 +796,7 @@ impl PaymentProcessor {
     /// This function releases allocations.
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
-    pub async fn release_allocations(&self, force: bool) {
+    pub async fn release_allocations(&mut self, force: bool) {
         let db = Data::new(self.db_executor.clone());
         let existing_allocations = db
             .clone()

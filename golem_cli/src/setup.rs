@@ -42,6 +42,7 @@ pub struct RunConfig {
         set = clap::ArgSettings::Global
     )]
     pub log_dir: Option<PathBuf>,
+
     /// Don't prompt user for configuration, but use defaults instead.
     #[structopt(long)]
     pub no_interactive: bool,
