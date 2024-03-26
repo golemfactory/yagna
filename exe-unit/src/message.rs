@@ -14,7 +14,6 @@ use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]
 pub struct GetState;

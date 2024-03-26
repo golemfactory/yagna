@@ -15,6 +15,8 @@ use ya_client_model::activity::{
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
+use ya_counters::message::GetMetrics;
+use ya_counters::service::MetricsService;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 use ya_transfer::transfer::{
@@ -26,12 +28,12 @@ use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
-use crate::service::counters::MetricsService;
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;
 pub mod agreement;
+mod counters;
 #[cfg(feature = "sgx")]
 pub mod crypto;
 pub mod error;
@@ -46,7 +48,6 @@ pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
-mod counters;
 
 mod dns;
 pub type Result<T> = std::result::Result<T, Error>;

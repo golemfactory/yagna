@@ -1,9 +1,10 @@
-use ya_counters::counters::{MemMetric, StorageMetric};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use ya_agreement_utils::agreement::{try_from_path, AgreementView, Error};
+
+use crate::counters::{MemMetric, StorageMetric};
 
 #[derive(Clone, Debug)]
 pub struct Agreement {

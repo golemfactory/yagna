@@ -1,8 +1,8 @@
 use ya_agreement_utils::agreement;
 use ya_core_model::activity::RpcMessageError as RpcError;
 pub use ya_transfer::error::Error as TransferError;
+use ya_counters::error::MetricError;
 
-use crate::metrics::error::MetricError;
 use crate::state::StateError;
 use hex::FromHexError;
 

@@ -6,10 +6,10 @@ use crate::message::{GetMetrics, SetMetric, Shutdown};
 
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
-use ya_agreement_utils::AgreementView;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use ya_agreement_utils::AgreementView;
 
 pub struct MetricsService {
     usage_vector: Vec<String>,
@@ -17,11 +17,11 @@ pub struct MetricsService {
 }
 
 impl MetricsService {
-    pub fn new(
-        usage_vector: Vec<String>,
-        metrics: HashMap<String, MetricProvider>
-    )  -> Self {
-        Self { usage_vector, metrics }
+    pub fn new(usage_vector: Vec<String>, metrics: HashMap<String, MetricProvider>) -> Self {
+        Self {
+            usage_vector,
+            metrics,
+        }
     }
 }
 
@@ -57,7 +57,7 @@ impl Handler<GetMetrics> for MetricsService {
                 MetricReport::Frame(data) => metrics[i] = data,
                 MetricReport::Error(error) => return Err(error.into()),
                 MetricReport::LimitExceeded(data) => {
-                    return Err(Error::UsageLimitExceeded(format!(
+                    return Err(MetricError::UsageLimitExceeded(format!(
                         "{:?} exceeded the value of {:?}",
                         name, data
                     )))

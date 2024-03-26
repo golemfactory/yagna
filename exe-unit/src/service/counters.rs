@@ -11,7 +11,6 @@ use std::time::Duration;
 use ya_counters::counters::{Metric, TimeMetric};
 use ya_counters::service::MetricsService;
 
-
 pub fn try_new(
     ctx: &ExeUnitContext,
     backlog_limit: Option<usize>,

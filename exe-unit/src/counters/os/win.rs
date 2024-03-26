@@ -1,5 +1,5 @@
-use crate::error::MetricError;
-use crate::Result;
+use ya_counters::error::MetricError;
+use ya_counters::Result;
 use crate::process::*;
 use std::time::Duration;
 
