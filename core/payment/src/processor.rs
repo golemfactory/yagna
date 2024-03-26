@@ -35,7 +35,7 @@ fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
 }
 
-async fn validate_orders(
+fn validate_orders(
     orders: &Vec<DbOrder>,
     platform: &str,
     payer_addr: &str,
@@ -328,7 +328,7 @@ impl PaymentProcessor {
         self.registry.unregister_account(msg)
     }
 
-    pub async fn get_accounts(&self) -> Vec<Account> {
+    pub fn get_accounts(&self) -> Vec<Account> {
         self.registry.get_accounts()
     }
 
@@ -336,7 +336,7 @@ impl PaymentProcessor {
         self.registry.get_drivers()
     }
 
-    pub async fn get_network(
+    pub fn get_network(
         &self,
         driver: String,
         network: Option<String>,
@@ -353,7 +353,7 @@ impl PaymentProcessor {
         self.registry.get_platform(driver, network, token)
     }
 
-    pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+    pub async fn notify_payment(&mut self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
         let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
@@ -373,8 +373,7 @@ impl PaymentProcessor {
             &payer_addr,
             &payee_addr,
             &msg.amount,
-        )
-        .await?;
+        )?;
 
         let mut activity_payments = vec![];
         let mut agreement_payments = vec![];
@@ -489,7 +488,10 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(
+        &mut self,
+        msg: SchedulePayment,
+    ) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -522,7 +524,7 @@ impl PaymentProcessor {
     }
 
     pub async fn verify_payment(
-        &self,
+        &mut self,
         payment: Payment,
         signature: Vec<u8>,
     ) -> Result<(), VerifyPaymentError> {
@@ -741,7 +743,7 @@ impl PaymentProcessor {
     /// This function releases allocations.
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
-    pub async fn release_allocations(&self, force: bool) {
+    pub async fn release_allocations(&mut self, force: bool) {
         let db = Data::new(self.db_executor.clone());
         let existing_allocations = db
             .clone()
