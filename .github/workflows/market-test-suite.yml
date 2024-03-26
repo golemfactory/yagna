@@ -20,7 +20,7 @@ on:
       - release/*
 
 env:
-  rust_stable: 1.76.0
+  rust_stable: 1.77.0
 
 jobs:
   build:
