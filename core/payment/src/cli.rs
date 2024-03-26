@@ -151,17 +151,33 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Fund { account } => {
-                if !account.network.is_fundable() {
+                let address = resolve_address(account.address()).await?;
+
+                let onboarding_supported = matches!(account.network, NetworkName::Polygon);
+                if !account.network.is_fundable() && !onboarding_supported {
                     log::error!(
                         "Network {} does not support automatic funding. Consider using one of the following: {:?}",
                         account.network,
                         NetworkName::all_fundable(),
                     );
 
-                    return CommandOutput::object("Failed");
-                }
+                    return CommandOutput::none();
+                } else if onboarding_supported {
+                    let url = format!(
+                        "https://glm.golem.network/#/onboarding/budget?yagnaAddress={}&network={}",
+                        address, account.network
+                    );
+                    log::warn!(
+                        "Funds for {} can be obtained via the onboarding portal, opening {} with the system browser. If the window doesn't open, you can do it manually.",
+                        account.network,
+                        url
+                    );
+                    if let Err(e) = open::that_detached(&url) {
+                        log::warn!("Failed to open {url}: {e}");
+                    }
 
-                let address = resolve_address(account.address()).await?;
+                    return CommandOutput::none();
+                }
 
                 init_account(Account {
                     driver: account.driver(),
