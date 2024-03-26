@@ -489,7 +489,7 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG").unwrap_or_else(|_| {
-                        "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
+                        "info,ya_payment::service=debug,actix_web::middleware::logger=warn,sqlx=warn".to_string()
                     }),
                 );
 
