@@ -52,13 +52,6 @@ pub enum Mode {
     Whitelist,
 }
 
-#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
-pub enum OutboundRule {
-    Partner,
-    AuditedPayload,
-    Everyone,
-}
-
 /// Temporary struct storing minimal context for outbound rules validation.
 #[derive(Clone)]
 pub struct OutboundRules {

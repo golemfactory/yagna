@@ -1,5 +1,6 @@
-use crate::rules::outbound::{CertRule, Mode, OutboundRule, OutboundRules};
+use crate::rules::outbound::{CertRule, Mode, OutboundRules};
 use crate::rules::restrict::{RestrictRule, RuleAccessor};
+use crate::rules::OutboundRule;
 use crate::{rules::RulesManager, startup_config::ProviderConfig};
 
 use anyhow::{bail, Result};

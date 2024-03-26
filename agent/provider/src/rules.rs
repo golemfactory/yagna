@@ -2,19 +2,21 @@ pub mod outbound;
 pub mod restrict;
 mod store;
 
-use crate::rules::outbound::{CertRule, Mode, OutboundRule, OutboundRules};
+use crate::rules::outbound::{CertRule, Mode, OutboundRules};
+use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule, RuleAccessor};
 use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
 
 use anyhow::{bail, Result};
 use golem_certificate::schemas::certificate::Fingerprint;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
     path::{Path, PathBuf},
 };
+use strum_macros::Display;
 
-use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule, RuleAccessor};
 use ya_client_model::NodeId;
 use ya_manifest_utils::keystore::{AddParams, AddResponse};
 use ya_manifest_utils::{
@@ -163,16 +165,22 @@ impl RulesManager {
         certs
             .into_iter()
             .map(|cert| {
-                let mut outbound_rules: Vec<OutboundRule> = Vec::new();
+                let mut outbound_rules: Vec<Rule> = Vec::new();
                 if cfg.outbound.partner.contains_key(&cert.id()) {
-                    outbound_rules.push(OutboundRule::Partner);
+                    outbound_rules.push(Rule::Outbound(OutboundRule::Partner));
                 }
                 if cfg.outbound.audited_payload.contains_key(&cert.id()) {
-                    outbound_rules.push(OutboundRule::AuditedPayload);
+                    outbound_rules.push(Rule::Outbound(OutboundRule::AuditedPayload));
+                }
+                if cfg.blacklist.certified.contains(&cert.id()) {
+                    outbound_rules.push(Rule::Blacklist);
+                }
+                if cfg.allow_only.certified.contains(&cert.id()) {
+                    outbound_rules.push(Rule::AllowOnly);
                 }
                 CertWithRules {
                     cert,
-                    outbound_rules,
+                    rules: outbound_rules,
                 }
             })
             .collect()
@@ -385,14 +393,25 @@ pub enum CheckRulesResult {
 #[derive(PartialEq, Eq)]
 pub struct CertWithRules {
     pub cert: Cert,
-    pub outbound_rules: Vec<OutboundRule>,
+    pub rules: Vec<Rule>,
 }
 
 impl CertWithRules {
-    pub fn format_outbound_rules(&self) -> String {
-        self.outbound_rules
-            .iter()
-            .map(|r| r.to_string())
-            .join(" | ")
+    pub fn format_rules(&self) -> String {
+        self.rules.iter().map(|r| r.to_string()).join(" | ")
     }
+}
+
+#[derive(PartialEq, Eq, derive_more::Display, Debug, Clone, Serialize, Deserialize)]
+pub enum Rule {
+    Outbound(OutboundRule),
+    Blacklist,
+    AllowOnly,
+}
+
+#[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
+pub enum OutboundRule {
+    Partner,
+    AuditedPayload,
+    Everyone,
 }

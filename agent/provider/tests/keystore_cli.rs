@@ -283,7 +283,7 @@ fn read_subject(certs: &HashMap<String, Value>, id: &str) -> String {
 }
 
 fn read_outbound_rules(certs: &HashMap<String, Value>, id: &str) -> String {
-    read_field(certs, id, "Outbound Rules")
+    read_field(certs, id, "Rules")
 }
 
 fn read_field(certs: &HashMap<String, Value>, id: &str, field: &str) -> String {

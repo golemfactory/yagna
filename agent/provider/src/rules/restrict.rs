@@ -28,7 +28,7 @@ pub struct RestrictConfig {
 #[derive(Clone)]
 pub struct RestrictRule<G: RuleAccessor> {
     rulestore: Rulestore,
-    pub(crate) keystore: CompositeKeystore,
+    keystore: CompositeKeystore,
 
     phantom: PhantomData<G>,
 }
