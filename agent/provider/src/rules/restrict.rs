@@ -105,7 +105,8 @@ impl RestrictConfig {
     }
 
     pub fn remove_certified(&mut self, cert_id: &Fingerprint) {
-        self.certified.remove(cert_id);
+        self.certified
+            .retain(|full_id| !full_id.starts_with(cert_id));
     }
 
     pub fn remove_identity(&mut self, node_id: NodeId) {
