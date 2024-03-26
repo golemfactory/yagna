@@ -10,13 +10,11 @@ use anyhow::{bail, Result};
 use golem_certificate::schemas::certificate::Fingerprint;
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
     convert::TryFrom,
-    ops::Not,
     path::{Path, PathBuf},
 };
 
-use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule};
+use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule, RuleAccessor};
 use ya_client_model::NodeId;
 use ya_manifest_utils::keystore::{AddParams, AddResponse};
 use ya_manifest_utils::{
@@ -311,7 +309,7 @@ impl RulesManager {
         let keystore_cert_ids = self.keystore.list_ids();
         let removed_rules = self.remove_rules_not_matching_any_cert(&keystore_cert_ids);
 
-        if removed_rules.partner.is_empty() && removed_rules.partner.is_empty() {
+        if removed_rules.is_empty() {
             return Ok(());
         }
         if !removed_rules.partner.is_empty() {
@@ -320,35 +318,38 @@ impl RulesManager {
         if !removed_rules.audited_payload.is_empty() {
             log::warn!("Because Keystore didn't have appropriate certs, following Outbound Audited-Payload rules were removed: {:?}", removed_rules.audited_payload);
         }
+        if !removed_rules.blacklist.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Blacklist rules were removed: {:?}", removed_rules.blacklist);
+        }
+        if !removed_rules.allow_only.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following AllowOnly rules were removed: {:?}", removed_rules.allow_only);
+        }
         self.rulestore.save()
     }
 
     fn remove_rules_not_matching_any_cert(&self, cert_ids: &[String]) -> RemovedRules {
-        let mut rulestore = self.rulestore.config.write().unwrap();
-        let removed_partner_rules =
-            remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
-        let removed_audited_payload_rules =
-            remove_rules_not_matching_any_cert(&mut rulestore.outbound.audited_payload, cert_ids);
         RemovedRules {
-            partner: removed_partner_rules,
-            audited_payload: removed_audited_payload_rules,
+            partner: self.outbound().remove_unmatched_partner_rules(cert_ids),
+            audited_payload: self
+                .outbound()
+                .remove_unmatched_audited_payload_rules(cert_ids),
+            blacklist: remove_unmatched_certs(self.blacklist(), cert_ids),
+            allow_only: remove_unmatched_certs(self.allow_only(), cert_ids),
         }
     }
 }
 
-fn remove_rules_not_matching_any_cert(
-    rules: &mut HashMap<String, CertRule>,
-    cert_ids: &[String],
-) -> Vec<String> {
-    let mut deleted_rules = vec![];
-    rules.retain(|cert_id, _| {
-        cert_ids
-            .contains(cert_id)
-            .not()
-            .then(|| deleted_rules.push(cert_id.clone()))
-            .is_none()
-    });
-    deleted_rules
+fn remove_unmatched_certs<G: RuleAccessor>(
+    rule: RestrictRule<G>,
+    keystore_certs: &[Fingerprint],
+) -> Vec<Fingerprint> {
+    rule.list_certs()
+        .into_iter()
+        .filter(|cert| !keystore_certs.contains(cert))
+        .inspect(|cert| {
+            rule.remove_certified_rule(cert).ok();
+        })
+        .collect()
 }
 
 type RemovedRulesIds = Vec<String>;
@@ -356,12 +357,17 @@ type RemovedRulesIds = Vec<String>;
 struct RemovedRules {
     partner: RemovedRulesIds,
     audited_payload: RemovedRulesIds,
+    blacklist: RemovedRulesIds,
+    allow_only: RemovedRulesIds,
 }
 
-fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
-    rules_checks
-        .iter()
-        .fold(String::new(), |s, c| s + &c.to_string() + " ; ")
+impl RemovedRules {
+    fn is_empty(&self) -> bool {
+        self.partner.is_empty()
+            && self.audited_payload.is_empty()
+            && self.blacklist.is_empty()
+            && self.allow_only.is_empty()
+    }
 }
 
 pub struct ManifestSignatureProps {

@@ -1,5 +1,5 @@
 use crate::rules::store::Rulestore;
-use crate::rules::{extract_rejected_message, CheckRulesResult, ManifestSignatureProps};
+use crate::rules::{CheckRulesResult, ManifestSignatureProps};
 use anyhow::anyhow;
 use golem_certificate::schemas::permissions::Permissions;
 use itertools::Itertools;
@@ -77,6 +77,15 @@ impl OutboundRules {
             keystore,
             whitelist,
         }
+    }
+    pub fn remove_unmatched_partner_rules(&self, cert_ids: &[String]) -> Vec<String> {
+        let mut rulestore = self.rulestore.config.write().unwrap();
+        remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids)
+    }
+
+    pub fn remove_unmatched_audited_payload_rules(&self, cert_ids: &[String]) -> Vec<String> {
+        let mut rulestore = self.rulestore.config.write().unwrap();
+        remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids)
     }
 
     pub fn config(&self) -> OutboundConfig {
@@ -245,6 +254,12 @@ impl OutboundRules {
     }
 }
 
+fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
+    rules_checks
+        .iter()
+        .fold(String::new(), |s, c| s + &c.to_string() + " ; ")
+}
+
 fn verify_golem_permissions(
     cert_permissions: &Permissions,
     outbound_access: &OutboundAccess,
@@ -275,6 +290,21 @@ fn verify_golem_permissions(
             None => anyhow::bail!("No outbound permissions"),
         },
     }
+}
+
+fn remove_rules_not_matching_any_cert(
+    rules: &mut HashMap<String, CertRule>,
+    cert_ids: &[String],
+) -> Vec<String> {
+    let mut deleted_rules = vec![];
+    rules.retain(|cert_id, _| {
+        cert_ids
+            .contains(cert_id)
+            .not()
+            .then(|| deleted_rules.push(cert_id.clone()))
+            .is_none()
+    });
+    deleted_rules
 }
 
 impl Default for OutboundConfig {
