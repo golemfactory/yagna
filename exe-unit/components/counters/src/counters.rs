@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{fs, thread};
 
-use crate::error;
+use crate::error::{self, MetricError};
 
 pub type Result<T> = std::result::Result<T, error::MetricError>;
 pub type MetricData = f64;
@@ -43,7 +43,8 @@ impl Default for TimeMetric {
 impl Metric for TimeMetric {
     fn frame(&mut self) -> Result<MetricData> {
         Ok(SystemTime::now()
-            .duration_since(self.started)?
+            .duration_since(self.started)
+            .map_err(|err| MetricError::Other(err.to_string()))?
             .as_secs_f64())
     }
 

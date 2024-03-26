@@ -1,7 +1,5 @@
 use crate::counters::{CpuMetric, MemMetric, Metric, MetricData, MetricReport, StorageMetric};
 use crate::error::Error;
-use crate::message::{GetMetrics, SetMetric, Shutdown};
-use crate::metrics::error::MetricError;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};

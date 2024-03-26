@@ -7,6 +7,7 @@ description = "Runtime counters generating data for Provider's metrics"
 [dependencies]
 ya-agreement-utils = { workspace = true }
 
+anyhow = "1.0"
 actix = "0.13"
 actix-rt = "2.7"
 chrono = "0.4"
