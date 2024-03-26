@@ -35,7 +35,7 @@ fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
 }
 
-async fn validate_orders(
+fn validate_orders(
     orders: &Vec<DbOrder>,
     platform: &str,
     payer_addr: &str,
@@ -328,7 +328,7 @@ impl PaymentProcessor {
         self.registry.unregister_account(msg)
     }
 
-    pub async fn get_accounts(&self) -> Vec<Account> {
+    pub fn get_accounts(&self) -> Vec<Account> {
         self.registry.get_accounts()
     }
 
@@ -336,7 +336,7 @@ impl PaymentProcessor {
         self.registry.get_drivers()
     }
 
-    pub async fn get_network(
+    pub fn get_network(
         &self,
         driver: String,
         network: Option<String>,
@@ -373,8 +373,7 @@ impl PaymentProcessor {
             &payer_addr,
             &payee_addr,
             &msg.amount,
-        )
-        .await?;
+        )?;
 
         let mut activity_payments = vec![];
         let mut agreement_payments = vec![];

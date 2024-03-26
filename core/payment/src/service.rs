@@ -51,6 +51,8 @@ mod local {
     use crate::dao::*;
     use chrono::NaiveDateTime;
     use std::str::FromStr;
+    use std::sync::atomic::AtomicU64;
+    use std::time::Duration;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -130,8 +132,10 @@ mod local {
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
-        processor.write().await.schedule_payment(msg).await?;
-        Ok(())
+        log::debug!("Schedule payment processor started");
+        let res = processor.write().await.schedule_payment(msg).await;
+        log::debug!("Schedule payment processor finished");
+        Ok(res?)
     }
 
     async fn register_driver(
@@ -140,7 +144,10 @@ mod local {
         sender: String,
         msg: RegisterDriver,
     ) -> Result<(), RegisterDriverError> {
-        processor.write().await.register_driver(msg).await
+        log::debug!("Register driver processor started");
+        let res = processor.write().await.register_driver(msg).await;
+        log::debug!("Register driver processor finished");
+        res
     }
 
     async fn unregister_driver(
@@ -149,8 +156,10 @@ mod local {
         sender: String,
         msg: UnregisterDriver,
     ) -> Result<(), NoError> {
-        processor.write().await.unregister_driver(msg).await;
-        Ok(())
+        log::debug!("Unregister driver processor started");
+        let res = processor.write().await.unregister_driver(msg).await;
+        log::debug!("Unregister driver processor finished");
+        Ok(res)
     }
 
     async fn register_account(
@@ -159,7 +168,10 @@ mod local {
         sender: String,
         msg: RegisterAccount,
     ) -> Result<(), RegisterAccountError> {
-        processor.write().await.register_account(msg).await
+        log::debug!("Register account processor started");
+        let res = processor.write().await.register_account(msg).await;
+        log::debug!("Register account processor finished");
+        res
     }
 
     async fn unregister_account(
@@ -168,7 +180,9 @@ mod local {
         sender: String,
         msg: UnregisterAccount,
     ) -> Result<(), NoError> {
+        log::debug!("Unregister account processor started");
         processor.write().await.unregister_account(msg).await;
+        log::debug!("Unregister account processor finished");
         Ok(())
     }
 
@@ -178,8 +192,11 @@ mod local {
         sender: String,
         msg: GetAccounts,
     ) -> Result<Vec<Account>, GenericError> {
-        Ok(processor.read().await.get_accounts().await)
+        Ok(processor.read().await.get_accounts())
     }
+
+    //used for debug log only
+    static NEXT_NOTIFY_PAYMENT_ID: AtomicU64 = AtomicU64::new(0);
 
     async fn notify_payment(
         db: DbExecutor,
@@ -187,8 +204,47 @@ mod local {
         sender: String,
         msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        processor.write().await.notify_payment(msg).await?;
-        Ok(())
+        let next_id = NEXT_NOTIFY_PAYMENT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let time_start = std::time::Instant::now();
+        log::debug!("Locking processor for notify payment no: {}", next_id);
+        let res = {
+            let mut processor_lock =
+                match tokio::time::timeout(Duration::from_secs(60), processor.write()).await {
+                    Ok(processor_lock) => processor_lock,
+                    Err(err) => {
+                        log::error!(
+                        "Timeout while obtaining processor lock for notification no: {} {:.2}ms",
+                        next_id,
+                        time_start.elapsed().as_secs_f64() * 1000.0
+                    );
+                        return Err(GenericError::new(
+                            "Timeout while obtaining processor lock for notification",
+                        ));
+                    }
+                };
+            log::debug!(
+                "Obtained processor lock for notification no: {} {:.2}ms",
+                next_id,
+                time_start.elapsed().as_secs_f64() * 1000.0
+            );
+
+            processor_lock.notify_payment(msg).await
+        };
+        log::debug!(
+            "Unlocked processor for notify payment no: {} {:.2}ms",
+            next_id,
+            time_start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        if time_start.elapsed() > std::time::Duration::from_secs(2) {
+            log::warn!(
+                "notify_payment no {} took too long: {:.2}ms",
+                next_id,
+                time_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+
+        Ok(res?)
     }
 
     async fn get_rpc_endpoints(
@@ -197,7 +253,6 @@ mod local {
         _caller: String,
         msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
-        log::info!("get rpc endpoints: {:?}", msg);
         let GetRpcEndpoints {
             driver,
             network,
@@ -211,7 +266,6 @@ mod local {
             .read()
             .await
             .get_network(driver.to_string(), network.as_ref().map(|s| s.to_string()))
-            .await
             .map_err(GenericError::new)?;
         let network2 = NetworkName::from_str(&network2).map_err(GenericError::new)?;
 
@@ -252,7 +306,6 @@ mod local {
         _caller: String,
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
-        log::info!("get status: {:?}", msg);
         let GetStatus {
             address,
             driver,
@@ -265,7 +318,6 @@ mod local {
             .read()
             .await
             .get_network(driver.clone(), network)
-            .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or_else(|| network_details.default_token.clone());
         let after_timestamp = NaiveDateTime::from_timestamp_opt(after_timestamp, 0)
@@ -411,7 +463,9 @@ mod local {
         _caller: String,
         msg: ReleaseAllocations,
     ) -> Result<(), GenericError> {
+        log::debug!("Release allocations processor started");
         processor.write().await.release_allocations(true).await;
+        log::debug!("Release allocations processor finished");
         Ok(())
     }
 
@@ -1174,7 +1228,8 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
-        match processor
+        log::debug!("Verify payment processor started");
+        let res = match processor
             .write()
             .await
             .verify_payment(payment, signature)
@@ -1192,7 +1247,9 @@ mod public {
                 VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
                 _ => Err(SendError::ServiceError(e.to_string())),
             },
-        }
+        };
+        log::debug!("Verify payment processor finished");
+        res
     }
 
     // **************************** SYNC *****************************
