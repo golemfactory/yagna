@@ -49,6 +49,8 @@ mod local {
     use crate::dao::*;
     use chrono::NaiveDateTime;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -197,9 +199,17 @@ mod local {
         sender: String,
         msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        log::debug!("Notify payment processor started");
+        static NOTIFY_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let i = NOTIFY_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let start = Instant::now();
+
+        log::debug!("Notify payment no. {i} processor started");
         let res = processor.notify_payment(msg).await;
-        log::debug!("Notify payment processor finished");
+        log::debug!(
+            "Notify payment no. {} processor finished after {:.2}s",
+            i,
+            start.elapsed().as_secs_f32()
+        );
 
         Ok(res?)
     }

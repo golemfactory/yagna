@@ -339,9 +339,7 @@ impl PaymentProcessor {
             .timeout_write(REGISTRY_LOCK_TIMEOUT)
             .await
             .map_err(|_| RegisterAccountError::InternalTimeout)?
-            .register_account(msg);
-
-        Ok(())
+            .register_account(msg)
     }
 
     pub async fn unregister_account(
