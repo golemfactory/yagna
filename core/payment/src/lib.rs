@@ -22,6 +22,7 @@ pub mod payment_sync;
 pub mod processor;
 pub mod schema;
 pub mod service;
+pub mod timeout_lock;
 pub mod utils;
 mod wallet;
 

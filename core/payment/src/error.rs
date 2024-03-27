@@ -154,6 +154,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Payment service is shutting down")]
         Shutdown,
+        #[error("Internal Timeout")]
+        InternalTimeout,
     }
 
     impl From<SchedulePaymentError> for GenericError {
@@ -219,6 +221,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Singning error: {0}")]
         Sign(#[from] ya_core_model::driver::GenericError),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl NotifyPaymentError {
@@ -252,6 +256,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("{0}")]
         Validation(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl VerifyPaymentError {
@@ -359,6 +365,10 @@ pub mod processor {
         pub fn overspending(tx_amount: &BigDecimal, total_amount: &BigDecimal) -> Result<(), Self> {
             Err(Self::Validation(format!("Transaction for {tx_amount} used for multiple payments amounting to {total_amount}")))
         }
+
+        pub fn timeout() -> Result<(), Self> {
+            Err(Self::InternalTimeout)
+        }
     }
 
     #[derive(thiserror::Error, Debug)]
@@ -383,6 +393,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Payment service is shutting down")]
         Shutdown,
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl From<ValidateAllocationError> for GsbValidateAllocationError {
