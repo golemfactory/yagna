@@ -36,10 +36,9 @@ impl Default for BindOptions {
     }
 }
 
-pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor, opts: BindOptions) {
+pub fn bind_service(db: &DbExecutor, processor: Arc<RwLock<PaymentProcessor>>, opts: BindOptions) {
     log::debug!("Binding payment service to service bus");
 
-    let processor = Arc::new(RwLock::new(processor));
     local::bind_service(db, processor.clone());
     public::bind_service(db, processor, opts);
 

@@ -290,7 +290,6 @@ impl DriverRegistry {
     }
 }
 
-#[derive(Clone)]
 pub struct PaymentProcessor {
     db_executor: DbExecutor,
     registry: DriverRegistry,
