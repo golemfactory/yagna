@@ -4,7 +4,6 @@ use crate::processor::PaymentProcessor;
 use futures::FutureExt;
 use service::BindOptions;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::RwLock;
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -53,11 +52,11 @@ impl PaymentService {
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
 
-        let processor = Arc::new(RwLock::new(PaymentProcessor::new(db.clone())));
+        let processor = Arc::new(PaymentProcessor::new(db.clone()));
         self::service::bind_service(&db, processor.clone(), BindOptions::default());
 
         tokio::task::spawn(async move {
-            processor.write().await.release_allocations(false).await;
+            processor.release_allocations(false).await;
         });
 
         Ok(())

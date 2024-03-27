@@ -7,7 +7,6 @@ use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
-use tokio::sync::RwLock;
 use ya_payment::service::BindOptions;
 
 use std::convert::TryInto;
@@ -230,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("bind_gsb_router()");
 
-    let processor = Arc::new(RwLock::new(PaymentProcessor::new(db.clone())));
+    let processor = Arc::new(PaymentProcessor::new(db.clone()));
     ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 
