@@ -157,7 +157,8 @@ mod local {
         log::debug!("Unregister driver processor started");
         let res = processor.unregister_driver(msg).await;
         log::debug!("Unregister driver processor finished");
-        Ok(res?)
+
+        res
     }
 
     async fn register_account(
