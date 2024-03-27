@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, rc::Rc, sync::Arc};
 
 use thiserror::Error;
 
@@ -9,22 +9,32 @@ pub enum MetricError {
     #[error("Usage limit exceeded: {0}")]
     UsageLimitExceeded(String),
     // #[error(transparent)]
-    // Other(#[from] ClonableError),
+    // Other(#[from] ClonedError),
     #[error("Other error: {0}")]
     Other(String),
+    // #[error(transparent)]
+    // Other(#[from] Arc<anyhow::Error>),
+    // #[error(transparent)]
+    // Other(#[from] Rc<anyhow::Error>),
 }
 
 // #[derive(Clone, Debug, Error)]
-// struct ClonableError(Arc<anyhow::Error>);
+// struct ClonedError(Arc<anyhow::Error>);
 
-// impl Display for ClonableError {
+// impl Display for ClonedError {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         write!(f, "{}", self.0)
 //     }
 // }
 
-// impl From<anyhow::Error> for ClonableError {
+// impl From<anyhow::Error> for ClonedError {
 //     fn from(err: anyhow::Error) -> Self {
-//             ClonableError(Arc::new(err))
+//             ClonedError(Arc::new(err))
+//     }
+// }
+
+// impl From<anyhow::Error> for MetricError {
+//     fn from(value: anyhow::Error) -> Self {
+//         Self::Other(Rc::new(value))
 //     }
 // }

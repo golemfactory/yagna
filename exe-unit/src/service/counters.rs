@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
+use ya_counters::error::MetricError;
 use crate::counters::{CpuMetric, StorageMetric, MemMetric};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};

@@ -15,6 +15,7 @@ use ya_client_model::activity::{
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
+use ya_counters::error::MetricError;
 use ya_counters::message::GetMetrics;
 use ya_counters::service::MetricsService;
 use ya_runtime_api::deploy;
@@ -559,7 +560,7 @@ async fn report_usage<R: Runtime>(
                 }
             }
             Err(err) => match err {
-                Error::UsageLimitExceeded(info) => {
+                MetricError::UsageLimitExceeded(info) => {
                     log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
