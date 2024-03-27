@@ -7,7 +7,7 @@ pub trait ExtendableScope {
         F: FnOnce(Self) -> Self;
 }
 
-impl ExtendableScope for Scope {
+impl<T> ExtendableScope for Scope<T> {
     #[inline(always)]
     fn extend<F>(self, f: F) -> Self
     where

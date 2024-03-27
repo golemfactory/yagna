@@ -8,6 +8,7 @@ use uuid::Uuid;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use ya_core_model::appkey as model;
+use ya_core_model::appkey::event::AppKeyEvent;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
@@ -29,7 +30,7 @@ impl Subscription {
     }
 }
 
-fn send_events(s: Ref<Subscription>, event: model::event::Event) -> impl Future<Output = ()> {
+fn send_events(s: Ref<Subscription>, event: AppKeyEvent) -> impl Future<Output = ()> {
     let destinations: Vec<String> = s.subscriptions.values().cloned().collect();
 
     // TODO: Remove on no destination.
@@ -146,7 +147,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     .map_err(|e| model::Error::internal(e.to_string()))?;
 
                 let _ = create_tx
-                    .send(model::event::Event::NewKey(appkey.to_core_model(role)))
+                    .send(AppKeyEvent::NewKey(appkey.to_core_model(role)))
                     .await;
                 Ok(result)
             }
@@ -271,7 +272,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     .map_err(Into::<model::Error>::into)?;
 
                 let _ = create_tx
-                    .send(model::event::Event::DroppedKey(appkey.to_core_model(role)))
+                    .send(AppKeyEvent::DroppedKey(appkey.to_core_model(role)))
                     .await;
                 Ok(())
             }

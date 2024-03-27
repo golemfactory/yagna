@@ -292,8 +292,12 @@ impl YaProviderCommand {
             self.cmd.arg(log_dir.to_str().unwrap());
         }
 
-        self.cmd.arg("--auto-cleanup-agreement").arg("true");
-        self.cmd.arg("--auto-cleanup-activity").arg("true");
+        self.cmd
+            .arg("--auto-cleanup-agreement")
+            .arg(std::env::var("AUTO_CLEANUP_AGREEMENT").unwrap_or("true".to_string()));
+        self.cmd
+            .arg("--auto-cleanup-activity")
+            .arg(std::env::var("AUTO_CLEANUP_ACTIVITY").unwrap_or("true".to_string()));
 
         log::debug!("spawning: {:?}", self.cmd);
 

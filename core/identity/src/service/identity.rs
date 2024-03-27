@@ -14,12 +14,12 @@ use ya_client_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
-use ya_core_model::identity::event::Event;
+use ya_core_model::identity::event::IdentityEvent;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{default_password, generate_new, IdentityKey};
+use crate::id_key::{default_password, generate_identity_key, IdentityKey};
 
 #[derive(Default)]
 struct Subscription {
@@ -40,7 +40,7 @@ pub struct IdentityService {
     default_key: NodeId,
     ids: HashMap<NodeId, IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
-    sender: futures::channel::mpsc::UnboundedSender<model::event::Event>,
+    sender: futures::channel::mpsc::UnboundedSender<IdentityEvent>,
     subscription: Rc<RefCell<Subscription>>,
     db: DbExecutor,
 }
@@ -57,7 +57,7 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
     }
 }
 
-fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<Output = ()> {
+fn send_event(s: Ref<Subscription>, event: IdentityEvent) -> impl Future<Output = ()> {
     let subscriptions: Vec<String> = s.subscriptions.clone();
     log::debug!("sending event: {:?} to {:?}", event, subscriptions);
 
@@ -109,7 +109,7 @@ impl IdentityService {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         log::info!("generating new default identity");
-                        let key: IdentityKey = generate_new(None, "".into());
+                        let key: IdentityKey = generate_identity_key(None, "".into(), None);
 
                         Ok(Identity {
                             identity_id: key.id(),
@@ -148,7 +148,7 @@ impl IdentityService {
         })
     }
 
-    fn sender(&self) -> &futures::channel::mpsc::UnboundedSender<model::event::Event> {
+    fn sender(&self) -> &futures::channel::mpsc::UnboundedSender<IdentityEvent> {
         &self.sender
     }
 
@@ -191,8 +191,9 @@ impl IdentityService {
     pub async fn create_identity(
         &mut self,
         alias: Option<String>,
+        private_key: Option<[u8; 32]>,
     ) -> Result<model::IdentityInfo, model::Error> {
-        let key = generate_new(alias.clone(), "".into());
+        let key = generate_identity_key(alias.clone(), "".into(), private_key);
 
         let new_identity = Identity {
             identity_id: key.id(),
@@ -223,7 +224,7 @@ impl IdentityService {
 
         if !is_locked {
             self.sender()
-                .send(Event::AccountUnlocked { identity })
+                .send(IdentityEvent::AccountUnlocked { identity })
                 .await
                 .ok();
         }
@@ -268,7 +269,7 @@ impl IdentityService {
 
         if !is_locked {
             self.sender()
-                .send(Event::AccountUnlocked { identity })
+                .send(IdentityEvent::AccountUnlocked { identity })
                 .await
                 .ok();
         }
@@ -433,7 +434,7 @@ impl IdentityService {
 
                         if !was_locked {
                             sender
-                                .send(Event::AccountLocked { identity: id.id() })
+                                .send(IdentityEvent::AccountLocked { identity: id.id() })
                                 .await
                                 .ok();
                         }
@@ -485,6 +486,7 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
             let this = this.clone();
+
             async move {
                 if let Some(key_store) = create.from_keystore {
                     let key: KeyFile = serde_json::from_str(key_store.as_str())
@@ -504,7 +506,7 @@ impl IdentityService {
                         .create_from_keystore(create.alias, node_id, key)
                         .await
                 } else {
-                    this.lock().await.create_identity(create.alias).await
+                    this.lock().await.create_identity(create.alias, None).await
                 }
             }
         });
@@ -528,7 +530,7 @@ impl IdentityService {
 
                 if result.is_ok() {
                     let _ = lock_sender
-                        .send(model::event::Event::AccountLocked {
+                        .send(IdentityEvent::AccountLocked {
                             identity: lock.node_id,
                         })
                         .await;
@@ -549,7 +551,7 @@ impl IdentityService {
                     .await;
                 if result.is_ok() {
                     let _ = unlock_sender
-                        .send(model::event::Event::AccountUnlocked {
+                        .send(IdentityEvent::AccountUnlocked {
                             identity: unlock.node_id,
                         })
                         .await;
@@ -611,12 +613,12 @@ pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
         let (tx, rx) = futures::channel::mpsc::unbounded();
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
 
-        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
+        let _ = bus::bind(&endpoint, move |e: IdentityEvent| {
             let mut tx_clone = tx.clone();
             async move {
                 match e {
-                    model::event::Event::AccountLocked { .. } => {}
-                    model::event::Event::AccountUnlocked { identity } => {
+                    IdentityEvent::AccountLocked { .. } => {}
+                    IdentityEvent::AccountUnlocked { identity } => {
                         if locked_identity == identity {
                             log::debug!("Got unlocked event for default locked account with nodeId: {locked_identity}");
                             tx_clone.send(()).await.expect("Receiver is closed");
@@ -676,7 +678,7 @@ async fn unsubscribe(endpoint: String) -> anyhow::Result<()> {
 }
 
 async fn unbind(endpoint: String) -> anyhow::Result<()> {
-    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID)).await?;
+    bus::unbind(&format!("{}/{}", endpoint.clone(), IdentityEvent::ID)).await?;
 
     Ok(())
 }

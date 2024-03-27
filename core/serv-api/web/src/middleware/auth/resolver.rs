@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use ya_core_model::appkey as model;
+use ya_core_model::appkey::event::AppKeyEvent;
 use ya_core_model::appkey::AppKey;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -94,12 +95,12 @@ impl AppKeyCache {
 
         log::trace!("AppKeyCache: binding endpoints listening to events.");
 
-        let _ = bus::bind(&endpoint, move |event: model::event::Event| {
+        let _ = bus::bind(&endpoint, move |event: AppKeyEvent| {
             let this = this.clone();
 
             async move {
                 match event {
-                    model::event::Event::NewKey(appkey) => {
+                    AppKeyEvent::NewKey(appkey) => {
                         log::debug!(
                             "Updating CORS for app-key: {}, origin: {:?}",
                             appkey.name,
@@ -107,7 +108,7 @@ impl AppKeyCache {
                         );
                         this.update(&appkey.key.clone(), Some(appkey))
                     }
-                    model::event::Event::DroppedKey(appkey) => {
+                    AppKeyEvent::DroppedKey(appkey) => {
                         log::debug!("Removing CORS for app-key: {}", appkey.name);
                         this.update(&appkey.key, None)
                     }

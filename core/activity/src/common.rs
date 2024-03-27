@@ -27,6 +27,18 @@ pub struct PathActivity {
 }
 
 #[derive(Deserialize)]
+pub struct QueryAgreement {
+    #[serde(rename = "agreementId")]
+    pub agreement_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct PathActivityUrl {
+    pub activity_id: String,
+    pub url: String,
+}
+
+#[derive(Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: Option<f32>,
@@ -69,6 +81,16 @@ pub(crate) fn generate_id() -> String {
 
 pub(crate) async fn _get_activities(db: &DbExecutor) -> Result<Vec<String>, Error> {
     Ok(db.as_dao::<ActivityDao>()._get_activity_ids().await?)
+}
+
+pub(crate) async fn get_activities_for_agreement(
+    db: &DbExecutor,
+    agreement_id: &str,
+) -> Result<Vec<String>, Error> {
+    Ok(db
+        .as_dao::<ActivityDao>()
+        .get_activity_ids_for_agreement(agreement_id)
+        .await?)
 }
 
 pub(crate) async fn get_persisted_state(

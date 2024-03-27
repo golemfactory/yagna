@@ -42,6 +42,8 @@ pub enum NetCommand {
     },
     /// Disconnect Node
     Disconnect { node_id: String },
+    /// List current neighbors of this Node.
+    ListNeighbors { size: u32 },
 }
 
 impl NetCommand {
@@ -176,14 +178,14 @@ impl NetCommand {
                     values: pings
                         .into_iter()
                         .map(|s| {
-                            let tcp_ping = Duration::from_millis(s.tcp_ping.as_millis() as u64);
-                            let udp_ping = Duration::from_millis(s.udp_ping.as_millis() as u64);
+                            let tcp_ping = s.tcp_ping.map(|p| p.as_secs_f64() * 1000.0);
+                            let udp_ping = s.udp_ping.map(|p| p.as_secs_f64() * 1000.0);
                             serde_json::json! {[
                                 s.node_id,
                                 s.node_alias,
                                 s.is_p2p,
-                                format_duration(tcp_ping).to_string(),
-                                format_duration(udp_ping).to_string(),
+                                to_ms(tcp_ping, is_json),
+                                to_ms(udp_ping, is_json),
                             ]}
                         })
                         .collect(),
@@ -215,6 +217,31 @@ impl NetCommand {
                     .map_err(anyhow::Error::msg)??;
                 Ok(CommandOutput::NoOutput)
             }
+            NetCommand::ListNeighbors { size } => {
+                let list = bus::service(model::BUS_ID)
+                    .send(model::ListNeighbours { size })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+                CommandOutput::object(serde_json::json!(list))
+            }
+        }
+    }
+}
+
+#[inline]
+fn to_ms(value: Option<f64>, is_json: bool) -> serde_json::Value {
+    #[allow(clippy::collapsible_else_if)]
+    if !is_json {
+        if let Some(value) = value {
+            format!("{:.1}ms", value).into()
+        } else {
+            "N/A".into()
+        }
+    } else {
+        if let Some(value) = value {
+            format!("{:.3}", value).into()
+        } else {
+            serde_json::Value::Null
         }
     }
 }

@@ -71,3 +71,9 @@ pub fn payment_hash(payment: &Payment) -> Vec<u8> {
     hasher.update(format!("{:?}", payment).as_bytes());
     hasher.finalize().to_vec()
 }
+
+pub fn payment_hash_canonicalized(payment: &Payment) -> Vec<u8> {
+    let mut hasher = Sha3_256::new();
+    hasher.update(serde_json_canonicalizer::to_vec(&payment).unwrap());
+    hasher.finalize().to_vec()
+}

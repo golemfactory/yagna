@@ -55,6 +55,7 @@ ya-utils-networking = { version = "0.2", default-features = false, features = [
     "vpn",
 ] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
+ya-gsb-http-proxy = { path = "../exe-unit/components/gsb-http-proxy" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"
@@ -75,6 +76,7 @@ log = "0.4"
 openssl = { version = "0.10", optional = true }
 rand = "0.8.5"
 regex = "1.5"
+reqwest = { version = "0.11", optional = false, features = ["stream"] }
 secp256k1 = { version = "0.27.0", optional = true }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -97,6 +99,7 @@ tokio-stream = { version = "0.1.8", features = ["io-util", "sync"] }
 url = "2.1"
 yansi = "0.5.0"
 trust-dns-resolver = { workspace = true }
+async-stream = "0.3.5"
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [

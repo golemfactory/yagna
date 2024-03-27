@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use std::convert::TryFrom;
-use std::mem;
+use std::{mem, slice};
 
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
@@ -137,8 +137,12 @@ pub fn default_password() -> Protected {
     Protected::new(Vec::default())
 }
 
-pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
-    let (key_file, secret) = generate_new_secret(password);
+pub fn generate_identity_key(
+    alias: Option<String>,
+    password: Protected,
+    private_key: Option<[u8; 32]>,
+) -> IdentityKey {
+    let (key_file, secret) = generate_new_secret(password, private_key);
     let id = NodeId::from(secret.public().address().as_ref());
     IdentityKey {
         id,
@@ -149,8 +153,8 @@ pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
     }
 }
 
-fn generate_new_secret(password: Protected) -> (KeyFile, SecretKey) {
-    let random_bytes: [u8; 32] = rand::thread_rng().gen();
+fn generate_new_secret(password: Protected, slice: Option<[u8; 32]>) -> (KeyFile, SecretKey) {
+    let random_bytes: [u8; 32] = slice.unwrap_or_else(|| rand::thread_rng().gen());
     let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
     let key_file = key_file_from_secret(&secret, password);
     (key_file, secret)
@@ -165,8 +169,11 @@ fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
     }
 }
 
-pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
-    let (key_file, _) = generate_new_secret(password);
+pub fn generate_new_keyfile(
+    password: Protected,
+    slice: Option<[u8; 32]>,
+) -> anyhow::Result<String> {
+    let (key_file, _) = generate_new_secret(password, slice);
 
     serde_json::to_string(&key_file).context("serialize keyfile")
 }

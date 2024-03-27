@@ -12,7 +12,6 @@ extern crate num_derive;
 
 extern crate log;
 
-pub mod account;
 pub mod bus;
 pub mod cron;
 pub mod dao;

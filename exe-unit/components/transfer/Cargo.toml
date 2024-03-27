@@ -77,6 +77,7 @@ serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "act
 sha2 = "0.8.1"
 structopt = "0.3.15"
 test-context = "0.1.4"
+test-case = "3"
 
 ya-framework-basic = { version = "0.1" }
 ya-exe-unit = { version = "0.4", path = "../../../exe-unit" }

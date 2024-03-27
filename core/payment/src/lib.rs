@@ -52,7 +52,7 @@ impl PaymentService {
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
 
-        let processor = PaymentProcessor::new(db.clone());
+        let mut processor = PaymentProcessor::new(db.clone());
         self::service::bind_service(&db, processor.clone(), BindOptions::default());
 
         tokio::task::spawn(async move {
