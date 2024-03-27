@@ -151,11 +151,11 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterDriver,
-    ) -> Result<(), NoError> {
+    ) -> Result<(), UnregisterDriverError> {
         log::debug!("Unregister driver processor started");
         let res = processor.unregister_driver(msg).await;
         log::debug!("Unregister driver processor finished");
-        Ok(res)
+        Ok(res?)
     }
 
     async fn register_account(
@@ -175,9 +175,9 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterAccount,
-    ) -> Result<(), NoError> {
+    ) -> Result<(), UnregisterAccountError> {
         log::debug!("Unregister account processor started");
-        processor.unregister_account(msg).await;
+        processor.unregister_account(msg).await?;
         log::debug!("Unregister account processor finished");
         Ok(())
     }

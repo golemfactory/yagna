@@ -6,7 +6,7 @@ use crate::error::processor::{
 };
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
-use crate::timeout_lock::MutexTimeoutExt;
+use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
@@ -25,7 +25,8 @@ use ya_core_model::driver::{
 };
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
-    SchedulePayment, UnregisterAccount, UnregisterDriver,
+    SchedulePayment, UnregisterAccount, UnregisterAccountError, UnregisterDriver,
+    UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_core_model::NodeId;
@@ -295,6 +296,7 @@ impl DriverRegistry {
 }
 
 const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct PaymentProcessor {
     db_executor: Mutex<DbExecutor>,
@@ -312,27 +314,62 @@ impl PaymentProcessor {
     }
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
-        self.registry.write().await.register_driver(msg)
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterDriverError::InternalTimeout)?
+            .register_driver(msg)
     }
 
-    pub async fn unregister_driver(&self, msg: UnregisterDriver) {
-        self.registry.write().await.unregister_driver(msg)
+    pub async fn unregister_driver(
+        &self,
+        msg: UnregisterDriver,
+    ) -> Result<(), UnregisterDriverError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| UnregisterDriverError::InternalTimeout)?
+            .unregister_driver(msg);
+
+        Ok(())
     }
 
     pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        self.registry.write().await.register_account(msg)
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
+            .register_account(msg);
+
+        Ok(())
     }
 
-    pub async fn unregister_account(&self, msg: UnregisterAccount) {
-        self.registry.write().await.unregister_account(msg)
+    pub async fn unregister_account(
+        &self,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| UnregisterAccountError::InternalTimeout)?
+            .unregister_account(msg);
+        Ok(())
     }
 
     pub async fn get_accounts(&self) -> Vec<Account> {
-        self.registry.read().await.get_accounts()
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .unwrap() // TODO: fixme
+            .get_accounts()
     }
 
     pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
-        self.registry.read().await.get_drivers()
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .unwrap() // TODO: fixme
+            .get_drivers()
     }
 
     pub async fn get_network(
@@ -340,7 +377,11 @@ impl PaymentProcessor {
         driver: String,
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
-        self.registry.read().await.get_network(driver, network)
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
+            .get_network(driver, network)
     }
 
     pub async fn get_platform(
@@ -350,8 +391,9 @@ impl PaymentProcessor {
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
         self.registry
-            .read()
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
             .get_platform(driver, network, token)
     }
 
@@ -529,11 +571,12 @@ impl PaymentProcessor {
                 &amount
             )));
         }
-        let driver = self.registry.read().await.driver(
-            &msg.payment_platform,
-            &msg.payer_addr,
-            AccountMode::SEND,
-        )?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| SchedulePaymentError::InternalTimeout)?
+            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -562,11 +605,16 @@ impl PaymentProcessor {
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
-        let driver = self.registry.read().await.driver(
-            &payment.payment_platform,
-            &payment.payee_addr,
-            AccountMode::RECV,
-        )?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| VerifyPaymentError::InternalTimeout)?
+            .driver(
+                &payment.payment_platform,
+                &payment.payee_addr,
+                AccountMode::RECV,
+            )?;
 
         if !driver_endpoint(&driver)
             .send(driver::VerifySignature::new(payment.clone(), signature))
@@ -706,11 +754,12 @@ impl PaymentProcessor {
         platform: String,
         address: String,
     ) -> Result<BigDecimal, GetStatusError> {
-        let driver =
-            self.registry
-                .read()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .unwrap() //TODO: fixme
+            .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
@@ -726,11 +775,12 @@ impl PaymentProcessor {
         resolve: bool,
         no_wait: bool,
     ) -> Result<GetRpcEndpointsResult, GetStatusError> {
-        let driver =
-            self.registry
-                .read()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .unwrap() //TODO: fixme
+            .driver(&platform, &address, AccountMode::empty())?;
         let res = driver_endpoint(&driver)
             .send(driver::GetRpcEndpoints {
                 network,
@@ -747,11 +797,12 @@ impl PaymentProcessor {
         platform: String,
         address: String,
     ) -> Result<Option<GasDetails>, GetStatusError> {
-        let driver =
-            self.registry
-                .read()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .unwrap() //TODO: fixme
+            .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountGasBalance::new(address, platform))
             .await??;
@@ -776,11 +827,12 @@ impl PaymentProcessor {
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
-        let driver =
-            self.registry
-                .read()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| ValidateAllocationError::InternalTimeout)?
+            .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
             platform,
@@ -847,7 +899,11 @@ impl PaymentProcessor {
         self.in_shutdown.store(true, Ordering::SeqCst);
 
         let driver_shutdown_futures: Vec<_> = {
-            let registry = self.registry.read().await;
+            let registry = self
+                .registry
+                .timeout_read(REGISTRY_LOCK_TIMEOUT)
+                .await
+                .unwrap(); //TODO: fixme
 
             registry
                 .iter_drivers()
