@@ -96,7 +96,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.com.usage.vector": service::counters::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
         }));
 
@@ -576,5 +576,14 @@ impl Handler<Shutdown> for TransferService {
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
         async move { Ok(addr.send(ya_transfer::transfer::Shutdown {}).await??) }.boxed_local()
+    }
+}
+
+impl Handler<Shutdown> for MetricsService {
+    type Result = ResponseFuture<Result<()>>;
+
+    fn handle(&mut self, msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
     }
 }

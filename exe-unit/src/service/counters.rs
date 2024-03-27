@@ -1,13 +1,13 @@
-use crate::counters::{CpuMetric, MemMetric, Metric, MetricData, MetricReport, StorageMetric};
 use crate::error::Error;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
+use crate::counters::{CpuMetric, StorageMetric, MemMetric};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ya_counters::counters::{Metric, TimeMetric};
-use ya_counters::service::MetricsService;
+use ya_counters::service::{CustomMetric, MetricProvider, MetricsService};
 
 pub fn try_new(
     ctx: &ExeUnitContext,
@@ -41,7 +41,7 @@ pub fn try_new(
 }
 
 #[cfg(feature = "sgx")]
-fn usage_vector() -> Vec<String> {
+pub fn usage_vector() -> Vec<String> {
     vec![TimeMetric::ID.to_string()]
 }
 

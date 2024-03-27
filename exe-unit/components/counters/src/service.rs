@@ -81,7 +81,7 @@ impl Handler<SetMetric> for MetricsService {
 }
 
 #[derive(Default)]
-struct CustomMetric {
+pub struct CustomMetric {
     val: MetricData,
     peak: MetricData,
 }
@@ -104,7 +104,7 @@ impl Metric for CustomMetric {
 }
 
 #[allow(clippy::type_complexity)]
-struct MetricProvider {
+pub struct MetricProvider {
     metric: Box<dyn Metric>,
     backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, MetricReport)>>>,
     backlog_limit: Option<usize>,
