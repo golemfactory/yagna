@@ -34,7 +34,7 @@ use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;
 pub mod agreement;
-mod counters;
+pub mod counters;
 #[cfg(feature = "sgx")]
 pub mod crypto;
 pub mod error;

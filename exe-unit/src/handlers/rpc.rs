@@ -94,7 +94,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
                     current_usage: Some(data),
                     timestamp: Utc::now().timestamp(),
                 }),
-                Err(e) => Err(e.into()),
+                Err(e) => Err(Error::from(e).into()),
             }
         };
 

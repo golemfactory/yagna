@@ -55,7 +55,7 @@ impl Handler<GetMetrics> for MetricsService {
 
             match report {
                 MetricReport::Frame(data) => metrics[i] = data,
-                MetricReport::Error(error) => return Err(error.into()),
+                MetricReport::Error(error) => return Err(error),
                 MetricReport::LimitExceeded(data) => {
                     return Err(MetricError::UsageLimitExceeded(format!(
                         "{:?} exceeded the value of {:?}",

@@ -95,7 +95,11 @@ impl Error {
 
 impl From<MetricError> for Error {
     fn from(e: MetricError) -> Self {
-        Error::from(LocalServiceError::MetricError(e))
+        match e {
+            MetricError::UsageLimitExceeded(e) => Error::UsageLimitExceeded(e),
+            e => Error::from(LocalServiceError::MetricError(e)),
+        }
+        
     }
 }
 
