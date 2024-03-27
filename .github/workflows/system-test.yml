@@ -15,7 +15,7 @@ on:
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 env:

@@ -19,14 +19,14 @@ on:
   push:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 jobs:
