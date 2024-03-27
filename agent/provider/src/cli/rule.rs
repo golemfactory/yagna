@@ -13,6 +13,7 @@ use strum::VariantNames;
 use ya_client_model::NodeId;
 use ya_manifest_utils::keystore::{AddParams, AddResponse, Keystore};
 use ya_manifest_utils::short_cert_ids::shorten_cert_ids;
+use ya_manifest_utils::CompositeKeystore;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -378,7 +379,7 @@ impl TablePrint for OutboundRules {
         add_everyone(&rules.everyone)
             .into_iter()
             .chain(add_audited_payload(&rules.audited_payload))
-            .chain(add_partner(&rules.partner))
+            .chain(add_partner(&self.keystore, &rules.partner))
             .collect()
     }
 }
@@ -399,7 +400,10 @@ fn add_audited_payload(
     })
 }
 
-fn add_partner(partner: &HashMap<String, CertRule>) -> impl Iterator<Item = Value> + '_ {
+fn add_partner<'a>(
+    keystore: &'a CompositeKeystore,
+    partner: &'a HashMap<String, CertRule>,
+) -> impl Iterator<Item = Value> + 'a {
     let rules: Vec<_> = partner.iter().collect();
     let long_ids: Vec<String> = rules.iter().map(|e| e.0.clone()).collect();
     let short_ids = shorten_cert_ids(&long_ids);
@@ -407,8 +411,15 @@ fn add_partner(partner: &HashMap<String, CertRule>) -> impl Iterator<Item = Valu
     rules
         .into_iter()
         .zip(short_ids)
-        .map(|((_long_id, rule), short_id)| {
-            serde_json::json! {[ OutboundRule::Partner, rule.mode, short_id, rule.description ]}
+        .map(move |((long_id, rule), short_id)| {
+            let subject = match rule.description.is_empty() {
+                true => keystore
+                    .get(long_id)
+                    .map(|cert| cert.subject())
+                    .unwrap_or_default(),
+                false => rule.description.clone().into(),
+            };
+            serde_json::json! {[ OutboundRule::Partner, rule.mode, short_id, subject ]}
         })
 }
 
@@ -440,8 +451,9 @@ impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
         long_ids
             .into_iter()
             .zip(short_ids)
-            .map(|(_long_id, short_id)| {
-                serde_json::json! {[ "Certified", "", short_id, "" ]}
+            .map(|(long_id, short_id)| {
+                let subject = self.keystore.get(&long_id).map(|cert| cert.subject());
+                serde_json::json! {[ "Certified", "", short_id, subject.unwrap_or_default() ]}
             })
             .chain(nodes.into_iter().map(|node| {
                 serde_json::json! {[ "ByNodeId", node, "", "" ]}

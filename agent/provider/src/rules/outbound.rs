@@ -56,7 +56,7 @@ pub enum Mode {
 #[derive(Clone)]
 pub struct OutboundRules {
     rulestore: Rulestore,
-    keystore: CompositeKeystore,
+    pub(crate) keystore: CompositeKeystore,
     whitelist: DomainWhitelistState,
 }
 impl OutboundRules {

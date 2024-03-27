@@ -2,6 +2,7 @@ use super::{Cert, Keystore, KeystoreBuilder};
 use crate::keystore::copy_file;
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
+use golem_certificate::schemas::certificate::Fingerprint;
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -200,6 +201,18 @@ impl Keystore for GolemKeystore {
             });
         }
         certificates
+    }
+
+    fn get(&self, cert: &Fingerprint) -> Option<Cert> {
+        self.certificates
+            .read()
+            .expect("Can't read Golem keystore")
+            .get(cert)
+            .cloned()
+            .map(|entry| Cert::Golem {
+                id: cert.clone(),
+                cert: entry.cert.clone(),
+            })
     }
 
     fn verifier(&self, _: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {

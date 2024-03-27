@@ -6,6 +6,7 @@ use self::{
     x509_keystore::{X509CertData, X509Keystore, X509KeystoreBuilder, X509KeystoreManager},
 };
 use chrono::{DateTime, Utc};
+use golem_certificate::schemas::certificate::Fingerprint;
 use golem_certificate::validator::validated_data::{ValidatedCertificate, ValidatedNodeDescriptor};
 use itertools::Itertools;
 use serde_json::Value;
@@ -122,6 +123,7 @@ pub trait Keystore: KeystoreClone + Send {
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse>;
     fn remove(&mut self, remove: &RemoveParams) -> anyhow::Result<RemoveResponse>;
     fn list(&self) -> Vec<Cert>;
+    fn get(&self, cert: &Fingerprint) -> Option<Cert>;
     /// Creates data signature verifier for given certificate.
     /// Returns error if certificate is invalid.
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>>;
@@ -278,6 +280,12 @@ impl Keystore for CompositeKeystore {
 
     fn list(&self) -> Vec<Cert> {
         self.list_sorted().into_iter().collect()
+    }
+
+    fn get(&self, cert: &Fingerprint) -> Option<Cert> {
+        let golem_cert = self.golem_keystore.get(cert);
+        let x509cert = self.x509_keystore.get(cert);
+        golem_cert.or(x509cert)
     }
 
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn SignatureVerifier>> {

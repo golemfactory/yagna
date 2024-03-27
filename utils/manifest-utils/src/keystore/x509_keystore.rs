@@ -313,6 +313,14 @@ impl Keystore for X509KeystoreManager {
         self.keystore.list().into_iter().map(Cert::X509).collect()
     }
 
+    fn get(&self, cert: &Fingerprint) -> Option<Cert> {
+        self.keystore
+            .list()
+            .into_iter()
+            .find(|cert_data| &cert_data.id == cert)
+            .map(Cert::X509)
+    }
+
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
         let cert_chain = X509Keystore::decode_cert_chain(cert)?;
         let cert_store = self.keystore.store.clone();
