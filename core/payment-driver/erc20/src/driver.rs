@@ -640,7 +640,7 @@ impl PaymentDriver for Erc20Driver {
                 loop {
                     iteration += 1;
                     if iteration == 0 {
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
                     } else {
                         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     }
@@ -705,7 +705,7 @@ impl PaymentDriver for Erc20Driver {
                 loop {
                     iteration += 1;
                     if iteration == 0 {
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
                     } else {
                         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     }

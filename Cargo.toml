@@ -178,7 +178,7 @@ assets = [
 [workspace.lints.clippy]
 arc_with_non_send_sync = "allow"
 get_first = "allow"
-
+blocks_in_conditions = "allow"
 
 [workspace]
 members = [
