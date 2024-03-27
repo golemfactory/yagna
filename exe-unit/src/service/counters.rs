@@ -1,14 +1,14 @@
-use crate::error::Error;
+#[allow(unused_imports)]
+use crate::counters::{CpuMetric, MemMetric, StorageMetric};
 use crate::ExeUnitContext;
-use actix::prelude::*;
-use chrono::{DateTime, Utc};
+
+use ya_counters::counters::TimeMetric;
 use ya_counters::error::MetricError;
-use crate::counters::{CpuMetric, StorageMetric, MemMetric};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use ya_counters::counters::{Metric, TimeMetric};
 use ya_counters::service::{CustomMetric, MetricProvider, MetricsService};
+
+use std::collections::HashMap;
+#[allow(unused_imports)]
+use std::time::Duration;
 
 pub fn try_new(
     ctx: &ExeUnitContext,
@@ -21,7 +21,7 @@ pub fn try_new(
     };
 
     let mut metrics = metrics(ctx, backlog_limit, caps);
-    let mut custom_metrics = ctx
+    let custom_metrics = ctx
         .agreement
         .usage_vector
         .iter()
@@ -49,7 +49,7 @@ pub fn usage_vector() -> Vec<String> {
 #[cfg(feature = "sgx")]
 fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
     ctx: &ExeUnitContext,
-    backlog_limit: Option<usize>,
+    _backlog_limit: Option<usize>,
     caps: F,
 ) -> HashMap<String, MetricProvider> {
     vec![(
@@ -61,7 +61,7 @@ fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
 }
 
 #[cfg(not(feature = "sgx"))]
-fn usage_vector() -> Vec<String> {
+pub fn usage_vector() -> Vec<String> {
     vec![
         TimeMetric::ID.to_string(),
         CpuMetric::ID.to_string(),

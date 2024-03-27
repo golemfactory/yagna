@@ -1,10 +1,5 @@
 use std::fmt::Debug;
-use std::ops::Not;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, SystemTime};
-use std::{fs, thread};
+use std::time::SystemTime;
 
 use crate::error::{self, MetricError};
 

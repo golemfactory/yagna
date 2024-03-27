@@ -583,7 +583,7 @@ impl Handler<Shutdown> for TransferService {
 impl Handler<Shutdown> for MetricsService {
     type Result = ResponseFuture<Result<()>>;
 
-    fn handle(&mut self, msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
         async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
     }

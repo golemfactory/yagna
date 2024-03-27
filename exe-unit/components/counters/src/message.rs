@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 use crate::Result;
+
 use actix::prelude::*;
-use std::collections::HashMap;
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]

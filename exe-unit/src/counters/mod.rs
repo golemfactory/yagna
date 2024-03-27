@@ -4,7 +4,7 @@ use std::ops::Not;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{fs, thread};
 
 use ya_counters::counters::{Metric, MetricData};
