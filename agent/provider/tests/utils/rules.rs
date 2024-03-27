@@ -1,7 +1,8 @@
+use golem_certificate::schemas::certificate::Fingerprint;
 use hex::ToHex;
 use serde_json::{json, Value};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use ya_agreement_utils::agreement::expand;
@@ -16,6 +17,11 @@ use ya_provider::rules::RulesManager;
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
 };
+
+pub fn init_certificates() -> PathBuf {
+    let (resource_cert_dir, _test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+    resource_cert_dir
+}
 
 pub fn setup_rules_manager() -> RulesManager {
     let (_resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
@@ -102,7 +108,7 @@ pub fn load_node_descriptor(file: Option<&str>) -> Value {
     }
 }
 
-fn fingerprint(input_file_path: &Path) -> anyhow::Result<String> {
+pub fn fingerprint(input_file_path: &Path) -> anyhow::Result<Fingerprint> {
     let json_string = fs::read_to_string(input_file_path)?;
     let input_json: Value = serde_json::from_str(&json_string)?;
 
@@ -157,5 +163,78 @@ pub fn expect_reject(result: NegotiationResult, error: Option<&str>) {
                 }
             }
         }
+    }
+}
+
+pub mod cli {
+    use assert_cmd::Command;
+    use std::path::Path;
+
+    pub fn list_rules_command(data_dir: &Path) -> serde_json::Value {
+        let output = Command::cargo_bin("ya-provider")
+            .unwrap()
+            .env("DATA_DIR", data_dir.to_str().unwrap())
+            .arg("rule")
+            .arg("list")
+            .arg("--json")
+            .output()
+            .unwrap();
+
+        serde_json::from_slice(&output.stdout).unwrap()
+    }
+
+    pub fn list_certs(data_dir: &Path) -> Vec<String> {
+        let output = Command::cargo_bin("ya-provider")
+            .unwrap()
+            .env("DATA_DIR", data_dir.to_str().unwrap())
+            .arg("keystore")
+            .arg("list")
+            .arg("--json")
+            .output()
+            .unwrap();
+        let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        result
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["ID"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    pub fn rule_to_mode<'json>(
+        rule: &'json serde_json::Value,
+        cert_prefix: &str,
+    ) -> Option<&'json serde_json::Value> {
+        rule.as_object()
+            .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_prefix)))
+            .map(|(_id, value)| &value["mode"])
+    }
+
+    pub fn remove_certificate_from_keystore(data_dir: &Path, cert_id: &str) {
+        Command::cargo_bin("ya-provider")
+            .unwrap()
+            .env("DATA_DIR", data_dir.to_str().unwrap())
+            .arg("keystore")
+            .arg("remove")
+            .arg(cert_id)
+            .assert()
+            .success();
+    }
+
+    pub fn add_certificate_to_keystore(
+        data_dir: &Path,
+        resource_cert_dir: &Path,
+        cert: &str,
+    ) -> String {
+        Command::cargo_bin("ya-provider")
+            .unwrap()
+            .env("DATA_DIR", data_dir.to_str().unwrap())
+            .arg("keystore")
+            .arg("add")
+            .arg(resource_cert_dir.join(cert))
+            .assert()
+            .success();
+
+        list_certs(data_dir)[0].clone()
     }
 }
