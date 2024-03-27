@@ -5,9 +5,7 @@ use ya_agreement_utils::{Error, OfferDefinition};
 
 use crate::display::EnableDisplay;
 use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 /// Negotiator that can reject Requestors, that request too long Agreement
 /// expiration time. Expiration limit can be different in case, when Requestor
@@ -184,18 +182,6 @@ impl NegotiatorComponent for LimitExpiration {
             serde_json::Value::Number(self.accept_timeout.num_seconds().into()),
         );
         Ok(template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> Result<()> {
-        Ok(())
     }
 }
 

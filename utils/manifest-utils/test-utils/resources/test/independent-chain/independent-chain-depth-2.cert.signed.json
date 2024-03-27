@@ -1,0 +1,99 @@
+{
+  "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
+  "certificate": {
+    "keyUsage": [
+      "signNode",
+      "signCertificate"
+    ],
+    "permissions": {
+      "outbound": "unrestricted"
+    },
+    "publicKey": {
+      "algorithm": "EdDSA",
+      "key": "e2c7c19ca8d18ef4527dd11f27d1c938cd56753cf432415e822efd2e81b1c6ab",
+      "parameters": {
+        "scheme": "Ed25519"
+      }
+    },
+    "subject": {
+      "displayName": "Independent Intermediate Depth 2",
+      "contact": {
+        "email": "independent-2.root@golem.network"
+      }
+    },
+    "validityPeriod": {
+      "notBefore": "2000-01-01T00:00:00Z",
+      "notAfter": "2050-01-01T00:00:00Z"
+    }
+  },
+  "signature": {
+    "algorithm": {
+      "hash": "sha512",
+      "encryption": "EdDSA"
+    },
+    "value": "b944935e13b0977bbc80dec2424710ecfb896b76377e0c685db725adfb680912be86a8726da13f3d01ba9787a56e91fa1927479e8d139d1ee54644ed240bf50e",
+    "signer": {
+      "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
+      "certificate": {
+        "keyUsage": "all",
+        "permissions": "all",
+        "publicKey": {
+          "algorithm": "EdDSA",
+          "key": "2afaf7337e76599a75c053062e327de6f1276de4d7f89d8c46eb9cc52316686d",
+          "parameters": {
+            "scheme": "Ed25519"
+          }
+        },
+        "subject": {
+          "displayName": "Independent Intermediate Depth 1",
+          "contact": {
+            "email": "independent-1.root@golem.network"
+          }
+        },
+        "validityPeriod": {
+          "notBefore": "2000-01-01T00:00:00Z",
+          "notAfter": "2050-01-01T00:00:00Z"
+        }
+      },
+      "signature": {
+        "algorithm": {
+          "hash": "sha512",
+          "encryption": "EdDSA"
+        },
+        "value": "2978ca3c23b788d486a6f3870dcf291b3750e0bc74531b10d602970666256416ae65b77eccc89d81957e49c09c8b31ad1c8a6a30869e42b3c153d2d4926d3b00",
+        "signer": {
+          "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
+          "certificate": {
+            "keyUsage": "all",
+            "permissions": "all",
+            "publicKey": {
+              "algorithm": "EdDSA",
+              "key": "f761b7ce5c54d9306aed093e58ee7e605381f579cdef570ba6f720d684e52e8a",
+              "parameters": {
+                "scheme": "Ed25519"
+              }
+            },
+            "subject": {
+              "displayName": "Independent Root",
+              "contact": {
+                "email": "independent.root@golem.network"
+              }
+            },
+            "validityPeriod": {
+              "notBefore": "2000-01-01T00:00:00Z",
+              "notAfter": "2050-01-01T00:00:00Z"
+            }
+          },
+          "signature": {
+            "algorithm": {
+              "hash": "sha512",
+              "encryption": "EdDSA"
+            },
+            "value": "f4d7bd8ca6d0a9beac8f955960194824c2d82dff6b97fffa5a81d9735afb019d9dd37879f992486c600ea7d53c8278f4b15ea2b838fd7ce959c87348b71c0704",
+            "signer": "self"
+          }
+        }
+      }
+    }
+  }
+}

@@ -41,20 +41,28 @@ pub trait NegotiatorComponent {
 
     /// Called during Offer creation. `NegotiatorComponent` should add properties
     /// and constraints for which it is responsible during future negotiations.
-    fn fill_template(&mut self, offer_template: OfferDefinition)
-        -> anyhow::Result<OfferDefinition>;
+    fn fill_template(
+        &mut self,
+        offer_template: OfferDefinition,
+    ) -> anyhow::Result<OfferDefinition> {
+        Ok(offer_template)
+    }
 
     /// Called when Agreement was finished. `NegotiatorComponent` can use termination
     /// result to adjust his future negotiation strategy.
     fn on_agreement_terminated(
         &mut self,
-        agreement_id: &str,
-        result: &AgreementResult,
-    ) -> anyhow::Result<()>;
+        _agreement_id: &str,
+        _result: &AgreementResult,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     /// Called when Negotiator decided to approve Agreement. It's only notification,
     /// `NegotiatorComponent` can't reject Agreement anymore.
-    fn on_agreement_approved(&mut self, agreement_id: &str) -> anyhow::Result<()>;
+    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Default)]

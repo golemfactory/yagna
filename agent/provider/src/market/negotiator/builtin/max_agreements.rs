@@ -1,8 +1,6 @@
 use anyhow::bail;
 use std::collections::HashSet;
 
-use ya_agreement_utils::OfferDefinition;
-
 use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
@@ -48,13 +46,6 @@ impl NegotiatorComponent for MaxAgreements {
                 is_final: false,
             })
         }
-    }
-
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
     }
 
     fn on_agreement_terminated(

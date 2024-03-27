@@ -1,6 +1,6 @@
 use std::ops::Not;
 
-use ya_agreement_utils::{Error, OfferDefinition};
+use ya_agreement_utils::Error;
 use ya_manifest_utils::policy::{Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
     decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
@@ -82,25 +82,6 @@ impl NegotiatorComponent for ManifestSignature {
 
         log::trace!("Outbound is not requested.");
         acceptance(offer)
-    }
-
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
 

@@ -4,9 +4,7 @@ use ya_agreement_utils::{Error, OfferDefinition};
 
 use crate::display::EnableDisplay;
 use crate::market::negotiator::factory::PaymentTimeoutConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 const PAYMENT_TIMEOUT_PROPERTY_FLAT: &str = "golem.com.scheme.payu.payment-timeout-sec?";
 pub const PAYMENT_TIMEOUT_PROPERTY: &str = "/golem/com/scheme/payu/payment-timeout-sec?";
@@ -117,18 +115,6 @@ impl NegotiatorComponent for PaymentTimeout {
             serde_json::Value::Number(self.timeout.num_seconds().into()),
         );
         Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
 
