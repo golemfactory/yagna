@@ -168,6 +168,7 @@ pub fn expect_reject(result: NegotiationResult, error: Option<&str>) {
 
 pub mod cli {
     use assert_cmd::Command;
+    use serde_json::Value;
     use std::path::Path;
 
     pub fn list_rules_command(data_dir: &Path) -> serde_json::Value {
@@ -207,6 +208,17 @@ pub mod cli {
     ) -> Option<&'json serde_json::Value> {
         rule.as_object()
             .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_prefix)))
+            .map(|(_id, value)| &value["mode"])
+    }
+
+    pub fn get_rule_mode<'a>(
+        rules_list: &'a Value,
+        rule: &'a str,
+        cert_id: &'a str,
+    ) -> Option<&'a Value> {
+        rules_list["outbound"][rule]
+            .as_object()
+            .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_id)))
             .map(|(_id, value)| &value["mode"])
     }
 

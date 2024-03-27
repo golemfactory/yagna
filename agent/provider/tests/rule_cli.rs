@@ -3,14 +3,14 @@ mod utils;
 
 use assert_cmd::Command;
 use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{collections::HashSet, iter::FromIterator, path::PathBuf, str::from_utf8};
 use tempdir::TempDir;
 use test_case::test_case;
 
 use crate::utils::rules::cli::{
-    add_certificate_to_keystore, list_certs, list_rules_command, remove_certificate_from_keystore,
-    rule_to_mode,
+    add_certificate_to_keystore, get_rule_mode, list_certs, list_rules_command,
+    remove_certificate_from_keystore, rule_to_mode,
 };
 
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -284,13 +284,6 @@ fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to
     let root_cert_id = added_certs.get("fe4f04e2").unwrap();
     let root_mode = get_rule_mode(&rules_list, rule, root_cert_id);
     assert_eq!(root_mode, None);
-}
-
-fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> Option<&'a Value> {
-    rules_list["outbound"][rule]
-        .as_object()
-        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_id)))
-        .map(|(_id, value)| &value["mode"])
 }
 
 #[test_case("audited-payload", "foo_ca.cert.pem")]
