@@ -190,8 +190,11 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: GetAccounts,
-    ) -> Result<Vec<Account>, GenericError> {
-        Ok(processor.get_accounts().await)
+    ) -> Result<Vec<Account>, GetAccountsError> {
+        log::debug!("Get accounts processor started");
+        let res = processor.get_accounts().await;
+        log::debug!("Get accounts processor finished");
+        res
     }
 
     async fn notify_payment(
@@ -432,8 +435,8 @@ mod local {
         processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetDrivers,
-    ) -> Result<HashMap<String, DriverDetails>, NoError> {
-        Ok(processor.get_drivers().await)
+    ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
+        processor.get_drivers().await
     }
 
     async fn payment_driver_status(

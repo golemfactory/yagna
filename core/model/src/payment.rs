@@ -364,10 +364,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetAccounts {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetAccountsError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
-        type Error = GenericError;
+        type Error = GetAccountsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -447,10 +453,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetDriversError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
-        type Error = NoError;
+        type Error = GetDriversError;
     }
 
     // ********************* STATUS ********************************

@@ -24,9 +24,9 @@ use ya_core_model::driver::{
     PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
-    SchedulePayment, UnregisterAccount, UnregisterAccountError, UnregisterDriver,
-    UnregisterDriverError,
+    GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount, RegisterAccountError,
+    RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
+    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_core_model::NodeId;
@@ -354,20 +354,20 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn get_accounts(&self) -> Vec<Account> {
+    pub async fn get_accounts(&self) -> Result<Vec<Account>, GetAccountsError> {
         self.registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await
-            .unwrap() // TODO: fixme
-            .get_accounts()
+            .map(|registry| registry.get_accounts())
+            .map_err(|_| GetAccountsError::InternalTimeout)
     }
 
-    pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+    pub async fn get_drivers(&self) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
         self.registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await
-            .unwrap() // TODO: fixme
-            .get_drivers()
+            .map(|registry| registry.get_drivers())
+            .map_err(|_| GetDriversError::InternalTimeout)
     }
 
     pub async fn get_network(
@@ -411,11 +411,7 @@ impl PaymentProcessor {
         let mut payment: Payment;
 
         {
-            let db_executor = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await
-                .map_err(|_| NotifyPaymentError::InternalTimeout)?;
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             let orders = db_executor
                 .as_dao::<OrderDao>()
@@ -512,11 +508,7 @@ impl PaymentProcessor {
                 })
                 .await;
 
-            let db_executor = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await
-                .map_err(|_| NotifyPaymentError::InternalTimeout)?;
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
             let payment_dao: PaymentDao = db_executor.as_dao();
             let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
@@ -546,11 +538,7 @@ impl PaymentProcessor {
             );
 
             // Assume payments are OK when requesting from self
-            let db_executor = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await
-                .map_err(|_| NotifyPaymentError::InternalTimeout)?;
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
             let payment_dao: PaymentDao = db_executor.as_dao();
             payment_dao.mark_sent(payment_id).await?;
         }
@@ -572,8 +560,7 @@ impl PaymentProcessor {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .map_err(|_| SchedulePaymentError::InternalTimeout)?
+            .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
@@ -587,8 +574,7 @@ impl PaymentProcessor {
 
         self.db_executor
             .timeout_lock(DB_LOCK_TIMEOUT)
-            .await
-            .map_err(|_| SchedulePaymentError::InternalTimeout)?
+            .await?
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
             .await?;
@@ -606,8 +592,7 @@ impl PaymentProcessor {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .map_err(|_| VerifyPaymentError::InternalTimeout)?
+            .await?
             .driver(
                 &payment.payment_platform,
                 &payment.payee_addr,
@@ -659,11 +644,7 @@ impl PaymentProcessor {
         }
 
         {
-            let db_executor = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await
-                .map_err(|_| VerifyPaymentError::InternalTimeout)?;
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             // Verify agreement payments
             let agreement_dao: AgreementDao = db_executor.as_dao();
@@ -755,8 +736,7 @@ impl PaymentProcessor {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .unwrap() //TODO: fixme
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
@@ -776,8 +756,7 @@ impl PaymentProcessor {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .unwrap() //TODO: fixme
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let res = driver_endpoint(&driver)
             .send(driver::GetRpcEndpoints {
@@ -798,8 +777,7 @@ impl PaymentProcessor {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .unwrap() //TODO: fixme
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountGasBalance::new(address, platform))
@@ -820,16 +798,14 @@ impl PaymentProcessor {
         let existing_allocations = self
             .db_executor
             .timeout_lock(DB_LOCK_TIMEOUT)
-            .await
-            .map_err(|_| ValidateAllocationError::InternalTimeout)?
+            .await?
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .map_err(|_| ValidateAllocationError::InternalTimeout)?
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
@@ -901,7 +877,7 @@ impl PaymentProcessor {
                 .registry
                 .timeout_read(REGISTRY_LOCK_TIMEOUT)
                 .await
-                .unwrap(); //TODO: fixme
+                .expect("Can't initiate payment shutdown: registry lock timed out");
 
             registry
                 .iter_drivers()
