@@ -160,15 +160,12 @@ mod test {
         let mutex = Mutex::new(());
         {
             // Lock the mutex - should be ok
-            let result = mutex.timeout_lock_with_log(&TimeoutLogParams::default()).await;
+            let result = mutex
+                .timeout_lock_with_log(&TimeoutLogParams::default())
+                .await;
             assert!(result.is_ok());
 
-            assert!(LOGGER
-                .0
-                .lock()
-                .unwrap()
-                .iter()
-                .all(|log| log.is_empty()));
+            assert!(LOGGER.0.lock().unwrap().iter().all(|log| log.is_empty()));
         }
 
         let params = super::TimeoutLogParams {
