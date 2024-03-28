@@ -38,6 +38,23 @@ fn restrict_rule_add_remove_certified_rules(rule: &str) {
         true
     );
 
+    // Add the same certificate for the second time.
+    Command::cargo_bin("ya-provider")
+        .unwrap()
+        .env("DATA_DIR", data_dir.path().to_str().unwrap())
+        .args(format!("rule add {rule} certified import-cert").split(' '))
+        .arg(certs.join("root-certificate.signed.json"))
+        .assert()
+        .success();
+
+    pretty_assertions::assert_eq!(
+        result[rule]["certified"]
+            .as_array()
+            .unwrap()
+            .contains(&json!(cert_id1)),
+        true
+    );
+
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
