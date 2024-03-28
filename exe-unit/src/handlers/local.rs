@@ -8,6 +8,7 @@ use actix::prelude::*;
 use futures::FutureExt;
 use ya_client_model::activity;
 use ya_core_model::activity::local::SetState as SetActivityState;
+use ya_counters::message::SetMetric;
 
 impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
     fn handle(&mut self, event: RuntimeEvent, ctx: &mut Context<Self>) {

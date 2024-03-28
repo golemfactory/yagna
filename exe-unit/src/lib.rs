@@ -15,6 +15,9 @@ use ya_client_model::activity::{
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
+use ya_counters::error::MetricError;
+use ya_counters::message::GetMetrics;
+use ya_counters::service::MetricsService;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 use ya_transfer::transfer::{
@@ -26,12 +29,12 @@ use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
-use crate::service::metrics::MetricsService;
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;
 pub mod agreement;
+pub mod counters;
 #[cfg(feature = "sgx")]
 pub mod crypto;
 pub mod error;
@@ -39,7 +42,6 @@ mod handlers;
 pub mod logger;
 pub mod manifest;
 pub mod message;
-pub mod metrics;
 mod network;
 mod notify;
 mod output;
@@ -95,7 +97,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.com.usage.vector": service::counters::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
         }));
 
@@ -558,7 +560,7 @@ async fn report_usage<R: Runtime>(
                 }
             }
             Err(err) => match err {
-                Error::UsageLimitExceeded(info) => {
+                MetricError::UsageLimitExceeded(info) => {
                     log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
@@ -575,5 +577,14 @@ impl Handler<Shutdown> for TransferService {
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
         async move { Ok(addr.send(ya_transfer::transfer::Shutdown {}).await??) }.boxed_local()
+    }
+}
+
+impl Handler<Shutdown> for MetricsService {
+    type Result = ResponseFuture<Result<()>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
     }
 }

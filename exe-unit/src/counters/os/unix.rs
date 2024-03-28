@@ -1,5 +1,8 @@
-use crate::metrics::{error::MetricError, Result};
 use crate::process::*;
+
+use ya_counters::error::MetricError;
+use ya_counters::Result;
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -99,5 +102,11 @@ impl Metrics {
                     *mem_entry = usage.rss_gib;
                 }
             })
+    }
+}
+
+impl From<SystemError> for MetricError {
+    fn from(err: SystemError) -> Self {
+        Self::Other(err.to_string())
     }
 }

@@ -1,4 +1,4 @@
-pub mod metrics;
+pub mod counters;
 pub mod signal;
 
 use crate::message::{Shutdown, ShutdownReason};

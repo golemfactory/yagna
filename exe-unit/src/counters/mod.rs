@@ -1,29 +1,15 @@
-use std::fmt::Debug;
+mod os;
+
 use std::ops::Not;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{fs, thread};
 
-pub mod error;
-mod os;
-
-pub type Result<T> = std::result::Result<T, error::MetricError>;
-pub type MetricData = f64;
-
-#[derive(Clone, Debug)]
-pub enum MetricReport {
-    Frame(MetricData),
-    LimitExceeded(MetricData),
-    Error(error::MetricError),
-}
-
-pub trait Metric {
-    fn frame(&mut self) -> Result<MetricData>;
-    fn peak(&mut self) -> Result<MetricData>;
-    fn set(&mut self, _value: MetricData) {}
-}
+use ya_counters::counters::{Metric, MetricData};
+use ya_counters::error::MetricError;
+use ya_counters::Result;
 
 #[derive(Default)]
 pub struct CpuMetric {}
@@ -70,7 +56,7 @@ impl Metric for MemMetric {
                 Ok(data)
             }
             Err(err) => match &err {
-                error::MetricError::Unsupported(_) => self.peak(),
+                MetricError::Unsupported(_) => self.peak(),
                 _ => Err(err),
             },
         }
@@ -79,34 +65,6 @@ impl Metric for MemMetric {
     fn peak(&mut self) -> Result<MetricData> {
         let peak = os::mem_peak_rss()? as MetricData;
         Ok(self.update_peak(peak))
-    }
-}
-
-pub struct TimeMetric {
-    started: SystemTime,
-}
-
-impl TimeMetric {
-    pub const ID: &'static str = "golem.usage.duration_sec";
-}
-
-impl Default for TimeMetric {
-    fn default() -> Self {
-        TimeMetric {
-            started: SystemTime::now(),
-        }
-    }
-}
-
-impl Metric for TimeMetric {
-    fn frame(&mut self) -> Result<MetricData> {
-        Ok(SystemTime::now()
-            .duration_since(self.started)?
-            .as_secs_f64())
-    }
-
-    fn peak(&mut self) -> Result<MetricData> {
-        self.frame()
     }
 }
 
