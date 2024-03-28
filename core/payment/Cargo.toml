@@ -60,6 +60,7 @@ uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
+serial_test = "3.0"
 ya-client = "0.8"
 ya-dummy-driver = "0.3"
 ya-erc20-driver = "0.4"
