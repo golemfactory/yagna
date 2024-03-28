@@ -137,6 +137,7 @@ impl Keystore for GolemKeystore {
             match read_cert(path.as_path(), None) {
                 Ok((id, cert)) => {
                     if certificates.contains_key(&id) {
+                        leaf_cert_ids.push(id.clone());
                         skipped.push(Cert::Golem { id, cert });
                         continue;
                     } else if cert.validity_period.not_after < Utc::now() {

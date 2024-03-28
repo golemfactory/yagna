@@ -104,9 +104,11 @@ impl RulesManager {
 
         self.keystore.reload()?;
 
-        if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
-            log::warn!(
-                "Certificate is already in keystore- please use `cert-id` instead of `import-cert`"
+        for cert in duplicated {
+            log::info!(
+                "Certificate is already in keystore: {}, `{}`",
+                cert.subject(),
+                cert.id()
             );
         }
 
