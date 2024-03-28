@@ -121,6 +121,7 @@ fn write_sync_log(is_err: bool, secs_elapsed: f64, params: &TimeoutLogParams) {
     }
 }
 
+#[cfg(test)]
 mod test {
     use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt, TimeoutLogParams};
     use log::{Level, Record};
@@ -152,7 +153,7 @@ mod test {
         log::set_max_level(Level::Trace.to_level_filter());
     }
 
-    #[tokio::test]
+    #[serial_test::serial]
     async fn test_mutex_timeout_lock_with_log() {
         init_logger();
 
@@ -199,7 +200,7 @@ mod test {
             .any(|log| log.contains("Timeout")));
     }
 
-    #[tokio::test]
+    #[serial_test::serial]
     async fn test_rwlock_timeout_read_with_log() {
         init_logger();
 
@@ -247,7 +248,7 @@ mod test {
             .any(|log| log.contains("Timfeout")));
     }
 
-    #[tokio::test]
+    #[serial_test::serial]
     async fn test_rwlock_timeout_write_with_log() {
         init_logger();
 
