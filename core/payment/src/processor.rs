@@ -9,11 +9,12 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::{
@@ -299,7 +300,7 @@ const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct PaymentProcessor {
-    db_executor: Mutex<DbExecutor>,
+    db_executor: Arc<Mutex<DbExecutor>>,
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
 }
@@ -307,7 +308,7 @@ pub struct PaymentProcessor {
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
         Self {
-            db_executor: Mutex::new(db_executor),
+            db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
         }
@@ -490,58 +491,44 @@ impl PaymentProcessor {
         counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment, signature);
 
-        if payer_id != payee_id {
-            let mark_sent = ya_net::from(payer_id)
-                .to(payee_id)
-                .service(BUS_ID)
-                .call(msg)
-                .map(|res| match res {
-                    Ok(Ok(_)) => true,
-                    Err(err) => {
-                        log::error!("Error sending payment message to provider: {:?}", err);
-                        false
-                    }
-                    Ok(Err(err)) => {
-                        log::error!("Provider rejected payment: {:?}", err);
-                        true
-                    }
-                })
-                .await;
+        let db_executor = Arc::clone(&self.db_executor);
 
-            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-            let payment_dao: PaymentDao = db_executor.as_dao();
-            let sync_dao: SyncNotifsDao = db_executor.as_dao();
-
-            if mark_sent {
-                payment_dao.mark_sent(payment_id).await.ok();
-            } else {
-                sync_dao.upsert(payee_id).await?;
-                SYNC_NOTIFS_NOTIFY.notify_one();
-                log::debug!("Failed to call SendPayment on [{payee_id}]");
-            }
-        } else {
-            // Spawning to avoid deadlock in a case that payee is the same node as payer
-            tokio::task::spawn_local(
-                ya_net::from(payer_id)
+        tokio::task::spawn_local(
+            async move {
+                let mark_sent = ya_net::from(payer_id)
                     .to(payee_id)
                     .service(BUS_ID)
                     .call(msg)
                     .map(|res| match res {
-                        Ok(Ok(_)) => (),
+                        Ok(Ok(_)) => true,
                         Err(err) => {
-                            log::error!("Error sending payment message to provider: {:?}", err)
+                            log::error!("Error sending payment message to provider: {:?}", err);
+                            false
                         }
                         Ok(Err(err)) => {
-                            log::error!("Provider rejected payment: {:?}", err)
+                            log::error!("Provider rejected payment: {:?}", err);
+                            true
                         }
-                    }),
-            );
+                    })
+                    .await;
 
-            // Assume payments are OK when requesting from self
-            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-            let payment_dao: PaymentDao = db_executor.as_dao();
-            payment_dao.mark_sent(payment_id).await?;
-        }
+                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+                let payment_dao: PaymentDao = db_executor.as_dao();
+                let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
+                if mark_sent {
+                    payment_dao.mark_sent(payment_id).await.ok();
+                } else {
+                    sync_dao.upsert(payee_id).await?;
+                    SYNC_NOTIFS_NOTIFY.notify_one();
+                    log::debug!("Failed to call SendPayment on [{payee_id}]");
+                }
+
+                anyhow::Ok(())
+            }
+            .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
+        );
 
         Ok(())
     }
