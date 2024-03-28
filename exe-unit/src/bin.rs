@@ -323,7 +323,7 @@ async fn run() -> anyhow::Result<()> {
 
     let (tx, rx) = oneshot::channel();
 
-    let metrics = counters::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
+    let metrics = counters::build(&ctx, Some(10000), ctx.supervise.hardware).start();
     let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
     let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
