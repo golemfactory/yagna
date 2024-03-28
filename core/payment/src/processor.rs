@@ -304,10 +304,25 @@ const DB_LOCK_ERROR_LEVEL: Level = Level::Error;
 const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const DB_LOCK_WARN_TIMEOUT: Duration = Duration::from_secs(5);
 
-const REGISTRY_LOCK_WARN_LEVEL: Level = Level::Warn;
-const REGISTRY_LOCK_ERROR_LEVEL: Level = Level::Error;
-const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
-const REGISTRY_LOCK_WARN_TIMEOUT: Duration = Duration::from_secs(5);
+fn registry_lock_params(topic: &'static str) -> TimeoutLogParams {
+    TimeoutLogParams {
+        topic,
+        log_level_warning: Level::Warn,
+        log_level_error: Level::Error,
+        warning_timeout: Duration::from_secs(5),
+        error_timeout: Duration::from_secs(30),
+    }
+}
+
+fn db_lock_params(topic: &'static str) -> TimeoutLogParams {
+    TimeoutLogParams {
+        topic,
+        log_level_warning: Level::Warn,
+        log_level_error: Level::Error,
+        warning_timeout: Duration::from_secs(5),
+        error_timeout: Duration::from_secs(30),
+    }
+}
 
 pub struct PaymentProcessor {
     db_executor: Arc<Mutex<DbExecutor>>,
@@ -326,13 +341,7 @@ impl PaymentProcessor {
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
         self.registry
-            .timeout_write_with_log(&TimeoutLogParams {
-                topic: "Registry lock - register driver",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_write_with_log(&registry_lock_params("Registry lock - register driver"))
             .await
             .map_err(|_| RegisterDriverError::InternalTimeout)?
             .register_driver(msg)
@@ -343,13 +352,7 @@ impl PaymentProcessor {
         msg: UnregisterDriver,
     ) -> Result<(), UnregisterDriverError> {
         self.registry
-            .timeout_write_with_log(&TimeoutLogParams {
-                topic: "Registry lock - unregister driver",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_write_with_log(&registry_lock_params("Registry lock - unregister driver"))
             .await
             .map_err(|_| UnregisterDriverError::InternalTimeout)?
             .unregister_driver(msg);
@@ -359,13 +362,7 @@ impl PaymentProcessor {
 
     pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
         self.registry
-            .timeout_write_with_log(&TimeoutLogParams {
-                topic: "Registry lock - register account",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_write_with_log(&registry_lock_params("Registry lock - register account"))
             .await
             .map_err(|_| RegisterAccountError::InternalTimeout)?
             .register_account(msg)
@@ -376,13 +373,7 @@ impl PaymentProcessor {
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
         self.registry
-            .timeout_write_with_log(&TimeoutLogParams {
-                topic: "Registry lock - unregister account",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_write_with_log(&registry_lock_params("Registry lock - unregister account"))
             .await
             .map_err(|_| UnregisterAccountError::InternalTimeout)?
             .unregister_account(msg);
@@ -391,13 +382,7 @@ impl PaymentProcessor {
 
     pub async fn get_accounts(&self) -> Result<Vec<Account>, GetAccountsError> {
         self.registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get accounts",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get accounts"))
             .await
             .map(|registry| registry.get_accounts())
             .map_err(|_| GetAccountsError::InternalTimeout)
@@ -405,13 +390,7 @@ impl PaymentProcessor {
 
     pub async fn get_drivers(&self) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
         self.registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get drivers",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get drivers"))
             .await
             .map(|registry| registry.get_drivers())
             .map_err(|_| GetDriversError::InternalTimeout)
@@ -423,13 +402,7 @@ impl PaymentProcessor {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         self.registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get network",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get network"))
             .await
             .map_err(|_| RegisterAccountError::InternalTimeout)?
             .get_network(driver, network)
@@ -442,13 +415,7 @@ impl PaymentProcessor {
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
         self.registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get platform",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get platform"))
             .await
             .map_err(|_| RegisterAccountError::InternalTimeout)?
             .get_platform(driver, network, token)
@@ -472,13 +439,7 @@ impl PaymentProcessor {
         {
             let db_executor = self
                 .db_executor
-                .timeout_lock_with_log(&TimeoutLogParams {
-                    topic: "Db lock - notify payment",
-                    log_level_warning: DB_LOCK_WARN_LEVEL,
-                    log_level_error: DB_LOCK_ERROR_LEVEL,
-                    warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                    error_timeout: DB_LOCK_TIMEOUT,
-                })
+                .timeout_lock_with_log(&db_lock_params("Db lock - notify payment"))
                 .await?;
 
             let orders = db_executor
@@ -580,13 +541,7 @@ impl PaymentProcessor {
                     .await;
 
                 let db_executor = db_executor
-                    .timeout_lock_with_log(&TimeoutLogParams {
-                        topic: "Db lock - notify payment 2",
-                        log_level_warning: DB_LOCK_WARN_LEVEL,
-                        log_level_error: DB_LOCK_ERROR_LEVEL,
-                        warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                        error_timeout: DB_LOCK_TIMEOUT,
-                    })
+                    .timeout_lock_with_log(&db_lock_params("Db lock - notify payment 2"))
                     .await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
@@ -621,13 +576,7 @@ impl PaymentProcessor {
         }
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - schedule payment",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - schedule payment"))
             .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
@@ -641,13 +590,7 @@ impl PaymentProcessor {
             .await??;
 
         self.db_executor
-            .timeout_lock_with_log(&TimeoutLogParams {
-                topic: "Db lock - schedule payment",
-                log_level_warning: DB_LOCK_WARN_LEVEL,
-                log_level_error: DB_LOCK_ERROR_LEVEL,
-                warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                error_timeout: DB_LOCK_TIMEOUT,
-            })
+            .timeout_lock_with_log(&db_lock_params("Db lock - schedule payment"))
             .await?
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
@@ -665,13 +608,7 @@ impl PaymentProcessor {
         let platform = payment.payment_platform.clone();
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - verify payment",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - verify payment"))
             .await?
             .driver(
                 &payment.payment_platform,
@@ -726,13 +663,7 @@ impl PaymentProcessor {
         {
             let db_executor = self
                 .db_executor
-                .timeout_lock_with_log(&TimeoutLogParams {
-                    topic: "Db lock - verify payment",
-                    log_level_warning: DB_LOCK_WARN_LEVEL,
-                    log_level_error: DB_LOCK_ERROR_LEVEL,
-                    warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                    error_timeout: DB_LOCK_TIMEOUT,
-                })
+                .timeout_lock_with_log(&db_lock_params("Db lock - verify payment"))
                 .await?;
 
             // Verify agreement payments
@@ -824,13 +755,7 @@ impl PaymentProcessor {
     ) -> Result<BigDecimal, GetStatusError> {
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get status",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get status"))
             .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
@@ -850,13 +775,9 @@ impl PaymentProcessor {
     ) -> Result<GetRpcEndpointsResult, GetStatusError> {
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get rpc endpoints info",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params(
+                "Registry lock - get rpc endpoints info",
+            ))
             .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let res = driver_endpoint(&driver)
@@ -877,13 +798,7 @@ impl PaymentProcessor {
     ) -> Result<Option<GasDetails>, GetStatusError> {
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - get gas balance",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - get gas balance"))
             .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
@@ -904,26 +819,14 @@ impl PaymentProcessor {
         }
         let existing_allocations = self
             .db_executor
-            .timeout_lock_with_log(&TimeoutLogParams {
-                topic: "Db lock - validate allocation",
-                log_level_warning: DB_LOCK_WARN_LEVEL,
-                log_level_error: DB_LOCK_ERROR_LEVEL,
-                warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                error_timeout: DB_LOCK_TIMEOUT,
-            })
+            .timeout_lock_with_log(&db_lock_params("Db lock - validate allocation"))
             .await?
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
         let driver = self
             .registry
-            .timeout_read_with_log(&TimeoutLogParams {
-                topic: "Registry lock - validate allocation",
-                log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                error_timeout: REGISTRY_LOCK_TIMEOUT,
-            })
+            .timeout_read_with_log(&registry_lock_params("Registry lock - validate allocation"))
             .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
@@ -943,13 +846,7 @@ impl PaymentProcessor {
         // keep this lock alive for the entirety of this function for now
         let db_executor = match self
             .db_executor
-            .timeout_lock_with_log(&TimeoutLogParams {
-                topic: "Db lock - release allocations",
-                log_level_warning: DB_LOCK_WARN_LEVEL,
-                log_level_error: DB_LOCK_ERROR_LEVEL,
-                warning_timeout: DB_LOCK_WARN_TIMEOUT,
-                error_timeout: DB_LOCK_TIMEOUT,
-            })
+            .timeout_lock_with_log(&db_lock_params("Db lock - release allocations"))
             .await
         {
             Ok(db) => db,
@@ -1004,13 +901,7 @@ impl PaymentProcessor {
         let driver_shutdown_futures: Vec<_> = {
             let registry = self
                 .registry
-                .timeout_read_with_log(&TimeoutLogParams {
-                    topic: "Registry lock - shut down",
-                    log_level_warning: REGISTRY_LOCK_WARN_LEVEL,
-                    log_level_error: REGISTRY_LOCK_ERROR_LEVEL,
-                    warning_timeout: REGISTRY_LOCK_WARN_TIMEOUT,
-                    error_timeout: REGISTRY_LOCK_TIMEOUT,
-                })
+                .timeout_read_with_log(&registry_lock_params("Registry lock - shut down"))
                 .await
                 .expect("Can't initiate payment shutdown: registry lock timed out");
 
