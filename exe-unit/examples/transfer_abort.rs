@@ -25,6 +25,7 @@ fn create_file(path: &PathBuf) {
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(false)
         .open(path)
         .expect("rnd file");
 

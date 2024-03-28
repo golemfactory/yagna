@@ -22,6 +22,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
     let mut file_src = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(false)
         .open(path)
         .expect("rnd file");
 

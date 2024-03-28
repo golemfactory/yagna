@@ -125,6 +125,7 @@ mod tests {
         OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false)
             .open(path.as_ref().join(format!("{}.db", name)))?;
         Ok(())
     }

@@ -15,11 +15,11 @@ on:
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   build:
