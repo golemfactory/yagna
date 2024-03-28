@@ -296,33 +296,49 @@ mod local {
             }
         };
 
-        let incoming = db
-            .as_dao::<AgreementDao>()
-            .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp)
-            .await
-            .map_err(GenericError::new)?;
+        let incoming_fut = async {
+            db.as_dao::<AgreementDao>()
+                .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp)
+                .await
+        }
+        .map_err(GenericError::new);
 
-        let outgoing = db
-            .as_dao::<AgreementDao>()
-            .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp)
-            .await
-            .map_err(GenericError::new)?;
+        let outgoing_fut = async {
+            db.as_dao::<AgreementDao>()
+                .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp)
+                .await
+        }
+        .map_err(GenericError::new);
 
-        let reserved = db
-            .as_dao::<AllocationDao>()
-            .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
-            .await
-            .map_err(GenericError::new)?;
+        let reserved_fut = async {
+            db.as_dao::<AllocationDao>()
+                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
+                .await
+        }
+        .map_err(GenericError::new);
 
-        let amount = processor
-            .get_status(platform.clone(), address.clone())
-            .await
-            .map_err(GenericError::new)?;
+        let amount_fut = async {
+            processor
+                .get_status(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
 
-        let gas = processor
-            .get_gas_balance(platform.clone(), address.clone())
-            .await
-            .map_err(GenericError::new)?;
+        let gas_amount_fut = async {
+            processor
+                .get_gas_balance(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
+
+        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
+            incoming_fut,
+            outgoing_fut,
+            amount_fut,
+            gas_amount_fut,
+            reserved_fut,
+        )
+        .await?;
 
         Ok(StatusResult {
             amount,
