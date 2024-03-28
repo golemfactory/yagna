@@ -59,7 +59,7 @@ ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
 ya-client = "0.8"
-ya-client-model = "0.6.1"
+ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
