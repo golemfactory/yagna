@@ -9,7 +9,10 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt, TimeoutLogParams};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
+use futures::FutureExt;
+use futures::TryFutureExt;
 
+use log::Level;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -557,11 +560,9 @@ impl PaymentProcessor {
 
         let db_executor = Arc::clone(&self.db_executor);
 
-
         tokio::task::spawn_local(
             async move {
                 let mark_sent = ya_net::from(payer_id)
-
                     .to(payee_id)
                     .service(BUS_ID)
                     .call(msg)
@@ -578,7 +579,15 @@ impl PaymentProcessor {
                     })
                     .await;
 
-                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+                let db_executor = db_executor
+                    .timeout_lock_with_log(&TimeoutLogParams {
+                        topic: "Db lock - notify payment 2",
+                        log_level_warning: DB_LOCK_WARN_LEVEL,
+                        log_level_error: DB_LOCK_ERROR_LEVEL,
+                        warning_timeout: DB_LOCK_WARN_TIMEOUT,
+                        error_timeout: DB_LOCK_TIMEOUT,
+                    })
+                    .await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
