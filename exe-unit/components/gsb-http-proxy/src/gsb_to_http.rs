@@ -1,18 +1,19 @@
+use crate::counters::Counters;
 use crate::headers;
-use crate::monitor::ResponseMonitor;
+use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
-use crate::{message::GsbHttpCallMessage, monitor::RequestsMonitor};
 use async_stream::stream;
 use chrono::Utc;
 use futures_core::stream::Stream;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tokio::sync::mpsc;
+use ya_counters::counters::Metric;
 
 #[derive(Clone, Debug)]
-pub struct GsbToHttpProxy<M: RequestsMonitor + 'static> {
-    pub base_url: String,
-    pub requests_monitor: M,
+pub struct GsbToHttpProxy {
+    base_url: String,
+    counters: Counters,
 }
 
 #[derive(Error, Debug)]
@@ -30,7 +31,14 @@ impl Display for GsbToHttpProxyError {
     }
 }
 
-impl<M: RequestsMonitor> GsbToHttpProxy<M> {
+impl GsbToHttpProxy {
+    pub fn new(base_url: String) -> Self {
+        GsbToHttpProxy {
+            base_url,
+            counters: Default::default(),
+        }
+    }
+
     pub fn pass(
         &mut self,
         message: GsbHttpCallMessage,
@@ -39,7 +47,7 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
 
         let (tx, mut rx) = mpsc::channel(1);
 
-        let mut requests_monitor = self.requests_monitor.clone();
+        let mut counters = self.counters.clone();
         tokio::task::spawn_local(async move {
             let client = reqwest::Client::new();
 
@@ -54,12 +62,12 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
             builder = headers::add(builder, message.headers);
 
             log::debug!("Calling {}", &url);
-            let response_monitor = requests_monitor.on_request().await;
+            let response_handler = counters.on_request();
             let response = builder.send().await;
             let response =
                 response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
             let bytes = response.bytes().await.unwrap();
-            response_monitor.on_response();
+            response_handler.on_response();
 
             let response = GsbHttpCallResponseEvent {
                 index: 0,
@@ -80,35 +88,20 @@ impl<M: RequestsMonitor> GsbToHttpProxy<M> {
 
         Box::pin(stream)
     }
+
+    pub fn requests_counter(&mut self) -> impl Metric {
+        self.counters.requests_counter()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::gsb_to_http::GsbToHttpProxy;
     use crate::message::GsbHttpCallMessage;
-    use crate::monitor::{RequestsMonitor, ResponseMonitor};
     use futures::StreamExt;
     use std::collections::HashMap;
     use tokio::sync::mpsc::UnboundedSender;
-
-    #[derive(Clone, Debug)]
-    struct MockMonitor {
-        on_request_tx: UnboundedSender<()>,
-        on_response_tx: UnboundedSender<()>,
-    }
-
-    impl RequestsMonitor for MockMonitor {
-        async fn on_request(&mut self) -> impl ResponseMonitor {
-            _ = self.on_request_tx.send(());
-            self.clone()
-        }
-    }
-
-    impl ResponseMonitor for MockMonitor {
-        fn on_response(self) {
-            let _ = self.on_response_tx.send(());
-        }
-    }
+    use ya_counters::counters::Metric;
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
@@ -122,15 +115,8 @@ mod tests {
             .with_body("response")
             .create();
 
-        let (on_request_tx, mut on_request_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-        let (on_response_tx, mut on_response_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-        let mut gsb_call = GsbToHttpProxy {
-            base_url: url,
-            requests_monitor: MockMonitor {
-                on_request_tx,
-                on_response_tx,
-            },
-        };
+        let mut gsb_call = GsbToHttpProxy::new(url);
+        let mut request_counter = gsb_call.requests_counter();
 
         let message = GsbHttpCallMessage {
             method: "GET".to_string(),
@@ -147,13 +133,6 @@ mod tests {
         }
 
         assert_eq!(vec!["response".as_bytes()], v);
-        assert_eq!(
-            1,
-            on_request_rx.recv_many(&mut Vec::new(), usize::MAX).await
-        );
-        assert_eq!(
-            1,
-            on_response_rx.recv_many(&mut Vec::new(), usize::MAX).await
-        );
+        assert_eq!(1.0, request_counter.frame().unwrap());
     }
 }

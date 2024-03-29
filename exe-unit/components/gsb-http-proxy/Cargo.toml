@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 ya-service-bus = { workspace = true }
+ya-counters = { path = "../counters" }
 
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -21,6 +22,7 @@ actix-web = "4"
 actix-http = "3"
 futures-core = "0.3"
 serde_derive = "1.0"
+actix = "0.13"
 
 [dev-dependencies]
 mockito = "1.2"

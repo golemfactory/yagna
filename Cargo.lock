@@ -8788,6 +8788,7 @@ dependencies = [
 name = "ya-gsb-http-proxy"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "actix-http",
  "actix-web",
  "async-stream",
@@ -8803,6 +8804,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "ya-counters",
  "ya-service-bus",
 ]
 

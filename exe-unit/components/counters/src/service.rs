@@ -29,15 +29,17 @@ impl MetricsServiceBuilder {
         }
     }
 
+    /// usage_limit: map of counter id to max value
     pub fn with_usage_limits(&mut self, usage_limit: HashMap<String, f64>) -> &mut Self {
         self.usage_limits = Some(usage_limit);
         self
     }
 
     pub fn with_metric(&mut self, metric_id: &str, metric: Box<dyn Metric>) -> &mut Self {
-        // let metric_provider = MetricProvider::new(metric, Some(1));
         // overwriting an existing metric should not matter
-        self.metrics.insert(metric_id.into(), metric);
+        if let Some(_) = self.metrics.insert(metric_id.into(), metric) {
+            log::warn!("Duplicated metric: {:?}", metric_id);
+        }
         self
     }
 
