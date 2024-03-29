@@ -92,6 +92,10 @@ impl GsbToHttpProxy {
     pub fn requests_counter(&mut self) -> impl Metric {
         self.counters.requests_counter()
     }
+
+    pub fn requests_duration_counter(&mut self) -> impl Metric {
+        self.counters.requests_duration_counter()
+    }
 }
 
 #[cfg(test)]
@@ -100,7 +104,6 @@ mod tests {
     use crate::message::GsbHttpCallMessage;
     use futures::StreamExt;
     use std::collections::HashMap;
-    use tokio::sync::mpsc::UnboundedSender;
     use ya_counters::counters::Metric;
 
     #[actix_web::test]
@@ -116,7 +119,8 @@ mod tests {
             .create();
 
         let mut gsb_call = GsbToHttpProxy::new(url);
-        let mut request_counter = gsb_call.requests_counter();
+        let mut requests_counter = gsb_call.requests_counter();
+        let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
         let message = GsbHttpCallMessage {
             method: "GET".to_string(),
@@ -133,6 +137,7 @@ mod tests {
         }
 
         assert_eq!(vec!["response".as_bytes()], v);
-        assert_eq!(1.0, request_counter.frame().unwrap());
+        assert_eq!(1.0, requests_counter.frame().unwrap());
+        assert!(requests_duration_counter.frame().unwrap() > 0.0);
     }
 }
