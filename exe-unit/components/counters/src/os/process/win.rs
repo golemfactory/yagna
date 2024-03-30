@@ -4,12 +4,12 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
+use crate::error::MetricError;
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-use ya_counters::error::MetricError;
 
 lazy_static::lazy_static! {
     static ref JOB_OBJECT: Arc<Mutex<JobObject>> = {

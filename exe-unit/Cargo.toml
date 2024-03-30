@@ -26,16 +26,6 @@ sgx = [
 packet-trace-enable = ["ya-packet-trace/enable"]
 framework-test = ["ya-transfer/framework-test"]
 
-[target.'cfg(target_family = "unix")'.dependencies]
-nix = "0.22.0"
-bytes = "1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-libproc = "0.7"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
-
 [dependencies]
 ya-agreement-utils = { workspace = true }
 ya-manifest-utils = { version = "0.2" }
@@ -56,7 +46,7 @@ ya-utils-networking = { version = "0.2", default-features = false, features = [
 ] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 ya-gsb-http-proxy = { path = "../exe-unit/components/gsb-http-proxy" }
-ya-counters = { path = "../exe-unit/components/counters" }
+ya-counters = { path = "../exe-unit/components/counters", features = ["os"] }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"

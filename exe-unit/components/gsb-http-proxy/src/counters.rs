@@ -4,11 +4,10 @@ use std::sync::{
 };
 
 use chrono::{DateTime, Duration, Utc};
+
+use ya_counters::error::MetricError;
 use ya_counters::Result as CountersResult;
-use ya_counters::{
-    counters::{Metric, MetricData},
-    error::MetricError,
-};
+use ya_counters::{Metric, MetricData};
 
 #[derive(Default, Clone, Debug)]
 pub(super) struct Counters {

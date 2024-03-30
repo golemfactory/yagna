@@ -1,9 +1,10 @@
 #[allow(unused_imports)]
-use crate::counters::{CpuMetric, MemMetric, StorageMetric};
 use crate::ExeUnitContext;
 
-use ya_counters::counters::{Metric, TimeMetric};
 use ya_counters::service::{MetricsService, MetricsServiceBuilder};
+#[cfg(not(feature = "sgx"))]
+use ya_counters::{CpuMetric, MemMetric, StorageMetric};
+use ya_counters::{Metric, TimeMetric};
 
 use std::collections::HashMap;
 

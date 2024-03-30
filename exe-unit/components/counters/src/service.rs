@@ -37,7 +37,7 @@ impl MetricsServiceBuilder {
 
     pub fn with_metric(&mut self, metric_id: &str, metric: Box<dyn Metric>) -> &mut Self {
         // overwriting an existing metric should not matter
-        if let Some(_) = self.metrics.insert(metric_id.into(), metric) {
+        if self.metrics.insert(metric_id.into(), metric).is_some() {
             log::warn!("Duplicated metric: {:?}", metric_id);
         }
         self

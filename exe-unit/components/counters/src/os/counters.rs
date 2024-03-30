@@ -1,5 +1,3 @@
-mod os;
-
 use std::ops::Not;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -7,9 +5,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, thread};
 
-use ya_counters::counters::{Metric, MetricData};
-use ya_counters::error::MetricError;
-use ya_counters::Result;
+use crate::counters::{Metric, MetricData};
+use crate::error::MetricError;
+use crate::os;
+use crate::Result;
 
 #[derive(Default)]
 pub struct CpuMetric {}

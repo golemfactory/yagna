@@ -1,5 +1,5 @@
-use ya_counters::counters::Metric;
-use ya_exe_unit::counters::{CpuMetric, MemMetric};
+use ya_counters::Metric;
+use ya_counters::{CpuMetric, MemMetric};
 
 fn main() {
     let mut v: Vec<Vec<u64>> = Vec::new();

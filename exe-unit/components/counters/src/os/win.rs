@@ -1,8 +1,8 @@
-use crate::process::*;
+use crate::os::process::*;
 
+use crate::error::MetricError;
+use crate::Result;
 use std::time::Duration;
-use ya_counters::error::MetricError;
-use ya_counters::Result;
 
 pub fn cpu_time() -> Result<Duration> {
     let info = ProcessTree::job()

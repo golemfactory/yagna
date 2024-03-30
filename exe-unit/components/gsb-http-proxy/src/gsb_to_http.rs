@@ -2,13 +2,15 @@ use crate::counters::Counters;
 use crate::headers;
 use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
+
+use ya_counters::Metric;
+
 use async_stream::stream;
 use chrono::Utc;
 use futures_core::stream::Stream;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use ya_counters::counters::Metric;
 
 #[derive(Clone, Debug)]
 pub struct GsbToHttpProxy {
@@ -104,7 +106,7 @@ mod tests {
     use crate::message::GsbHttpCallMessage;
     use futures::StreamExt;
     use std::collections::HashMap;
-    use ya_counters::counters::Metric;
+    use ya_counters::Metric;
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
