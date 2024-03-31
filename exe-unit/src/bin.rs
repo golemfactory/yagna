@@ -323,10 +323,10 @@ async fn run() -> anyhow::Result<()> {
 
     let (tx, rx) = oneshot::channel();
 
-    let metrics = counters::build(&ctx, Some(10000), ctx.supervise.hardware).start();
+    let counters = counters::build(&ctx, Some(10000), ctx.supervise.hardware).start();
     let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(tx, ctx, counters, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.send(Register(signals)).await?;
 

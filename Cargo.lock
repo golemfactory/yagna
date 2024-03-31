@@ -8523,6 +8523,7 @@ dependencies = [
  "anyhow",
  "bytes 1.5.0",
  "chrono",
+ "futures 0.3.30",
  "lazy_static",
  "libproc",
  "log",

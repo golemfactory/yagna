@@ -1,31 +1,33 @@
 #![allow(unused)]
 
-use crate::counters::{Metric, MetricData, MetricReport};
-use crate::error::MetricError;
-use crate::message::{GetMetrics, SetMetric, Shutdown};
+use crate::counters::{Counter, CounterData, CounterReport};
+use crate::error::CounterError;
+use crate::message::{GetCounters, SetCounter, Shutdown};
 
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
 use ya_agreement_utils::AgreementView;
 
-pub struct MetricsServiceBuilder {
+pub struct CountersServiceBuilder {
     usage_vector: Vec<String>,
     backlog_limit: Option<usize>,
     usage_limits: Option<HashMap<String, f64>>,
-    metrics: HashMap<String, Box<dyn Metric>>,
+    counters: HashMap<String, Box<dyn Counter>>,
 }
 
-impl MetricsServiceBuilder {
+impl CountersServiceBuilder {
     pub fn new(usage_vector: Vec<String>, backlog_limit: Option<usize>) -> Self {
-        let metrics = Default::default();
+        let counters = Default::default();
         Self {
             usage_vector,
             backlog_limit,
             usage_limits: None,
-            metrics,
+            counters,
         }
     }
 
@@ -35,66 +37,66 @@ impl MetricsServiceBuilder {
         self
     }
 
-    pub fn with_metric(&mut self, metric_id: &str, metric: Box<dyn Metric>) -> &mut Self {
-        // overwriting an existing metric should not matter
-        if self.metrics.insert(metric_id.into(), metric).is_some() {
-            log::warn!("Duplicated metric: {:?}", metric_id);
+    pub fn with_counter(&mut self, counter_id: &str, counter: Box<dyn Counter>) -> &mut Self {
+        // overwriting an existing counter should not matter
+        if self.counters.insert(counter_id.into(), counter).is_some() {
+            log::warn!("Duplicated counter: {:?}", counter_id);
         }
         self
     }
 
-    pub fn build(self) -> MetricsService {
-        let custom_metrics_ids: Vec<String> = self
+    pub fn build(self) -> CountersService {
+        let custom_counters_ids: Vec<String> = self
             .usage_vector
             .iter()
-            .filter(|metric_id| !self.metrics.contains_key(*metric_id))
+            .filter(|counter_id| !self.counters.contains_key(*counter_id))
             .cloned()
             .collect();
 
-        if !custom_metrics_ids.is_empty() {
-            log::debug!("Custom metrics: {:?}", custom_metrics_ids)
+        if !custom_counters_ids.is_empty() {
+            log::debug!("Custom counters: {:?}", custom_counters_ids)
         }
 
-        let mut metrics = HashMap::new();
+        let mut counters = HashMap::new();
         let usage_limits = self.usage_limits.unwrap_or_default();
 
-        for custom_metric_id in custom_metrics_ids {
-            let usage_limit = usage_limits.get(&custom_metric_id).cloned();
-            let metric = Box::<CustomMetric>::default();
-            let provider = MetricProvider::new(metric, self.backlog_limit, usage_limit);
-            metrics.insert(custom_metric_id, provider);
+        for custom_counter_id in custom_counters_ids {
+            let usage_limit = usage_limits.get(&custom_counter_id).cloned();
+            let counter = Box::<CustomCounter>::default();
+            let provider = CounterProvider::new(counter, self.backlog_limit, usage_limit);
+            counters.insert(custom_counter_id, provider);
         }
 
-        for (metric_id, metric) in self.metrics {
-            let usage_limit = usage_limits.get(&metric_id).cloned();
-            // non custom metrics have backlog limit set to 1
-            let metric_provider = MetricProvider::new(metric, Some(1), usage_limit);
-            metrics.insert(metric_id.clone(), metric_provider);
+        for (counter_id, counter) in self.counters {
+            let usage_limit = usage_limits.get(&counter_id).cloned();
+            // non custom counters have backlog limit set to 1
+            let counter_provider = CounterProvider::new(counter, Some(1), usage_limit);
+            counters.insert(counter_id.clone(), counter_provider);
         }
 
-        MetricsService::new(self.usage_vector, metrics)
+        CountersService::new(self.usage_vector, counters)
     }
 }
 
-pub struct MetricsService {
+pub struct CountersService {
     usage_vector: Vec<String>,
-    metrics: HashMap<String, MetricProvider>,
+    counters: HashMap<String, CounterProvider>,
 }
 
-impl MetricsService {
-    pub fn new(usage_vector: Vec<String>, metrics: HashMap<String, MetricProvider>) -> Self {
+impl CountersService {
+    pub fn new(usage_vector: Vec<String>, counters: HashMap<String, CounterProvider>) -> Self {
         Self {
             usage_vector,
-            metrics,
+            counters,
         }
     }
 }
 
-impl Actor for MetricsService {
+impl Actor for CountersService {
     type Context = Context<Self>;
 }
 
-impl Handler<Shutdown> for MetricsService {
+impl Handler<Shutdown> for CountersService {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
@@ -103,26 +105,26 @@ impl Handler<Shutdown> for MetricsService {
     }
 }
 
-impl Handler<GetMetrics> for MetricsService {
-    type Result = <GetMetrics as Message>::Result;
+impl Handler<GetCounters> for CountersService {
+    type Result = <GetCounters as Message>::Result;
 
-    fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
-        let mut metrics = vec![0f64; self.usage_vector.len()];
+    fn handle(&mut self, _: GetCounters, _: &mut Self::Context) -> Self::Result {
+        let mut counters = vec![0f64; self.usage_vector.len()];
 
         for (i, name) in self.usage_vector.iter().enumerate() {
-            let metric = self
-                .metrics
+            let counter = self
+                .counters
                 .get_mut(name)
-                .ok_or_else(|| MetricError::Unsupported(name.to_string()))?;
+                .ok_or_else(|| CounterError::Unsupported(name.to_string()))?;
 
-            let report = metric.report();
-            metric.log_report(report.clone());
+            let report = counter.report();
+            counter.log_report(report.clone());
 
             match report {
-                MetricReport::Frame(data) => metrics[i] = data,
-                MetricReport::Error(error) => return Err(error),
-                MetricReport::LimitExceeded(data) => {
-                    return Err(MetricError::UsageLimitExceeded(format!(
+                CounterReport::Frame(data) => counters[i] = data,
+                CounterReport::Error(error) => return Err(error),
+                CounterReport::LimitExceeded(data) => {
+                    return Err(CounterError::UsageLimitExceeded(format!(
                         "{:?} exceeded the value of {:?}",
                         name, data
                     )))
@@ -130,37 +132,37 @@ impl Handler<GetMetrics> for MetricsService {
             }
         }
 
-        Ok::<_, MetricError>(metrics)
+        Ok::<_, CounterError>(counters)
     }
 }
 
-impl Handler<SetMetric> for MetricsService {
+impl Handler<SetCounter> for CountersService {
     type Result = ();
 
-    fn handle(&mut self, msg: SetMetric, ctx: &mut Self::Context) -> Self::Result {
-        match self.metrics.get_mut(&msg.name) {
-            Some(provider) => provider.metric.set(msg.value),
-            None => log::debug!("Unknown metric: {}", msg.name),
+    fn handle(&mut self, msg: SetCounter, ctx: &mut Self::Context) -> Self::Result {
+        match self.counters.get_mut(&msg.name) {
+            Some(provider) => provider.counter.set(msg.value),
+            None => log::debug!("Unknown counter: {}", msg.name),
         }
     }
 }
 
 #[derive(Default)]
-pub struct CustomMetric {
-    val: MetricData,
-    peak: MetricData,
+pub struct CustomCounter {
+    val: CounterData,
+    peak: CounterData,
 }
 
-impl Metric for CustomMetric {
-    fn frame(&mut self) -> Result<MetricData, MetricError> {
+impl Counter for CustomCounter {
+    fn frame(&mut self) -> Result<CounterData, CounterError> {
         Ok(self.val)
     }
 
-    fn peak(&mut self) -> Result<MetricData, MetricError> {
+    fn peak(&mut self) -> Result<CounterData, CounterError> {
         Ok(self.peak)
     }
 
-    fn set(&mut self, val: MetricData) {
+    fn set(&mut self, val: CounterData) {
         if val > self.peak {
             self.peak = val;
         }
@@ -169,21 +171,21 @@ impl Metric for CustomMetric {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct MetricProvider {
-    metric: Box<dyn Metric>,
-    backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, MetricReport)>>>,
+pub struct CounterProvider {
+    counter: Box<dyn Counter>,
+    backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, CounterReport)>>>,
     backlog_limit: Option<usize>,
-    usage_limit: Option<MetricData>,
+    usage_limit: Option<CounterData>,
 }
 
-impl MetricProvider {
+impl CounterProvider {
     pub fn new(
-        metric: Box<dyn Metric>,
+        counter: Box<dyn Counter>,
         backlog_limit: Option<usize>,
-        usage_limit: Option<MetricData>,
+        usage_limit: Option<CounterData>,
     ) -> Self {
-        MetricProvider {
-            metric,
+        CounterProvider {
+            counter,
             backlog: Arc::new(Mutex::new(VecDeque::new())),
             backlog_limit,
             usage_limit,
@@ -191,23 +193,23 @@ impl MetricProvider {
     }
 }
 
-impl MetricProvider {
-    fn report(&mut self) -> MetricReport {
-        if let Ok(data) = self.metric.peak() {
+impl CounterProvider {
+    fn report(&mut self) -> CounterReport {
+        if let Ok(data) = self.counter.peak() {
             if let Some(limit) = &self.usage_limit {
                 if data > *limit {
-                    return MetricReport::LimitExceeded(data);
+                    return CounterReport::LimitExceeded(data);
                 }
             }
         }
 
-        match self.metric.frame() {
-            Ok(data) => MetricReport::Frame(data),
-            Err(error) => MetricReport::Error(error),
+        match self.counter.frame() {
+            Ok(data) => CounterReport::Frame(data),
+            Err(error) => CounterReport::Error(error),
         }
     }
 
-    fn log_report(&mut self, report: MetricReport) {
+    fn log_report(&mut self, report: CounterReport) {
         let mut backlog = self.backlog.lock().unwrap();
         if let Some(limit) = self.backlog_limit {
             if backlog.len() == limit {

@@ -10,4 +10,4 @@ pub use crate::counters::*;
 #[cfg(feature = "os")]
 pub use crate::os::counters::*;
 
-pub type Result<T> = std::result::Result<T, error::MetricError>;
+pub type Result<T> = std::result::Result<T, error::CounterError>;

@@ -1,10 +1,10 @@
 #[allow(unused_imports)]
 use crate::ExeUnitContext;
 
-use ya_counters::service::{MetricsService, MetricsServiceBuilder};
+use ya_counters::service::{CountersService, CountersServiceBuilder};
+use ya_counters::{Counter, TimeCounter};
 #[cfg(not(feature = "sgx"))]
-use ya_counters::{CpuMetric, MemMetric, StorageMetric};
-use ya_counters::{Metric, TimeMetric};
+use ya_counters::{CpuCounter, MemCounter, StorageCounter};
 
 use std::collections::HashMap;
 
@@ -15,15 +15,16 @@ pub fn build(
     ctx: &ExeUnitContext,
     backlog_limit: Option<usize>,
     supervise_caps: bool,
-) -> MetricsService {
-    let mut builder = MetricsServiceBuilder::new(ctx.agreement.usage_vector.clone(), backlog_limit);
+) -> CountersService {
+    let mut builder =
+        CountersServiceBuilder::new(ctx.agreement.usage_vector.clone(), backlog_limit);
 
     if supervise_caps {
         builder.with_usage_limits(ctx.agreement.usage_limits.clone());
     }
 
-    for (metric_id, metric) in metrics(ctx) {
-        builder.with_metric(&metric_id, metric);
+    for (counter_id, counter) in counters(ctx) {
+        builder.with_counter(&counter_id, counter);
     }
 
     builder.build()
@@ -31,14 +32,14 @@ pub fn build(
 
 #[cfg(feature = "sgx")]
 pub fn usage_vector() -> Vec<String> {
-    vec![TimeMetric::ID.to_string()]
+    vec![TimeCounter::ID.to_string()]
 }
 
 #[cfg(feature = "sgx")]
-fn metrics(_ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Metric>> {
+fn counters(_ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Counter>> {
     vec![(
-        TimeMetric::ID.to_string(),
-        Box::<TimeMetric>::default() as Box<dyn Metric>,
+        TimeCounter::ID.to_string(),
+        Box::<TimeCounter>::default() as Box<dyn Counter>,
     )]
     .into_iter()
     .collect()
@@ -47,36 +48,36 @@ fn metrics(_ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Metric>> {
 #[cfg(not(feature = "sgx"))]
 pub fn usage_vector() -> Vec<String> {
     vec![
-        TimeMetric::ID.to_string(),
-        CpuMetric::ID.to_string(),
-        MemMetric::ID.to_string(),
-        StorageMetric::ID.to_string(),
+        TimeCounter::ID.to_string(),
+        CpuCounter::ID.to_string(),
+        MemCounter::ID.to_string(),
+        StorageCounter::ID.to_string(),
     ]
     .into_iter()
     .collect()
 }
 
 #[cfg(not(feature = "sgx"))]
-fn metrics(ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Metric>> {
+fn counters(ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Counter>> {
     vec![
         (
-            CpuMetric::ID.to_string(),
-            Box::new(CpuMetric::default()) as Box<dyn Metric>,
+            CpuCounter::ID.to_string(),
+            Box::new(CpuCounter::default()) as Box<dyn Counter>,
         ),
         (
-            MemMetric::ID.to_string(),
-            Box::new(MemMetric::default()) as Box<dyn Metric>,
+            MemCounter::ID.to_string(),
+            Box::new(MemCounter::default()) as Box<dyn Counter>,
         ),
         (
-            StorageMetric::ID.to_string(),
-            Box::new(StorageMetric::new(
+            StorageCounter::ID.to_string(),
+            Box::new(StorageCounter::new(
                 ctx.work_dir.clone(),
                 Duration::from_secs(60 * 5),
-            )) as Box<dyn Metric>,
+            )) as Box<dyn Counter>,
         ),
         (
-            TimeMetric::ID.to_string(),
-            Box::new(TimeMetric::default()) as Box<dyn Metric>,
+            TimeCounter::ID.to_string(),
+            Box::new(TimeCounter::default()) as Box<dyn Counter>,
         ),
     ]
     .into_iter()

@@ -4,7 +4,8 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
-use crate::error::MetricError;
+use crate::error::CounterError;
+
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
@@ -34,9 +35,9 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
     }
 }
 
-impl From<SystemError> for MetricError {
+impl From<SystemError> for CounterError {
     fn from(err: SystemError) -> Self {
-        MetricError::Other(err.to_string())
+        CounterError::Other(err.to_string())
     }
 }
 

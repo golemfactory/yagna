@@ -1,49 +1,49 @@
 use std::fmt::Debug;
 use std::time::SystemTime;
 
-use crate::error::{self, MetricError};
+use crate::error::{self, CounterError};
 
-pub type Result<T> = std::result::Result<T, error::MetricError>;
-pub type MetricData = f64;
+pub type Result<T> = std::result::Result<T, error::CounterError>;
+pub type CounterData = f64;
 
 #[derive(Clone, Debug)]
-pub enum MetricReport {
-    Frame(MetricData),
-    LimitExceeded(MetricData),
-    Error(error::MetricError),
+pub enum CounterReport {
+    Frame(CounterData),
+    LimitExceeded(CounterData),
+    Error(error::CounterError),
 }
 
-pub trait Metric {
-    fn frame(&mut self) -> Result<MetricData>;
-    fn peak(&mut self) -> Result<MetricData>;
-    fn set(&mut self, _value: MetricData) {}
+pub trait Counter {
+    fn frame(&mut self) -> Result<CounterData>;
+    fn peak(&mut self) -> Result<CounterData>;
+    fn set(&mut self, _value: CounterData) {}
 }
 
-pub struct TimeMetric {
+pub struct TimeCounter {
     started: SystemTime,
 }
 
-impl TimeMetric {
+impl TimeCounter {
     pub const ID: &'static str = "golem.usage.duration_sec";
 }
 
-impl Default for TimeMetric {
+impl Default for TimeCounter {
     fn default() -> Self {
-        TimeMetric {
+        TimeCounter {
             started: SystemTime::now(),
         }
     }
 }
 
-impl Metric for TimeMetric {
-    fn frame(&mut self) -> Result<MetricData> {
+impl Counter for TimeCounter {
+    fn frame(&mut self) -> Result<CounterData> {
         Ok(SystemTime::now()
             .duration_since(self.started)
-            .map_err(|err| MetricError::Other(err.to_string()))?
+            .map_err(|err| CounterError::Other(err.to_string()))?
             .as_secs_f64())
     }
 
-    fn peak(&mut self) -> Result<MetricData> {
+    fn peak(&mut self) -> Result<CounterData> {
         self.frame()
     }
 }

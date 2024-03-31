@@ -1,6 +1,6 @@
 use ya_agreement_utils::agreement;
 use ya_core_model::activity::RpcMessageError as RpcError;
-use ya_counters::error::MetricError;
+use ya_counters::error::CounterError;
 pub use ya_transfer::error::Error as TransferError;
 
 use crate::state::StateError;
@@ -10,8 +10,8 @@ use hex::FromHexError;
 pub enum LocalServiceError {
     #[error("State error: {0}")]
     StateError(#[from] StateError),
-    #[error("Metric error: {0}")]
-    MetricError(#[from] MetricError),
+    #[error("Counter error: {0}")]
+    CounterError(#[from] CounterError),
     #[error("Transfer error: {0}")]
     TransferError(#[from] TransferError),
 }
@@ -93,11 +93,11 @@ impl Error {
     }
 }
 
-impl From<MetricError> for Error {
-    fn from(e: MetricError) -> Self {
+impl From<CounterError> for Error {
+    fn from(e: CounterError) -> Self {
         match e {
-            MetricError::UsageLimitExceeded(e) => Error::UsageLimitExceeded(e),
-            e => Error::from(LocalServiceError::MetricError(e)),
+            CounterError::UsageLimitExceeded(e) => Error::UsageLimitExceeded(e),
+            e => Error::from(LocalServiceError::CounterError(e)),
         }
     }
 }

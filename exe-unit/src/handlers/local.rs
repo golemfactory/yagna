@@ -6,9 +6,10 @@ use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
+
 use ya_client_model::activity;
 use ya_core_model::activity::local::SetState as SetActivityState;
-use ya_counters::message::SetMetric;
+use ya_counters::message::SetCounter;
 
 impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
     fn handle(&mut self, event: RuntimeEvent, ctx: &mut Context<Self>) {
@@ -25,9 +26,9 @@ impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
                 _ => log::error!("Batch {} event error: unknown batch", event.batch_id),
             },
             RuntimeEvent::Counter { name, value } => {
-                let addr = self.metrics.clone();
+                let addr = self.counters.clone();
                 let fut = async move {
-                    let _ = addr.send(SetMetric { name, value }).await;
+                    let _ = addr.send(SetCounter { name, value }).await;
                 };
                 ctx.spawn(fut.into_actor(self));
             }

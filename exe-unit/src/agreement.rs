@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 use ya_agreement_utils::agreement::{try_from_path, AgreementView, Error};
-use ya_counters::{MemMetric, StorageMetric};
+use ya_counters::{MemCounter, StorageCounter};
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
@@ -35,8 +35,8 @@ impl TryFrom<Value> for Agreement {
         let infra = agreement.properties::<f64>("/offer/properties/golem/inf")?;
 
         let limits = vec![
-            (MemMetric::ID, MemMetric::INF),
-            (StorageMetric::ID, StorageMetric::INF),
+            (MemCounter::ID, MemCounter::INF),
+            (StorageCounter::ID, StorageCounter::INF),
         ]
         .into_iter()
         .filter_map(|(id, inf)| infra.get(inf).map(|v| (id.to_string(), *v)))

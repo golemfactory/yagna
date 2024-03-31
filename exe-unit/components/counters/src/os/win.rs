@@ -1,7 +1,7 @@
+use crate::error::CounterError;
 use crate::os::process::*;
-
-use crate::error::MetricError;
 use crate::Result;
+
 use std::time::Duration;
 
 pub fn cpu_time() -> Result<Duration> {
@@ -17,7 +17,7 @@ pub fn cpu_time() -> Result<Duration> {
 
 #[inline(always)]
 pub fn mem_rss() -> Result<f64> {
-    Err(MetricError::Unsupported("mem".to_owned()))
+    Err(CounterError::Unsupported("mem".to_owned()))
 }
 
 pub fn mem_peak_rss() -> Result<f64> {

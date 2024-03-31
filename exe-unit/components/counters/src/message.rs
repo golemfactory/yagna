@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
-pub struct GetMetrics;
+pub struct GetCounters;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
-pub struct SetMetric {
+pub struct SetCounter {
     pub name: String,
     pub value: f64,
 }

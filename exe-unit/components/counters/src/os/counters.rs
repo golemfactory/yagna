@@ -5,40 +5,40 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, thread};
 
-use crate::counters::{Metric, MetricData};
-use crate::error::MetricError;
+use crate::counters::{Counter, CounterData};
+use crate::error::CounterError;
 use crate::os;
 use crate::Result;
 
 #[derive(Default)]
-pub struct CpuMetric {}
+pub struct CpuCounter {}
 
-impl CpuMetric {
+impl CpuCounter {
     pub const ID: &'static str = "golem.usage.cpu_sec";
 }
 
-impl Metric for CpuMetric {
+impl Counter for CpuCounter {
     #[inline]
-    fn frame(&mut self) -> Result<MetricData> {
+    fn frame(&mut self) -> Result<CounterData> {
         os::cpu_time().map(|d| d.as_secs_f64())
     }
 
     #[inline]
-    fn peak(&mut self) -> Result<MetricData> {
+    fn peak(&mut self) -> Result<CounterData> {
         self.frame()
     }
 }
 
 #[derive(Default)]
-pub struct MemMetric {
-    peak: MetricData,
+pub struct MemCounter {
+    peak: CounterData,
 }
 
-impl MemMetric {
+impl MemCounter {
     pub const ID: &'static str = "golem.usage.gib";
     pub const INF: &'static str = "mem.gib";
 
-    fn update_peak(&mut self, val: MetricData) -> MetricData {
+    fn update_peak(&mut self, val: CounterData) -> CounterData {
         if val > self.peak {
             self.peak = val;
         }
@@ -46,43 +46,43 @@ impl MemMetric {
     }
 }
 
-impl Metric for MemMetric {
-    fn frame(&mut self) -> Result<MetricData> {
+impl Counter for MemCounter {
+    fn frame(&mut self) -> Result<CounterData> {
         match os::mem_rss() {
             Ok(data) => {
-                let data = data as MetricData;
+                let data = data as CounterData;
                 self.update_peak(data);
                 Ok(data)
             }
             Err(err) => match &err {
-                MetricError::Unsupported(_) => self.peak(),
+                CounterError::Unsupported(_) => self.peak(),
                 _ => Err(err),
             },
         }
     }
 
-    fn peak(&mut self) -> Result<MetricData> {
-        let peak = os::mem_peak_rss()? as MetricData;
+    fn peak(&mut self) -> Result<CounterData> {
+        let peak = os::mem_peak_rss()? as CounterData;
         Ok(self.update_peak(peak))
     }
 }
 
-pub struct StorageMetric {
+pub struct StorageCounter {
     path: PathBuf,
-    peak: MetricData,
+    peak: CounterData,
     last: Arc<AtomicU64>,
     running: Arc<AtomicBool>,
     interval: Duration,
 }
 
-impl StorageMetric {
+impl StorageCounter {
     pub const ID: &'static str = "golem.usage.storage_gib";
     pub const INF: &'static str = "storage.gib";
 
     pub fn new(path: PathBuf, interval: Duration) -> Self {
-        StorageMetric {
+        StorageCounter {
             path,
-            peak: 0 as MetricData,
+            peak: 0 as CounterData,
             last: Arc::new(AtomicU64::new(0)),
             running: Arc::new(AtomicBool::new(false)),
             interval,
@@ -103,12 +103,12 @@ impl StorageMetric {
             let (size, skipped) = match fs::read_dir(path.clone()) {
                 Ok(dir) => Self::read_dir_size(dir),
                 Err(err) => {
-                    log::error!("StorageMetric: unable to read '{:?}': {:?}", path, err);
+                    log::error!("StorageCounter: unable to read '{:?}': {:?}", path, err);
                     return;
                 }
             };
             if skipped > 0 {
-                log::warn!("StorageMetric: skipped {} filesystem entries", skipped);
+                log::warn!("StorageCounter: skipped {} filesystem entries", skipped);
             }
 
             last.store(size, Ordering::Relaxed);
@@ -135,7 +135,7 @@ impl StorageMetric {
     }
 
     #[inline]
-    fn update_peak(&mut self, val: MetricData) -> MetricData {
+    fn update_peak(&mut self, val: CounterData) -> CounterData {
         if val > self.peak {
             self.peak = val;
         }
@@ -143,25 +143,25 @@ impl StorageMetric {
     }
 }
 
-impl Metric for StorageMetric {
-    fn frame(&mut self) -> Result<MetricData> {
+impl Counter for StorageCounter {
+    fn frame(&mut self) -> Result<CounterData> {
         if self.running.load(Ordering::Relaxed).not() {
             self.running.store(true, Ordering::Relaxed);
             self.spawn();
         }
 
-        let val = self.last.load(Ordering::Relaxed) as MetricData / (1024. * 1024. * 1024.);
+        let val = self.last.load(Ordering::Relaxed) as CounterData / (1024. * 1024. * 1024.);
         self.update_peak(val);
         Ok(val)
     }
 
     #[inline]
-    fn peak(&mut self) -> Result<MetricData> {
+    fn peak(&mut self) -> Result<CounterData> {
         Ok(self.peak)
     }
 }
 
-impl Drop for StorageMetric {
+impl Drop for StorageCounter {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
     }

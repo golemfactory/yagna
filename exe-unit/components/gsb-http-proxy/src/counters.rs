@@ -5,9 +5,9 @@ use std::sync::{
 
 use chrono::{DateTime, Duration, Utc};
 
-use ya_counters::error::MetricError;
+use ya_counters::error::CounterError;
 use ya_counters::Result as CountersResult;
-use ya_counters::{Metric, MetricData};
+use ya_counters::{Counter, CounterData};
 
 #[derive(Default, Clone, Debug)]
 pub(super) struct Counters {
@@ -16,11 +16,11 @@ pub(super) struct Counters {
 }
 
 impl Counters {
-    pub(super) fn requests_counter(&mut self) -> impl Metric {
+    pub(super) fn requests_counter(&mut self) -> impl Counter {
         self.requests.get_or_insert_with(Default::default).clone()
     }
 
-    pub(super) fn requests_duration_counter(&mut self) -> impl Metric {
+    pub(super) fn requests_duration_counter(&mut self) -> impl Counter {
         self.requests_duration
             .get_or_insert_with(Default::default)
             .clone()
@@ -86,13 +86,13 @@ impl RequestCounter {
     }
 }
 
-impl Metric for RequestCounter {
-    fn frame(&mut self) -> CountersResult<MetricData> {
+impl Counter for RequestCounter {
+    fn frame(&mut self) -> CountersResult<CounterData> {
         let count = self.count.load(Ordering::Relaxed) as f64;
         Ok(count)
     }
 
-    fn peak(&mut self) -> CountersResult<MetricData> {
+    fn peak(&mut self) -> CountersResult<CounterData> {
         self.frame()
     }
 }
@@ -116,15 +116,15 @@ impl SharedRequestsDurationCounter {
     }
 }
 
-impl Metric for SharedRequestsDurationCounter {
-    fn frame(&mut self) -> CountersResult<MetricData> {
+impl Counter for SharedRequestsDurationCounter {
+    fn frame(&mut self) -> CountersResult<CounterData> {
         match self.0.read() {
             Ok(counter) => counter.count(),
-            Err(err) => Err(MetricError::Other(err.to_string())),
+            Err(err) => Err(CounterError::Other(err.to_string())),
         }
     }
 
-    fn peak(&mut self) -> CountersResult<MetricData> {
+    fn peak(&mut self) -> CountersResult<CounterData> {
         self.frame()
     }
 }
@@ -154,7 +154,7 @@ impl RequestsDurationCounter {
         let response_time = Utc::now();
         self.active_requests_count -= 1;
         if self.active_requests_count == 0 {
-            self.duration = self.duration + self.active_request_duration(response_time);
+            self.duration += self.active_request_duration(response_time);
             self.first_active_request_start_time = None;
         }
     }

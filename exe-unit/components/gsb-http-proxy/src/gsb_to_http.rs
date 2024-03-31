@@ -3,7 +3,7 @@ use crate::headers;
 use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
 
-use ya_counters::Metric;
+use ya_counters::Counter;
 
 use async_stream::stream;
 use chrono::Utc;
@@ -91,11 +91,11 @@ impl GsbToHttpProxy {
         Box::pin(stream)
     }
 
-    pub fn requests_counter(&mut self) -> impl Metric {
+    pub fn requests_counter(&mut self) -> impl Counter {
         self.counters.requests_counter()
     }
 
-    pub fn requests_duration_counter(&mut self) -> impl Metric {
+    pub fn requests_duration_counter(&mut self) -> impl Counter {
         self.counters.requests_duration_counter()
     }
 }
@@ -106,7 +106,7 @@ mod tests {
     use crate::message::GsbHttpCallMessage;
     use futures::StreamExt;
     use std::collections::HashMap;
-    use ya_counters::Metric;
+    use ya_counters::Counter;
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
