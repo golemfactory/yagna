@@ -102,34 +102,25 @@ impl GsbToHttpProxy {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::gsb_to_http::GsbToHttpProxy;
     use crate::message::GsbHttpCallMessage;
     use futures::StreamExt;
-    use std::collections::HashMap;
+    use mockito::{Mock, ServerGuard};
     use ya_counters::Counter;
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
         // Mock server
-        let mut server = mockito::Server::new();
-        let url = server.url();
-
-        server
-            .mock("GET", "/endpoint")
-            .with_status(201)
-            .with_body("response")
-            .create();
+        #[allow(unused)]
+        let (server, mock, url) = mock_server();
 
         let mut gsb_call = GsbToHttpProxy::new(url);
         let mut requests_counter = gsb_call.requests_counter();
         let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
-        let message = GsbHttpCallMessage {
-            method: "GET".to_string(),
-            path: "/endpoint".to_string(),
-            body: None,
-            headers: HashMap::new(),
-        };
+        let message = message();
 
         let mut response_stream = gsb_call.pass(message);
 
@@ -141,5 +132,85 @@ mod tests {
         assert_eq!(vec!["response".as_bytes()], v);
         assert_eq!(1.0, requests_counter.frame().unwrap());
         assert!(requests_duration_counter.frame().unwrap() > 0.0);
+    }
+
+    #[actix_web::test]
+    async fn cloned_proxy_test() {
+        // Mock server
+        #[allow(unused)]
+        let (server, mock, url) = mock_server();
+
+        let mut gsb_call = GsbToHttpProxy::new(url);
+        let mut requests_counter = gsb_call.requests_counter();
+        let mut requests_duration_counter = gsb_call.requests_duration_counter();
+
+        let message = message();
+
+        // Cloned proxy should keep initialized counters
+        let mut gsb_call = gsb_call.clone();
+
+        let mut response_stream = gsb_call.pass(message);
+
+        let mut v = vec![];
+        while let Some(event) = response_stream.next().await {
+            v.push(event.msg_bytes);
+        }
+
+        assert_eq!(vec!["response".as_bytes()], v);
+        assert_eq!(1.0, requests_counter.frame().unwrap());
+        assert!(requests_duration_counter.frame().unwrap() > 0.0);
+    }
+
+    #[actix_web::test]
+    async fn multiple_parallel_requests() {
+        // Mock server
+        #[allow(unused)]
+        let (server, mock, url) = mock_server();
+
+        let mut gsb_call = GsbToHttpProxy::new(url);
+        let mut requests_counter = gsb_call.requests_counter();
+        let mut requests_duration_counter = gsb_call.requests_duration_counter();
+
+        let task_0 = run_10_requests(gsb_call.clone());
+        let task_1 = run_10_requests(gsb_call.clone());
+
+        tokio::join!(task_0, task_1);
+
+        assert_eq!(20.0, requests_counter.frame().unwrap());
+        assert!(requests_duration_counter.frame().unwrap() > 0.0);
+    }
+
+    async fn run_10_requests(mut gsb_call_proxy: GsbToHttpProxy) {
+        let message = message();
+        for _ in 0..10 {
+            let message = message.clone();
+            let mut response_stream = gsb_call_proxy.pass(message);
+            let mut v = vec![];
+            while let Some(event) = response_stream.next().await {
+                v.push(event.msg_bytes);
+            }
+            assert_eq!(vec!["response".as_bytes()], v);
+        }
+    }
+
+    fn mock_server() -> (ServerGuard, Mock, String) {
+        // Mock server
+        let mut server = mockito::Server::new();
+        let url = server.url();
+        let mock = server
+            .mock("GET", "/endpoint")
+            .with_status(201)
+            .with_body("response")
+            .create();
+        (server, mock, url)
+    }
+
+    fn message() -> GsbHttpCallMessage {
+        GsbHttpCallMessage {
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
+            headers: HashMap::new(),
+        }
     }
 }
