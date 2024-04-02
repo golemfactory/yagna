@@ -184,6 +184,12 @@ fn blacklist_negotiator_certificate_blacklisted(
     &["0x0000000000000000000000000000000000000001"];
     "Accepted; Other id is on blacklist"
 )]
+#[test_case(
+    Some("node.independent-chain.node.signed.json"),
+    &[],
+    &[];
+    "Certificate with no permissions field is allowed"
+)]
 #[serial]
 fn blacklist_negotiator_pass_node(
     node_descriptor: Option<&str>,

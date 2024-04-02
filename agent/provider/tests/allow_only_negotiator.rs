@@ -215,6 +215,12 @@ fn allowonly_negotiator_rule_rejections(
     &["0x0000000000000000000000000000000000000001"];
     "Signed Requestors with certificate on the allow-list are passed, when more than one certificate and id is allowed"
 )]
+#[test_case(
+    Some("node.independent-chain.node.signed.json"),
+    &["independent-chain-depth-1.cert.signed.json"],
+    &[];
+    "Certificate with no permissions field is allowed"
+)]
 #[serial]
 fn allowonly_negotiator_rule_accepts(
     node_descriptor: Option<&str>,
