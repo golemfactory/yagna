@@ -1,17 +1,17 @@
 #![allow(clippy::items_after_test_module)]
-
-use std::{
-    collections::HashSet,
-    iter::FromIterator,
-    path::{Path, PathBuf},
-    str::from_utf8,
-};
+mod utils;
 
 use assert_cmd::Command;
 use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
+use serde_json::json;
+use std::{collections::HashSet, iter::FromIterator, path::PathBuf, str::from_utf8};
 use tempdir::TempDir;
 use test_case::test_case;
+
+use crate::utils::rules::cli::{
+    add_certificate_to_keystore, get_rule_mode, list_certs, list_rules_command,
+    remove_certificate_from_keystore, rule_to_mode,
+};
 
 static INIT: std::sync::Once = std::sync::Once::new();
 
@@ -38,6 +38,16 @@ fn rule_list_cmd_should_print_default_rules() {
             "everyone": "whitelist",
             "audited-payload": {},
             "partner": {}
+          },
+          "blacklist": {
+            "enabled": false,
+            "identity": [],
+            "certified": []
+          },
+          "allow-only": {
+            "enabled": false,
+            "identity": [],
+            "certified": []
           }
         })
     );
@@ -276,13 +286,6 @@ fn rule_set_with_import_x509_cert_chain_should_add_whole_to_keystore_and_leaf_to
     assert_eq!(root_mode, None);
 }
 
-fn get_rule_mode<'a>(rules_list: &'a Value, rule: &'a str, cert_id: &'a str) -> Option<&'a Value> {
-    rules_list["outbound"][rule]
-        .as_object()
-        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_id)))
-        .map(|(_id, value)| &value["mode"])
-}
-
 #[test_case("audited-payload", "foo_ca.cert.pem")]
 #[test_case("partner", "partner-certificate.signed.json")]
 #[serial_test::serial]
@@ -310,70 +313,6 @@ fn removing_cert_should_also_remove_its_rule(rule: &str, cert: &str) {
     let result = list_rules_command(data_dir.path());
 
     assert_eq!(result["outbound"][rule][&cert_id], serde_json::Value::Null);
-}
-
-fn list_rules_command(data_dir: &Path) -> serde_json::Value {
-    let output = Command::cargo_bin("ya-provider")
-        .unwrap()
-        .env("DATA_DIR", data_dir.to_str().unwrap())
-        .arg("rule")
-        .arg("list")
-        .arg("--json")
-        .output()
-        .unwrap();
-
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
-fn rule_to_mode<'json>(
-    rule: &'json serde_json::Value,
-    cert_prefix: &str,
-) -> Option<&'json serde_json::Value> {
-    rule.as_object()
-        .and_then(|obj| obj.iter().find(|(id, _cert)| id.starts_with(cert_prefix)))
-        .map(|(_id, value)| &value["mode"])
-}
-
-fn remove_certificate_from_keystore(data_dir: &Path, cert_id: &str) {
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .env("DATA_DIR", data_dir.to_str().unwrap())
-        .arg("keystore")
-        .arg("remove")
-        .arg(cert_id)
-        .assert()
-        .success();
-}
-
-fn add_certificate_to_keystore(data_dir: &Path, resource_cert_dir: &Path, cert: &str) -> String {
-    Command::cargo_bin("ya-provider")
-        .unwrap()
-        .env("DATA_DIR", data_dir.to_str().unwrap())
-        .arg("keystore")
-        .arg("add")
-        .arg(resource_cert_dir.join(cert))
-        .assert()
-        .success();
-
-    list_certs(data_dir)[0].clone()
-}
-
-fn list_certs(data_dir: &Path) -> Vec<String> {
-    let output = Command::cargo_bin("ya-provider")
-        .unwrap()
-        .env("DATA_DIR", data_dir.to_str().unwrap())
-        .arg("keystore")
-        .arg("list")
-        .arg("--json")
-        .output()
-        .unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    result
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v["ID"].as_str().unwrap().to_string())
-        .collect()
 }
 
 fn prepare_test_dir() -> TempDir {
