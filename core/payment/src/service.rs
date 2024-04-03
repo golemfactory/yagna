@@ -131,7 +131,7 @@ mod local {
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        let res = processor.schedule_payment(msg).await;
+        let res = processor.schedule_payment(sender, msg).await;
         log::debug!("Schedule payment processor finished");
         Ok(res?)
     }
