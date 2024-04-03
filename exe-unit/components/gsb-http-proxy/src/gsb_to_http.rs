@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn multiple_parallel_requests() {
+    async fn multiple_concurrent_requests() {
         // Mock server
         #[allow(unused)]
         let (server, mock, url) = mock_server();

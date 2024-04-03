@@ -11,13 +11,15 @@ use ya_counters::{Counter, CounterData};
 
 #[derive(Default, Clone, Debug)]
 pub(super) struct Counters {
-    requests: Option<RequestCounter>,
+    requests_count: Option<RequestCounter>,
     requests_duration: Option<SharedRequestsDurationCounter>,
 }
 
 impl Counters {
     pub(super) fn requests_counter(&mut self) -> impl Counter {
-        self.requests.get_or_insert_with(Default::default).clone()
+        self.requests_count
+            .get_or_insert_with(Default::default)
+            .clone()
     }
 
     pub(super) fn requests_duration_counter(&mut self) -> impl Counter {
@@ -27,14 +29,13 @@ impl Counters {
     }
 
     pub(super) fn on_request(&mut self) -> ResponseHandler {
-        if let Some(counter) = &mut self.requests {
+        if let Some(counter) = &mut self.requests_count {
             counter.on_request();
         }
         if let Some(counter) = &mut self.requests_duration {
             counter.on_request();
-            let counter = Some(counter.clone());
             return ResponseHandler {
-                counter,
+                counter: Some(counter.clone()),
                 ..Default::default()
             };
         }
@@ -68,11 +69,6 @@ impl Drop for ResponseHandler {
     fn drop(&mut self) {
         self.on_response_priv()
     }
-}
-
-trait RequestResponseHandler {
-    fn on_request(&mut self);
-    fn on_response(&mut self);
 }
 
 #[derive(Debug, Default, Clone)]
@@ -179,5 +175,5 @@ impl Default for RequestsDurationCounter {
 }
 
 fn duration_to_secs(duration: Duration) -> f64 {
-    duration.to_std().expect("Duration is >= 0").as_secs_f64()
+    duration.to_std().unwrap_or_default().as_secs_f64()
 }
