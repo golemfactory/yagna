@@ -1989,7 +1989,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "erc20_payment_lib"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0304f7f3075b2a353c028370f56ddb83baf7581c#0304f7f3075b2a353c028370f56ddb83baf7581c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix",
  "actix-files",
@@ -2031,7 +2031,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_common"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0304f7f3075b2a353c028370f56ddb83baf7581c#0304f7f3075b2a353c028370f56ddb83baf7581c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2072,7 +2072,7 @@ dependencies = [
 [[package]]
 name = "erc20_payment_lib_extra"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0304f7f3075b2a353c028370f56ddb83baf7581c#0304f7f3075b2a353c028370f56ddb83baf7581c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2108,7 +2108,7 @@ dependencies = [
 [[package]]
 name = "erc20_processor"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0304f7f3075b2a353c028370f56ddb83baf7581c#0304f7f3075b2a353c028370f56ddb83baf7581c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2156,7 +2156,7 @@ dependencies = [
 [[package]]
 name = "erc20_rpc_pool"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=0304f7f3075b2a353c028370f56ddb83baf7581c#0304f7f3075b2a353c028370f56ddb83baf7581c"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -5149,9 +5149,9 @@ dependencies = [
 
 [[package]]
 name = "protoc-prebuilt"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37aee930fb53074ec083bf049aa6133bb1a93cce8fc39f83e07f36a0937304dd"
+checksum = "4d85d4641fe3b8c6e853dfd09fe35379bc6b6e66bd692ac29ed4f7087de69ed5"
 dependencies = [
  "ureq",
  "zip 0.6.6",
@@ -8358,7 +8358,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8382,7 +8382,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8393,6 +8393,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -9064,7 +9065,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9094,7 +9095,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "chrono",
@@ -9124,7 +9125,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "bytes 1.5.0",
@@ -9138,7 +9139,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
 ]
 
 [[package]]
@@ -9164,7 +9165,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "derive_more",
  "futures 0.3.30",
@@ -9178,7 +9179,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
 ]
 
 [[package]]
@@ -9194,7 +9195,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "bytes 1.5.0",
  "derive_more",
