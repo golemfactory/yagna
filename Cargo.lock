@@ -8297,7 +8297,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9865df0f8adf265a2b2f020a632cafd5cd8e82b5#9865df0f8adf265a2b2f020a632cafd5cd8e82b5"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=ed613ed25f4a48c633aba21a8fae6426bd71c19e#ed613ed25f4a48c633aba21a8fae6426bd71c19e"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8321,7 +8321,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9865df0f8adf265a2b2f020a632cafd5cd8e82b5#9865df0f8adf265a2b2f020a632cafd5cd8e82b5"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=ed613ed25f4a48c633aba21a8fae6426bd71c19e#ed613ed25f4a48c633aba21a8fae6426bd71c19e"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",

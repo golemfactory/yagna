@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
             total_amount: BigDecimal::from(1u64),
             timeout: None,
             make_deposit: false,
+            deposit: None,
         })
         .await;
     assert!(result.is_err());
@@ -76,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         total_amount: requestor_balance,
         timeout: None,
         make_deposit: false,
+        deposit: None,
     };
 
     log::info!(

@@ -78,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
+            deposit: None,
         })
         .await?;
     log::debug!("allocation={:?}", allocation);
