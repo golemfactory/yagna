@@ -110,7 +110,7 @@ fn restrict_rule_add_remove_identity_rules(rule: &str) {
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
-        .args(format!("rule add {rule} by-node-id --address {node1}").split(' '))
+        .args(format!("rule add {rule} identity {node1}").split(' '))
         .assert()
         .success();
 
@@ -127,7 +127,7 @@ fn restrict_rule_add_remove_identity_rules(rule: &str) {
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
-        .args(format!("rule add {rule} by-node-id --address {node2}").split(' '))
+        .args(format!("rule add {rule} identity {node2}").split(' '))
         .assert()
         .success();
 
@@ -144,7 +144,7 @@ fn restrict_rule_add_remove_identity_rules(rule: &str) {
     Command::cargo_bin("ya-provider")
         .unwrap()
         .env("DATA_DIR", data_dir.path().to_str().unwrap())
-        .args(format!("rule remove {rule} by-node-id --address {node1}").split(' '))
+        .args(format!("rule remove {rule} identity {node1}").split(' '))
         .assert()
         .success();
 
