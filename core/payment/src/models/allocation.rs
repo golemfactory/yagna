@@ -92,7 +92,6 @@ impl From<ReadObj> for Allocation {
             remaining_amount: allocation.remaining_amount.into(),
             timestamp: Utc.from_utc_datetime(&allocation.timestamp),
             timeout: allocation.timeout.map(|v| Utc.from_utc_datetime(&v)),
-            deposit: None,
             make_deposit: allocation.make_deposit,
             deposit: allocation
                 .deposit

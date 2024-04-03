@@ -11,16 +11,14 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
-use futures::FutureExt;
-use futures::{FutureExt, TryFutureExt};
 use chrono::{DateTime, Utc};
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::{
@@ -554,17 +552,11 @@ impl PaymentProcessor {
                 &amount
             )));
         }
-        let driver =
-            self.registry
-                .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
-        let driver = self
-            .registry
-            .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await?
-            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
 
         let allocation_status = self
             .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await?
             .as_dao::<AllocationDao>()
             .get(
                 msg.allocation_id.clone(),
@@ -578,12 +570,12 @@ impl PaymentProcessor {
             None
         };
 
-let driver = self
+        let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
-       
+
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,

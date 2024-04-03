@@ -34,7 +34,6 @@ async fn main() -> anyhow::Result<()> {
             )),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
-            deposit: None,
             make_deposit: false,
             deposit: None,
         })
@@ -99,7 +98,6 @@ async fn main() -> anyhow::Result<()> {
             )),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
-            deposit: None,
             make_deposit: false,
             deposit: None,
         })
