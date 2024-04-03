@@ -160,6 +160,8 @@ pub mod local {
         InvalidDefaultToken(String, String),
         #[error("Invalid default network specified: {0}")]
         InvalidDefaultNetwork(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterDriver {
@@ -168,13 +170,19 @@ pub mod local {
         type Error = RegisterDriverError;
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterDriverError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct UnregisterDriver(pub String);
 
     impl RpcMessage for UnregisterDriver {
         const ID: &'static str = "UnregisterDriver";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterDriverError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -198,12 +206,20 @@ pub mod local {
         UnsupportedToken(String, String, String),
         #[error("Error while registering account: {0}")]
         Other(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterAccount {
         const ID: &'static str = "RegisterAccount";
         type Item = ();
         type Error = RegisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterAccountError {
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -215,7 +231,7 @@ pub mod local {
     impl RpcMessage for UnregisterAccount {
         const ID: &'static str = "UnregisterAccount";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterAccountError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -348,10 +364,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetAccounts {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetAccountsError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
-        type Error = GenericError;
+        type Error = GetAccountsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -452,10 +474,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetDriversError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
-        type Error = NoError;
+        type Error = GetDriversError;
     }
 
     // ********************* STATUS ********************************

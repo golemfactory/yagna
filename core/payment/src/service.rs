@@ -1,7 +1,6 @@
 use crate::dao::{DebitNoteDao, InvoiceDao};
 use crate::processor::PaymentProcessor;
 
-use futures::lock::Mutex;
 use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
@@ -36,10 +35,9 @@ impl Default for BindOptions {
     }
 }
 
-pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor, opts: BindOptions) {
+pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
     log::debug!("Binding payment service to service bus");
 
-    let processor = Arc::new(Mutex::new(processor));
     local::bind_service(db, processor.clone());
     public::bind_service(db, processor, opts);
 
@@ -51,6 +49,8 @@ mod local {
     use crate::dao::*;
     use chrono::NaiveDateTime;
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
     use ya_client_model::{
         payment::{
@@ -66,7 +66,7 @@ mod local {
     };
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
+    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>) {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -126,78 +126,104 @@ mod local {
 
     async fn schedule_payment(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
-        processor.lock().await.schedule_payment(sender, msg).await?;
-        Ok(())
+        log::debug!("Schedule payment processor started");
+        let res = processor.schedule_payment(msg).await;
+        log::debug!("Schedule payment processor finished");
+        Ok(res?)
     }
 
     async fn register_driver(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: RegisterDriver,
     ) -> Result<(), RegisterDriverError> {
-        processor.lock().await.register_driver(msg).await
+        log::debug!("Register driver processor started");
+        let res = processor.register_driver(msg).await;
+        log::debug!("Register driver processor finished");
+        res
     }
 
     async fn unregister_driver(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterDriver,
-    ) -> Result<(), NoError> {
-        processor.lock().await.unregister_driver(msg).await;
-        Ok(())
+    ) -> Result<(), UnregisterDriverError> {
+        log::debug!("Unregister driver processor started");
+        let res = processor.unregister_driver(msg).await;
+        log::debug!("Unregister driver processor finished");
+
+        res
     }
 
     async fn register_account(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: RegisterAccount,
     ) -> Result<(), RegisterAccountError> {
-        processor.lock().await.register_account(msg).await
+        log::debug!("Register account processor started");
+        let res = processor.register_account(msg).await;
+        log::debug!("Register account processor finished");
+        res
     }
 
     async fn unregister_account(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterAccount,
-    ) -> Result<(), NoError> {
-        processor.lock().await.unregister_account(msg).await;
+    ) -> Result<(), UnregisterAccountError> {
+        log::debug!("Unregister account processor started");
+        processor.unregister_account(msg).await?;
+        log::debug!("Unregister account processor finished");
         Ok(())
     }
 
     async fn get_accounts(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: GetAccounts,
-    ) -> Result<Vec<Account>, GenericError> {
-        Ok(processor.lock().await.get_accounts().await)
+    ) -> Result<Vec<Account>, GetAccountsError> {
+        log::debug!("Get accounts processor started");
+        let res = processor.get_accounts().await;
+        log::debug!("Get accounts processor finished");
+        res
     }
 
     async fn notify_payment(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        processor.lock().await.notify_payment(msg).await?;
-        Ok(())
+        static NOTIFY_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let i = NOTIFY_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let start = Instant::now();
+
+        log::debug!("Notify payment no. {i} processor started");
+        let res = processor.notify_payment(msg).await;
+        log::debug!(
+            "Notify payment no. {} processor finished after {:.2}s",
+            i,
+            start.elapsed().as_secs_f32()
+        );
+
+        Ok(res?)
     }
 
     async fn get_rpc_endpoints(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
-        log::info!("get rpc endpoints: {:?}", msg);
         let GetRpcEndpoints {
             driver,
             network,
@@ -208,8 +234,6 @@ mod local {
         } = msg;
 
         let (network2, network_details) = processor
-            .lock()
-            .await
             .get_network(driver.to_string(), network.as_ref().map(|s| s.to_string()))
             .await
             .map_err(GenericError::new)?;
@@ -227,8 +251,6 @@ mod local {
         };
 
         let rpc_info = processor
-            .lock()
-            .await
             .get_rpc_endpoints_info(
                 platform,
                 address.to_string(),
@@ -248,11 +270,10 @@ mod local {
 
     async fn get_status(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
-        log::info!("get status: {:?}", msg);
         let GetStatus {
             address,
             driver,
@@ -262,8 +283,6 @@ mod local {
         } = msg;
 
         let (network, network_details) = processor
-            .lock()
-            .await
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
@@ -303,8 +322,6 @@ mod local {
 
         let amount_fut = async {
             processor
-                .lock()
-                .await
                 .get_status(platform.clone(), address.clone())
                 .await
         }
@@ -312,8 +329,6 @@ mod local {
 
         let gas_amount_fut = async {
             processor
-                .lock()
-                .await
                 .get_gas_balance(platform.clone(), address.clone())
                 .await
         }
@@ -342,7 +357,7 @@ mod local {
 
     async fn get_invoice_stats(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetInvoiceStats,
     ) -> Result<InvoiceStats, GenericError> {
@@ -394,39 +409,39 @@ mod local {
 
     async fn validate_allocation(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: ValidateAllocation,
     ) -> Result<bool, ValidateAllocationError> {
         Ok(processor
-            .lock()
-            .await
             .validate_allocation(msg.platform, msg.address, msg.amount, msg.timeout)
             .await?)
     }
 
     async fn release_allocations(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: ReleaseAllocations,
     ) -> Result<(), GenericError> {
-        processor.lock().await.release_allocations(true).await;
+        log::debug!("Release allocations processor started");
+        processor.release_allocations(true).await;
+        log::debug!("Release allocations processor finished");
         Ok(())
     }
 
     async fn get_drivers(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetDrivers,
-    ) -> Result<HashMap<String, DriverDetails>, NoError> {
-        Ok(processor.lock().await.get_drivers().await)
+    ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
+        processor.get_drivers().await
     }
 
     async fn payment_driver_status(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: PaymentDriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, PaymentDriverStatusError> {
@@ -472,7 +487,7 @@ mod local {
     // *************************** PAYMENT ****************************
     async fn handle_status_change(
         db: DbExecutor,
-        _processor: Arc<Mutex<PaymentProcessor>>,
+        _processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: PaymentDriverStatusChange,
     ) -> Result<Ack, GenericError> {
@@ -693,13 +708,13 @@ mod local {
 
     async fn shut_down(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender: String,
         msg: ShutDown,
     ) -> Result<(), GenericError> {
         // It's crucial to drop the lock on processor (hence assigning the future to a variable).
         // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
-        let shutdown_future = processor.lock().await.shut_down(msg.timeout);
+        let shutdown_future = processor.shut_down(msg.timeout).await;
         shutdown_future.await;
         Ok(())
     }
@@ -721,11 +736,7 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(
-        db: &DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
-        opts: BindOptions,
-    ) {
+    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -1161,7 +1172,7 @@ mod public {
 
     async fn send_payment(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
@@ -1174,12 +1185,8 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
-        match processor
-            .lock()
-            .await
-            .verify_payment(payment, signature)
-            .await
-        {
+        log::debug!("Verify payment processor started");
+        let res = match processor.verify_payment(payment, signature).await {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
@@ -1192,7 +1199,9 @@ mod public {
                 VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
                 _ => Err(SendError::ServiceError(e.to_string())),
             },
-        }
+        };
+        log::debug!("Verify payment processor finished");
+        res
     }
 
     // **************************** SYNC *****************************
@@ -1215,7 +1224,7 @@ mod public {
 
     async fn sync_payment(
         db: DbExecutor,
-        processor: Arc<Mutex<PaymentProcessor>>,
+        processor: Arc<PaymentProcessor>,
         sender_id: String,
         msg: PaymentSync,
     ) -> Result<Ack, PaymentSyncError> {
