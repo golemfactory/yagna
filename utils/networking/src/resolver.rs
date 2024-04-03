@@ -71,7 +71,7 @@ pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
     lazy_static! {
         static ref SCHEME_RE: Regex = Regex::new("(?i)^[a-z0-9\\-\\.]+?:").unwrap();
     }
-    let dns_record_result =  if SCHEME_RE.is_match(request_url_or_host) {
+    let dns_record_result = if SCHEME_RE.is_match(request_url_or_host) {
         resolve_dns_record(request_url_or_host).await
     } else {
         resolve_dns_record_host(request_url_or_host).await
