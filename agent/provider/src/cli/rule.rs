@@ -47,14 +47,16 @@ pub enum RuleCategory {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum AddRule {
-    Outbound(SetOutboundRule),
+    /// TODO: Outbound rule should be moved here from SetRule.
+    //Outbound(SetOutboundRule),
     Blacklist(RestrictRuleDesc),
     AllowOnly(RestrictRuleDesc),
 }
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RemoveRule {
-    Outbound(SetOutboundRule),
+    /// TODO: Outbound rule should be moved here from SetRule.
+    //Outbound(SetOutboundRule),
     Blacklist(RestrictRuleDesc),
     AllowOnly(RestrictRuleDesc),
 }
@@ -73,11 +75,13 @@ pub enum SetOutboundRule {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RestrictRuleDesc {
-    ByNodeId {
-        #[structopt(short, long)]
-        address: NodeId,
-    },
+    Identity(RestrictRuleWithIdentity),
     Certified(RestrictRuleWithCert),
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub struct RestrictRuleWithIdentity {
+    address: NodeId,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -149,10 +153,7 @@ impl RuleCommand {
 
 fn add(rule: AddRule, mut rules: RulesManager) -> Result<()> {
     match rule {
-        AddRule::Outbound(_rule) => {
-            bail!("Outbound rules are not supported yet by this command. Use `rule set` instead.")
-        }
-        AddRule::Blacklist(RestrictRuleDesc::ByNodeId { address }) => {
+        AddRule::Blacklist(RestrictRuleDesc::Identity(RestrictRuleWithIdentity { address })) => {
             rules.blacklist().add_identity_rule(address)
         }
         AddRule::Blacklist(RestrictRuleDesc::Certified(rule)) => match rule {
@@ -167,7 +168,7 @@ fn add(rule: AddRule, mut rules: RulesManager) -> Result<()> {
                 Ok(())
             }
         },
-        AddRule::AllowOnly(RestrictRuleDesc::ByNodeId { address }) => {
+        AddRule::AllowOnly(RestrictRuleDesc::Identity(RestrictRuleWithIdentity { address })) => {
             rules.allow_only().add_identity_rule(address)
         }
         AddRule::AllowOnly(RestrictRuleDesc::Certified(rule)) => match rule {
@@ -187,10 +188,7 @@ fn add(rule: AddRule, mut rules: RulesManager) -> Result<()> {
 
 fn remove(rule: RemoveRule, rules: RulesManager) -> Result<()> {
     match rule {
-        RemoveRule::Outbound(_rule) => {
-            bail!("Outbound rules are not supported yet by this command. Use `rule set` instead.")
-        }
-        RemoveRule::Blacklist(RestrictRuleDesc::ByNodeId { address }) => {
+        RemoveRule::Blacklist(RestrictRuleDesc::Identity(RestrictRuleWithIdentity { address })) => {
             rules.blacklist().remove_identity_rule(address)
         }
         RemoveRule::Blacklist(RestrictRuleDesc::Certified(rule)) => match rule {
@@ -199,7 +197,7 @@ fn remove(rule: RemoveRule, rules: RulesManager) -> Result<()> {
             }
             RestrictRuleWithCert::ImportCert { .. } => bail!("Use cert id to remove rule"),
         },
-        RemoveRule::AllowOnly(RestrictRuleDesc::ByNodeId { address }) => {
+        RemoveRule::AllowOnly(RestrictRuleDesc::Identity(RestrictRuleWithIdentity { address })) => {
             rules.allow_only().remove_identity_rule(address)
         }
         RemoveRule::AllowOnly(RestrictRuleDesc::Certified(rule)) => match rule {
@@ -456,7 +454,7 @@ impl<G: RuleAccessor> TablePrint for RestrictRule<G> {
                 serde_json::json! {[ "Certified", "", short_id, subject.unwrap_or_default() ]}
             })
             .chain(nodes.into_iter().map(|node| {
-                serde_json::json! {[ "ByNodeId", node, "", "" ]}
+                serde_json::json! {[ "Identity", node, "", "" ]}
             }))
             .collect()
     }
