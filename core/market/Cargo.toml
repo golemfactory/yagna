@@ -68,3 +68,6 @@ serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch 
 ] }
 structopt = "0.3"
 tokio = { version = "1", features = ["macros", "rt"] }
+
+[lints]
+workspace = true
