@@ -1,33 +1,36 @@
-use crate::metrics::{error::MetricError, Result};
-use crate::process::*;
+use crate::os::process::*;
+
+use crate::error::CounterError;
+use crate::Result;
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 lazy_static::lazy_static! {
-    static ref METRICS: Arc<RwLock<Metrics>> = Arc::new(RwLock::new(Metrics::default()));
+    static ref COUNTERS: Arc<RwLock<Counters>> = Arc::new(RwLock::new(Counters::default()));
 }
 
 const MAX_UPDATE_RESOLUTION_MS: i64 = 100;
 
 pub fn cpu_time() -> Result<Duration> {
-    let mut metrics = (*METRICS).write().map_err(SystemError::from)?;
-    metrics.sample()?;
-    Ok(metrics.cpu_total)
+    let mut counters = (*COUNTERS).write().map_err(SystemError::from)?;
+    counters.sample()?;
+    Ok(counters.cpu_total)
 }
 
 #[inline(always)]
 pub fn mem_rss() -> Result<f64> {
-    Err(MetricError::Unsupported("mem".to_owned()))
+    Err(CounterError::Unsupported("mem".to_owned()))
 }
 
 pub fn mem_peak_rss() -> Result<f64> {
-    let mut metrics = (*METRICS).write().map_err(SystemError::from)?;
-    metrics.sample()?;
-    Ok(metrics.mem_total)
+    let mut counters = (*COUNTERS).write().map_err(SystemError::from)?;
+    counters.sample()?;
+    Ok(counters.mem_total)
 }
 
-struct Metrics {
+struct Counters {
     process_tree: ProcessTree,
     cpu: HashMap<i32, Duration>,
     mem: HashMap<i32, f64>,
@@ -36,12 +39,12 @@ struct Metrics {
     updated: i64,
 }
 
-impl Default for Metrics {
+impl Default for Counters {
     fn default() -> Self {
         let pid = unsafe { nix::libc::getpid() } as u32;
         let process_tree = ProcessTree::try_new(pid).unwrap();
 
-        Metrics {
+        Counters {
             cpu: HashMap::new(),
             mem: HashMap::new(),
             cpu_total: Duration::default(),
@@ -52,7 +55,7 @@ impl Default for Metrics {
     }
 }
 
-impl Metrics {
+impl Counters {
     fn sample(&mut self) -> Result<()> {
         // grace period
         let now = chrono::Local::now().timestamp_millis();
@@ -99,5 +102,11 @@ impl Metrics {
                     *mem_entry = usage.rss_gib;
                 }
             })
+    }
+}
+
+impl From<SystemError> for CounterError {
+    fn from(err: SystemError) -> Self {
+        Self::Other(err.to_string())
     }
 }

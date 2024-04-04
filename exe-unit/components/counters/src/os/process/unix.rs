@@ -1,12 +1,13 @@
-use nix::libc;
-use nix::sys::signal;
-use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
-use nix::unistd::Pid;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::io;
 use std::mem;
 use std::time::{Duration, Instant};
+
+use nix::libc;
+use nix::sys::signal;
+use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+use nix::unistd::Pid;
 use thiserror::Error;
 
 #[cfg(target_os = "linux")]

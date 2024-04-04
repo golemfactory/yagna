@@ -6,19 +6,23 @@ edition = "2021"
 
 [dependencies]
 ya-service-bus = { workspace = true }
+ya-counters = { path = "../counters" }
 
-thiserror = "1.0.51"
-serde = { version = "1.0.193", features = ["derive"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
-http = "1.0.0"
-serde_json = "1.0.111"
-tokio = { version = "1.35.0", features = ["full"] }
-reqwest = { version = "0.11.23", features = ["json"] }
-log = { version = "0.4.20", features = [] }
-async-stream = "0.3.5"
+http = "1.0"
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+log = { version = "0.4", features = [] }
+async-stream = "0.3"
 futures = { version = "0.3", features = [] }
 actix-web = "4"
 actix-http = "3"
-mockito = "1.2.0"
-futures-core = "0.3.30"
-serde_derive = "1.0.195"
+futures-core = "0.3"
+serde_derive = "1.0"
+actix = "0.13"
+
+[dev-dependencies]
+mockito = "1.2"

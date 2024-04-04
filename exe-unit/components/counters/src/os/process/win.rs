@@ -4,6 +4,8 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
+use crate::error::CounterError;
+
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
@@ -30,6 +32,12 @@ pub enum SystemError {
 impl<T> From<std::sync::PoisonError<T>> for SystemError {
     fn from(_: std::sync::PoisonError<T>) -> Self {
         SystemError::PoisonError
+    }
+}
+
+impl From<SystemError> for CounterError {
+    fn from(err: SystemError) -> Self {
+        CounterError::Other(err.to_string())
     }
 }
 

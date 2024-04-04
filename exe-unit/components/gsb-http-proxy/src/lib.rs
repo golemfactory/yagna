@@ -1,3 +1,4 @@
+pub mod counters;
 pub mod error;
 pub mod gsb_to_http;
 mod headers;
