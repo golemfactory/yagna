@@ -1,8 +1,8 @@
 use awc::error::{ConnectError, SendRequestError};
 use awc::Client;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use tokio::time::{self, Duration, Instant};
 
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
@@ -15,12 +15,16 @@ pub fn spawn(ctx: MetricsCtx) {
 
     log::debug!("Starting metrics pusher");
     tokio::task::spawn_local(async move {
-        push_forever(ctx.push_host_url.unwrap().as_str(), &ctx.job).await;
+        if let Some(push_host_url) = &ctx.push_host_url {
+            push_forever(push_host_url.as_str(), &ctx).await;
+        } else {
+            log::warn!("Metrics pusher enabled, but no `push_host_url` provided");
+        }
     });
     log::info!("Metrics pusher started");
 }
 
-pub async fn push_forever(host_url: &str, job: &str) {
+pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let node_identity = match try_get_default_id().await {
         Ok(default_id) => default_id,
         Err(e) => {
@@ -31,7 +35,7 @@ pub async fn push_forever(host_url: &str, job: &str) {
             return;
         }
     };
-    let push_url = match get_push_url(host_url, &node_identity, job) {
+    let push_url = match get_push_url(host_url, &node_identity, ctx) {
         Ok(url) => url,
         Err(e) => {
             log::warn!(
@@ -111,10 +115,10 @@ async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {
     Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Undefined error")))
 }
 
-fn get_push_url(host_url: &str, id: &IdentityInfo, job: &str) -> anyhow::Result<String> {
+fn get_push_url(host_url: &str, id: &IdentityInfo, ctx: &MetricsCtx) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
-    let url = base
-        .join(&format!("/metrics/job/{job}/"))?
+    let mut url = base
+        .join(&format!("/metrics/job/{}/", ctx.job))?
         .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
@@ -123,6 +127,17 @@ fn get_push_url(host_url: &str, id: &IdentityInfo, job: &str) -> anyhow::Result<
                 .map(|alias| utf8_percent_encode(alias, NON_ALPHANUMERIC).to_string())
                 .unwrap_or_else(|| id.node_id.to_string())
         ))?;
+
+    for (label, value) in &ctx.labels {
+        url = url
+            .join(&format!(
+                "{}/{}",
+                utf8_percent_encode(label, NON_ALPHANUMERIC),
+                utf8_percent_encode(value, NON_ALPHANUMERIC),
+            ))
+            .map_err(|e| anyhow::anyhow!("Couldn't add label `{}`: {}", label, e))?;
+    }
+
     Ok(String::from(url.as_str()))
 }
 

@@ -1,6 +1,7 @@
 use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::sync::Arc;
+use structopt::StructOpt;
 use url::Url;
 
 use ya_service_api::{CliCtx, MetricsCtx};
@@ -28,6 +29,16 @@ pub struct MetricsPusherOpts {
     /// Metrics job name, which allows to distinguish different groups of Nodes.
     #[structopt(long, env = "YAGNA_METRICS_JOB_NAME", default_value = "community.1")]
     pub metrics_job_name: String,
+    #[structopt(flatten)]
+    pub labels: MetricsLabels,
+}
+
+#[derive(structopt::StructOpt, Debug)]
+pub struct MetricsLabels {
+    /// Allows to create arbitrary group of Nodes that can be distinguished
+    /// from the crowd.
+    #[structopt(long, env = "YAGNA_METRICS_GROUP", default_value = "None")]
+    pub group: String,
 }
 
 impl From<&MetricsPusherOpts> for MetricsCtx {
@@ -36,7 +47,19 @@ impl From<&MetricsPusherOpts> for MetricsCtx {
             push_enabled: !opts.disable_metrics_push,
             push_host_url: Some(opts.metrics_push_url.clone()),
             job: opts.metrics_job_name.clone(),
+            labels: [("group", &opts.labels.group)]
+                .iter()
+                .map(|(label, value)| (label.to_string(), value.to_string()))
+                .collect(),
         }
+    }
+}
+
+impl MetricsPusherOpts {
+    pub fn from_env() -> Result<MetricsPusherOpts, structopt::clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        MetricsPusherOpts::from_iter_safe(&[""])
     }
 }
 

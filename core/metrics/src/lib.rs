@@ -3,7 +3,7 @@ mod metrics;
 pub(crate) mod pusher;
 mod service;
 
-pub use service::{MetricsPusherOpts, MetricsService};
+pub use service::{MetricsLabels, MetricsPusherOpts, MetricsService};
 
 pub mod utils {
     const CRYPTOCURRENCY_PRECISION: u64 = 1000000000;
