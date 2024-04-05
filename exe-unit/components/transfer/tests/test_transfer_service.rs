@@ -1,15 +1,6 @@
 use actix::{Actor, Addr};
-use actix_web::{web, HttpResponse};
-use futures::StreamExt;
-use rand::Rng;
-use sha3::digest::generic_array::GenericArray;
-use sha3::Digest;
 use std::env;
-use std::fs::OpenOptions;
-use std::io::Read;
-use std::path::{Path, PathBuf};
 use test_context::test_context;
-use tokio::io::AsyncWriteExt;
 
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
@@ -23,75 +14,6 @@ use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::transfer::{
     AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
 };
-
-type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
-
-fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -> HashOutput {
-    let path = path.join(name);
-    let mut hasher = sha3::Sha3_512::default();
-    let mut file_src = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)
-        .expect("rnd file");
-
-    let mut rng = rand::thread_rng();
-
-    for _ in 0..chunk_count {
-        let input: Vec<u8> = (0..chunk_size)
-            .map(|_| rng.gen_range(0..256) as u8)
-            .collect();
-
-        hasher.input(&input);
-        let _ = file_src.write(&input).unwrap();
-    }
-    file_src.flush().unwrap();
-    hasher.result()
-}
-
-fn hash_file(path: &Path) -> HashOutput {
-    let mut file_src = OpenOptions::new().read(true).open(path).expect("rnd file");
-
-    let mut hasher = sha3::Sha3_512::default();
-    let mut chunk = vec![0; 4096];
-
-    while let Ok(count) = file_src.read(&mut chunk[..]) {
-        hasher.input(&chunk[..count]);
-        if count != 4096 {
-            break;
-        }
-    }
-    hasher.result()
-}
-
-async fn upload(
-    path: web::Data<PathBuf>,
-    mut payload: web::Payload,
-    name: web::Path<String>,
-) -> Result<HttpResponse, actix_web::Error> {
-    let mut dst_path = path.as_ref().clone();
-    dst_path.push(name.as_ref());
-
-    let mut dst = tokio::fs::File::create(dst_path).await.unwrap();
-
-    while let Some(chunk) = payload.next().await {
-        let data = chunk.unwrap();
-        dst.write_all(&data).await?;
-    }
-
-    Ok(HttpResponse::Ok().finish())
-}
-
-#[cfg(feature = "sgx")]
-fn init_crypto() -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
-    use ya_exe_unit::crypto::Crypto;
-
-    // dummy impl
-    let ec = secp256k1::Secp256k1::new();
-    let (sec_key, req_key) = ec.generate_keypair(&mut rand::thread_rng());
-    Ok(Crypto::try_with_keys_raw(sec_key, req_key)?)
-}
 
 async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<(), Error> {
     transfer_with_args(addr, from, to, TransferArgs::default()).await
