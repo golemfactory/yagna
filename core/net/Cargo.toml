@@ -61,3 +61,6 @@ env_logger = "0.7"
 serde = "1.0"
 structopt = "0.3"
 test-case = "2"
+
+[lints]
+workspace = true

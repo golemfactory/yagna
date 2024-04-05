@@ -21,13 +21,14 @@ use ya_core_model::{
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{typed, Error, RpcEndpoint};
+use ya_service_bus::{timeout::IntoTimeoutFuture, typed, RpcEndpoint};
 
 use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
 const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
 const SYNC_NOTIF_RATIO: u32 = 6;
 const SYNC_NOTIF_MAX_RETRIES: u32 = 7;
+const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 async fn payment_sync(
     db: &DbExecutor,
@@ -269,10 +270,17 @@ async fn send_sync_requests_impl(db: DbExecutor) -> anyhow::Result<()> {
                 .to(peer_id)
                 .service(payment::public::BUS_ID)
                 .call(PaymentSyncRequest)
+                .timeout(Some(REMOTE_CALL_TIMEOUT))
                 .await;
 
-            if let Err(e) = result {
-                log::debug!("Couldn't deliver PaymentSyncRequest to [{peer_id}]: {e}");
+            match result {
+                Err(_) => {
+                    log::debug!("Couldn't deliver PaymentSyncRequest to [{peer_id}]: timeout");
+                }
+                Ok(Err(e)) => {
+                    log::debug!("Couldn't deliver PaymentSyncRequest to [{peer_id}]: {e}");
+                }
+                Ok(Ok(_)) => {}
             }
         }
     }

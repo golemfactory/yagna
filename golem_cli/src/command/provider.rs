@@ -292,12 +292,12 @@ impl YaProviderCommand {
             self.cmd.arg(log_dir.to_str().unwrap());
         }
 
-        self.cmd
-            .arg("--auto-cleanup-agreement")
-            .arg(std::env::var("AUTO_CLEANUP_AGREEMENT").unwrap_or("true".to_string()));
-        self.cmd
-            .arg("--auto-cleanup-activity")
-            .arg(std::env::var("AUTO_CLEANUP_ACTIVITY").unwrap_or("true".to_string()));
+        if !run_cfg.disable_auto_cleanup {
+            // auto-cleanup-agreement and auto-cleanup-activity are set to true by default
+            // when running ya-provider via golemsp
+            self.cmd.arg("--auto-cleanup-agreement").arg("true");
+            self.cmd.arg("--auto-cleanup-activity").arg("true");
+        }
 
         log::debug!("spawning: {:?}", self.cmd);
 
