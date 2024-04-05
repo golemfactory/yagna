@@ -1,6 +1,15 @@
 use actix::{Actor, Addr};
+use actix_web::{web, HttpResponse};
+use futures::StreamExt;
+use rand::Rng;
+use sha3::digest::generic_array::GenericArray;
+use sha3::Digest;
 use std::env;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use test_context::test_context;
+use tokio::io::AsyncWriteExt;
 
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
@@ -11,6 +20,9 @@ use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_runtime_api::deploy::ContainerVolume;
+use ya_transfer::transfer::{
+    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+};
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
