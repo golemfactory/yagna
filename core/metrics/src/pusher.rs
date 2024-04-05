@@ -137,8 +137,8 @@ fn get_push_url(host_url: &str, id: &IdentityInfo, ctx: &MetricsCtx) -> anyhow::
     for (label, value) in &ctx.labels {
         url.path_segments_mut()
             .map_err(|_e| anyhow::anyhow!("Couldn't add label `{label}`"))?
-            .push(&utf8_percent_encode(label, &SAFE_CHAR_SET).to_string())
-            .push(&utf8_percent_encode(value, &SAFE_CHAR_SET).to_string());
+            .push(label)
+            .push(value);
     }
 
     Ok(String::from(url.as_str()))
@@ -220,14 +220,14 @@ mod test {
     fn test_get_push_url_with_labels() {
         let ctx = MetricsCtx {
             job: "community.1".into(),
-            labels: labels(&[("group", "random"), ("importance", "none")]),
+            labels: labels(&[("group", "random-1"), ("importance", "none.1")]),
             ..MetricsCtx::default()
         };
         let url = get_push_url("http://a", &default_id_info(), &ctx).unwrap();
 
         // Note: There is no strict order of labels in the URL, because HashMap iterator doesn't have order.
-        assert!(url.contains("/importance/none"));
-        assert!(url.contains("/group/random"));
+        assert!(url.contains("/importance/none.1"));
+        assert!(url.contains("/group/random-1"));
         assert!(url.starts_with("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/"));
     }
 
@@ -235,10 +235,10 @@ mod test {
     fn test_get_push_url_label_with_pletters() {
         let ctx = MetricsCtx {
             job: "community.1".into(),
-            labels: labels(&[("ala/ma/kota", "zażółć?gęślą!jaźń=")]),
+            labels: labels(&[("ala/ma/kota", "zażółć?gęślą!jaźń=\\\"'")]),
             ..MetricsCtx::default()
         };
         let url = get_push_url("http://a", &default_id_info(), &ctx).unwrap();
-        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/ala%2Fma%2Fkota/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);
+        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/ala%2Fma%2Fkota/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85!ja%C5%BA%C5%84=%5C%22'", url);
     }
 }
