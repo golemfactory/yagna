@@ -9,7 +9,7 @@ use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
 
 lazy_static! {
-    static ref SAFE_CHAR_SET: AsciiSet = NON_ALPHANUMERIC.remove(b'.').remove(b'-').remove(b'_');
+    static ref UNSAFE_CHAR_SET: AsciiSet = NON_ALPHANUMERIC.remove(b'.').remove(b'-').remove(b'_');
 }
 
 pub fn spawn(ctx: MetricsCtx) {
@@ -123,14 +123,14 @@ fn get_push_url(host_url: &str, id: &IdentityInfo, ctx: &MetricsCtx) -> anyhow::
     let mut url = base
         .join(&format!(
             "/metrics/job/{}/",
-            utf8_percent_encode(&ctx.job, &SAFE_CHAR_SET)
+            utf8_percent_encode(&ctx.job, &UNSAFE_CHAR_SET)
         ))?
         .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
             id.alias
                 .as_ref()
-                .map(|alias| utf8_percent_encode(alias, &SAFE_CHAR_SET).to_string())
+                .map(|alias| utf8_percent_encode(alias, &UNSAFE_CHAR_SET).to_string())
                 .unwrap_or_else(|| id.node_id.to_string())
         ))?;
 
