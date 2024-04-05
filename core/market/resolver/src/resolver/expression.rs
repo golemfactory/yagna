@@ -464,7 +464,7 @@ fn build_multi_expression(
 
 fn build_simple_expression(
     expr_type: u64,
-    sequence: &Vec<Tag>,
+    sequence: &[Tag],
 ) -> Result<Expression, ExpressionError> {
     match extract_two_octet_strings(sequence) {
         Ok(result) => {
@@ -513,7 +513,7 @@ fn extract_str_from_octet_string(tag: &Tag) -> Result<&str, ExpressionError> {
 }
 
 fn extract_two_octet_strings<'a>(
-    sequence: &'a Vec<Tag>,
+    sequence: &'a [Tag],
 ) -> Result<(&'a str, &'a str), ExpressionError> {
     if sequence.len() >= 2 {
         let attr: &'a str = extract_str_from_octet_string(&sequence[0])?;

@@ -229,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("bind_gsb_router()");
 
-    let processor = PaymentProcessor::new(db.clone());
+    let processor = Arc::new(PaymentProcessor::new(db.clone()));
     ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 

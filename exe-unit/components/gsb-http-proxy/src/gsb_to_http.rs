@@ -114,7 +114,7 @@ mod tests {
     async fn gsb_to_http_test() {
         // Mock server
         #[allow(unused)]
-        let (server, mock, url) = mock_server();
+        let (server, mock, url) = mock_server().await;
 
         let mut gsb_call = GsbToHttpProxy::new(url);
         let mut requests_counter = gsb_call.requests_counter();
@@ -138,7 +138,7 @@ mod tests {
     async fn cloned_proxy_test() {
         // Mock server
         #[allow(unused)]
-        let (server, mock, url) = mock_server();
+        let (server, mock, url) = mock_server().await;
 
         let mut gsb_call = GsbToHttpProxy::new(url);
         let mut requests_counter = gsb_call.requests_counter();
@@ -165,7 +165,7 @@ mod tests {
     async fn multiple_concurrent_requests() {
         // Mock server
         #[allow(unused)]
-        let (server, mock, url) = mock_server();
+        let (server, mock, url) = mock_server().await;
 
         let mut gsb_call = GsbToHttpProxy::new(url);
         let mut requests_counter = gsb_call.requests_counter();
@@ -193,9 +193,9 @@ mod tests {
         }
     }
 
-    fn mock_server() -> (ServerGuard, Mock, String) {
+    async fn mock_server() -> (ServerGuard, Mock, String) {
         // Mock server
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
         let mock = server
             .mock("GET", "/endpoint")

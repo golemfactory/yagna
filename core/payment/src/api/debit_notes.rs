@@ -127,10 +127,7 @@ async fn get_debit_note_events(
             ]
         });
     let node_id = id.identity;
-    let timeout_secs = query
-        .timeout
-        .timeout
-        .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
+    let timeout_secs = query.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
