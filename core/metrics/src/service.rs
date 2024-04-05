@@ -1,5 +1,6 @@
 use futures::lock::Mutex;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
 use std::sync::Arc;
 use structopt::StructOpt;
 use url::Url;
@@ -37,20 +38,22 @@ pub struct MetricsPusherOpts {
 pub struct MetricsLabels {
     /// Allows to create arbitrary group of Nodes that can be distinguished
     /// from the crowd.
-    #[structopt(long, env = "YAGNA_METRICS_GROUP", default_value = "None")]
-    pub group: String,
+    #[structopt(long, env = "YAGNA_METRICS_GROUP")]
+    pub group: Option<String>,
 }
 
 impl From<&MetricsPusherOpts> for MetricsCtx {
     fn from(opts: &MetricsPusherOpts) -> Self {
+        let mut labels = HashMap::new();
+        if let Some(group) = &opts.labels.group {
+            labels.insert("group".to_string(), group.to_string());
+        }
+
         MetricsCtx {
             push_enabled: !opts.disable_metrics_push,
             push_host_url: Some(opts.metrics_push_url.clone()),
             job: opts.metrics_job_name.clone(),
-            labels: [("group", &opts.labels.group)]
-                .iter()
-                .map(|(label, value)| (label.to_string(), value.to_string()))
-                .collect(),
+            labels,
         }
     }
 }
