@@ -164,7 +164,7 @@ mod test {
 
     fn labels(labels: &[(&str, &str)]) -> HashMap<String, String> {
         labels
-            .into_iter()
+            .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
     }
