@@ -22,7 +22,7 @@ on:
       - staszek/gamerhash-combined
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   check_format:
