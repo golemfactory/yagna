@@ -5,7 +5,6 @@ use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use ya_core_model::payment::local::{GenericError, BUS_ID as PAYMENT_BUS_ID};
 use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync, SendPayment};
@@ -39,10 +38,6 @@ impl Default for BindOptions {
 pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
     log::debug!("Binding payment service to service bus");
 
-<<<<<<< HEAD
-    let processor = Arc::new(RwLock::new(processor));
-=======
->>>>>>> master
     local::bind_service(db, processor.clone());
     public::bind_service(db, processor, opts);
 
@@ -71,11 +66,7 @@ mod local {
     };
     use ya_persistence::types::Role;
 
-<<<<<<< HEAD
-    pub fn bind_service(db: &DbExecutor, processor: Arc<RwLock<PaymentProcessor>>) {
-=======
     pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>) {
->>>>>>> master
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -135,14 +126,6 @@ mod local {
 
     async fn schedule_payment(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: SchedulePayment,
-    ) -> Result<(), GenericError> {
-        processor.write().await.schedule_payment(msg).await?;
-        Ok(())
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: SchedulePayment,
@@ -151,18 +134,10 @@ mod local {
         let res = processor.schedule_payment(msg).await;
         log::debug!("Schedule payment processor finished");
         Ok(res?)
->>>>>>> master
     }
 
     async fn register_driver(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: RegisterDriver,
-    ) -> Result<(), RegisterDriverError> {
-        processor.write().await.register_driver(msg).await
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: RegisterDriver,
@@ -171,19 +146,10 @@ mod local {
         let res = processor.register_driver(msg).await;
         log::debug!("Register driver processor finished");
         res
->>>>>>> master
     }
 
     async fn unregister_driver(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: UnregisterDriver,
-    ) -> Result<(), NoError> {
-        processor.write().await.unregister_driver(msg).await;
-        Ok(())
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterDriver,
@@ -193,18 +159,10 @@ mod local {
         log::debug!("Unregister driver processor finished");
 
         res
->>>>>>> master
     }
 
     async fn register_account(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: RegisterAccount,
-    ) -> Result<(), RegisterAccountError> {
-        processor.write().await.register_account(msg).await
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: RegisterAccount,
@@ -213,18 +171,10 @@ mod local {
         let res = processor.register_account(msg).await;
         log::debug!("Register account processor finished");
         res
->>>>>>> master
     }
 
     async fn unregister_account(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: UnregisterAccount,
-    ) -> Result<(), NoError> {
-        processor.write().await.unregister_account(msg).await;
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: UnregisterAccount,
@@ -232,19 +182,11 @@ mod local {
         log::debug!("Unregister account processor started");
         processor.unregister_account(msg).await?;
         log::debug!("Unregister account processor finished");
->>>>>>> master
         Ok(())
     }
 
     async fn get_accounts(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: GetAccounts,
-    ) -> Result<Vec<Account>, GenericError> {
-        Ok(processor.read().await.get_accounts().await)
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: GetAccounts,
@@ -253,19 +195,10 @@ mod local {
         let res = processor.get_accounts().await;
         log::debug!("Get accounts processor finished");
         res
->>>>>>> master
     }
 
     async fn notify_payment(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        sender: String,
-        msg: NotifyPayment,
-    ) -> Result<(), GenericError> {
-        processor.write().await.notify_payment(msg).await?;
-        Ok(())
-=======
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: NotifyPayment,
@@ -283,16 +216,11 @@ mod local {
         );
 
         Ok(res?)
->>>>>>> master
     }
 
     async fn get_rpc_endpoints(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         _caller: String,
         msg: GetRpcEndpoints,
     ) -> Result<GetRpcEndpointsResult, GenericError> {
@@ -306,11 +234,6 @@ mod local {
         } = msg;
 
         let (network2, network_details) = processor
-<<<<<<< HEAD
-            .read()
-            .await
-=======
->>>>>>> master
             .get_network(driver.to_string(), network.as_ref().map(|s| s.to_string()))
             .await
             .map_err(GenericError::new)?;
@@ -328,11 +251,6 @@ mod local {
         };
 
         let rpc_info = processor
-<<<<<<< HEAD
-            .read()
-            .await
-=======
->>>>>>> master
             .get_rpc_endpoints_info(
                 platform,
                 address.to_string(),
@@ -352,11 +270,7 @@ mod local {
 
     async fn get_status(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         _caller: String,
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
@@ -369,11 +283,6 @@ mod local {
         } = msg;
 
         let (network, network_details) = processor
-<<<<<<< HEAD
-            .read()
-            .await
-=======
->>>>>>> master
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
@@ -413,11 +322,6 @@ mod local {
 
         let amount_fut = async {
             processor
-<<<<<<< HEAD
-                .read()
-                .await
-=======
->>>>>>> master
                 .get_status(platform.clone(), address.clone())
                 .await
         }
@@ -425,11 +329,6 @@ mod local {
 
         let gas_amount_fut = async {
             processor
-<<<<<<< HEAD
-                .read()
-                .await
-=======
->>>>>>> master
                 .get_gas_balance(platform.clone(), address.clone())
                 .await
         }
@@ -458,11 +357,7 @@ mod local {
 
     async fn get_invoice_stats(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         _caller: String,
         msg: GetInvoiceStats,
     ) -> Result<InvoiceStats, GenericError> {
@@ -514,33 +409,17 @@ mod local {
 
     async fn validate_allocation(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         sender: String,
         msg: ValidateAllocation,
     ) -> Result<bool, ValidateAllocationError> {
         Ok(processor
-<<<<<<< HEAD
-            .read()
-            .await
-=======
->>>>>>> master
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
     }
 
     async fn release_allocations(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        _caller: String,
-        msg: ReleaseAllocations,
-    ) -> Result<(), GenericError> {
-        processor.write().await.release_allocations(true).await;
-=======
         processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: ReleaseAllocations,
@@ -548,34 +427,21 @@ mod local {
         log::debug!("Release allocations processor started");
         processor.release_allocations(true).await;
         log::debug!("Release allocations processor finished");
->>>>>>> master
         Ok(())
     }
 
     async fn get_drivers(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-        _caller: String,
-        msg: GetDrivers,
-    ) -> Result<HashMap<String, DriverDetails>, NoError> {
-        Ok(processor.read().await.get_drivers().await)
-=======
         processor: Arc<PaymentProcessor>,
         _caller: String,
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
         processor.get_drivers().await
->>>>>>> master
     }
 
     async fn payment_driver_status(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         _caller: String,
         msg: PaymentDriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, PaymentDriverStatusError> {
@@ -621,11 +487,7 @@ mod local {
     // *************************** PAYMENT ****************************
     async fn handle_status_change(
         db: DbExecutor,
-<<<<<<< HEAD
-        _processor: Arc<RwLock<PaymentProcessor>>,
-=======
         _processor: Arc<PaymentProcessor>,
->>>>>>> master
         _caller: String,
         msg: PaymentDriverStatusChange,
     ) -> Result<Ack, GenericError> {
@@ -846,21 +708,13 @@ mod local {
 
     async fn shut_down(
         db: DbExecutor,
-<<<<<<< HEAD
-        processor: Arc<RwLock<PaymentProcessor>>,
-=======
         processor: Arc<PaymentProcessor>,
->>>>>>> master
         sender: String,
         msg: ShutDown,
     ) -> Result<(), GenericError> {
         // It's crucial to drop the lock on processor (hence assigning the future to a variable).
         // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
-<<<<<<< HEAD
-        let shutdown_future = processor.write().await.shut_down(msg.timeout);
-=======
         let shutdown_future = processor.shut_down(msg.timeout).await;
->>>>>>> master
         shutdown_future.await;
         Ok(())
     }
@@ -882,15 +736,7 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-<<<<<<< HEAD
-    pub fn bind_service(
-        db: &DbExecutor,
-        processor: Arc<RwLock<PaymentProcessor>>,
-        opts: BindOptions,
-    ) {
-=======
     pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
->>>>>>> master
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -1379,7 +1225,10 @@ mod public {
         let num_paid_invoices = payment.agreement_payments.len() as u64;
 
         log::debug!("Verify payment processor started");
-        let res = match processor.verify_payment(payment, signature, canonicalized, signed_bytes).await {
+        let res = match processor
+            .verify_payment(payment, signature, canonicalized, signed_bytes)
+            .await
+        {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);

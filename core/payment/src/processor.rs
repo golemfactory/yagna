@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
@@ -406,7 +407,7 @@ impl PaymentProcessor {
             .get_platform(driver, network, token)
     }
 
-    pub async fn notify_payment(&mut self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+    pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
         let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
@@ -503,18 +504,23 @@ impl PaymentProcessor {
         // This is unconditional because at this point the invoice *has been paid*.
         // Whether the provider was correctly notified of this fact is another matter.
         counter!("payment.invoices.requestor.paid", 1);
-        let msg = SendPayment::new(payment, signature);
+        let msg = SendPayment::new(payment.clone(), signature);
         let msg_with_bytes = SendSignedPayment::new(payment, signature_canonicalized);
 
         let db_executor = Arc::clone(&self.db_executor);
 
         tokio::task::spawn_local(
             async move {
+                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+                let payment_dao: PaymentDao = db_executor.as_dao();
+                let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
                 let send_result =
                     Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
 
                 let mark_sent = if send_result.is_ok() {
-                    db_executor
+                    payment_dao
                         .add_signature(
                             payment_id.clone(),
                             msg_with_bytes.signature.clone(),
@@ -533,11 +539,6 @@ impl PaymentProcessor {
                 } else {
                     false
                 };
-
-                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-
-                let payment_dao: PaymentDao = db_executor.as_dao();
-                let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
                 if mark_sent {
                     payment_dao.mark_sent(payment_id).await.ok();
@@ -579,10 +580,7 @@ impl PaymentProcessor {
             .await
     }
 
-    pub async fn schedule_payment(
-        &mut self,
-        msg: SchedulePayment,
-    ) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -764,7 +762,15 @@ impl PaymentProcessor {
             }
 
             // Insert payment into database (this operation creates and updates all related entities)
-            payment_dao.insert_received(payment, payee_id).await?;
+            if signed_bytes.is_none() {
+                payment_dao
+                    .insert_received(payment, payee_id, None, None)
+                    .await?;
+            } else {
+                payment_dao
+                    .insert_received(payment, payee_id, Some(signature), signed_bytes)
+                    .await?;
+            }
         }
 
         Ok(())

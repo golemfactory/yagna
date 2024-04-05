@@ -21,7 +21,7 @@ use ya_core_model::{
 };
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{timeout::IntoTimeoutFuture, typed, RpcEndpoint};
+use ya_service_bus::{timeout::IntoTimeoutFuture, typed, Error, RpcEndpoint};
 
 use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
