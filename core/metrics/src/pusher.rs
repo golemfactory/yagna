@@ -1,11 +1,16 @@
 use awc::error::{ConnectError, SendRequestError};
 use awc::Client;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use lazy_static::lazy_static;
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use tokio::time::{self, Duration, Instant};
 
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
+
+lazy_static! {
+    static ref SAFE_CHAR_SET: AsciiSet = NON_ALPHANUMERIC.remove(b'.').remove(b'-').remove(b'_');
+}
 
 pub fn spawn(ctx: MetricsCtx) {
     if !ctx.push_enabled {
@@ -28,10 +33,7 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let node_identity = match try_get_default_id().await {
         Ok(default_id) => default_id,
         Err(e) => {
-            log::warn!(
-                "Metrics pusher init failure: Couldn't determine node_id: {}",
-                e
-            );
+            log::warn!("Metrics pusher init failure: Couldn't determine node_id: {e}",);
             return;
         }
     };
@@ -51,7 +53,8 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let start = Instant::now() + Duration::from_secs(5);
     let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
-    log::info!("Starting metrics pusher");
+
+    log::info!("Starting metrics pusher on address: {push_url}");
     loop {
         push_interval.tick().await;
         push(&client, push_url.clone()).await;
@@ -118,24 +121,24 @@ async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {
 fn get_push_url(host_url: &str, id: &IdentityInfo, ctx: &MetricsCtx) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
     let mut url = base
-        .join(&format!("/metrics/job/{}/", ctx.job))?
+        .join(&format!(
+            "/metrics/job/{}/",
+            utf8_percent_encode(&ctx.job, &SAFE_CHAR_SET)
+        ))?
         .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
             id.alias
                 .as_ref()
-                .map(|alias| utf8_percent_encode(alias, NON_ALPHANUMERIC).to_string())
+                .map(|alias| utf8_percent_encode(alias, &SAFE_CHAR_SET).to_string())
                 .unwrap_or_else(|| id.node_id.to_string())
         ))?;
 
     for (label, value) in &ctx.labels {
-        url = url
-            .join(&format!(
-                "{}/{}",
-                utf8_percent_encode(label, NON_ALPHANUMERIC),
-                utf8_percent_encode(value, NON_ALPHANUMERIC),
-            ))
-            .map_err(|e| anyhow::anyhow!("Couldn't add label `{}`: {}", label, e))?;
+        url.path_segments_mut()
+            .map_err(|_e| anyhow::anyhow!("Couldn't add label `{label}`"))?
+            .push(&utf8_percent_encode(label, &SAFE_CHAR_SET).to_string())
+            .push(&utf8_percent_encode(value, &SAFE_CHAR_SET).to_string());
     }
 
     Ok(String::from(url.as_str()))
@@ -144,20 +147,41 @@ fn get_push_url(host_url: &str, id: &IdentityInfo, ctx: &MetricsCtx) -> anyhow::
 #[cfg(test)]
 mod test {
     use crate::pusher::get_push_url;
+    use std::collections::HashMap;
+
     use ya_core_model::identity::IdentityInfo;
+    use ya_service_api::MetricsCtx;
+
+    fn default_id_info() -> IdentityInfo {
+        IdentityInfo {
+            alias: Some("node1".into()),
+            node_id: Default::default(),
+            is_locked: false,
+            is_default: false,
+            deleted: false,
+        }
+    }
+
+    fn labels(labels: &[(&str, &str)]) -> HashMap<String, String> {
+        labels
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
 
     #[test]
     fn test_get_push_url_with_slashes() {
+        let ctx = MetricsCtx {
+            job: "community.1".into(),
+            ..MetricsCtx::default()
+        };
         let url = get_push_url(
             "http://a",
             &IdentityInfo {
                 alias: Some("ala/ma/kota".into()),
-                node_id: Default::default(),
-                is_locked: false,
-                is_default: false,
-                deleted: false,
+                ..default_id_info()
             },
-            "community.1",
+            &ctx,
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/ala%2Fma%2Fkota", url);
@@ -165,18 +189,56 @@ mod test {
 
     #[test]
     fn test_get_push_url_with_pletters() {
+        let ctx = MetricsCtx {
+            job: "community.1".into(),
+            ..MetricsCtx::default()
+        };
         let url = get_push_url(
             "http://a",
             &IdentityInfo {
                 alias: Some("zażółć?gęślą!jaźń=".into()),
-                node_id: Default::default(),
-                is_locked: false,
-                is_default: false,
-                deleted: false,
+                ..default_id_info()
             },
-            "community.1",
+            &ctx,
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);
+    }
+
+    #[test]
+    fn test_get_push_url_with_single_label() {
+        let ctx = MetricsCtx {
+            job: "community.1".into(),
+            labels: labels(&[("group", "random")]),
+            ..MetricsCtx::default()
+        };
+        let url = get_push_url("http://a", &default_id_info(), &ctx).unwrap();
+        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/group/random", url);
+    }
+
+    #[test]
+    fn test_get_push_url_with_labels() {
+        let ctx = MetricsCtx {
+            job: "community.1".into(),
+            labels: labels(&[("group", "random"), ("importance", "none")]),
+            ..MetricsCtx::default()
+        };
+        let url = get_push_url("http://a", &default_id_info(), &ctx).unwrap();
+
+        // Note: There is no strict order of labels in the URL, because HashMap iterator doesn't have order.
+        assert!(url.contains("/importance/none"));
+        assert!(url.contains("/group/random"));
+        assert!(url.starts_with("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/"));
+    }
+
+    #[test]
+    fn test_get_push_url_label_with_pletters() {
+        let ctx = MetricsCtx {
+            job: "community.1".into(),
+            labels: labels(&[("ala/ma/kota", "zażółć?gęślą!jaźń=")]),
+            ..MetricsCtx::default()
+        };
+        let url = get_push_url("http://a", &default_id_info(), &ctx).unwrap();
+        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/node1/ala%2Fma%2Fkota/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);
     }
 }

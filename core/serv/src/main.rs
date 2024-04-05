@@ -3,7 +3,7 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
-use metrics::gauge;
+use metrics::{counter, gauge};
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -568,6 +568,8 @@ impl ServiceCommand {
                             number_of_workers,
                             rest_address
                         );
+
+                        counter!("yagna.service.up", 1);
 
                         tokio::task::spawn_local(async move {
                             ya_net::hybrid::send_bcast_new_neighbour().await
