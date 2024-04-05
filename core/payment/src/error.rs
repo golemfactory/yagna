@@ -60,8 +60,6 @@ pub enum Error {
     ExtService(#[from] ExternalServiceError),
     #[error("RPC error: {0}")]
     Rpc(#[from] RpcMessageError),
-    #[error("Timeout")]
-    Timeout(#[from] tokio::time::error::Elapsed),
 }
 
 impl From<ya_core_model::activity::RpcMessageError> for Error {
@@ -113,6 +111,7 @@ pub mod processor {
     use crate::models::order::ReadObj as Order;
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
+    use tokio::time::error::Elapsed;
     use ya_core_model::driver::AccountMode;
     use ya_core_model::payment::local::{
         GenericError, ValidateAllocationError as GsbValidateAllocationError,
@@ -154,6 +153,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Payment service is shutting down")]
         Shutdown,
+        #[error("Internal timeout")]
+        InternalTimeout(#[from] Elapsed),
     }
 
     impl From<SchedulePaymentError> for GenericError {
@@ -219,6 +220,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Singning error: {0}")]
         Sign(#[from] ya_core_model::driver::GenericError),
+        #[error("Internal timeout")]
+        InternalTimeout(#[from] Elapsed),
     }
 
     impl NotifyPaymentError {
@@ -252,6 +255,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("{0}")]
         Validation(String),
+        #[error("Internal timeout")]
+        InternalTimeout(#[from] Elapsed),
     }
 
     impl VerifyPaymentError {
@@ -369,6 +374,8 @@ pub mod processor {
         ServiceBus(#[from] ya_service_bus::error::Error),
         #[error("Error while sending payment: {0}")]
         Driver(#[from] ya_core_model::driver::GenericError),
+        #[error("Internal timeout")]
+        InternalTimeout(#[from] Elapsed),
     }
 
     #[derive(thiserror::Error, Debug)]
@@ -383,6 +390,8 @@ pub mod processor {
         Database(#[from] DbError),
         #[error("Payment service is shutting down")]
         Shutdown,
+        #[error("Internal timeout")]
+        InternalTimeout(#[from] Elapsed),
     }
 
     impl From<ValidateAllocationError> for GsbValidateAllocationError {

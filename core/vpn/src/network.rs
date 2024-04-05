@@ -837,7 +837,8 @@ mod tests {
             .await?;
 
         supervisor.get_network(&node_id, &network.id)?;
-        supervisor.remove_network(&node_id, &network.id)?;
+        let fut = supervisor.remove_network(&node_id, &network.id)?;
+        drop(fut);
 
         Ok(())
     }
@@ -871,7 +872,8 @@ mod tests {
         assert!(supervisor.get_network(&node_id, &network1.id).is_ok());
         assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
 
-        supervisor.remove_network(&node_id, &network1.id)?;
+        let fut = supervisor.remove_network(&node_id, &network1.id)?;
+        drop(fut);
 
         assert!(supervisor.get_network(&node_id, &network1.id).is_err());
         assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
