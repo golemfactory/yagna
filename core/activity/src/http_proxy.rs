@@ -4,7 +4,7 @@ use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 use futures::{Stream, StreamExt};
 
-use ya_client_model::market::{Agreement, Role};
+use ya_client_model::market::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::Error;
@@ -91,7 +91,7 @@ async fn proxy_http_request(
 }
 
 fn stream_results(
-    stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + Sized + Sized,
+    stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
 ) -> crate::Result<impl Responder> {
     Ok(HttpResponse::Ok()
         .keep_alive()
@@ -100,7 +100,7 @@ fn stream_results(
 }
 
 async fn await_results(
-    mut stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + Sized + Sized,
+    mut stream: impl Stream<Item = Result<Bytes, Error>> + Unpin,
 ) -> crate::Result<impl Responder> {
     let response = stream.next().await;
 
