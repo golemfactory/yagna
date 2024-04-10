@@ -13,9 +13,22 @@ use ya_service_bus::typed as bus;
 
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
-pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
     enable_logs(true);
 
+    start_proxy_http_server(ctx).await;
+    bind_proxy_to_gsb().await;
+    start_target_server(ctx).await;
+    bind_gsb_to_target().await;
+
+    let response = reqwest::get("http://127.0.0.1:8081/proxy")
+        .await
+        .expect("request should succeed");
+    let r: String = response.text().await.expect("response text expected");
+    assert_eq!(r, "correct");
+}
+
+async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {
     async fn proxy_endpoint() -> impl Responder {
         let http_to_gsb = HttpToGsbProxy {
             method: "GET".to_string(),
@@ -34,15 +47,38 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) -> anyhow::Resu
         "failed".to_string()
     }
 
-    let requestor = HttpServer::new(|| App::new().route("/proxy", web::get().to(proxy_endpoint)))
-        .bind(("127.0.0.1", 8081))?
-        .run();
+    let proxy_server =
+        HttpServer::new(|| App::new().route("/proxy", web::get().to(proxy_endpoint)))
+            .bind(("127.0.0.1", 8081))
+            .expect("should bind correctly")
+            .run();
 
-    ctx.register(requestor.handle());
-    tokio::task::spawn_local(async move { anyhow::Ok(requestor.await?) });
+    ctx.register(proxy_server.handle());
+    tokio::task::spawn_local(async move { anyhow::Ok(proxy_server.await?) });
+}
 
-    ya_sb_router::bind_gsb_router(None).await?;
+async fn bind_proxy_to_gsb() {
+    ya_sb_router::bind_gsb_router(None)
+        .await
+        .expect("should bind to gsb");
+}
 
+async fn start_target_server(ctx: &mut DroppableTestContext) {
+    let responder = HttpServer::new(|| {
+        App::new().route(
+            "/target",
+            web::get().to(|| async { HttpResponse::Ok().body("correct") }),
+        )
+    })
+    .bind(("127.0.0.1", 8082))
+    .expect("should bind correctly")
+    .run();
+
+    ctx.register(responder.handle());
+    tokio::task::spawn_local(async move { anyhow::Ok(responder.await?) });
+}
+
+async fn bind_gsb_to_target() {
     let _stream_handle = bus::bind(
         ya_gsb_http_proxy::BUS_ID,
         move |msg: GsbHttpCallMessage| async move {
@@ -50,30 +86,13 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) -> anyhow::Resu
             let response = reqwest::get(url)
                 .await
                 .expect("internal call should succeed");
-            let msg = response.text().await.expect("text expected");
+            let response_text = response.text().await.expect("text expected");
             let response = GsbHttpCallResponseEvent {
                 index: 0,
                 timestamp: Utc::now().naive_local().to_string(),
-                msg_bytes: msg.into_bytes(),
+                msg_bytes: response_text.into_bytes(),
             };
             Ok(response)
         },
     );
-    let responder = HttpServer::new(|| {
-        App::new().route(
-            "/target",
-            web::get().to(|| async { HttpResponse::Ok().body("correct") }),
-        )
-    })
-    .bind(("127.0.0.1", 8082))?
-    .run();
-
-    ctx.register(responder.handle());
-    tokio::task::spawn_local(async move { anyhow::Ok(responder.await?) });
-
-    let response = reqwest::get("http://127.0.0.1:8081/proxy").await?;
-    let r: String = response.text().await?;
-    log::info!("{}", r);
-    assert_eq!(r, "correct");
-    Ok(())
 }
