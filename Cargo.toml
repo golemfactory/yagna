@@ -15,15 +15,10 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 tos = []
-framework-test = []
+framework-test = ['ya-exe-unit/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
-packet-trace-enable = [
-    "ya-vpn/packet-trace-enable",
-    "ya-file-logging/packet-trace-enable",
-    "ya-net/packet-trace-enable",
-    "ya-service-bus/packet-trace-enable",
-]
+packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable", "ya-service-bus/packet-trace-enable"]
 
 [[bin]]
 name = "yagna"
@@ -52,7 +47,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = "0.2"
+ya-utils-futures = "0.3"
 ya-utils-process = { version = "0.2", features = ["lock"] }
 ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
@@ -63,6 +58,7 @@ ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
+ya-exe-unit = { version = "0.4", optional = true }       # just to enable conditionally running some tests
 
 actix-rt = "2.7"
 actix-service = "2"
@@ -91,6 +87,7 @@ libsqlite3-sys = { workspace = true }
 [dev-dependencies]
 erc20_processor = { workspace = true }
 ya-test-framework = "0.1"
+ya-exe-unit = { version = "0.4" }
 
 [package.metadata.deb]
 name = "golem-requestor"
@@ -203,9 +200,12 @@ members = [
     "core/sgx",
     "core/version",
     "core/vpn",
+    "exe-unit/components/counters",
+    "exe-unit/components/gsb-http-proxy",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "exe-unit/components/transfer",
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
@@ -219,12 +219,12 @@ members = [
     "utils/path",
     "utils/process",
     "utils/std-utils",
-    "utils/transfer",
     "utils/diesel-utils",
     "utils/fd-metrics",
     "core/metrics",
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
+    "test-utils/test-framework/framework-basic",
 ]
 
 [workspace.dependencies]
@@ -248,6 +248,7 @@ url = "2.3.1"
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
+
 ya-service-bus = { version = "0.7.1" }
 
 [patch.crates-io]
@@ -298,7 +299,7 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
-ya-transfer = { path = "utils/transfer" }
+ya-transfer = { path = "exe-unit/components/transfer" }
 ya-utils-actix = { path = "utils/actix_utils" }
 ya-utils-cli = { path = "utils/cli" }
 ya-utils-futures = { path = "utils/futures" }
@@ -308,11 +309,14 @@ ya-utils-process = { path = "utils/process" }
 ya-diesel-utils = { path = "utils/diesel-utils" }
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider" }
+ya-counters = { path = "exe-unit/components/counters" }
+ya-gsb-http-proxy = { path = "exe-unit/components/gsb-http-proxy" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
+ya-framework-basic = { path = "test-utils/test-framework/framework-basic" }
 
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
