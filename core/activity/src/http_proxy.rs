@@ -82,7 +82,16 @@ async fn proxy_http_request(
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
-            return Ok(Either::Left(stream_results(stream)?));
+            return Ok(Either::Left(stream_results(
+                stream,
+                mime::TEXT_EVENT_STREAM.essence_str(),
+            )?));
+        }
+        if value.eq(mime::APPLICATION_OCTET_STREAM.essence_str()) {
+            return Ok(Either::Left(stream_results(
+                stream,
+                mime::APPLICATION_OCTET_STREAM.essence_str(),
+            )?));
         }
     }
     Ok(Either::Right(await_results(stream).await?))
@@ -90,10 +99,11 @@ async fn proxy_http_request(
 
 fn stream_results(
     stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
+    content_type: &str,
 ) -> crate::Result<impl Responder> {
     Ok(HttpResponse::Ok()
         .keep_alive()
-        .content_type(mime::TEXT_EVENT_STREAM.essence_str())
+        .content_type(content_type)
         .streaming(stream))
 }
 
