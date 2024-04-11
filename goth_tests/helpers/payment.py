@@ -14,6 +14,8 @@ from goth.runner.probe.rest_client import ya_payment
 logger = logging.getLogger("goth.tests.helpers.payment")
 
 
+global_deposit = None
+
 async def pay_all(
     requestor: RequestorProbe,
     agreements: List[Tuple[str, ProviderProbe]],
@@ -120,6 +122,8 @@ class AllocationCtx:
     _id: Optional[str] = None
 
     async def __aenter__(self):
+        logger.info("Creating allocation for deposit {}".format(global_deposit))
+
         allocation = ya_payment.Allocation(
             allocation_id="",
             total_amount=str(self.amount),

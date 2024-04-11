@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import pytest
-
+import payment from goth_tests.helpers
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -64,8 +64,12 @@ async def test_deposit_agreement_payments(
     config_overrides: List[Override],
     log_dir: Path,
 ):
+    deposit_id = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
+
+    payment.global_deposit = deposit_id
     """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
+
     ts = datetime.now(timezone.utc)
     amount = 0.0
     number_of_payments = 0
