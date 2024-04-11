@@ -1,4 +1,4 @@
-use crate::os::process::*;
+use ya_process::*;
 
 use crate::error::CounterError;
 use crate::Result;

@@ -1,6 +1,6 @@
-use crate::error::CounterError;
-use crate::os::process::*;
-use crate::Result;
+use crate::{error::CounterError, Result};
+
+use ya_process::*;
 
 use std::time::Duration;
 

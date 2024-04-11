@@ -4,13 +4,13 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
-use crate::error::CounterError;
-
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+
+use crate::ProcessError;
 
 lazy_static::lazy_static! {
     static ref JOB_OBJECT: Arc<Mutex<JobObject>> = {
@@ -35,9 +35,9 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
     }
 }
 
-impl From<SystemError> for CounterError {
+impl From<SystemError> for ProcessError {
     fn from(err: SystemError) -> Self {
-        CounterError::Other(err.to_string())
+        ProcessError::Other(err.to_string())
     }
 }
 

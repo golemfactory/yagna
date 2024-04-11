@@ -13,8 +13,8 @@ use tokio::process::Command;
 
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
-use ya_counters::os::process::{kill, ProcessTree, SystemError};
 use ya_manifest_utils::Feature;
+use ya_process::{kill, ProcessTree, SystemError};
 use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;
