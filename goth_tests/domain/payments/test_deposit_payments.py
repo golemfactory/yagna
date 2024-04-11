@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import pytest
-import payment from goth_tests.helpers
+import goth_tests.helpers.payment
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
