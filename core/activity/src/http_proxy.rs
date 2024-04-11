@@ -27,7 +27,6 @@ async fn get_proxy_http_request(
     path: web::Path<PathActivityUrl>,
     id: Identity,
     request: HttpRequest,
-    // ) -> Result<HttpResponse, actix_web::Error> {
 ) -> crate::Result<impl Responder> {
     proxy_http_request(db, path, id, request, None, Method::GET).await
 }
@@ -39,7 +38,6 @@ async fn post_proxy_http_request(
     body: web::Bytes,
     id: Identity,
     request: HttpRequest,
-    // ) -> Result<HttpResponse, actix_web::Error> {
 ) -> crate::Result<impl Responder> {
     proxy_http_request(db, path, id, request, Some(body), Method::POST).await
 }
