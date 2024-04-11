@@ -15,7 +15,7 @@ use ya_service_bus::typed as bus;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
-    enable_logs(true);
+    enable_logs(false);
 
     start_proxy_http_server(ctx).await;
     bind_proxy_to_gsb().await;
