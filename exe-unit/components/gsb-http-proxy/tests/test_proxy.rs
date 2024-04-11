@@ -11,10 +11,11 @@ use ya_gsb_http_proxy::message::GsbHttpCallMessage;
 use ya_gsb_http_proxy::response::GsbHttpCallResponseEvent;
 use ya_service_bus::typed as bus;
 
+#[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
-    enable_logs(true);
+    enable_logs(false);
 
     start_proxy_http_server(ctx).await;
     bind_proxy_to_gsb().await;
