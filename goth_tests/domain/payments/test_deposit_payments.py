@@ -66,7 +66,7 @@ async def test_deposit_agreement_payments(
 ):
     deposit_id = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
 
-    payment.global_deposit = deposit_id
+    goth_tests.helpers.payment.global_deposit = deposit_id
     """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
