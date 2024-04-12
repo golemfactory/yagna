@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use derive_more::Display;
 use futures::channel::oneshot::channel;
 use futures::future::{AbortHandle, Abortable};
-use job_object::JobObject;
 use shared_child::SharedChild;
 use std::process::Command;
 use std::sync::Arc;
@@ -12,8 +11,15 @@ use std::time::Duration;
 #[cfg(feature = "lock")]
 pub mod lock;
 
+#[cfg(unix)]
+mod unix;
+#[cfg(unix)]
+pub use unix::*;
+
 #[cfg(windows)]
-mod job_object;
+mod win;
+#[cfg(windows)]
+pub use win::*;
 
 #[cfg(unix)]
 use shared_child::unix::SharedChildExt;
@@ -23,6 +29,16 @@ use winapi::um::{
     errhandlingapi,
     wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT},
 };
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ProcessError {
+    #[error("Unsupported: {0}")]
+    Unsupported(String),
+    #[error("Usage limit exceeded: {0}")]
+    UsageLimitExceeded(String),
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
 pub trait ProcessGroupExt<T> {
     fn new_process_group(&mut self) -> &mut T;
@@ -94,7 +110,7 @@ impl ProcessHandle {
     pub fn new(command: &mut Command) -> Result<ProcessHandle> {
         let process = Arc::new(SharedChild::spawn(command)?);
         #[cfg(windows)]
-        let job_object = JobObject::new()?;
+        let job_object = JobObject::try_new_current()?;
         Ok(ProcessHandle {
             process,
             #[cfg(windows)]

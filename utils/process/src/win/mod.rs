@@ -1,4 +1,3 @@
-#![allow(clippy::collapsible_if)]
 use std::hash::Hash;
 use std::mem;
 use std::ptr;
@@ -100,17 +99,28 @@ pub struct JobObject {
 
 unsafe impl Send for JobObject {}
 
-impl JobObject {
-    pub fn try_new(pid: Option<u32>) -> Result<Self, SystemError> {
-        let job_object = JobObject {
-            handle: Self::create_job(process_handle(pid)?)?,
-        };
+impl TryFrom<HANDLE> for JobObject {
+    type Error = SystemError;
 
+    fn try_from(process_handle: HANDLE) -> Result<Self, Self::Error> {
+        let handle = Self::create_job(process_handle)?;
+        let job_object = JobObject { handle };
         let mut info: um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { mem::zeroed() };
         info.BasicLimitInformation.LimitFlags = um::winnt::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         job_object.set_limits(info).unwrap();
-
         Ok(job_object)
+    }
+}
+
+impl JobObject {
+    pub fn try_new_current() -> Result<Self, SystemError> {
+        let handle = current_process_handle();
+        Self::try_from(handle)
+    }
+
+    pub fn try_new(pid: Option<u32>) -> Result<Self, SystemError> {
+        let process_handle = process_handle(pid)?;
+        Self::try_from(process_handle)
     }
 
     pub fn accounting(
@@ -194,10 +204,8 @@ impl JobObject {
 impl Drop for JobObject {
     fn drop(&mut self) {
         let handle = mem::replace(&mut self.handle, INVALID_HANDLE_VALUE);
-        if handle != INVALID_HANDLE_VALUE {
-            if unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
-                log::error!("{:?}", SystemError::last());
-            }
+        if handle != INVALID_HANDLE_VALUE && unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
+            log::error!("{:?}", SystemError::last());
         }
     }
 }
@@ -227,4 +235,8 @@ fn process_handle(pid: Option<u32>) -> Result<HANDLE, SystemError> {
             Ok(handle)
         }
     }
+}
+
+fn current_process_handle() -> HANDLE {
+    unsafe { um::processthreadsapi::GetCurrentProcess() }
 }

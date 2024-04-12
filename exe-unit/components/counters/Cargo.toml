@@ -6,7 +6,7 @@ description = "Runtime counters generating data used to collect activity metrics
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-process = { path = "../process", optional = true }
+ya-utils-process = { optional = true }
 
 anyhow = "1.0"
 actix = "0.13"
@@ -42,4 +42,4 @@ winapi = { version = "0.3.8", features = [
 ], optional = true }
 
 [features]
-os = ["dep:ya-process", "dep:bytes", "dep:futures", "dep:lazy_static", "dep:nix", "dep:libproc", "dep:winapi"]
+os = ["dep:ya-utils-process", "dep:bytes", "dep:futures", "dep:lazy_static", "dep:nix", "dep:libproc", "dep:winapi"]

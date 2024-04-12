@@ -8637,7 +8637,7 @@ dependencies = [
  "tokio",
  "winapi 0.3.9",
  "ya-agreement-utils",
- "ya-process",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -8770,7 +8770,6 @@ dependencies = [
  "ya-gsb-http-proxy",
  "ya-manifest-utils",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
- "ya-process",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
@@ -8779,6 +8778,7 @@ dependencies = [
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
+ "ya-utils-process",
  "yansi",
 ]
 
@@ -9268,29 +9268,6 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-utils-process",
-]
-
-[[package]]
-name = "ya-process"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-rt",
- "anyhow",
- "bytes 1.5.0",
- "chrono",
- "futures 0.3.30",
- "lazy_static",
- "libproc",
- "log",
- "nix 0.22.3",
- "serde",
- "serde_json",
- "serde_yaml 0.9.31",
- "thiserror",
- "tokio",
- "winapi 0.3.9",
- "ya-agreement-utils",
 ]
 
 [[package]]
@@ -9840,7 +9817,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-process"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix",
  "anyhow",
@@ -9848,10 +9825,13 @@ dependencies = [
  "fs2",
  "futures 0.3.30",
  "futures-util",
+ "lazy_static",
  "libc",
+ "libproc",
  "log",
  "nix 0.22.3",
  "shared_child",
+ "thiserror",
  "tokio",
  "winapi 0.3.9",
 ]

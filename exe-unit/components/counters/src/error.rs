@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[cfg(feature = "os")]
-use ya_process::SystemError;
+use ya_utils_process::SystemError;
 
 #[derive(Clone, Debug, Error)]
 pub enum CounterError {

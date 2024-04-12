@@ -48,7 +48,7 @@ ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.3"
-ya-utils-process = { version = "0.2", features = ["lock"] }
+ya-utils-process = { version = "0.3", features = ["lock"] }
 ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
@@ -311,7 +311,6 @@ ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider" }
 ya-counters = { path = "exe-unit/components/counters" }
 ya-gsb-http-proxy = { path = "exe-unit/components/gsb-http-proxy" }
-ya-process = { path = "exe-unit/components/process" }
 
 ## TEST UTILS
 ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }

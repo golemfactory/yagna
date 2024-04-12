@@ -1,6 +1,6 @@
 use crate::{error::CounterError, Result};
 
-use ya_process::*;
+use ya_utils_process::*;
 
 use std::time::Duration;
 
