@@ -16,7 +16,6 @@ use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -558,11 +557,7 @@ impl PaymentProcessor {
             .lock()
             .await
             .as_dao::<AllocationDao>()
-            .get(
-                msg.allocation_id.clone(),
-                NodeId::from_str(&caller)
-                    .map_err(|e| SchedulePaymentError::InvalidInput(e.to_string()))?,
-            )
+            .get(msg.allocation_id.clone(), msg.payer_id)
             .await?;
 
         let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
