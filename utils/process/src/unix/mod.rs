@@ -1,4 +1,4 @@
-pub mod usage;
+mod usage;
 
 pub use usage::*;
 
@@ -16,6 +16,11 @@ use thiserror::Error;
 use libproc::libproc::bsd_info::BSDInfo;
 #[cfg(target_os = "macos")]
 use libproc::libproc::proc_pid::{listpids, pidinfo, ProcType};
+
+#[cfg(target_os = "linux")]
+use nix::unistd::sysconf;
+#[cfg(target_os = "linux")]
+use nix::unistd::SysconfVar::CLK_TCK;
 
 #[derive(Clone, Debug, Error)]
 pub enum SystemError {
@@ -57,6 +62,33 @@ impl Process {
             .filter_map(|entry| i32::from_str(&entry.file_name().to_string_lossy()).ok())
             .filter_map(|pid| Process::info(pid).ok())
             .filter(move |proc| proc.pgid == group)
+    }
+
+    pub fn info(pid: i32) -> Result<Process, SystemError> {
+        let stat = StatStub::read(pid)?;
+        Ok(Process {
+            pid: stat.pid,
+            ppid: stat.ppid,
+            pgid: stat.pgid,
+        })
+    }
+
+    pub fn usage(pid: i32) -> Result<Usage, SystemError> {
+        let stat = StatStub::read(pid)?;
+        let tps = Self::ticks_per_second()?;
+
+        let cpu_sec = Duration::from_secs((stat.stime + stat.utime) / tps as u64);
+        let rss_gib = stat.rss as f64 / (1024. * 1024.);
+
+        Ok(Usage { cpu_sec, rss_gib })
+    }
+
+    fn ticks_per_second() -> Result<i64, SystemError> {
+        match sysconf(CLK_TCK) {
+            Ok(Some(tps)) => Ok(tps),
+            Ok(None) => Err(nix::errno::Errno::ENOTSUP.into()),
+            Err(err) => Err(err.into()),
+        }
     }
 }
 

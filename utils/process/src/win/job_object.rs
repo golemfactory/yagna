@@ -29,6 +29,7 @@ impl TryFrom<HANDLE> for JobObject {
 }
 
 impl JobObject {
+    /// Creates new JobObject for the current process.
     pub fn try_new_current() -> Result<Self, SystemError> {
         let handle = current_process_handle();
         Self::try_from(handle)

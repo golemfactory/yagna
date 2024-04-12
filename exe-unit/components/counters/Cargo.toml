@@ -6,7 +6,7 @@ description = "Runtime counters generating data used to collect activity metrics
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-utils-process = { path = "../../../utils/process", optional = true }
+ya-utils-process = { version = "0.3", optional = true }
 
 anyhow = "1.0"
 actix = "0.13"
