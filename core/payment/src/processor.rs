@@ -558,11 +558,7 @@ impl PaymentProcessor {
             .timeout_lock(DB_LOCK_TIMEOUT)
             .await?
             .as_dao::<AllocationDao>()
-            .get(
-                msg.allocation_id.clone(),
-                NodeId::from_str(&caller)
-                    .map_err(|e| SchedulePaymentError::InvalidInput(e.to_string()))?,
-            )
+            .get(msg.allocation_id.clone(), msg.payer_id)
             .await?;
         let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
             allocation.deposit.clone().map(|deposit| deposit.id)
