@@ -7,7 +7,6 @@ use std::hash::Hash;
 use std::io;
 use std::time::{Duration, Instant};
 
-
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;

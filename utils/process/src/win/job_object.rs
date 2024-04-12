@@ -1,15 +1,12 @@
-use std::hash::Hash;
 use std::mem;
 use std::ptr;
-use std::sync::{Arc, Mutex};
 
-use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 
-use crate::ProcessError;
+use crate::SystemError;
 
 #[derive(Clone, Debug)]
 pub struct JobObject {
