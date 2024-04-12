@@ -84,6 +84,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.status( c, m).await }
         )
         .bind_with_processor(
+            move |_, dr, c, m| async move { dr.release_deposit( c, m).await }
+        )
+        .bind_with_processor(
             move |_, dr, c, m| async move { dr.shut_down( c, m).await }
         );
 

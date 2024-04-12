@@ -25,13 +25,13 @@ use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, GetRpcEndpointsResult, PaymentConfirmation,
-    PaymentDetails, ShutDown, ValidateAllocation,
+    self, driver_bus_id, AccountMode, DriverReleaseDeposit, GasDetails, GetRpcEndpointsResult,
+    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount, RegisterAccountError,
-    RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
-    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
+    GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
+    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
+    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_core_model::NodeId;
@@ -882,6 +882,29 @@ impl PaymentProcessor {
                 log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
             }
         }
+    }
+
+    pub async fn release_deposit(&self, msg: ReleaseDeposit) -> Result<(), GenericError> {
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(GenericError::new)?
+            .driver(&msg.platform, &msg.from, AccountMode::SEND)
+            .map_err(GenericError::new)?;
+
+        driver_endpoint(&driver)
+            .send(DriverReleaseDeposit {
+                platform: msg.platform,
+                from: msg.from,
+                deposit_contract: msg.deposit_contract,
+                deposit_id: msg.deposit_id,
+            })
+            .await
+            .map_err(GenericError::new)?
+            .map_err(GenericError::new)?;
+
+        Ok(())
     }
 
     pub async fn shut_down(
