@@ -590,6 +590,22 @@ pub enum DriverStatusError {
     NetworkNotFound(String),
 }
 
+// ************************* DEPOSIT *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DriverReleaseDeposit {
+    pub platform: String,
+    pub from: String,
+    pub deposit_contract: String,
+    pub deposit_id: String,
+}
+
+impl RpcMessage for DriverReleaseDeposit {
+    const ID: &'static str = "DriverReleaseDeposit";
+    type Item = ();
+    type Error = GenericError;
+}
+
 // ************************* SHUT DOWN *************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

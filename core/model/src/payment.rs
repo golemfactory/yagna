@@ -453,22 +453,16 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ReleaseDeposit {
-        pub signer: NodeId,
+        pub platform: String,
+        pub from: String,
+        pub deposit_contract: String,
         pub deposit_id: String,
     }
 
     impl RpcMessage for ReleaseDeposit {
         const ID: &'static str = "ReleaseDeposit";
-        type Item = bool;
-        type Error = ReleaseDepositError;
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum ReleaseDepositError {
-        #[error("Account not registered")]
-        AccountNotRegistered,
-        #[error("Error while releasing allocation: {0}")]
-        Other(String),
+        type Item = ();
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
