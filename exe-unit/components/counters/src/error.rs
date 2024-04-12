@@ -1,7 +1,6 @@
 use thiserror::Error;
-
-#[cfg(feature = "os")]
 use ya_utils_process::SystemError;
+
 
 #[derive(Clone, Debug, Error)]
 pub enum CounterError {
@@ -13,13 +12,8 @@ pub enum CounterError {
     Other(String),
 }
 
-#[cfg(feature = "os")]
 impl From<SystemError> for CounterError {
     fn from(error: SystemError) -> Self {
-        match error {
-            SystemError::NullPointer(err) => CounterError::Other(err.to_string()),
-            SystemError::PoisonError => CounterError::Other("PoisonError".into()),
-            SystemError::ApiError(err) => CounterError::Other(err.to_string()),
-        }
+        CounterError::Other(error.to_string())
     }
 }

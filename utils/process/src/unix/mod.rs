@@ -5,19 +5,13 @@ pub use usage::*;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::io;
-use std::mem;
 use std::time::{Duration, Instant};
 
-use nix::libc;
+
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;
 use thiserror::Error;
-
-#[cfg(target_os = "linux")]
-use nix::unistd::sysconf;
-#[cfg(target_os = "linux")]
-use nix::unistd::SysconfVar::CLK_TCK;
 
 #[cfg(target_os = "macos")]
 use libproc::libproc::bsd_info::BSDInfo;
@@ -64,15 +58,6 @@ impl Process {
             .filter_map(|entry| i32::from_str(&entry.file_name().to_string_lossy()).ok())
             .filter_map(|pid| Process::info(pid).ok())
             .filter(move |proc| proc.pgid == group)
-    }
-
-    pub fn info(pid: i32) -> Result<Process, SystemError> {
-        let stat = StatStub::read(pid)?;
-        Ok(Process {
-            pid: stat.pid,
-            ppid: stat.ppid,
-            pgid: stat.pgid,
-        })
     }
 }
 
@@ -197,33 +182,4 @@ fn parents(pid: i32) -> Result<HashSet<i32>, SystemError> {
         }
     }
     Ok(ancestors)
-}
-
-#[cfg(test)]
-mod test {
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn parse_stat() {
-        let stat = "10220 (proc-name) S 7666 7832 7832 0 -1 4194304 2266 0 4 0 44 2 0 0 \
-        20 0 6 0 1601 816193536 1793 18446744073709551615 94873375535104 94873375567061 \
-        140731153968032 0 0 0 0 4096 0 0 0 0 17 6 0 0 0 0 0 94873375582256 94873375584384 \
-        94873398587392 140731153974918 140731153974959 140731153974959 140731153977295 0";
-
-        let parsed = super::StatStub::parse_stat(stat).unwrap();
-        let expected = super::StatStub {
-            pid: 10220,
-            comm: "proc-name".to_string(),
-            state: 'S',
-            ppid: 7666,
-            pgid: 7832,
-            sid: 7832,
-            utime: 44,
-            stime: 2,
-            vsize: 816193536,
-            rss: 1793,
-        };
-
-        assert_eq!(parsed, expected);
-    }
 }

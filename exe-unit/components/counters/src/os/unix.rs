@@ -104,9 +104,3 @@ impl Counters {
             })
     }
 }
-
-impl From<SystemError> for CounterError {
-    fn from(err: SystemError) -> Self {
-        Self::Other(err.to_string())
-    }
-}
