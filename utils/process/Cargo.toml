@@ -20,6 +20,7 @@ derive_more = { workspace = true }
 futures = "0.3"
 futures-util = "0.3.4"
 libc = "0.2"
+log = "0.4"
 shared_child = "0.3.4"
 tokio = { version = "1", features = ["process", "signal"] }
 
