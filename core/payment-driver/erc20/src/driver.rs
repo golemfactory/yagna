@@ -271,12 +271,6 @@ impl Erc20Driver {
                         network,
                     })
                 }
-                LibStatusProperty::InvalidChainId { chain_id, .. } => {
-                    Some(DriverStatusProperty::InvalidChainId {
-                        driver: DRIVER_NAME.into(),
-                        chain_id,
-                    })
-                }
             })
             .collect())
     }
@@ -992,6 +986,46 @@ impl PaymentDriver for Erc20Driver {
         } else {
             self.validate_allocation_internal(caller, msg).await
         }
+    }
+
+    async fn release_deposit(
+        &self,
+        _caller: String,
+        msg: DriverReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        let network = &msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))
+            .unwrap();
+
+        self.payment_runtime
+            .close_deposit(
+                network,
+                H160::from_str(&msg.from).map_err(|e| {
+                    GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
+                })?,
+                H160::from_str(&msg.deposit_contract).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` address parsing error: {}",
+                        msg.deposit_contract, e
+                    ))
+                })?,
+                U256::from_str(&msg.deposit_id).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` deposit id parsing error: {}",
+                        msg.deposit_id, e
+                    ))
+                })?,
+            )
+            .await
+            .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;
+
+        Ok(())
     }
 
     async fn status(

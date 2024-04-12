@@ -523,12 +523,14 @@ async fn release_allocation(
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
-        Ok(AllocationReleaseStatus::Released { deposit }) => {
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
             if let Some(deposit) = deposit {
                 let release_result = bus::service(LOCAL_SERVICE)
                     .send(ReleaseDeposit {
-                        signer: id.identity,
+                        from: id.identity.to_string(),
                         deposit_id: deposit.id,
+                        deposit_contract: deposit.contract,
+                        platform,
                     })
                     .await;
                 match release_result {
@@ -640,7 +642,7 @@ pub async fn forced_release_allocation(
         .release(allocation_id.clone(), node_id)
         .await
     {
-        Ok(AllocationReleaseStatus::Released { deposit: _ }) => {
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
             log::info!("Allocation {} released.", allocation_id);
         }
         Err(e) => {

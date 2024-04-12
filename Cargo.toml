@@ -232,8 +232,8 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 derive_more = "0.99.11"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "d82a4e2031ec2f434e301190480b5522f371848b" }
-erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "d82a4e2031ec2f434e301190480b5522f371848b" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "3404b727d79fbacd87a8c708f6b7dd5a2745630f" }
+erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "3404b727d79fbacd87a8c708f6b7dd5a2745630f" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.4.1" }
@@ -280,9 +280,9 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2539fcefd02b12e0078dc1ddcc9bcc0e841e685f" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2539fcefd02b12e0078dc1ddcc9bcc0e841e685f" }
 #ya-client-model = "0.7"
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
