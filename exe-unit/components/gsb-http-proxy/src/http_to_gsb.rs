@@ -90,31 +90,33 @@ impl HttpToGsbProxy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::rt::pin;
+    use crate::http_to_gsb::BindingMode::Local;
+    use crate::response::GsbHttpCallResponseEvent;
     use async_stream::stream;
 
     #[actix_web::test]
     async fn http_to_gsb_test() {
-        let gsb_call = HttpToGsbProxy {
-            method: "GET".to_string(),
-            path: "/endpoint".to_string(),
-            body: None,
-            headers: HeaderMap::new(),
-        };
+        let mut gsb_call = HttpToGsbProxy::new(Local);
 
-        let stream = stream! {
-            for i in 0..3 {
-                let event = GsbHttpCallResponseEvent {
-                    index: i,
-                    timestamp: "timestamp".to_string(),
-                    msg_bytes: format!("response {}", i).into_bytes()
-                };
-                let result = Ok(event);
-                yield Ok(result)
-            }
-        };
-        pin!(stream);
-        let mut response_stream = gsb_call.pass(|_| stream);
+        bus::bind_stream(crate::BUS_ID, move |_msg: GsbHttpCallMessage| {
+            Box::pin(stream! {
+                for i in 0..3 {
+                    let response = GsbHttpCallResponseEvent {
+                        index: i,
+                        timestamp: "timestamp".to_string(),
+                        msg_bytes: format!("response {}", i).into_bytes()
+                    };
+                    yield Ok(response);
+                }
+            })
+        });
+
+        let mut response_stream = gsb_call.pass(
+            "GET".to_string(),
+            "/endpoint".to_string(),
+            HeaderMap::new(),
+            None,
+        );
 
         let mut v = vec![];
         while let Some(event) = response_stream.next().await {
