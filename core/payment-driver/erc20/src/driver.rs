@@ -420,6 +420,16 @@ impl Erc20Driver {
             return Ok(ValidateAllocationResult::MalformedDepositId);
         };
 
+        let deposit_reused = msg
+            .existing_allocations
+            .iter()
+            .find(|allocation| allocation.deposit.as_ref() == Some(&deposit))
+            .is_some();
+
+        if deposit_reused {
+            return k(ValidateAllocationResult::DepositReused);
+        }
+
         let deposit_details = self
             .payment_runtime
             .deposit_details(network.to_string(), deposit_id, deposit_contract)
