@@ -351,9 +351,10 @@ async fn create_allocation(
              Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
-            return bad_req_and_log(format!(
+            return bad_req_and_log(
                 "Requested allocation timeout either not set or exceeds deposit timeout"
-            ));
+                    .to_string(),
+            );
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
@@ -513,9 +514,10 @@ async fn amend_allocation(
              Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
-            return bad_req_and_log(format!(
+            return bad_req_and_log(
                 "Requested allocation timeout either not set or exceeds deposit timeout"
-            ));
+                    .to_string(),
+            );
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
