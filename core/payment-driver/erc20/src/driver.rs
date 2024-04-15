@@ -412,17 +412,23 @@ impl Erc20Driver {
                 msg.platform
             )))?;
 
+        let Ok(deposit_contract) = Address::from_str(&deposit.contract) else {
+            return Ok(ValidateAllocationResult::MalformedDepositContract);
+        };
+
+        let Ok(deposit_id) = U256::from_str(&deposit.id) else {
+            return Ok(ValidateAllocationResult::MalformedDepositId);
+        };
+
         let deposit_details = self
             .payment_runtime
-            .deposit_details(
-                network.to_string(),
-                U256::from_str(&deposit.id).unwrap(),
-                Address::from_str(&deposit.contract).unwrap(),
-            )
+            .deposit_details(network.to_string(), deposit_id, deposit_contract)
             .await
             .map_err(GenericError::new)?;
-        let deposit_balance =
-            BigDecimal::new(BigInt::from_str(&deposit_details.amount).unwrap(), 18);
+        let deposit_balance = BigDecimal::new(
+            BigInt::from_str(&deposit_details.amount).map_err(GenericError::new)?,
+            18,
+        );
         let deposit_timeout = deposit_details.valid_to;
 
         log::info!(
