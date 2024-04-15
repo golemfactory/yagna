@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::{public::Ack, *};
-    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
+    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
@@ -431,7 +431,7 @@ pub mod local {
 
     impl RpcMessage for ValidateAllocation {
         const ID: &'static str = "ValidateAllocation";
-        type Item = bool;
+        type Item = ValidateAllocationResult;
         type Error = ValidateAllocationError;
     }
 

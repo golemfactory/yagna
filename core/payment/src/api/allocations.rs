@@ -14,6 +14,7 @@ use ya_client_model::NodeId;
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
 use ya_client_model::payment::*;
+use ya_core_model::driver::ValidateAllocationResult;
 use ya_core_model::payment::local::{
     get_token_from_network_name, DriverName, NetworkName, ReleaseDeposit, ValidateAllocation,
     ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
@@ -344,10 +345,15 @@ async fn create_allocation(
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => {
+        Ok(ValidateAllocationResult::Valid) => {}
+        Ok(ValidateAllocationResult::InsufficientFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
              Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
+            return bad_req_and_log(format!(
+                "Requested allocation timeout either not set or exceeds deposit timeout"
+            ));
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
@@ -455,6 +461,11 @@ async fn amend_allocation(
     body: Json<AllocationUpdate>,
     id: Identity,
 ) -> HttpResponse {
+    let bad_req_and_log = |err_msg: String| -> HttpResponse {
+        log::error!("{}", err_msg);
+        response::bad_request(&err_msg)
+    };
+
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let new_allocation: AllocationUpdate = body.into_inner();
@@ -477,6 +488,8 @@ async fn amend_allocation(
             Err(e) => return response::bad_request(&e),
         };
 
+    let payment_triple = amended_allocation.payment_platform.clone();
+
     // validation will take into account all existing allocation, including the one
     // being currently modified. This means we only need to validate the increase.
     let amount_to_validate =
@@ -494,11 +507,19 @@ async fn amend_allocation(
         deposit: amended_allocation.deposit.clone(),
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(ValidateAllocationResult::Valid) => {}
+        Ok(ValidateAllocationResult::InsufficientFunds) => {
+            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
+             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
+            return bad_req_and_log(format!(
+                "Requested allocation timeout either not set or exceeds deposit timeout"
+            ));
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-                           ValidateAllocationError::AccountNotRegistered,
-                       ))) => return response::bad_request(&"Account not registered"),
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => return response::bad_request(&"Account not registered"),
         Err(e) => return response::server_error(&e),
     }
 

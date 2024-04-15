@@ -401,9 +401,16 @@ impl ValidateAllocation {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ValidateAllocationResult {
+    InsufficientFunds,
+    TimeoutExceedsDeposit,
+    Valid,
+}
+
 impl RpcMessage for ValidateAllocation {
     const ID: &'static str = "ValidateAllocation";
-    type Item = bool;
+    type Item = ValidateAllocationResult;
     type Error = GenericError;
 }
 
