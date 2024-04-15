@@ -1,44 +1,76 @@
 use crate::error::HttpProxyStatusError;
 use crate::headers::Headers;
 use crate::message::GsbHttpCallMessage;
-use crate::response::GsbHttpCallResponseEvent;
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
 use futures::{Stream, StreamExt};
-use ya_service_bus::Error;
+use ya_client_model::NodeId;
+use ya_core_model::net as ya_net;
+use ya_core_model::net::RemoteEndpoint;
+use ya_service_bus::{typed as bus, Error};
 
 #[derive(Clone, Debug)]
 pub struct HttpToGsbProxy {
-    pub method: String,
-    pub path: String,
-    pub body: Option<Vec<u8>>,
-    pub headers: HeaderMap,
+    pub binding: BindingMode,
+    pub bus_addr: String,
 }
 
 impl HttpToGsbProxy {
-    pub fn pass<T, F>(
-        &self,
-        trigger_stream: F,
-    ) -> impl Stream<Item = Result<actix_web::web::Bytes, Error>> + Unpin + Sized
-    where
-        T: Stream<Item = Result<Result<GsbHttpCallResponseEvent, HttpProxyStatusError>, Error>>
-            + Unpin,
-        F: FnOnce(GsbHttpCallMessage) -> T,
-    {
-        let path = if let Some(stripped_url) = self.path.strip_prefix('/') {
+    pub fn new(binding: BindingMode) -> Self {
+        HttpToGsbProxy {
+            binding,
+            bus_addr: crate::BUS_ID.to_string(),
+        }
+    }
+
+    pub fn bus_addr(&mut self, bus_addr: &str) -> Self {
+        HttpToGsbProxy {
+            binding: self.binding.clone(),
+            bus_addr: bus_addr.to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum BindingMode {
+    Local,
+    Net(NetBindingNodes),
+}
+
+#[derive(Clone, Debug)]
+pub struct NetBindingNodes {
+    pub from: NodeId,
+    pub to: NodeId,
+}
+
+impl HttpToGsbProxy {
+    pub fn pass(
+        &mut self,
+        method: String,
+        path: String,
+        headers: HeaderMap,
+        body: Option<Vec<u8>>,
+    ) -> impl Stream<Item = Result<actix_web::web::Bytes, Error>> + Unpin + Sized {
+        let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
-            self.path.clone()
+            path
         };
 
         let msg = GsbHttpCallMessage {
-            method: self.method.to_string(),
+            method,
             path,
-            body: self.body.clone(),
-            headers: Headers::default().filter(&self.headers),
+            body,
+            headers: Headers::default().filter(&headers),
         };
 
-        let stream = trigger_stream(msg);
+        let stream = match &self.binding {
+            BindingMode::Local => bus::service(&self.bus_addr).call_streaming(msg),
+            BindingMode::Net(binding) => ya_net::from(binding.from)
+                .to(binding.to)
+                .service(&self.bus_addr)
+                .call_streaming(msg),
+        };
 
         let stream = stream
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))

@@ -27,6 +27,9 @@ actix = "0.13"
 actix-http = "3"
 actix-web = "4"
 actix-rt = "2.7"
+rand = "0.8.5"
+hex = "0.4.3"
+env_logger = "0.10.2"
 
 [dev-dependencies]
 mockito = "1.2"
@@ -36,4 +39,3 @@ test-context = "0.1.4"
 
 ya-framework-basic = { version = "0.1" }
 ya-sb-router = "0.6.2"
-

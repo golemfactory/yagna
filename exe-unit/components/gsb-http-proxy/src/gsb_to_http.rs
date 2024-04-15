@@ -7,10 +7,12 @@ use ya_counters::Counter;
 
 use async_stream::stream;
 use chrono::Utc;
+use futures::StreamExt;
 use futures_core::stream::Stream;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tokio::sync::mpsc;
+use ya_service_bus::{typed as bus, Handle};
 
 #[derive(Clone, Debug)]
 pub struct GsbToHttpProxy {
@@ -39,6 +41,14 @@ impl GsbToHttpProxy {
             base_url,
             counters: Default::default(),
         }
+    }
+
+    pub fn bind(&mut self, gsb_path: &str) -> Handle {
+        let mut this = self.clone();
+        bus::bind_stream(gsb_path, move |message: GsbHttpCallMessage| {
+            let stream = this.pass(message);
+            Box::pin(stream.map(Ok))
+        })
     }
 
     pub fn pass(

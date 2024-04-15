@@ -12,8 +12,8 @@ use ya_service_bus::Error;
 use crate::common::*;
 use crate::error;
 use ya_core_model::activity;
-use ya_core_model::net::RemoteEndpoint;
-use ya_gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
+use ya_gsb_http_proxy::http_to_gsb::BindingMode::Net;
+use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, NetBindingNodes};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -21,7 +21,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(post_proxy_http_request)
 }
 
-#[actix_web::get("/activity/{activity_id}/proxy_http_request{url:.*}")]
+#[actix_web::get("/activity/{activity_id}/proxy-http{url:.*}")]
 async fn get_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
@@ -31,7 +31,7 @@ async fn get_proxy_http_request(
     proxy_http_request(db, path, id, request, None, Method::GET).await
 }
 
-#[actix_web::post("/activity/{activity_id}/proxy_http_request{url:.*}")]
+#[actix_web::post("/activity/{activity_id}/proxy-http{url:.*}")]
 async fn post_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
@@ -54,7 +54,6 @@ async fn proxy_http_request(
     let activity_id = path_activity_url.activity_id;
     let path = path_activity_url.url;
 
-    // TODO: check if caller is the Requestor
     let result = authorize_activity_executor(&db, id.identity, &activity_id, Role::Requestor).await;
     if let Err(e) = result {
         log::error!("Authorize error {}", e);
@@ -62,23 +61,17 @@ async fn proxy_http_request(
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
 
-    let http_to_gsb = HttpToGsbProxy {
-        method: method.to_string(),
-        path,
-        body: body.map(|bytes| bytes.to_vec()),
-        headers: request.headers().clone(),
-    };
+    let mut http_to_gsb = HttpToGsbProxy::new(Net(NetBindingNodes {
+        from: id.identity,
+        to: *agreement.provider_id(),
+    }))
+    .bus_addr(&activity::exeunit::bus_id(&activity_id));
 
-    let stream = http_to_gsb.pass(move |msg| {
-        let from = id.identity;
-        let to = *agreement.provider_id();
-        let bus_id = &activity::exeunit::bus_id(&activity_id);
+    let method = method.to_string();
+    let body = body.map(|bytes| bytes.to_vec());
+    let headers = request.headers().clone();
 
-        ya_net::from(from)
-            .to(to)
-            .service_transfer(bus_id)
-            .call_streaming(msg)
-    });
+    let stream = http_to_gsb.pass(method, path, headers, body);
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
