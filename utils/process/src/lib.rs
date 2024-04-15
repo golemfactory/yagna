@@ -12,6 +12,16 @@ use std::time::Duration;
 pub mod lock;
 
 #[cfg(unix)]
+mod unix;
+#[cfg(unix)]
+pub use unix::*;
+
+#[cfg(windows)]
+mod win;
+#[cfg(windows)]
+pub use win::*;
+
+#[cfg(unix)]
 use shared_child::unix::SharedChildExt;
 
 #[cfg(windows)]
@@ -19,6 +29,16 @@ use winapi::um::{
     errhandlingapi,
     wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT},
 };
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ProcessError {
+    #[error("Unsupported: {0}")]
+    Unsupported(String),
+    #[error("Usage limit exceeded: {0}")]
+    UsageLimitExceeded(String),
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
 pub trait ProcessGroupExt<T> {
     fn new_process_group(&mut self) -> &mut T;
@@ -80,12 +100,21 @@ pub enum ExeUnitExitStatus {
 #[derive(Clone)]
 pub struct ProcessHandle {
     process: Arc<SharedChild>,
+    // Windows process will be killed once `job_object` is dropped
+    #[allow(unused)]
+    #[cfg(windows)]
+    job_object: JobObject,
 }
 
 impl ProcessHandle {
     pub fn new(command: &mut Command) -> Result<ProcessHandle> {
+        let process = Arc::new(SharedChild::spawn(command)?);
+        #[cfg(windows)]
+        let job_object = JobObject::try_new_current()?;
         Ok(ProcessHandle {
-            process: Arc::new(SharedChild::spawn(command)?),
+            process,
+            #[cfg(windows)]
+            job_object,
         })
     }
 

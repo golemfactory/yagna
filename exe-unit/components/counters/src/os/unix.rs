@@ -1,4 +1,4 @@
-use crate::os::process::*;
+use ya_utils_process::*;
 
 use crate::error::CounterError;
 use crate::Result;
@@ -102,11 +102,5 @@ impl Counters {
                     *mem_entry = usage.rss_gib;
                 }
             })
-    }
-}
-
-impl From<SystemError> for CounterError {
-    fn from(err: SystemError) -> Self {
-        Self::Other(err.to_string())
     }
 }

@@ -23,7 +23,7 @@ ya-file-logging = "0.1"
 ya-utils-actix = "0.2"
 ya-utils-cli = "0.1"
 ya-utils-path = "0.1"
-ya-utils-process = { version = "0.2", features = ['lock'] }
+ya-utils-process = { version = "0.3", features = ['lock'] }
 ya-std-utils = "0.1"
 golem-certificate = "0.1.1"
 
