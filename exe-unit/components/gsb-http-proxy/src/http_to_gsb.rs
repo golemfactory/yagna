@@ -23,9 +23,11 @@ impl HttpToGsbProxy {
         }
     }
 
-    pub fn bus_addr(&mut self, bus_addr: &str) -> &Self {
-        self.bus_addr = bus_addr.to_string();
-        self
+    pub fn bus_addr(&mut self, bus_addr: &str) -> Self {
+        HttpToGsbProxy {
+            binding: self.binding.clone(),
+            bus_addr: bus_addr.to_string(),
+        }
     }
 }
 
