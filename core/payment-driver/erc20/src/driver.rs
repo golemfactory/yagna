@@ -423,8 +423,7 @@ impl Erc20Driver {
         let deposit_reused = msg
             .existing_allocations
             .iter()
-            .find(|allocation| allocation.deposit.as_ref() == Some(&deposit))
-            .is_some();
+            .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
 
         if deposit_reused {
             return Ok(ValidateAllocationResult::DepositReused);
