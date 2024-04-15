@@ -427,7 +427,7 @@ impl Erc20Driver {
             .is_some();
 
         if deposit_reused {
-            return k(ValidateAllocationResult::DepositReused);
+            return Ok(ValidateAllocationResult::DepositReused);
         }
 
         let deposit_details = self
