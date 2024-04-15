@@ -340,6 +340,7 @@ async fn create_allocation(
         address: address.clone(),
         amount: allocation.total_amount.clone(),
         timeout: allocation.timeout,
+        deposit: allocation.deposit.clone(),
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
@@ -490,6 +491,7 @@ async fn amend_allocation(
             0.into()
         },
         timeout: amended_allocation.timeout,
+        deposit: amended_allocation.deposit.clone(),
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
