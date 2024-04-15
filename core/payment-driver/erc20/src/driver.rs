@@ -391,7 +391,7 @@ impl Erc20Driver {
             total_allocated_amount,
         );
 
-        Ok(if msg.amount > account_balance {
+        Ok(if msg.amount > account_balance - total_allocated_amount {
             ValidateAllocationResult::InsufficientFunds
         } else {
             ValidateAllocationResult::Valid
