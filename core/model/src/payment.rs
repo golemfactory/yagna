@@ -30,7 +30,7 @@ pub mod local {
     use strum::{EnumProperty, IntoEnumIterator, VariantNames};
     use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
 
-    use ya_client_model::NodeId;
+    use ya_client_model::{payment::allocation::Deposit, NodeId};
 
     pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
@@ -426,6 +426,7 @@ pub mod local {
         pub address: String,
         pub amount: BigDecimal,
         pub timeout: Option<DateTime<Utc>>,
+        pub deposit: Option<Deposit>,
     }
 
     impl RpcMessage for ValidateAllocation {
