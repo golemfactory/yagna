@@ -360,7 +360,7 @@ impl Erc20Driver {
         &self,
         caller: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         if msg.deposit.is_some() {
             Err(GenericError::new(
                 "validate_allocation_internal called with not empty deposit",
@@ -391,14 +391,18 @@ impl Erc20Driver {
             total_allocated_amount,
         );
 
-        Ok(msg.amount <= account_balance - total_allocated_amount)
+        Ok(if msg.amount > account_balance {
+            ValidateAllocationResult::InsufficientFunds
+        } else {
+            ValidateAllocationResult::Valid
+        })
     }
 
     async fn validate_allocation_deposit(
         &self,
         msg: ValidateAllocation,
         deposit: Deposit,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         let network = msg
             .platform
             .split('-')
@@ -435,37 +439,36 @@ impl Erc20Driver {
             deposit_timeout,
         );
 
-        let valid_amount = msg.amount <= deposit_balance;
-
-        if !valid_amount {
-            log::info!(
+        if msg.amount > deposit_balance {
+            log::debug!(
                 "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
                 msg.amount,
                 deposit_balance
             );
+
+            return Ok(ValidateAllocationResult::InsufficientFunds);
         }
 
-        let valid_timeout = if let Some(timeout) = msg.timeout {
-            let valid_timeout = timeout <= deposit_details.valid_to;
-
-            if !valid_timeout {
-                log::info!(
+        if let Some(timeout) = msg.timeout {
+            if timeout > deposit_details.valid_to {
+                log::debug!(
                     "Deposit validation failed: requested timeout [{}] > deposit timeout [{}]",
                     timeout,
                     deposit_timeout
                 );
+
+                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
             }
-            valid_timeout
         } else {
-            log::info!(
+            log::debug!(
                 "Deposit validation failed: allocations with deposits must have a timeout. Deposit timeout: {}",
                 deposit_timeout
             );
 
-            false
+            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
 
-        Ok(valid_amount && valid_timeout)
+        Ok(ValidateAllocationResult::Valid)
     }
 }
 
@@ -1003,7 +1006,7 @@ impl PaymentDriver for Erc20Driver {
         &self,
         caller: String,
         mut msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
 
         if let Some(deposit) = msg.deposit.take() {

@@ -26,7 +26,7 @@ use ya_client_model::payment::{
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GasDetails, GetRpcEndpointsResult,
-    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
+    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
@@ -804,7 +804,7 @@ impl PaymentProcessor {
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
         deposit: Option<Deposit>,
-    ) -> Result<bool, ValidateAllocationError> {
+    ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
         }
