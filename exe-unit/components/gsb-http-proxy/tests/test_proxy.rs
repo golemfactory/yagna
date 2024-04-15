@@ -5,9 +5,7 @@ use futures::StreamExt;
 use test_context::test_context;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_gsb_http_proxy::gsb_to_http::GsbToHttpProxy;
-use ya_gsb_http_proxy::http_to_gsb::HttpToGsbProxy;
-use ya_gsb_http_proxy::http_to_gsb::HttpToGsbProxyBinding::Local;
-use ya_service_bus::Handle;
+use ya_gsb_http_proxy::http_to_gsb::{BindingMode, HttpToGsbProxy};
 
 // #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
@@ -21,7 +19,7 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
         .expect("should bind to gsb");
 
     let mut gsb_proxy = GsbToHttpProxy::new("http://127.0.0.1:8082/".into());
-    gsb_proxy.bind(ya_gsb_http_proxy::BUS_ID)
+    gsb_proxy.bind(ya_gsb_http_proxy::BUS_ID);
 
     let response = reqwest::get("http://127.0.0.1:8081/proxy")
         .await
@@ -32,10 +30,7 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
 
 async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {
     async fn proxy_endpoint() -> impl Responder {
-        let mut http_to_gsb = HttpToGsbProxy {
-            binding: Local,
-            bus_id: ya_gsb_http_proxy::BUS_ID.to_string(),
-        };
+        let mut http_to_gsb = HttpToGsbProxy::new(BindingMode::Local);
 
         let mut stream = http_to_gsb.pass(
             "GET".to_string(),
@@ -61,10 +56,6 @@ async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {
     tokio::task::spawn_local(async move { anyhow::Ok(proxy_server.await?) });
 }
 
-async fn bind_proxy_to_gsb() {
-
-}
-
 async fn start_target_server(ctx: &mut DroppableTestContext) {
     let responder = HttpServer::new(|| {
         App::new().route(
@@ -78,8 +69,4 @@ async fn start_target_server(ctx: &mut DroppableTestContext) {
 
     ctx.register(responder.handle());
     tokio::task::spawn_local(async move { anyhow::Ok(responder.await?) });
-}
-
-async fn bind_gsb_to_target() -> Handle {
-
 }

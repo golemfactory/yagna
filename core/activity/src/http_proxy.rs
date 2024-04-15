@@ -12,8 +12,8 @@ use ya_service_bus::Error;
 use crate::common::*;
 use crate::error;
 use ya_core_model::activity;
-use ya_gsb_http_proxy::http_to_gsb::HttpToGsbProxyBinding::Net;
-use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, HttpToGsbProxyNetBindingNodes};
+use ya_gsb_http_proxy::http_to_gsb::BindingMode::Net;
+use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, NetBindingNodes};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -21,7 +21,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(post_proxy_http_request)
 }
 
-#[actix_web::get("/activity/{activity_id}/proxy_http_request{url:.*}")]
+#[actix_web::get("/activity/{activity_id}/http-proxy{url:.*}")]
 async fn get_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
@@ -31,7 +31,7 @@ async fn get_proxy_http_request(
     proxy_http_request(db, path, id, request, None, Method::GET).await
 }
 
-#[actix_web::post("/activity/{activity_id}/proxy_http_request{url:.*}")]
+#[actix_web::post("/activity/{activity_id}/http-proxy{url:.*}")]
 async fn post_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
@@ -62,11 +62,11 @@ async fn proxy_http_request(
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;
 
     let mut http_to_gsb = HttpToGsbProxy {
-        binding: Net(HttpToGsbProxyNetBindingNodes {
+        binding: Net(NetBindingNodes {
             from: id.identity,
             to: *agreement.provider_id(),
         }),
-        bus_id: activity::exeunit::bus_id(&activity_id),
+        bus_addr: activity::exeunit::bus_id(&activity_id),
     };
 
     let method = method.to_string();

@@ -36,10 +36,6 @@ mockito = "1.2"
 anyhow = "1.0"
 serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"] }
 test-context = "0.1.4"
-ethsign = "0.8"
-dotenv = "0.15.0"
 
 ya-framework-basic = { version = "0.1" }
 ya-sb-router = "0.6.2"
-ya-net = "0.3.0"
-

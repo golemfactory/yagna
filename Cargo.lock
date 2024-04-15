@@ -8961,9 +8961,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "chrono",
- "dotenv",
  "env_logger 0.10.2",
- "ethsign",
  "futures 0.3.30",
  "futures-core",
  "hex",
@@ -8983,7 +8981,6 @@ dependencies = [
  "ya-core-model",
  "ya-counters",
  "ya-framework-basic",
- "ya-net",
  "ya-sb-router",
  "ya-service-bus",
 ]

@@ -11,18 +11,32 @@ use ya_service_bus::{typed as bus, Error};
 
 #[derive(Clone, Debug)]
 pub struct HttpToGsbProxy {
-    pub binding: HttpToGsbProxyBinding,
-    pub bus_id: String,
+    pub binding: BindingMode,
+    pub bus_addr: String,
+}
+
+impl HttpToGsbProxy {
+    pub fn new(binding: BindingMode) -> Self {
+        HttpToGsbProxy {
+            binding,
+            bus_addr: crate::BUS_ID.to_string(),
+        }
+    }
+
+    pub fn bus_addr(&mut self, bus_addr: &str) -> &Self {
+        self.bus_addr = bus_addr.to_string();
+        self
+    }
 }
 
 #[derive(Clone, Debug)]
-pub enum HttpToGsbProxyBinding {
+pub enum BindingMode {
     Local,
-    Net(HttpToGsbProxyNetBindingNodes),
+    Net(NetBindingNodes),
 }
 
 #[derive(Clone, Debug)]
-pub struct HttpToGsbProxyNetBindingNodes {
+pub struct NetBindingNodes {
     pub from: NodeId,
     pub to: NodeId,
 }
@@ -49,10 +63,10 @@ impl HttpToGsbProxy {
         };
 
         let stream = match &self.binding {
-            HttpToGsbProxyBinding::Local => bus::service(crate::BUS_ID).call_streaming(msg),
-            HttpToGsbProxyBinding::Net(binding) => ya_net::from(binding.from)
+            BindingMode::Local => bus::service(&self.bus_addr).call_streaming(msg),
+            BindingMode::Net(binding) => ya_net::from(binding.from)
                 .to(binding.to)
-                .service(&self.bus_id)
+                .service(&self.bus_addr)
                 .call_streaming(msg),
         };
 
