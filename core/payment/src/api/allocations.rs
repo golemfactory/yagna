@@ -348,7 +348,7 @@ async fn create_allocation(
         Ok(ValidateAllocationResult::Valid) => {}
         Ok(ValidateAllocationResult::InsufficientFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
             return bad_req_and_log(
@@ -357,10 +357,14 @@ async fn create_allocation(
             );
         }
         Ok(ValidateAllocationResult::MalformedDepositContract) => {
-            return bad_req_and_log("Invalid deposit contract address".to_string());
+            return bad_req_and_log("Invalid deposit contract address.".to_string());
         }
         Ok(ValidateAllocationResult::MalformedDepositId) => {
-            return bad_req_and_log("Invalid deposit id".to_string());
+            return bad_req_and_log("Invalid deposit id.".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositReused) => {
+            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
+                if the deposit has been extended".to_string());
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
@@ -517,7 +521,7 @@ async fn amend_allocation(
         Ok(ValidateAllocationResult::Valid) => {}
         Ok(ValidateAllocationResult::InsufficientFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
             return bad_req_and_log(
@@ -529,7 +533,11 @@ async fn amend_allocation(
             return bad_req_and_log("Invalid deposit contract address".to_string());
         }
         Ok(ValidateAllocationResult::MalformedDepositId) => {
-            return bad_req_and_log("Invalid deposit id".to_string());
+            return bad_req_and_log("Invalid deposit id.".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositReused) => {
+            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
+                if the deposit has been extended".to_string());
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,

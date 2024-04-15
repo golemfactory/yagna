@@ -407,6 +407,7 @@ pub enum ValidateAllocationResult {
     TimeoutExceedsDeposit,
     MalformedDepositContract,
     MalformedDepositId,
+    DepositReused,
     Valid,
 }
 
