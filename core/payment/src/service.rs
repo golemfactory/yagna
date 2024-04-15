@@ -415,7 +415,13 @@ mod local {
         msg: ValidateAllocation,
     ) -> Result<bool, ValidateAllocationError> {
         Ok(processor
-            .validate_allocation(msg.platform, msg.address, msg.amount, msg.timeout)
+            .validate_allocation(
+                msg.platform,
+                msg.address,
+                msg.amount,
+                msg.timeout,
+                msg.deposit,
+            )
             .await?)
     }
 

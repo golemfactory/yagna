@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
@@ -802,6 +803,7 @@ impl PaymentProcessor {
         address: String,
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
+        deposit: Option<Deposit>,
     ) -> Result<bool, ValidateAllocationError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
@@ -823,7 +825,7 @@ impl PaymentProcessor {
             platform,
             amount,
             timeout,
-            deposit: None,
+            deposit,
             existing_allocations,
         };
         let result = driver_endpoint(&driver).send(msg).await??;

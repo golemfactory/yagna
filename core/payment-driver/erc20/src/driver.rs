@@ -419,6 +419,7 @@ impl Erc20Driver {
             .map_err(GenericError::new)?;
         let deposit_balance =
             BigDecimal::new(BigInt::from_str(&deposit_details.amount).unwrap(), 18);
+        let deposit_timeout = deposit_details.valid_to;
 
         log::info!(
             "Allocation validation with deposit: \
@@ -431,14 +432,38 @@ impl Erc20Driver {
             msg.timeout
                 .map(|tm| tm.to_string())
                 .unwrap_or(String::from("never")),
-            deposit_details.valid_to,
+            deposit_timeout,
         );
 
         let valid_amount = msg.amount <= deposit_balance;
-        let valid_timeout = msg
-            .timeout
-            .map(|timeout| timeout <= deposit_details.valid_to)
-            .unwrap_or(false);
+
+        if !valid_amount {
+            log::info!(
+                "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
+                msg.amount,
+                deposit_balance
+            );
+        }
+
+        let valid_timeout = if let Some(timeout) = msg.timeout {
+            let valid_timeout = timeout <= deposit_details.valid_to;
+
+            if !valid_timeout {
+                log::info!(
+                    "Deposit validation failed: requested timeout [{}] > deposit timeout [{}]",
+                    timeout,
+                    deposit_timeout
+                );
+            }
+            valid_timeout
+        } else {
+            log::info!(
+                "Deposit validation failed: allocations with deposits must have a timeout. Deposit timeout: {}",
+                deposit_timeout
+            );
+
+            false
+        };
 
         Ok(valid_amount && valid_timeout)
     }
