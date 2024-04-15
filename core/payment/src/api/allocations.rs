@@ -356,6 +356,12 @@ async fn create_allocation(
                     .to_string(),
             );
         }
+        Ok(ValidateAllocationResult::MalformedDepositContract) => {
+            return bad_req_and_log("Invalid deposit contract address".to_string());
+        }
+        Ok(ValidateAllocationResult::MalformedDepositId) => {
+            return bad_req_and_log("Invalid deposit id".to_string());
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
@@ -518,6 +524,12 @@ async fn amend_allocation(
                 "Requested allocation timeout either not set or exceeds deposit timeout"
                     .to_string(),
             );
+        }
+        Ok(ValidateAllocationResult::MalformedDepositContract) => {
+            return bad_req_and_log("Invalid deposit contract address".to_string());
+        }
+        Ok(ValidateAllocationResult::MalformedDepositId) => {
+            return bad_req_and_log("Invalid deposit id".to_string());
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,

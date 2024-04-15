@@ -405,6 +405,8 @@ impl ValidateAllocation {
 pub enum ValidateAllocationResult {
     InsufficientFunds,
     TimeoutExceedsDeposit,
+    MalformedDepositContract,
+    MalformedDepositId,
     Valid,
 }
 
