@@ -59,6 +59,7 @@ mod local {
         },
         NodeId,
     };
+    use ya_core_model::driver::ValidateAllocationResult;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -413,7 +414,7 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, ValidateAllocationError> {
+    ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         Ok(processor
             .validate_allocation(
                 msg.platform,

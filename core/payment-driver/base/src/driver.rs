@@ -87,7 +87,7 @@ pub trait PaymentDriver {
 
         caller: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, GenericError>;
+    ) -> Result<ValidateAllocationResult, GenericError>;
 
     async fn release_deposit(
         &self,

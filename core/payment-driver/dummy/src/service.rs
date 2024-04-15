@@ -139,8 +139,8 @@ async fn validate_allocation(
     _db: (),
     _caller: String,
     _msg: ValidateAllocation,
-) -> Result<bool, GenericError> {
-    Ok(true)
+) -> Result<ValidateAllocationResult, GenericError> {
+    Ok(ValidateAllocationResult::Valid)
 }
 
 async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericError> {
