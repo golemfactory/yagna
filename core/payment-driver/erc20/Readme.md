@@ -26,6 +26,7 @@ See `config-payments.toml` for the list of supported chains and token symbols.
 * `{CHAIN}_MAX_FEE_PER_GAS` -- [max fee per gas](https://ethereum.org/nl/developers/docs/gas/#maxfee).
 * `{CHAIN}_{SYMBOL}_CONTRACT_ADDRESS` -- Address of the GLM contract.
 * `{CHAIN}_MULTI_PAYMENT_CONTRACT_ADDRESS` -- Address of a custom Golem contract allowing for executing multiple transfers at once.
+* `{CHAIN}_LOCK_PAYMENT_CONTRACT_ADDRESS` -- Address of a custom Golem contract for deposits.
 * `ERC20_{CHAIN}_REQUIRED_CONFIRMATIONS` -- The number of confirmation blocks required to consider a transaction complete.
 
 Be aware that options not prefixed with `ERC20` are also applicable to the old Erc20 driver.
