@@ -108,9 +108,10 @@ pub struct ProcessHandle {
 
 impl ProcessHandle {
     pub fn new(command: &mut Command) -> Result<ProcessHandle> {
-        let process = Arc::new(SharedChild::spawn(command)?);
+        // Create a JobObject before spawning a process.
         #[cfg(windows)]
         let job_object = JobObject::try_new_current()?;
+        let process = Arc::new(SharedChild::spawn(command)?);
         Ok(ProcessHandle {
             process,
             #[cfg(windows)]
