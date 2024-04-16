@@ -65,8 +65,12 @@ async def test_deposit_agreement_payments(
         log_dir: Path,
 ):
     deposit_id = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
+    deposit_contract = "0xD756fb6A081CC11e7F513C39399DB296b1DE3036"
 
-    goth_tests.helpers.payment.global_deposit = deposit_id
+    goth_tests.helpers.payment.global_deposit = {
+        "id": deposit_id,
+        "contract": deposit_contract
+    }
     """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 

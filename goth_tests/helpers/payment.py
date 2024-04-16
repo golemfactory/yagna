@@ -132,6 +132,7 @@ class AllocationCtx:
             make_deposit=True,
             timestamp=datetime.now(timezone.utc),
             payment_platform=self.requestor.payment_config.platform_string,
+            deposit=global_deposit,
         )
         allocation = await self.requestor.api.payment.create_allocation(allocation)
         self._id = allocation.allocation_id
