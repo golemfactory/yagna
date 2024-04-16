@@ -232,8 +232,8 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 derive_more = "0.99.11"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "3404b727d79fbacd87a8c708f6b7dd5a2745630f" }
-erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "3404b727d79fbacd87a8c708f6b7dd5a2745630f" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "c2d548c2d58d04d1c3ca865ac621b8ec7bf0d471" }
+erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "c2d548c2d58d04d1c3ca865ac621b8ec7bf0d471" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.4.1" }
