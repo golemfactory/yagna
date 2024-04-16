@@ -14,6 +14,7 @@ use ya_client_model::NodeId;
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
 use ya_client_model::payment::*;
+use ya_core_model::driver::ValidateAllocationResult;
 use ya_core_model::payment::local::{
     get_token_from_network_name, DriverName, NetworkName, ReleaseDeposit, ValidateAllocation,
     ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
@@ -340,13 +341,30 @@ async fn create_allocation(
         address: address.clone(),
         amount: allocation.total_amount.clone(),
         timeout: allocation.timeout,
+        deposit: allocation.deposit.clone(),
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => {
+        Ok(ValidateAllocationResult::Valid) => {}
+        Ok(ValidateAllocationResult::InsufficientFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
+            return bad_req_and_log(
+                "Requested allocation timeout either not set or exceeds deposit timeout"
+                    .to_string(),
+            );
+        }
+        Ok(ValidateAllocationResult::MalformedDepositContract) => {
+            return bad_req_and_log("Invalid deposit contract address.".to_string());
+        }
+        Ok(ValidateAllocationResult::MalformedDepositId) => {
+            return bad_req_and_log("Invalid deposit id.".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositReused) => {
+            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
+                if the deposit has been extended".to_string());
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
@@ -454,6 +472,11 @@ async fn amend_allocation(
     body: Json<AllocationUpdate>,
     id: Identity,
 ) -> HttpResponse {
+    let bad_req_and_log = |err_msg: String| -> HttpResponse {
+        log::error!("{}", err_msg);
+        response::bad_request(&err_msg)
+    };
+
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let new_allocation: AllocationUpdate = body.into_inner();
@@ -476,6 +499,8 @@ async fn amend_allocation(
             Err(e) => return response::bad_request(&e),
         };
 
+    let payment_triple = amended_allocation.payment_platform.clone();
+
     // validation will take into account all existing allocation, including the one
     // being currently modified. This means we only need to validate the increase.
     let amount_to_validate =
@@ -490,13 +515,33 @@ async fn amend_allocation(
             0.into()
         },
         timeout: amended_allocation.timeout,
+        deposit: amended_allocation.deposit.clone(),
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(ValidateAllocationResult::Valid) => {}
+        Ok(ValidateAllocationResult::InsufficientFunds) => {
+            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
+                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
+            return bad_req_and_log(
+                "Requested allocation timeout either not set or exceeds deposit timeout"
+                    .to_string(),
+            );
+        }
+        Ok(ValidateAllocationResult::MalformedDepositContract) => {
+            return bad_req_and_log("Invalid deposit contract address".to_string());
+        }
+        Ok(ValidateAllocationResult::MalformedDepositId) => {
+            return bad_req_and_log("Invalid deposit id.".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositReused) => {
+            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
+                if the deposit has been extended".to_string());
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-                           ValidateAllocationError::AccountNotRegistered,
-                       ))) => return response::bad_request(&"Account not registered"),
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => return response::bad_request(&"Account not registered"),
         Err(e) => return response::server_error(&e),
     }
 
@@ -523,12 +568,14 @@ async fn release_allocation(
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
-        Ok(AllocationReleaseStatus::Released { deposit }) => {
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
             if let Some(deposit) = deposit {
                 let release_result = bus::service(LOCAL_SERVICE)
                     .send(ReleaseDeposit {
-                        signer: id.identity,
+                        from: id.identity.to_string(),
                         deposit_id: deposit.id,
+                        deposit_contract: deposit.contract,
+                        platform,
                     })
                     .await;
                 match release_result {
@@ -640,7 +687,7 @@ pub async fn forced_release_allocation(
         .release(allocation_id.clone(), node_id)
         .await
     {
-        Ok(AllocationReleaseStatus::Released { deposit: _ }) => {
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
             log::info!("Allocation {} released.", allocation_id);
         }
         Err(e) => {

@@ -360,7 +360,7 @@ impl Erc20Driver {
         &self,
         caller: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         if msg.deposit.is_some() {
             Err(GenericError::new(
                 "validate_allocation_internal called with not empty deposit",
@@ -391,14 +391,18 @@ impl Erc20Driver {
             total_allocated_amount,
         );
 
-        Ok(msg.amount <= account_balance - total_allocated_amount)
+        Ok(if msg.amount > account_balance - total_allocated_amount {
+            ValidateAllocationResult::InsufficientFunds
+        } else {
+            ValidateAllocationResult::Valid
+        })
     }
 
     async fn validate_allocation_deposit(
         &self,
         msg: ValidateAllocation,
         deposit: Deposit,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         let network = msg
             .platform
             .split('-')
@@ -408,17 +412,33 @@ impl Erc20Driver {
                 msg.platform
             )))?;
 
+        let Ok(deposit_contract) = Address::from_str(&deposit.contract) else {
+            return Ok(ValidateAllocationResult::MalformedDepositContract);
+        };
+
+        let Ok(deposit_id) = U256::from_str(&deposit.id) else {
+            return Ok(ValidateAllocationResult::MalformedDepositId);
+        };
+
+        let deposit_reused = msg
+            .existing_allocations
+            .iter()
+            .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
+
+        if deposit_reused {
+            return Ok(ValidateAllocationResult::DepositReused);
+        }
+
         let deposit_details = self
             .payment_runtime
-            .deposit_details(
-                network.to_string(),
-                U256::from_str(&deposit.id).unwrap(),
-                Address::from_str(&deposit.contract).unwrap(),
-            )
+            .deposit_details(network.to_string(), deposit_id, deposit_contract)
             .await
             .map_err(GenericError::new)?;
-        let deposit_balance =
-            BigDecimal::new(BigInt::from_str(&deposit_details.amount).unwrap(), 18);
+        let deposit_balance = BigDecimal::new(
+            BigInt::from_str(&deposit_details.amount).map_err(GenericError::new)?,
+            18,
+        );
+        let deposit_timeout = deposit_details.valid_to;
 
         log::info!(
             "Allocation validation with deposit: \
@@ -431,16 +451,39 @@ impl Erc20Driver {
             msg.timeout
                 .map(|tm| tm.to_string())
                 .unwrap_or(String::from("never")),
-            deposit_details.valid_to,
+            deposit_timeout,
         );
 
-        let valid_amount = msg.amount <= deposit_balance;
-        let valid_timeout = msg
-            .timeout
-            .map(|timeout| timeout <= deposit_details.valid_to)
-            .unwrap_or(false);
+        if msg.amount > deposit_balance {
+            log::debug!(
+                "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
+                msg.amount,
+                deposit_balance
+            );
 
-        Ok(valid_amount && valid_timeout)
+            return Ok(ValidateAllocationResult::InsufficientFunds);
+        }
+
+        if let Some(timeout) = msg.timeout {
+            if timeout > deposit_details.valid_to {
+                log::debug!(
+                    "Deposit validation failed: requested timeout [{}] > deposit timeout [{}]",
+                    timeout,
+                    deposit_timeout
+                );
+
+                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+            }
+        } else {
+            log::debug!(
+                "Deposit validation failed: allocations with deposits must have a timeout. Deposit timeout: {}",
+                deposit_timeout
+            );
+
+            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+        };
+
+        Ok(ValidateAllocationResult::Valid)
     }
 }
 
@@ -983,7 +1026,7 @@ impl PaymentDriver for Erc20Driver {
         &self,
         caller: String,
         mut msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+    ) -> Result<ValidateAllocationResult, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
 
         if let Some(deposit) = msg.deposit.take() {
@@ -991,6 +1034,46 @@ impl PaymentDriver for Erc20Driver {
         } else {
             self.validate_allocation_internal(caller, msg).await
         }
+    }
+
+    async fn release_deposit(
+        &self,
+        _caller: String,
+        msg: DriverReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        let network = &msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))
+            .unwrap();
+
+        self.payment_runtime
+            .close_deposit(
+                network,
+                H160::from_str(&msg.from).map_err(|e| {
+                    GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
+                })?,
+                H160::from_str(&msg.deposit_contract).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` address parsing error: {}",
+                        msg.deposit_contract, e
+                    ))
+                })?,
+                U256::from_str(&msg.deposit_id).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` deposit id parsing error: {}",
+                        msg.deposit_id, e
+                    ))
+                })?,
+            )
+            .await
+            .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;
+
+        Ok(())
     }
 
     async fn status(

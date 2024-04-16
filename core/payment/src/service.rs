@@ -59,6 +59,7 @@ mod local {
         },
         NodeId,
     };
+    use ya_core_model::driver::ValidateAllocationResult;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -85,6 +86,7 @@ mod local {
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
+            .bind_with_processor(release_deposit)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -412,9 +414,15 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, ValidateAllocationError> {
+    ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         Ok(processor
-            .validate_allocation(msg.platform, msg.address, msg.amount, msg.timeout)
+            .validate_allocation(
+                msg.platform,
+                msg.address,
+                msg.amount,
+                msg.timeout,
+                msg.deposit,
+            )
             .await?)
     }
 
@@ -704,6 +712,18 @@ mod local {
         }
 
         Ok(Ack {})
+    }
+
+    async fn release_deposit(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender: String,
+        msg: ReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        log::debug!("Schedule payment processor started");
+        let res = processor.release_deposit(msg).await;
+        log::debug!("Schedule payment processor finished");
+        res
     }
 
     async fn shut_down(

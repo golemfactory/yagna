@@ -401,9 +401,19 @@ impl ValidateAllocation {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ValidateAllocationResult {
+    InsufficientFunds,
+    TimeoutExceedsDeposit,
+    MalformedDepositContract,
+    MalformedDepositId,
+    DepositReused,
+    Valid,
+}
+
 impl RpcMessage for ValidateAllocation {
     const ID: &'static str = "ValidateAllocation";
-    type Item = bool;
+    type Item = ValidateAllocationResult;
     type Error = GenericError;
 }
 
@@ -588,6 +598,22 @@ impl RpcMessage for DriverStatus {
 pub enum DriverStatusError {
     #[error("No such network '{0}'")]
     NetworkNotFound(String),
+}
+
+// ************************* DEPOSIT *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DriverReleaseDeposit {
+    pub platform: String,
+    pub from: String,
+    pub deposit_contract: String,
+    pub deposit_id: String,
+}
+
+impl RpcMessage for DriverReleaseDeposit {
+    const ID: &'static str = "DriverReleaseDeposit";
+    type Item = ();
+    type Error = GenericError;
 }
 
 // ************************* SHUT DOWN *************************

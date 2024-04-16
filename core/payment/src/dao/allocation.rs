@@ -179,7 +179,7 @@ impl<'c> AllocationDao<'c> {
                 .first(conn)
                 .optional()?;
 
-            let deposit = match allocation {
+            let (deposit, platform) = match allocation {
                 Some(allocation) => {
                     if let Some(owner_id) = owner_id {
                         if owner_id != allocation.owner_id {
@@ -191,7 +191,9 @@ impl<'c> AllocationDao<'c> {
                         return Ok(AllocationReleaseStatus::Gone);
                     }
 
-                    Allocation::from(allocation).deposit
+                    let allocation = Allocation::from(allocation);
+
+                    (allocation.deposit, allocation.payment_platform)
                 }
                 None => return Ok(AllocationReleaseStatus::NotFound),
             };
@@ -203,7 +205,7 @@ impl<'c> AllocationDao<'c> {
                 .execute(conn)?;
 
             match num_released {
-                1 => Ok(AllocationReleaseStatus::Released { deposit }),
+                1 => Ok(AllocationReleaseStatus::Released { deposit, platform }),
                 _ => Err(DbError::Query(format!(
                     "Update error occurred when releasing allocation {}",
                     allocation_id
@@ -249,5 +251,8 @@ pub enum AllocationStatus {
 pub enum AllocationReleaseStatus {
     Gone,
     NotFound,
-    Released { deposit: Option<Deposit> },
+    Released {
+        deposit: Option<Deposit>,
+        platform: String,
+    },
 }
