@@ -14,9 +14,11 @@ from goth.runner.probe.rest_client import ya_payment
 logger = logging.getLogger("goth.tests.helpers.payment")
 
 
+global_deposit = None
+
 async def pay_all(
-    requestor: RequestorProbe,
-    agreements: List[Tuple[str, ProviderProbe]],
+        requestor: RequestorProbe,
+        agreements: List[Tuple[str, ProviderProbe]],
 ):
     """Pay for all Agreements."""
     for agreement_id, provider in agreements:
@@ -29,8 +31,8 @@ async def pay_all(
 
 
 async def accept_debit_notes(
-    requestor: RequestorProbe,
-    stats: "DebitNoteStats",
+        requestor: RequestorProbe,
+        stats: "DebitNoteStats",
 ):
     ts = datetime.now(timezone.utc)
     logger.info("Listening for debit note events")
@@ -86,7 +88,7 @@ async def accept_debit_notes(
 
 
 async def get_debit_note_events_raw(
-    requestor: RequestorProbe, ts: datetime
+        requestor: RequestorProbe, ts: datetime
 ) -> List[Dict]:
     client = requestor.api.payment.api_client
 
@@ -120,6 +122,8 @@ class AllocationCtx:
     _id: Optional[str] = None
 
     async def __aenter__(self):
+        logger.info("Creating allocation for deposit {}".format(global_deposit))
+
         allocation = ya_payment.Allocation(
             allocation_id="",
             total_amount=str(self.amount),
@@ -128,7 +132,6 @@ class AllocationCtx:
             make_deposit=True,
             timestamp=datetime.now(timezone.utc),
             payment_platform=self.requestor.payment_config.platform_string,
-            deposit=None,
         )
         allocation = await self.requestor.api.payment.create_allocation(allocation)
         self._id = allocation.allocation_id

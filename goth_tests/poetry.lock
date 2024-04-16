@@ -872,8 +872,8 @@ ya-aioclient = {git = "https://github.com/golemfactory/ya_tmp_pyapi.git", rev = 
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "26f1629957f891d63cfaed323b0803b9d10df5b4"
-resolved_reference = "26f1629957f891d63cfaed323b0803b9d10df5b4"
+reference = "4d021cda507a66b81f7b82582972610caa75d5d1"
+resolved_reference = "4d021cda507a66b81f7b82582972610caa75d5d1"
 
 [[package]]
 name = "h11"
@@ -2297,4 +2297,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1,<3.11"
-content-hash = "9e2ac59662e4c975c8afc66197a48b4e0a6eff449730fd5fe84b9bcb69e8b17c"
+content-hash = "f078a46a444acd2c9a260c246652ba7c330c269ff1d8b2d0e026495969d55f5e"
