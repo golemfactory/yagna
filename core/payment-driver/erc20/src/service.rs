@@ -188,7 +188,7 @@ impl Erc20Service {
                     match H160::from_str(&lock_payment_addr) {
                         Ok(parsed) => {
                             log::info!(
-                                "{network} lock payment contract address set to {multi_payment_addr}"
+                                "{network} lock payment contract address set to {lock_payment_addr}"
                             );
                             chain.lock_contract = Some(LockContractSettings { address: parsed })
                         }
