@@ -4,3 +4,4 @@ pub mod hash;
 pub mod log;
 pub mod server_external;
 pub mod temp;
+pub mod template;
