@@ -60,6 +60,7 @@ table! {
         timestamp -> Timestamp,
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
+        deposit -> Nullable<Text>,
         released -> Bool,
     }
 }

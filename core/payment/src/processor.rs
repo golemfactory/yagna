@@ -1,5 +1,7 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{
+    ActivityDao, AgreementDao, AllocationDao, AllocationStatus, OrderDao, PaymentDao, SyncNotifsDao,
+};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -9,6 +11,7 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::{DateTime, Utc};
 use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
@@ -17,17 +20,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, GetRpcEndpointsResult, PaymentConfirmation,
-    PaymentDetails, ShutDown, ValidateAllocation,
+    self, driver_bus_id, AccountMode, DriverReleaseDeposit, GasDetails, GetRpcEndpointsResult,
+    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
-    GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount, RegisterAccountError,
-    RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
-    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
+    GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
+    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
+    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_core_model::NodeId;
@@ -533,7 +537,11 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+    pub async fn schedule_payment(
+        &self,
+        caller: String,
+        msg: SchedulePayment,
+    ) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -544,17 +552,33 @@ impl PaymentProcessor {
                 &amount
             )));
         }
+
+        let allocation_status = self
+            .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await?
+            .as_dao::<AllocationDao>()
+            .get(msg.allocation_id.clone(), msg.payer_id)
+            .await?;
+        let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
+            allocation.deposit.clone().map(|deposit| deposit.id)
+        } else {
+            None
+        };
+
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
+
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
                 msg.payment_platform.clone(),
+                deposit_id,
                 msg.due_date,
             ))
             .await??;
@@ -778,7 +802,9 @@ impl PaymentProcessor {
         platform: String,
         address: String,
         amount: BigDecimal,
-    ) -> Result<bool, ValidateAllocationError> {
+        timeout: Option<DateTime<Utc>>,
+        deposit: Option<Deposit>,
+    ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
         }
@@ -798,6 +824,8 @@ impl PaymentProcessor {
             address,
             platform,
             amount,
+            timeout,
+            deposit,
             existing_allocations,
         };
         let result = driver_endpoint(&driver).send(msg).await??;
@@ -851,6 +879,29 @@ impl PaymentProcessor {
                 log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
             }
         }
+    }
+
+    pub async fn release_deposit(&self, msg: ReleaseDeposit) -> Result<(), GenericError> {
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(GenericError::new)?
+            .driver(&msg.platform, &msg.from, AccountMode::SEND)
+            .map_err(GenericError::new)?;
+
+        driver_endpoint(&driver)
+            .send(DriverReleaseDeposit {
+                platform: msg.platform,
+                from: msg.from,
+                deposit_contract: msg.deposit_contract,
+                deposit_id: msg.deposit_id,
+            })
+            .await
+            .map_err(GenericError::new)?
+            .map_err(GenericError::new)?;
+
+        Ok(())
     }
 
     pub async fn shut_down(

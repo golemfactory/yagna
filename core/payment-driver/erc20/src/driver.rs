@@ -24,6 +24,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::{Address, H256};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::DriverStatusProperty;
 use ya_payment_driver::driver::IdentityError;
 
@@ -118,6 +119,7 @@ impl Erc20Driver {
         amount: &BigDecimal,
         network: &str,
         deadline: Option<DateTime<Utc>>,
+        deposit_id: Option<String>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -137,7 +139,7 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
-                deposit_id: None,
+                deposit_id,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -352,6 +354,136 @@ impl Erc20Driver {
             transaction_hash,
         )
         .await
+    }
+
+    async fn validate_allocation_internal(
+        &self,
+        caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<ValidateAllocationResult, GenericError> {
+        if msg.deposit.is_some() {
+            Err(GenericError::new(
+                "validate_allocation_internal called with not empty deposit",
+            ))?;
+        }
+
+        let account_balance = self
+            .get_account_balance(
+                caller,
+                GetAccountBalance::new(msg.address, msg.platform.clone()),
+            )
+            .await?;
+
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .filter(|allocation| allocation.payment_platform == msg.platform)
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+        );
+
+        Ok(if msg.amount > account_balance - total_allocated_amount {
+            ValidateAllocationResult::InsufficientFunds
+        } else {
+            ValidateAllocationResult::Valid
+        })
+    }
+
+    async fn validate_allocation_deposit(
+        &self,
+        msg: ValidateAllocation,
+        deposit: Deposit,
+    ) -> Result<ValidateAllocationResult, GenericError> {
+        let network = msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))?;
+
+        let Ok(deposit_contract) = Address::from_str(&deposit.contract) else {
+            return Ok(ValidateAllocationResult::MalformedDepositContract);
+        };
+
+        let Ok(deposit_id) = U256::from_str(&deposit.id) else {
+            return Ok(ValidateAllocationResult::MalformedDepositId);
+        };
+
+        let deposit_reused = msg
+            .existing_allocations
+            .iter()
+            .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
+
+        if deposit_reused {
+            return Ok(ValidateAllocationResult::DepositReused);
+        }
+
+        let deposit_details = self
+            .payment_runtime
+            .deposit_details(network.to_string(), deposit_id, deposit_contract)
+            .await
+            .map_err(GenericError::new)?;
+        let deposit_balance = BigDecimal::new(
+            BigInt::from_str(&deposit_details.amount).map_err(GenericError::new)?,
+            18,
+        );
+        let deposit_timeout = deposit_details.valid_to;
+
+        log::info!(
+            "Allocation validation with deposit: \
+                allocating: {:.5}, \
+                deposit balance: {:.5}, \
+                requested timeout: {}, \
+                deposit valid to: {}",
+            msg.amount,
+            deposit_balance,
+            msg.timeout
+                .map(|tm| tm.to_string())
+                .unwrap_or(String::from("never")),
+            deposit_timeout,
+        );
+
+        if msg.amount > deposit_balance {
+            log::debug!(
+                "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
+                msg.amount,
+                deposit_balance
+            );
+
+            return Ok(ValidateAllocationResult::InsufficientFunds);
+        }
+
+        if let Some(timeout) = msg.timeout {
+            if timeout > deposit_details.valid_to {
+                log::debug!(
+                    "Deposit validation failed: requested timeout [{}] > deposit timeout [{}]",
+                    timeout,
+                    deposit_timeout
+                );
+
+                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+            }
+        } else {
+            log::debug!(
+                "Deposit validation failed: allocations with deposits must have a timeout. Deposit timeout: {}",
+                deposit_timeout
+            );
+
+            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+        };
+
+        Ok(ValidateAllocationResult::Valid)
     }
 }
 
@@ -818,6 +950,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount,
             &network,
             Some(Utc::now()),
+            None,
         )
         .await
     }
@@ -843,6 +976,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount(),
             network,
             Some(msg.due_date() - transfer_margin),
+            msg.deposit_id(),
         )
         .await
     }
@@ -891,34 +1025,55 @@ impl PaymentDriver for Erc20Driver {
     async fn validate_allocation(
         &self,
         caller: String,
-        msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+        mut msg: ValidateAllocation,
+    ) -> Result<ValidateAllocationResult, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
-        let account_balance = self
-            .get_account_balance(
-                caller,
-                GetAccountBalance::new(msg.address, msg.platform.clone()),
+
+        if let Some(deposit) = msg.deposit.take() {
+            self.validate_allocation_deposit(msg, deposit).await
+        } else {
+            self.validate_allocation_internal(caller, msg).await
+        }
+    }
+
+    async fn release_deposit(
+        &self,
+        _caller: String,
+        msg: DriverReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        let network = &msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))
+            .unwrap();
+
+        self.payment_runtime
+            .close_deposit(
+                network,
+                H160::from_str(&msg.from).map_err(|e| {
+                    GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
+                })?,
+                H160::from_str(&msg.deposit_contract).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` address parsing error: {}",
+                        msg.deposit_contract, e
+                    ))
+                })?,
+                U256::from_str(&msg.deposit_id).map_err(|e| {
+                    GenericError::new(format!(
+                        "`{}` deposit id parsing error: {}",
+                        msg.deposit_id, e
+                    ))
+                })?,
             )
-            .await?;
+            .await
+            .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;
 
-        let total_allocated_amount: BigDecimal = msg
-            .existing_allocations
-            .into_iter()
-            .filter(|allocation| allocation.payment_platform == msg.platform)
-            .map(|allocation| allocation.remaining_amount)
-            .sum();
-
-        log::info!(
-            "Allocation validation: \
-            allocating: {:.5}, \
-            account_balance: {:.5}, \
-            total_allocated_amount: {:.5}",
-            msg.amount,
-            account_balance,
-            total_allocated_amount,
-        );
-
-        Ok(msg.amount <= account_balance - total_allocated_amount)
+        Ok(())
     }
 
     async fn status(
