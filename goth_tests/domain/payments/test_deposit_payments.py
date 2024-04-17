@@ -64,13 +64,26 @@ async def test_deposit_agreement_payments(
         config_overrides: List[Override],
         log_dir: Path,
 ):
-    deposit_id = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
+    deposit_id_1 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
+    deposit_id_2 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000667"
+    deposit_id_3 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000668"
     deposit_contract = "0xD756fb6A081CC11e7F513C39399DB296b1DE3036"
 
-    goth_tests.helpers.payment.global_deposit = {
-        "id": deposit_id,
-        "contract": deposit_contract
-    }
+    goth_tests.helpers.payment.global_deposits = [
+        {
+            "id": deposit_id_1,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_2,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_3,
+            "contract": deposit_contract
+        }
+    ]
+
     """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 

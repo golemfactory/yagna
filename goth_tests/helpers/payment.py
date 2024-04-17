@@ -14,7 +14,7 @@ from goth.runner.probe.rest_client import ya_payment
 logger = logging.getLogger("goth.tests.helpers.payment")
 
 
-global_deposit = None
+global_deposits = []
 
 async def pay_all(
         requestor: RequestorProbe,
@@ -122,20 +122,46 @@ class AllocationCtx:
     _id: Optional[str] = None
 
     async def __aenter__(self):
-        logger.info("Creating allocation for deposit {}".format(global_deposit))
+        allocation = None
+        if global_deposits:
+            for global_deposit in global_deposits:
+                try:
+                    logger.info("Creating allocation for deposit {}".format(global_deposit))
 
-        allocation = ya_payment.Allocation(
-            allocation_id="",
-            total_amount=str(self.amount),
-            spent_amount=0,
-            remaining_amount=0,
-            make_deposit=True,
-            timestamp=datetime.now(timezone.utc),
-            timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
-            payment_platform=self.requestor.payment_config.platform_string,
-            deposit=global_deposit,
-        )
-        allocation = await self.requestor.api.payment.create_allocation(allocation)
+                    allocation = ya_payment.Allocation(
+                        allocation_id="",
+                        total_amount=str(self.amount),
+                        spent_amount=0,
+                        remaining_amount=0,
+                        make_deposit=True,
+                        timestamp=datetime.now(timezone.utc),
+                        timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
+                        payment_platform=self.requestor.payment_config.platform_string,
+                        deposit=global_deposit,
+                    )
+                    allocation = await self.requestor.api.payment.create_allocation(allocation)
+                except Exception as ex:
+                    logger.warning("Failed to create allocation for deposit {} - {ex}".format(global_deposit, ex)
+                    continue
+        else:
+            logger.info("Creating allocation without deposit")
+
+            allocation = ya_payment.Allocation(
+                allocation_id="",
+                total_amount=str(self.amount),
+                spent_amount=0,
+                remaining_amount=0,
+                make_deposit=True,
+                timestamp=datetime.now(timezone.utc),
+                timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
+                payment_platform=self.requestor.payment_config.platform_string,
+                deposit=None,
+            )
+
+            allocation = await self.requestor.api.payment.create_allocation(allocation)
+
+        if not allocation:
+            raise RuntimeError("Failed to create allocation at all")
         self._id = allocation.allocation_id
         return allocation
 
