@@ -64,9 +64,9 @@ async def test_deposit_agreement_payments(
         config_overrides: List[Override],
         log_dir: Path,
 ):
-    deposit_id_1 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
-    deposit_id_2 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000667"
-    deposit_id_3 = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000668"
+    deposit_id_1 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000666"
+    deposit_id_2 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000667"
+    deposit_id_3 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000668"
     deposit_contract = "0xD756fb6A081CC11e7F513C39399DB296b1DE3036"
 
     goth_tests.helpers.payment.global_deposits = [
