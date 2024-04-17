@@ -412,6 +412,13 @@ impl Erc20Driver {
                 msg.platform
             )))?;
 
+        let Ok(allocation_address) = Address::from_str(&msg.address) else {
+            return Err(GenericError::new(format!(
+                "{} is not a valid address",
+                msg.address
+            )));
+        };
+
         let Ok(deposit_contract) = Address::from_str(&deposit.contract) else {
             return Ok(ValidateAllocationResult::MalformedDepositContract);
         };
@@ -439,19 +446,24 @@ impl Erc20Driver {
             18,
         );
         let deposit_timeout = deposit_details.valid_to;
+        let deposit_spender = deposit_details.spender;
 
         log::info!(
             "Allocation validation with deposit: \
                 allocating: {:.5}, \
                 deposit balance: {:.5}, \
                 requested timeout: {}, \
-                deposit valid to: {}",
+                deposit valid to: {}, \
+                requested spender: {}, \
+                spender: {}",
             msg.amount,
             deposit_balance,
             msg.timeout
                 .map(|tm| tm.to_string())
                 .unwrap_or(String::from("never")),
             deposit_timeout,
+            allocation_address,
+            deposit_spender,
         );
 
         if msg.amount > deposit_balance {
@@ -482,6 +494,16 @@ impl Erc20Driver {
 
             return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
+
+        if allocation_address != deposit_spender {
+            log::debug!(
+                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
+                allocation_address,
+                deposit_spender
+            );
+
+            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
+        }
 
         Ok(ValidateAllocationResult::Valid)
     }
