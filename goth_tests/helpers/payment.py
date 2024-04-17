@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Union
 
 from goth.runner.probe import ProviderProbe, RequestorProbe
@@ -131,6 +131,7 @@ class AllocationCtx:
             remaining_amount=0,
             make_deposit=True,
             timestamp=datetime.now(timezone.utc),
+            timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
             payment_platform=self.requestor.payment_config.platform_string,
             deposit=global_deposit,
         )
