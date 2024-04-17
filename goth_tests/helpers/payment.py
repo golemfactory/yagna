@@ -10,11 +10,10 @@ from typing import List, Optional, Tuple, Dict, Union
 from goth.runner.probe import ProviderProbe, RequestorProbe
 from goth.runner.probe.rest_client import ya_payment
 
-
 logger = logging.getLogger("goth.tests.helpers.payment")
 
-
 global_deposits = []
+
 
 async def pay_all(
         requestor: RequestorProbe,
