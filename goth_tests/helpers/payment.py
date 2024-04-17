@@ -140,7 +140,7 @@ class AllocationCtx:
                     )
                     allocation = await self.requestor.api.payment.create_allocation(allocation)
                 except Exception as ex:
-                    logger.warning("Failed to create allocation for deposit {} - {ex}".format(global_deposit, ex)
+                    logger.warning("Failed to create allocation for deposit {} - {ex}".format(global_deposit, ex))
                     continue
         else:
             logger.info("Creating allocation without deposit")
