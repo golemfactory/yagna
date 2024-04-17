@@ -127,7 +127,7 @@ class AllocationCtx:
                 try:
                     logger.info("Creating allocation for deposit {}".format(global_deposit))
 
-                    allocation = ya_payment.Allocation(
+                    allocation_arg = ya_payment.Allocation(
                         allocation_id="",
                         total_amount=str(self.amount),
                         spent_amount=0,
@@ -138,15 +138,14 @@ class AllocationCtx:
                         payment_platform=self.requestor.payment_config.platform_string,
                         deposit=global_deposit,
                     )
-                    allocation = await self.requestor.api.payment.create_allocation(allocation)
-
+                    allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
                 except Exception as ex:
                     logger.warning("Failed to create allocation for deposit {} - {}".format(global_deposit["id"], ex))
                     continue
         else:
             logger.info("Creating allocation without deposit")
 
-            allocation = ya_payment.Allocation(
+            allocation_arg = ya_payment.Allocation(
                 allocation_id="",
                 total_amount=str(self.amount),
                 spent_amount=0,
@@ -158,7 +157,7 @@ class AllocationCtx:
                 deposit=None,
             )
 
-            allocation = await self.requestor.api.payment.create_allocation(allocation)
+            allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
 
         if not allocation:
             raise RuntimeError("Failed to create allocation at all")
