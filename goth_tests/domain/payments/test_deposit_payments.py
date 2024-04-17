@@ -109,9 +109,11 @@ async def test_deposit_agreement_payments(
         activity_id = await requestor.create_activity(agreement_id)
         await provider.wait_for_exeunit_started()
 
+        logger.debug(f"Activity created: {activity_id}")
         for i in range(0, ITERATION_COUNT):
             await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
 
+            logger.debug(f"Fetching payments: {i}/{ITERATION_COUNT}")
             payments = await provider.api.payment.get_payments(after_timestamp=ts)
             for payment in payments:
                 number_of_payments += 1
