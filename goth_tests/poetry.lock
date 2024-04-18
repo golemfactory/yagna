@@ -863,6 +863,7 @@ func_timeout = "4.3.5"
 ghapi = "^0.1.16"
 markupsafe = "2.0.1"
 mitmproxy = "^5.3"
+pylproxy = "0.1.0"
 pyyaml = "5.3.1"
 transitions = "^0.8"
 typing_extensions = "^4.5"
@@ -872,8 +873,8 @@ ya-aioclient = {git = "https://github.com/golemfactory/ya_tmp_pyapi.git", rev = 
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "36765b682ed22b46985bfd020543cc7177d72864"
-resolved_reference = "36765b682ed22b46985bfd020543cc7177d72864"
+reference = "384d1a939b2d5a0146755732c6cd37c5a8f95b10"
+resolved_reference = "384d1a939b2d5a0146755732c6cd37c5a8f95b10"
 
 [[package]]
 name = "h11"
@@ -1554,6 +1555,17 @@ files = [
 [package.extras]
 docs = ["sphinx (>=1.4.8)"]
 test = ["codecov (>=2.0.5)", "hypothesis (>=3.5.3)", "mock (>=1.0.1)", "pytest (>=3.0.3)", "pytest-cov (>=2.2.1)", "pytest-faulthandler (>=1.3.0,<2)", "pytest-timeout (>=1.0.0,<2)", "wheel (>=0.29)"]
+
+[[package]]
+name = "pylproxy"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "<4.0,>=3.10"
+files = [
+    {file = "pylproxy-0.1.0-py3-none-any.whl", hash = "sha256:15ad39498170589bd5c2c5194b8e182d586cbc9a76e55f308317e4f0d14c7339"},
+    {file = "pylproxy-0.1.0.tar.gz", hash = "sha256:cbfb5e437bb94b0e169b16a3cf9cdcf07b5e7f80393ae700304586044e76cf91"},
+]
 
 [[package]]
 name = "pynacl"
@@ -2297,4 +2309,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1,<3.11"
-content-hash = "9dc98f27c8e9f960a089bb7c10859e1bac9eba3f23f4a60f71bf4aae02b107c3"
+content-hash = "939360316a2e59dfca0a9bcddfe926dc34c32c8601bf8a7404a68cd48c759347"
