@@ -366,6 +366,9 @@ async fn create_allocation(
             return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
                 if the deposit has been extended".to_string());
         }
+        Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
+            return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
@@ -538,6 +541,9 @@ async fn amend_allocation(
         Ok(ValidateAllocationResult::DepositReused) => {
             return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
                 if the deposit has been extended".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
+            return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
