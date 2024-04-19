@@ -4,19 +4,20 @@ import asyncio
 import logging
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Union
 
 from goth.runner.probe import ProviderProbe, RequestorProbe
 from goth.runner.probe.rest_client import ya_payment
 
-
 logger = logging.getLogger("goth.tests.helpers.payment")
+
+global_deposits = []
 
 
 async def pay_all(
-    requestor: RequestorProbe,
-    agreements: List[Tuple[str, ProviderProbe]],
+        requestor: RequestorProbe,
+        agreements: List[Tuple[str, ProviderProbe]],
 ):
     """Pay for all Agreements."""
     for agreement_id, provider in agreements:
@@ -29,41 +30,40 @@ async def pay_all(
 
 
 async def accept_debit_notes(
-    requestor: RequestorProbe,
-    stats: "DebitNoteStats",
+        requestor: RequestorProbe,
+        stats: "DebitNoteStats",
 ):
     ts = datetime.now(timezone.utc)
     logger.info("Listening for debit note events")
+    async with AllocationCtx(requestor, 50.0) as allocation:
+        while True:
+            try:
+                # FIXME: requestor.api.payment.get_debit_note_events returns
+                #  instances of 'DebitNoteReceivedEvent', which do not contain
+                #  the `eventDate` property
+                events = await get_debit_note_events_raw(requestor, ts)
+            except Exception as e:
+                logger.error("Failed to fetch debit note events: %s", e)
+                events = []
 
-    while True:
-        try:
-            # FIXME: requestor.api.payment.get_debit_note_events returns
-            #  instances of 'DebitNoteReceivedEvent', which do not contain
-            #  the `eventDate` property
-            events = await get_debit_note_events_raw(requestor, ts)
-        except Exception as e:
-            logger.error("Failed to fetch debit note events: %s", e)
-            events = []
+            for ev in events:
+                debit_note_id = ev.get("debitNoteId")
+                event_date = ev.get("eventDate")
+                event_type = ev.get("eventType")
 
-        for ev in events:
-            debit_note_id = ev.get("debitNoteId")
-            event_date = ev.get("eventDate")
-            event_type = ev.get("eventType")
+                ts = datetime.fromisoformat(event_date.replace("Z", "+00:00"))
 
-            ts = datetime.fromisoformat(event_date.replace("Z", "+00:00"))
+                if event_type != "DebitNoteReceivedEvent":
+                    logger.warning("Invalid debit note event type: %s", event_type)
+                    continue
+                if not (debit_note_id and event_date):
+                    logger.warning("Empty debit note event: %r", ev)
+                    continue
 
-            if event_type != "DebitNoteReceivedEvent":
-                logger.warning("Invalid debit note event type: %s", event_type)
-                continue
-            if not (debit_note_id and event_date):
-                logger.warning("Empty debit note event: %r", ev)
-                continue
+                debit_note = await requestor.api.payment.get_debit_note(debit_note_id)
+                stats.amount = float(debit_note.total_amount_due)
+                amount = str(debit_note.total_amount_due)
 
-            debit_note = await requestor.api.payment.get_debit_note(debit_note_id)
-            stats.amount = float(debit_note.total_amount_due)
-            amount = str(debit_note.total_amount_due)
-
-            async with AllocationCtx(requestor, amount) as allocation:
                 acceptance = ya_payment.Acceptance(
                     total_amount_accepted=amount,
                     allocation_id=allocation.allocation_id,
@@ -81,12 +81,12 @@ async def accept_debit_notes(
                     debit_note.total_amount_due,
                 )
 
-        if not events:
-            await asyncio.sleep(0.5)
+            if not events:
+                await asyncio.sleep(0.5)
 
 
 async def get_debit_note_events_raw(
-    requestor: RequestorProbe, ts: datetime
+        requestor: RequestorProbe, ts: datetime
 ) -> List[Dict]:
     client = requestor.api.payment.api_client
 
@@ -120,16 +120,46 @@ class AllocationCtx:
     _id: Optional[str] = None
 
     async def __aenter__(self):
-        allocation = ya_payment.Allocation(
-            allocation_id="",
-            total_amount=str(self.amount),
-            spent_amount=0,
-            remaining_amount=0,
-            make_deposit=True,
-            timestamp=datetime.now(timezone.utc),
-            payment_platform=self.requestor.payment_config.platform_string,
-        )
-        allocation = await self.requestor.api.payment.create_allocation(allocation)
+        allocation = None
+        if global_deposits:
+            for global_deposit in global_deposits:
+                try:
+                    logger.info("Creating allocation for deposit {}".format(global_deposit))
+
+                    allocation_arg = ya_payment.Allocation(
+                        allocation_id="",
+                        total_amount=str(self.amount),
+                        spent_amount=0,
+                        remaining_amount=0,
+                        make_deposit=True,
+                        timestamp=datetime.now(timezone.utc),
+                        timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
+                        payment_platform=self.requestor.payment_config.platform_string,
+                        deposit=global_deposit,
+                    )
+                    allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
+                except Exception as ex:
+                    logger.warning("Failed to create allocation for deposit {} - {}".format(global_deposit["id"], ex))
+                    continue
+        else:
+            logger.info("Creating allocation without deposit")
+
+            allocation_arg = ya_payment.Allocation(
+                allocation_id="",
+                total_amount=str(self.amount),
+                spent_amount=0,
+                remaining_amount=0,
+                make_deposit=True,
+                timestamp=datetime.now(timezone.utc),
+                timeout=datetime.now(timezone.utc) + timedelta(minutes=30),
+                payment_platform=self.requestor.payment_config.platform_string,
+                deposit=None,
+            )
+
+            allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
+
+        if not allocation:
+            raise RuntimeError("Failed to create allocation at all")
         self._id = allocation.allocation_id
         return allocation
 
