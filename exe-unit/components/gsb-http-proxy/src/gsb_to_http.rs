@@ -55,11 +55,7 @@ impl GsbToHttpProxy {
         &mut self,
         message: GsbHttpCallMessage,
     ) -> impl Stream<Item = GsbHttpCallResponseEvent> {
-        let url = if message.path.starts_with("/") {
-            format!("{}{}", self.base_url, message.path)
-        } else {
-            format!("{}/{}", self.base_url, message.path)
-        };
+        let url = format!("{}{}", self.base_url, message.path);
 
         let (tx, mut rx) = mpsc::channel(1);
 
