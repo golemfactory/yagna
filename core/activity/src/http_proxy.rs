@@ -21,7 +21,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(post_proxy_http_request)
 }
 
-#[actix_web::get("/activity/{activity_id}/proxy-http{url:.*}")]
+#[actix_web::get("/activity/{activity_id}/proxy-http/{url:.*}")]
 async fn get_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
@@ -31,7 +31,7 @@ async fn get_proxy_http_request(
     proxy_http_request(db, path, id, request, None, Method::GET).await
 }
 
-#[actix_web::post("/activity/{activity_id}/proxy-http{url:.*}")]
+#[actix_web::post("/activity/{activity_id}/proxy-http/{url:.*}")]
 async fn post_proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
