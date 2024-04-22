@@ -438,10 +438,13 @@ impl Erc20Driver {
 
         let deposit_details = self
             .payment_runtime
-            .deposit_details(network.to_string(), DepositId {
-                deposit_id,
-                lock_address: deposit_contract,
-            })
+            .deposit_details(
+                network.to_string(),
+                DepositId {
+                    deposit_id,
+                    lock_address: deposit_contract,
+                },
+            )
             .await
             .map_err(GenericError::new)?;
         let deposit_balance = BigDecimal::new(
@@ -1082,19 +1085,20 @@ impl PaymentDriver for Erc20Driver {
                 H160::from_str(&msg.from).map_err(|e| {
                     GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
                 })?,
-                DepositId{
-                lock_address: H160::from_str(&msg.deposit_contract).map_err(|e| {
-                    GenericError::new(format!(
-                        "`{}` address parsing error: {}",
-                        msg.deposit_contract, e
-                    ))
-                })?,
-                deposit_id: U256::from_str(&msg.deposit_id).map_err(|e| {
-                    GenericError::new(format!(
-                        "`{}` deposit id parsing error: {}",
-                        msg.deposit_id, e
-                    ))
-                })?},
+                DepositId {
+                    lock_address: H160::from_str(&msg.deposit_contract).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` address parsing error: {}",
+                            msg.deposit_contract, e
+                        ))
+                    })?,
+                    deposit_id: U256::from_str(&msg.deposit_id).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` deposit id parsing error: {}",
+                            msg.deposit_id, e
+                        ))
+                    })?,
+                },
             )
             .await
             .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;
