@@ -316,7 +316,7 @@ pub struct SchedulePayment {
     sender: String,
     recipient: String,
     platform: String,
-    deposit_id: Option<String>,
+    deposit_id: Option<Deposit>,
     due_date: DateTime<Utc>,
 }
 
@@ -326,7 +326,7 @@ impl SchedulePayment {
         sender: String,
         recipient: String,
         platform: String,
-        deposit_id: Option<String>,
+        deposit_id: Option<Deposit>,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
@@ -355,7 +355,7 @@ impl SchedulePayment {
         self.platform.clone()
     }
 
-    pub fn deposit_id(&self) -> Option<String> {
+    pub fn deposit_id(&self) -> Option<Deposit> {
         self.deposit_id.clone()
     }
 

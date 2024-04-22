@@ -119,7 +119,7 @@ impl Erc20Driver {
         amount: &BigDecimal,
         network: &str,
         deadline: Option<DateTime<Utc>>,
-        deposit_id: Option<String>,
+        deposit_id: Option<Deposit>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -129,6 +129,21 @@ impl Erc20Driver {
         let amount = big_dec_to_u256(amount)?;
 
         let payment_id = Uuid::new_v4().to_simple().to_string();
+
+        let deposit_id = if let Some(deposit) = deposit_id {
+            Some(DepositId {
+                deposit_id: U256::from_str(&deposit.id).map_err(|err| {
+                    GenericError::new(format!("Error when parsing deposit id {err:?}"))
+                })?,
+                lock_address: Address::from_str(&deposit.contract).map_err(|err| {
+                    GenericError::new(format!(
+                        "Error when parsing deposit contract address {err:?}"
+                    ))
+                })?,
+            })
+        } else {
+            None
+        };
 
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
