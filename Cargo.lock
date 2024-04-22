@@ -9210,15 +9210,14 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.6.2"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de36a4e0e807b40e2aa0418fcfab711808d40f49e940019be9d29cb89b699ec7"
+checksum = "f74510bd2152b98c04f18d66f16ea1036a938966c1ff48f30a4d683fd66ca589"
 dependencies = [
  "actix",
  "actix-rt",
  "actix-server",
  "actix-service",
- "actix_derive",
  "anyhow",
  "bitflags 1.3.2",
  "chrono",

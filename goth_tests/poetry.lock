@@ -740,7 +740,7 @@ dpath = "^2.0"
 func_timeout = "4.3.5"
 ghapi = "^0.1.16"
 markupsafe = "2.0.1"
-pylproxy = "0.2.0"
+pylproxy = "0.2.3"
 pyyaml = "5.3.1"
 transitions = "^0.8"
 typing_extensions = "^4.5"
@@ -750,8 +750,8 @@ ya-aioclient = {git = "https://github.com/golemfactory/ya_tmp_pyapi.git", rev = 
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "462d8e991d592c99040b3e914d9fd873562d30ef"
-resolved_reference = "462d8e991d592c99040b3e914d9fd873562d30ef"
+reference = "5829ef8670087095f0de730e1aeed9d6dd9d3a44"
+resolved_reference = "5829ef8670087095f0de730e1aeed9d6dd9d3a44"
 
 [[package]]
 name = "idna"
@@ -1142,13 +1142,13 @@ files = [
 
 [[package]]
 name = "pylproxy"
-version = "0.2.0"
-description = ""
+version = "0.2.3"
+description = "Proxy for use in Goth instead of mitmproxy"
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "pylproxy-0.2.0-py3-none-any.whl", hash = "sha256:5cc08cdd7194703dba9cdd8e903de9858938aad9d304209898e38a8d6ce3109f"},
-    {file = "pylproxy-0.2.0.tar.gz", hash = "sha256:8b8d62bba028aed3a88000dd6e91931b53add9f68cc29efa74689dfa537c3e3f"},
+    {file = "pylproxy-0.2.3-py3-none-any.whl", hash = "sha256:e60b5910f027b6416c15ace0854155ed0a5e0d37d496dc235412d81489896430"},
+    {file = "pylproxy-0.2.3.tar.gz", hash = "sha256:133d26832632de43d589ea6a63e54dc66afa815c833b4fd55941d77c86fa9a41"},
 ]
 
 [package.dependencies]
@@ -1705,4 +1705,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1,<3.11"
-content-hash = "562487d798d5297064ce6b9c2defea246b7498796d0bc479a28089c424aecd25"
+content-hash = "5d111caf9a0e5dc23449e1b8fb60ab754c1f6b30b57d607195d15e775eb7f724"

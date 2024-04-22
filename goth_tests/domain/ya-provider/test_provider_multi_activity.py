@@ -1,4 +1,5 @@
 """End to end tests for requesting WASM tasks using goth REST API clients."""
+import asyncio
 import json
 import logging
 import re
@@ -39,7 +40,7 @@ def _create_runner(
 
 
 @pytest.mark.asyncio
-async def test_provider_multi_activity(
+async def test_prov_multi_activity(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -73,6 +74,9 @@ async def test_provider_multi_activity(
             .build()
         )
 
+        logger.info("Awaiting 30s before starting negotiation - checking if that help this flaky test")
+        await asyncio.sleep(30)
+
         agreement_providers = await negotiate_agreements(
             requestor,
             demand,
@@ -104,7 +108,7 @@ async def test_provider_multi_activity(
 
 
 @pytest.mark.asyncio
-async def test_provider_single_simultaneous_activity(
+async def test_prov_single_simultaneous_activity(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -166,7 +170,7 @@ async def test_provider_single_simultaneous_activity(
 
 
 @pytest.mark.asyncio
-async def test_provider_recover_from_abandoned_task(
+async def test_prov_recover_from_abandoned_task(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -269,7 +273,7 @@ async def test_provider_recover_from_abandoned_task(
 
 
 @pytest.mark.asyncio
-async def test_provider_renegotiate_proposal(
+async def test_prov_renegotiate_proposal(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
