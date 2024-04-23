@@ -93,6 +93,7 @@ mod tests {
     use crate::http_to_gsb::BindingMode::Local;
     use crate::response::GsbHttpCallResponseEvent;
     use async_stream::stream;
+    use std::collections::HashMap;
 
     #[actix_web::test]
     async fn http_to_gsb_test() {
@@ -104,7 +105,9 @@ mod tests {
                     let response = GsbHttpCallResponseEvent {
                         index: i,
                         timestamp: "timestamp".to_string(),
-                        msg_bytes: format!("response {}", i).into_bytes()
+                        msg_bytes: format!("response {}", i).into_bytes(),
+                        response_headers: HashMap::new(),
+                        status_code: 200
                     };
                     yield Ok(response);
                 }

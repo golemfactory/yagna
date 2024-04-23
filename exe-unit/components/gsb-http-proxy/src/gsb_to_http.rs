@@ -2,6 +2,7 @@ use crate::counters::Counters;
 use crate::headers;
 use crate::message::GsbHttpCallMessage;
 use crate::response::GsbHttpCallResponseEvent;
+use std::collections::HashMap;
 
 use ya_counters::Counter;
 
@@ -9,6 +10,7 @@ use async_stream::stream;
 use chrono::Utc;
 use futures::StreamExt;
 use futures_core::stream::Stream;
+use reqwest::Response;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -75,16 +77,23 @@ impl GsbToHttpProxy {
 
             log::debug!("Calling {}", &url);
             let response_handler = counters.on_request();
-            let response = builder.send().await;
-            let response =
-                response.map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()))?;
+
+            let response_headers = Self::collect_headers(&response);
+            let status_code = response.status();
             let bytes = response.bytes().await.unwrap();
+
             response_handler.on_response();
 
             let response = GsbHttpCallResponseEvent {
                 index: 0,
                 timestamp: Utc::now().naive_local().to_string(),
                 msg_bytes: bytes.to_vec(),
+                response_headers,
+                status_code: status_code.as_u16(),
             };
 
             tx.send(response).await.unwrap();
@@ -99,6 +108,26 @@ impl GsbToHttpProxy {
         };
 
         Box::pin(stream)
+    }
+
+    fn collect_headers(response: &Response) -> HashMap<String, Vec<String>> {
+        let mut response_headers: HashMap<String, Vec<String>> = HashMap::new();
+        response
+            .headers()
+            .iter()
+            .map(|(name, val)| {
+                (
+                    name.to_string(),
+                    val.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .for_each(|(h, v)| {
+                response_headers
+                    .entry(h.to_string())
+                    .and_modify(|e: &mut Vec<String>| e.push(v.clone()))
+                    .or_insert_with(|| vec![v]);
+            });
+        response_headers
     }
 
     pub fn requests_counter(&mut self) -> impl Counter {
@@ -135,10 +164,21 @@ mod tests {
         let mut response_stream = gsb_call.pass(message);
 
         let mut v = vec![];
+        let mut headers = vec![];
         while let Some(event) = response_stream.next().await {
             v.push(event.msg_bytes);
+            for (h, vals) in event.response_headers.iter() {
+                vals.iter()
+                    .for_each(|v| headers.push((h.to_string(), v.to_string())));
+            }
         }
 
+        assert_eq!(
+            headers
+                .iter()
+                .any(|(h, v)| { h.eq("some-header") && v.eq("value") }),
+            true
+        );
         assert_eq!(vec!["response".as_bytes()], v);
         assert_eq!(1.0, requests_counter.frame().unwrap());
         assert!(requests_duration_counter.frame().unwrap() > 0.0);
@@ -211,6 +251,7 @@ mod tests {
             .mock("GET", "/endpoint")
             .with_status(201)
             .with_body("response")
+            .with_header("Some-Header", "value")
             .create();
         (server, mock, url)
     }
