@@ -1,20 +1,24 @@
 use std::cell::RefCell;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::io;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
+use actix_web::dev::Url;
+use actix_web::http::Uri;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use tokio::time::{Duration, Instant};
 use ya_sb_proto::codec::{GsbMessage, ProtocolError};
+use ya_service_bus::connection::{CallRequestHandler, ClientInfo, ConnectionRef};
+use ya_service_bus::{
+    connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
+};
 
 use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::net::{local as local_net, net_service};
 use ya_core_model::NodeId;
-use ya_service_bus::connection::{CallRequestHandler, ClientInfo, ConnectionRef};
-use ya_service_bus::{
-    connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
-};
+use ya_service_api_interfaces::Provider;
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
@@ -24,24 +28,81 @@ use crate::config::Config;
 
 const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 
-async fn central_net_addr() -> std::io::Result<SocketAddr> {
-    Ok(match std::env::var(CENTRAL_ADDR_ENV_VAR) {
-        Ok(v) => v,
-        Err(_) => resolver::resolve_yagna_srv_record("_net._tcp").await?,
+fn parse_host_link(host_link: &str) -> Option<(&str, u16, Option<&str>)> {
+    let re = regex::Regex::new(r"^(([0-9a-z]{56})@)?([^:]*)(:[0-9]{1,4})?$").unwrap();
+
+    if let Some(m) = re.captures(host_link) {
+        let cert_hash = m.get(2).map(|m| m.as_str());
+        let host = m.get(3)?.as_str();
+        let port = m
+            .get(4)
+            .and_then(|s| s.as_str()[1..].parse().ok())
+            .unwrap_or(7464);
+        Some((host, port, cert_hash))
+    } else {
+        None
     }
-    .to_socket_addrs()?
-    .next()
-    .expect("central net hub addr needed"))
 }
 
-/// Initialize net module on a hub.
+async fn central_net_addr(
+) -> std::io::Result<(SocketAddr, Option<ya_service_bus::connection::CertHash>)> {
+    let urls = match std::env::var(CENTRAL_ADDR_ENV_VAR) {
+        Ok(v) => vec![v],
+        Err(_) => resolver::resolve_href_record("_net._tcp.dev.golem.network").await?,
+    };
+
+    for url in urls {
+        if let Some((host, port, cert)) = parse_host_link(&url) {
+            let addr = (host, port)
+                .to_socket_addrs()?
+                .next()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "host not found"))?;
+            let cert = cert.and_then(|c| c.parse().ok());
+
+            return Ok((addr, cert));
+        }
+    }
+    return Err(io::Error::new(io::ErrorKind::Other, "host not found"));
+}
+
 pub async fn bind_remote(
     client_info: ClientInfo,
     default_node_id: NodeId,
     nodes: Vec<NodeId>,
 ) -> std::io::Result<oneshot::Receiver<()>> {
-    let hub_addr = central_net_addr().await?;
-    let conn = connection::tcp(hub_addr).await?;
+    let (hub_addr, cert) = central_net_addr().await?;
+    log::info!("connecting to {:?}, cert={:?}", hub_addr, cert);
+    if let Some(cert) = cert {
+        bind_remote_for(
+            client_info,
+            default_node_id,
+            nodes,
+            connection::tls(hub_addr, cert).await?,
+        )
+        .await
+    } else {
+        bind_remote_for(
+            client_info,
+            default_node_id,
+            nodes,
+            connection::tcp(hub_addr).await?,
+        )
+        .await
+    }
+}
+
+/// Initialize net module on a hub.
+async fn bind_remote_for<
+    Transport: Sink<GsbMessage, Error = ProtocolError>
+        + Stream<Item = Result<GsbMessage, ProtocolError>>
+        + Unpin
+        + 'static,
+>(
+    client_info: ClientInfo,
+    default_node_id: NodeId,
+    nodes: Vec<NodeId>,
+    conn: Transport,
+) -> std::io::Result<oneshot::Receiver<()>> {
     let bcast = BCastService::default();
     let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
@@ -102,7 +163,7 @@ pub async fn bind_remote(
             .bind(addr.clone())
             .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
-        log::info!("network service bound at: {} under: {}", hub_addr, addr);
+        log::info!("network service bound at under: {}", addr);
     }
 
     bind_net_handler(net::BUS_ID, central_bus.clone(), default_node_id);
@@ -492,8 +553,9 @@ pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ya_core_model::net::RemoteEndpoint;
+
+    use super::*;
 
     #[test]
     fn parse_generated_from_to_service_should_pass() {
@@ -527,5 +589,28 @@ mod tests {
     fn parse_with_service_should_pass() {
         let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b/x");
         assert!(out.is_ok())
+    }
+
+    #[test]
+    fn check_parse() {
+        let link = "393479950594e7c676ba121033a677a1316f722460827e217c82d2b3@18.185.178.4:7464";
+
+        let (host, port, cert) = parse_host_link(link).unwrap();
+
+        assert_eq!(
+            cert.unwrap(),
+            "393479950594e7c676ba121033a677a1316f722460827e217c82d2b3"
+        );
+        assert_eq!(host, "18.185.178.4");
+        assert_eq!(port, 7464);
+
+        assert_eq!(
+            parse_host_link("127.0.0.1:2233"),
+            Some(("127.0.0.1", 2233, None))
+        );
+        assert_eq!(
+            parse_host_link("127.0.0.1"),
+            Some(("127.0.0.1", 7464, None))
+        )
     }
 }
