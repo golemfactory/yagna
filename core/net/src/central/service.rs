@@ -1,10 +1,8 @@
 use std::cell::RefCell;
 use std::io;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
-use actix_web::dev::Url;
-use actix_web::http::Uri;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use tokio::time::{Duration, Instant};
@@ -18,7 +16,6 @@ use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::net::{local as local_net, net_service};
 use ya_core_model::NodeId;
-use ya_service_api_interfaces::Provider;
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
@@ -62,7 +59,7 @@ async fn central_net_addr(
             return Ok((addr, cert));
         }
     }
-    return Err(io::Error::new(io::ErrorKind::Other, "host not found"));
+    Err(io::Error::new(io::ErrorKind::Other, "host not found"))
 }
 
 pub async fn bind_remote(
