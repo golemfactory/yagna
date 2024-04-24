@@ -407,7 +407,7 @@ impl Erc20Driver {
         );
 
         Ok(if msg.amount > account_balance - total_allocated_amount {
-            ValidateAllocationResult::InsufficientFunds
+            ValidateAllocationResult::InsufficientAccountFunds
         } else {
             ValidateAllocationResult::Valid
         })
@@ -504,7 +504,7 @@ impl Erc20Driver {
                 deposit_balance
             );
 
-            return Ok(ValidateAllocationResult::InsufficientFunds);
+            return Ok(ValidateAllocationResult::InsufficientDepositFunds);
         }
 
         if let Some(timeout) = msg.timeout {
