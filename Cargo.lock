@@ -8428,7 +8428,7 @@ dependencies = [
  "ya-core-model",
  "ya-net",
  "ya-persistence",
- "ya-sb-router 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
@@ -8659,7 +8659,7 @@ dependencies = [
  "ya-manifest-utils",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-runtime-api",
- "ya-sb-router 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-router",
  "ya-service-bus",
  "ya-std-utils",
  "ya-transfer",
@@ -8766,7 +8766,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
- "ya-sb-router 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
@@ -8951,9 +8951,9 @@ dependencies = [
  "ya-core-model",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-relay-client",
- "ya-sb-proto 0.6.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
- "ya-sb-router 0.6.2 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
- "ya-sb-util 0.4.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
+ "ya-sb-proto",
+ "ya-sb-router",
+ "ya-sb-util",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -9025,7 +9025,7 @@ dependencies = [
  "ya-metrics",
  "ya-net",
  "ya-persistence",
- "ya-sb-router 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
@@ -9331,53 +9331,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-sb-proto"
-version = "0.6.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657#0e4550ff6b31a455a35bffb724f5054591b97657"
-dependencies = [
- "bytes 1.6.0",
- "prost 0.10.4",
- "prost-build 0.10.4",
- "thiserror",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
 name = "ya-sb-router"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de36a4e0e807b40e2aa0418fcfab711808d40f49e940019be9d29cb89b699ec7"
-dependencies = [
- "actix",
- "actix-rt",
- "actix-server",
- "actix-service",
- "actix_derive",
- "anyhow",
- "bitflags 1.3.2",
- "chrono",
- "futures 0.3.30",
- "lazy_static",
- "log",
- "parking_lot 0.11.2",
- "pin-project 1.1.5",
- "prost 0.10.4",
- "structopt",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "url",
- "uuid 0.8.2",
- "ya-sb-proto 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-sb-util 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "ya-sb-router"
-version = "0.6.2"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657#0e4550ff6b31a455a35bffb724f5054591b97657"
+checksum = "c3500862a1c1e1a357e23a1d770d090a1015456ff9732d85e3c72d2557df5da9"
 dependencies = [
  "actix",
  "actix-rt",
@@ -9398,25 +9355,15 @@ dependencies = [
  "tokio-util",
  "url",
  "uuid 0.8.2",
- "ya-sb-proto 0.6.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
- "ya-sb-util 0.4.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
+ "ya-sb-proto",
+ "ya-sb-util",
 ]
 
 [[package]]
 name = "ya-sb-util"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c525504f7ca7d13825ef10a44005663b91b4b9f3eeebd6768188884bec78a37d"
-dependencies = [
- "actix",
- "bitflags 1.3.2",
- "futures 0.3.30",
-]
-
-[[package]]
-name = "ya-sb-util"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657#0e4550ff6b31a455a35bffb724f5054591b97657"
+checksum = "5a7b847ec692b270cf179072275fa825d6d6598ce770eb47426ffa0a0d4670b2"
 dependencies = [
  "actix",
  "bitflags 1.3.2",
@@ -9489,7 +9436,7 @@ dependencies = [
  "ya-core-model",
  "ya-identity",
  "ya-persistence",
- "ya-sb-router 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
@@ -9498,8 +9445,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.7.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657#0e4550ff6b31a455a35bffb724f5054591b97657"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9003e7d34fcfbd8f70d10b67e4e49947686c5330e6ae83160aa30fd66f471444"
 dependencies = [
  "actix",
  "flexbuffers",
@@ -9518,8 +9466,8 @@ dependencies = [
  "url",
  "uuid 0.8.2",
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-sb-proto 0.6.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
- "ya-sb-util 0.4.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
+ "ya-sb-proto",
+ "ya-sb-util",
 ]
 
 [[package]]
@@ -9801,8 +9749,8 @@ dependencies = [
  "ya-payment",
  "ya-persistence",
  "ya-provider",
- "ya-sb-proto 0.6.1 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
- "ya-sb-router 0.6.2 (git+https://github.com/golemfactory/ya-service-bus.git?rev=0e4550ff6b31a455a35bffb724f5054591b97657)",
+ "ya-sb-proto",
+ "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
