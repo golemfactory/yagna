@@ -21,7 +21,7 @@ jobs:
           script: |
             let tag = context.payload.ref.replace(/.*\//, '');
             let buildNo = context.runNumber;
-            let versionName = tag.replace(/^pre-rel-/,'').replace(/^preview-.*-/,'');
+            let versionName = tag.replace(/^pre-rel-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
