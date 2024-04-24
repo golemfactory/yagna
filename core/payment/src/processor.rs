@@ -6,27 +6,34 @@ use crate::error::processor::{
 };
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
+use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation,
+    self, driver_bus_id, AccountMode, GasDetails, GetRpcEndpointsResult, PaymentConfirmation,
+    PaymentDetails, ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
-    SchedulePayment, UnregisterAccount, UnregisterDriver,
+    GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount, RegisterAccountError,
+    RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
+    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
+use ya_core_model::NodeId;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::types::Role;
 use ya_service_bus::typed::Endpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -34,8 +41,8 @@ fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
 }
 
-async fn validate_orders(
-    orders: &Vec<DbOrder>,
+fn validate_orders(
+    orders: &[DbOrder],
     platform: &str,
     payer_addr: &str,
     payee_addr: &str,
@@ -225,7 +232,8 @@ impl DriverRegistry {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         let driver_details = self.get_driver(&driver)?;
-        let network_name = network.unwrap_or_default();
+        // If network is not specified, use default network
+        let network_name = network.unwrap_or_else(|| driver_details.default_network.to_owned());
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
@@ -288,50 +296,79 @@ impl DriverRegistry {
     }
 }
 
-#[derive(Clone)]
+const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub struct PaymentProcessor {
-    db_executor: DbExecutor,
-    registry: DriverRegistry,
-    in_shutdown: bool,
+    db_executor: Arc<Mutex<DbExecutor>>,
+    registry: RwLock<DriverRegistry>,
+    in_shutdown: AtomicBool,
 }
 
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
         Self {
-            db_executor,
+            db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
-            in_shutdown: false,
+            in_shutdown: AtomicBool::new(false),
         }
     }
 
-    pub async fn register_driver(
-        &mut self,
-        msg: RegisterDriver,
-    ) -> Result<(), RegisterDriverError> {
-        self.registry.register_driver(msg)
+    pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterDriverError::InternalTimeout)?
+            .register_driver(msg)
     }
 
-    pub async fn unregister_driver(&mut self, msg: UnregisterDriver) {
-        self.registry.unregister_driver(msg)
+    pub async fn unregister_driver(
+        &self,
+        msg: UnregisterDriver,
+    ) -> Result<(), UnregisterDriverError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| UnregisterDriverError::InternalTimeout)?
+            .unregister_driver(msg);
+
+        Ok(())
     }
 
-    pub async fn register_account(
-        &mut self,
-        msg: RegisterAccount,
-    ) -> Result<(), RegisterAccountError> {
-        self.registry.register_account(msg)
+    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
+            .register_account(msg)
     }
 
-    pub async fn unregister_account(&mut self, msg: UnregisterAccount) {
-        self.registry.unregister_account(msg)
+    pub async fn unregister_account(
+        &self,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        self.registry
+            .timeout_write(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| UnregisterAccountError::InternalTimeout)?
+            .unregister_account(msg);
+        Ok(())
     }
 
-    pub async fn get_accounts(&self) -> Vec<Account> {
-        self.registry.get_accounts()
+    pub async fn get_accounts(&self) -> Result<Vec<Account>, GetAccountsError> {
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map(|registry| registry.get_accounts())
+            .map_err(|_| GetAccountsError::InternalTimeout)
     }
 
-    pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
-        self.registry.get_drivers()
+    pub async fn get_drivers(&self) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map(|registry| registry.get_drivers())
+            .map_err(|_| GetDriversError::InternalTimeout)
     }
 
     pub async fn get_network(
@@ -339,7 +376,11 @@ impl PaymentProcessor {
         driver: String,
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
-        self.registry.get_network(driver, network)
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
+            .get_network(driver, network)
     }
 
     pub async fn get_platform(
@@ -348,7 +389,11 @@ impl PaymentProcessor {
         network: Option<String>,
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
-        self.registry.get_platform(driver, network, token)
+        self.registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| RegisterAccountError::InternalTimeout)?
+            .get_platform(driver, network, token)
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
@@ -360,64 +405,74 @@ impl PaymentProcessor {
         if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         }
-        let orders = self
-            .db_executor
-            .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, driver.clone())
-            .await?;
-        validate_orders(
-            &orders,
-            &payment_platform,
-            &payer_addr,
-            &payee_addr,
-            &msg.amount,
-        )
-        .await?;
 
-        let mut activity_payments = vec![];
-        let mut agreement_payments = vec![];
-        for order in orders.iter() {
-            let amount = order.amount.clone().into();
-            match (order.activity_id.clone(), order.agreement_id.clone()) {
-                (Some(activity_id), None) => activity_payments.push(ActivityPayment {
-                    activity_id,
-                    amount,
-                    allocation_id: Some(order.allocation_id.clone()),
-                }),
-                (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
-                    agreement_id,
-                    amount,
-                    allocation_id: Some(order.allocation_id.clone()),
-                }),
-                _ => return NotifyPaymentError::invalid_order(order),
+        let payer_id: NodeId;
+        let payee_id: NodeId;
+        let payment_id: String;
+        let mut payment: Payment;
+
+        {
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+            let orders = db_executor
+                .as_dao::<OrderDao>()
+                .get_many(msg.order_ids, driver.clone())
+                .await?;
+            validate_orders(
+                &orders,
+                &payment_platform,
+                &payer_addr,
+                &payee_addr,
+                &msg.amount,
+            )?;
+
+            let mut activity_payments = vec![];
+            let mut agreement_payments = vec![];
+            for order in orders.iter() {
+                let amount = order.amount.clone().into();
+                match (order.activity_id.clone(), order.agreement_id.clone()) {
+                    (Some(activity_id), None) => activity_payments.push(ActivityPayment {
+                        activity_id,
+                        amount,
+                        allocation_id: Some(order.allocation_id.clone()),
+                    }),
+                    (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
+                        agreement_id,
+                        amount,
+                        allocation_id: Some(order.allocation_id.clone()),
+                    }),
+                    _ => return NotifyPaymentError::invalid_order(order),
+                }
             }
+
+            // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
+            //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
+            //        data model. Payments can no longer by assigned to a single payer and payee.
+            payer_id = orders.get(0).unwrap().payer_id;
+            payee_id = orders.get(0).unwrap().payee_id;
+
+            let payment_dao: PaymentDao = db_executor.as_dao();
+
+            payment_id = payment_dao
+                .create_new(
+                    payer_id,
+                    payee_id,
+                    payer_addr,
+                    payee_addr,
+                    payment_platform.clone(),
+                    msg.amount.clone(),
+                    msg.confirmation.confirmation,
+                    activity_payments,
+                    agreement_payments,
+                )
+                .await?;
+
+            payment = payment_dao
+                .get(payment_id.clone(), payer_id)
+                .await?
+                .unwrap();
         }
 
-        // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
-        //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
-        //        data model. Payments can no longer by assigned to a single payer and payee.
-        let payer_id = orders.get(0).unwrap().payer_id;
-        let payee_id = orders.get(0).unwrap().payee_id;
-
-        let payment_dao: PaymentDao = self.db_executor.as_dao();
-        let payment_id = payment_dao
-            .create_new(
-                payer_id,
-                payee_id,
-                payer_addr,
-                payee_addr,
-                payment_platform.clone(),
-                msg.amount.clone(),
-                msg.confirmation.confirmation,
-                activity_payments,
-                agreement_payments,
-            )
-            .await?;
-
-        let mut payment = payment_dao
-            .get(payment_id.clone(), payer_id)
-            .await?
-            .unwrap();
         // Allocation IDs are requestor's private matter and should not be sent to provider
         for agreement_payment in payment.agreement_payments.iter_mut() {
             agreement_payment.allocation_id = None;
@@ -436,59 +491,50 @@ impl PaymentProcessor {
         counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment, signature);
 
-        if payer_id != payee_id {
-            let mark_sent = ya_net::from(payer_id)
-                .to(payee_id)
-                .service(BUS_ID)
-                .call(msg)
-                .map(|res| match res {
-                    Ok(Ok(_)) => true,
-                    Err(err) => {
-                        log::error!("Error sending payment message to provider: {:?}", err);
-                        false
-                    }
-                    Ok(Err(err)) => {
-                        log::error!("Provider rejected payment: {:?}", err);
-                        true
-                    }
-                })
-                .await;
+        let db_executor = Arc::clone(&self.db_executor);
 
-            if mark_sent {
-                payment_dao.mark_sent(payment_id).await.ok();
-            } else {
-                let sync_dao: SyncNotifsDao = self.db_executor.as_dao();
-                sync_dao.upsert(payee_id).await?;
-                SYNC_NOTIFS_NOTIFY.notify_one();
-                log::debug!("Failed to call SendPayment on [{payee_id}]");
-            }
-        } else {
-            // Spawning to avoid deadlock in a case that payee is the same node as payer
-            tokio::task::spawn_local(
-                ya_net::from(payer_id)
+        tokio::task::spawn_local(
+            async move {
+                let mark_sent = ya_net::from(payer_id)
                     .to(payee_id)
                     .service(BUS_ID)
                     .call(msg)
                     .map(|res| match res {
-                        Ok(Ok(_)) => (),
+                        Ok(Ok(_)) => true,
                         Err(err) => {
-                            log::error!("Error sending payment message to provider: {:?}", err)
+                            log::error!("Error sending payment message to provider: {:?}", err);
+                            false
                         }
                         Ok(Err(err)) => {
-                            log::error!("Provider rejected payment: {:?}", err)
+                            log::error!("Provider rejected payment: {:?}", err);
+                            true
                         }
-                    }),
-            );
+                    })
+                    .await;
 
-            // Assume payments are OK when requesting from self
-            payment_dao.mark_sent(payment_id).await?;
-        }
+                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+                let payment_dao: PaymentDao = db_executor.as_dao();
+                let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
+                if mark_sent {
+                    payment_dao.mark_sent(payment_id).await.ok();
+                } else {
+                    sync_dao.upsert(payee_id).await?;
+                    SYNC_NOTIFS_NOTIFY.notify_one();
+                    log::debug!("Failed to call SendPayment on [{payee_id}]");
+                }
+
+                anyhow::Ok(())
+            }
+            .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
+        );
 
         Ok(())
     }
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
-        if self.in_shutdown {
+        if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
         let amount = msg.amount.clone();
@@ -498,9 +544,11 @@ impl PaymentProcessor {
                 &amount
             )));
         }
-        let driver =
-            self.registry
-                .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
+            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -512,6 +560,8 @@ impl PaymentProcessor {
             .await??;
 
         self.db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await?
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
             .await?;
@@ -526,11 +576,15 @@ impl PaymentProcessor {
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
-        let driver = self.registry.driver(
-            &payment.payment_platform,
-            &payment.payee_addr,
-            AccountMode::RECV,
-        )?;
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
+            .driver(
+                &payment.payment_platform,
+                &payment.payee_addr,
+                AccountMode::RECV,
+            )?;
 
         if !driver_endpoint(&driver)
             .send(driver::VerifySignature::new(payment.clone(), signature))
@@ -576,83 +630,87 @@ impl PaymentProcessor {
             return VerifyPaymentError::sender(payer_addr, &details.sender);
         }
 
-        // Verify agreement payments
-        let agreement_dao: AgreementDao = self.db_executor.as_dao();
-        for agreement_payment in payment.agreement_payments.iter() {
-            let agreement_id = &agreement_payment.agreement_id;
-            let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
-            if agreement_payment.amount == BigDecimal::zero() {
-                return VerifyPaymentError::agreement_zero_amount(agreement_id);
+        {
+            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+            // Verify agreement payments
+            let agreement_dao: AgreementDao = db_executor.as_dao();
+            for agreement_payment in payment.agreement_payments.iter() {
+                let agreement_id = &agreement_payment.agreement_id;
+                let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+                if agreement_payment.amount == BigDecimal::zero() {
+                    return VerifyPaymentError::agreement_zero_amount(agreement_id);
+                }
+                match agreement {
+                    None => return VerifyPaymentError::agreement_not_found(agreement_id),
+                    Some(agreement) if &agreement.payee_addr != payee_addr => {
+                        return VerifyPaymentError::agreement_payee(&agreement, payee_addr);
+                    }
+                    Some(agreement) if &agreement.payer_addr != payer_addr => {
+                        return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
+                    }
+                    Some(agreement) if agreement.payment_platform != payment.payment_platform => {
+                        return VerifyPaymentError::agreement_platform(
+                            &agreement,
+                            &payment.payment_platform,
+                        );
+                    }
+                    _ => (),
+                }
             }
-            match agreement {
-                None => return VerifyPaymentError::agreement_not_found(agreement_id),
-                Some(agreement) if &agreement.payee_addr != payee_addr => {
-                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr);
+
+            // Verify activity payments
+            let activity_dao: ActivityDao = db_executor.as_dao();
+            for activity_payment in payment.activity_payments.iter() {
+                let activity_id = &activity_payment.activity_id;
+                if activity_payment.amount == BigDecimal::zero() {
+                    return VerifyPaymentError::activity_zero_amount(activity_id);
                 }
-                Some(agreement) if &agreement.payer_addr != payer_addr => {
-                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
+                let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
+                match activity {
+                    None => return VerifyPaymentError::activity_not_found(activity_id),
+                    Some(activity) if &activity.payee_addr != payee_addr => {
+                        return VerifyPaymentError::activity_payee(&activity, payee_addr);
+                    }
+                    Some(activity) if &activity.payer_addr != payer_addr => {
+                        return VerifyPaymentError::activity_payer(&activity, payer_addr);
+                    }
+                    _ => (),
                 }
-                Some(agreement) if agreement.payment_platform != payment.payment_platform => {
-                    return VerifyPaymentError::agreement_platform(
-                        &agreement,
-                        &payment.payment_platform,
-                    );
-                }
-                _ => (),
             }
+
+            // Verify totals for all agreements and activities with the same confirmation
+            let payment_dao: PaymentDao = db_executor.as_dao();
+            let shared_payments = payment_dao
+                .get_for_confirmation(confirmation.confirmation, Role::Provider)
+                .await?;
+            let other_payment_total = shared_payments
+                .iter()
+                .map(|payment| {
+                    let agreement_total = payment
+                        .agreement_payments
+                        .iter()
+                        .map(|ap| &ap.amount)
+                        .sum::<BigDecimal>();
+
+                    let activity_total = payment
+                        .activity_payments
+                        .iter()
+                        .map(|ap| &ap.amount)
+                        .sum::<BigDecimal>();
+
+                    agreement_total + activity_total
+                })
+                .sum::<BigDecimal>();
+
+            let all_payment_total = &other_payment_total + agreement_sum + activity_sum;
+            if all_payment_total > details.amount {
+                return VerifyPaymentError::overspending(&details.amount, &all_payment_total);
+            }
+
+            // Insert payment into database (this operation creates and updates all related entities)
+            payment_dao.insert_received(payment, payee_id).await?;
         }
-
-        // Verify activity payments
-        let activity_dao: ActivityDao = self.db_executor.as_dao();
-        for activity_payment in payment.activity_payments.iter() {
-            let activity_id = &activity_payment.activity_id;
-            if activity_payment.amount == BigDecimal::zero() {
-                return VerifyPaymentError::activity_zero_amount(activity_id);
-            }
-            let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
-            match activity {
-                None => return VerifyPaymentError::activity_not_found(activity_id),
-                Some(activity) if &activity.payee_addr != payee_addr => {
-                    return VerifyPaymentError::activity_payee(&activity, payee_addr);
-                }
-                Some(activity) if &activity.payer_addr != payer_addr => {
-                    return VerifyPaymentError::activity_payer(&activity, payer_addr);
-                }
-                _ => (),
-            }
-        }
-
-        // Verify totals for all agreements and activities with the same confirmation
-        let payment_dao: PaymentDao = self.db_executor.as_dao();
-        let shared_payments = payment_dao
-            .get_for_confirmation(confirmation.confirmation)
-            .await?;
-        let other_payment_total = shared_payments
-            .iter()
-            .map(|payment| {
-                let agreement_total = payment
-                    .agreement_payments
-                    .iter()
-                    .map(|ap| &ap.amount)
-                    .sum::<BigDecimal>();
-
-                let activity_total = payment
-                    .activity_payments
-                    .iter()
-                    .map(|ap| &ap.amount)
-                    .sum::<BigDecimal>();
-
-                agreement_total + activity_total
-            })
-            .sum::<BigDecimal>();
-
-        let all_payment_total = &other_payment_total + agreement_sum + activity_sum;
-        if all_payment_total > details.amount {
-            return VerifyPaymentError::overspending(&details.amount, &all_payment_total);
-        }
-
-        // Insert payment into database (this operation creates and updates all related entities)
-        payment_dao.insert_received(payment, payee_id).await?;
 
         Ok(())
     }
@@ -664,11 +722,38 @@ impl PaymentProcessor {
     ) -> Result<BigDecimal, GetStatusError> {
         let driver = self
             .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
+    }
+
+    pub async fn get_rpc_endpoints_info(
+        &self,
+        platform: String,
+        address: String,
+        network: Option<String>,
+        verify: bool,
+        resolve: bool,
+        no_wait: bool,
+    ) -> Result<GetRpcEndpointsResult, GetStatusError> {
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
+            .driver(&platform, &address, AccountMode::empty())?;
+        let res = driver_endpoint(&driver)
+            .send(driver::GetRpcEndpoints {
+                network,
+                verify,
+                resolve,
+                no_wait,
+            })
+            .await??;
+        Ok(res)
     }
 
     pub async fn get_gas_balance(
@@ -678,6 +763,8 @@ impl PaymentProcessor {
     ) -> Result<Option<GasDetails>, GetStatusError> {
         let driver = self
             .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountGasBalance::new(address, platform))
@@ -692,16 +779,20 @@ impl PaymentProcessor {
         address: String,
         amount: BigDecimal,
     ) -> Result<bool, ValidateAllocationError> {
-        if self.in_shutdown {
+        if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
         }
         let existing_allocations = self
             .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await?
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
         let driver = self
             .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
             .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
@@ -717,7 +808,16 @@ impl PaymentProcessor {
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
     pub async fn release_allocations(&self, force: bool) {
-        let db = Data::new(self.db_executor.clone());
+        // keep this lock alive for the entirety of this function for now
+        let db_executor = match self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await {
+            Ok(db) => db,
+            Err(_) => {
+                log::error!("Timed out waiting for db lock");
+                return;
+            }
+        };
+
+        let db = Data::new(db_executor.clone());
         let existing_allocations = db
             .clone()
             .as_dao::<AllocationDao>()
@@ -753,12 +853,24 @@ impl PaymentProcessor {
         }
     }
 
-    pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
-        self.in_shutdown = true;
-        let driver_shutdown_futures = self
-            .registry
-            .iter_drivers()
-            .map(|driver| shut_down_driver(driver, timeout));
+    pub async fn shut_down(
+        &self,
+        timeout: Duration,
+    ) -> impl futures::Future<Output = ()> + 'static {
+        self.in_shutdown.store(true, Ordering::SeqCst);
+
+        let driver_shutdown_futures: Vec<_> = {
+            let registry = self
+                .registry
+                .timeout_read(REGISTRY_LOCK_TIMEOUT)
+                .await
+                .expect("Can't initiate payment shutdown: registry lock timed out");
+
+            registry
+                .iter_drivers()
+                .map(|driver| shut_down_driver(driver, timeout))
+                .collect()
+        };
         futures::future::join_all(driver_shutdown_futures).map(|_| ())
     }
 }

@@ -250,8 +250,8 @@ pub mod local {
     pub struct GsbPingResponse {
         pub node_id: NodeId,
         pub node_alias: Option<NodeId>,
-        pub tcp_ping: Duration,
-        pub udp_ping: Duration,
+        pub tcp_ping: Option<Duration>,
+        pub udp_ping: Option<Duration>,
         pub is_p2p: bool,
     }
 
@@ -304,6 +304,18 @@ pub mod local {
         const ID: &'static str = "Shutdown";
         type Item = ();
         type Error = GenericNetError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ListNeighbours {
+        pub size: u32,
+    }
+
+    impl RpcMessage for ListNeighbours {
+        const ID: &'static str = "ListNeighbours";
+        type Item = Vec<NodeId>;
+        type Error = StatusError;
     }
 }
 

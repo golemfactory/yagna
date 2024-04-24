@@ -521,7 +521,7 @@ fn verify_cert_chain(
     cert_store: &CertStore,
     cert_chain: &Vec<X509>,
 ) -> anyhow::Result<PKey<Public>> {
-    let cert = match cert_chain.last().map(Clone::clone) {
+    let cert = match cert_chain.last().cloned() {
         Some(cert) => cert,
         None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
     };

@@ -36,7 +36,7 @@ use ya_service_bus::typed as bus;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Erc20next,
+    Erc20,
 }
 
 impl FromStr for Driver {
@@ -45,7 +45,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "erc20" => Ok(Driver::Erc20next),
+            "erc20" => Ok(Driver::Erc20),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -55,7 +55,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Erc20next => write!(f, "erc20"),
+            Driver::Erc20 => write!(f, "erc20"),
         }
     }
 }
@@ -91,10 +91,7 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn start_erc20_next_driver(
-    path: PathBuf,
-    requestor_account: SecretKey,
-) -> anyhow::Result<()> {
+pub async fn start_erc20_driver(path: PathBuf, requestor_account: SecretKey) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
@@ -232,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("bind_gsb_router()");
 
-    let processor = PaymentProcessor::new(db.clone());
+    let processor = Arc::new(PaymentProcessor::new(db.clone()));
     ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 
@@ -241,8 +238,8 @@ async fn main() -> anyhow::Result<()> {
             start_dummy_driver().await?;
             dummy::DRIVER_NAME
         }
-        Driver::Erc20next => {
-            start_erc20_next_driver("./".into(), requestor_account).await?;
+        Driver::Erc20 => {
+            start_erc20_driver("./".into(), requestor_account).await?;
             erc20::DRIVER_NAME
         }
     };

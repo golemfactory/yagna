@@ -22,6 +22,8 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
+    use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
+    use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -158,6 +160,8 @@ pub mod local {
         InvalidDefaultToken(String, String),
         #[error("Invalid default network specified: {0}")]
         InvalidDefaultNetwork(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterDriver {
@@ -166,13 +170,19 @@ pub mod local {
         type Error = RegisterDriverError;
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterDriverError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct UnregisterDriver(pub String);
 
     impl RpcMessage for UnregisterDriver {
         const ID: &'static str = "UnregisterDriver";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterDriverError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -196,12 +206,20 @@ pub mod local {
         UnsupportedToken(String, String, String),
         #[error("Error while registering account: {0}")]
         Other(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterAccount {
         const ID: &'static str = "RegisterAccount";
         type Item = ();
         type Error = RegisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterAccountError {
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -213,7 +231,7 @@ pub mod local {
     impl RpcMessage for UnregisterAccount {
         const ID: &'static str = "UnregisterAccount";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterAccountError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -258,6 +276,28 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub gas: Option<GasDetails>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetRpcEndpoints {
+        pub address: String,
+        pub driver: DriverName,
+        pub network: Option<NetworkName>,
+        pub verify: bool,
+        pub resolve: bool,
+        pub no_wait: bool,
+    }
+
+    impl RpcMessage for crate::payment::local::GetRpcEndpoints {
+        const ID: &'static str = "GetRpcEndpoints";
+        type Item = crate::payment::local::GetRpcEndpointsResult;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct GetRpcEndpointsResult {
+        pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
+        pub sources: BTreeMap<String, Web3ExternalSources>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -324,10 +364,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetAccounts {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetAccountsError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
-        type Error = GenericError;
+        type Error = GetAccountsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -407,10 +453,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetDriversError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
-        type Error = NoError;
+        type Error = GetDriversError;
     }
 
     // ********************* STATUS ********************************
@@ -476,6 +528,8 @@ pub mod local {
         Clone,
         PartialEq,
         Eq,
+        Ord,
+        PartialOrd,
         Serialize,
         Deserialize,
     )]

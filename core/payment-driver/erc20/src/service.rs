@@ -2,6 +2,7 @@
     The service that binds this payment driver into yagna via GSB.
 */
 
+use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
@@ -69,7 +70,7 @@ impl Erc20Service {
                 );
             }
 
-            let sendout_interval_env = "ERC20NEXT_SENDOUT_INTERVAL_SECS";
+            let sendout_interval_env = "ERC20_SENDOUT_INTERVAL_SECS";
             if let Ok(sendout_interval) = env::var(sendout_interval_env) {
                 match sendout_interval.parse::<u64>() {
                     Ok(sendout_interval_secs) => {
@@ -89,7 +90,7 @@ impl Erc20Service {
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
-                let confirmations_env = format!("ERC20NEXT_{prefix}_REQUIRED_CONFIRMATIONS");
+                let confirmations_env = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
                     chain.rpc_endpoints = addr
@@ -198,9 +199,13 @@ impl Erc20Service {
                     broadcast_sender: None,
                     extra_testing: None,
                 },
-                signer,
+                Arc::new(Box::new(signer)),
             )
             .await?;
+
+            //let signer = IdentitySigner;
+            //pr.add_account(PaymentAccount::new(H160::from_low_u64_be(0), Box::new(signer)))
+            //    .await?;
 
             log::debug!("Bind erc20 driver");
             let driver = Erc20Driver::new(pr, recv);

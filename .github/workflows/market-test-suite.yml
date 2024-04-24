@@ -10,17 +10,17 @@ on:
   push:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   build:
@@ -31,6 +31,7 @@ jobs:
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
 

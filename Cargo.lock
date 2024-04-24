@@ -387,7 +387,18 @@ checksum = "884391ef1066acaa41e766ba8f596341b96e93ce34f9a43e7d24bf0a0eaf0561"
 dependencies = [
  "aes-soft",
  "aesni",
- "cipher",
+ "cipher 0.2.5",
+]
+
+[[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cipher 0.4.4",
+ "cpufeatures",
 ]
 
 [[package]]
@@ -398,8 +409,8 @@ checksum = "7729c3cde54d67063be556aeac75a81330d802f0259500ca40cb52967f975763"
 dependencies = [
  "aes-soft",
  "aesni",
- "cipher",
- "ctr",
+ "cipher 0.2.5",
+ "ctr 0.6.0",
 ]
 
 [[package]]
@@ -408,7 +419,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be14c7498ea50828a38d0e24a765ed2effe92a705885b57d029cd67d45744072"
 dependencies = [
- "cipher",
+ "cipher 0.2.5",
  "opaque-debug 0.3.0",
 ]
 
@@ -418,7 +429,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2e11f5e94c2f7d386164cc2aa1f97823fed6f259e486940a71c174dd01b0ce"
 dependencies = [
- "cipher",
+ "cipher 0.2.5",
  "opaque-debug 0.3.0",
 ]
 
@@ -857,7 +868,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57a0e8073e8baa88212fb5823574c02ebccb395136ba9a164ab89379ec6072f0"
 dependencies = [
  "block-padding 0.2.1",
- "cipher",
+ "cipher 0.2.5",
 ]
 
 [[package]]
@@ -1134,6 +1145,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
 dependencies = [
  "generic-array 0.14.7",
+]
+
+[[package]]
+name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common",
+ "inout",
 ]
 
 [[package]]
@@ -1500,7 +1521,16 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb4a30d54f7443bf3d6191dcd486aca19e67cb3c49fa7a06a319966346707e7f"
 dependencies = [
- "cipher",
+ "cipher 0.2.5",
+]
+
+[[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher 0.4.4",
 ]
 
 [[package]]
@@ -1961,8 +1991,8 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix",
  "actix-files",
@@ -2003,8 +2033,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.3.20"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2043,9 +2073,93 @@ dependencies = [
 ]
 
 [[package]]
+name = "erc20_payment_lib_extra"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "chrono",
+ "csv",
+ "dotenv",
+ "erc20_payment_lib",
+ "erc20_payment_lib_common",
+ "erc20_rpc_pool",
+ "fastrand",
+ "futures 0.3.30",
+ "futures-util",
+ "hex",
+ "humantime 2.1.0",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "rust_decimal",
+ "rustc-hex",
+ "secp256k1 0.27.0",
+ "serde",
+ "serde_json",
+ "sha3 0.10.8",
+ "sqlx",
+ "stream-rate-limiter",
+ "structopt",
+ "tokio",
+ "toml",
+ "uuid 1.7.0",
+ "web3",
+]
+
+[[package]]
+name = "erc20_processor"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-web",
+ "anyhow",
+ "awc",
+ "chrono",
+ "csv",
+ "dotenv",
+ "env_logger 0.10.2",
+ "erc20_payment_lib",
+ "erc20_payment_lib_common",
+ "erc20_payment_lib_extra",
+ "erc20_rpc_pool",
+ "eth-keystore",
+ "fastrand",
+ "futures 0.3.30",
+ "futures-util",
+ "hex",
+ "itertools 0.11.0",
+ "lazy_static",
+ "log",
+ "metrics 0.12.1",
+ "metrics-runtime",
+ "rand 0.8.5",
+ "regex",
+ "rust_decimal",
+ "rustc-hex",
+ "secp256k1 0.27.0",
+ "serde",
+ "serde_json",
+ "sha3 0.10.8",
+ "sqlx",
+ "stream-rate-limiter",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "toml",
+ "trust-dns-resolver 0.23.2",
+ "url",
+ "uuid 1.7.0",
+ "web3",
+]
+
+[[package]]
 name = "erc20_rpc_pool"
-version = "0.3.22"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=d328b9db49011cd9ca9f28cba1952aafa27c71ee#d328b9db49011cd9ca9f28cba1952aafa27c71ee"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2064,6 +2178,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.12.1",
+ "parking_lot 0.12.1",
  "rand 0.8.5",
  "reqwest",
  "rust_decimal",
@@ -2122,6 +2237,28 @@ dependencies = [
  "cfg-if 1.0.0",
  "home",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "eth-keystore"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fda3bf123be441da5260717e0661c25a2fd9cb2b2c1d20bf2e05580047158ab"
+dependencies = [
+ "aes 0.8.4",
+ "ctr 0.9.2",
+ "digest 0.10.7",
+ "hex",
+ "hmac 0.12.1",
+ "pbkdf2 0.11.0",
+ "rand 0.8.5",
+ "scrypt 0.10.0",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "sha3 0.10.8",
+ "thiserror",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -3310,6 +3447,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inout"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
+dependencies = [
+ "generic-array 0.14.7",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3346,6 +3492,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
+name = "is-docker"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3354,6 +3509,16 @@ dependencies = [
  "hermit-abi 0.3.4",
  "rustix",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "is-wsl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "173609498df190136aa7dea1a91db051746d339e18476eed5ca40521f02d7aa5"
+dependencies = [
+ "is-docker",
+ "once_cell",
 ]
 
 [[package]]
@@ -4261,6 +4426,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
+name = "open"
+version = "5.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449f0ff855d85ddbf1edd5b646d65249ead3f5e422aaa86b7d2d0b049b103e32"
+dependencies = [
+ "is-wsl",
+ "libc",
+ "pathdiff",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4320,14 +4496,14 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c81ac9a98f245685fdfd1c37685613ecf123cf7941e2365e9aa551622065e8e"
 dependencies = [
- "aes",
+ "aes 0.6.0",
  "aes-ctr",
  "block-modes",
  "digest 0.9.0",
  "hmac 0.10.1",
- "pbkdf2",
+ "pbkdf2 0.6.0",
  "ripemd160",
- "scrypt",
+ "scrypt 0.5.0",
  "sha2 0.9.9",
  "subtle",
  "tiny-keccak",
@@ -4471,6 +4647,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecba01bf2678719532c5e3059e0b5f0811273d94b397088b82e3bd0a78c78fdd"
 
 [[package]]
+name = "pathdiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
+
+[[package]]
 name = "pbkdf2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4483,6 +4665,15 @@ dependencies = [
  "rand_core 0.5.1",
  "sha2 0.9.9",
  "subtle",
+]
+
+[[package]]
+name = "pbkdf2"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
+dependencies = [
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -4961,9 +5152,9 @@ dependencies = [
 
 [[package]]
 name = "protoc-prebuilt"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37aee930fb53074ec083bf049aa6133bb1a93cce8fc39f83e07f36a0937304dd"
+checksum = "4d85d4641fe3b8c6e853dfd09fe35379bc6b6e66bd692ac29ed4f7087de69ed5"
 dependencies = [
  "ureq",
  "zip 0.6.6",
@@ -5631,7 +5822,16 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "399f290ffc409596022fce5ea5d4138184be4784f2b28c62c59f0d8389059a15"
 dependencies = [
- "cipher",
+ "cipher 0.2.5",
+]
+
+[[package]]
+name = "salsa20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97a22f5af31f73a954c10289c93e8a50cc23d971e80ee446f1f6f7137a088213"
+dependencies = [
+ "cipher 0.4.4",
 ]
 
 [[package]]
@@ -5702,12 +5902,24 @@ checksum = "8da492dab03f925d977776a0b7233d7b934d6dc2b94faead48928e2e9bacedb9"
 dependencies = [
  "base64 0.13.1",
  "hmac 0.10.1",
- "pbkdf2",
+ "pbkdf2 0.6.0",
  "rand 0.7.3",
  "rand_core 0.5.1",
- "salsa20",
+ "salsa20 0.7.2",
  "sha2 0.9.9",
  "subtle",
+]
+
+[[package]]
+name = "scrypt"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f9e24d2b632954ded8ab2ef9fea0a0c769ea56ea98bddbafbad22caeeadf45d"
+dependencies = [
+ "hmac 0.12.1",
+ "pbkdf2 0.11.0",
+ "salsa20 0.10.2",
+ "sha2 0.10.8",
 ]
 
 [[package]]
@@ -6649,6 +6861,17 @@ name = "str-buf"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e08d8363704e6c71fc928674353e6b7c23dcea9d82d7012c8faf2a3a025f8d0"
+
+[[package]]
+name = "stream-rate-limiter"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cebfcdcd4191b1d351fbff95f6b9c02fbccc5454837a7afd4ed9b6fab17f4cab"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+]
 
 [[package]]
 name = "stringprep"
@@ -8154,7 +8377,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8178,7 +8401,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e58208bdd521afbb626021d94b0b91a7d17d4e9d#e58208bdd521afbb626021d94b0b91a7d17d4e9d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8189,6 +8412,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -8213,10 +8437,12 @@ dependencies = [
  "bitflags 1.3.2",
  "chrono",
  "derive_more",
+ "erc20_payment_lib",
  "graphene-sgx",
  "log",
  "serde",
  "serde_bytes",
+ "serde_json",
  "structopt",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -8295,6 +8521,7 @@ dependencies = [
  "uuid 0.8.2",
  "web3",
  "ya-client-model",
+ "ya-core-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -8492,6 +8719,7 @@ dependencies = [
  "env_logger 0.7.1",
  "ethsign",
  "futures 0.3.30",
+ "hex",
  "log",
  "promptly",
  "r2d2",
@@ -8745,11 +8973,13 @@ dependencies = [
  "log",
  "metrics 0.12.1",
  "num-bigint 0.3.3",
+ "open",
  "r2d2",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "structopt",
+ "strum 0.24.1",
  "thiserror",
  "tokio",
  "uint 0.7.1",
@@ -8899,7 +9129,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8929,7 +9159,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8959,7 +9189,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "anyhow",
  "bytes 1.5.0",
@@ -8973,7 +9203,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
 ]
 
 [[package]]
@@ -8999,7 +9229,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "derive_more",
  "futures 0.3.30",
@@ -9013,7 +9243,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
 ]
 
 [[package]]
@@ -9029,7 +9259,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=8d544dd766e14479519437d0bf4f2879e6a6de5a#8d544dd766e14479519437d0bf4f2879e6a6de5a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
 dependencies = [
  "bytes 1.5.0",
  "derive_more",
@@ -9460,6 +9690,7 @@ dependencies = [
  "chrono",
  "directories",
  "dotenv",
+ "erc20_processor",
  "futures 0.3.30",
  "gftp",
  "lazy_static",

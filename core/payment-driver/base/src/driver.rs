@@ -20,12 +20,19 @@ pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::payment::network::Network;
 pub use ya_client_model::NodeId;
-pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
+pub use ya_core_model::identity::event::IdentityEvent;
+pub use ya_core_model::identity::Error as IdentityError;
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
     async fn account_event(&self, _caller: String, msg: IdentityEvent)
         -> Result<(), IdentityError>;
+
+    async fn get_rpc_endpoints(
+        &self,
+        caller: String,
+        msg: GetRpcEndpoints,
+    ) -> Result<GetRpcEndpointsResult, GenericError>;
 
     async fn get_account_balance(
         &self,
