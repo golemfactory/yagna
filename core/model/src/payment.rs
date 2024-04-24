@@ -427,6 +427,7 @@ pub mod local {
         pub amount: BigDecimal,
         pub timeout: Option<DateTime<Utc>>,
         pub deposit: Option<Deposit>,
+        pub new_allocation: bool,
     }
 
     impl RpcMessage for ValidateAllocation {
