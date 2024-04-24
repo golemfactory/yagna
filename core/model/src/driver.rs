@@ -403,7 +403,8 @@ impl ValidateAllocation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ValidateAllocationResult {
-    InsufficientFunds,
+    InsufficientAccountFunds,
+    InsufficientDepositFunds,
     TimeoutExceedsDeposit,
     MalformedDepositContract,
     MalformedDepositId,
