@@ -52,7 +52,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = { workspace = true }
 ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = {  version = "0.3", path = "utils/futures" }
+ya-utils-futures.workspace = true
 ya-utils-process = { version = "0.2", features = ["lock"] }
 ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
@@ -252,6 +252,7 @@ ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-service-bus = { version = "0.7.1" }
+ya-utils-futures = { path = "utils/futures" }
 
 [patch.crates-io]
 ## SERVICES
@@ -304,7 +305,6 @@ ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "exe-unit/components/transfer" }
 ya-utils-actix = { path = "utils/actix_utils" }
 ya-utils-cli = { path = "utils/cli" }
-ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking" }
 ya-utils-path = { path = "utils/path" }
 ya-utils-process = { path = "utils/process" }
