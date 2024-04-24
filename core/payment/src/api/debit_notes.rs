@@ -106,6 +106,8 @@ async fn get_debit_note_events(
     req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
+    counter!("payment.debit_notes.events.query", 1);
+
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")

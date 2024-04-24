@@ -105,6 +105,10 @@ mod local {
         counter!("payment.debit_notes.provider.sent.call", 0);
         counter!("payment.debit_notes.provider.accepted", 0);
         counter!("payment.debit_notes.provider.accepted.call", 0);
+
+        counter!("payment.debit_notes.events.query", 0);
+        counter!("payment.invoices.events.query", 0);
+
         counter!("payment.invoices.provider.issued", 0);
         counter!("payment.invoices.provider.sent", 0);
         counter!("payment.invoices.provider.sent.call", 0);
