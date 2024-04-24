@@ -562,7 +562,7 @@ impl PaymentProcessor {
             .await?;
 
         let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
-            allocation.deposit.clone().map(|deposit| deposit.id)
+            allocation.deposit
         } else {
             None
         };
