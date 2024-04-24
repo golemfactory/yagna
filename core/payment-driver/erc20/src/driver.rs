@@ -447,7 +447,7 @@ impl Erc20Driver {
             .iter()
             .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
 
-        if deposit_reused {
+        if deposit_reused && msg.new_allocation {
             return Ok(ValidateAllocationResult::DepositReused);
         }
 

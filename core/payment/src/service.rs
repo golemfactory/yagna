@@ -422,6 +422,7 @@ mod local {
                 msg.amount,
                 msg.timeout,
                 msg.deposit,
+                msg.new_allocation,
             )
             .await?)
     }
