@@ -487,6 +487,16 @@ impl Erc20Driver {
             deposit_spender,
         );
 
+        if allocation_address != deposit_spender {
+            log::debug!(
+                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
+                allocation_address,
+                deposit_spender
+            );
+
+            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
+        }
+
         if msg.amount > deposit_balance {
             log::debug!(
                 "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
@@ -515,16 +525,6 @@ impl Erc20Driver {
 
             return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
-
-        if allocation_address != deposit_spender {
-            log::debug!(
-                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
-                allocation_address,
-                deposit_spender
-            );
-
-            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
-        }
 
         Ok(ValidateAllocationResult::Valid)
     }
