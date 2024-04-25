@@ -8953,7 +8953,7 @@ dependencies = [
  "ya-relay-client",
  "ya-sb-proto",
  "ya-sb-router",
- "ya-sb-util 0.4.1",
+ "ya-sb-util",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -9356,7 +9356,7 @@ dependencies = [
  "url",
  "uuid 0.8.2",
  "ya-sb-proto",
- "ya-sb-util 0.5.0",
+ "ya-sb-util",
 ]
 
 [[package]]
@@ -9373,18 +9373,6 @@ dependencies = [
  "ring 0.17.8",
  "rustls 0.22.4",
  "sha2 0.10.8",
-]
-
-[[package]]
-name = "ya-sb-util"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a7b847ec692b270cf179072275fa825d6d6598ce770eb47426ffa0a0d4670b2"
-dependencies = [
- "actix",
- "bitflags 1.3.2",
- "futures 0.3.30",
- "ring 0.17.8",
 ]
 
 [[package]]
@@ -9479,7 +9467,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-sb-proto",
- "ya-sb-util 0.4.1",
+ "ya-sb-util",
 ]
 
 [[package]]
