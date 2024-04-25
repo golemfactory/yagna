@@ -55,7 +55,7 @@ rand = { version = "0.7" }
 
 [dev-dependencies]
 ya-sb-proto = "0.6.1"
-ya-sb-router = "=0.6.1"
+ya-sb-router = { workspace = true }
 
 env_logger = "0.7"
 serde = "1.0"

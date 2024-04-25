@@ -5536,16 +5536,17 @@ dependencies = [
 
 [[package]]
 name = "ring"
-version = "0.17.7"
+version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "688c63d65483050968b2a8937f7995f443e27041a0f7700aa59b0822aedebb74"
+checksum = "c17fa4cb658e3583423e915b9f3acc01cceaee1860e33d59ebae66adc3a2dc0d"
 dependencies = [
  "cc",
+ "cfg-if 1.0.0",
  "getrandom 0.2.12",
  "libc",
  "spin 0.9.8",
  "untrusted 0.9.0",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5707,7 +5708,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
 dependencies = [
  "log",
- "ring 0.17.7",
+ "ring 0.17.8",
  "rustls-webpki",
  "sct",
 ]
@@ -5727,7 +5728,7 @@ version = "0.101.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
- "ring 0.17.7",
+ "ring 0.17.8",
  "untrusted 0.9.0",
 ]
 
@@ -5925,7 +5926,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
- "ring 0.17.7",
+ "ring 0.17.8",
  "untrusted 0.9.0",
 ]
 
@@ -7984,7 +7985,7 @@ version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
- "ring 0.17.7",
+ "ring 0.17.8",
  "untrusted 0.9.0",
 ]
 
@@ -8831,7 +8832,7 @@ dependencies = [
  "ya-relay-client",
  "ya-sb-proto",
  "ya-sb-router",
- "ya-sb-util",
+ "ya-sb-util 0.4.1",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -9210,14 +9211,15 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f74510bd2152b98c04f18d66f16ea1036a938966c1ff48f30a4d683fd66ca589"
+checksum = "c3500862a1c1e1a357e23a1d770d090a1015456ff9732d85e3c72d2557df5da9"
 dependencies = [
  "actix",
  "actix-rt",
  "actix-server",
  "actix-service",
+ "actix_derive",
  "anyhow",
  "bitflags 1.3.2",
  "chrono",
@@ -9227,14 +9229,13 @@ dependencies = [
  "parking_lot 0.11.2",
  "pin-project 1.1.4",
  "prost 0.10.4",
- "structopt",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "url",
  "uuid 0.8.2",
  "ya-sb-proto",
- "ya-sb-util",
+ "ya-sb-util 0.5.0",
 ]
 
 [[package]]
@@ -9247,6 +9248,18 @@ dependencies = [
  "bitflags 1.3.2",
  "futures 0.3.30",
  "pin-project 0.4.30",
+]
+
+[[package]]
+name = "ya-sb-util"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a7b847ec692b270cf179072275fa825d6d6598ce770eb47426ffa0a0d4670b2"
+dependencies = [
+ "actix",
+ "bitflags 1.3.2",
+ "futures 0.3.30",
+ "ring 0.17.8",
 ]
 
 [[package]]
@@ -9339,7 +9352,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-packet-trace 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-sb-proto",
- "ya-sb-util",
+ "ya-sb-util 0.4.1",
 ]
 
 [[package]]

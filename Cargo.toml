@@ -44,7 +44,7 @@ ya-net = { version = "0.3", features = ["service"] }
 ya-payment = "0.3"
 ya-persistence = { version = "0.3", features = ["service"] }
 ya-sb-proto = "0.6.1"
-ya-sb-router = "=0.6.1"
+ya-sb-router = { workspace = true }
 ya-service-api = "0.1"
 ya-service-api-derive = "0.2"
 ya-service-api-interfaces = "0.2"
@@ -249,6 +249,7 @@ ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-service-bus = { version = "0.7.1" }
+ya-sb-router = { version = "0.6.3" }
 
 [patch.crates-io]
 ## SERVICES
