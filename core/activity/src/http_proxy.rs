@@ -1,4 +1,4 @@
-use actix_http::Method;
+use actix_http::{Method, StatusCode};
 use actix_web::http::header;
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
@@ -13,7 +13,7 @@ use crate::common::*;
 use crate::error;
 use ya_core_model::activity;
 use ya_gsb_http_proxy::http_to_gsb::BindingMode::Net;
-use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, NetBindingNodes};
+use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, HttpToGsbProxyResponse, NetBindingNodes};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -75,40 +75,50 @@ async fn proxy_http_request(
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
-            return Ok(Either::Left(stream_results(
-                stream,
-                mime::TEXT_EVENT_STREAM.essence_str(),
-            )?));
+            return Ok(Either::Left(
+                stream_results(stream, mime::TEXT_EVENT_STREAM.essence_str()).await?,
+            ));
         }
         if value.eq(mime::APPLICATION_OCTET_STREAM.essence_str()) {
-            return Ok(Either::Left(stream_results(
-                stream,
-                mime::APPLICATION_OCTET_STREAM.essence_str(),
-            )?));
+            return Ok(Either::Left(
+                stream_results(stream, mime::APPLICATION_OCTET_STREAM.essence_str()).await?,
+            ));
         }
     }
     Ok(Either::Right(await_results(stream).await?))
 }
 
-fn stream_results(
-    stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
+async fn stream_results(
+    stream: impl Stream<Item = HttpToGsbProxyResponse<Result<Bytes, Error>>> + Unpin + 'static,
     content_type: &str,
 ) -> crate::Result<impl Responder> {
     Ok(HttpResponse::Ok()
         .keep_alive()
         .content_type(content_type)
-        .streaming(stream))
+        .streaming(stream.map(|e| e.response_stream)))
 }
 
 async fn await_results(
-    mut stream: impl Stream<Item = Result<Bytes, Error>> + Unpin,
+    mut stream: impl Stream<Item = HttpToGsbProxyResponse<Result<Bytes, Error>>> + Unpin,
 ) -> crate::Result<impl Responder> {
     let response = stream.next().await;
 
-    if let Some(Ok(bytes)) = response {
-        let response_body = String::from_utf8(bytes.to_vec())
-            .map_err(|e| error::Error::Service(format!("Conversion from utf8 failed {e}")))?;
-        return Ok(HttpResponse::Ok().body(response_body));
+    if let Some(response) = response {
+        if let Ok(bytes) = response.response_stream {
+            let response_body = String::from_utf8(bytes.to_vec())
+                .map_err(|e| error::Error::Service(format!("Conversion from utf8 failed {e}")))?;
+
+            let mut response_builder = HttpResponse::build(
+                StatusCode::from_u16(response.status_code)
+                    .map_err(|e| Error::GsbFailure(format!("Invalid status code {e}")))?,
+            );
+            for (h, vals) in response.response_headers {
+                for v in vals {
+                    response_builder.append_header((h.as_str(), v));
+                }
+            }
+            return Ok(response_builder.body(response_body));
+        }
     }
     Ok(HttpResponse::InternalServerError().body("No response"))
 }

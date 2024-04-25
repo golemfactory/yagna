@@ -4,6 +4,8 @@ use crate::message::GsbHttpCallMessage;
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
 use futures::{Stream, StreamExt};
+use http::StatusCode;
+use std::collections::HashMap;
 use ya_client_model::NodeId;
 use ya_core_model::net as ya_net;
 use ya_core_model::net::RemoteEndpoint;
@@ -31,6 +33,12 @@ impl HttpToGsbProxy {
     }
 }
 
+pub struct HttpToGsbProxyResponse<T> {
+    pub response_stream: T,
+    pub status_code: u16,
+    pub response_headers: HashMap<String, Vec<String>>,
+}
+
 #[derive(Clone, Debug)]
 pub enum BindingMode {
     Local,
@@ -50,7 +58,10 @@ impl HttpToGsbProxy {
         path: String,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
-    ) -> impl Stream<Item = Result<actix_web::web::Bytes, Error>> + Unpin + Sized {
+    ) -> impl Stream<Item = HttpToGsbProxyResponse<Result<actix_web::web::Bytes, Error>>> + Unpin + Sized
+//,
+    //>
+    {
         let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
@@ -72,18 +83,47 @@ impl HttpToGsbProxy {
                 .call_streaming(msg),
         };
 
-        let stream = stream
+        let response = stream
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(move |result| {
+                let err = |_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string());
+
                 let msg = match result {
-                    Ok(r) => actix_web::web::Bytes::from(r.msg_bytes),
-                    Err(e) => actix_web::web::Bytes::from(format!("Error {}", e)),
+                    Ok(r) => HttpToGsbProxyResponse {
+                        response_stream: actix_web::web::Bytes::from(r.msg_bytes)
+                            .try_into_bytes()
+                            .map_err(err),
+                        status_code: r.status_code,
+                        response_headers: r.response_headers,
+                    },
+                    Err(e) => HttpToGsbProxyResponse {
+                        response_stream: actix_web::web::Bytes::from(format!("Error {}", e))
+                            .try_into_bytes()
+                            .map_err(err),
+                        status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        response_headers: HashMap::new(),
+                    },
                 };
-                msg.try_into_bytes().map_err(|_| {
-                    Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
-                })
+                msg
             });
-        Box::pin(stream)
+        response
+
+        // let response = stream
+        //     .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
+        //     .map(move |result| {
+        //         let err = |_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string());
+        //
+        //         let msg = match result {
+        //             Ok(r) => actix_web::web::Bytes::from(r.msg_bytes)
+        //                 .try_into_bytes()
+        //                 .map_err(err),
+        //             Err(e) => actix_web::web::Bytes::from(format!("Error {}", e))
+        //                 .try_into_bytes()
+        //                 .map_err(err),
+        //         };
+        //         msg
+        //     });
+        // response
     }
 }
 
@@ -123,7 +163,7 @@ mod tests {
 
         let mut v = vec![];
         while let Some(event) = response_stream.next().await {
-            if let Ok(event) = event {
+            if let Ok(event) = event.response_stream {
                 v.push(event);
             }
         }
