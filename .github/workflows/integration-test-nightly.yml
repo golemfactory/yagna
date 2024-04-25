@@ -81,7 +81,7 @@ jobs:
 
       - name: Run test suite
         env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Runs on branches defined within matrix
           poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.branch }}
