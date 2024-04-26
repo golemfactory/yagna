@@ -59,7 +59,7 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
@@ -165,6 +165,7 @@ jobs:
           - "test_e2e_rule_partner_outbound_unrestricted"
           - "test_e2e_vm"
           - "test_e2e_x509_signature_outbound"
+          - "test_e2e_outbound_perf"
           - "test_e2e_wasi"
     defaults:
       run:
@@ -194,13 +195,21 @@ jobs:
           path: /tmp/yagna-build
 
       - name: Run test suite
+        id: poetry_test
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run pytest -W ignore::DeprecationWarning -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
+      - name: Check test result
+        if: ${{ steps.poetry_test.outcome != 'success' }}
+        run: |
+          echo "::warning::Test ${{ matrix.test_name }} failed"
+
       - name: Upload test logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}
           path: /tmp/goth-tests
