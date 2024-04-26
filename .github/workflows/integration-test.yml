@@ -202,6 +202,7 @@ jobs:
 
       - name: Upload test logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}
           path: /tmp/goth-tests
