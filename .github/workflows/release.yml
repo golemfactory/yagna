@@ -87,7 +87,7 @@ jobs:
             return release.data.upload_url
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
