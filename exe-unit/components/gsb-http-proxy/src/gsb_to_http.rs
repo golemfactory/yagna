@@ -6,11 +6,13 @@ use std::collections::HashMap;
 
 use ya_counters::Counter;
 
+use actix_http::Method;
 use async_stream::stream;
 use chrono::Utc;
 use futures::StreamExt;
 use futures_core::stream::Stream;
-use reqwest::Response;
+use http::StatusCode;
+use reqwest::{RequestBuilder, Response};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -23,7 +25,7 @@ pub struct GsbToHttpProxy {
 }
 
 #[derive(Error, Debug)]
-enum GsbToHttpProxyError {
+pub enum GsbToHttpProxyError {
     InvalidMethod,
     ErrorInResponse(String),
 }
@@ -47,13 +49,81 @@ impl GsbToHttpProxy {
 
     pub fn bind(&mut self, gsb_path: &str) -> Handle {
         let mut this = self.clone();
+        bus::bind(gsb_path, move |message: GsbHttpCallMessage| {
+            let mut this = this.clone();
+            async move { Ok(this.pass(message).await) }
+        })
+    }
+
+    pub fn bind_streaming(&mut self, gsb_path: &str) -> Handle {
+        let mut this = self.clone();
         bus::bind_stream(gsb_path, move |message: GsbHttpCallMessage| {
-            let stream = this.pass(message);
+            let stream = this.pass_streaming(message);
             Box::pin(stream.map(Ok))
         })
     }
 
-    pub fn pass(
+    pub async fn pass(&mut self, message: GsbHttpCallMessage) -> GsbHttpCallResponseEvent {
+        let url = format!("{}{}", self.base_url, message.path);
+        log::info!("Gsb to http call - Url: {url}");
+
+        let mut counters = self.counters.clone();
+
+        let method = actix_http::Method::from_bytes(message.method.to_uppercase().as_bytes());
+        if method.is_err() {
+            return GsbHttpCallResponseEvent::with_message(
+                method.err().unwrap().to_string().into_bytes(),
+                StatusCode::METHOD_NOT_ALLOWED.as_u16(),
+            );
+        }
+        let builder = Self::create_request_builder(message, &url, method.unwrap());
+
+        log::debug!("Calling {}", &url);
+        let response_handler = counters.on_request();
+        let response = builder
+            .send()
+            .await
+            .map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()));
+
+        if let Ok(response) = response {
+            let response_headers = Self::collect_headers(&response);
+            let status_code = response.status().as_u16();
+            response_handler.on_response();
+            if let Ok(bytes) = response.bytes().await {
+                return GsbHttpCallResponseEvent::new(
+                    0,
+                    Utc::now().naive_local().to_string(),
+                    bytes.to_vec(),
+                    response_headers,
+                    status_code,
+                );
+            }
+        } else {
+            return GsbHttpCallResponseEvent::with_message(
+                response.err().unwrap().to_string().into_bytes(),
+                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            );
+        }
+        return GsbHttpCallResponseEvent::with_status_code(
+            StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+        );
+    }
+
+    fn create_request_builder(
+        message: GsbHttpCallMessage,
+        url: &String,
+        method: Method,
+    ) -> RequestBuilder {
+        let mut builder = reqwest::Client::new().request(method, url);
+        builder = match message.body {
+            Some(body) => builder.body(body),
+            None => builder,
+        };
+        builder = headers::add(builder, message.headers);
+        builder
+    }
+
+    pub fn pass_streaming(
         &mut self,
         message: GsbHttpCallMessage,
     ) -> impl Stream<Item = GsbHttpCallResponseEvent> {
@@ -84,19 +154,22 @@ impl GsbToHttpProxy {
 
             let response_headers = Self::collect_headers(&response);
             let status_code = response.status();
-            let bytes = response.bytes().await.unwrap();
+            let mut bytes = response.bytes_stream();
 
             response_handler.on_response();
 
-            let response = GsbHttpCallResponseEvent {
-                index: 0,
-                timestamp: Utc::now().naive_local().to_string(),
-                msg_bytes: bytes.to_vec(),
-                response_headers,
-                status_code: status_code.as_u16(),
-            };
+            while let Some(Ok(chunk)) = bytes.next().await {
+                let response = GsbHttpCallResponseEvent {
+                    index: 0,
+                    timestamp: Utc::now().naive_local().to_string(),
+                    msg_bytes: chunk.to_vec(),
+                    response_headers: HashMap::new(),
+                    status_code: status_code.as_u16(),
+                };
 
-            tx.send(response).await.unwrap();
+                tx.send(response).await.unwrap();
+            }
+
             Ok::<(), GsbToHttpProxyError>(())
         });
 

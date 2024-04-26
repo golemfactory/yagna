@@ -24,3 +24,24 @@ impl RpcStreamMessage for GsbHttpCallMessage {
     type Item = GsbHttpCallResponseEvent;
     type Error = HttpProxyStatusError;
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GsbHttpCallStreamingMessage {
+    pub method: String,
+    pub path: String,
+    pub body: Option<Vec<u8>>,
+    pub headers: HashMap<String, Vec<String>>,
+}
+
+impl RpcMessage for GsbHttpCallStreamingMessage {
+    const ID: &'static str = "GsbHttpCallStreamingMessage";
+    type Item = GsbHttpCallResponseEvent;
+    type Error = HttpProxyStatusError;
+}
+
+impl RpcStreamMessage for GsbHttpCallStreamingMessage {
+    const ID: &'static str = "GsbHttpCallStreamingMessage";
+    type Item = GsbHttpCallResponseEvent;
+    type Error = HttpProxyStatusError;
+}

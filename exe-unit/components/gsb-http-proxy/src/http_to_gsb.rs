@@ -34,7 +34,7 @@ impl HttpToGsbProxy {
 }
 
 pub struct HttpToGsbProxyResponse<T> {
-    pub response_stream: T,
+    pub body: T,
     pub status_code: u16,
     pub response_headers: HashMap<String, Vec<String>>,
 }
@@ -52,15 +52,67 @@ pub struct NetBindingNodes {
 }
 
 impl HttpToGsbProxy {
-    pub fn pass(
+    pub async fn pass(
+        &mut self,
+        method: String,
+        path: String,
+        headers: HeaderMap,
+        body: Option<Vec<u8>>,
+    ) -> HttpToGsbProxyResponse<Result<actix_web::web::Bytes, Error>> {
+        let path = if let Some(stripped_url) = path.strip_prefix('/') {
+            stripped_url.to_string()
+        } else {
+            path
+        };
+
+        let msg = GsbHttpCallMessage {
+            method,
+            path,
+            body,
+            headers: Headers::default().filter(&headers),
+        };
+
+        let response = match &self.binding {
+            BindingMode::Local => bus::service(&self.bus_addr).call(msg).await,
+            BindingMode::Net(binding) => {
+                ya_net::from(binding.from)
+                    .to(binding.to)
+                    .service(&self.bus_addr)
+                    .call(msg)
+                    .await
+            }
+        };
+
+        let result = response.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
+
+        if let Ok(r) = result {
+            return HttpToGsbProxyResponse {
+                body: actix_web::web::Bytes::from(r.msg_bytes)
+                    .try_into_bytes()
+                    .map_err(|_| {
+                        Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
+                    }),
+                status_code: r.status_code,
+                response_headers: r.response_headers,
+            };
+        }
+
+        HttpToGsbProxyResponse {
+            body: actix_web::web::Bytes::from(format!("Error: {}", result.err().unwrap()))
+                .try_into_bytes()
+                .map_err(|_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())),
+            status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            response_headers: HashMap::new(),
+        }
+    }
+
+    pub async fn pass_streaming(
         &mut self,
         method: String,
         path: String,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
     ) -> impl Stream<Item = HttpToGsbProxyResponse<Result<actix_web::web::Bytes, Error>>> + Unpin + Sized
-//,
-    //>
     {
         let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
@@ -90,14 +142,14 @@ impl HttpToGsbProxy {
 
                 let msg = match result {
                     Ok(r) => HttpToGsbProxyResponse {
-                        response_stream: actix_web::web::Bytes::from(r.msg_bytes)
+                        body: actix_web::web::Bytes::from(r.msg_bytes)
                             .try_into_bytes()
                             .map_err(err),
                         status_code: r.status_code,
                         response_headers: r.response_headers,
                     },
                     Err(e) => HttpToGsbProxyResponse {
-                        response_stream: actix_web::web::Bytes::from(format!("Error {}", e))
+                        body: actix_web::web::Bytes::from(format!("Error {}", e))
                             .try_into_bytes()
                             .map_err(err),
                         status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
@@ -107,23 +159,6 @@ impl HttpToGsbProxy {
                 msg
             });
         response
-
-        // let response = stream
-        //     .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
-        //     .map(move |result| {
-        //         let err = |_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string());
-        //
-        //         let msg = match result {
-        //             Ok(r) => actix_web::web::Bytes::from(r.msg_bytes)
-        //                 .try_into_bytes()
-        //                 .map_err(err),
-        //             Err(e) => actix_web::web::Bytes::from(format!("Error {}", e))
-        //                 .try_into_bytes()
-        //                 .map_err(err),
-        //         };
-        //         msg
-        //     });
-        // response
     }
 }
 
