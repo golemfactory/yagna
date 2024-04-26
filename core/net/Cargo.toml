@@ -55,8 +55,8 @@ rand = { version = "0.7" }
 regex = { workspace = true }
 
 [dev-dependencies]
-ya-sb-proto = { workspace = true}
-ya-sb-router = { workspace = true}
+ya-sb-proto = { workspace = true }
+ya-sb-router = { workspace = true }
 
 env_logger = "0.7"
 serde = "1.0"
