@@ -71,7 +71,7 @@ def _create_runner(
 
 
 @pytest.mark.asyncio
-async def test_provider_idle_agreement(
+async def test_prov_idle_agreement(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -101,7 +101,7 @@ async def test_provider_idle_agreement(
 
 
 @pytest.mark.asyncio
-async def test_provider_idle_agreement_after_2_activities(
+async def test_prov_idle_agreement_after_2_activities(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -142,7 +142,7 @@ async def test_provider_idle_agreement_after_2_activities(
 
 
 @pytest.mark.asyncio
-async def test_provider_debit_notes_accept_timeout(
+async def test_prov_debit_notes_accept_timeout(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -184,7 +184,7 @@ async def test_provider_debit_notes_accept_timeout(
 
 
 @pytest.mark.asyncio
-async def test_provider_timeout_unresponsive_requestor(
+async def test_prov_timeout_unresponsive_requestor(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,

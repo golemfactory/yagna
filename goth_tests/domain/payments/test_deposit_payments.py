@@ -60,13 +60,30 @@ def _create_runner(
 
 @pytest.mark.asyncio
 async def test_deposit_agreement_payments(
-    common_assets: Path,
-    config_overrides: List[Override],
-    log_dir: Path,
+        common_assets: Path,
+        config_overrides: List[Override],
+        log_dir: Path,
 ):
-    deposit_id = "0x17ec8597ff92c3f44523bdc65bf0f1be632917ff000000000000000000000666"
+    deposit_id_1 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000666"
+    deposit_id_2 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000667"
+    deposit_id_3 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000668"
+    deposit_contract = "0xD756fb6A081CC11e7F513C39399DB296b1DE3036"
 
-    goth_tests.helpers.payment.global_deposit = deposit_id
+    goth_tests.helpers.payment.global_deposits = [
+        {
+            "id": deposit_id_1,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_2,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_3,
+            "contract": deposit_contract
+        }
+    ]
+
     """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
@@ -92,9 +109,11 @@ async def test_deposit_agreement_payments(
         activity_id = await requestor.create_activity(agreement_id)
         await provider.wait_for_exeunit_started()
 
+        logger.debug(f"Activity created: {activity_id}")
         for i in range(0, ITERATION_COUNT):
             await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
 
+            logger.debug(f"Fetching payments: {i}/{ITERATION_COUNT}")
             payments = await provider.api.payment.get_payments(after_timestamp=ts)
             for payment in payments:
                 number_of_payments += 1

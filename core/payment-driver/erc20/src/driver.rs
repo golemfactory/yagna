@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 // Extrnal crates
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
-use erc20_payment_lib::model::{TokenTransferDbObj, TxDbObj};
+use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
 };
@@ -119,7 +119,7 @@ impl Erc20Driver {
         amount: &BigDecimal,
         network: &str,
         deadline: Option<DateTime<Utc>>,
-        deposit_id: Option<String>,
+        deposit_id: Option<Deposit>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -129,6 +129,21 @@ impl Erc20Driver {
         let amount = big_dec_to_u256(amount)?;
 
         let payment_id = Uuid::new_v4().to_simple().to_string();
+
+        let deposit_id = if let Some(deposit) = deposit_id {
+            Some(DepositId {
+                deposit_id: U256::from_str(&deposit.id).map_err(|err| {
+                    GenericError::new(format!("Error when parsing deposit id {err:?}"))
+                })?,
+                lock_address: Address::from_str(&deposit.contract).map_err(|err| {
+                    GenericError::new(format!(
+                        "Error when parsing deposit contract address {err:?}"
+                    ))
+                })?,
+            })
+        } else {
+            None
+        };
 
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
@@ -392,7 +407,7 @@ impl Erc20Driver {
         );
 
         Ok(if msg.amount > account_balance - total_allocated_amount {
-            ValidateAllocationResult::InsufficientFunds
+            ValidateAllocationResult::InsufficientAccountFunds
         } else {
             ValidateAllocationResult::Valid
         })
@@ -432,13 +447,19 @@ impl Erc20Driver {
             .iter()
             .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
 
-        if deposit_reused {
+        if deposit_reused && msg.new_allocation {
             return Ok(ValidateAllocationResult::DepositReused);
         }
 
         let deposit_details = self
             .payment_runtime
-            .deposit_details(network.to_string(), deposit_id, deposit_contract)
+            .deposit_details(
+                network.to_string(),
+                DepositId {
+                    deposit_id,
+                    lock_address: deposit_contract,
+                },
+            )
             .await
             .map_err(GenericError::new)?;
         let deposit_balance = BigDecimal::new(
@@ -466,6 +487,16 @@ impl Erc20Driver {
             deposit_spender,
         );
 
+        if allocation_address != deposit_spender {
+            log::debug!(
+                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
+                allocation_address,
+                deposit_spender
+            );
+
+            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
+        }
+
         if msg.amount > deposit_balance {
             log::debug!(
                 "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
@@ -473,7 +504,7 @@ impl Erc20Driver {
                 deposit_balance
             );
 
-            return Ok(ValidateAllocationResult::InsufficientFunds);
+            return Ok(ValidateAllocationResult::InsufficientDepositFunds);
         }
 
         if let Some(timeout) = msg.timeout {
@@ -494,16 +525,6 @@ impl Erc20Driver {
 
             return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
-
-        if allocation_address != deposit_spender {
-            log::debug!(
-                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
-                allocation_address,
-                deposit_spender
-            );
-
-            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
-        }
 
         Ok(ValidateAllocationResult::Valid)
     }
@@ -1079,18 +1100,20 @@ impl PaymentDriver for Erc20Driver {
                 H160::from_str(&msg.from).map_err(|e| {
                     GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
                 })?,
-                H160::from_str(&msg.deposit_contract).map_err(|e| {
-                    GenericError::new(format!(
-                        "`{}` address parsing error: {}",
-                        msg.deposit_contract, e
-                    ))
-                })?,
-                U256::from_str(&msg.deposit_id).map_err(|e| {
-                    GenericError::new(format!(
-                        "`{}` deposit id parsing error: {}",
-                        msg.deposit_id, e
-                    ))
-                })?,
+                DepositId {
+                    lock_address: H160::from_str(&msg.deposit_contract).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` address parsing error: {}",
+                            msg.deposit_contract, e
+                        ))
+                    })?,
+                    deposit_id: U256::from_str(&msg.deposit_id).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` deposit id parsing error: {}",
+                            msg.deposit_id, e
+                        ))
+                    })?,
+                },
             )
             .await
             .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;

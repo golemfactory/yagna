@@ -39,6 +39,6 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 structopt = "0.3.7"
 
 [dev-dependencies]
-ya-sb-router = "0.6.1"
+ya-sb-router = { workspace = true }
 
 actix-rt = "2.7"

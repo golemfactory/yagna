@@ -585,7 +585,7 @@ impl PaymentProcessor {
             .get(msg.allocation_id.clone(), msg.payer_id)
             .await?;
         let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
-            allocation.deposit.clone().map(|deposit| deposit.id)
+            allocation.deposit
         } else {
             None
         };
@@ -828,6 +828,7 @@ impl PaymentProcessor {
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
         deposit: Option<Deposit>,
+        new_allocation: bool,
     ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
@@ -851,6 +852,7 @@ impl PaymentProcessor {
             timeout,
             deposit,
             existing_allocations,
+            new_allocation,
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)

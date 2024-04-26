@@ -316,7 +316,7 @@ pub struct SchedulePayment {
     sender: String,
     recipient: String,
     platform: String,
-    deposit_id: Option<String>,
+    deposit_id: Option<Deposit>,
     due_date: DateTime<Utc>,
 }
 
@@ -326,7 +326,7 @@ impl SchedulePayment {
         sender: String,
         recipient: String,
         platform: String,
-        deposit_id: Option<String>,
+        deposit_id: Option<Deposit>,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
@@ -355,7 +355,7 @@ impl SchedulePayment {
         self.platform.clone()
     }
 
-    pub fn deposit_id(&self) -> Option<String> {
+    pub fn deposit_id(&self) -> Option<Deposit> {
         self.deposit_id.clone()
     }
 
@@ -380,6 +380,7 @@ pub struct ValidateAllocation {
     pub timeout: Option<DateTime<Utc>>,
     pub deposit: Option<Deposit>,
     pub existing_allocations: Vec<Allocation>,
+    pub new_allocation: bool,
 }
 
 impl ValidateAllocation {
@@ -389,6 +390,7 @@ impl ValidateAllocation {
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
         existing: Vec<Allocation>,
+        new_allocation: bool,
     ) -> Self {
         ValidateAllocation {
             address,
@@ -397,13 +399,15 @@ impl ValidateAllocation {
             timeout,
             deposit: None,
             existing_allocations: existing,
+            new_allocation,
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ValidateAllocationResult {
-    InsufficientFunds,
+    InsufficientAccountFunds,
+    InsufficientDepositFunds,
     TimeoutExceedsDeposit,
     MalformedDepositContract,
     MalformedDepositId,

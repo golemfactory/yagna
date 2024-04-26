@@ -342,13 +342,19 @@ async fn create_allocation(
         amount: allocation.total_amount.clone(),
         timeout: allocation.timeout,
         deposit: allocation.deposit.clone(),
+        new_allocation: true,
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(ValidateAllocationResult::Valid) => {}
-        Ok(ValidateAllocationResult::InsufficientFunds) => {
+        Ok(ValidateAllocationResult::InsufficientAccountFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
                 Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::InsufficientDepositFunds) => {
+            return bad_req_and_log(
+                "Insufficient funds on the deposit for this allocation".to_string(),
+            );
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
             return bad_req_and_log(
@@ -519,12 +525,18 @@ async fn amend_allocation(
         },
         timeout: amended_allocation.timeout,
         deposit: amended_allocation.deposit.clone(),
+        new_allocation: false,
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(ValidateAllocationResult::Valid) => {}
-        Ok(ValidateAllocationResult::InsufficientFunds) => {
+        Ok(ValidateAllocationResult::InsufficientAccountFunds) => {
             return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
                 Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        }
+        Ok(ValidateAllocationResult::InsufficientDepositFunds) => {
+            return bad_req_and_log(
+                "Insufficient funds on the deposit for this allocation".to_string(),
+            );
         }
         Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
             return bad_req_and_log(
