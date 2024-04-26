@@ -165,6 +165,7 @@ jobs:
           - "test_e2e_rule_partner_outbound_unrestricted"
           - "test_e2e_vm"
           - "test_e2e_x509_signature_outbound"
+          - "test_e2e_outbound_perf"
           - "test_e2e_wasi"
     defaults:
       run:
