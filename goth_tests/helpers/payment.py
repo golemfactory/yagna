@@ -30,13 +30,12 @@ async def pay_all(
 
 
 async def accept_debit_notes(
+        allocation,
         requestor: RequestorProbe,
         stats: "DebitNoteStats",
 ):
     ts = datetime.now(timezone.utc)
     logger.info("Listening for debit note events")
-    allocation = await AllocationCtx(requestor, 50.0)
-
     while True:
         try:
             # FIXME: requestor.api.payment.get_debit_note_events returns
