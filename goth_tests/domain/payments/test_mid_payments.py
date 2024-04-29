@@ -85,7 +85,7 @@ async def test_mid_agreement_payments(
 
         async with AllocationCtx(requestor, 50.0) as allocation:
 
-            asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
+            debit_note_task = asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
 
             agreement_id, provider = agreement_providers[0]
             activity_id = await requestor.create_activity(agreement_id)
@@ -107,6 +107,12 @@ async def test_mid_agreement_payments(
                     await requestor.destroy_activity(activity_id)
                     await provider.wait_for_exeunit_finished()
 
+            debit_note_task.cancel()
+            try:
+                await debit_note_task
+            except asyncio.CancelledError:
+                # that is expected behaviour when cancelling task
+                pass
 
         # this test is failing too much, so not expect exact amount paid,
         # but at least two payments have to be made
