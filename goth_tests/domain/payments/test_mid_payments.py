@@ -84,7 +84,6 @@ async def test_mid_agreement_payments(
         stats = DebitNoteStats()
 
         async with AllocationCtx(requestor, 50.0) as allocation:
-
             debit_note_task = asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
 
             agreement_id, provider = agreement_providers[0]
