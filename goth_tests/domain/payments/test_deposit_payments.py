@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import pytest
-import goth_tests.helpers.payment
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -14,7 +14,7 @@ from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
-from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats
+from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats, AllocationCtx
 
 logger = logging.getLogger("goth.test.deposit_payments")
 
@@ -24,7 +24,7 @@ ITERATION_COUNT = 10
 ITERATION_STOP_JOB = 4
 
 def build_demand(
-        requestor: RequestorProbe,
+    requestor: RequestorProbe,
 ):
     return (
         DemandBuilder(requestor)
@@ -42,12 +42,12 @@ def build_demand(
 
 
 def _create_runner(
-        common_assets: Path, config_overrides: List[Override], log_dir: Path
+    common_assets: Path, config_overrides: List[Override], log_dir: Path
 ) -> Tuple[Runner, Configuration]:
     goth_config = load_yaml(
         Path(__file__).parent / "goth-config.yml",
         config_overrides,
-        )
+    )
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -60,9 +60,9 @@ def _create_runner(
 
 @pytest.mark.asyncio
 async def test_deposit_agreement_payments(
-        common_assets: Path,
-        config_overrides: List[Override],
-        log_dir: Path,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     deposit_id_1 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000666"
     deposit_id_2 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000667"
