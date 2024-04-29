@@ -82,7 +82,7 @@ async def test_mid_agreement_payments(
         )
 
         stats = DebitNoteStats()
-        asyncio.create_task(accept_debit_notes(requestor, stats))
+        tsk = asyncio.create_task(accept_debit_notes(requestor, stats))
 
         agreement_id, provider = agreement_providers[0]
         activity_id = await requestor.create_activity(agreement_id)
@@ -104,6 +104,8 @@ async def test_mid_agreement_payments(
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
 
+        tsk.cancel()
+        await tsk
         # this test is failing too much, so not expect exact amount paid,
         # but at least two payments have to be made
         assert stats.amount > 0
