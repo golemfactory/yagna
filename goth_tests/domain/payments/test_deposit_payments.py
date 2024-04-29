@@ -12,6 +12,7 @@ from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
+import goth_tests
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats, AllocationCtx
