@@ -1,11 +1,15 @@
 use crate::error::HttpProxyStatusError;
 use crate::headers::Headers;
-use crate::message::GsbHttpCallMessage;
+use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
+use crate::response::{GsbHttpCallResponseChunk, GsbHttpCallResponseHeader};
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
-use futures::{Stream, StreamExt};
+use actix_web::web::Bytes;
+use async_stream::stream;
+use futures::{future, stream, Stream, StreamExt};
 use http::StatusCode;
 use std::collections::HashMap;
+use std::pin::Pin;
 use ya_client_model::NodeId;
 use ya_core_model::net as ya_net;
 use ya_core_model::net::RemoteEndpoint;
@@ -39,6 +43,12 @@ pub struct HttpToGsbProxyResponse<T> {
     pub response_headers: HashMap<String, Vec<String>>,
 }
 
+pub struct HttpToGsbProxyStreamingResponse<T> {
+    pub status_code: u16,
+    pub response_headers: HashMap<String, Vec<String>>,
+    pub body: Pin<Box<T>>,
+}
+
 #[derive(Clone, Debug)]
 pub enum BindingMode {
     Local,
@@ -58,7 +68,7 @@ impl HttpToGsbProxy {
         path: String,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
-    ) -> HttpToGsbProxyResponse<Result<actix_web::web::Bytes, Error>> {
+    ) -> HttpToGsbProxyResponse<Result<Bytes, Error>> {
         let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
@@ -112,22 +122,21 @@ impl HttpToGsbProxy {
         path: String,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
-    ) -> impl Stream<Item = HttpToGsbProxyResponse<Result<actix_web::web::Bytes, Error>>> + Unpin + Sized
-    {
+    ) -> HttpToGsbProxyStreamingResponse<impl Stream<Item = Bytes>> {
         let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
             path
         };
 
-        let msg = GsbHttpCallMessage {
+        let msg = GsbHttpCallStreamingMessage {
             method,
             path,
             body,
             headers: Headers::default().filter(&headers),
         };
 
-        let stream = match &self.binding {
+        let mut stream = match &self.binding {
             BindingMode::Local => bus::service(&self.bus_addr).call_streaming(msg),
             BindingMode::Net(binding) => ya_net::from(binding.from)
                 .to(binding.to)
@@ -135,30 +144,102 @@ impl HttpToGsbProxy {
                 .call_streaming(msg),
         };
 
-        let response = stream
-            .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
-            .map(move |result| {
-                let err = |_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string());
+        let GsbHttpCallResponseChunk::Header(header) =
+            stream.next().await.unwrap().unwrap().unwrap()
+        else {
+            panic!("missing header")
+            // let s = stream::once(future::ok(Bytes::from("Missing stream header".to_string())));
+            //
+            // return HttpToGsbProxyStreamingResponse {
+            //     status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            //     response_headers: Default::default(),
+            //      body: Box::pin(s),
+            // };
+        };
+        // let header = match stream.next().await {
+        //     Some(Ok(Ok(GsbHttpCallResponseChunk::Header(h)))) => h,
+        //     _ => {
+        //         return HttpToGsbProxyStreamingResponse {
+        //             status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+        //             response_headers: Default::default(),
+        //             // body: Box::pin(stream::iter(vec![Bytes::from(
+        //             //     "Missing stream header".to_string(),
+        //             // )])),
+        //             body: Box::pin(sss),
+        //         };
+        //     }
+        // };
 
-                let msg = match result {
-                    Ok(r) => HttpToGsbProxyResponse {
-                        body: actix_web::web::Bytes::from(r.msg_bytes)
-                            .try_into_bytes()
-                            .map_err(err),
-                        status_code: r.status_code,
-                        response_headers: r.response_headers,
-                    },
-                    Err(e) => HttpToGsbProxyResponse {
-                        body: actix_web::web::Bytes::from(format!("Error {}", e))
-                            .try_into_bytes()
-                            .map_err(err),
-                        status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                        response_headers: HashMap::new(),
-                    },
-                };
-                msg
+        //
+        // if header.status_code > 1000 {
+        //     let response = HttpToGsbProxyStreamingResponse {
+        //         status_code: header.status_code,
+        //         response_headers: header.response_headers,
+        //         body: Box::pin(sss),
+        //     };
+        //     return response;
+        // }
+
+        let s = stream
+            // .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
+            .map(|item| item.unwrap())
+            .map(move |result| match result {
+                Ok(GsbHttpCallResponseChunk::Body(body)) => Bytes::from(body.msg_bytes),
+                // Ok(GsbHttpCallResponseChunk::Header(header)) => {
+                //     return HttpToGsbProxyStreamingResponse {
+                //         // body: Ok("duplicate header".to_string().into_bytes()),
+                //         body: Box::pin(body_stream),
+                //         status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                //         response_headers: HashMap::new(),
+                //     };
+                // }
+                // Err(e) => {
+                //     return HttpToGsbProxyStreamingResponse {
+                //         // body: Ok(Bytes::from(format!("Error {}", e))),
+                //         body: Box::pin(body_stream),
+                //         status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                //         response_headers: HashMap::new(),
+                //     };
+                // }
+                _ => {
+                    Bytes::from("error".to_string())
+                    // return HttpToGsbProxyStreamingResponse {
+                    //     status_code: StatusCode::OK.as_u16(),
+                    //     response_headers: Default::default(),
+                    //     body: Box::pin(sss),
+                    // }
+                }
             });
-        response
+
+        HttpToGsbProxyStreamingResponse {
+            status_code: header.status_code,
+            response_headers: header.response_headers,
+            body: Box::pin(s),
+        }
+
+        // let response = stream
+        //     .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
+        //     .map(move |result| {
+        //         let msg = match result {
+        //             Ok(GsbHttpCallResponseChunk::Header(header)) => HttpToGsbProxyResponse {
+        //                 body: Ok(Bytes::new()),
+        //                 status_code: header.status_code,
+        //                 response_headers: header.response_headers,
+        //             },
+        //             Ok(GsbHttpCallResponseChunk::Body(body)) => HttpToGsbProxyResponse {
+        //                 body: Ok(Bytes::from(body.msg_bytes)),
+        //                 status_code: 0,
+        //                 response_headers: HashMap::new(),
+        //             },
+        //             Err(e) => HttpToGsbProxyResponse {
+        //                 body: Ok(Bytes::from(format!("Error {}", e))),
+        //                 status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+        //                 response_headers: HashMap::new(),
+        //             },
+        //         };
+        //         msg
+        //     });
+        // response
     }
 }
 

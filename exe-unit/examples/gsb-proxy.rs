@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
-use ya_gsb_http_proxy::message::GsbHttpCallMessage;
+use ya_gsb_http_proxy::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
 use ya_gsb_http_proxy::response::GsbHttpCallResponseEvent;
 use ya_service_bus::typed as bus;
 
@@ -96,12 +96,13 @@ async fn main() -> anyhow::Result<()> {
     } else if args.mode == Mode::Send {
         // env::set_var("GSB_URL", "tcp://127.0.0.1:12501");
 
-        let stream = bus::service(ya_gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCallMessage {
-            method: "GET".to_string(),
-            path: args.url.to_str().unwrap_or("/").to_string(),
-            body: None,
-            headers: HashMap::new(),
-        });
+        let stream =
+            bus::service(ya_gsb_http_proxy::BUS_ID).call_streaming(GsbHttpCallStreamingMessage {
+                method: "GET".to_string(),
+                path: args.url.to_str().unwrap_or("/").to_string(),
+                body: None,
+                headers: HashMap::new(),
+            });
 
         stream
             .for_each(|r| async move {

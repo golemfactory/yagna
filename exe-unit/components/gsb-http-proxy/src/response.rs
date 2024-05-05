@@ -3,6 +3,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum GsbHttpCallResponseChunk {
+    Header(GsbHttpCallResponseHeader),
+    Body(GsbHttpCallResponseBody),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GsbHttpCallResponseHeader {
+    pub response_headers: HashMap<String, Vec<String>>,
+    pub status_code: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GsbHttpCallResponseBody {
+    pub msg_bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GsbHttpCallResponseEvent {
     pub index: usize,
     pub timestamp: String,

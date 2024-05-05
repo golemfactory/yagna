@@ -1,5 +1,4 @@
-use actix_http::{Method, StatusCode};
-use actix_web::http::header;
+use actix_http::{header, Method, StatusCode};
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 use futures::{Stream, StreamExt};
@@ -75,11 +74,12 @@ async fn proxy_http_request(
         if accept_header.eq(mime::TEXT_EVENT_STREAM.essence_str())
             || accept_header.eq(mime::APPLICATION_OCTET_STREAM.essence_str())
         {
-            let stream = http_to_gsb
+            let mut stream = http_to_gsb
                 .pass_streaming(method, path, headers, body)
                 .await;
+
             return Ok(Either::Left(
-                stream_results(stream, accept_header.to_str().unwrap()).await?,
+                stream_results(stream.body, accept_header.to_str().unwrap()).await?,
             ));
         }
     }
@@ -88,17 +88,17 @@ async fn proxy_http_request(
 }
 
 async fn stream_results(
-    stream: impl Stream<Item = HttpToGsbProxyResponse<Result<Bytes, Error>>> + Unpin + 'static,
+    stream: impl Stream<Item = Bytes> + Unpin + 'static,
     content_type: &str,
 ) -> crate::Result<impl Responder> {
     Ok(HttpResponse::Ok()
         .keep_alive()
         .content_type(content_type)
-        .streaming(stream.map(|e| e.body)))
+        .streaming(stream.map(|e| Ok::<Bytes, Error>(e))))
 }
 
 async fn build_response(
-    mut response: HttpToGsbProxyResponse<Result<Bytes, Error>>,
+    response: HttpToGsbProxyResponse<Result<Bytes, Error>>,
 ) -> crate::Result<impl Responder> {
     if let Ok(bytes) = response.body {
         let response_body = String::from_utf8(bytes.to_vec())

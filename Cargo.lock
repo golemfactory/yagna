@@ -8962,6 +8962,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-stream",
+ "bytes 1.6.0",
  "chrono",
  "env_logger 0.10.2",
  "futures 0.3.30",
