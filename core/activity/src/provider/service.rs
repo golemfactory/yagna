@@ -6,20 +6,24 @@ use futures::prelude::*;
 use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
+use ya_core_model::market::{Agreement, AgreementListEntry, ListAgreements};
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
 use ya_client_model::market::{agreement::State as AgreementState, Role};
 use ya_client_model::NodeId;
-use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
+use ya_core_model::{activity, market};
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed::Endpoint;
+use ya_service_bus::{timeout::IntoDuration, typed as bus, RpcEndpoint, RpcMessage};
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
+// use ya_client_model::market::agreement::State as AgreementState;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
-    set_persisted_state, RpcMessageResult,
+    get_activities_for_agreement, get_activity_agreement, get_agreement, get_persisted_state,
+    get_persisted_usage, set_persisted_state, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
@@ -74,7 +78,74 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
 
-    local::bind_gsb(db, tracker);
+    local::bind_gsb(&db.clone(), tracker.clone());
+
+    let db = db.clone();
+    let tracker = tracker.clone();
+    tokio::task::spawn_local(initial_checkup(db, tracker));
+}
+
+async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
+    log::info!("Initial activities checkup");
+    let agreements_res = get_approved_agreements().await;
+    let Ok(agreements) = agreements_res else {
+        log::error!("Acitivties checkup error. Failed to list Agreements. Err: {agreements_res:?}");
+        return;
+    };
+
+    for agreement in agreements {
+        let agreement_res = bus::service(market::BUS_ID)
+            .send(market::GetAgreement::as_provider(agreement.id))
+            .await;
+        let Ok(Ok(agreement)) = agreement_res else {
+            log::error!(
+                "Acitivties checkup error. Failed to get Agreement. Err: {agreement_res:?}"
+            );
+            continue;
+        };
+        if let Err(err) = monitor_alive_activities(agreement, db.clone(), tracker.clone()).await {
+            log::error!("Acitivties initial checkup error. Err: {err}")
+        };
+    }
+}
+
+async fn get_approved_agreements() -> anyhow::Result<Vec<AgreementListEntry>> {
+    let state = Some(AgreementState::Approved);
+    let list_agreements_query = market::ListAgreements {
+        state,
+        ..Default::default()
+    };
+    let agreements = bus::service(market::BUS_ID)
+        .send(list_agreements_query)
+        .await??;
+    Ok(agreements)
+}
+
+async fn monitor_alive_activities(
+    agreement: Agreement,
+    db: DbExecutor,
+    tracker: TrackerRef,
+) -> anyhow::Result<()> {
+    log::info!(
+        "Initial activities checkup for agreement {}",
+        agreement.agreement_id
+    );
+    let activities_ids = get_activities_for_agreement(&db, &agreement.agreement_id).await?;
+    let activity_state_dao = db.as_dao::<ActivityStateDao>();
+    for activity_id in activities_ids {
+        let activity_state = activity_state_dao.get(&activity_id).await?;
+        if activity_state.alive() {
+            log::info!("Initial activty {activity_id} monitoring");
+            tokio::task::spawn_local(monitor_activity(
+                db.clone(),
+                tracker.clone(),
+                activity_id,
+                agreement.provider_id().clone(),
+                None,
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Creates new Activity based on given Agreement.
