@@ -1,7 +1,6 @@
 use actix_http::header::HeaderMap;
 use actix_web::{web, HttpResponse, Responder};
 use actix_web::{App, HttpServer};
-use futures::StreamExt;
 use test_context::test_context;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_gsb_http_proxy::gsb_to_http::GsbToHttpProxy;
@@ -32,14 +31,17 @@ async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {
     async fn proxy_endpoint() -> impl Responder {
         let mut http_to_gsb = HttpToGsbProxy::new(BindingMode::Local);
 
-        let mut stream = http_to_gsb.pass(
-            "GET".to_string(),
-            "target-endpoint".to_string(),
-            HeaderMap::default(),
-            None,
-        );
-        if let Ok(_r) = stream.next().await.unwrap() {
-            if let Ok(s) = String::from_utf8(_r.to_vec()) {
+        let response = http_to_gsb
+            .pass(
+                "GET".to_string(),
+                "target-endpoint".to_string(),
+                HeaderMap::default(),
+                None,
+            )
+            .await;
+
+        if let Ok(r) = response.body {
+            if let Ok(s) = String::from_utf8(r.to_vec()) {
                 return s;
             }
         }

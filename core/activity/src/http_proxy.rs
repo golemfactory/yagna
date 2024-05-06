@@ -106,7 +106,7 @@ async fn stream_results(
         Ok(body) => Ok(response_builder
             .keep_alive()
             .content_type(content_type)
-            .streaming(body.map(|e| Ok::<Bytes, Error>(e)))),
+            .streaming(body.map(Ok::<Bytes, Error>))),
         Err(err) => {
             let reason = format!("{err}");
             Ok(response_builder.body(reason))

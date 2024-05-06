@@ -250,7 +250,8 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::gsb_to_http::GsbToHttpProxy;
-    use crate::message::GsbHttpCallMessage;
+    use crate::message::GsbHttpCallStreamingMessage;
+    use crate::response::GsbHttpCallResponseStreamChunk;
     use futures::StreamExt;
     use mockito::{Mock, ServerGuard};
     use ya_counters::Counter;
@@ -265,26 +266,27 @@ mod tests {
         let mut requests_counter = gsb_call.requests_counter();
         let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
-        let message = message();
+        let message = streaming_message();
 
-        let mut response_stream = gsb_call.pass(message);
+        let mut response_stream = gsb_call.pass_streaming(message);
 
         let mut v = vec![];
         let mut headers = vec![];
-        while let Some(event) = response_stream.next().await {
-            v.push(event.msg_bytes);
-            for (h, vals) in event.response_headers.iter() {
-                vals.iter()
-                    .for_each(|v| headers.push((h.to_string(), v.to_string())));
+        while let Some(chunk) = response_stream.next().await {
+            match chunk {
+                GsbHttpCallResponseStreamChunk::Header(h) => {
+                    for (h, vals) in h.response_headers.iter() {
+                        vals.iter()
+                            .for_each(|v| headers.push((h.to_string(), v.to_string())));
+                    }
+                }
+                GsbHttpCallResponseStreamChunk::Body(b) => v.push(b.msg_bytes),
             }
         }
 
-        assert_eq!(
-            headers
-                .iter()
-                .any(|(h, v)| { h.eq("some-header") && v.eq("value") }),
-            true
-        );
+        assert!(headers
+            .iter()
+            .any(|(h, v)| { h.eq("some-header") && v.eq("value") }));
         assert_eq!(vec!["response".as_bytes()], v);
         assert_eq!(1.0, requests_counter.frame().unwrap());
         assert!(requests_duration_counter.frame().unwrap() > 0.0);
@@ -300,16 +302,19 @@ mod tests {
         let mut requests_counter = gsb_call.requests_counter();
         let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
-        let message = message();
+        let message = streaming_message();
 
         // Cloned proxy should keep initialized counters
         let mut gsb_call = gsb_call.clone();
 
-        let mut response_stream = gsb_call.pass(message);
+        let mut response_stream = gsb_call.pass_streaming(message);
 
         let mut v = vec![];
-        while let Some(event) = response_stream.next().await {
-            v.push(event.msg_bytes);
+        while let Some(chunk) = response_stream.next().await {
+            match chunk {
+                GsbHttpCallResponseStreamChunk::Header(_) => {}
+                GsbHttpCallResponseStreamChunk::Body(b) => v.push(b.msg_bytes),
+            }
         }
 
         assert_eq!(vec!["response".as_bytes()], v);
@@ -337,13 +342,16 @@ mod tests {
     }
 
     async fn run_10_requests(mut gsb_call_proxy: GsbToHttpProxy) {
-        let message = message();
+        let message = streaming_message();
         for _ in 0..10 {
             let message = message.clone();
-            let mut response_stream = gsb_call_proxy.pass(message);
+            let mut response_stream = gsb_call_proxy.pass_streaming(message);
             let mut v = vec![];
-            while let Some(event) = response_stream.next().await {
-                v.push(event.msg_bytes);
+            while let Some(chunk) = response_stream.next().await {
+                match chunk {
+                    GsbHttpCallResponseStreamChunk::Header(_) => {}
+                    GsbHttpCallResponseStreamChunk::Body(b) => v.push(b.msg_bytes),
+                }
             }
             assert_eq!(vec!["response".as_bytes()], v);
         }
@@ -362,8 +370,8 @@ mod tests {
         (server, mock, url)
     }
 
-    fn message() -> GsbHttpCallMessage {
-        GsbHttpCallMessage {
+    fn streaming_message() -> GsbHttpCallStreamingMessage {
+        GsbHttpCallStreamingMessage {
             method: "GET".to_string(),
             path: "/endpoint".to_string(),
             body: None,

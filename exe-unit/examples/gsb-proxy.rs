@@ -1,17 +1,16 @@
 use actix_rt::time;
 use async_stream::stream;
-use bytes::{BufMut, BytesMut};
-use chrono::Utc;
 use futures::prelude::*;
-use reqwest::Client;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
-use ya_gsb_http_proxy::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
-use ya_gsb_http_proxy::response::GsbHttpCallResponse;
+use ya_gsb_http_proxy::message::GsbHttpCallStreamingMessage;
+use ya_gsb_http_proxy::response::{
+    GsbHttpCallResponseBody, GsbHttpCallResponseHeader, GsbHttpCallResponseStreamChunk,
+};
 use ya_service_bus::typed as bus;
 
 /// This example allows to test proxying http requests via GSB.
@@ -27,7 +26,6 @@ use ya_service_bus::typed as bus;
 pub enum Mode {
     Send,
     Receive,
-    Trigger,
 }
 
 type ParseError = &'static str;
@@ -39,7 +37,6 @@ impl FromStr for Mode {
         match s {
             "send" => Ok(Mode::Send),
             "receive" => Ok(Mode::Receive),
-            "trigger" => Ok(Mode::Trigger),
             _ => Err("Could not parse mode"),
         }
     }
@@ -69,22 +66,29 @@ async fn main() -> anyhow::Result<()> {
     if args.mode == Mode::Receive {
         ya_sb_router::bind_gsb_router(None).await?;
 
-        let _stream_handle =
-            bus::bind_stream(ya_gsb_http_proxy::BUS_ID, move |msg: GsbHttpCallMessage| {
+        let _stream_handle = bus::bind_stream(
+            ya_gsb_http_proxy::BUS_ID,
+            move |msg: GsbHttpCallStreamingMessage| {
                 let _interval = tokio::time::interval(Duration::from_secs(1));
                 println!("Received request, responding with 10 elements");
                 Box::pin(stream! {
+                    let header = GsbHttpCallResponseStreamChunk::Header(GsbHttpCallResponseHeader {
+                        response_headers: Default::default(),
+                        status_code: 200,
+                    });
+                    yield Ok(header);
+
                     for i in 0..10 {
                         let msg = format!("called {} {} #{} time", msg.method, msg.path, i);
-                        let response = GsbHttpCallResponse {
-                            index: i,
-                            timestamp: Utc::now().naive_local().to_string(),
-                            msg_bytes: msg.into_bytes(),
-                        };
-                        yield Ok(response);
+                        let chunk = GsbHttpCallResponseStreamChunk::Body (
+                            GsbHttpCallResponseBody {
+                                msg_bytes: msg.into_bytes()
+                            });
+                        yield Ok(chunk);
                     }
                 })
-            });
+            },
+        );
 
         let mut interval = time::interval(tokio::time::Duration::from_secs(3));
 
@@ -106,48 +110,18 @@ async fn main() -> anyhow::Result<()> {
 
         stream
             .for_each(|r| async move {
-                if let Ok(Ok(r)) = r {
-                    log::info!(
-                        "[Stream response #{}]: [{}] {:?}",
-                        r.index,
-                        r.timestamp,
-                        String::from_utf8(r.msg_bytes)
-                    );
-                }
-            })
-            .await;
-    } else if args.mode == Mode::Trigger {
-        let client = Client::new();
-        let request = client
-            .get("http://127.0.0.1:11502/activity-api/v1/activity/146ac32155114d4e99033d7d78592e00/proxy_http_request")
-            .bearer_auth("b073104dfd8046558b8b76e9e852d0d8")
-            .build()?;
-
-        if let Some(req2) = request.try_clone() {
-            let resp = client.execute(req2).await;
-            println!("{:?}", request);
-            println!("{:?}", resp);
-            match resp {
-                Ok(response) => {
-                    println!("{:#?}", response.status());
-                    let mut stream = response.bytes_stream();
-                    let mut buf = BytesMut::new();
-                    while let Some(item) = stream.next().await {
-                        for byte in item? {
-                            if byte == b'\n' {
-                                println!("Got chunk: {:?}", buf.clone().freeze());
-                                buf.clear();
-                            } else {
-                                buf.put_u8(byte);
-                            }
+                if let Ok(Ok(chunk)) = r {
+                    match chunk {
+                        GsbHttpCallResponseStreamChunk::Header(h) => {
+                            log::info!("[Stream response]: status code: {:}", h.status_code);
+                        }
+                        GsbHttpCallResponseStreamChunk::Body(b) => {
+                            log::info!("[Stream response]: {:?}", String::from_utf8(b.msg_bytes));
                         }
                     }
                 }
-                Err(e) => {
-                    println!("{:?}", e);
-                }
-            }
-        }
+            })
+            .await;
     }
 
     Ok(())

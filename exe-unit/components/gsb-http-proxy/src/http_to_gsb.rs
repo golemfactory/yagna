@@ -175,43 +175,43 @@ impl HttpToGsbProxy {
 mod tests {
     use super::*;
     use crate::http_to_gsb::BindingMode::Local;
-    use crate::response::{
-        GsbHttpCallResponse, GsbHttpCallResponseBody, GsbHttpCallResponseHeader,
-    };
+    use crate::response::{GsbHttpCallResponseBody, GsbHttpCallResponseHeader};
     use async_stream::stream;
-    use std::collections::HashMap;
 
     #[actix_web::test]
     async fn http_to_gsb_test() {
         let mut gsb_call = HttpToGsbProxy::new(Local);
 
-        bus::bind_stream(crate::BUS_ID, move |_msg: GsbHttpCallMessage| {
+        bus::bind_stream(crate::BUS_ID, move |_msg: GsbHttpCallStreamingMessage| {
             Box::pin(stream! {
+                let header = GsbHttpCallResponseStreamChunk::Header(GsbHttpCallResponseHeader {
+                    response_headers: Default::default(),
+                    status_code: 200,
+                });
+                yield Ok(header);
+
                 for i in 0..3 {
-                    let response = GsbHttpCallResponse {
-                        header: GsbHttpCallResponseHeader {
-                            response_headers: HashMap::new(),
-                            status_code: 200
-                        },
-                        body: GsbHttpCallResponseBody {
+                    let chunk = GsbHttpCallResponseStreamChunk::Body (
+                        GsbHttpCallResponseBody {
                             msg_bytes: format!("response {}", i).into_bytes(),
-                        }
-                    };
-                    yield Ok(response);
+                        });
+                    yield Ok(chunk);
                 }
             })
         });
 
-        let mut response_stream = gsb_call.pass(
-            "GET".to_string(),
-            "/endpoint".to_string(),
-            HeaderMap::new(),
-            None,
-        );
+        let response = gsb_call
+            .pass_streaming(
+                "GET".to_string(),
+                "/endpoint".to_string(),
+                HeaderMap::new(),
+                None,
+            )
+            .await;
 
         let mut v = vec![];
-        while let Some(event) = response_stream.next().await {
-            if let Ok(event) = event.response_stream {
+        if let Ok(mut body) = response.body {
+            while let Some(event) = body.next().await {
                 v.push(event);
             }
         }
