@@ -1,5 +1,5 @@
 use crate::error::HttpProxyStatusError;
-use crate::response::{GsbHttpCallResponseChunk, GsbHttpCallResponseEvent};
+use crate::response::{GsbHttpCallResponse, GsbHttpCallResponseStreamChunk};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
@@ -15,7 +15,7 @@ pub struct GsbHttpCallMessage {
 
 impl RpcMessage for GsbHttpCallMessage {
     const ID: &'static str = "GsbHttpCallMessage";
-    type Item = GsbHttpCallResponseEvent;
+    type Item = GsbHttpCallResponse;
     type Error = HttpProxyStatusError;
 }
 
@@ -30,6 +30,6 @@ pub struct GsbHttpCallStreamingMessage {
 
 impl RpcStreamMessage for GsbHttpCallStreamingMessage {
     const ID: &'static str = "GsbHttpCallStreamingMessage";
-    type Item = GsbHttpCallResponseChunk;
+    type Item = GsbHttpCallResponseStreamChunk;
     type Error = HttpProxyStatusError;
 }

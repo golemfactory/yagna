@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
 use ya_gsb_http_proxy::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
-use ya_gsb_http_proxy::response::GsbHttpCallResponseEvent;
+use ya_gsb_http_proxy::response::GsbHttpCallResponse;
 use ya_service_bus::typed as bus;
 
 /// This example allows to test proxying http requests via GSB.
@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
                 Box::pin(stream! {
                     for i in 0..10 {
                         let msg = format!("called {} {} #{} time", msg.method, msg.path, i);
-                        let response = GsbHttpCallResponseEvent {
+                        let response = GsbHttpCallResponse {
                             index: i,
                             timestamp: Utc::now().naive_local().to_string(),
                             msg_bytes: msg.into_bytes(),

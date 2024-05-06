@@ -1,7 +1,7 @@
 use crate::error::HttpProxyStatusError;
 use crate::headers::Headers;
 use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
-use crate::response::GsbHttpCallResponseChunk;
+use crate::response::GsbHttpCallResponseStreamChunk;
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
 use actix_web::web::Bytes;
@@ -96,13 +96,13 @@ impl HttpToGsbProxy {
 
         if let Ok(r) = result {
             return HttpToGsbProxyResponse {
-                body: actix_web::web::Bytes::from(r.msg_bytes)
+                body: actix_web::web::Bytes::from(r.body.msg_bytes)
                     .try_into_bytes()
                     .map_err(|_| {
                         Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
                     }),
-                status_code: r.status_code,
-                response_headers: r.response_headers,
+                status_code: r.header.status_code,
+                response_headers: r.header.response_headers,
             };
         }
 
@@ -143,7 +143,7 @@ impl HttpToGsbProxy {
                 .call_streaming(msg),
         };
 
-        let GsbHttpCallResponseChunk::Header(header) =
+        let GsbHttpCallResponseStreamChunk::Header(header) =
             stream.next().await.unwrap().unwrap().unwrap()
         else {
             panic!("missing header")
@@ -183,7 +183,7 @@ impl HttpToGsbProxy {
             // .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(|item| item.unwrap())
             .map(move |result| match result {
-                Ok(GsbHttpCallResponseChunk::Body(body)) => Bytes::from(body.msg_bytes),
+                Ok(GsbHttpCallResponseStreamChunk::Body(body)) => Bytes::from(body.msg_bytes),
                 // Ok(GsbHttpCallResponseChunk::Header(header)) => {
                 //     return HttpToGsbProxyStreamingResponse {
                 //         // body: Ok("duplicate header".to_string().into_bytes()),
@@ -246,7 +246,9 @@ impl HttpToGsbProxy {
 mod tests {
     use super::*;
     use crate::http_to_gsb::BindingMode::Local;
-    use crate::response::GsbHttpCallResponseEvent;
+    use crate::response::{
+        GsbHttpCallResponse, GsbHttpCallResponseBody, GsbHttpCallResponseHeader,
+    };
     use async_stream::stream;
     use std::collections::HashMap;
 
@@ -257,12 +259,14 @@ mod tests {
         bus::bind_stream(crate::BUS_ID, move |_msg: GsbHttpCallMessage| {
             Box::pin(stream! {
                 for i in 0..3 {
-                    let response = GsbHttpCallResponseEvent {
-                        index: i,
-                        timestamp: "timestamp".to_string(),
-                        msg_bytes: format!("response {}", i).into_bytes(),
-                        response_headers: HashMap::new(),
-                        status_code: 200
+                    let response = GsbHttpCallResponse {
+                        header: GsbHttpCallResponseHeader {
+                            response_headers: HashMap::new(),
+                            status_code: 200
+                        },
+                        body: GsbHttpCallResponseBody {
+                            msg_bytes: format!("response {}", i).into_bytes(),
+                        }
                     };
                     yield Ok(response);
                 }

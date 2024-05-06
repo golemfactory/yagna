@@ -2,8 +2,8 @@ use crate::counters::Counters;
 use crate::headers;
 use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
 use crate::response::{
-    GsbHttpCallResponseBody, GsbHttpCallResponseChunk, GsbHttpCallResponseEvent,
-    GsbHttpCallResponseHeader,
+    GsbHttpCallResponse, GsbHttpCallResponseBody, GsbHttpCallResponseHeader,
+    GsbHttpCallResponseStreamChunk,
 };
 use std::collections::HashMap;
 
@@ -11,7 +11,6 @@ use ya_counters::Counter;
 
 use actix_http::Method;
 use async_stream::stream;
-use chrono::Utc;
 use futures::StreamExt;
 use futures_core::stream::Stream;
 use http::StatusCode;
@@ -66,7 +65,7 @@ impl GsbToHttpProxy {
         })
     }
 
-    pub async fn pass(&mut self, message: GsbHttpCallMessage) -> GsbHttpCallResponseEvent {
+    pub async fn pass(&mut self, message: GsbHttpCallMessage) -> GsbHttpCallResponse {
         let url = format!("{}{}", self.base_url, message.path);
         log::info!("Gsb to http call - Url: {url}");
 
@@ -74,7 +73,7 @@ impl GsbToHttpProxy {
 
         let method = actix_http::Method::from_bytes(message.method.to_uppercase().as_bytes());
         if method.is_err() {
-            return GsbHttpCallResponseEvent::with_message(
+            return GsbHttpCallResponse::with_message(
                 method.err().unwrap().to_string().into_bytes(),
                 StatusCode::METHOD_NOT_ALLOWED.as_u16(),
             );
@@ -93,23 +92,15 @@ impl GsbToHttpProxy {
             let status_code = response.status().as_u16();
             response_handler.on_response();
             if let Ok(bytes) = response.bytes().await {
-                return GsbHttpCallResponseEvent::new(
-                    0,
-                    Utc::now().naive_local().to_string(),
-                    bytes.to_vec(),
-                    response_headers,
-                    status_code,
-                );
+                return GsbHttpCallResponse::new(bytes.to_vec(), response_headers, status_code);
             }
         } else {
-            return GsbHttpCallResponseEvent::with_message(
+            return GsbHttpCallResponse::with_message(
                 response.err().unwrap().to_string().into_bytes(),
                 StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
             );
         }
-        return GsbHttpCallResponseEvent::with_status_code(
-            StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-        );
+        GsbHttpCallResponse::with_status_code(StatusCode::INTERNAL_SERVER_ERROR.as_u16())
     }
 
     fn create_request_builder(
@@ -129,7 +120,7 @@ impl GsbToHttpProxy {
     pub fn pass_streaming(
         &mut self,
         message: GsbHttpCallStreamingMessage,
-    ) -> impl Stream<Item = GsbHttpCallResponseChunk> {
+    ) -> impl Stream<Item = GsbHttpCallResponseStreamChunk> {
         let url = format!("{}{}", self.base_url, message.path);
 
         let (tx, mut rx) = mpsc::channel(1);
@@ -143,7 +134,7 @@ impl GsbToHttpProxy {
             {
                 Ok(method) => method,
                 Err(e) => {
-                    tx.send(GsbHttpCallResponseChunk::Header(
+                    tx.send(GsbHttpCallResponseStreamChunk::Header(
                         GsbHttpCallResponseHeader {
                             response_headers: Default::default(),
                             status_code: StatusCode::METHOD_NOT_ALLOWED.as_u16(),
@@ -152,9 +143,11 @@ impl GsbToHttpProxy {
                     .await
                     .unwrap();
 
-                    tx.send(GsbHttpCallResponseChunk::Body(GsbHttpCallResponseBody {
-                        msg_bytes: format!("Invalid method {}", message.method).into_bytes(),
-                    }))
+                    tx.send(GsbHttpCallResponseStreamChunk::Body(
+                        GsbHttpCallResponseBody {
+                            msg_bytes: format!("Invalid method {}", message.method).into_bytes(),
+                        },
+                    ))
                     .await
                     .unwrap();
 
@@ -186,7 +179,7 @@ impl GsbToHttpProxy {
 
             response_handler.on_response();
 
-            tx.send(GsbHttpCallResponseChunk::Header(
+            tx.send(GsbHttpCallResponseStreamChunk::Header(
                 GsbHttpCallResponseHeader {
                     response_headers,
                     status_code,
@@ -197,9 +190,11 @@ impl GsbToHttpProxy {
 
             while let Some(Ok(chunk)) = bytes.next().await {
                 log::info!("Sending chunk of size: {}", chunk.len());
-                tx.send(GsbHttpCallResponseChunk::Body(GsbHttpCallResponseBody {
-                    msg_bytes: chunk.to_vec(),
-                }))
+                tx.send(GsbHttpCallResponseStreamChunk::Body(
+                    GsbHttpCallResponseBody {
+                        msg_bytes: chunk.to_vec(),
+                    },
+                ))
                 .await
                 .unwrap();
             }
@@ -211,8 +206,8 @@ impl GsbToHttpProxy {
             while let Some(event) = rx.recv().await {
                 log::info!("sending response {}",
                     match event {
-                        GsbHttpCallResponseChunk::Header(_) => { "header".to_string() },
-                        GsbHttpCallResponseChunk::Body(ref b) => { format!("body chunk: {} bytes", b.msg_bytes.len()) }
+                        GsbHttpCallResponseStreamChunk::Header(_) => { "header".to_string() },
+                        GsbHttpCallResponseStreamChunk::Body(ref b) => { format!("body chunk: {} bytes", b.msg_bytes.len()) }
                     });
                 yield event;
             }
