@@ -12,7 +12,9 @@ use crate::common::*;
 use crate::error;
 use ya_core_model::activity;
 use ya_gsb_http_proxy::http_to_gsb::BindingMode::Net;
-use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, HttpToGsbProxyResponse, NetBindingNodes};
+use ya_gsb_http_proxy::http_to_gsb::{
+    HttpToGsbProxy, HttpToGsbProxyResponse, HttpToGsbProxyStreamingResponse, NetBindingNodes,
+};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -74,12 +76,12 @@ async fn proxy_http_request(
         if accept_header.eq(mime::TEXT_EVENT_STREAM.essence_str())
             || accept_header.eq(mime::APPLICATION_OCTET_STREAM.essence_str())
         {
-            let mut stream = http_to_gsb
+            let response = http_to_gsb
                 .pass_streaming(method, path, headers, body)
                 .await;
 
             return Ok(Either::Left(
-                stream_results(stream.body, accept_header.to_str().unwrap()).await?,
+                stream_results(response, accept_header.to_str().unwrap()).await?,
             ));
         }
     }
@@ -88,13 +90,28 @@ async fn proxy_http_request(
 }
 
 async fn stream_results(
-    stream: impl Stream<Item = Bytes> + Unpin + 'static,
+    response: HttpToGsbProxyStreamingResponse<impl Stream<Item = Bytes> + Unpin + 'static>,
     content_type: &str,
 ) -> crate::Result<impl Responder> {
-    Ok(HttpResponse::Ok()
-        .keep_alive()
-        .content_type(content_type)
-        .streaming(stream.map(|e| Ok::<Bytes, Error>(e))))
+    let mut response_builder = HttpResponse::build(
+        StatusCode::from_u16(response.status_code)
+            .map_err(|e| error::Error::Service(format!("Invalid status code {e}")))?,
+    );
+    for (h, vals) in response.response_headers {
+        for v in vals {
+            response_builder.append_header((h.as_str(), v));
+        }
+    }
+    return match response.body {
+        Ok(body) => Ok(response_builder
+            .keep_alive()
+            .content_type(content_type)
+            .streaming(body.map(|e| Ok::<Bytes, Error>(e)))),
+        Err(err) => {
+            let reason = format!("{err}");
+            Ok(response_builder.body(reason))
+        }
+    };
 }
 
 async fn build_response(

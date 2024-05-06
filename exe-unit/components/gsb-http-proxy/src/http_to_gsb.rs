@@ -1,12 +1,11 @@
 use crate::error::HttpProxyStatusError;
 use crate::headers::Headers;
 use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
-use crate::response::{GsbHttpCallResponseChunk, GsbHttpCallResponseHeader};
+use crate::response::GsbHttpCallResponseChunk;
 use actix_http::body::MessageBody;
 use actix_http::header::HeaderMap;
 use actix_web::web::Bytes;
-use async_stream::stream;
-use futures::{future, stream, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use http::StatusCode;
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -46,7 +45,7 @@ pub struct HttpToGsbProxyResponse<T> {
 pub struct HttpToGsbProxyStreamingResponse<T> {
     pub status_code: u16,
     pub response_headers: HashMap<String, Vec<String>>,
-    pub body: Pin<Box<T>>,
+    pub body: Result<Pin<Box<T>>, Error>,
 }
 
 #[derive(Clone, Debug)]
@@ -214,7 +213,7 @@ impl HttpToGsbProxy {
         HttpToGsbProxyStreamingResponse {
             status_code: header.status_code,
             response_headers: header.response_headers,
-            body: Box::pin(s),
+            body: Ok(Box::pin(s)),
         }
 
         // let response = stream
