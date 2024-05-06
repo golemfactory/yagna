@@ -30,7 +30,7 @@ goth = "0.17.0"
 # goth = { git = "https://github.com/golemfactory/goth.git", rev = "5829ef8670087095f0de730e1aeed9d6dd9d3a44" }
 
 [tool.poetry.dev-dependencies]
-black = "21.7b0"
+black = "24.3.0"
 mypy = "^1.5"
 poethepoet = "^0.22"
 
