@@ -250,9 +250,11 @@ dependencies = [
  "tokio",
  "tokio-openssl",
  "tokio-rustls 0.23.4",
+ "tokio-rustls 0.24.1",
  "tokio-util",
  "tracing",
  "webpki-roots 0.22.6",
+ "webpki-roots 0.25.4",
 ]
 
 [[package]]
@@ -681,6 +683,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "rustls 0.20.9",
+ "rustls 0.21.11",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -6214,7 +6217,17 @@ source = "git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_te
 dependencies = [
  "lazy_static",
  "parking_lot 0.11.2",
- "serial_test_derive 0.5.1",
+ "serial_test_derive 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
+]
+
+[[package]]
+name = "serial_test"
+version = "0.5.1"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
+dependencies = [
+ "lazy_static",
+ "parking_lot 0.11.2",
+ "serial_test_derive 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
 ]
 
 [[package]]
@@ -6263,6 +6276,16 @@ dependencies = [
 name = "serial_test_derive"
 version = "0.5.1"
 source = "git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.5.1"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7161,6 +7184,27 @@ dependencies = [
  "quote",
  "syn 2.0.60",
  "test-case-core",
+]
+
+[[package]]
+name = "test-context"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "055831a02a4f5aa28fede67f2902014273eb8c21b958ac5ebbd59b71ef30dbc3"
+dependencies = [
+ "async-trait",
+ "futures 0.3.30",
+ "test-context-macros",
+]
+
+[[package]]
+name = "test-context-macros"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8901a55b0a7a06ebc4a674dcca925170da8e613fa3b163a1df804ed10afb154d"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -8557,7 +8601,6 @@ dependencies = [
  "openssl",
  "rand 0.8.5",
  "regex",
- "reqwest",
  "rustyline 7.1.0",
  "secp256k1 0.27.0",
  "serde",
@@ -8587,6 +8630,7 @@ dependencies = [
  "ya-service-bus",
  "ya-std-utils",
  "ya-transfer",
+ "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
  "yansi",
@@ -8609,6 +8653,52 @@ dependencies = [
  "flexi_logger 0.17.1",
  "log",
  "yansi",
+]
+
+[[package]]
+name = "ya-framework-basic"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-files",
+ "actix-http",
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "async-compression",
+ "async-trait",
+ "awc",
+ "bytes 1.6.0",
+ "crossterm 0.26.1",
+ "env_logger 0.7.1",
+ "futures 0.3.30",
+ "gftp",
+ "globset",
+ "h2",
+ "hex",
+ "lazy_static",
+ "log",
+ "percent-encoding",
+ "rand 0.8.5",
+ "regex",
+ "secp256k1 0.27.0",
+ "serde",
+ "sha2 0.8.2",
+ "sha3 0.8.2",
+ "tempdir",
+ "test-context",
+ "thiserror",
+ "tokio",
+ "tokio-tar",
+ "tokio-util",
+ "url",
+ "walkdir",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-service-bus",
+ "ya-utils-futures",
+ "ya-utils-path",
+ "zip 0.5.6",
 ]
 
 [[package]]
@@ -8778,7 +8868,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "serial_test 0.5.1",
+ "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
  "structopt",
  "strum 0.24.1",
@@ -9234,6 +9324,7 @@ dependencies = [
  "prost-build 0.10.4",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tokio-util",
  "url",
@@ -9438,7 +9529,7 @@ dependencies = [
  "nix 0.22.3",
  "serde",
  "serde_json",
- "serial_test 0.5.1",
+ "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
  "tokio",
  "url",
  "ya-framework-macro",
@@ -9449,11 +9540,14 @@ dependencies = [
 name = "ya-transfer"
 version = "0.3.0"
 dependencies = [
+ "actix",
+ "actix-files",
  "actix-http",
  "actix-rt",
  "actix-web",
  "anyhow",
  "async-compression",
+ "async-trait",
  "awc",
  "bytes 1.6.0",
  "crossterm 0.26.1",
@@ -9468,11 +9562,15 @@ dependencies = [
  "percent-encoding",
  "rand 0.8.5",
  "regex",
+ "reqwest",
+ "secp256k1 0.27.0",
  "serde",
+ "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
  "sha2 0.8.2",
  "sha3 0.8.2",
  "structopt",
  "tempdir",
+ "test-context",
  "thiserror",
  "tokio",
  "tokio-tar",
@@ -9481,7 +9579,11 @@ dependencies = [
  "walkdir",
  "ya-client-model",
  "ya-core-model",
+ "ya-exe-unit",
+ "ya-framework-basic",
+ "ya-runtime-api",
  "ya-service-bus",
+ "ya-utils-futures",
  "ya-utils-path",
  "zip 0.5.6",
 ]
@@ -9513,7 +9615,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-futures"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures 0.3.30",
  "tokio",
@@ -9663,6 +9765,7 @@ dependencies = [
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
+ "ya-exe-unit",
  "ya-fd-metrics",
  "ya-file-logging",
  "ya-gsb-api",

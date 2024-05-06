@@ -1,11 +1,15 @@
 mod archive;
+pub mod cache;
+mod container;
 pub mod error;
 mod file;
 mod gftp;
+mod hash;
 mod http;
 mod location;
 mod progress;
 mod retry;
+pub mod transfer;
 mod traverse;
 
 use std::cell::RefCell;
@@ -19,13 +23,12 @@ use futures::channel::oneshot;
 use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted, LocalBoxFuture};
 use futures::prelude::*;
 use futures::task::{Context, Poll};
-use sha3::digest::DynDigest;
-use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use url::Url;
 
 use crate::error::Error;
 
 pub use crate::archive::{archive, extract, ArchiveFormat};
+pub use crate::container::ContainerTransferProvider;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
@@ -34,6 +37,7 @@ pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_pr
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
+use crate::hash::with_hash_stream;
 use ya_client_model::activity::TransferArgs;
 
 /// Transfers data from `stream` to a `TransferSink`
@@ -68,7 +72,7 @@ where
 
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
-            let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
+            let stream = with_hash_stream(src.source(&src_url.url, ctx), src_url, dst_url, ctx)?;
             let sink = dst.destination(&dst_url.url, ctx);
 
             transfer(stream, sink).await?;
@@ -86,16 +90,6 @@ where
             },
         };
     }
-}
-
-fn wrap_stream(
-    stream: TransferStream<TransferData, Error>,
-    url: &TransferUrl,
-) -> Result<Box<dyn Stream<Item = Result<TransferData, Error>> + Unpin>, Error> {
-    Ok(match url.hash {
-        Some(ref h) => Box::new(HashStream::try_new(stream, &h.alg, h.val.clone())?),
-        None => Box::new(stream),
-    })
 }
 
 /// Trait for implementing file transfer methods
@@ -160,6 +154,19 @@ where
         // to always be `Some`
         let rx = self.rx.take().unwrap();
         self.rx.replace(Box::pin(rx.map(f)));
+    }
+
+    pub fn map_inner_async<F, Fut>(&mut self, f: F)
+    where
+        F: FnMut(Result<T, E>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<T, E>> + Send + Sync + Unpin + 'static,
+    {
+        // This function cannot take `self` as argument since `Self` implements `Drop`.
+        // In order to take and map the stream, then put it back in `self.rx`, the simplest
+        // workaround is to use `Option`. Outside of this function, `self.rx` is guaranteed
+        // to always be `Some`
+        let rx = self.rx.take().unwrap();
+        self.rx.replace(Box::pin(rx.then(f)));
     }
 
     pub fn err(e: E) -> Self {
@@ -372,94 +379,6 @@ impl Default for TransferStateInner {
             size: Default::default(),
             retry: Some(Retry::default()),
         }
-    }
-}
-
-struct HashStream<T, E, S>
-where
-    S: Stream<Item = Result<T, E>>,
-{
-    inner: S,
-    hasher: Box<dyn DynDigest>,
-    hash: Vec<u8>,
-    result: Option<Vec<u8>>,
-}
-
-impl<T, S> HashStream<T, Error, S>
-where
-    S: Stream<Item = Result<T, Error>> + Unpin,
-{
-    pub fn try_new(stream: S, alg: &str, hash: Vec<u8>) -> Result<Self, Error> {
-        let hasher: Box<dyn DynDigest> = match alg {
-            "sha3" => match hash.len() * 8 {
-                224 => Box::<Sha3_224>::default(),
-                256 => Box::<Sha3_256>::default(),
-                384 => Box::<Sha3_384>::default(),
-                512 => Box::<Sha3_512>::default(),
-                len => {
-                    return Err(Error::UnsupportedDigestError(format!(
-                        "Unsupported digest {} of length {}: {}",
-                        alg,
-                        len,
-                        hex::encode(&hash),
-                    )))
-                }
-            },
-            _ => {
-                return Err(Error::UnsupportedDigestError(format!(
-                    "Unsupported digest: {}",
-                    alg
-                )))
-            }
-        };
-
-        Ok(HashStream {
-            inner: stream,
-            hasher,
-            hash,
-            result: None,
-        })
-    }
-}
-
-impl<S> Stream for HashStream<TransferData, Error, S>
-where
-    S: Stream<Item = Result<TransferData, Error>> + Unpin,
-{
-    type Item = Result<TransferData, Error>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let result = Stream::poll_next(Pin::new(&mut self.inner), cx);
-
-        if let Poll::Ready(ref opt) = result {
-            match opt {
-                Some(item) => {
-                    if let Ok(data) = item {
-                        self.hasher.input(data.as_ref());
-                    }
-                }
-                None => {
-                    let result = match &self.result {
-                        Some(r) => r,
-                        None => {
-                            self.result = Some(self.hasher.result_reset().to_vec());
-                            self.result.as_ref().unwrap()
-                        }
-                    };
-
-                    if &self.hash == result {
-                        log::info!("Hash verified successfully: {:?}", hex::encode(result));
-                    } else {
-                        return Poll::Ready(Some(Err(Error::InvalidHashError {
-                            expected: hex::encode(&self.hash),
-                            hash: hex::encode(result),
-                        })));
-                    }
-                }
-            }
-        }
-
-        result
     }
 }
 

@@ -65,8 +65,8 @@ fn can_retry(err: &Error) -> bool {
     match err {
         Error::HttpError(e) => match e {
             HttpError::Timeout(_) | HttpError::Connect(_) | HttpError::Server(_) => true,
-            HttpError::Io(kind) => matches!(
-                kind,
+            HttpError::Io(e) => matches!(
+                e.kind(),
                 ErrorKind::ConnectionReset
                     | ErrorKind::ConnectionAborted
                     | ErrorKind::NotConnected

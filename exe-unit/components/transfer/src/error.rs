@@ -4,12 +4,13 @@ use awc::error::{ConnectError, SendRequestError};
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
 use futures::future::Aborted;
+use std::io;
 use std::io::ErrorKind;
 
 #[derive(thiserror::Error, Debug)]
 pub enum HttpError {
     #[error("io error: {0:?}")]
-    Io(ErrorKind),
+    Io(io::Error),
     #[error("connection error: {0}")]
     Connect(String),
     #[error("client error: {0}")]
@@ -27,7 +28,7 @@ pub enum HttpError {
 impl From<PayloadError> for HttpError {
     fn from(error: PayloadError) -> Self {
         match error {
-            PayloadError::Io(io_err) => HttpError::Io(io_err.kind()),
+            PayloadError::Io(io_err) => HttpError::Io(io_err),
             payload_err => HttpError::Payload(payload_err),
         }
     }
@@ -37,14 +38,14 @@ impl From<SendRequestError> for HttpError {
     fn from(error: SendRequestError) -> Self {
         match error {
             SendRequestError::Timeout => HttpError::Timeout("operation timed out".into()),
-            SendRequestError::Send(e) => HttpError::Io(e.kind()),
+            SendRequestError::Send(e) => HttpError::Io(e),
             SendRequestError::Connect(e) => match e {
-                ConnectError::Io(e) => HttpError::Io(e.kind()),
+                ConnectError::Io(e) => HttpError::Io(e),
                 ConnectError::Timeout => HttpError::Timeout("connection".into()),
                 e => HttpError::Connect(e.to_string()),
             },
             SendRequestError::Response(e) => match e {
-                ParseError::Io(e) => HttpError::Io(e.kind()),
+                ParseError::Io(e) => HttpError::Io(e),
                 ParseError::Timeout => HttpError::Timeout("response read".into()),
                 e => HttpError::Server(e.to_string()),
             },
@@ -59,14 +60,22 @@ impl From<SendRequestError> for HttpError {
                 use h2::Reason;
 
                 if let Some(e) = e.get_io() {
-                    return HttpError::Io(e.kind());
+                    return HttpError::Other(format!("IO error: {e}"));
                 }
                 if let Some(r) = e.reason() {
                     return match r {
-                        Reason::CANCEL => HttpError::Io(ErrorKind::ConnectionAborted),
-                        Reason::STREAM_CLOSED => HttpError::Io(ErrorKind::ConnectionAborted),
-                        Reason::REFUSED_STREAM => HttpError::Io(ErrorKind::ConnectionRefused),
-                        Reason::CONNECT_ERROR => HttpError::Io(ErrorKind::ConnectionReset),
+                        Reason::CANCEL => {
+                            HttpError::Io(io::Error::from(ErrorKind::ConnectionAborted))
+                        }
+                        Reason::STREAM_CLOSED => {
+                            HttpError::Io(io::Error::from(ErrorKind::ConnectionAborted))
+                        }
+                        Reason::REFUSED_STREAM => {
+                            HttpError::Io(io::Error::from(ErrorKind::ConnectionRefused))
+                        }
+                        Reason::CONNECT_ERROR => {
+                            HttpError::Io(io::Error::from(ErrorKind::ConnectionReset))
+                        }
                         Reason::SETTINGS_TIMEOUT => HttpError::Timeout("http/2 settings".into()),
                         Reason::NO_ERROR | Reason::INTERNAL_ERROR => {
                             HttpError::Server(format!("http/2 code: {}", r))
@@ -106,7 +115,7 @@ pub enum Error {
     UnsupportedSchemeError(String),
     #[error("Unsupported digest: {0}")]
     UnsupportedDigestError(String),
-    #[error("Downloaded VM image is corrupted: calculated hash {hash} differs from the expected one {expected}")]
+    #[error("Incorrect hash provided or downloaded image is corrupted: calculated hash {hash} differs from the expected one {expected}")]
     InvalidHashError { hash: String, expected: String },
     #[error("Hex error: {0}")]
     HexError(#[from] hex::FromHexError),
