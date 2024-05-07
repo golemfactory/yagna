@@ -11,10 +11,6 @@ pub enum GsbHttpCallResponseStreamChunk {
 pub struct GsbHttpCallResponse {
     pub header: GsbHttpCallResponseHeader,
     pub body: GsbHttpCallResponseBody,
-    //
-    // pub msg_bytes: Vec<u8>,
-    // pub response_headers: HashMap<String, Vec<String>>,
-    // pub status_code: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

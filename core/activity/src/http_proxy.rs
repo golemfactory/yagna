@@ -1,7 +1,7 @@
 use actix_http::{header, Method, StatusCode};
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
-use futures::{Stream, StreamExt};
+use futures::Stream;
 
 use ya_client_model::market::Role;
 use ya_persistence::executor::DbExecutor;
@@ -90,7 +90,9 @@ async fn proxy_http_request(
 }
 
 async fn stream_results(
-    response: HttpToGsbProxyStreamingResponse<impl Stream<Item = Bytes> + Unpin + 'static>,
+    response: HttpToGsbProxyStreamingResponse<
+        impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
+    >,
     content_type: &str,
 ) -> crate::Result<impl Responder> {
     let mut response_builder = HttpResponse::build(
@@ -106,7 +108,7 @@ async fn stream_results(
         Ok(body) => Ok(response_builder
             .keep_alive()
             .content_type(content_type)
-            .streaming(body.map(Ok::<Bytes, Error>))),
+            .streaming(body)),
         Err(err) => {
             let reason = format!("{err}");
             Ok(response_builder.body(reason))

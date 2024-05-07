@@ -120,7 +120,7 @@ impl HttpToGsbProxy {
         path: String,
         headers: HeaderMap,
         body: Option<Vec<u8>>,
-    ) -> HttpToGsbProxyStreamingResponse<impl Stream<Item = Bytes>> {
+    ) -> HttpToGsbProxyStreamingResponse<impl Stream<Item = Result<Bytes, Error>>> {
         let path = if let Some(stripped_url) = path.strip_prefix('/') {
             stripped_url.to_string()
         } else {
@@ -156,11 +156,11 @@ impl HttpToGsbProxy {
         let body_stream = stream
             .map(|item| item.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e))))
             .map(move |result| match result {
-                Ok(GsbHttpCallResponseStreamChunk::Body(body)) => Bytes::from(body.msg_bytes),
+                Ok(GsbHttpCallResponseStreamChunk::Body(body)) => Ok(Bytes::from(body.msg_bytes)),
                 Ok(GsbHttpCallResponseStreamChunk::Header(_)) => {
-                    Bytes::from("Duplicate stream header".to_string())
+                    Err(Error::GsbFailure("Duplicate stream header".to_string()))
                 }
-                Err(e) => Bytes::from(format!("Stream error: {e}")),
+                Err(e) => Err(Error::GsbFailure(format!("Stream error: {e}"))),
             });
 
         HttpToGsbProxyStreamingResponse {

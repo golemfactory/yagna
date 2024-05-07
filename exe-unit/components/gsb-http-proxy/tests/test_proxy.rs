@@ -9,7 +9,7 @@ use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_gsb_http_proxy::gsb_to_http::GsbToHttpProxy;
 use ya_gsb_http_proxy::http_to_gsb::{BindingMode, HttpToGsbProxy};
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+// #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
@@ -30,7 +30,7 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
     assert_eq!(r, "correct");
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+// #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 pub async fn test_gsb_http_streaming_proxy(ctx: &mut DroppableTestContext) {
@@ -90,7 +90,7 @@ async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {
             .await;
 
         if let Ok(r) = response.body {
-            return HttpResponse::Ok().streaming(r.map(Ok::<Bytes, Error>));
+            return HttpResponse::Ok().streaming(r);
         }
         HttpResponse::InternalServerError().body("failed".to_string())
     }
