@@ -153,7 +153,8 @@ impl PaymentCli {
             PaymentCli::Fund { account } => {
                 let address = resolve_address(account.address()).await?;
 
-                let onboarding_supported = matches!(account.network, NetworkName::Polygon);
+                let onboarding_supported =
+                    matches!(account.network, NetworkName::Polygon | NetworkName::Mainnet);
                 if !account.network.is_fundable() && !onboarding_supported {
                     log::error!(
                         "Network {} does not support automatic funding. Consider using one of the following: {:?}",
