@@ -518,53 +518,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "anstream"
-version = "0.6.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "418c75fa768af9c03be99d17643f93f79bbba589895012a80e3452a19ddda15b"
-dependencies = [
- "anstyle",
- "anstyle-parse",
- "anstyle-query",
- "anstyle-wincon",
- "colorchoice",
- "is_terminal_polyfill",
- "utf8parse",
-]
-
-[[package]]
 name = "anstyle"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8901269c6307e8d93993578286ac0edf7f195079ffff5ebdeea6a59ffb7e36bc"
-
-[[package]]
-name = "anstyle-parse"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c03a11a9034d92058ceb6ee011ce58af4a9bf61491aa7e1e59ecd24bd40d22d4"
-dependencies = [
- "utf8parse",
-]
-
-[[package]]
-name = "anstyle-query"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a64c907d4e79225ac72e2a354c9ce84d50ebb4586dee56c82b3ee73004f537f5"
-dependencies = [
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "anstyle-wincon"
-version = "3.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a38449feb7068f52bb06c12759005cf459ee52bb4adc1d5a7c4322d716fb19"
-dependencies = [
- "anstyle",
- "windows-sys 0.52.0",
-]
 
 [[package]]
 name = "anyhow"
@@ -611,16 +568,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assert-json-diff"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "assert_cmd"
 version = "2.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -650,28 +597,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "xz2",
-]
-
-[[package]]
-name = "async-stream"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
-dependencies = [
- "async-stream-impl",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.60",
 ]
 
 [[package]]
@@ -1290,22 +1215,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colorchoice"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
-
-[[package]]
-name = "colored"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
-dependencies = [
- "lazy_static",
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "console"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1346,15 +1255,6 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
 
 [[package]]
 name = "cookie"
@@ -1771,7 +1671,7 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case 0.4.0",
+ "convert_case",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -2050,16 +1950,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_filter"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a009aa4810eb158359dda09d0c87378e4bbb89b5a801f016885a4707ba24f7ea"
-dependencies = [
- "log",
- "regex",
-]
-
-[[package]]
 name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2083,19 +1973,6 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b35839ba51819680ba087cd351788c9a3c476841207e0b8cee0b04722343b9"
-dependencies = [
- "anstream",
- "anstyle",
- "env_filter",
- "humantime 2.1.0",
- "log",
 ]
 
 [[package]]
@@ -3032,7 +2909,7 @@ dependencies = [
  "ya-core-model",
  "ya-provider",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -3379,7 +3256,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3689,12 +3566,6 @@ dependencies = [
  "is-docker",
  "once_cell",
 ]
-
-[[package]]
-name = "is_terminal_polyfill"
-version = "1.70.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8478577c03552c21db0e2724ffb8986a5ce7af88107e6be5d2ee6e158c12800"
 
 [[package]]
 name = "itertools"
@@ -4244,25 +4115,6 @@ dependencies = [
  "net2",
  "winapi 0.2.8",
  "ws2_32-sys",
-]
-
-[[package]]
-name = "mockito"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f6e023aa5bdf392aa06c78e4a4e6d498baab5138d0c993503350ebbc37bf1e"
-dependencies = [
- "assert-json-diff",
- "colored",
- "futures-core",
- "hyper",
- "log",
- "rand 0.8.5",
- "regex",
- "serde_json",
- "serde_urlencoded",
- "similar",
- "tokio",
 ]
 
 [[package]]
@@ -5220,7 +5072,7 @@ checksum = "80b776a1b2dc779f5ee0641f8ade0125bc1298dd41a9a0c16d8bd57b42d222b1"
 dependencies = [
  "bytes 1.6.0",
  "heck 0.5.0",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "log",
  "multimap 0.10.0",
  "once_cell",
@@ -5253,7 +5105,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19de2de2a00075bf566bee3bd4db014b11587e84184d3f7a791bc17f1a8e9e48"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
@@ -5631,12 +5483,10 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
- "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-streams",
  "web-sys",
  "webpki-roots 0.25.4",
  "winreg",
@@ -6660,12 +6510,6 @@ name = "simdutf8"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
-
-[[package]]
-name = "similar"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa42c91313f1d05da9b26f267f931cf178d4aba455b4c4622dd7355eb80c6640"
 
 [[package]]
 name = "sized-chunks"
@@ -8138,19 +7982,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af190c94f2773fdb3729c55b007a722abb5384da03bc0986df4c289bf5567e96"
 
 [[package]]
-name = "wasm-streams"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b65dc4c90b63b118468cf747d8bf3566c1913ef60be765b5730ead9e0a3ba129"
-dependencies = [
- "futures-util",
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "web-sys"
 version = "0.3.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8541,7 +8372,6 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
- "async-stream",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -8564,7 +8394,6 @@ dependencies = [
  "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
- "ya-gsb-http-proxy",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",
@@ -8659,37 +8488,12 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_json_canonicalizer",
  "structopt",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
  "ya-client-model",
  "ya-service-bus",
-]
-
-[[package]]
-name = "ya-counters"
-version = "0.2.0"
-dependencies = [
- "actix",
- "actix-rt",
- "anyhow",
- "bytes 1.6.0",
- "chrono",
- "futures 0.3.30",
- "lazy_static",
- "libproc",
- "log",
- "nix 0.22.3",
- "serde",
- "serde_json",
- "serde_yaml 0.9.34+deprecated",
- "thiserror",
- "tokio",
- "winapi 0.3.9",
- "ya-agreement-utils",
- "ya-utils-process 0.3.0",
 ]
 
 [[package]]
@@ -8778,7 +8582,6 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
- "async-stream",
  "async-trait",
  "bytes 1.6.0",
  "chrono",
@@ -8792,11 +8595,12 @@ dependencies = [
  "hex",
  "ipnet",
  "lazy_static",
+ "libproc",
  "log",
+ "nix 0.22.3",
  "openssl",
  "rand 0.8.5",
  "regex",
- "reqwest",
  "rustyline 7.1.0",
  "secp256k1 0.27.0",
  "serde",
@@ -8814,12 +8618,11 @@ dependencies = [
  "tokio-util",
  "trust-dns-resolver 0.22.0",
  "url",
+ "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
- "ya-counters",
- "ya-gsb-http-proxy",
  "ya-manifest-utils",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-runtime-api",
@@ -8830,7 +8633,6 @@ dependencies = [
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
  "yansi",
 ]
 
@@ -8940,41 +8742,6 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus",
-]
-
-[[package]]
-name = "ya-gsb-http-proxy"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-http",
- "actix-rt",
- "actix-web",
- "anyhow",
- "async-stream",
- "chrono",
- "env_logger 0.10.2",
- "futures 0.3.30",
- "futures-core",
- "hex",
- "http 1.1.0",
- "log",
- "mockito",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_derive",
- "serde_json",
- "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
- "test-context",
- "thiserror",
- "tokio",
- "ya-client-model",
- "ya-core-model",
- "ya-counters",
- "ya-framework-basic",
- "ya-sb-router",
  "ya-service-bus",
 ]
 
@@ -9299,7 +9066,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "r2d2",
- "serde_json_canonicalizer",
  "sha3 0.9.1",
  "thiserror",
  "tokio",
@@ -9331,7 +9097,7 @@ dependencies = [
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -9348,12 +9114,10 @@ dependencies = [
  "bigdecimal 0.2.2",
  "bytesize",
  "chrono",
- "convert_case 0.6.0",
  "derive_more",
  "dialoguer",
  "directories",
  "dotenv",
- "env_logger 0.11.3",
  "futures 0.3.30",
  "futures-util",
  "golem-certificate",
@@ -9398,14 +9162,13 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
- "ya-framework-basic",
  "ya-manifest-test-utils",
  "ya-manifest-utils",
  "ya-std-utils",
  "ya-utils-actix",
  "ya-utils-cli",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
  "yansi",
 ]
 
@@ -9770,7 +9533,7 @@ dependencies = [
  "tokio",
  "url",
  "ya-framework-macro",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -9807,7 +9570,6 @@ dependencies = [
  "sha3 0.8.2",
  "structopt",
  "tempdir",
- "test-case 3.3.1",
  "test-context",
  "thiserror",
  "tokio",
@@ -9887,8 +9649,6 @@ dependencies = [
 [[package]]
 name = "ya-utils-process"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ae347dbc4362cc24241f96ddb7c4bc46fdc6f4772c2f92d12b40af359b81ef"
 dependencies = [
  "actix",
  "anyhow",
@@ -9899,26 +9659,6 @@ dependencies = [
  "libc",
  "nix 0.22.3",
  "shared_child",
- "tokio",
-]
-
-[[package]]
-name = "ya-utils-process"
-version = "0.3.0"
-dependencies = [
- "actix",
- "anyhow",
- "derive_more",
- "fs2",
- "futures 0.3.30",
- "futures-util",
- "lazy_static",
- "libc",
- "libproc",
- "log",
- "nix 0.22.3",
- "shared_child",
- "thiserror",
  "tokio",
  "winapi 0.3.9",
 ]
@@ -10048,7 +9788,7 @@ dependencies = [
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
- "ya-utils-process 0.2.0",
+ "ya-utils-process",
  "ya-version",
  "ya-vpn",
 ]
