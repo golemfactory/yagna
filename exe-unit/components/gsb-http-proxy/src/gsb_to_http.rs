@@ -250,7 +250,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::gsb_to_http::GsbToHttpProxy;
-    use crate::message::GsbHttpCallStreamingMessage;
+    use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
     use crate::response::GsbHttpCallResponseStreamChunk;
     use futures::StreamExt;
     use mockito::{Mock, ServerGuard};
@@ -258,6 +258,34 @@ mod tests {
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
+        // Mock server
+        #[allow(unused)]
+        let (server, mock, url) = mock_server().await;
+
+        let mut gsb_call = GsbToHttpProxy::new(url);
+        let mut requests_counter = gsb_call.requests_counter();
+        let mut requests_duration_counter = gsb_call.requests_duration_counter();
+
+        let message = message();
+        let response = gsb_call.pass(message).await;
+
+        let mut headers = vec![];
+
+        for (h, vals) in response.header.response_headers.iter() {
+            vals.iter()
+                .for_each(|v| headers.push((h.to_string(), v.to_string())));
+        }
+
+        assert!(headers
+            .iter()
+            .any(|(h, v)| { h.eq("some-header") && v.eq("value") }));
+        assert_eq!("response".as_bytes(), response.body.msg_bytes);
+        assert_eq!(1.0, requests_counter.frame().unwrap());
+        assert!(requests_duration_counter.frame().unwrap() > 0.0);
+    }
+
+    #[actix_web::test]
+    async fn gsb_to_http_stream_test() {
         // Mock server
         #[allow(unused)]
         let (server, mock, url) = mock_server().await;
@@ -342,18 +370,11 @@ mod tests {
     }
 
     async fn run_10_requests(mut gsb_call_proxy: GsbToHttpProxy) {
-        let message = streaming_message();
+        let message = message();
         for _ in 0..10 {
             let message = message.clone();
-            let mut response_stream = gsb_call_proxy.pass_streaming(message);
-            let mut v = vec![];
-            while let Some(chunk) = response_stream.next().await {
-                match chunk {
-                    GsbHttpCallResponseStreamChunk::Header(_) => {}
-                    GsbHttpCallResponseStreamChunk::Body(b) => v.push(b.msg_bytes),
-                }
-            }
-            assert_eq!(vec!["response".as_bytes()], v);
+            let response = gsb_call_proxy.pass(message).await;
+            assert_eq!("response".as_bytes(), response.body.msg_bytes);
         }
     }
 
@@ -372,6 +393,15 @@ mod tests {
 
     fn streaming_message() -> GsbHttpCallStreamingMessage {
         GsbHttpCallStreamingMessage {
+            method: "GET".to_string(),
+            path: "/endpoint".to_string(),
+            body: None,
+            headers: HashMap::new(),
+        }
+    }
+
+    fn message() -> GsbHttpCallMessage {
+        GsbHttpCallMessage {
             method: "GET".to_string(),
             path: "/endpoint".to_string(),
             body: None,
