@@ -164,11 +164,6 @@ impl Batch {
                         ..event
                     })
             }
-            RuntimeEventKind::Progress(_) => {
-                log::error!("Progress event handling is NYI");
-                //TODO implement progress
-                None
-            }
         };
 
         if let Some(evt) = stream_event {
