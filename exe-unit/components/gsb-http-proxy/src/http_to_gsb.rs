@@ -211,7 +211,7 @@ mod tests {
 
         let mut v = vec![];
         if let Ok(mut body) = response.body {
-            while let Some(event) = body.next().await {
+            while let Some(Ok(event)) = body.next().await {
                 v.push(event);
             }
         }

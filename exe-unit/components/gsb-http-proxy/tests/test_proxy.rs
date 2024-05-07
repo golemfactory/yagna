@@ -3,7 +3,6 @@ use actix_web::{web, Error, HttpResponse, Responder};
 use actix_web::{App, HttpServer};
 use async_stream::stream;
 use bytes::Bytes;
-use futures::StreamExt;
 use test_context::test_context;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_gsb_http_proxy::gsb_to_http::GsbToHttpProxy;
