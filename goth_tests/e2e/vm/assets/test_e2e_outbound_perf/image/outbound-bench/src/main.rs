@@ -118,7 +118,7 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
         "https://s3.amazonaws.com/data-production-walltime-info/production/dynamic/walltime-info.json?now=1528962473468.679.0000000000873",
         "http://worldtimeapi.org/api/timezone",
         "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
-        "http://www.7timer.info/bin/api.pl?lon=113.17&lat=23.09&product=astro&output=xml",
+        "http://api.citybik.es/v2/networks",
     ];
 
     let mut requests_to_run = Vec::new();
