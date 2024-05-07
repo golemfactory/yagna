@@ -6,7 +6,7 @@ use futures::prelude::*;
 use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
-use ya_core_model::market::{Agreement, AgreementListEntry, ListAgreements};
+use ya_core_model::market::{Agreement, AgreementListEntry};
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
 use ya_client_model::market::{agreement::State as AgreementState, Role};
@@ -15,9 +15,9 @@ use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
 use ya_core_model::{activity, market};
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed::Endpoint;
-use ya_service_bus::{timeout::IntoDuration, typed as bus, RpcEndpoint, RpcMessage};
+
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 // use ya_client_model::market::agreement::State as AgreementState;
 
 use crate::common::{
@@ -110,9 +110,8 @@ async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
 }
 
 async fn get_approved_agreements() -> anyhow::Result<Vec<AgreementListEntry>> {
-    let state = Some(AgreementState::Approved);
     let list_agreements_query = market::ListAgreements {
-        state,
+        state: Some(AgreementState::Approved),
         ..Default::default()
     };
     let agreements = bus::service(market::BUS_ID)
@@ -140,7 +139,7 @@ async fn monitor_alive_activities(
                 db.clone(),
                 tracker.clone(),
                 activity_id,
-                agreement.provider_id().clone(),
+                *agreement.provider_id(),
                 None,
             ));
         }
@@ -407,8 +406,8 @@ async fn monitor_activity(
     app_session_id: Option<String>,
 ) {
     let activity_id = activity_id.to_string();
-    let limit_s = inactivity_limit_seconds();
-    let unresp_s = unresponsive_limit_seconds();
+    let inactivity_limit = inactivity_limit_seconds();
+    let unresponsive_limit = unresponsive_limit_seconds();
     let delay = Duration::from_secs_f64(1.);
     let mut prev_state: Option<ActivityState> = None;
 
@@ -421,31 +420,41 @@ async fn monitor_activity(
                 break;
             }
 
-            let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
-            if dt > limit_s {
-                log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
-                enqueue_destroy_evt(
-                    db,
-                    tracker.clone(),
-                    &activity_id,
-                    provider_id,
-                    app_session_id.clone(),
-                )
-                .await;
+            let duration = (Utc::now().timestamp() - usage.timestamp) as f64;
 
-                counter!("activity.provider.destroyed.unresponsive", 1);
-                break;
-            } else if state.state.0 != State::Unresponsive && dt >= unresp_s {
-                log::warn!("activity {} unresponsive after {}s", activity_id, dt);
-                let new_state = ActivityState::from(StatePair(State::Unresponsive, state.state.1));
-                prev_state = Some(state);
-                let _ = tracker
-                    .update_state(activity_id.clone(), State::Unresponsive)
-                    .await;
-                if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
-                    log::error!("cannot update activity {} state: {}", activity_id, e);
+            if duration > unresponsive_limit || duration > inactivity_limit {
+                if state.state.0 != State::Unresponsive {
+                    log::warn!("activity {} unresponsive after {}s", activity_id, duration);
+                    let new_state =
+                        ActivityState::from(StatePair(State::Unresponsive, state.state.1));
+                    prev_state = Some(state);
+                    let _ = tracker
+                        .update_state(activity_id.clone(), State::Unresponsive)
+                        .await;
+                    if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
+                        log::error!("cannot update activity {} state: {}", activity_id, e);
+                    }
                 }
-            } else if state.state.0 == State::Unresponsive && dt < unresp_s {
+
+                if duration > inactivity_limit {
+                    log::warn!(
+                        "activity {} inactive for {}s, destroying",
+                        activity_id,
+                        duration
+                    );
+                    enqueue_destroy_evt(
+                        db,
+                        tracker.clone(),
+                        &activity_id,
+                        provider_id,
+                        app_session_id.clone(),
+                    )
+                    .await;
+
+                    counter!("activity.provider.destroyed.unresponsive", 1);
+                    break;
+                }
+            } else if state.state.0 == State::Unresponsive && duration <= unresponsive_limit {
                 log::warn!("activity {} is now responsive", activity_id);
                 let state = match prev_state.take() {
                     Some(state) => state,
