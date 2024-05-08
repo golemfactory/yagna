@@ -1,4 +1,4 @@
-use actix_http::{header, Method, StatusCode};
+use actix_http::{header, StatusCode};
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 use futures::Stream;
@@ -17,39 +17,27 @@ use ya_gsb_http_proxy::http_to_gsb::{
 };
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
-    scope
-        .service(get_proxy_http_request)
-        .service(post_proxy_http_request)
+    scope.service(proxy_http_request)
 }
 
-#[actix_web::get("/activity/{activity_id}/proxy-http/{url:.*}")]
-async fn get_proxy_http_request(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivityUrl>,
-    id: Identity,
-    request: HttpRequest,
-) -> crate::Result<impl Responder> {
-    proxy_http_request(db, path, id, request, None, Method::GET).await
-}
-
-#[actix_web::post("/activity/{activity_id}/proxy-http/{url:.*}")]
-async fn post_proxy_http_request(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivityUrl>,
-    body: web::Bytes,
-    id: Identity,
-    request: HttpRequest,
-) -> crate::Result<impl Responder> {
-    proxy_http_request(db, path, id, request, Some(body), Method::POST).await
-}
-
+#[actix_web::route(
+    "/activity/{activity_id}/proxy-http/{url:.*}",
+    method = "GET",
+    method = "POST",
+    method = "PUT",
+    method = "DELETE",
+    method = "HEAD",
+    method = "OPTIONS",
+    method = "CONNECT",
+    method = "PATCH",
+    method = "TRACE"
+)]
 async fn proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
     id: Identity,
     request: HttpRequest,
     body: Option<web::Bytes>,
-    method: Method,
 ) -> crate::Result<impl Responder> {
     let path_activity_url = path.into_inner();
     let activity_id = path_activity_url.activity_id;
@@ -68,7 +56,7 @@ async fn proxy_http_request(
     }))
     .bus_addr(&activity::exeunit::bus_id(&activity_id));
 
-    let method = method.to_string();
+    let method = request.method().to_string();
     let body = body.map(|bytes| bytes.to_vec());
     let headers = request.headers().clone();
 
