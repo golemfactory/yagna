@@ -1,27 +1,27 @@
+pub mod outbound;
+pub mod restrict;
+mod store;
+
+use crate::rules::outbound::{CertRule, Mode, OutboundRules};
+use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule, RuleAccessor};
+use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, bail, Result};
-use golem_certificate::schemas::permissions::Permissions;
+
+use anyhow::{bail, Result};
+use golem_certificate::schemas::certificate::Fingerprint;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     convert::TryFrom,
-    fs::OpenOptions,
-    io::BufReader,
-    ops::Not,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
 };
-use structopt::StructOpt;
-use strum::{Display, EnumString, EnumVariantNames};
-use url::Url;
+use strum_macros::Display;
+
 use ya_client_model::NodeId;
+use ya_manifest_utils::keystore::{AddParams, AddResponse};
 use ya_manifest_utils::{
     keystore::{x509_keystore::X509CertData, Cert, Keystore},
-    matching::{
-        domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
-        Matcher,
-    },
+    matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher},
     CompositeKeystore, OutboundAccess,
 };
 
@@ -29,7 +29,6 @@ use ya_manifest_utils::{
 pub struct RulesManager {
     pub rulestore: Rulestore,
     pub keystore: CompositeKeystore,
-    pub cert_dir: PathBuf,
     whitelist: DomainWhitelistState,
     whitelist_file: PathBuf,
 }
@@ -49,7 +48,6 @@ impl RulesManager {
 
         let manager = Self {
             whitelist_file: whitelist_file.to_path_buf(),
-            cert_dir: cert_dir.to_path_buf(),
             rulestore,
             keystore,
             whitelist,
@@ -58,6 +56,63 @@ impl RulesManager {
         manager.remove_dangling_rules()?;
 
         Ok(manager)
+    }
+
+    pub fn blacklist(&self) -> RestrictRule<Blacklist> {
+        RestrictRule::<Blacklist>::new(self.rulestore.clone(), self.keystore.clone())
+    }
+
+    pub fn allow_only(&self) -> RestrictRule<AllowOnly> {
+        RestrictRule::<AllowOnly>::new(self.rulestore.clone(), self.keystore.clone())
+    }
+
+    pub fn outbound(&self) -> OutboundRules {
+        OutboundRules::new(
+            self.rulestore.clone(),
+            self.keystore.clone(),
+            self.whitelist.clone(),
+        )
+    }
+
+    /// TODO: Compatibility method. `self.outbound()` interface should be used instead.
+    pub fn check_outbound_rules(
+        &self,
+        access: OutboundAccess,
+        requestor_id: NodeId,
+        manifest_sig: Option<ManifestSignatureProps>,
+        node_descriptor: Option<serde_json::Value>,
+    ) -> CheckRulesResult {
+        self.outbound()
+            .check_outbound_rules(access, requestor_id, manifest_sig, node_descriptor)
+    }
+
+    /// TODO: function should be able to distinguish x509 and golem certificates and import
+    ///       both types. Currently, it's only importing golem certificates.
+    pub fn import_certs(&mut self, import_cert: &Path) -> Result<Vec<Fingerprint>> {
+        let AddResponse {
+            invalid,
+            leaf_cert_ids,
+            duplicated,
+            ..
+        } = self.keystore.add_golem_cert(&AddParams {
+            certs: vec![import_cert.to_path_buf()],
+        })?;
+
+        for cert_path in invalid {
+            log::error!("Failed to import Golem certificates from: {cert_path:?}.");
+        }
+
+        self.keystore.reload()?;
+
+        for cert in duplicated {
+            log::info!(
+                "Certificate is already in keystore: {}, `{}`",
+                cert.subject(),
+                cert.id()
+            );
+        }
+
+        Ok(leaf_cert_ids)
     }
 
     pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
@@ -112,16 +167,22 @@ impl RulesManager {
         certs
             .into_iter()
             .map(|cert| {
-                let mut outbound_rules: Vec<OutboundRule> = Vec::new();
+                let mut outbound_rules: Vec<Rule> = Vec::new();
                 if cfg.outbound.partner.contains_key(&cert.id()) {
-                    outbound_rules.push(OutboundRule::Partner);
+                    outbound_rules.push(Rule::Outbound(OutboundRule::Partner));
                 }
                 if cfg.outbound.audited_payload.contains_key(&cert.id()) {
-                    outbound_rules.push(OutboundRule::AuditedPayload);
+                    outbound_rules.push(Rule::Outbound(OutboundRule::AuditedPayload));
+                }
+                if cfg.blacklist.certified.contains(&cert.id()) {
+                    outbound_rules.push(Rule::Blacklist);
+                }
+                if cfg.allow_only.certified.contains(&cert.id()) {
+                    outbound_rules.push(Rule::AllowOnly);
                 }
                 CertWithRules {
                     cert,
-                    outbound_rules,
+                    rules: outbound_rules,
                 }
             })
             .collect()
@@ -187,11 +248,10 @@ impl RulesManager {
 
     pub fn spawn_file_monitors(&self) -> Result<(FileMonitor, FileMonitor, FileMonitor)> {
         let rulestore_monitor = {
-            let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
             let handler = move |p: PathBuf| {
                 // Reload also keystore to avoid file-monitor race when doing `import-cert`
-                match manager.keystore.reload(&cert_dir) {
+                match manager.keystore.reload() {
                     Ok(()) => {
                         log::info!("Trusted keystore updated because rulestore changed");
                     }
@@ -215,9 +275,8 @@ impl RulesManager {
         };
 
         let keystore_monitor = {
-            let cert_dir = self.cert_dir.clone();
             let manager = self.clone();
-            let handler = move |p: PathBuf| match manager.keystore.reload(&cert_dir) {
+            let handler = move |p: PathBuf| match manager.keystore.reload() {
                 Ok(()) => {
                     log::info!("Trusted keystore updated from {}", p.display());
 
@@ -227,7 +286,7 @@ impl RulesManager {
                 }
                 Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
             };
-            FileMonitor::spawn(self.cert_dir.clone(), FileMonitor::on_modified(handler))?
+            FileMonitor::spawn(self.keystore.cert_dir(), FileMonitor::on_modified(handler))?
         };
 
         let whitelist_monitor = {
@@ -260,7 +319,7 @@ impl RulesManager {
         let keystore_cert_ids = self.keystore.list_ids();
         let removed_rules = self.remove_rules_not_matching_any_cert(&keystore_cert_ids);
 
-        if removed_rules.partner.is_empty() && removed_rules.partner.is_empty() {
+        if removed_rules.is_empty() {
             return Ok(());
         }
         if !removed_rules.partner.is_empty() {
@@ -269,196 +328,38 @@ impl RulesManager {
         if !removed_rules.audited_payload.is_empty() {
             log::warn!("Because Keystore didn't have appropriate certs, following Outbound Audited-Payload rules were removed: {:?}", removed_rules.audited_payload);
         }
+        if !removed_rules.blacklist.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following Blacklist rules were removed: {:?}", removed_rules.blacklist);
+        }
+        if !removed_rules.allow_only.is_empty() {
+            log::warn!("Because Keystore didn't have appropriate certs, following AllowOnly rules were removed: {:?}", removed_rules.allow_only);
+        }
         self.rulestore.save()
     }
 
     fn remove_rules_not_matching_any_cert(&self, cert_ids: &[String]) -> RemovedRules {
-        let mut rulestore = self.rulestore.config.write().unwrap();
-        let removed_partner_rules =
-            remove_rules_not_matching_any_cert(&mut rulestore.outbound.partner, cert_ids);
-        let removed_audited_payload_rules =
-            remove_rules_not_matching_any_cert(&mut rulestore.outbound.audited_payload, cert_ids);
         RemovedRules {
-            partner: removed_partner_rules,
-            audited_payload: removed_audited_payload_rules,
-        }
-    }
-
-    fn check_everyone_rule(&self, access: &OutboundAccess) -> Result<()> {
-        let mode = &self.rulestore.config.read().unwrap().outbound.everyone;
-
-        self.check_mode(mode, access)
-            .map_err(|e| anyhow!("Everyone {e}"))
-    }
-
-    fn check_audited_payload_rule(
-        &self,
-        access: &OutboundAccess,
-        manifest_sig: Option<ManifestSignatureProps>,
-    ) -> Result<()> {
-        if let Some(props) = manifest_sig {
-            let cert_chain_ids = self
-                .keystore
-                .verifier(&props.cert)?
-                .with_alg(&props.sig_alg)
-                .verify(&props.manifest_encoded, &props.sig)
-                .map_err(|e| anyhow!("Audited-Payload rule: {e}"))?;
-
-            let rulestore_config = self.rulestore.config.read().unwrap();
-            // Rule set for certificate closes to leaf takes precedence
-            // either:
-            // 1. a rule is set directly for the cert
-            // 2. an issuer for the certificate is in keystore and there's a rule for this cert
-            for cert_id in cert_chain_ids.iter().rev() {
-                if let Some(rule) = rulestore_config.outbound.audited_payload.get(cert_id) {
-                    return self
-                        .check_mode(&rule.mode, access)
-                        .map_err(|e| anyhow!("Audited-Payload {e}"));
-                }
-            }
-
-            Err(anyhow!(
-                "Audited-Payload rule whole chain of cert_ids is not trusted: {:?}",
-                cert_chain_ids
-            ))
-        } else {
-            Err(anyhow!("Audited-Payload rule requires manifest signature"))
-        }
-    }
-
-    fn check_partner_rule(
-        &self,
-        access: &OutboundAccess,
-        node_descriptor: Option<serde_json::Value>,
-        requestor_id: NodeId,
-    ) -> Result<()> {
-        let node_descriptor =
-            node_descriptor.ok_or_else(|| anyhow!("Partner rule requires node descriptor"))?;
-
-        let node_descriptor = self
-            .keystore
-            .verify_node_descriptor(node_descriptor)
-            .map_err(|e| anyhow!("Partner {e}"))?;
-
-        if requestor_id != node_descriptor.node_id {
-            return Err(anyhow!(
-                "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
-                node_descriptor.node_id
-            ));
-        }
-
-        self::verify_golem_permissions(&node_descriptor.permissions, access)
-            .map_err(|e| anyhow!("Partner {e}"))?;
-
-        for cert_id in node_descriptor.certificate_chain_fingerprints.iter() {
-            if let Some(rule) = self
-                .rulestore
-                .config
-                .read()
-                .unwrap()
-                .outbound
-                .partner
-                .get(cert_id)
-            {
-                return self
-                    .check_mode(&rule.mode, access)
-                    .map_err(|e| anyhow!("Partner {e}"));
-            }
-        }
-        Err(anyhow!(
-            "Partner rule whole chain of cert_ids is not trusted: {:?}",
-            node_descriptor.certificate_chain_fingerprints
-        ))
-    }
-
-    fn check_mode(&self, mode: &Mode, access: &OutboundAccess) -> Result<()> {
-        log::trace!("Checking mode: {mode}");
-
-        match mode {
-            Mode::All => Ok(()),
-            Mode::Whitelist => {
-                if self.whitelist_matching(access) {
-                    log::trace!("Whitelist matched");
-
-                    Ok(())
-                } else {
-                    Err(anyhow!("rule didn't match whitelist"))
-                }
-            }
-            Mode::None => Err(anyhow!("rule is disabled")),
-        }
-    }
-
-    pub fn check_outbound_rules(
-        &self,
-        access: OutboundAccess,
-        requestor_id: NodeId,
-        manifest_sig: Option<ManifestSignatureProps>,
-        node_descriptor: Option<serde_json::Value>,
-    ) -> CheckRulesResult {
-        if self.rulestore.is_outbound_disabled() {
-            log::trace!("Checking rules: outbound is disabled.");
-
-            return CheckRulesResult::Reject("outbound is disabled".into());
-        }
-
-        let (accepts, rejects): (Vec<_>, Vec<_>) = vec![
-            self.check_everyone_rule(&access),
-            self.check_audited_payload_rule(&access, manifest_sig),
-            self.check_partner_rule(&access, node_descriptor, requestor_id),
-        ]
-        .into_iter()
-        .partition_result();
-
-        let reject_msg = extract_rejected_message(rejects);
-
-        log::info!("Following rules didn't match: {reject_msg}");
-
-        if accepts.is_empty().not() {
-            CheckRulesResult::Accept
-        } else {
-            CheckRulesResult::Reject(format!("Outbound rejected because: {reject_msg}"))
-        }
-    }
-
-    fn whitelist_matching(&self, outbound_access: &OutboundAccess) -> bool {
-        match outbound_access {
-            ya_manifest_utils::OutboundAccess::Urls(urls) => {
-                let matcher = self.whitelist.matchers.read().unwrap();
-                let non_whitelisted_urls: Vec<&str> = urls
-                    .iter()
-                    .flat_map(Url::host_str)
-                    .filter(|domain| matcher.matches(domain).not())
-                    .collect();
-
-                if non_whitelisted_urls.is_empty() {
-                    true
-                } else {
-                    log::debug!(
-                        "Whitelist. Non whitelisted URLs: {:?}",
-                        non_whitelisted_urls
-                    );
-                    false
-                }
-            }
-            ya_manifest_utils::OutboundAccess::Unrestricted => false,
+            partner: self.outbound().remove_unmatched_partner_rules(cert_ids),
+            audited_payload: self
+                .outbound()
+                .remove_unmatched_audited_payload_rules(cert_ids),
+            blacklist: remove_unmatched_certs(self.blacklist(), cert_ids),
+            allow_only: remove_unmatched_certs(self.allow_only(), cert_ids),
         }
     }
 }
 
-fn remove_rules_not_matching_any_cert(
-    rules: &mut HashMap<String, CertRule>,
-    cert_ids: &[String],
-) -> Vec<String> {
-    let mut deleted_rules = vec![];
-    rules.retain(|cert_id, _| {
-        cert_ids
-            .contains(cert_id)
-            .not()
-            .then(|| deleted_rules.push(cert_id.clone()))
-            .is_none()
-    });
-    deleted_rules
+fn remove_unmatched_certs<G: RuleAccessor>(
+    rule: RestrictRule<G>,
+    keystore_certs: &[Fingerprint],
+) -> Vec<Fingerprint> {
+    rule.list_certs()
+        .into_iter()
+        .filter(|cert| !keystore_certs.contains(cert))
+        .inspect(|cert| {
+            rule.remove_certified_rule(cert).ok();
+        })
+        .collect()
 }
 
 type RemovedRulesIds = Vec<String>;
@@ -466,44 +367,17 @@ type RemovedRulesIds = Vec<String>;
 struct RemovedRules {
     partner: RemovedRulesIds,
     audited_payload: RemovedRulesIds,
+    blacklist: RemovedRulesIds,
+    allow_only: RemovedRulesIds,
 }
 
-fn verify_golem_permissions(
-    cert_permissions: &Permissions,
-    outbound_access: &OutboundAccess,
-) -> Result<()> {
-    match cert_permissions {
-        Permissions::All => Ok(()),
-        Permissions::Object(details) => match &details.outbound {
-            Some(outbound_permissions) => match outbound_permissions {
-                golem_certificate::schemas::permissions::OutboundPermissions::Unrestricted => {
-                    Ok(())
-                }
-                golem_certificate::schemas::permissions::OutboundPermissions::Urls(
-                    permitted_urls,
-                ) => {
-                    match outbound_access {
-                        OutboundAccess::Urls(requested_urls) => {
-                            for requested_url in requested_urls {
-                                if permitted_urls.contains(requested_url).not() {
-                                    anyhow::bail!("Partner rule forbidden url requested: {requested_url}");
-                                }
-                            }
-                        },
-                        OutboundAccess::Unrestricted => anyhow::bail!("Manifest tries to use Unrestricted access, but certificate allows only for specific urls"),
-                    }
-                    Ok(())
-                }
-            },
-            None => anyhow::bail!("No outbound permissions"),
-        },
+impl RemovedRules {
+    fn is_empty(&self) -> bool {
+        self.partner.is_empty()
+            && self.audited_payload.is_empty()
+            && self.blacklist.is_empty()
+            && self.allow_only.is_empty()
     }
-}
-
-fn extract_rejected_message(rules_checks: Vec<anyhow::Error>) -> String {
-    rules_checks
-        .iter()
-        .fold(String::new(), |s, c| s + &c.to_string() + " ; ")
 }
 
 pub struct ManifestSignatureProps {
@@ -518,128 +392,24 @@ pub enum CheckRulesResult {
     Reject(String),
 }
 
-#[derive(Clone, Debug)]
-pub struct Rulestore {
-    pub path: PathBuf,
-    pub config: Arc<RwLock<RulesConfig>>,
+#[derive(PartialEq, Eq)]
+pub struct CertWithRules {
+    pub cert: Cert,
+    pub rules: Vec<Rule>,
 }
 
-impl Rulestore {
-    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
-        if rules_file.exists() {
-            log::debug!("Loading rule from: {}", rules_file.display());
-            let file = OpenOptions::new().read(true).open(rules_file)?;
-            let config: RulesConfig = serde_json::from_reader(BufReader::new(file))?;
-            log::debug!("Loaded rules: {:#?}", config);
-
-            Ok(Self {
-                config: Arc::new(RwLock::new(config)),
-                path: rules_file.to_path_buf(),
-            })
-        } else {
-            log::debug!("Creating default Rules configuration");
-            let config = Default::default();
-
-            let store = Self {
-                config: Arc::new(RwLock::new(config)),
-                path: rules_file.to_path_buf(),
-            };
-            store.save()?;
-
-            Ok(store)
-        }
-    }
-
-    fn save(&self) -> Result<()> {
-        log::debug!("Saving RuleStore to: {}", self.path.display());
-        Ok(std::fs::write(
-            &self.path,
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?,
-        )?)
-    }
-
-    pub fn reload(&self) -> Result<()> {
-        log::debug!("Reloading RuleStore from: {}", self.path.display());
-        let new_rule_store = Self::load_or_create(&self.path)?;
-
-        self.replace(new_rule_store);
-
-        Ok(())
-    }
-
-    fn replace(&self, other: Self) {
-        let store = std::mem::take(&mut (*other.config.write().unwrap()));
-
-        *self.config.write().unwrap() = store;
-    }
-
-    pub fn print(&self) -> Result<()> {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?
-        );
-
-        Ok(())
-    }
-
-    pub fn is_outbound_disabled(&self) -> bool {
-        self.config.read().unwrap().outbound.enabled.not()
+impl CertWithRules {
+    pub fn format_rules(&self) -> String {
+        self.rules.iter().map(|r| r.to_string()).join(" | ")
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RulesConfig {
-    pub outbound: OutboundConfig,
-}
-
-impl Default for RulesConfig {
-    fn default() -> Self {
-        Self {
-            outbound: OutboundConfig {
-                enabled: true,
-                everyone: Mode::Whitelist,
-                audited_payload: HashMap::new(),
-                partner: HashMap::new(),
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct OutboundConfig {
-    pub enabled: bool,
-    pub everyone: Mode,
-    #[serde(default)]
-    pub audited_payload: HashMap<String, CertRule>,
-    #[serde(default)]
-    pub partner: HashMap<String, CertRule>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CertRule {
-    pub mode: Mode,
-    pub description: String,
-}
-
-#[derive(
-    StructOpt,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    Eq,
-    PartialEq,
-    Display,
-    EnumString,
-    EnumVariantNames,
-)]
-#[serde(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab-case")]
-pub enum Mode {
-    All,
-    None,
-    Whitelist,
+#[derive(PartialEq, Eq, derive_more::Display, Debug, Clone, Serialize, Deserialize)]
+pub enum Rule {
+    #[display(fmt = "Outbound-{}", _0)]
+    Outbound(OutboundRule),
+    Blacklist,
+    AllowOnly,
 }
 
 #[derive(PartialEq, Eq, Display, Debug, Clone, Serialize, Deserialize)]
@@ -647,19 +417,4 @@ pub enum OutboundRule {
     Partner,
     AuditedPayload,
     Everyone,
-}
-
-#[derive(PartialEq, Eq)]
-pub struct CertWithRules {
-    pub cert: Cert,
-    pub outbound_rules: Vec<OutboundRule>,
-}
-
-impl CertWithRules {
-    pub fn format_outbound_rules(&self) -> String {
-        self.outbound_rules
-            .iter()
-            .map(|r| r.to_string())
-            .join(" | ")
-    }
 }

@@ -1,6 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
@@ -538,17 +539,34 @@ impl RpcMessage for SignPayment {
     type Error = GenericError;
 }
 
+// ************************ SIGN PAYMENT ************************
+
+/// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
+#[derive(Clone, Debug, Serialize, Deserialize, From)]
+pub struct SignPaymentCanonicalized(pub Payment);
+
+impl RpcMessage for crate::driver::SignPaymentCanonicalized {
+    const ID: &'static str = "SignPaymentCanonicalized";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
 // ********************** VERIFY SIGNATURE **********************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
+    pub canonicalized: bool,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-        Self { payment, signature }
+    pub fn new(payment: Payment, signature: Vec<u8>, canonicalized: bool) -> Self {
+        Self {
+            payment,
+            signature,
+            canonicalized,
+        }
     }
 }
 

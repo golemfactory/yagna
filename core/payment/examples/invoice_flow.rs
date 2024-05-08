@@ -12,7 +12,7 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInv
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
-    #[structopt(long, default_value = "dummy-glm")]
+    #[structopt(long, default_value = "erc20-holesky-tglm")]
     platform: String,
 }
 
@@ -28,11 +28,14 @@ async fn main() -> anyhow::Result<()> {
     // Create requestor / provider PaymentApi
     let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
     let provider: PaymentApi = WebClient::builder()
+        .timeout(Duration::from_secs(600 * 60))
         .api_url(provider_url)
         .build()
         .interface()?;
+
     let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
     let requestor: PaymentApi = WebClient::builder()
+        .timeout(Duration::from_secs(600 * 60))
         .api_url(requestor_url)
         .build()
         .interface()?;
@@ -58,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_received = requestor
         .get_invoice_events::<Utc>(
             Some(&invoice_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )
@@ -115,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_accepted = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_received.first().unwrap().event_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )
@@ -125,12 +128,21 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
+
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;
+
+    let signed_payments = provider
+        .get_signed_payments(Some(&now), None, None, args.app_session_id.clone())
+        .await?;
+
     assert_eq!(payments.len(), 1);
+    assert_eq!(signed_payments.len(), 1);
+
     let payment = payments.pop().unwrap();
     assert!(payment.amount >= invoice.amount);
+
     log::info!("Payment verified correctly.");
 
     log::info!("Verifying invoice status...");
@@ -141,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
     let invoice_events_settled = provider
         .get_invoice_events::<Utc>(
             Some(&invoice_events_accepted.first().unwrap().event_date),
-            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(1000)),
             None,
             args.app_session_id.clone(),
         )

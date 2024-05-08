@@ -11,18 +11,7 @@ keywords = ["golem", "yagna"]
 
 [features]
 default = []
-full = [
-    'activity',
-    'appkey',
-    'driver',
-    'identity',
-    'market',
-    'net',
-    'payment',
-    'gftp',
-    'sgx',
-    'version',
-]
+full = ['activity', 'appkey', 'driver', 'identity', 'market', 'net', 'payment', 'gftp', 'sgx', 'version']
 activity = []
 appkey = []
 driver = ['bigdecimal', 'bitflags']
@@ -50,4 +39,6 @@ structopt = "0.3"
 strum = { workspace = true }
 strum_macros = "0.24"
 thiserror = "1.0.9"
+serde_json_canonicalizer = "0.2.0"
 serde_json = "1.0.113"
+
