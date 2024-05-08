@@ -17,5 +17,6 @@
     "e2e/vm/test_e2e_rule_partner_outbound_unrestricted.py::test_e2e_rule_partner_outbound_unrestricted": 105.69478582400916,
     "e2e/vm/test_e2e_vm.py::test_e2e_vm": 228.68717026399827,
     "e2e/vm/test_e2e_x509_signature_outbound.py::test_e2e_x509_signature_outbound": 118.35896305299684,
+    "e2e/vm/test_e2e_outbound_perf.py::test_e2e_outbound_perf": 70.0,
     "e2e/wasi/test_e2e_wasi.py::test_e2e_wasi": 178.58433114900254
 }

@@ -7,17 +7,9 @@ on:
         description: 'Profile (unused right now)'
         required: true
         default: 'debug'
-  push:
-    branches:
-      - master
-      - deposits
-      - release/*
-      - '**/all-tests'
-  pull_request:
-    branches:
-      - master
-      - deposits
-      - release/*
+  schedule:
+    # run this workflow every day at 4:00 AM UTC
+    - cron: '0 4 * * *'
 
 env:
   rust_stable: 1.77.0
@@ -27,13 +19,13 @@ jobs:
     name: Payment test
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
-      RUSTFLAGS: "-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      RUSTFLAGS: "-C opt-level=z -C debuginfo=1"
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [ macos-latest, windows-latest, ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -46,7 +38,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
