@@ -22,8 +22,6 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
-    use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
-    use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -296,8 +294,8 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct GetRpcEndpointsResult {
-        pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
-        pub sources: BTreeMap<String, Web3ExternalSources>,
+        pub endpoints: serde_json::Value,
+        pub sources: serde_json::Value,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]

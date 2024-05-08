@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 // External crates
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
@@ -162,17 +163,18 @@ pub async fn run_command_rpc(
         })
         .await??;
 
+    let endpoints: BTreeMap<String, Vec<Web3FullNodeData>> =
+        serde_json::from_value(result.endpoints).unwrap();
+    let sources: BTreeMap<String, Web3ExternalSources> =
+        serde_json::from_value(result.sources).unwrap();
     if ctx.json_output {
-        return CommandOutput::object(
-            json!({"endpoints": result.endpoints, "sources": result.sources}),
-        );
+        return CommandOutput::object(json!({"endpoints": endpoints, "sources": sources}));
     }
 
-    let v = result
-        .endpoints
+    let v = endpoints
         .iter()
         .map(|(network, node_infos)| {
-            let sources = result.sources.get(network);
+            let sources = sources.get(network);
             let network = NetworkName::from_str(network)
                 .map_err(|_| anyhow!("Invalid network name {network}"))?;
             Ok(run_command_rpc_entry(
