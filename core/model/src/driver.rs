@@ -1,9 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
-use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
 use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
@@ -98,8 +96,8 @@ impl RpcMessage for GetRpcEndpoints {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct GetRpcEndpointsResult {
-    pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
-    pub sources: BTreeMap<String, Web3ExternalSources>,
+    pub endpoints: serde_json::Value,
+    pub sources: serde_json::Value,
 }
 
 // ************************** GET ACCOUNT BALANCE **************************
