@@ -13,13 +13,11 @@ on:
       - deposits
       - release/*
       - '**/all-tests'
-      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
       - deposits
       - release/*
-      - staszek/gamerhash-combined
 
 env:
   rust_stable: 1.77.0

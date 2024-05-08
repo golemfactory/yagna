@@ -15,7 +15,7 @@ on:
         description: 'Strip binaries'
         required: true
         default: 'true'
-        possible_values: ['true', 'false']
+        possible_values: [ 'true', 'false' ]
   push:
     branches:
       - master
@@ -23,13 +23,11 @@ on:
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
-      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
       - deposits
       - release/*
-      - staszek/gamerhash-combined
 
 jobs:
   build:
@@ -219,7 +217,7 @@ jobs:
   integration-test:
     name: Integration Tests (hybrid-net)
     runs-on: ubuntu-latest
-    needs: [integration-test-groups]
+    needs: [ integration-test-groups ]
     steps:
       - name: Check status
         if: needs.integration-test-groups.result != 'success'
