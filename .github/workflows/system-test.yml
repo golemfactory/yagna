@@ -12,13 +12,11 @@ on:
       - master
       - release/*
       - '**/all-tests'
-      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
       - deposits
       - release/*
-      - staszek/gamerhash-combined
 
 env:
   rust_stable: 1.77.0
@@ -33,7 +31,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -46,7 +44,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
