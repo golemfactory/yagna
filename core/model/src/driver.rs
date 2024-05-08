@@ -1,6 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
