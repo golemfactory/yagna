@@ -136,6 +136,8 @@ async fn get_invoice_events(
     req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
+    counter!("payment.invoices.events.query", 1);
+
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")

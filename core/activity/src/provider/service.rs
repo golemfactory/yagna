@@ -73,6 +73,7 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     counter!("activity.provider.destroyed", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
+    counter!("activity.provider.events.query", 0);
 
     local::bind_gsb(db, tracker);
 }
