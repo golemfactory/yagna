@@ -6,6 +6,7 @@ use futures::prelude::*;
 use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
+use ya_client_model::market::agreement;
 use ya_core_model::market::Agreement;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
@@ -83,22 +84,29 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
 }
 
 async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
-    log::info!("Initial activities checkup");
-    let agreements_res = get_agreements_by_state(AgreementState::Approved).await;
-    let Ok(agreements) = agreements_res else {
-        log::error!("Acitivties checkup error. Failed to list Agreements. Err: {agreements_res:?}");
-        return;
+    log::info!("Checkup for alive Activities remaining from previous runs");
+    let agreements = match get_agreements_by_state(AgreementState::Approved).await {
+        Ok(agreements) => agreements,
+        Err(err) => {
+            log::error!("Acitivties checkup error. Failed to list Agreements. Err: {err}");
+            return;
+        }
     };
 
     for agreement in agreements {
-        let agreement_res = bus::service(market::BUS_ID)
+        let agreement = match bus::service(market::BUS_ID)
             .send(market::GetAgreement::as_provider(agreement.id))
-            .await;
-        let Ok(Ok(agreement)) = agreement_res else {
-            log::error!(
-                "Acitivties checkup error. Failed to get Agreement. Err: {agreement_res:?}"
-            );
-            continue;
+            .await
+        {
+            Ok(Ok(agreement)) => agreement,
+            Ok(Err(err)) => {
+                log::error!("Acitivties checkup error. Failed to get Agreement. Err: {err}");
+                continue;
+            }
+            Err(err) => {
+                log::error!("Acitivties checkup error. GSB call failed. Err: {err}");
+                continue;
+            }
         };
         if let Err(err) = monitor_alive_activities(agreement, db.clone(), tracker.clone()).await {
             log::error!("Acitivties initial checkup error. Err: {err}")
@@ -112,7 +120,7 @@ async fn monitor_alive_activities(
     tracker: TrackerRef,
 ) -> anyhow::Result<()> {
     log::info!(
-        "Initial activities checkup for agreement {}",
+        "Checkup of Agreement {} for remaining alive Activities",
         agreement.agreement_id
     );
     let activities_ids = get_activities_for_agreement(&db, &agreement.agreement_id).await?;
@@ -120,7 +128,7 @@ async fn monitor_alive_activities(
     for activity_id in activities_ids {
         let activity_state = activity_state_dao.get(&activity_id).await?;
         if is_responsive(activity_state) {
-            log::info!("Initial activty {activity_id} monitoring");
+            log::info!("Spawning monitoring of Activty {activity_id}");
             tokio::task::spawn_local(monitor_activity(
                 db.clone(),
                 tracker.clone(),
