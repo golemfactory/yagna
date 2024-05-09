@@ -75,6 +75,7 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     counter!("activity.provider.create.agreement.not-approved", 0);
     counter!("activity.provider.destroyed", 0);
     counter!("activity.provider.unresponsive", 0);
+    counter!("activity.provider.responsive-again", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
 
@@ -465,6 +466,7 @@ async fn monitor_activity(
                 if let Err(e) = set_persisted_state(&db, &activity_id, state).await {
                     log::error!("cannot update activity {} state: {}", activity_id, e);
                 }
+                counter!("activity.provider.responsive-again", 1);
             }
         };
 
