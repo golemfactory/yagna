@@ -6,14 +6,13 @@ use futures::prelude::*;
 use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
-use ya_client_model::market::agreement;
-use ya_core_model::market::Agreement;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
 use ya_client_model::market::{agreement::State as AgreementState, Role};
 use ya_client_model::NodeId;
 use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
+use ya_core_model::market::Agreement;
 use ya_core_model::{activity, market};
 use ya_persistence::executor::DbExecutor;
 
@@ -129,7 +128,7 @@ async fn monitor_alive_activities(
     for activity_id in activities_ids {
         let activity_state = activity_state_dao.get(&activity_id).await?;
         if is_responsive(activity_state) {
-            log::info!("Spawning monitoring of Activty {activity_id}");
+            log::info!("Spawning monitoring of Activity {activity_id}");
             tokio::task::spawn_local(monitor_activity(
                 db.clone(),
                 tracker.clone(),
@@ -456,9 +455,9 @@ async fn monitor_activity(
                 }
             } else if state.state.0 == State::Unresponsive && since_update <= unresponsive_limit {
                 log::warn!("activity {} is now responsive", activity_id);
-                let state = match prev_state.take() {
-                    Some(state) => state,
-                    _ => panic!("unknown pre-unresponsive state of activity {}", activity_id),
+                let Some(state) = prev_state.take() else {
+                    log::error!("Unknown pre-unresponsive state of activity {activity_id}");
+                    break;
                 };
                 let _ = tracker
                     .update_state(activity_id.clone(), state.state.0)
