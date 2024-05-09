@@ -18,12 +18,11 @@ use ya_persistence::executor::DbExecutor;
 
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 use ya_service_bus::{typed as bus, RpcEndpoint};
-// use ya_client_model::market::agreement::State as AgreementState;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activities_for_agreement, get_activity_agreement, get_agreement, get_persisted_state,
-    get_persisted_usage, set_persisted_state, RpcMessageResult,
+    get_activities_for_agreement, get_activity_agreement, get_agreement, get_agreements_by_state,
+    get_persisted_state, get_persisted_usage, is_responsive, set_persisted_state, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
@@ -80,14 +79,12 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
 
     local::bind_gsb(&db.clone(), tracker.clone());
 
-    let db = db.clone();
-    let tracker = tracker.clone();
-    tokio::task::spawn_local(initial_checkup(db, tracker));
+    tokio::task::spawn_local(initial_checkup(db.clone(), tracker.clone()));
 }
 
 async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
     log::info!("Initial activities checkup");
-    let agreements_res = get_approved_agreements().await;
+    let agreements_res = get_agreements_by_state(AgreementState::Approved).await;
     let Ok(agreements) = agreements_res else {
         log::error!("Acitivties checkup error. Failed to list Agreements. Err: {agreements_res:?}");
         return;
@@ -109,17 +106,6 @@ async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
     }
 }
 
-async fn get_approved_agreements() -> anyhow::Result<Vec<AgreementListEntry>> {
-    let list_agreements_query = market::ListAgreements {
-        state: Some(AgreementState::Approved),
-        ..Default::default()
-    };
-    let agreements = bus::service(market::BUS_ID)
-        .send(list_agreements_query)
-        .await??;
-    Ok(agreements)
-}
-
 async fn monitor_alive_activities(
     agreement: Agreement,
     db: DbExecutor,
@@ -133,7 +119,7 @@ async fn monitor_alive_activities(
     let activity_state_dao = db.as_dao::<ActivityStateDao>();
     for activity_id in activities_ids {
         let activity_state = activity_state_dao.get(&activity_id).await?;
-        if activity_state.alive() {
+        if is_responsive(activity_state) {
             log::info!("Initial activty {activity_id} monitoring");
             tokio::task::spawn_local(monitor_activity(
                 db.clone(),
