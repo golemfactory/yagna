@@ -75,6 +75,7 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     counter!("activity.provider.created", 0);
     counter!("activity.provider.create.agreement.not-approved", 0);
     counter!("activity.provider.destroyed", 0);
+    counter!("activity.provider.unresponsive", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
 
@@ -414,11 +415,15 @@ async fn monitor_activity(
                 break;
             }
 
-            let duration = (Utc::now().timestamp() - usage.timestamp) as f64;
+            let since_update = (Utc::now().timestamp() - usage.timestamp) as f64;
 
-            if duration > unresponsive_limit || duration > inactivity_limit {
+            if since_update > unresponsive_limit || since_update > inactivity_limit {
                 if state.state.0 != State::Unresponsive {
-                    log::warn!("activity {} unresponsive after {}s", activity_id, duration);
+                    log::warn!(
+                        "activity {} unresponsive after {}s",
+                        activity_id,
+                        since_update
+                    );
                     let new_state =
                         ActivityState::from(StatePair(State::Unresponsive, state.state.1));
                     prev_state = Some(state);
@@ -428,13 +433,14 @@ async fn monitor_activity(
                     if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
                         log::error!("cannot update activity {} state: {}", activity_id, e);
                     }
+                    counter!("activity.provider.unresponsive", 1);
                 }
 
-                if duration > inactivity_limit {
+                if since_update > inactivity_limit {
                     log::warn!(
                         "activity {} inactive for {}s, destroying",
                         activity_id,
-                        duration
+                        since_update
                     );
                     enqueue_destroy_evt(
                         db,
@@ -448,7 +454,7 @@ async fn monitor_activity(
                     counter!("activity.provider.destroyed.unresponsive", 1);
                     break;
                 }
-            } else if state.state.0 == State::Unresponsive && duration <= unresponsive_limit {
+            } else if state.state.0 == State::Unresponsive && since_update <= unresponsive_limit {
                 log::warn!("activity {} is now responsive", activity_id);
                 let state = match prev_state.take() {
                     Some(state) => state,
