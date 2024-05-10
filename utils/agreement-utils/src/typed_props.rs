@@ -46,7 +46,7 @@ impl NodeInfo {
             geo_country_code: None,
             subnet: None,
             is_public: false,
-            protocol_version: 2,
+            protocol_version: 3,
         }
     }
 

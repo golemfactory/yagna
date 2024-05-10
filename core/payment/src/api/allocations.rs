@@ -632,13 +632,13 @@ async fn get_demand_decorations(
 
     // Populate payment platform properties / constraint.
     let mut properties: Vec<MarketProperty> = allocations
-        .into_iter()
+        .iter()
         .map(|allocation| MarketProperty {
             key: format!(
                 "golem.com.payment.platform.{}.address",
                 allocation.payment_platform
             ),
-            value: allocation.address,
+            value: allocation.address.clone(),
         })
         .collect();
     let platform_clause = Constraints::new_clause(
@@ -654,11 +654,25 @@ async fn get_demand_decorations(
     // Populate payment protocol version property / constraint.
     properties.push(MarketProperty {
         key: "golem.com.payment.protocol.version".into(),
-        value: "2".into(),
+        value: "3".into(),
     });
+
+    // Validating payments from deposit contracts requires a new version
+    // of the erc20 driver, so we determine the required version based
+    // on any allocations using deposits.
+    let required_protocol_ver = if allocations
+        .iter()
+        .any(|allocation| allocation.deposit.is_some())
+    {
+        3
+    } else {
+        2
+    };
+
     let protocol_clause = Constraints::new_single(
+        // >= constraint is not supported so we use > with decremented value
         ConstraintKey::new("golem.com.payment.protocol.version")
-            .greater_than(ConstraintKey::new(1)),
+            .greater_than(ConstraintKey::new(required_protocol_ver - 1)),
     );
 
     let constraints = vec![platform_clause.to_string(), protocol_clause.to_string()];
