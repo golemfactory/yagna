@@ -1,4 +1,4 @@
-use chrono::{Duration, TimeDelta};
+use chrono::Duration;
 
 use ya_agreement_utils::{Error, OfferDefinition};
 
@@ -19,12 +19,8 @@ pub struct DebitNoteInterval {
 
 impl DebitNoteInterval {
     pub fn new(config: &DebitNoteIntervalConfig) -> anyhow::Result<Self> {
-        let min_interval = Duration::from(TimeDelta::seconds(10));
-        // Duration::from_std(config.min_debit_note_interval)?;
-        let max_interval = Duration::from(TimeDelta::seconds(10));
-        // Duration::from_std(config.max_debit_note_interval)?;
-
-        log::info!("new debit note interval");
+        let min_interval = Duration::from_std(config.min_debit_note_interval)?;
+        let max_interval = Duration::from_std(config.max_debit_note_interval)?;
 
         if min_interval > max_interval {
             anyhow::bail!(
@@ -68,8 +64,7 @@ impl NegotiatorComponent for DebitNoteInterval {
                     });
                 } else if offer_interval != interval {
                     let property = offer.pointer_mut(DEBIT_NOTE_INTERVAL_PROPERTY).unwrap();
-                    // *property = serde_json::Value::Number(interval.num_seconds().into());
-                    *property = serde_json::Value::Number(10.into());
+                    *property = serde_json::Value::Number(interval.num_seconds().into());
                     return Ok(NegotiationResult::Negotiating { offer });
                 }
             }

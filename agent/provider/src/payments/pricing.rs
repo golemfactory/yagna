@@ -175,13 +175,13 @@ mod tests {
 
   "offer": {
     "properties": {
-      "golem.com.payment.debit-notes.accept-timeout?": 10,
+      "golem.com.payment.debit-notes.accept-timeout?": 240,
       "golem.com.payment.platform.erc20-goerli-tglm.address": "0x95369fc6fd02afeca110b9c32a21fb8ad899ee0a",
       "golem.com.pricing.model": "linear",
       "golem.com.pricing.model.linear.coeffs": [${coeffs}],
       "golem.com.scheme": "payu",
-      "golem.com.scheme.payu.debit-note.interval-sec?": 1,
-      "golem.com.scheme.payu.payment-timeout-sec?": 10,
+      "golem.com.scheme.payu.debit-note.interval-sec?": 120,
+      "golem.com.scheme.payu.payment-timeout-sec?": 120,
       "golem.com.usage.vector": [
         "golem.usage.cpu_sec",
         "golem.usage.duration_sec"
