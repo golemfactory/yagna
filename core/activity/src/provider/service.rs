@@ -417,7 +417,7 @@ async fn monitor_activity(
 
             let since_update = (Utc::now().timestamp() - usage.timestamp) as f64;
 
-            if since_update > unresponsive_limit || since_update > inactivity_limit {
+            if since_update > unresponsive_limit {
                 if state.state.0 != State::Unresponsive {
                     log::warn!(
                         "activity {} unresponsive after {}s",
@@ -436,6 +436,7 @@ async fn monitor_activity(
                     counter!("activity.provider.unresponsive", 1);
                 }
 
+                // `unresponsive_limit` should be configured to be smaller than `inactivity_limit`
                 if since_update > inactivity_limit {
                     log::warn!(
                         "activity {} inactive for {}s, destroying",
