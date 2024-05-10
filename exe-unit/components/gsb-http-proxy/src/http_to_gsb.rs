@@ -93,8 +93,8 @@ impl HttpToGsbProxy {
 
         let result = response.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
 
-        if let Ok(r) = result {
-            return HttpToGsbProxyResponse {
+        match result {
+            Ok(r) => HttpToGsbProxyResponse {
                 body: actix_web::web::Bytes::from(r.body.msg_bytes)
                     .try_into_bytes()
                     .map_err(|_| {
@@ -102,15 +102,16 @@ impl HttpToGsbProxy {
                     }),
                 status_code: r.header.status_code,
                 response_headers: r.header.response_headers,
-            };
-        }
-
-        HttpToGsbProxyResponse {
-            body: actix_web::web::Bytes::from(format!("Error: {}", result.err().unwrap()))
-                .try_into_bytes()
-                .map_err(|_| Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())),
-            status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            response_headers: HashMap::new(),
+            },
+            Err(err) => HttpToGsbProxyResponse {
+                body: actix_web::web::Bytes::from(format!("Error: {}", err))
+                    .try_into_bytes()
+                    .map_err(|_| {
+                        Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
+                    }),
+                status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                response_headers: HashMap::new(),
+            },
         }
     }
 
@@ -121,10 +122,9 @@ impl HttpToGsbProxy {
         headers: HeaderMap,
         body: Option<Vec<u8>>,
     ) -> HttpToGsbProxyStreamingResponse<impl Stream<Item = Result<Bytes, Error>>> {
-        let path = if let Some(stripped_url) = path.strip_prefix('/') {
-            stripped_url.to_string()
-        } else {
-            path
+        let path = match path.strip_prefix('/') {
+            Some(stripped_url) => stripped_url.to_string(),
+            None => path,
         };
 
         let msg = GsbHttpCallStreamingMessage {

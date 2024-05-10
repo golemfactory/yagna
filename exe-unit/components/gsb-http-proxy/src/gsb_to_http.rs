@@ -30,6 +30,7 @@ pub struct GsbToHttpProxy {
 pub enum GsbToHttpProxyError {
     InvalidMethod,
     ErrorInResponse(String),
+    InternalError(String),
 }
 
 impl Display for GsbToHttpProxyError {
@@ -37,6 +38,7 @@ impl Display for GsbToHttpProxyError {
         match self {
             GsbToHttpProxyError::InvalidMethod => write!(f, "Invalid Method"),
             GsbToHttpProxyError::ErrorInResponse(e) => write!(f, "Error in response {}", e),
+            GsbToHttpProxyError::InternalError(e) => write!(f, "Internal error {}", e),
         }
     }
 }
@@ -71,14 +73,16 @@ impl GsbToHttpProxy {
 
         let mut counters = self.counters.clone();
 
-        let method = actix_http::Method::from_bytes(message.method.to_uppercase().as_bytes());
-        if method.is_err() {
-            return GsbHttpCallResponse::with_message(
-                method.err().unwrap().to_string().into_bytes(),
-                StatusCode::METHOD_NOT_ALLOWED.as_u16(),
-            );
-        }
-        let builder = Self::create_request_builder(message, &url, method.unwrap());
+        let method = match Method::from_bytes(message.method.to_uppercase().as_bytes()) {
+            Ok(method) => method,
+            Err(err) => {
+                return GsbHttpCallResponse::with_message(
+                    err.to_string().into_bytes(),
+                    StatusCode::METHOD_NOT_ALLOWED.as_u16(),
+                )
+            }
+        };
+        let builder = Self::create_request_builder(method, &url, message.headers, message.body);
 
         log::debug!("Calling {}", &url);
         let response_handler = counters.on_request();
@@ -87,34 +91,40 @@ impl GsbToHttpProxy {
             .await
             .map_err(|e| GsbToHttpProxyError::ErrorInResponse(e.to_string()));
 
-        if let Ok(response) = response {
-            let response_headers = Self::collect_headers(&response);
-            let status_code = response.status().as_u16();
-            response_handler.on_response();
-            if let Ok(bytes) = response.bytes().await {
-                return GsbHttpCallResponse::new(bytes.to_vec(), response_headers, status_code);
+        match response {
+            Ok(response) => {
+                let response_headers = Self::collect_headers(&response);
+                let status_code = response.status().as_u16();
+                response_handler.on_response();
+                match response.bytes().await {
+                    Ok(bytes) => {
+                        GsbHttpCallResponse::new(bytes.to_vec(), response_headers, status_code)
+                    }
+                    Err(err) => GsbHttpCallResponse::with_message(
+                        format!("Error in response: {err}").into_bytes(),
+                        StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                    ),
+                }
             }
-        } else {
-            return GsbHttpCallResponse::with_message(
-                response.err().unwrap().to_string().into_bytes(),
+            Err(err) => GsbHttpCallResponse::with_message(
+                format!("Error in response: {err}").into_bytes(),
                 StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            );
+            ),
         }
-        GsbHttpCallResponse::with_status_code(StatusCode::INTERNAL_SERVER_ERROR.as_u16())
     }
 
     fn create_request_builder(
-        message: GsbHttpCallMessage,
-        url: &String,
         method: Method,
+        url: &String,
+        headers: HashMap<String, Vec<String>>,
+        body: Option<Vec<u8>>,
     ) -> RequestBuilder {
         let mut builder = reqwest::Client::new().request(method, url);
-        builder = match message.body {
+        builder = match body {
             Some(body) => builder.body(body),
             None => builder,
         };
-        builder = headers::add(builder, message.headers);
-        builder
+        headers::add(builder, headers)
     }
 
     pub fn pass_streaming(
@@ -127,44 +137,35 @@ impl GsbToHttpProxy {
 
         let mut counters = self.counters.clone();
         tokio::task::spawn_local(async move {
-            let client = reqwest::Client::new();
-
             let method = match Method::from_bytes(message.method.to_uppercase().as_bytes())
                 .map_err(|_| GsbToHttpProxyError::InvalidMethod)
             {
                 Ok(method) => method,
                 Err(e) => {
-                    tx.send(GsbHttpCallResponseStreamChunk::Header(
+                    tx.send(
                         GsbHttpCallResponseHeader {
                             response_headers: Default::default(),
                             status_code: StatusCode::METHOD_NOT_ALLOWED.as_u16(),
-                        },
-                    ))
+                        }
+                        .into(),
+                    )
                     .await
-                    .unwrap();
+                    .map_err(|e| GsbToHttpProxyError::InternalError(format!("SendError: {e}")))?;
 
-                    tx.send(GsbHttpCallResponseStreamChunk::Body(
+                    tx.send(
                         GsbHttpCallResponseBody {
                             msg_bytes: format!("Invalid method {}", message.method).into_bytes(),
-                        },
-                    ))
+                        }
+                        .into(),
+                    )
                     .await
-                    .unwrap();
+                    .map_err(|e| GsbToHttpProxyError::InternalError(format!("SendError: {e}")))?;
 
                     return Err::<(), GsbToHttpProxyError>(e);
                 }
             };
 
-            let mut builder = client.request(method, &url);
-
-            builder = match message.body {
-                Some(body) => {
-                    log::info!("Request body: {}", String::from_utf8(body.clone()).unwrap());
-                    builder.body(body)
-                }
-                None => builder,
-            };
-            builder = headers::add(builder, message.headers);
+            let builder = Self::create_request_builder(method, &url, message.headers, message.body);
 
             log::debug!("Calling {}", &url);
             let response_handler = counters.on_request();
@@ -179,24 +180,26 @@ impl GsbToHttpProxy {
 
             response_handler.on_response();
 
-            tx.send(GsbHttpCallResponseStreamChunk::Header(
+            tx.send(
                 GsbHttpCallResponseHeader {
                     response_headers,
                     status_code,
-                },
-            ))
+                }
+                .into(),
+            )
             .await
-            .unwrap();
+            .map_err(|e| GsbToHttpProxyError::InternalError(format!("SendError: {e}")))?;
 
             while let Some(Ok(chunk)) = bytes.next().await {
-                log::info!("Sending chunk of size: {}", chunk.len());
-                tx.send(GsbHttpCallResponseStreamChunk::Body(
+                log::trace!("Sending chunk of size: {}", chunk.len());
+                tx.send(
                     GsbHttpCallResponseBody {
                         msg_bytes: chunk.to_vec(),
-                    },
-                ))
+                    }
+                    .into(),
+                )
                 .await
-                .unwrap();
+                .map_err(|e| GsbToHttpProxyError::InternalError(format!("SendError: {e}")))?;
             }
 
             Ok::<(), GsbToHttpProxyError>(())
@@ -204,7 +207,7 @@ impl GsbToHttpProxy {
 
         let stream = stream! {
             while let Some(event) = rx.recv().await {
-                log::info!("sending response {}",
+                log::trace!("sending response {}",
                     match event {
                         GsbHttpCallResponseStreamChunk::Header(_) => { "header".to_string() },
                         GsbHttpCallResponseStreamChunk::Body(ref b) => { format!("body chunk: {} bytes", b.msg_bytes.len()) }

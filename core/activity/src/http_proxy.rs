@@ -1,3 +1,4 @@
+use actix_http::header::HeaderValue;
 use actix_http::{header, StatusCode};
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
@@ -61,15 +62,21 @@ async fn proxy_http_request(
     let headers = request.headers().clone();
 
     if let Some(accept_header) = request.headers().get(header::ACCEPT) {
+        let accept_header = accept_header
+            .to_str()
+            .map_err(|e| error::Error::BadRequest(format!("Invalid accept header: {e}")))?;
         if accept_header.eq(mime::TEXT_EVENT_STREAM.essence_str())
             || accept_header.eq(mime::APPLICATION_OCTET_STREAM.essence_str())
         {
+            let accept_header_value = HeaderValue::from_str(accept_header).map_err(|e| {
+                error::Error::BadRequest(format!("Invalid accept header value: {e}"))
+            })?;
             let response = http_to_gsb
                 .pass_streaming(method, path, headers, body)
                 .await;
 
             return Ok(Either::Left(
-                stream_results(response, accept_header.to_str().unwrap()).await?,
+                stream_results(response, accept_header_value).await?,
             ));
         }
     }
@@ -81,7 +88,7 @@ async fn stream_results(
     response: HttpToGsbProxyStreamingResponse<
         impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
     >,
-    content_type: &str,
+    content_type: HeaderValue,
 ) -> crate::Result<impl Responder> {
     let mut response_builder = HttpResponse::build(
         StatusCode::from_u16(response.status_code)

@@ -1,25 +1,26 @@
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, From)]
 pub enum GsbHttpCallResponseStreamChunk {
     Header(GsbHttpCallResponseHeader),
     Body(GsbHttpCallResponseBody),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct GsbHttpCallResponse {
     pub header: GsbHttpCallResponseHeader,
     pub body: GsbHttpCallResponseBody,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct GsbHttpCallResponseHeader {
     pub response_headers: HashMap<String, Vec<String>>,
     pub status_code: u16,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct GsbHttpCallResponseBody {
     pub msg_bytes: Vec<u8>,
 }
@@ -56,18 +57,6 @@ impl GsbHttpCallResponse {
                 response_headers,
             },
             body: GsbHttpCallResponseBody { msg_bytes },
-        }
-    }
-}
-
-impl Default for GsbHttpCallResponse {
-    fn default() -> Self {
-        GsbHttpCallResponse {
-            header: GsbHttpCallResponseHeader {
-                response_headers: HashMap::new(),
-                status_code: 0,
-            },
-            body: GsbHttpCallResponseBody { msg_bytes: vec![] },
         }
     }
 }
