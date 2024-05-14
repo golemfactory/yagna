@@ -1,5 +1,6 @@
 //! Provider side operations
 use actix_web::{web, Responder};
+use metrics::counter;
 use ya_client_model::activity::{ActivityState, ProviderEvent};
 use ya_client_model::market::Role;
 use ya_service_bus::timeout::IntoTimeoutFuture;
@@ -39,7 +40,10 @@ async fn get_events(
     query: web::Query<QueryEvents>,
     id: Identity,
 ) -> impl Responder {
+    // Thanks to this counter we can monitor agent activity.
+    counter!("activity.provider.events.query", 1);
     log::trace!("getting events {:?}", query);
+
     let events = db
         .as_dao::<EventDao>()
         .get_events_wait(

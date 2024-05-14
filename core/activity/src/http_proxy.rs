@@ -1,8 +1,8 @@
-use actix_http::Method;
-use actix_web::http::header;
+use actix_http::header::HeaderValue;
+use actix_http::{header, StatusCode};
 use actix_web::web::Bytes;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
-use futures::{Stream, StreamExt};
+use futures::Stream;
 
 use ya_client_model::market::Role;
 use ya_persistence::executor::DbExecutor;
@@ -13,42 +13,32 @@ use crate::common::*;
 use crate::error;
 use ya_core_model::activity;
 use ya_gsb_http_proxy::http_to_gsb::BindingMode::Net;
-use ya_gsb_http_proxy::http_to_gsb::{HttpToGsbProxy, NetBindingNodes};
+use ya_gsb_http_proxy::http_to_gsb::{
+    HttpToGsbProxy, HttpToGsbProxyResponse, HttpToGsbProxyStreamingResponse, NetBindingNodes,
+};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
-    scope
-        .service(get_proxy_http_request)
-        .service(post_proxy_http_request)
+    scope.service(proxy_http_request)
 }
 
-#[actix_web::get("/activity/{activity_id}/proxy-http/{url:.*}")]
-async fn get_proxy_http_request(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivityUrl>,
-    id: Identity,
-    request: HttpRequest,
-) -> crate::Result<impl Responder> {
-    proxy_http_request(db, path, id, request, None, Method::GET).await
-}
-
-#[actix_web::post("/activity/{activity_id}/proxy-http/{url:.*}")]
-async fn post_proxy_http_request(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivityUrl>,
-    body: web::Bytes,
-    id: Identity,
-    request: HttpRequest,
-) -> crate::Result<impl Responder> {
-    proxy_http_request(db, path, id, request, Some(body), Method::POST).await
-}
-
+#[actix_web::route(
+    "/activity/{activity_id}/proxy-http/{url:.*}",
+    method = "GET",
+    method = "POST",
+    method = "PUT",
+    method = "DELETE",
+    method = "HEAD",
+    method = "OPTIONS",
+    method = "CONNECT",
+    method = "PATCH",
+    method = "TRACE"
+)]
 async fn proxy_http_request(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityUrl>,
     id: Identity,
     request: HttpRequest,
     body: Option<web::Bytes>,
-    method: Method,
 ) -> crate::Result<impl Responder> {
     let path_activity_url = path.into_inner();
     let activity_id = path_activity_url.activity_id;
@@ -67,48 +57,78 @@ async fn proxy_http_request(
     }))
     .bus_addr(&activity::exeunit::bus_id(&activity_id));
 
-    let method = method.to_string();
+    let method = request.method().to_string();
     let body = body.map(|bytes| bytes.to_vec());
     let headers = request.headers().clone();
 
-    let stream = http_to_gsb.pass(method, path, headers, body);
+    if let Some(accept_header) = request.headers().get(header::ACCEPT) {
+        let accept_header = accept_header
+            .to_str()
+            .map_err(|e| error::Error::BadRequest(format!("Invalid accept header: {e}")))?;
+        if accept_header.eq(mime::TEXT_EVENT_STREAM.essence_str())
+            || accept_header.eq(mime::APPLICATION_OCTET_STREAM.essence_str())
+        {
+            let accept_header_value = HeaderValue::from_str(accept_header).map_err(|e| {
+                error::Error::BadRequest(format!("Invalid accept header value: {e}"))
+            })?;
+            let response = http_to_gsb
+                .pass_streaming(method, path, headers, body)
+                .await;
 
-    if let Some(value) = request.headers().get(header::ACCEPT) {
-        if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
-            return Ok(Either::Left(stream_results(
-                stream,
-                mime::TEXT_EVENT_STREAM.essence_str(),
-            )?));
-        }
-        if value.eq(mime::APPLICATION_OCTET_STREAM.essence_str()) {
-            return Ok(Either::Left(stream_results(
-                stream,
-                mime::APPLICATION_OCTET_STREAM.essence_str(),
-            )?));
+            return Ok(Either::Left(
+                stream_results(response, accept_header_value).await?,
+            ));
         }
     }
-    Ok(Either::Right(await_results(stream).await?))
+    let response = http_to_gsb.pass(method, path, headers, body).await;
+    Ok(Either::Right(build_response(response).await?))
 }
 
-fn stream_results(
-    stream: impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
-    content_type: &str,
+async fn stream_results(
+    response: HttpToGsbProxyStreamingResponse<
+        impl Stream<Item = Result<Bytes, Error>> + Unpin + 'static,
+    >,
+    content_type: HeaderValue,
 ) -> crate::Result<impl Responder> {
-    Ok(HttpResponse::Ok()
-        .keep_alive()
-        .content_type(content_type)
-        .streaming(stream))
+    let mut response_builder = HttpResponse::build(
+        StatusCode::from_u16(response.status_code)
+            .map_err(|e| error::Error::Service(format!("Invalid status code {e}")))?,
+    );
+    for (h, vals) in response.response_headers {
+        for v in vals {
+            response_builder.append_header((h.as_str(), v));
+        }
+    }
+    return match response.body {
+        Ok(body) => Ok(response_builder
+            .keep_alive()
+            .content_type(content_type)
+            .streaming(body)),
+        Err(err) => {
+            let reason = format!("{err}");
+            Ok(response_builder.body(reason))
+        }
+    };
 }
 
-async fn await_results(
-    mut stream: impl Stream<Item = Result<Bytes, Error>> + Unpin,
+async fn build_response(
+    response: HttpToGsbProxyResponse<Result<Bytes, Error>>,
 ) -> crate::Result<impl Responder> {
-    let response = stream.next().await;
-
-    if let Some(Ok(bytes)) = response {
+    if let Ok(bytes) = response.body {
         let response_body = String::from_utf8(bytes.to_vec())
             .map_err(|e| error::Error::Service(format!("Conversion from utf8 failed {e}")))?;
-        return Ok(HttpResponse::Ok().body(response_body));
+
+        let mut response_builder = HttpResponse::build(
+            StatusCode::from_u16(response.status_code)
+                .map_err(|e| error::Error::Service(format!("Invalid status code {e}")))?,
+        );
+        for (h, vals) in response.response_headers {
+            for v in vals {
+                response_builder.append_header((h.as_str(), v));
+            }
+        }
+        return Ok(response_builder.body(response_body));
     }
+
     Ok(HttpResponse::InternalServerError().body("No response"))
 }

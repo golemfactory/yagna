@@ -101,6 +101,7 @@ impl ProviderBroker {
         counter!("market.agreements.provider.rejected", 0);
         counter!("market.agreements.provider.cancelled", 0);
         counter!("market.events.provider.queried", 0);
+        counter!("market.events.provider.query", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.proposals.provider.received", 0);
@@ -197,6 +198,9 @@ impl ProviderBroker {
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
+        // Thanks to this counter we can monitor agent activity.
+        counter!("market.events.provider.query", 1);
+
         let events = self
             .common
             .query_events(offer_id, timeout, max_events, Owner::Provider)
