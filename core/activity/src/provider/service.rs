@@ -10,16 +10,19 @@ use std::time::Duration;
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
 use ya_client_model::market::{agreement::State as AgreementState, Role};
 use ya_client_model::NodeId;
-use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
+use ya_core_model::market::Agreement;
+use ya_core_model::{activity, market};
 use ya_persistence::executor::DbExecutor;
+
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
-    set_persisted_state, RpcMessageResult,
+    get_activities_for_agreement, get_activity_agreement, get_agreement, get_agreements_by_state,
+    get_persisted_state, get_persisted_usage, is_responsive, set_persisted_state, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
@@ -71,11 +74,73 @@ pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     counter!("activity.provider.created", 0);
     counter!("activity.provider.create.agreement.not-approved", 0);
     counter!("activity.provider.destroyed", 0);
+    counter!("activity.provider.unresponsive", 0);
+    counter!("activity.provider.responsive-again", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
     counter!("activity.provider.events.query", 0);
 
-    local::bind_gsb(db, tracker);
+    local::bind_gsb(&db.clone(), tracker.clone());
+
+    tokio::task::spawn_local(initial_checkup(db.clone(), tracker.clone()));
+}
+
+async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
+    log::info!("Checkup for alive Activities remaining from previous runs");
+    let agreements = match get_agreements_by_state(AgreementState::Approved).await {
+        Ok(agreements) => agreements,
+        Err(err) => {
+            log::error!("Acitivties checkup error. Failed to list Agreements. Err: {err}");
+            return;
+        }
+    };
+
+    for agreement in agreements {
+        let agreement = match bus::service(market::BUS_ID)
+            .send(market::GetAgreement::as_provider(agreement.id))
+            .await
+        {
+            Ok(Ok(agreement)) => agreement,
+            Ok(Err(err)) => {
+                log::error!("Acitivties checkup error. Failed to get Agreement. Err: {err}");
+                continue;
+            }
+            Err(err) => {
+                log::error!("Acitivties checkup error. GSB call failed. Err: {err}");
+                continue;
+            }
+        };
+        if let Err(err) = monitor_alive_activities(agreement, db.clone(), tracker.clone()).await {
+            log::error!("Acitivties initial checkup error. Err: {err}")
+        };
+    }
+}
+
+async fn monitor_alive_activities(
+    agreement: Agreement,
+    db: DbExecutor,
+    tracker: TrackerRef,
+) -> anyhow::Result<()> {
+    log::info!(
+        "Checkup of Agreement {} for remaining alive Activities",
+        agreement.agreement_id
+    );
+    let activities_ids = get_activities_for_agreement(&db, &agreement.agreement_id).await?;
+    let activity_state_dao = db.as_dao::<ActivityStateDao>();
+    for activity_id in activities_ids {
+        let activity_state = activity_state_dao.get(&activity_id).await?;
+        if is_responsive(activity_state) {
+            log::info!("Spawning monitoring of Activity {activity_id}");
+            tokio::task::spawn_local(monitor_activity(
+                db.clone(),
+                tracker.clone(),
+                activity_id,
+                *agreement.provider_id(),
+                None,
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Creates new Activity based on given Agreement.
@@ -337,8 +402,8 @@ async fn monitor_activity(
     app_session_id: Option<String>,
 ) {
     let activity_id = activity_id.to_string();
-    let limit_s = inactivity_limit_seconds();
-    let unresp_s = unresponsive_limit_seconds();
+    let inactivity_limit = inactivity_limit_seconds();
+    let unresponsive_limit = unresponsive_limit_seconds();
     let delay = Duration::from_secs_f64(1.);
     let mut prev_state: Option<ActivityState> = None;
 
@@ -351,35 +416,51 @@ async fn monitor_activity(
                 break;
             }
 
-            let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
-            if dt > limit_s {
-                log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
-                enqueue_destroy_evt(
-                    db,
-                    tracker.clone(),
-                    &activity_id,
-                    provider_id,
-                    app_session_id.clone(),
-                )
-                .await;
+            let since_update = (Utc::now().timestamp() - usage.timestamp) as f64;
 
-                counter!("activity.provider.destroyed.unresponsive", 1);
-                break;
-            } else if state.state.0 != State::Unresponsive && dt >= unresp_s {
-                log::warn!("activity {} unresponsive after {}s", activity_id, dt);
-                let new_state = ActivityState::from(StatePair(State::Unresponsive, state.state.1));
-                prev_state = Some(state);
-                let _ = tracker
-                    .update_state(activity_id.clone(), State::Unresponsive)
-                    .await;
-                if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
-                    log::error!("cannot update activity {} state: {}", activity_id, e);
+            if since_update > unresponsive_limit {
+                if state.state.0 != State::Unresponsive {
+                    log::warn!(
+                        "activity {} unresponsive after {}s",
+                        activity_id,
+                        since_update
+                    );
+                    let new_state =
+                        ActivityState::from(StatePair(State::Unresponsive, state.state.1));
+                    prev_state = Some(state);
+                    let _ = tracker
+                        .update_state(activity_id.clone(), State::Unresponsive)
+                        .await;
+                    if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
+                        log::error!("cannot update activity {} state: {}", activity_id, e);
+                    }
+                    counter!("activity.provider.unresponsive", 1);
                 }
-            } else if state.state.0 == State::Unresponsive && dt < unresp_s {
+
+                // `unresponsive_limit` should be configured to be smaller than `inactivity_limit`
+                if since_update > inactivity_limit {
+                    log::warn!(
+                        "activity {} inactive for {}s, destroying",
+                        activity_id,
+                        since_update
+                    );
+                    enqueue_destroy_evt(
+                        db,
+                        tracker.clone(),
+                        &activity_id,
+                        provider_id,
+                        app_session_id.clone(),
+                    )
+                    .await;
+
+                    counter!("activity.provider.destroyed.unresponsive", 1);
+                    break;
+                }
+            } else if state.state.0 == State::Unresponsive && since_update <= unresponsive_limit {
                 log::warn!("activity {} is now responsive", activity_id);
-                let state = match prev_state.take() {
-                    Some(state) => state,
-                    _ => panic!("unknown pre-unresponsive state of activity {}", activity_id),
+                let Some(state) = prev_state.take() else {
+                    log::error!("Unknown pre-unresponsive state of activity {activity_id}");
+                    break;
                 };
                 let _ = tracker
                     .update_state(activity_id.clone(), state.state.0)
@@ -387,6 +468,7 @@ async fn monitor_activity(
                 if let Err(e) = set_persisted_state(&db, &activity_id, state).await {
                     log::error!("cannot update activity {} state: {}", activity_id, e);
                 }
+                counter!("activity.provider.responsive-again", 1);
             }
         };
 
