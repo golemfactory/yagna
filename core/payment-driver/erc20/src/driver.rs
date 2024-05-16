@@ -527,11 +527,13 @@ impl Erc20Driver {
         };
 
         if let Some(_extra_validation) = deposit.validate {
+            #[allow(unused)]
             let validation_result: Result<(), String> = {
                 //self.payment_runtime.blah();
                 unimplemented!("awaiting implementation in erc20_payment_lib")
             };
 
+            #[allow(unreachable_code)]
             if let Err(e) = validation_result {
                 return Ok(ValidateAllocationResult::DepositValidationError(e));
             }
