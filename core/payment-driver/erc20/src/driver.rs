@@ -526,6 +526,17 @@ impl Erc20Driver {
             return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
 
+        if let Some(_extra_validation) = deposit.validate {
+            let validation_result: Result<(), String> = {
+                //self.payment_runtime.blah();
+                unimplemented!("awaiting implementation in erc20_payment_lib")
+            };
+
+            if let Err(e) = validation_result {
+                return Ok(ValidateAllocationResult::DepositValidationError(e));
+            }
+        }
+
         Ok(ValidateAllocationResult::Valid)
     }
 }
