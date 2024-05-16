@@ -3237,6 +3237,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
+name = "humantime-serde"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
+dependencies = [
+ "humantime 2.1.0",
+ "serde",
+]
+
+[[package]]
 name = "hyper"
 version = "0.14.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8378,7 +8388,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=4fb874b81f9dbad2281601d2351383a356c89dd6#4fb874b81f9dbad2281601d2351383a356c89dd6"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8402,13 +8412,14 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=4fb874b81f9dbad2281601d2351383a356c89dd6#4fb874b81f9dbad2281601d2351383a356c89dd6"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "diesel",
  "hex",
+ "humantime-serde",
  "openssl",
  "rand 0.8.5",
  "secp256k1 0.27.0",
