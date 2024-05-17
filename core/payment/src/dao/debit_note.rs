@@ -1,23 +1,27 @@
+use std::collections::HashMap;
+use std::convert::TryInto;
+
+use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
+use diesel::sqlite::Sqlite;
+use diesel::{
+    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
+    RunQueryDsl,
+};
+use ya_client_model::payment::{DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote};
+use ya_client_model::NodeId;
+
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
+use ya_persistence::types::{BigDecimalField, Role};
+
 use crate::dao::{activity, debit_note_event};
 use crate::error::{DbError, DbResult};
 use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
-use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
-use diesel::{
-    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
-    RunQueryDsl,
-};
-use std::collections::HashMap;
-use std::convert::TryInto;
-use ya_client_model::payment::{DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote};
-use ya_client_model::NodeId;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
-use ya_persistence::types::{BigDecimalField, Role};
 
 pub struct DebitNoteDao<'c> {
     pool: &'c PoolType,
@@ -385,30 +389,140 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    // TODO: Implement reject debit note
-    // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-    //     do_with_transaction(self.pool, move |conn| {
-    //         let (activity_id, role): (String, Role) = dsl::pay_debit_note
-    //             .find((&debit_note_id, &owner_id))
-    //             .select((dsl::activity_id, dsl::role))
-    //             .first(conn)?;
-    //         update_status(
-    //             &vec![debit_note_id.clone()],
-    //             &owner_id,
-    //             &DocumentStatus::Rejected,
-    //             conn,
-    //         )?;
-    //         if let Role::Provider = role {
-    //             debit_note_event::create::<()>(
-    //                 debit_note_id,
-    //                 owner_id,
-    //                 DebitNoteEventType::DebitNoteRejectedEvent,
-    //                 None,
-    //                 conn,
-    //             )?;
-    //         }
-    //         Ok(())
-    //     })
-    //     .await
-    // }
+    pub async fn cancel(
+        &self,
+        owner_id: NodeId,
+        role: Role,
+        debit_note_id: String,
+    ) -> DbResult<NodeId> {
+        let peer_id = do_with_transaction(self.pool, "cancel_dn", move |conn| -> DbResult<_> {
+            let note = select_debit_note(conn, &debit_note_id, &owner_id)?;
+
+            if !matches!(note.status, DocumentStatus::Issued | DocumentStatus::Failed) {
+                return Err(DbError::Integrity(format!(
+                    "unable to cancel debit note in state: {}",
+                    note.status
+                )));
+            }
+
+            if note.role != role {
+                return Err(DbError::Integrity(format!(
+                    "unable to cancel debit note for role {role:?}"
+                )));
+            }
+
+            let nr = diesel::update(dsl::pay_debit_note)
+                .filter(dsl::id.eq(&debit_note_id))
+                .filter(dsl::status.eq_any(vec!["ISSUED", "FAILED"]))
+                .filter(dsl::owner_id.eq(owner_id))
+                .set(dsl::status.eq(DocumentStatus::Cancelled.to_string()))
+                .execute(conn)?;
+
+            if nr == 0 {
+                return Err(diesel::result::Error::NotFound.into());
+            }
+
+            let next_notes: i64 = dsl::pay_debit_note
+                .filter(dsl::previous_debit_note_id.eq(&debit_note_id))
+                .count()
+                .get_result(conn)?;
+
+            if next_notes != 0 {
+                return Err(DbError::Integrity("note has continuation".into()));
+            }
+
+            debit_note_event::create(
+                debit_note_id,
+                owner_id,
+                DebitNoteEventType::DebitNoteCancelledEvent,
+                conn,
+            )?;
+            Ok(note.peer_id)
+        })
+        .await?;
+
+        Ok(peer_id)
+    }
+
+    pub async fn reject(&self, owner_id: NodeId, debit_note_id: String) -> DbResult<NodeId> {
+        do_with_transaction(self.pool, "reject_dbn", move |conn| {
+            let note = select_debit_note(conn, &debit_note_id, &owner_id)?;
+
+            if !matches!(
+                note.status,
+                DocumentStatus::Issued | DocumentStatus::Received
+            ) {
+                return Err(DbError::Integrity(format!(
+                    "unable to reject debit note in state: {}",
+                    note.status
+                )));
+            }
+
+            let nr = diesel::update(dsl::pay_debit_note)
+                .filter(dsl::id.eq(&debit_note_id))
+                .filter(dsl::status.eq_any(vec!["ISSUED", "RECEIVED"]))
+                .filter(dsl::owner_id.eq(owner_id))
+                .set(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .execute(conn)?;
+
+            if nr == 0 {
+                return Err(DbError::Integrity(
+                    "unable to reject debit, state changed".into(),
+                ));
+            }
+
+            if matches!(note.role, Role::Provider) {
+                debit_note_event::create(
+                    debit_note_id,
+                    owner_id,
+                    DebitNoteEventType::DebitNoteCancelledEvent,
+                    conn,
+                )?;
+            }
+            Ok(note.peer_id)
+        })
+        .await
+    }
+}
+
+struct DebitNoteShort {
+    activity_id: String,
+    role: Role,
+    status: DocumentStatus,
+    peer_id: NodeId,
+}
+
+fn select_debit_note<Conn: diesel::Connection<Backend = Sqlite>>(
+    conn: &Conn,
+    debit_note_id: &str,
+    owner_id: &NodeId,
+) -> DbResult<DebitNoteShort> {
+    let (activity_id, role, status, peer_id): (String, Role, String, NodeId) = dsl::pay_debit_note
+        .find((debit_note_id, owner_id))
+        .inner_join(
+            activity_dsl::pay_activity.on(dsl::owner_id
+                .eq(activity_dsl::owner_id)
+                .and(dsl::activity_id.eq(activity_dsl::id))),
+        )
+        .inner_join(
+            agreement_dsl::pay_agreement.on(dsl::owner_id
+                .eq(agreement_dsl::owner_id)
+                .and(activity_dsl::agreement_id.eq(agreement_dsl::id))),
+        )
+        .select((
+            dsl::activity_id,
+            dsl::role,
+            dsl::status,
+            agreement_dsl::peer_id,
+        ))
+        .get_result(conn)?;
+
+    let status: DocumentStatus = status.try_into()?;
+
+    Ok(DebitNoteShort {
+        activity_id,
+        role,
+        status,
+        peer_id,
+    })
 }

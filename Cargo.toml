@@ -7,7 +7,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 homepage = "https://github.com/golemfactory/yagna/core/serv"
 repository = "https://github.com/golemfactory/yagna"
 license = "GPL-3.0"
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ['erc20-driver', 'gftp/bin']
@@ -282,9 +282,9 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2539fcefd02b12e0078dc1ddcc9bcc0e841e685f" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "prek/paymng" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2539fcefd02b12e0078dc1ddcc9bcc0e841e685f" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "prek/paymng" }
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 

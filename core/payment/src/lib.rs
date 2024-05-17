@@ -11,6 +11,7 @@ use ya_service_bus::typed as bus;
 
 #[macro_use]
 extern crate diesel;
+extern crate core;
 
 pub mod accounts;
 pub mod api;

@@ -1,5 +1,6 @@
 use crate::schema::pay_allocation;
 use chrono::{NaiveDateTime, TimeZone, Utc};
+use core::time;
 use uuid::Uuid;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
@@ -18,6 +19,7 @@ pub struct WriteObj {
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
     pub released: bool,
+    pub extend_timeout: Option<i32>,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -34,6 +36,7 @@ pub struct ReadObj {
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
     pub released: bool,
+    pub extend_timeout: Option<i32>,
 }
 
 impl WriteObj {
@@ -54,6 +57,9 @@ impl WriteObj {
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
+            extend_timeout: allocation
+                .extend_timeout
+                .map(|d| d.as_secs().try_into().ok().unwrap_or(i32::MAX)),
         }
     }
 
@@ -69,6 +75,9 @@ impl WriteObj {
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
+            extend_timeout: allocation
+                .extend_timeout
+                .map(|s| s.as_secs().try_into().ok().unwrap_or(i32::MAX)),
         }
     }
 }
@@ -86,6 +95,9 @@ impl From<ReadObj> for Allocation {
             timeout: allocation.timeout.map(|v| Utc.from_utc_datetime(&v)),
             deposit: None,
             make_deposit: allocation.make_deposit,
+            extend_timeout: allocation
+                .extend_timeout
+                .and_then(|secs| Some(time::Duration::from_secs(secs.try_into().ok()?))),
         }
     }
 }

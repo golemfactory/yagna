@@ -47,7 +47,7 @@ pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: Bin
 mod local {
     use super::*;
     use crate::dao::*;
-    use chrono::NaiveDateTime;
+    use chrono::DateTime;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
@@ -293,8 +293,9 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or_else(|| network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp_opt(after_timestamp, 0)
-            .expect("Failed on out-of-range number of seconds");
+        let after_timestamp = DateTime::from_timestamp(after_timestamp, 0)
+            .ok_or_else(|| GenericError::new("Failed on out-of-range number of seconds"))?;
+
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
@@ -307,21 +308,33 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp)
+                .incoming_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.naive_utc(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp)
+                .outgoing_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.naive_utc(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
+                .total_remaining_allocation(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.naive_utc(),
+                )
                 .await
         }
         .map_err(GenericError::new);
@@ -898,7 +911,10 @@ mod public {
         sender: String,
         msg: RejectDebitNote,
     ) -> Result<Ack, AcceptRejectError> {
-        unimplemented!() // TODO
+        let debitNoteId = msg.debit_note_id;
+        let rejection = msg.rejection;
+
+        db.as_dao::<DebitNoteDao>().
     }
 
     async fn cancel_debit_note(

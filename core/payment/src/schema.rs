@@ -1,4 +1,6 @@
-table! {
+// @generated automatically by Diesel CLI.
+
+diesel::table! {
     pay_activity (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -11,7 +13,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_activity_payment (payment_id, activity_id, owner_id) {
         payment_id -> Text,
         activity_id -> Text,
@@ -21,7 +23,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_agreement (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -38,7 +40,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_agreement_payment (payment_id, agreement_id, owner_id) {
         payment_id -> Text,
         agreement_id -> Text,
@@ -48,7 +50,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_allocation (id) {
         id -> Text,
         owner_id -> Text,
@@ -61,10 +63,11 @@ table! {
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
         released -> Bool,
+        extend_timeout -> Nullable<Integer>,
     }
 }
 
-table! {
+diesel::table! {
     pay_debit_note (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -73,14 +76,14 @@ table! {
         activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
-        send_accept -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
         payment_due_date -> Nullable<Timestamp>,
+        send_accept -> Bool,
     }
 }
 
-table! {
+diesel::table! {
     pay_debit_note_event (debit_note_id, event_type) {
         debit_note_id -> Text,
         owner_id -> Text,
@@ -90,7 +93,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_debit_note_event_read (debit_note_id, event_type) {
         role -> Text,
         debit_note_id -> Text,
@@ -102,20 +105,20 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_document_status (status) {
         status -> Text,
     }
 }
 
-table! {
+diesel::table! {
     pay_event_type (event_type) {
         event_type -> Text,
         role -> Text,
     }
 }
 
-table! {
+diesel::table! {
     pay_invoice (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -123,14 +126,14 @@ table! {
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
-        send_accept -> Bool,
-        send_reject -> Bool,
         amount -> Text,
         payment_due_date -> Timestamp,
+        send_accept -> Bool,
+        send_reject -> Bool,
     }
 }
 
-table! {
+diesel::table! {
     pay_invoice_event (invoice_id, event_type) {
         invoice_id -> Text,
         owner_id -> Text,
@@ -140,7 +143,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_invoice_event_read (invoice_id, event_type) {
         role -> Text,
         invoice_id -> Text,
@@ -152,7 +155,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_invoice_x_activity (invoice_id, activity_id, owner_id) {
         invoice_id -> Text,
         activity_id -> Text,
@@ -160,7 +163,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_order (id, driver) {
         id -> Text,
         driver -> Text,
@@ -177,7 +180,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_payment (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -195,7 +198,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     pay_sync_needed_notifs (id) {
         id -> Text,
         last_ping -> Timestamp,
@@ -203,15 +206,15 @@ table! {
     }
 }
 
-joinable!(pay_activity_payment -> pay_allocation (allocation_id));
-joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
-joinable!(pay_debit_note -> pay_document_status (status));
-joinable!(pay_debit_note_event -> pay_event_type (event_type));
-joinable!(pay_invoice -> pay_document_status (status));
-joinable!(pay_invoice_event -> pay_event_type (event_type));
-joinable!(pay_order -> pay_allocation (allocation_id));
+diesel::joinable!(pay_activity_payment -> pay_allocation (allocation_id));
+diesel::joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
+diesel::joinable!(pay_debit_note -> pay_document_status (status));
+diesel::joinable!(pay_debit_note_event -> pay_event_type (event_type));
+diesel::joinable!(pay_invoice -> pay_document_status (status));
+diesel::joinable!(pay_invoice_event -> pay_event_type (event_type));
+diesel::joinable!(pay_order -> pay_allocation (allocation_id));
 
-allow_tables_to_appear_in_same_query!(
+diesel::allow_tables_to_appear_in_same_query!(
     pay_activity,
     pay_activity_payment,
     pay_agreement,
@@ -228,4 +231,5 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice_x_activity,
     pay_order,
     pay_payment,
+    pay_sync_needed_notifs,
 );

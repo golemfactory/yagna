@@ -1,17 +1,22 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 // Extrnal crates
-use actix_web::web::{get, post, Data, Json, Path, Query};
+use actix_web::{
+    get, post,
+    web::{Data, Json, Path, Query},
+};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
+use ya_client_model::ErrorMessage;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
-    AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
+    AcceptDebitNote, AcceptRejectError, CancelDebitNote, RejectDebitNote, SendDebitNote, SendError,
+    BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
@@ -29,37 +34,10 @@ use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_for_activity;
 use crate::utils::*;
 
-pub fn register_endpoints(scope: Scope) -> Scope {
-    scope
-        // Shared
-        .route("/debitNotes", get().to(get_debit_notes))
-        .route("/debitNotes/{debit_note_id}", get().to(get_debit_note))
-        .route(
-            "/debitNotes/{debit_note_id}/payments",
-            get().to(get_debit_note_payments),
-        )
-        .route("/debitNoteEvents", get().to(get_debit_note_events))
-        // Provider
-        .route("/debitNotes", post().to(issue_debit_note))
-        .route(
-            "/debitNotes/{debit_note_id}/send",
-            post().to(send_debit_note),
-        )
-        .route(
-            "/debitNotes/{debit_note_id}/cancel",
-            post().to(cancel_debit_note),
-        )
-        // Requestor
-        .route(
-            "/debitNotes/{debit_note_id}/accept",
-            post().to(accept_debit_note),
-        )
-        .route(
-            "/debitNotes/{debit_note_id}/reject",
-            post().to(reject_debit_note),
-        )
-}
+const CANCEL_ACK_TIMEOUT: Duration = Duration::from_secs(10);
+const REJECT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[get("/debitNotes")]
 async fn get_debit_notes(
     db: Data<DbExecutor>,
     query: Query<params::FilterParams>,
@@ -78,6 +56,7 @@ async fn get_debit_notes(
     }
 }
 
+#[get("/debitNotes/{debit_note_id}")]
 async fn get_debit_note(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
@@ -93,6 +72,7 @@ async fn get_debit_note(
     }
 }
 
+#[get("/debitNotes/{debit_note_id}/payments")]
 async fn get_debit_note_payments(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
@@ -100,6 +80,7 @@ async fn get_debit_note_payments(
     response::not_implemented() // TODO
 }
 
+#[get("/debitNoteEvents")]
 async fn get_debit_note_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
@@ -155,6 +136,7 @@ async fn get_debit_note_events(
 
 // Provider
 
+#[post("/debitNotes")]
 async fn issue_debit_note(
     db: Data<DbExecutor>,
     body: Json<NewDebitNote>,
@@ -205,6 +187,7 @@ async fn issue_debit_note(
     }
 }
 
+#[post("/debitNotes/{debit_note_id}/send")]
 async fn send_debit_note(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
@@ -279,16 +262,41 @@ async fn send_debit_note(
     result
 }
 
+#[post("/debitNotes/{debit_note_id}/cancel")]
 async fn cancel_debit_note(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let debit_note_id = path.into_inner().debit_note_id;
+    let dao: DebitNoteDao = db.as_dao();
+
+    let peer_id = match dao
+        .cancel(id.identity, Role::Provider, debit_note_id.clone())
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::InternalServerError().json(ErrorMessage::new(e)),
+    };
+
+    match ya_net::from(id.identity)
+        .to(peer_id)
+        .service(PUBLIC_SERVICE)
+        .call(CancelDebitNote { debit_note_id })
+        .timeout(CANCEL_ACK_TIMEOUT.into())
+        .await
+    {
+        Ok(Ok(Ok(_))) => HttpResponse::Ok().finish(),
+        Ok(Ok(Err(e))) => HttpResponse::Conflict().json(ErrorMessage::new(e)),
+        Ok(Err(e)) => HttpResponse::BadGateway().json(ErrorMessage::new(e)),
+        Err(_e) => HttpResponse::GatewayTimeout().json(ErrorMessage {
+            message: Some("send cancel timeout".into()),
+        }),
+    }
 }
 
-// Requestor
-
+#[post("/debitNotes/{debit_note_id}/accept")]
 async fn accept_debit_note(
     db: Data<DbExecutor>,
     agreement_lock: Data<Arc<AgreementLock>>,
@@ -496,11 +504,51 @@ async fn accept_debit_note(
     result
 }
 
+#[post("/debitNotes/{debit_note_id}/reject")]
 async fn reject_debit_note(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
     body: Json<Rejection>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let debit_note_id = path.into_inner().debit_note_id;
+    let rejection = body.into_inner();
+    let dao: DebitNoteDao = db.as_dao();
+
+    let peer_id = match dao.reject(id.identity, debit_note_id.clone()).await {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::InternalServerError().json(ErrorMessage::new(e)),
+    };
+
+    match ya_net::from(id.identity)
+        .to(peer_id)
+        .service(PUBLIC_SERVICE)
+        .call(RejectDebitNote {
+            debit_note_id,
+            rejection,
+        })
+        .timeout(REJECT_ACK_TIMEOUT.into())
+        .await
+    {
+        Ok(Ok(Ok(_))) => HttpResponse::Ok().finish(),
+        Ok(Ok(Err(e))) => HttpResponse::Conflict().json(ErrorMessage::new(e)),
+        Ok(Err(e)) => HttpResponse::BadGateway().json(ErrorMessage::new(e)),
+        Err(_e) => HttpResponse::GatewayTimeout().json(ErrorMessage {
+            message: Some("send reject timeout".into()),
+        }),
+    }
+}
+
+pub fn register_endpoints(scope: Scope) -> Scope {
+    scope
+        .service(get_debit_notes)
+        .service(get_debit_notes)
+        .service(get_debit_note_payments)
+        .service(get_debit_note_events)
+        .service(issue_debit_note)
+        .service(send_debit_note)
+        .service(cancel_debit_note)
+        .service(accept_debit_note)
+        .service(reject_debit_note)
 }

@@ -47,12 +47,13 @@ pub fn spend_from_allocation(
 impl<'c> AllocationDao<'c> {
     pub async fn create(
         &self,
-        allocation: NewAllocation,
+        new_allocation: NewAllocation,
         owner_id: NodeId,
         payment_platform: String,
         address: String,
     ) -> DbResult<String> {
-        let allocation = WriteObj::new(allocation, owner_id, payment_platform, address);
+        let allocation = WriteObj::new(new_allocation, owner_id, payment_platform, address);
+
         let allocation_id = allocation.id.clone();
         do_with_transaction(self.pool, "allocation_dao_create", move |conn| {
             diesel::insert_into(dsl::pay_allocation)
