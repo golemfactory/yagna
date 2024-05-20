@@ -375,6 +375,9 @@ async fn create_allocation(
         Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
             return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
         }
+        Ok(ValidateAllocationResult::DepositValidationError(message)) => {
+            return bad_req_and_log(format!("Deposit contract rejected the deposit: {message}"));
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
@@ -556,6 +559,9 @@ async fn amend_allocation(
         }
         Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
             return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
+        }
+        Ok(ValidateAllocationResult::DepositValidationError(message)) => {
+            return bad_req_and_log(format!("Deposit contract rejected the deposit: {message}"));
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
