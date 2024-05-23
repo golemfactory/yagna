@@ -1989,8 +1989,8 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9c9224dfdb0818d905876c241bb7b6312975f1cb#9c9224dfdb0818d905876c241bb7b6312975f1cb"
+version = "0.4.2"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=1009a0272de4ea31b50c262e87627bd0032352bf#1009a0272de4ea31b50c262e87627bd0032352bf"
 dependencies = [
  "actix",
  "actix-files",
@@ -2031,8 +2031,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9c9224dfdb0818d905876c241bb7b6312975f1cb#9c9224dfdb0818d905876c241bb7b6312975f1cb"
+version = "0.4.2"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=1009a0272de4ea31b50c262e87627bd0032352bf#1009a0272de4ea31b50c262e87627bd0032352bf"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2072,8 +2072,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_extra"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9c9224dfdb0818d905876c241bb7b6312975f1cb#9c9224dfdb0818d905876c241bb7b6312975f1cb"
+version = "0.4.2"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=1009a0272de4ea31b50c262e87627bd0032352bf#1009a0272de4ea31b50c262e87627bd0032352bf"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2108,8 +2108,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_processor"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9c9224dfdb0818d905876c241bb7b6312975f1cb#9c9224dfdb0818d905876c241bb7b6312975f1cb"
+version = "0.4.3"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=1009a0272de4ea31b50c262e87627bd0032352bf#1009a0272de4ea31b50c262e87627bd0032352bf"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2156,8 +2156,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=9c9224dfdb0818d905876c241bb7b6312975f1cb#9c9224dfdb0818d905876c241bb7b6312975f1cb"
+version = "0.4.2"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=1009a0272de4ea31b50c262e87627bd0032352bf#1009a0272de4ea31b50c262e87627bd0032352bf"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -8378,7 +8378,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=ec1643bd27307310e8e5c8715a73967b6341ac60#ec1643bd27307310e8e5c8715a73967b6341ac60"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8402,7 +8402,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2539fcefd02b12e0078dc1ddcc9bcc0e841e685f#2539fcefd02b12e0078dc1ddcc9bcc0e841e685f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=ec1643bd27307310e8e5c8715a73967b6341ac60#ec1643bd27307310e8e5c8715a73967b6341ac60"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",

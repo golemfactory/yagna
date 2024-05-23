@@ -9,7 +9,7 @@ use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
-    PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
 };
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
@@ -525,6 +525,25 @@ impl Erc20Driver {
 
             return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
         };
+
+        if let Some(extra_validation) = deposit.validate {
+            let deposit_validation_result = self
+                .payment_runtime
+                .validate_deposit(
+                    network.to_string(),
+                    DepositId {
+                        deposit_id,
+                        lock_address: deposit_contract,
+                    },
+                    extra_validation.arguments.into_iter().collect(),
+                )
+                .await
+                .map_err(GenericError::new)?;
+
+            if let ValidateDepositResult::Invalid(reason) = deposit_validation_result {
+                return Ok(ValidateAllocationResult::DepositValidationError(reason));
+            }
+        }
 
         Ok(ValidateAllocationResult::Valid)
     }

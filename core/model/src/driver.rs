@@ -413,6 +413,7 @@ pub enum ValidateAllocationResult {
     MalformedDepositId,
     DepositReused,
     DepositSpenderMismatch,
+    DepositValidationError(String),
     Valid,
 }
 
