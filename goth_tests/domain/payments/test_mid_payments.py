@@ -14,7 +14,7 @@ from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
-from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats
+from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats, AllocationCtx
 
 logger = logging.getLogger("goth.test.mid_payments")
 
@@ -82,27 +82,38 @@ async def test_mid_agreement_payments(
         )
 
         stats = DebitNoteStats()
-        asyncio.create_task(accept_debit_notes(requestor, stats))
 
-        agreement_id, provider = agreement_providers[0]
-        activity_id = await requestor.create_activity(agreement_id)
-        await provider.wait_for_exeunit_started()
+        async with AllocationCtx(requestor, 50.0) as allocation:
+            debit_note_task = asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
 
-        for i in range(0, ITERATION_COUNT):
-            await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
+            agreement_id, provider = agreement_providers[0]
+            activity_id = await requestor.create_activity(agreement_id)
+            await provider.wait_for_exeunit_started()
 
-            payments = await provider.api.payment.get_payments(after_timestamp=ts)
-            for payment in payments:
-                number_of_payments += 1
-                amount += float(payment.amount)
-                logger.info(f"Received payment: amount {payment.amount}."
-                            f" Total amount {amount}. Number of payments {number_of_payments}")
-                ts = payment.timestamp if payment.timestamp > ts else ts
+            logger.debug(f"Activity created: {activity_id}")
+            for i in range(0, ITERATION_COUNT):
+                await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
 
-            # prevent new debit notes in the last iteration
-            if i == ITERATION_STOP_JOB:
-                await requestor.destroy_activity(activity_id)
-                await provider.wait_for_exeunit_finished()
+                logger.debug(f"Fetching payments: {i}/{ITERATION_COUNT}")
+                payments = await provider.api.payment.get_payments(after_timestamp=ts)
+                for payment in payments:
+                    number_of_payments += 1
+                    amount += float(payment.amount)
+                    logger.info(f"Received payment: amount {payment.amount}."
+                                f" Total amount {amount}. Number of payments {number_of_payments}")
+                    ts = payment.timestamp if payment.timestamp > ts else ts
+
+                # prevent new debit notes in the last iteration
+                if i == ITERATION_STOP_JOB:
+                    await requestor.destroy_activity(activity_id)
+                    await provider.wait_for_exeunit_finished()
+
+            debit_note_task.cancel()
+            try:
+                await debit_note_task
+            except asyncio.CancelledError:
+                # that is expected behaviour when cancelling task
+                pass
 
         # this test is failing too much, so not expect exact amount paid,
         # but at least two payments have to be made

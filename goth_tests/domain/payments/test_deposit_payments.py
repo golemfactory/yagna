@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import pytest
-import goth_tests.helpers.payment
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -12,9 +12,10 @@ from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
+import goth_tests
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
-from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats
+from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats, AllocationCtx
 
 logger = logging.getLogger("goth.test.deposit_payments")
 
@@ -24,7 +25,7 @@ ITERATION_COUNT = 10
 ITERATION_STOP_JOB = 4
 
 def build_demand(
-        requestor: RequestorProbe,
+    requestor: RequestorProbe,
 ):
     return (
         DemandBuilder(requestor)
@@ -42,12 +43,12 @@ def build_demand(
 
 
 def _create_runner(
-        common_assets: Path, config_overrides: List[Override], log_dir: Path
+    common_assets: Path, config_overrides: List[Override], log_dir: Path
 ) -> Tuple[Runner, Configuration]:
     goth_config = load_yaml(
         Path(__file__).parent / "goth-config.yml",
         config_overrides,
-        )
+    )
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -60,9 +61,9 @@ def _create_runner(
 
 @pytest.mark.asyncio
 async def test_deposit_agreement_payments(
-        common_assets: Path,
-        config_overrides: List[Override],
-        log_dir: Path,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     deposit_id_1 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000666"
     deposit_id_2 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000667"
@@ -103,29 +104,38 @@ async def test_deposit_agreement_payments(
         )
 
         stats = DebitNoteStats()
-        asyncio.create_task(accept_debit_notes(requestor, stats))
 
-        agreement_id, provider = agreement_providers[0]
-        activity_id = await requestor.create_activity(agreement_id)
-        await provider.wait_for_exeunit_started()
+        async with AllocationCtx(requestor, 50.0) as allocation:
+            debit_note_task = asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
 
-        logger.debug(f"Activity created: {activity_id}")
-        for i in range(0, ITERATION_COUNT):
-            await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
+            agreement_id, provider = agreement_providers[0]
+            activity_id = await requestor.create_activity(agreement_id)
+            await provider.wait_for_exeunit_started()
 
-            logger.debug(f"Fetching payments: {i}/{ITERATION_COUNT}")
-            payments = await provider.api.payment.get_payments(after_timestamp=ts)
-            for payment in payments:
-                number_of_payments += 1
-                amount += float(payment.amount)
-                logger.info(f"Received payment: amount {payment.amount}."
-                            f" Total amount {amount}. Number of payments {number_of_payments}")
-                ts = payment.timestamp if payment.timestamp > ts else ts
+            logger.debug(f"Activity created: {activity_id}")
+            for i in range(0, ITERATION_COUNT):
+                await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
 
-            # prevent new debit notes in the last iteration
-            if i == ITERATION_STOP_JOB:
-                await requestor.destroy_activity(activity_id)
-                await provider.wait_for_exeunit_finished()
+                logger.debug(f"Fetching payments: {i}/{ITERATION_COUNT}")
+                payments = await provider.api.payment.get_payments(after_timestamp=ts)
+                for payment in payments:
+                    number_of_payments += 1
+                    amount += float(payment.amount)
+                    logger.info(f"Received payment: amount {payment.amount}."
+                                f" Total amount {amount}. Number of payments {number_of_payments}")
+                    ts = payment.timestamp if payment.timestamp > ts else ts
+
+                # prevent new debit notes in the last iteration
+                if i == ITERATION_STOP_JOB:
+                    await requestor.destroy_activity(activity_id)
+                    await provider.wait_for_exeunit_finished()
+
+            debit_note_task.cancel()
+            try:
+                await debit_note_task
+            except asyncio.CancelledError:
+                # that is expected behaviour when cancelling task
+                pass
 
         # this test is failing too much, so not expect exact amount paid,
         # but at least two payments have to be made
