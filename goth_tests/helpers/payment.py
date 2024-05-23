@@ -30,59 +30,59 @@ async def pay_all(
 
 
 async def accept_debit_notes(
+        allocation,
         requestor: RequestorProbe,
         stats: "DebitNoteStats",
 ):
     ts = datetime.now(timezone.utc)
     logger.info("Listening for debit note events")
-    async with AllocationCtx(requestor, 50.0) as allocation:
-        while True:
-            try:
-                # FIXME: requestor.api.payment.get_debit_note_events returns
-                #  instances of 'DebitNoteReceivedEvent', which do not contain
-                #  the `eventDate` property
-                events = await get_debit_note_events_raw(requestor, ts)
-            except Exception as e:
-                logger.error("Failed to fetch debit note events: %s", e)
-                events = []
+    while True:
+        try:
+            # FIXME: requestor.api.payment.get_debit_note_events returns
+            #  instances of 'DebitNoteReceivedEvent', which do not contain
+            #  the `eventDate` property
+            events = await get_debit_note_events_raw(requestor, ts)
+        except Exception as e:
+            logger.error("Failed to fetch debit note events: %s", e)
+            events = []
 
-            for ev in events:
-                debit_note_id = ev.get("debitNoteId")
-                event_date = ev.get("eventDate")
-                event_type = ev.get("eventType")
+        for ev in events:
+            debit_note_id = ev.get("debitNoteId")
+            event_date = ev.get("eventDate")
+            event_type = ev.get("eventType")
 
-                ts = datetime.fromisoformat(event_date.replace("Z", "+00:00"))
+            ts = datetime.fromisoformat(event_date.replace("Z", "+00:00"))
 
-                if event_type != "DebitNoteReceivedEvent":
-                    logger.warning("Invalid debit note event type: %s", event_type)
-                    continue
-                if not (debit_note_id and event_date):
-                    logger.warning("Empty debit note event: %r", ev)
-                    continue
+            if event_type != "DebitNoteReceivedEvent":
+                logger.warning("Invalid debit note event type: %s", event_type)
+                continue
+            if not (debit_note_id and event_date):
+                logger.warning("Empty debit note event: %r", ev)
+                continue
 
-                debit_note = await requestor.api.payment.get_debit_note(debit_note_id)
-                stats.amount = float(debit_note.total_amount_due)
-                amount = str(debit_note.total_amount_due)
+            debit_note = await requestor.api.payment.get_debit_note(debit_note_id)
+            stats.amount = float(debit_note.total_amount_due)
+            amount = str(debit_note.total_amount_due)
 
-                acceptance = ya_payment.Acceptance(
-                    total_amount_accepted=amount,
-                    allocation_id=allocation.allocation_id,
-                )
+            acceptance = ya_payment.Acceptance(
+                total_amount_accepted=amount,
+                allocation_id=allocation.allocation_id,
+            )
 
-                await requestor.api.payment.accept_debit_note(
-                    debit_note.debit_note_id,
-                    acceptance,
-                )
-                stats.accepted += 1
+            await requestor.api.payment.accept_debit_note(
+                debit_note.debit_note_id,
+                acceptance,
+            )
+            stats.accepted += 1
 
-                logger.info(
-                    "Debit note %s (amount: %s) accepted",
-                    debit_note.debit_note_id,
-                    debit_note.total_amount_due,
-                )
+            logger.info(
+                "Debit note %s (amount: %s) accepted",
+                debit_note.debit_note_id,
+                debit_note.total_amount_due,
+            )
 
-            if not events:
-                await asyncio.sleep(0.5)
+        if not events:
+            await asyncio.sleep(0.5)
 
 
 async def get_debit_note_events_raw(

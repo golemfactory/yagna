@@ -10,7 +10,7 @@ on:
       rust_version:
         description: 'Rust version'
         required: true
-        default: '1.75.0'
+        default: '1.77.0'
       strip_binaries:
         description: 'Strip binaries'
         required: true
@@ -19,14 +19,14 @@ on:
   push:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
         id: variables
         run: |
           echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "rust_version=${{ github.event.inputs.rust_version || '1.75.0' }}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.77.0' }}" >> $GITHUB_OUTPUT
           echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
 
       - name: Musl
@@ -59,7 +59,7 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
@@ -89,7 +89,7 @@ jobs:
           strip -x build/*
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: yagna-binaries
           path: build
@@ -110,13 +110,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        continue-on-error: true
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
@@ -137,13 +139,35 @@ jobs:
           python payment_test.py
 
   integration-test-groups:
-    name: Integration Tests (hybrid-net) group
-    runs-on: [goth2]
+    name: T
+    runs-on: ubuntu-latest
     needs: build
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2]
+        test_name:
+          - "test_custom_runtime_counter"
+          - "test_mid_agreement_payments"
+          - "test_deposit_agreement_payments"
+          - "test_payment_driver_list"
+          - "test_payment_release_allocations"
+          - "test_payment_validate_allocations"
+          - "test_zero_amount_invoice"
+          - "test_prov_debit_notes_accept_timeout"
+          - "test_prov_idle_agreement"
+          - "test_prov_idle_agreement_after_2_activities"
+          - "test_prov_timeout_unresponsive_requestor"
+          - "test_prov_multi_activity"
+          - "test_prov_recover_from_abandoned_task"
+          - "test_prov_renegotiate_proposal"
+          - "test_prov_single_simultaneous_activity"
+          - "test_e2e_rule_partner_outbound"
+          - "test_e2e_rule_partner_outbound_unrestricted"
+          - "test_e2e_vm"
+          - "test_e2e_x509_signature_outbound"
+          - "test_e2e_outbound_perf"
+          - "test_e2e_wasi"
     defaults:
       run:
         working-directory: "./goth_tests"
@@ -155,65 +179,41 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        continue-on-error: true
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
 
-      - name: Install poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          ln -sf $HOME/.local/bin/poetry /usr/bin/poetry
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 
       - name: Install dependencies
-        run: |
-          poetry install --no-root
-
-      - name: Cleanup Docker
-        if: always()
-        run: |
-          c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
-
-      - name: Log in to GitHub Docker repository
-        run: |
-          rm -rf ~/.docker/config.json
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{github.actor}} --password-stdin
+        run: poetry install
 
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
 
       - name: Run test suite
+        id: poetry_test
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run poe goth-tests --splits 2 --group ${{ matrix.group }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run pytest -W ignore::DeprecationWarning -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+
+      - name: Check test result
+        if: ${{ steps.poetry_test.outcome != 'success' }}
+        run: |
+          echo "::warning::Test ${{ matrix.test_name }} failed"
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: goth-logs
+          name: goth-logs-${{ matrix.test_name }}
           path: /tmp/goth-tests
-
-      # Only relevant for self-hosted runners
-      - name: Remove test logs
-        if: always()
-        run: rm -rf /tmp/goth-tests
-
-      # Only relevant for self-hosted runners
-      - name: Remove Poetry virtual env
-        if: always()
-        run: poetry env remove --all
-
-      - name: Cleanup Docker
-        if: always()
-        run: |
-          c=$(docker ps -q) && [[ $c ]] && docker kill $c
-          docker system prune -af
 
   integration-test:
     name: Integration Tests (hybrid-net)
