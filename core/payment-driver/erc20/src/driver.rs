@@ -749,16 +749,28 @@ impl PaymentDriver for Erc20Driver {
                 .await
             {
                 Ok(balance) => {
-                    let gas_balance = balance.gas_balance.unwrap_or(U256::zero());
+                    let gas_balance = balance.gas_balance.ok_or(
+                        GenericError::new(format!(
+                            "Error getting gas balance for address {}",
+                            address
+                        )),
+                    )?;
+
                     log::info!("Gas balance is {}", gas_balance.to_eth_str());
-                    let token_balance = balance.token_balance.unwrap_or(U256::zero());
+                    let token_balance = balance.token_balance.ok_or(
+                        GenericError::new(format!(
+                            "Error getting token balance for address {}",
+                            address
+                        )),
+                    )?;
+
                     log::info!("tGLM balance is {}", token_balance.to_eth_str());
                     (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
+                    log::error!("Error getting balance: {}", err);
                     return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
+                        "Error getting balance: {}",
                         err
                     )));
                 }
@@ -948,27 +960,43 @@ impl PaymentDriver for Erc20Driver {
             } else {
                 format!("No funds received on {} network", network)
             };
-            let final_balance = match self
+            let (final_gas_balance, final_token_balance) = match self
                 .payment_runtime
                 .get_token_balance(network.to_string(), address, None)
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.gas_balance.unwrap_or(Default::default()).to_eth_str());
-                    balance
+                    let gas_balance = balance.gas_balance.ok_or(
+                        GenericError::new(format!(
+                            "Error getting gas balance for address {}",
+                            address
+                        )),
+                    )?;
+
+                    log::info!("Gas balance is {}", gas_balance.to_eth_str());
+                    let token_balance = balance.token_balance.ok_or(
+                        GenericError::new(format!(
+                            "Error getting token balance for address {}",
+                            address
+                        )),
+                    )?;
+
+                    log::info!("tGLM balance is {}", token_balance.to_eth_str());
+                    (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
+                    log::error!("Error getting balance: {}", err);
                     return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
+                        "Error getting balance: {}",
                         err
                     )));
                 }
             };
+
             str_output += &format!(
                 "\nYou have {} tETH and {} tGLM on {} network",
-                final_balance.gas_balance.unwrap_or(Default::default()).to_eth_str(),
-                final_balance.token_balance.unwrap_or(Default::default()).to_eth_str(),
+                final_gas_balance.to_eth_str(),
+                final_token_balance.to_eth_str(),
                 network
             );
             str_output += &format!(
