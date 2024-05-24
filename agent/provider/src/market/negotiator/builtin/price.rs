@@ -1,9 +1,5 @@
-use ya_agreement_utils::OfferDefinition;
-
 use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 pub struct PriceNego {}
 
@@ -52,21 +48,5 @@ impl NegotiatorComponent for PriceNego {
         } else {
             Ok(NegotiationResult::Ready { offer })
         }
-    }
-
-    fn fill_template(&mut self, template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
-        Ok(template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }

@@ -17,7 +17,7 @@ serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch 
 tokio = { version = "1", features = ["rt"] }
 url = "2.3"
 
-ya-utils-process = "0.2"
+ya-utils-process = "0.3"
 ya-framework-macro = "0.1"
 
 [target.'cfg(target_family = "unix")'.dependencies]

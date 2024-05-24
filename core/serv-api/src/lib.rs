@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -7,6 +8,7 @@ pub struct MetricsCtx {
     pub push_enabled: bool,
     pub push_host_url: Option<url::Url>,
     pub job: String,
+    pub labels: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default)]

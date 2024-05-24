@@ -304,16 +304,22 @@ pub fn flatten(value: Value) -> Map<String, Value> {
 fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) {
     match value {
         Value::Object(m) => {
-            for (k, v) in m.into_iter() {
-                if k.as_str() == PROPERTY_TAG {
-                    result.insert(prefix.clone(), v);
-                    continue;
+            if m.is_empty() {
+                // Important to keep this value in case we want to un-flatten later
+                // and get the same structure.
+                result.insert(prefix, Value::Object(Map::new()));
+            } else {
+                for (k, v) in m.into_iter() {
+                    if k.as_str() == PROPERTY_TAG {
+                        result.insert(prefix.clone(), v);
+                        continue;
+                    }
+                    let p = match prefix.is_empty() {
+                        true => k,
+                        _ => format!("{}.{}", prefix, k),
+                    };
+                    flatten_inner(p, result, v);
                 }
-                let p = match prefix.is_empty() {
-                    true => k,
-                    _ => format!("{}.{}", prefix, k),
-                };
-                flatten_inner(p, result, v);
             }
         }
         v => {
@@ -564,15 +570,20 @@ constraints: |
                 "b": {
                     "c": 1,
                     PROPERTY_TAG: 2
-                }
+                },
+                "d": {}
             },
             "r": [123, "string"]
         });
 
-        let map = flatten(source);
+        let map = flatten(source.clone());
         assert_eq!(map.get("a.b.c").unwrap(), 1);
         assert_eq!(map.get("a.b").unwrap(), 2);
         assert_eq!(map.get("r").unwrap(), &serde_json::json!([123, "string"]));
+        assert_eq!(map.get("a.d").unwrap(), &Value::Object(Map::new()));
+
+        let json = expand(Value::Object(map));
+        assert_eq!(source, json);
     }
 
     #[test]
