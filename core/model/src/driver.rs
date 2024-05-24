@@ -124,38 +124,17 @@ impl GetAccountBalance {
     }
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GetAccountBalanceResult {
+    pub gas_details: Option<GasDetails>,
+    pub token_balance: BigDecimal,
+    pub block_number: u64,
+    pub block_datetime: DateTime<Utc>,
+}
+
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
-    type Item = BigDecimal;
-    type Error = GenericError;
-}
-
-// ************************** GET ACCOUNT GAS BALANCE **************************
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetAccountGasBalance {
-    address: String,
-    platform: String,
-}
-
-impl GetAccountGasBalance {
-    pub fn new(address: String, platform: String) -> Self {
-        Self { address, platform }
-    }
-}
-
-impl GetAccountGasBalance {
-    pub fn address(&self) -> String {
-        self.address.clone()
-    }
-    pub fn platform(&self) -> String {
-        self.platform.clone()
-    }
-}
-
-impl RpcMessage for GetAccountGasBalance {
-    const ID: &'static str = "GetAccountGasBalance";
-    type Item = Option<GasDetails>;
+    type Item = GetAccountBalanceResult;
     type Error = GenericError;
 }
 
