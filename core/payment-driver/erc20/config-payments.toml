@@ -102,7 +102,7 @@ chain-name = "Holesky"
 chain-id = 17000
 currency-symbol = "tETH"
 priority-fee = 0.000001
-max-fee-per-gas = 10.0
+max-fee-per-gas = 20.0
 transaction-timeout = 100
 wrapper-contract = { address = "0xE168bCa171ccf51066E2106d8955BF22705a6905" }
 token = { address = "0x8888888815bf4DB87e57B609A50f938311EEd068", symbol = "tGLM" }
