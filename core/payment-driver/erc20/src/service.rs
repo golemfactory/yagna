@@ -6,9 +6,7 @@ use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
-use erc20_payment_lib::config::{
-    AdditionalOptions, LockContractSettings, MultiContractSettings, RpcSettings,
-};
+use erc20_payment_lib::config::{AdditionalOptions, LockContractSettings, MultiContractSettings, RpcSettings, WrapperContractSettings};
 use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
 
@@ -91,6 +89,7 @@ impl Erc20Service {
                 let priority_fee_env = format!("{prefix}_PRIORITY_FEE");
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
+                let wrapper_contract_env = format!("{prefix}_WRAPPER_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
                 let lock_payment_addr_env = format!("{prefix}_LOCK_PAYMENT_CONTRACT_ADDRESS");
                 let confirmations_env = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
@@ -195,6 +194,21 @@ impl Erc20Service {
                         Err(e) => {
                             log::warn!(
                                 "Value {lock_payment_addr} for {lock_payment_addr_env} is not valid H160 address: {e}"
+                            );
+                        }
+                    };
+                }
+                if let Ok(wrapper_contract_addr) = env::var(&wrapper_contract_env) {
+                    match H160::from_str(&wrapper_contract_addr) {
+                        Ok(parsed) => {
+                            log::info!(
+                                "{network} wrapper contract address set to {wrapper_contract_addr}"
+                            );
+                            chain.wrapper_contract = Some(WrapperContractSettings { address: parsed } )
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Value {wrapper_contract_addr} for {wrapper_contract_env} is not valid H160 address: {e}"
                             );
                         }
                     };
