@@ -59,7 +59,7 @@ mod local {
         },
         NodeId,
     };
-    use ya_core_model::driver::{ValidateAllocationResult};
+    use ya_core_model::driver::ValidateAllocationResult;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -335,13 +335,8 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let (incoming, outgoing, status, reserved) = future::try_join4(
-            incoming_fut,
-            outgoing_fut,
-            amount_fut,
-            reserved_fut,
-        )
-        .await?;
+        let (incoming, outgoing, status, reserved) =
+            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
 
         Ok(StatusResult {
             amount: status.token_balance,

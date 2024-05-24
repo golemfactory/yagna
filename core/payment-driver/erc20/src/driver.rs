@@ -37,10 +37,10 @@ use ya_payment_driver::{
 // Local uses
 use crate::erc20::utils;
 use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
+use crate::network::platform_to_currency;
 use crate::signer::IdentitySigner;
 use crate::{driver::PaymentDetails, network, HOLESKY_NETWORK};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
-use crate::network::platform_to_currency;
 
 mod cli;
 
@@ -406,11 +406,13 @@ impl Erc20Driver {
             total_allocated_amount,
         );
 
-        Ok(if msg.amount > account_balance.token_balance - total_allocated_amount {
-            ValidateAllocationResult::InsufficientAccountFunds
-        } else {
-            ValidateAllocationResult::Valid
-        })
+        Ok(
+            if msg.amount > account_balance.token_balance - total_allocated_amount {
+                ValidateAllocationResult::InsufficientAccountFunds
+            } else {
+                ValidateAllocationResult::Valid
+            },
+        )
     }
 
     async fn validate_allocation_deposit(
@@ -653,15 +655,17 @@ impl PaymentDriver for Erc20Driver {
             .await
             .map_err(|e| GenericError::new(e.to_string()))?;
 
-        let gas_balance = balance.gas_balance.ok_or(
-            GenericError::new(format!("Error getting gas balance for address: {}", address_str)),
-        )?;
+        let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+            "Error getting gas balance for address: {}",
+            address_str
+        )))?;
         let gas_balance = u256_to_big_dec(gas_balance).map_err(|e| {
             GenericError::new(format!("Error converting gas balance to big int: {}", e))
         })?;
-        let token_balance = balance.token_balance.ok_or(
-            GenericError::new(format!("Error getting token balance for address: {}", address_str)),
-        )?;
+        let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+            "Error getting token balance for address: {}",
+            address_str
+        )))?;
         let token_balance = u256_to_big_dec(token_balance).map_err(|e| {
             GenericError::new(format!("Error converting token balance to big int: {}", e))
         })?;
@@ -749,30 +753,23 @@ impl PaymentDriver for Erc20Driver {
                 .await
             {
                 Ok(balance) => {
-                    let gas_balance = balance.gas_balance.ok_or(
-                        GenericError::new(format!(
-                            "Error getting gas balance for address {}",
-                            address
-                        )),
-                    )?;
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
 
                     log::info!("Gas balance is {}", gas_balance.to_eth_str());
-                    let token_balance = balance.token_balance.ok_or(
-                        GenericError::new(format!(
-                            "Error getting token balance for address {}",
-                            address
-                        )),
-                    )?;
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
 
                     log::info!("tGLM balance is {}", token_balance.to_eth_str());
                     (gas_balance, token_balance)
                 }
                 Err(err) => {
                     log::error!("Error getting balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting balance: {}",
-                        err
-                    )));
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
 
@@ -966,30 +963,23 @@ impl PaymentDriver for Erc20Driver {
                 .await
             {
                 Ok(balance) => {
-                    let gas_balance = balance.gas_balance.ok_or(
-                        GenericError::new(format!(
-                            "Error getting gas balance for address {}",
-                            address
-                        )),
-                    )?;
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
 
                     log::info!("Gas balance is {}", gas_balance.to_eth_str());
-                    let token_balance = balance.token_balance.ok_or(
-                        GenericError::new(format!(
-                            "Error getting token balance for address {}",
-                            address
-                        )),
-                    )?;
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
 
                     log::info!("tGLM balance is {}", token_balance.to_eth_str());
                     (gas_balance, token_balance)
                 }
                 Err(err) => {
                     log::error!("Error getting balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting balance: {}",
-                        err
-                    )));
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
 

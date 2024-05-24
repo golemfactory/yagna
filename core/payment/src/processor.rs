@@ -25,7 +25,11 @@ use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
-use ya_core_model::driver::{self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult, GetAccountBalanceResult};
+use ya_core_model::driver::{
+    self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
+    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
+    ValidateAllocationResult,
+};
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,

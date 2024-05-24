@@ -6,7 +6,10 @@ use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
-use erc20_payment_lib::config::{AdditionalOptions, LockContractSettings, MultiContractSettings, RpcSettings, WrapperContractSettings};
+use erc20_payment_lib::config::{
+    AdditionalOptions, LockContractSettings, MultiContractSettings, RpcSettings,
+    WrapperContractSettings,
+};
 use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
 
@@ -201,10 +204,18 @@ impl Erc20Service {
                 if let Ok(wrapper_contract_addr) = env::var(&wrapper_contract_env) {
                     match H160::from_str(&wrapper_contract_addr) {
                         Ok(parsed) => {
-                            log::info!(
-                                "{network} wrapper contract address set to {wrapper_contract_addr}"
-                            );
-                            chain.wrapper_contract = Some(WrapperContractSettings { address: parsed } )
+                            if parsed == H160::zero() {
+                                log::info!(
+                                    "{network} wrapper contract address set to {wrapper_contract_addr}, setting to None"
+                                );
+                                chain.wrapper_contract = None;
+                            } else {
+                                log::info!(
+                                    "{network} wrapper contract address set to {wrapper_contract_addr}"
+                                );
+                                chain.wrapper_contract =
+                                    Some(WrapperContractSettings { address: parsed })
+                            }
                         }
                         Err(e) => {
                             log::warn!(
