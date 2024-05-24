@@ -1,8 +1,6 @@
 use crate::{DRIVER_NAME, NETWORK_NAME, PLATFORM_NAME, TOKEN_NAME};
-use bigdecimal::BigDecimal;
 use chrono::Utc;
 use maplit::hashmap;
-use std::str::FromStr;
 use uuid::Uuid;
 use ya_client_model::payment::{DriverDetails, Network};
 use ya_core_model::driver::*;
@@ -76,10 +74,13 @@ async fn get_account_balance(
     _db: (),
     _caller: String,
     msg: GetAccountBalance,
-) -> Result<BigDecimal, GenericError> {
+) -> Result<GetAccountBalanceResult, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
-    BigDecimal::from_str("1000000000000000000000000").map_err(GenericError::new)
+    Ok(GetAccountBalanceResult {
+        gas_balance: Default::default(),
+        ..Default::default()
+    })
 }
 
 async fn schedule_payment(

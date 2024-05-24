@@ -57,9 +57,6 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
         )
         .bind_with_processor(
-            move |_, dr, c, m| async move { dr.get_account_gas_balance( c, m).await }
-        )
-        .bind_with_processor(
             move |_, dr, c, m| async move { dr.init( c, m).await }
         )
         .bind_with_processor(

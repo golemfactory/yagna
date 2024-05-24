@@ -25,10 +25,7 @@ use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
-use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, DriverReleaseDeposit, GasDetails, GetRpcEndpointsResult,
-    PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult,
-};
+use ya_core_model::driver::{self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult, GetAccountBalanceResult};
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
@@ -802,16 +799,16 @@ impl PaymentProcessor {
         &self,
         platform: String,
         address: String,
-    ) -> Result<BigDecimal, GetStatusError> {
+    ) -> Result<GetAccountBalanceResult, GetStatusError> {
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await?
             .driver(&platform, &address, AccountMode::empty())?;
-        let amount = driver_endpoint(&driver)
+        let status = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
-        Ok(amount)
+        Ok(status)
     }
 
     pub async fn get_rpc_endpoints_info(
@@ -837,23 +834,6 @@ impl PaymentProcessor {
             })
             .await??;
         Ok(res)
-    }
-
-    pub async fn get_gas_balance(
-        &self,
-        platform: String,
-        address: String,
-    ) -> Result<Option<GasDetails>, GetStatusError> {
-        let driver = self
-            .registry
-            .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await?
-            .driver(&platform, &address, AccountMode::empty())?;
-        let amount = driver_endpoint(&driver)
-            .send(driver::GetAccountGasBalance::new(address, platform))
-            .await??;
-
-        Ok(amount)
     }
 
     pub async fn validate_allocation(

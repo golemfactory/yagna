@@ -59,7 +59,7 @@ mod local {
         },
         NodeId,
     };
-    use ya_core_model::driver::ValidateAllocationResult;
+    use ya_core_model::driver::{GasDetails, ValidateAllocationResult};
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -335,31 +335,30 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let gas_amount_fut = async {
-            processor
-                .get_gas_balance(platform.clone(), address.clone())
-                .await
-        }
-        .map_err(GenericError::new);
-
-        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
+        let (incoming, outgoing, status, reserved) = future::try_join4(
             incoming_fut,
             outgoing_fut,
             amount_fut,
-            gas_amount_fut,
             reserved_fut,
         )
         .await?;
 
+        let gas = GasDetails {
+            currency_short_name: "".to_string(),
+            currency_long_name: "".to_string(),
+            balance: status.gas_balance,
+        };
         Ok(StatusResult {
-            amount,
+            amount: status.token_balance,
             reserved,
             outgoing,
             incoming,
             driver,
             network,
             token,
-            gas,
+            gas: Some(gas),
+            block_number: 0,
+            block_datetime: Default::default(),
         })
     }
 
