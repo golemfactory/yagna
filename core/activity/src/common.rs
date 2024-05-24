@@ -7,7 +7,8 @@ use uuid::Uuid;
 
 use ya_client_model::{
     activity::{ActivityState, ActivityUsage},
-    market::{Agreement, Role},
+    market::agreement::State as AgreementState,
+    market::{Agreement, AgreementListEntry, Role},
     NodeId,
 };
 use ya_core_model::{activity, market};
@@ -24,6 +25,18 @@ const DEFAULT_TIMEOUT_MARGIN: f32 = 1.0;
 #[derive(Deserialize)]
 pub struct PathActivity {
     pub activity_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct QueryAgreement {
+    #[serde(rename = "agreementId")]
+    pub agreement_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct PathActivityUrl {
+    pub activity_id: String,
+    pub url: String,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +82,16 @@ pub(crate) fn generate_id() -> String {
 
 pub(crate) async fn _get_activities(db: &DbExecutor) -> Result<Vec<String>, Error> {
     Ok(db.as_dao::<ActivityDao>()._get_activity_ids().await?)
+}
+
+pub(crate) async fn get_activities_for_agreement(
+    db: &DbExecutor,
+    agreement_id: &str,
+) -> Result<Vec<String>, Error> {
+    Ok(db
+        .as_dao::<ActivityDao>()
+        .get_activity_ids_for_agreement(agreement_id)
+        .await?)
 }
 
 pub(crate) async fn get_persisted_state(
@@ -143,6 +166,19 @@ pub(crate) async fn get_activity_agreement(
     get_agreement(get_agreement_id(db, activity_id).await?, role).await
 }
 
+pub(crate) async fn get_agreements_by_state(
+    state: AgreementState,
+) -> anyhow::Result<Vec<AgreementListEntry>> {
+    let list_agreements_query = market::ListAgreements {
+        state: Some(state),
+        ..Default::default()
+    };
+    let agreements = bus::service(market::BUS_ID)
+        .send(list_agreements_query)
+        .await??;
+    Ok(agreements)
+}
+
 pub(crate) async fn authorize_activity_initiator(
     db: &DbExecutor,
     caller: impl ToString,
@@ -195,4 +231,14 @@ pub(crate) fn authorize_caller(caller: &NodeId, authorized: &NodeId) -> Result<(
 
 pub(crate) fn timeout_margin<D: IntoDuration>(timeout: Option<D>) -> Option<Duration> {
     timeout.map(|t| t.into_duration() + Duration::from_secs_f32(DEFAULT_TIMEOUT_MARGIN))
+}
+
+pub(crate) fn is_responsive(state: ActivityState) -> bool {
+    use ya_client_model::activity::State as ActivityStateType;
+    let internal_state = state.state;
+    state.alive()
+        && !matches!(
+            (&internal_state.0, &internal_state.1),
+            (ActivityStateType::Unresponsive, _) | (_, Some(ActivityStateType::Unresponsive))
+        )
 }

@@ -619,7 +619,10 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        Ok(GetRpcEndpointsResult { endpoints, sources })
+        Ok(GetRpcEndpointsResult {
+            endpoints: serde_json::to_value(endpoints).unwrap(),
+            sources: serde_json::to_value(sources).unwrap(),
+        })
     }
 
     async fn get_account_balance(

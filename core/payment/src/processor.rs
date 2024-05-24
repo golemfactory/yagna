@@ -14,6 +14,7 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
 use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
+use thiserror::Error;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,13 +34,13 @@ use ya_core_model::payment::local::{
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
     UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
-use ya_core_model::payment::public::{SendPayment, BUS_ID};
+use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::NodeId;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_bus::typed::Endpoint;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
@@ -309,6 +310,16 @@ pub struct PaymentProcessor {
     in_shutdown: AtomicBool,
 }
 
+#[derive(Debug, PartialEq, Error)]
+enum PaymentSendToGsbError {
+    #[error("payment Send to Gsb failed")]
+    Failed,
+    #[error("payment Send to Gsb is not supported")]
+    NotSupported,
+    #[error("payment Send to Gsb has been rejected")]
+    Rejected,
+}
+
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
         Self {
@@ -471,10 +482,11 @@ impl PaymentProcessor {
                 )
                 .await?;
 
-            payment = payment_dao
+            let signed_payment = payment_dao
                 .get(payment_id.clone(), payer_id)
                 .await?
                 .unwrap();
+            payment = signed_payment.payload;
         }
 
         // Allocation IDs are requestor's private matter and should not be sent to provider
@@ -485,6 +497,9 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
+        let signature_canonicalized = driver_endpoint(&driver)
+            .send(driver::SignPaymentCanonicalized(payment.clone()))
+            .await??;
         let signature = driver_endpoint(&driver)
             .send(driver::SignPayment(payment.clone()))
             .await??;
@@ -493,33 +508,41 @@ impl PaymentProcessor {
         // This is unconditional because at this point the invoice *has been paid*.
         // Whether the provider was correctly notified of this fact is another matter.
         counter!("payment.invoices.requestor.paid", 1);
-        let msg = SendPayment::new(payment, signature);
+        let msg = SendPayment::new(payment.clone(), signature);
+        let msg_with_bytes = SendSignedPayment::new(payment, signature_canonicalized);
 
         let db_executor = Arc::clone(&self.db_executor);
 
         tokio::task::spawn_local(
             async move {
-                let mark_sent = ya_net::from(payer_id)
-                    .to(payee_id)
-                    .service(BUS_ID)
-                    .call(msg)
-                    .map(|res| match res {
-                        Ok(Ok(_)) => true,
-                        Err(err) => {
-                            log::error!("Error sending payment message to provider: {:?}", err);
-                            false
-                        }
-                        Ok(Err(err)) => {
-                            log::error!("Provider rejected payment: {:?}", err);
-                            true
-                        }
-                    })
-                    .await;
-
                 let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
+                let send_result =
+                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
+
+                let mark_sent = if send_result.is_ok() {
+                    payment_dao
+                        .add_signature(
+                            payment_id.clone(),
+                            msg_with_bytes.signature.clone(),
+                            msg_with_bytes.signed_bytes.clone(),
+                        )
+                        .await
+                        .is_ok()
+                } else if send_result.is_err_and(|err| err == PaymentSendToGsbError::NotSupported) {
+                    // if sending SendPaymentWithBytes is not supported then try sending SendPayment
+                    match Self::send_to_gsb(payer_id, payee_id, msg).await {
+                        Ok(_) => true,
+                        Err(PaymentSendToGsbError::Rejected) => true,
+                        Err(PaymentSendToGsbError::Failed) => false,
+                        Err(PaymentSendToGsbError::NotSupported) => false,
+                    }
+                } else {
+                    false
+                };
 
                 if mark_sent {
                     payment_dao.mark_sent(payment_id).await.ok();
@@ -537,11 +560,31 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn schedule_payment(
-        &self,
-        caller: String,
-        msg: SchedulePayment,
-    ) -> Result<(), SchedulePaymentError> {
+    async fn send_to_gsb<T: RpcMessage + Unpin>(
+        payer_id: NodeId,
+        payee_id: NodeId,
+        msg: T,
+    ) -> Result<(), PaymentSendToGsbError> {
+        ya_net::from(payer_id)
+            .to(payee_id)
+            .service(BUS_ID)
+            .call(msg)
+            .map(|res| match res {
+                Ok(Ok(_)) => Ok(()),
+                Err(ya_service_bus::Error::GsbBadRequest(_)) => Err(PaymentSendToGsbError::NotSupported),
+                Err(err) => {
+                    log::error!("Error sending payment message to provider: {:?}", err);
+                    Err(PaymentSendToGsbError::Failed)
+                }
+                Ok(Err(err)) => {
+                    log::error!("Provider rejected payment: {:?}", err);
+                    Err(PaymentSendToGsbError::Rejected)
+                }
+            })
+            .await
+    }
+
+    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
@@ -597,6 +640,8 @@ impl PaymentProcessor {
         &self,
         payment: Payment,
         signature: Vec<u8>,
+        canonicalized: bool,
+        signed_bytes: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -611,7 +656,11 @@ impl PaymentProcessor {
             )?;
 
         if !driver_endpoint(&driver)
-            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .send(driver::VerifySignature::new(
+                payment.clone(),
+                signature.clone(),
+                canonicalized,
+            ))
             .await??
         {
             return Err(VerifyPaymentError::InvalidSignature);
@@ -733,7 +782,15 @@ impl PaymentProcessor {
             }
 
             // Insert payment into database (this operation creates and updates all related entities)
-            payment_dao.insert_received(payment, payee_id).await?;
+            if signed_bytes.is_none() {
+                payment_dao
+                    .insert_received(payment, payee_id, None, None)
+                    .await?;
+            } else {
+                payment_dao
+                    .insert_received(payment, payee_id, Some(signature), signed_bytes)
+                    .await?;
+            }
         }
 
         Ok(())

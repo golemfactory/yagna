@@ -126,7 +126,10 @@ impl ProviderAgent {
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
-        registry.test_runtimes(&data_dir).await?;
+        registry
+            .test_runtimes(&data_dir)
+            .await
+            .inspect_err(|err| log::error!("Runtimes test failed: {err}"))?;
 
         // Generate session id from node name and process id to make sure it's unique.
         let name = args

@@ -15,6 +15,7 @@ use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
 use ya_manifest_utils::Feature;
 use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
+use ya_utils_process::{kill, ProcessTree, SystemError};
 
 use crate::acl::Acl;
 use crate::error::Error;
@@ -27,7 +28,6 @@ use crate::network::inet::Inet;
 use crate::network::vpn::{start_vpn, Vpn};
 use crate::network::Endpoint;
 use crate::output::forward_output;
-use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeMode};
 use crate::state::Deployment;

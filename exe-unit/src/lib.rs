@@ -15,16 +15,20 @@ use ya_client_model::activity::{
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
+use ya_counters::error::CounterError;
+use ya_counters::message::GetCounters;
+use ya_counters::service::CountersService;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+use ya_transfer::transfer::{
+    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+};
 
 use crate::acl::Acl;
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
-use crate::service::metrics::MetricsService;
-use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
@@ -37,15 +41,12 @@ mod handlers;
 pub mod logger;
 pub mod manifest;
 pub mod message;
-pub mod metrics;
 mod network;
 mod notify;
 mod output;
-pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
-pub mod util;
 
 mod dns;
 pub type Result<T> = std::result::Result<T, Error>;
@@ -59,7 +60,7 @@ pub struct ExeUnit<R: Runtime> {
     state: ExeUnitState,
     events: Channel<RuntimeEvent>,
     runtime: Addr<R>,
-    metrics: Addr<MetricsService>,
+    counters: Addr<CountersService>,
     transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
     shutdown_tx: Option<oneshot::Sender<Result<()>>>,
@@ -69,7 +70,7 @@ impl<R: Runtime> ExeUnit<R> {
     pub fn new(
         shutdown_tx: oneshot::Sender<Result<()>>,
         ctx: ExeUnitContext,
-        metrics: Addr<MetricsService>,
+        counters: Addr<CountersService>,
         transfers: Addr<TransferService>,
         runtime: Addr<R>,
     ) -> Self {
@@ -78,10 +79,10 @@ impl<R: Runtime> ExeUnit<R> {
             state: ExeUnitState::default(),
             events: Channel::default(),
             runtime: runtime.clone(),
-            metrics: metrics.clone(),
+            counters: counters.clone(),
             transfers: transfers.clone(),
             services: vec![
-                Box::new(ServiceAddr::new(metrics)),
+                Box::new(ServiceAddr::new(counters)),
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
@@ -94,7 +95,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.com.usage.vector": service::counters::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
         }));
 
@@ -114,7 +115,7 @@ impl<R: Runtime> ExeUnit<R> {
             self.ctx.report_url.clone().unwrap(),
             self.ctx.activity_id.clone().unwrap(),
             context.address(),
-            self.metrics.clone(),
+            self.counters.clone(),
         );
         context.spawn(fut.into_actor(self));
     }
@@ -311,7 +312,10 @@ impl<R: Runtime> RuntimeRef<R> {
                 transfer_service.send(msg).await??;
             }
             ExeScriptCommand::Deploy { net, hosts } => {
-                let task_package = transfer_service.send(DeployImage {}).await??;
+                // TODO: We should pass `task_package` here not in `TransferService` initialization.
+                let task_package = transfer_service
+                    .send(DeployImage { task_package: None })
+                    .await??;
                 runtime
                     .send(UpdateDeployment {
                         task_package,
@@ -483,6 +487,18 @@ impl ExeUnitContext {
     }
 }
 
+impl From<&ExeUnitContext> for TransferServiceContext {
+    fn from(val: &ExeUnitContext) -> Self {
+        TransferServiceContext {
+            task_package: val.agreement.task_package.clone(),
+            deploy_retry: None,
+            cache_dir: val.cache_dir.clone(),
+            work_dir: val.work_dir.clone(),
+            transfer_retry: None,
+        }
+    }
+}
+
 struct Channel<T> {
     tx: mpsc::Sender<T>,
     rx: Option<mpsc::Receiver<T>>,
@@ -522,9 +538,9 @@ async fn report_usage<R: Runtime>(
     report_url: String,
     activity_id: String,
     exe_unit: Addr<ExeUnit<R>>,
-    metrics: Addr<MetricsService>,
+    counters: Addr<CountersService>,
 ) {
-    match metrics.send(GetMetrics).await {
+    match counters.send(GetCounters).await {
         Ok(resp) => match resp {
             Ok(data) => {
                 let msg = activity::local::SetUsage {
@@ -542,13 +558,31 @@ async fn report_usage<R: Runtime>(
                 }
             }
             Err(err) => match err {
-                Error::UsageLimitExceeded(info) => {
+                CounterError::UsageLimitExceeded(info) => {
                     log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
-                error => log::warn!("Unable to retrieve metrics: {:?}", error),
+                error => log::warn!("Unable to retrieve counters: {:?}", error),
             },
         },
         Err(e) => log::warn!("Unable to report activity usage: {:?}", e),
+    }
+}
+
+impl Handler<Shutdown> for TransferService {
+    type Result = ResponseFuture<Result<()>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_transfer::transfer::Shutdown {}).await??) }.boxed_local()
+    }
+}
+
+impl Handler<Shutdown> for CountersService {
+    type Result = ResponseFuture<Result<()>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
     }
 }

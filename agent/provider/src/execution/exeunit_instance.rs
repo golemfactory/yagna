@@ -96,6 +96,9 @@ impl ExeUnitInstance {
             })?;
 
         let output = child.wait_with_output().await?;
+        if !output.status.success() {
+            anyhow::bail!(String::from_utf8_lossy(output.stderr.as_slice()).to_string())
+        }
         Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string())
     }
 
