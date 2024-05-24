@@ -14,12 +14,12 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
 use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
-use thiserror::Error;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
@@ -571,7 +571,9 @@ impl PaymentProcessor {
             .call(msg)
             .map(|res| match res {
                 Ok(Ok(_)) => Ok(()),
-                Err(ya_service_bus::Error::GsbBadRequest(_)) => Err(PaymentSendToGsbError::NotSupported),
+                Err(ya_service_bus::Error::GsbBadRequest(_)) => {
+                    Err(PaymentSendToGsbError::NotSupported)
+                }
                 Err(err) => {
                     log::error!("Error sending payment message to provider: {:?}", err);
                     Err(PaymentSendToGsbError::Failed)
