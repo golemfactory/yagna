@@ -113,11 +113,11 @@ external-source-check-interval = 300
 
 [[chain.holesky.rpc-endpoints]]
 names = """
-    holesky.geth.golem.network
+    holesky.rpc-node.dev.golem.network
 """
 
 endpoints = """
-    https://holesky.geth.golem.network,
+    https://holesky.rpc-node.dev.golem.network,
 """
 priority = 0
 max-timeout-ms = 5000
