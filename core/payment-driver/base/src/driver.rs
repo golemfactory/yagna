@@ -38,14 +38,7 @@ pub trait PaymentDriver {
         &self,
         caller: String,
         msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError>;
-
-    async fn get_account_gas_balance(
-        &self,
-
-        _caller: String,
-        msg: GetAccountGasBalance,
-    ) -> Result<Option<GasDetails>, GenericError>;
+    ) -> Result<GetAccountBalanceResult, GenericError>;
 
     async fn enter(&self, caller: String, msg: Enter) -> Result<String, GenericError>;
 

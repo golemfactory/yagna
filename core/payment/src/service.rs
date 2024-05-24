@@ -329,31 +329,20 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let gas_amount_fut = async {
-            processor
-                .get_gas_balance(platform.clone(), address.clone())
-                .await
-        }
-        .map_err(GenericError::new);
-
-        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
-            incoming_fut,
-            outgoing_fut,
-            amount_fut,
-            gas_amount_fut,
-            reserved_fut,
-        )
-        .await?;
+        let (incoming, outgoing, status, reserved) =
+            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
 
         Ok(StatusResult {
-            amount,
+            amount: status.token_balance,
             reserved,
             outgoing,
             incoming,
             driver,
             network,
             token,
-            gas,
+            gas: status.gas_details,
+            block_number: 0,
+            block_datetime: Default::default(),
         })
     }
 
