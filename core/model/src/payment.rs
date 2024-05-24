@@ -274,6 +274,8 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub gas: Option<GasDetails>,
+        pub block_number: u64,
+        pub block_datetime: DateTime<Utc>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
