@@ -126,7 +126,7 @@ impl GetAccountBalance {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GetAccountBalanceResult {
-    pub gas_balance: BigDecimal,
+    pub gas_details: Option<GasDetails>,
     pub token_balance: BigDecimal,
     pub block_number: u64,
     pub block_datetime: DateTime<Utc>,

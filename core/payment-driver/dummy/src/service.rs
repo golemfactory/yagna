@@ -77,10 +77,7 @@ async fn get_account_balance(
 ) -> Result<GetAccountBalanceResult, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
-    Ok(GetAccountBalanceResult {
-        gas_balance: Default::default(),
-        ..Default::default()
-    })
+    Ok(GetAccountBalanceResult::default())
 }
 
 async fn schedule_payment(

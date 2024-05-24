@@ -40,6 +40,7 @@ use crate::erc20::utils::{big_dec_to_u256, u256_to_big_dec};
 use crate::signer::IdentitySigner;
 use crate::{driver::PaymentDetails, network, HOLESKY_NETWORK};
 use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
+use crate::network::platform_to_currency;
 
 mod cli;
 
@@ -664,9 +665,13 @@ impl PaymentDriver for Erc20Driver {
         let token_balance = u256_to_big_dec(token_balance).map_err(|e| {
             GenericError::new(format!("Error converting token balance to big int: {}", e))
         })?;
-
+        let (currency_short_name, currency_long_name) = platform_to_currency(platform)?;
         Ok(GetAccountBalanceResult {
-            gas_balance,
+            gas_details: Some(GasDetails {
+                currency_short_name,
+                currency_long_name,
+                balance: gas_balance,
+            }),
             token_balance,
             block_number: balance.block_number,
             block_datetime: balance.block_datetime,

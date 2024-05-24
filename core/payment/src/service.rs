@@ -59,7 +59,7 @@ mod local {
         },
         NodeId,
     };
-    use ya_core_model::driver::{GasDetails, ValidateAllocationResult};
+    use ya_core_model::driver::{ValidateAllocationResult};
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -343,11 +343,6 @@ mod local {
         )
         .await?;
 
-        let gas = GasDetails {
-            currency_short_name: "".to_string(),
-            currency_long_name: "".to_string(),
-            balance: status.gas_balance,
-        };
         Ok(StatusResult {
             amount: status.token_balance,
             reserved,
@@ -356,7 +351,7 @@ mod local {
             driver,
             network,
             token,
-            gas: Some(gas),
+            gas: status.gas_details,
             block_number: 0,
             block_datetime: Default::default(),
         })
