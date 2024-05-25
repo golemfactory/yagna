@@ -10,11 +10,12 @@ use tokio::time::timeout;
 use ya_client_model::activity::encrypted::RpcMessageError as SgxMessageError;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_core_model::activity::*;
+use ya_counters::message::GetCounters;
 use ya_service_bus::{Error as RpcError, RpcEnvelope, RpcStreamCall};
 
 use crate::error::Error;
 use crate::manifest::{ManifestValidatorExt, ScriptValidator};
-use crate::message::{GetBatchResults, GetMetrics};
+use crate::message::GetBatchResults;
 use crate::runtime::Runtime;
 use crate::{ExeUnit, RuntimeRef};
 
@@ -78,9 +79,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
             return ActorResponse::reply(Err(e.into()));
         }
 
-        let metrics = self.metrics.clone();
+        let counters = self.counters.clone();
         let fut = async move {
-            let resp = match metrics.send(GetMetrics).await {
+            let resp = match counters.send(GetCounters).await {
                 Ok(r) => r,
                 Err(e) => {
                     log::warn!("Unable to report activity usage: {:?}", e);
@@ -93,7 +94,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
                     current_usage: Some(data),
                     timestamp: Utc::now().timestamp(),
                 }),
-                Err(e) => Err(e.into()),
+                Err(e) => Err(Error::from(e).into()),
             }
         };
 

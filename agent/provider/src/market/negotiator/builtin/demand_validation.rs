@@ -1,9 +1,5 @@
-use ya_agreement_utils::OfferDefinition;
-
 use crate::market::negotiator::factory::DemandValidationNegotiatorConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 /// Negotiator that verifies that all required fields are present in proposal.
 pub struct DemandValidation {
@@ -42,25 +38,6 @@ impl NegotiatorComponent for DemandValidation {
                 is_final: false,
             })
         }
-    }
-
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
 

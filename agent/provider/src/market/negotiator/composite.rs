@@ -13,6 +13,8 @@ use super::builtin::{
 };
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
+use crate::market::negotiator::builtin::allow_only::AllowOnly;
+use crate::market::negotiator::builtin::blacklist::Blacklist;
 use crate::market::negotiator::builtin::demand_validation::DemandValidation;
 use crate::market::negotiator::builtin::PriceNego;
 use crate::market::negotiator::common::{
@@ -38,6 +40,14 @@ impl CompositeNegotiator {
             .add_component(
                 "Validation",
                 Box::new(DemandValidation::new(&config.validation_config)),
+            )
+            .add_component(
+                "Blacklist",
+                Box::new(Blacklist::new(agent_negotiators_cfg.clone())),
+            )
+            .add_component(
+                "AllowOnlyList",
+                Box::new(AllowOnly::new(agent_negotiators_cfg.clone())),
             )
             .add_component(
                 "LimitAgreements",

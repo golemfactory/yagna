@@ -402,15 +402,17 @@ impl Erc20Driver {
             account_balance: {:.5}, \
             total_allocated_amount: {:.5}",
             msg.amount,
-            account_balance,
+            account_balance.token_balance,
             total_allocated_amount,
         );
 
-        Ok(if msg.amount > account_balance - total_allocated_amount {
-            ValidateAllocationResult::InsufficientAccountFunds
-        } else {
-            ValidateAllocationResult::Valid
-        })
+        Ok(
+            if msg.amount > account_balance.token_balance - total_allocated_amount {
+                ValidateAllocationResult::InsufficientAccountFunds
+            } else {
+                ValidateAllocationResult::Valid
+            },
+        )
     }
 
     async fn validate_allocation_deposit(
@@ -619,14 +621,17 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        Ok(GetRpcEndpointsResult { endpoints, sources })
+        Ok(GetRpcEndpointsResult {
+            endpoints: serde_json::to_value(endpoints).unwrap(),
+            sources: serde_json::to_value(sources).unwrap(),
+        })
     }
 
     async fn get_account_balance(
         &self,
         _caller: String,
         msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
+    ) -> Result<GetAccountBalanceResult, GenericError> {
         let platform = msg.platform();
         let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
@@ -646,45 +651,35 @@ impl PaymentDriver for Erc20Driver {
 
         let balance = self
             .payment_runtime
-            .get_token_balance(network.to_string(), address)
+            .get_token_balance(network.to_string(), address, None)
             .await
             .map_err(|e| GenericError::new(e.to_string()))?;
-        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
 
-        Ok(BigDecimal::new(balance_int, 18))
-    }
-
-    async fn get_account_gas_balance(
-        &self,
-        _caller: String,
-        msg: GetAccountGasBalance,
-    ) -> Result<Option<GasDetails>, GenericError> {
-        let platform = msg.platform();
-        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
-            "Malformed platform string: {}",
-            msg.platform()
+        let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+            "Error getting gas balance for address: {}",
+            address_str
         )))?;
-
-        let address_str = msg.address();
-        let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
+        let gas_balance = u256_to_big_dec(gas_balance).map_err(|e| {
+            GenericError::new(format!("Error converting gas balance to big int: {}", e))
         })?;
-
-        let balance = self
-            .payment_runtime
-            .get_gas_balance(network.to_string(), address)
-            .await
-            .map_err(|e| GenericError::new(e.to_string()))?;
-        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
-        let balance = BigDecimal::new(balance_int, 18);
-
+        let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+            "Error getting token balance for address: {}",
+            address_str
+        )))?;
+        let token_balance = u256_to_big_dec(token_balance).map_err(|e| {
+            GenericError::new(format!("Error converting token balance to big int: {}", e))
+        })?;
         let (currency_short_name, currency_long_name) = platform_to_currency(platform)?;
-
-        Ok(Some(GasDetails {
-            currency_long_name,
-            currency_short_name,
-            balance,
-        }))
+        Ok(GetAccountBalanceResult {
+            gas_details: Some(GasDetails {
+                currency_short_name,
+                currency_long_name,
+                balance: gas_balance,
+            }),
+            token_balance,
+            block_number: balance.block_number,
+            block_datetime: balance.block_datetime,
+        })
     }
 
     fn get_name(&self) -> String {
@@ -752,38 +747,29 @@ impl PaymentDriver for Erc20Driver {
                         network
                     )))?;
 
-            let starting_eth_balance = match self
+            let (starting_eth_balance, starting_glm_balance) = match self
                 .payment_runtime
-                .get_gas_balance(network.to_string(), address)
+                .get_token_balance(network.to_string(), address, None)
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.to_eth_str());
-                    balance
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("Gas balance is {}", gas_balance.to_eth_str());
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("tGLM balance is {}", token_balance.to_eth_str());
+                    (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
-                        err
-                    )));
-                }
-            };
-            let starting_glm_balance = match self
-                .payment_runtime
-                .get_token_balance(network.to_string(), address)
-                .await
-            {
-                Ok(balance) => {
-                    log::info!("tGLM balance is {}", balance.to_eth_str());
-                    balance
-                }
-                Err(err) => {
-                    log::error!("Error getting tGLM balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting tGLM balance: {}",
-                        err
-                    )));
+                    log::error!("Error getting balance: {}", err);
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
 
@@ -849,10 +835,11 @@ impl PaymentDriver for Erc20Driver {
                     }
                     match self
                         .payment_runtime
-                        .get_gas_balance(network.to_string(), address)
+                        .get_token_balance(network.to_string(), address, None)
                         .await
                     {
-                        Ok(current_balance) => {
+                        Ok(balance_res) => {
+                            let current_balance = balance_res.gas_balance.unwrap_or(U256::zero());
                             if current_balance > starting_eth_balance {
                                 log::info!(
                                     "Received {} ETH from faucet",
@@ -912,12 +899,14 @@ impl PaymentDriver for Erc20Driver {
                             time_now.elapsed().as_secs()
                         )));
                     }
+
                     match self
                         .payment_runtime
-                        .get_token_balance(network.to_string(), address)
+                        .get_token_balance(network.to_string(), address, None)
                         .await
                     {
-                        Ok(current_balance) => {
+                        Ok(balance_res) => {
+                            let current_balance = balance_res.token_balance.unwrap_or(U256::zero());
                             if current_balance > starting_glm_balance {
                                 log::info!(
                                     "Created {} tGLM using mint transaction",
@@ -968,27 +957,36 @@ impl PaymentDriver for Erc20Driver {
             } else {
                 format!("No funds received on {} network", network)
             };
-            let final_eth_balance = match self
+            let (final_gas_balance, final_token_balance) = match self
                 .payment_runtime
-                .get_gas_balance(network.to_string(), address)
+                .get_token_balance(network.to_string(), address, None)
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.to_eth_str());
-                    balance
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("Gas balance is {}", gas_balance.to_eth_str());
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("tGLM balance is {}", token_balance.to_eth_str());
+                    (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
-                        err
-                    )));
+                    log::error!("Error getting balance: {}", err);
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
+
             str_output += &format!(
                 "\nYou have {} tETH and {} tGLM on {} network",
-                final_eth_balance.to_eth_str(),
-                (starting_glm_balance + glm_received).to_eth_str(),
+                final_gas_balance.to_eth_str(),
+                final_token_balance.to_eth_str(),
                 network
             );
             str_output += &format!(

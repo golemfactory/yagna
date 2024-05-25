@@ -57,9 +57,6 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
         )
         .bind_with_processor(
-            move |_, dr, c, m| async move { dr.get_account_gas_balance( c, m).await }
-        )
-        .bind_with_processor(
             move |_, dr, c, m| async move { dr.init( c, m).await }
         )
         .bind_with_processor(
@@ -76,6 +73,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         )
         .bind_with_processor(
             move |_, dr, c, m| async move { dr.sign_payment( c, m).await }
+        )
+        .bind_with_processor(
+            move |_, dr, c, m| async move { dr.sign_payment_canonicalized(c, m).await }
         )
         .bind_with_processor(
             move |_, dr, c, m| async move { dr.verify_signature( c, m).await }

@@ -22,8 +22,6 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
-    use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
-    use std::collections::BTreeMap;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -276,6 +274,8 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub gas: Option<GasDetails>,
+        pub block_number: u64,
+        pub block_datetime: DateTime<Utc>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -296,8 +296,8 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct GetRpcEndpointsResult {
-        pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
-        pub sources: BTreeMap<String, Web3ExternalSources>,
+        pub endpoints: serde_json::Value,
+        pub sources: serde_json::Value,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -842,6 +842,33 @@ pub mod public {
         type Error = SendError;
     }
 
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct SendSignedPayment {
+        #[serde(flatten)]
+        pub payment: Payment,
+        #[serde(with = "serde_bytes")]
+        pub signature: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        pub signed_bytes: Vec<u8>,
+    }
+
+    impl SendSignedPayment {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+            let signed_bytes = serde_json_canonicalizer::to_vec(&payment).unwrap();
+            Self {
+                payment,
+                signature,
+                signed_bytes,
+            }
+        }
+    }
+
+    impl RpcMessage for SendSignedPayment {
+        const ID: &'static str = "SendPaymentWithBytes";
+        type Item = Ack;
+        type Error = SendError;
+    }
+
     // **************************** SYNC *****************************
 
     /// Push unsynchronized state
@@ -849,6 +876,20 @@ pub mod public {
     pub struct PaymentSync {
         /// Payment confirmations.
         pub payments: Vec<SendPayment>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Invoice rejections.
+        pub invoice_rejects: Vec<RejectInvoiceV2>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncWithBytes {
+        /// Payment confirmations.
+        pub payments: Vec<SendSignedPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.
@@ -886,6 +927,12 @@ pub mod public {
 
     impl RpcMessage for PaymentSync {
         const ID: &'static str = "PaymentSync";
+        type Item = Ack;
+        type Error = PaymentSyncError;
+    }
+
+    impl RpcMessage for PaymentSyncWithBytes {
+        const ID: &'static str = "PaymentSyncWithBytes";
         type Item = Ack;
         type Error = PaymentSyncError;
     }

@@ -14,6 +14,7 @@ pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
         .extend(crate::requestor::state::extend_web_scope)
+        .extend(crate::http_proxy::extend_web_scope)
 }
 
 /// Common operations for both sides: Provider and Requestor
@@ -28,25 +29,38 @@ mod common {
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
+    use crate::error::Error;
     use crate::tracker::TrackingEvent;
     use crate::TrackerRef;
     use actix_web::http::header;
+    use actix_web::web::Json;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
-            // .service(get_activities_web)
             .service(get_events)
+            .service(get_activities_for_agreement_web)
             .service(get_activity_agreement_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
 
-    // TODO this endpoint needs authorization via Identity, otherwise is vulnerable for attacks.
-    // #[actix_web::get("/activity")]
-    // async fn get_activities_web(db: web::Data<DbExecutor>) -> impl Responder {
-    //     log::debug!("get_activities_web");
-    //     get_activities(&db).await.map(web::Json)
-    // }
+    #[actix_web::get("/activity")]
+    async fn get_activities_for_agreement_web(
+        db: web::Data<DbExecutor>,
+        query: web::Query<QueryAgreement>,
+        id: Identity,
+    ) -> impl Responder {
+        if authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Provider)
+            .await
+            .is_err()
+        {
+            authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Requestor)
+                .await?
+        }
+        let activities = get_activities_for_agreement(&db, query.agreement_id.as_str()).await?;
+
+        Ok::<Json<Vec<std::string::String>>, Error>(web::Json(activities))
+    }
 
     #[actix_web::get("/activity/{activity_id}/agreement")]
     async fn get_activity_agreement_web(

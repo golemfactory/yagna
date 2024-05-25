@@ -1,9 +1,8 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
-use erc20_payment_lib::rpc_pool::{Web3ExternalSources, Web3FullNodeData};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
 use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
@@ -98,8 +97,8 @@ impl RpcMessage for GetRpcEndpoints {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct GetRpcEndpointsResult {
-    pub endpoints: BTreeMap<String, Vec<Web3FullNodeData>>,
-    pub sources: BTreeMap<String, Web3ExternalSources>,
+    pub endpoints: serde_json::Value,
+    pub sources: serde_json::Value,
 }
 
 // ************************** GET ACCOUNT BALANCE **************************
@@ -125,38 +124,17 @@ impl GetAccountBalance {
     }
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GetAccountBalanceResult {
+    pub gas_details: Option<GasDetails>,
+    pub token_balance: BigDecimal,
+    pub block_number: u64,
+    pub block_datetime: DateTime<Utc>,
+}
+
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
-    type Item = BigDecimal;
-    type Error = GenericError;
-}
-
-// ************************** GET ACCOUNT GAS BALANCE **************************
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetAccountGasBalance {
-    address: String,
-    platform: String,
-}
-
-impl GetAccountGasBalance {
-    pub fn new(address: String, platform: String) -> Self {
-        Self { address, platform }
-    }
-}
-
-impl GetAccountGasBalance {
-    pub fn address(&self) -> String {
-        self.address.clone()
-    }
-    pub fn platform(&self) -> String {
-        self.platform.clone()
-    }
-}
-
-impl RpcMessage for GetAccountGasBalance {
-    const ID: &'static str = "GetAccountGasBalance";
-    type Item = Option<GasDetails>;
+    type Item = GetAccountBalanceResult;
     type Error = GenericError;
 }
 
@@ -568,17 +546,34 @@ impl RpcMessage for SignPayment {
     type Error = GenericError;
 }
 
+// ************************ SIGN PAYMENT ************************
+
+/// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
+#[derive(Clone, Debug, Serialize, Deserialize, From)]
+pub struct SignPaymentCanonicalized(pub Payment);
+
+impl RpcMessage for crate::driver::SignPaymentCanonicalized {
+    const ID: &'static str = "SignPaymentCanonicalized";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
 // ********************** VERIFY SIGNATURE **********************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
+    pub canonicalized: bool,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-        Self { payment, signature }
+    pub fn new(payment: Payment, signature: Vec<u8>, canonicalized: bool) -> Self {
+        Self {
+            payment,
+            signature,
+            canonicalized,
+        }
     }
 }
 
