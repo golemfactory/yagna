@@ -15,8 +15,6 @@ logger = logging.getLogger("goth.tests.helpers.payment")
 global_deposits = []
 
 
-global_deposit = None
-
 async def pay_all(
         requestor: RequestorProbe,
         agreements: List[Tuple[str, ProviderProbe]],
