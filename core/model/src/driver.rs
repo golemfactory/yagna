@@ -357,7 +357,8 @@ pub struct ValidateAllocation {
     pub amount: BigDecimal,
     pub timeout: Option<DateTime<Utc>>,
     pub deposit: Option<Deposit>,
-    pub existing_allocations: Vec<Allocation>,
+    pub active_allocations: Vec<Allocation>,
+    pub released_allocations: Vec<Allocation>,
     pub new_allocation: bool,
 }
 
@@ -367,7 +368,8 @@ impl ValidateAllocation {
         platform: String,
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
-        existing: Vec<Allocation>,
+        active: Vec<Allocation>,
+        released: Vec<Allocation>,
         new_allocation: bool,
     ) -> Self {
         ValidateAllocation {
@@ -376,7 +378,8 @@ impl ValidateAllocation {
             amount,
             timeout,
             deposit: None,
-            existing_allocations: existing,
+            active_allocations: active,
+            released_allocations: released,
             new_allocation,
         }
     }

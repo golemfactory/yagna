@@ -1,7 +1,5 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{
-    ActivityDao, AgreementDao, AllocationDao, AllocationStatus, OrderDao, PaymentDao, SyncNotifsDao,
-};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, AllocationFilter, AllocationStatus, OrderDao, PaymentDao, SyncNotifsDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -870,7 +868,7 @@ impl PaymentProcessor {
             amount,
             timeout,
             deposit,
-            existing_allocations,
+            active_allocations,
             new_allocation,
         };
         let result = driver_endpoint(&driver).send(msg).await??;
@@ -894,7 +892,16 @@ impl PaymentProcessor {
         let existing_allocations = db
             .clone()
             .as_dao::<AllocationDao>()
-            .get_filtered(None, None, None, None, None)
+            .get_filtered(
+                AllocationFilter {
+                    released: Some(false),
+                    owner_id: None,
+                    after_timestamp: None,
+                    max_items: None,
+                    payment_platform: None,
+                    address: None,
+                }
+            )
             .await;
 
         log::info!("Checking for allocations to be released...");

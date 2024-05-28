@@ -45,6 +45,8 @@ pub fn spend_from_allocation(
     Ok(())
 }
 
+
+
 impl<'c> AllocationDao<'c> {
     pub async fn create(
         &self,
@@ -61,7 +63,7 @@ impl<'c> AllocationDao<'c> {
                 .execute(conn)?;
             Ok(allocation_id)
         })
-        .await
+            .await
     }
 
     pub async fn replace(&self, allocation: Allocation, owner_id: NodeId) -> DbResult<bool> {
@@ -75,7 +77,7 @@ impl<'c> AllocationDao<'c> {
 
             Ok(count == 1)
         })
-        .await
+            .await
     }
 
     pub async fn get(&self, allocation_id: String, owner_id: NodeId) -> DbResult<AllocationStatus> {
@@ -96,7 +98,7 @@ impl<'c> AllocationDao<'c> {
             }
             Ok(AllocationStatus::NotFound)
         })
-        .await
+            .await
     }
 
     pub async fn get_many(
@@ -112,7 +114,7 @@ impl<'c> AllocationDao<'c> {
                 .load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())
         })
-        .await
+            .await
     }
 
     pub async fn get_for_owner(
@@ -120,45 +122,73 @@ impl<'c> AllocationDao<'c> {
         owner_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
         max_items: Option<u32>,
+        released: Option<bool>
     ) -> DbResult<Vec<Allocation>> {
-        self.get_filtered(Some(owner_id), after_timestamp, max_items, None, None)
-            .await
+        self.get_filtered(
+            AllocationFilter {
+                released,
+                owner_id: Some(owner_id),
+                after_timestamp,
+                max_items,
+                payment_platform: None,
+                address: None,
+            },
+        ).await
     }
 
     pub async fn get_for_address(
         &self,
         payment_platform: String,
         address: String,
+        released: Option<bool>
     ) -> DbResult<Vec<Allocation>> {
-        self.get_filtered(None, None, None, Some(payment_platform), Some(address))
-            .await
+        self.get_filtered(
+            AllocationFilter {
+                released,
+                owner_id: None,
+                after_timestamp: None,
+                max_items: None,
+                payment_platform: Some(payment_platform),
+                address: Some(address),
+            },
+        ).await
     }
+}
 
+#[derive(Debug, Clone)]
+pub struct AllocationFilter {
+    pub released: Option<bool>,
+    pub owner_id: Option<NodeId>,
+    pub after_timestamp: Option<NaiveDateTime>,
+    pub max_items: Option<u32>,
+    pub payment_platform: Option<String>,
+    pub address: Option<String>,
+}
+
+impl<'c> AllocationDao<'c> {
     pub async fn get_filtered(
         &self,
-        owner_id: Option<NodeId>,
-        after_timestamp: Option<NaiveDateTime>,
-        max_items: Option<u32>,
-        payment_platform: Option<String>,
-        address: Option<String>,
+        filter: AllocationFilter,
     ) -> DbResult<Vec<Allocation>> {
         readonly_transaction(self.pool, "allocation_dao_get_filtered", move |conn| {
             let mut query = dsl::pay_allocation
-                .filter(dsl::released.eq(false))
                 .into_boxed();
-            if let Some(owner_id) = owner_id {
+            if let Some(released) = filter.released {
+                query = query.filter(dsl::released.eq(released))
+            }
+            if let Some(owner_id) = filter.owner_id {
                 query = query.filter(dsl::owner_id.eq(owner_id))
             }
-            if let Some(after_timestamp) = after_timestamp {
+            if let Some(after_timestamp) = filter.after_timestamp {
                 query = query.filter(dsl::timestamp.gt(after_timestamp))
             }
-            if let Some(payment_platform) = payment_platform {
+            if let Some(payment_platform) = filter.payment_platform {
                 query = query.filter(dsl::payment_platform.eq(payment_platform))
             }
-            if let Some(address) = address {
+            if let Some(address) = filter.address {
                 query = query.filter(dsl::address.eq(address))
             }
-            if let Some(max_items) = max_items {
+            if let Some(max_items) = filter.max_items {
                 query = query.limit(max_items.into())
             }
             let allocations: Vec<ReadObj> = query.order_by(dsl::timestamp.asc()).load(conn)?;

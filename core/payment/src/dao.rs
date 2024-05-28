@@ -14,6 +14,7 @@ pub use self::agreement::AgreementDao;
 pub use self::allocation::AllocationDao;
 pub use self::allocation::AllocationReleaseStatus;
 pub use self::allocation::AllocationStatus;
+pub use self::allocation::AllocationFilter;
 pub use self::debit_note::DebitNoteDao;
 pub use self::debit_note_event::DebitNoteEventDao;
 pub use self::invoice::InvoiceDao;
