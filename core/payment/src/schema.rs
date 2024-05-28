@@ -10,6 +10,7 @@ diesel::table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
+        rec_version -> Integer,
     }
 }
 
@@ -63,7 +64,9 @@ diesel::table! {
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
         released -> Bool,
-        extend_timeout -> Nullable<Integer>,
+        extend_timeout_by -> Nullable<Integer>,
+        accepted_amount -> Text,
+        rec_version -> Integer,
     }
 }
 

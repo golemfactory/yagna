@@ -1,3 +1,22 @@
+use std::collections::HashMap;
+
+use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+    TextExpressionMethods,
+};
+use ya_client_model::payment::{
+    ActivityPayment, AgreementPayment, DocumentStatus, Payment, Signed,
+};
+use ya_client_model::NodeId;
+
+use ya_core_model::payment::local::{DriverName, NetworkName};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
+use ya_persistence::types::{BigDecimalField, Role};
+
 use crate::dao::{activity, agreement};
 use crate::error::DbResult;
 use crate::models::payment::{
@@ -8,20 +27,6 @@ use crate::schema::pay_activity_payment::dsl as activity_pay_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_agreement_payment::dsl as agreement_pay_dsl;
 use crate::schema::pay_payment::dsl;
-use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
-use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
-    TextExpressionMethods,
-};
-use std::collections::HashMap;
-use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment, Signed};
-use ya_client_model::NodeId;
-use ya_core_model::payment::local::{DriverName, NetworkName};
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
-use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -249,6 +254,102 @@ impl<'c> PaymentDao<'c> {
             }
 
             Ok(result)
+        })
+        .await
+    }
+
+    pub async fn get_for_debit_note(
+        &self,
+        owner_id: NodeId,
+        debit_note_id: String,
+        after_timestamp: Option<NaiveDateTime>,
+        limit: Option<usize>,
+    ) -> DbResult<Vec<Payment>> {
+        readonly_transaction(self.pool, "payment_dao_get_for_debit_note", move |conn| {
+            use crate::schema::pay_activity_payment::dsl as dsl_ac;
+            use crate::schema::pay_debit_note::dsl as dsl_dn;
+
+            log::info!("start");
+            let (activity_id, status, due_date, total_amount): (
+                String,
+                String,
+                Option<NaiveDateTime>,
+                BigDecimalField,
+            ) = dsl_dn::pay_debit_note
+                .find((&debit_note_id, &owner_id))
+                .select((
+                    dsl_dn::activity_id,
+                    dsl_dn::status,
+                    dsl_dn::payment_due_date,
+                    dsl_dn::total_amount_due,
+                ))
+                .get_result(conn)?;
+
+            log::info!("got {activity_id}, {status}");
+            // Not payable empty result
+            if due_date.is_none() {
+                return Ok(Vec::new());
+            }
+
+            let status: DocumentStatus = status.try_into()?;
+            let total_amount = total_amount.0;
+
+            if matches!(status, DocumentStatus::Rejected) {
+                return Ok(Vec::new());
+            }
+
+            let activity_payments: Vec<(BigDecimalField, String, NaiveDateTime)> =
+                dsl_ac::pay_activity_payment
+                    .inner_join(
+                        dsl::pay_payment.on(dsl::owner_id
+                            .eq(dsl_ac::owner_id)
+                            .and(dsl::id.eq(dsl_ac::payment_id))),
+                    )
+                    .filter(
+                        dsl_ac::owner_id
+                            .eq(owner_id)
+                            .and(dsl_ac::activity_id.eq(&activity_id)),
+                    )
+                    .select((dsl_ac::amount, dsl_ac::payment_id, dsl::timestamp))
+                    .load(conn)?;
+
+            let mut amount_paid = BigDecimal::default();
+            let mut payments = Vec::new();
+
+            for (amount, payment_id, pay_ts) in activity_payments {
+                if amount_paid > total_amount {
+                    break;
+                }
+                amount_paid += amount.0;
+
+                if let Some(limit) = limit {
+                    if payments.len() >= limit {
+                        break;
+                    }
+                }
+
+                if let Some(ts) = after_timestamp.clone() {
+                    if ts < pay_ts {
+                        continue;
+                    }
+                }
+
+                let payment: ReadObj = dsl::pay_payment
+                    .find((&payment_id, &owner_id))
+                    .get_result(conn)?;
+                let activity_payments = activity_pay_dsl::pay_activity_payment
+                    .filter(activity_pay_dsl::payment_id.eq(&payment_id))
+                    .filter(activity_pay_dsl::owner_id.eq(&owner_id))
+                    .load(conn)?;
+                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
+                    .filter(agreement_pay_dsl::payment_id.eq(&payment_id))
+                    .filter(agreement_pay_dsl::owner_id.eq(&owner_id))
+                    .load(conn)?;
+
+                payments.push(payment.into_api_model(activity_payments, agreement_payments))
+            }
+
+            Ok(payments)
         })
         .await
     }

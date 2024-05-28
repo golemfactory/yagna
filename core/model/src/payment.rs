@@ -710,12 +710,13 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct RejectDebitNote {
+        pub issuer_id : NodeId,
         pub debit_note_id: String,
-        pub rejection: Rejection,
+        pub rejection: Rejection
     }
 
     impl RpcMessage for RejectDebitNote {
-        const ID: &'static str = "RejectDebitNote";
+        const ID: &'static str = "RejectDebitNoteV2";
         type Item = Ack;
         type Error = AcceptRejectError;
     }
@@ -724,10 +725,11 @@ pub mod public {
     #[serde(rename_all = "camelCase")]
     pub struct CancelDebitNote {
         pub debit_note_id: String,
+        pub recipient_id : NodeId,
     }
 
     impl RpcMessage for CancelDebitNote {
-        const ID: &'static str = "CancelDebitNote";
+        const ID: &'static str = "CancelDebitNoteV2";
         type Item = Ack;
         type Error = CancelError;
     }
@@ -768,13 +770,13 @@ pub mod public {
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct RejectInvoiceV2 {
+    pub struct RejectInvoice {
         pub invoice_id: String,
         pub rejection: Rejection,
         pub issuer_id: NodeId,
     }
 
-    impl RejectInvoiceV2 {
+    impl RejectInvoice {
         pub fn new(invoice_id: String, rejection: Rejection, issuer_id: NodeId) -> Self {
             Self {
                 invoice_id,
@@ -784,7 +786,7 @@ pub mod public {
         }
     }
 
-    impl RpcMessage for RejectInvoiceV2 {
+    impl RpcMessage for RejectInvoice {
         const ID: &'static str = "RejectInvoiceV2";
         type Item = Ack;
         type Error = AcceptRejectError;
@@ -860,7 +862,7 @@ pub mod public {
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.
-        pub invoice_rejects: Vec<RejectInvoiceV2>,
+        pub invoice_rejects: Vec<RejectInvoice>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.
@@ -874,7 +876,7 @@ pub mod public {
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.
-        pub invoice_rejects: Vec<RejectInvoiceV2>,
+        pub invoice_rejects: Vec<RejectInvoice>,
         /// Debit note acceptances.
         ///
         /// Only last debit note in chain is included per agreement.

@@ -8,20 +8,26 @@ use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
     RunQueryDsl,
 };
-use ya_client_model::payment::{DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote};
+use serde_json::Value::Null;
+use ya_client_model::payment::{
+    DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote, Rejection,
+};
 use ya_client_model::NodeId;
+use ya_core_model::payment::local::SchedulePayment;
 
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 use ya_persistence::types::{BigDecimalField, Role};
+use ya_persistence::wrap_ro;
 
 use crate::dao::{activity, debit_note_event};
-use crate::error::{DbError, DbResult};
+use crate::error::{DbError, DbResult, NotFoundExtension};
 use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
+use crate::utils::response;
 
 pub struct DebitNoteDao<'c> {
     pool: &'c PoolType,
@@ -67,53 +73,134 @@ macro_rules! query {
     };
 }
 
-pub fn update_status(
-    debit_note_ids: &Vec<String>,
-    owner_id: &NodeId,
-    status: &DocumentStatus,
-    conn: &ConnType,
-) -> DbResult<()> {
-    diesel::update(
-        dsl::pay_debit_note
-            .filter(dsl::id.eq_any(debit_note_ids))
-            .filter(dsl::owner_id.eq(owner_id)),
-    )
-    .set(dsl::status.eq(status.to_string()))
-    .execute(conn)?;
-    Ok(())
+struct DebitNoteShort {
+    activity_id: String,
+    role: Role,
+    status: DocumentStatus,
+    peer_id: NodeId,
 }
 
-pub fn get_paid_amount_per_activity(
-    debit_note_ids: &Vec<String>,
-    owner_id: &NodeId,
-    conn: &ConnType,
-) -> DbResult<HashMap<String, BigDecimalField>> {
-    // This method is equivalent to the following query:
-    // SELECT (activity_id, MAX(amount))
-    // FROM pay_debit_note
-    // GROUP BY activity_id
-    // WHERE id IN debit_note_ids
-    // Cannot be done by SQL because amounts are stored as text.
+pub mod raw {
+    use super::DebitNoteShort;
+    use crate::error::{DbResult, NotFoundExtension};
+    use crate::models::debit_note::ReadObj;
+    use diesel::prelude::*;
+    use std::collections::HashMap;
+    use ya_client_model::payment::{DebitNote, DocumentStatus};
+    use ya_client_model::NodeId;
+    use ya_persistence::executor::{readonly_transaction, ConnType};
+    use ya_persistence::types::{BigDecimalField, Role};
 
-    let debit_note_amounts: Vec<(String, BigDecimalField)> = dsl::pay_debit_note
-        .filter(
-            dsl::id
-                .eq_any(debit_note_ids)
-                .and(dsl::owner_id.eq(owner_id)),
+    use crate::schema::pay_activity::dsl as activity_dsl;
+    use crate::schema::pay_agreement::dsl as agreement_dsl;
+    use crate::schema::pay_debit_note::dsl;
+
+    pub(super) fn select_debit_note(
+        conn: &ConnType,
+        debit_note_id: &str,
+        owner_id: &NodeId,
+    ) -> DbResult<DebitNoteShort> {
+        let (activity_id, role, status, peer_id): (String, Role, String, NodeId) =
+            dsl::pay_debit_note
+                .find((debit_note_id, owner_id))
+                .inner_join(
+                    crate::schema::pay_activity::dsl::pay_activity.on(dsl::owner_id
+                        .eq(crate::schema::pay_activity::dsl::owner_id)
+                        .and(dsl::activity_id.eq(crate::schema::pay_activity::dsl::id))),
+                )
+                .inner_join(
+                    crate::schema::pay_agreement::dsl::pay_agreement.on(dsl::owner_id
+                        .eq(crate::schema::pay_agreement::dsl::owner_id)
+                        .and(
+                            crate::schema::pay_activity::dsl::agreement_id
+                                .eq(crate::schema::pay_agreement::dsl::id),
+                        )),
+                )
+                .select((
+                    dsl::activity_id,
+                    dsl::role,
+                    dsl::status,
+                    crate::schema::pay_agreement::dsl::peer_id,
+                ))
+                .get_result(conn)
+                .map_err_not_found()?;
+
+        let status: DocumentStatus = status.try_into()?;
+
+        Ok(DebitNoteShort {
+            activity_id,
+            role,
+            status,
+            peer_id,
+        })
+    }
+
+    pub fn update_status(
+        conn: &ConnType,
+        debit_note_ids: &Vec<String>,
+        owner_id: &NodeId,
+        status: &DocumentStatus,
+    ) -> DbResult<()> {
+        diesel::update(
+            dsl::pay_debit_note
+                .filter(dsl::id.eq_any(debit_note_ids))
+                .filter(dsl::owner_id.eq(owner_id)),
         )
-        .select((dsl::activity_id, dsl::total_amount_due))
-        .load(conn)?;
-    let activity_amounts =
-        debit_note_amounts
-            .into_iter()
-            .fold(HashMap::new(), |mut map, (activity_id, amount)| {
+        .set(dsl::status.eq(status.to_string()))
+        .execute(conn)?;
+        Ok(())
+    }
+
+    pub fn get_paid_amount_per_activity(
+        debit_note_ids: &Vec<String>,
+        owner_id: &NodeId,
+        conn: &ConnType,
+    ) -> DbResult<HashMap<String, BigDecimalField>> {
+        // This method is equivalent to the following query:
+        // SELECT (activity_id, MAX(amount))
+        // FROM pay_debit_note
+        // GROUP BY activity_id
+        // WHERE id IN debit_note_ids
+        // Cannot be done by SQL because amounts are stored as text.
+
+        let debit_note_amounts: Vec<(String, BigDecimalField)> = dsl::pay_debit_note
+            .filter(
+                dsl::id
+                    .eq_any(debit_note_ids)
+                    .and(dsl::owner_id.eq(owner_id)),
+            )
+            .select((dsl::activity_id, dsl::total_amount_due))
+            .load(conn)?;
+        let activity_amounts = debit_note_amounts.into_iter().fold(
+            HashMap::new(),
+            |mut map, (activity_id, amount)| {
                 let current_amount = map.entry(activity_id).or_default();
                 if &amount > current_amount {
                     *current_amount = amount;
                 }
                 map
-            });
-    Ok(activity_amounts)
+            },
+        );
+        Ok(activity_amounts)
+    }
+
+    pub fn get(
+        conn: &ConnType,
+        debit_note_id: &str,
+        owner_id: &NodeId,
+    ) -> DbResult<Option<DebitNote>> {
+        let debit_note: Option<ReadObj> = query!()
+            .filter(dsl::id.eq(debit_note_id))
+            .filter(dsl::owner_id.eq(owner_id))
+            .first(conn)
+            .optional()?;
+        match debit_note {
+            Some(debit_note) => Ok(Some(debit_note.try_into()?)),
+            None => Ok(None),
+        }
+    }
+
+    //    <Conn: diesel::Connection<Backend = Sqlite>>
 }
 
 impl<'c> DebitNoteDao<'c> {
@@ -184,23 +271,8 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn get(
-        &self,
-        debit_note_id: String,
-        owner_id: NodeId,
-    ) -> DbResult<Option<DebitNote>> {
-        readonly_transaction(self.pool, "debit_note_dao_get", move |conn| {
-            let debit_note: Option<ReadObj> = query!()
-                .filter(dsl::id.eq(debit_note_id))
-                .filter(dsl::owner_id.eq(owner_id))
-                .first(conn)
-                .optional()?;
-            match debit_note {
-                Some(debit_note) => Ok(Some(debit_note.try_into()?)),
-                None => Ok(None),
-            }
-        })
-        .await
+    wrap_ro! {
+        pub async fn get(debit_note_id: String, owner_id: NodeId) -> DbResult<Option<DebitNote>>;
     }
 
     pub async fn list(
@@ -263,6 +335,57 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
+    pub async fn accept_start(
+        &self,
+        debit_note_id: String,
+        owner_id: NodeId,
+        total_amount_accepted: BigDecimal,
+        allocation_id: &str,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "debit_note::accept_start", move |conn| {
+            let debit_note: ReadObj = query!()
+                .filter(dsl::id.eq(debit_note_id))
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::role.eq(Role::Requestor))
+                .first(conn)
+                .map_err_not_found()?;
+
+            let status: DocumentStatus = debit_note.status.try_into()?;
+            match status {
+                DocumentStatus::Received | DocumentStatus::Rejected | DocumentStatus::Failed => (),
+                DocumentStatus::Accepted | DocumentStatus::Settled => return Ok(()),
+                DocumentStatus::Issued => return DbError::bad_request("Illegal status: issued"),
+                DocumentStatus::Cancelled => return DbError::bad_request("Debit note cancelled"),
+            }
+
+            if debit_note.total_amount_due.0 != total_amount_accepted {
+                return DbError::bad_request("Invalid amount accepted");
+            }
+            let activity_id = debit_note.activity_id.as_str();
+            let (activity_accepted, activity_scheduled, activity_version): (
+                BigDecimalField,
+                BigDecimalField,
+                i32,
+            ) = activity_dsl::pay_activity
+                .find((activity_id, &owner_id))
+                .select((
+                    activity_dsl::total_amount_accepted,
+                    activity_dsl::total_amount_scheduled,
+                    activity_dsl::rec_version,
+                )).get_result(conn)?;
+
+            let amount_to_accept = total_amount_accepted - activity_accepted.0;
+            /*let amount_to_pay = debit_note.payment_due_date.map(|date| {
+                SchedulePayment::from_debit_note()
+            });*/
+
+            todo!();
+
+            Ok::<_, DbError>(())
+        })
+        .await
+    }
+
     pub async fn accept(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, "debit_note_dao_accept", move |conn| {
             let (activity_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_debit_note
@@ -292,7 +415,7 @@ impl<'c> DebitNoteDao<'c> {
                 .execute(conn)?;
             }
 
-            update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
+            raw::update_status(conn, &vec![debit_note_id.clone()], &owner_id, &status)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
                 debit_note_event::create(debit_note_id.clone(), owner_id, event, conn)?;
@@ -396,9 +519,14 @@ impl<'c> DebitNoteDao<'c> {
         debit_note_id: String,
     ) -> DbResult<NodeId> {
         let peer_id = do_with_transaction(self.pool, "cancel_dn", move |conn| -> DbResult<_> {
-            let note = select_debit_note(conn, &debit_note_id, &owner_id)?;
+            let note = raw::select_debit_note(conn, &debit_note_id, &owner_id)?;
 
-            if !matches!(note.status, DocumentStatus::Issued | DocumentStatus::Failed) {
+            log::info!("got note {}", note.peer_id);
+
+            if !matches!(
+                note.status,
+                DocumentStatus::Issued | DocumentStatus::Failed | DocumentStatus::Received
+            ) {
                 return Err(DbError::Integrity(format!(
                     "unable to cancel debit note in state: {}",
                     note.status
@@ -413,19 +541,30 @@ impl<'c> DebitNoteDao<'c> {
 
             let nr = diesel::update(dsl::pay_debit_note)
                 .filter(dsl::id.eq(&debit_note_id))
-                .filter(dsl::status.eq_any(vec!["ISSUED", "FAILED"]))
+                .filter(dsl::status.eq_any(vec!["ISSUED", "FAILED", "RECEIVED"]))
                 .filter(dsl::owner_id.eq(owner_id))
                 .set(dsl::status.eq(DocumentStatus::Cancelled.to_string()))
                 .execute(conn)?;
 
             if nr == 0 {
-                return Err(diesel::result::Error::NotFound.into());
+                return Err(DbError::Integrity(
+                    "conflict, invalid debit note state".to_string(),
+                ));
             }
 
+            // NOTE: There is no index on previous_debit_note_id, that why it is
+            // filtered by activity_id.
             let next_notes: i64 = dsl::pay_debit_note
-                .filter(dsl::previous_debit_note_id.eq(&debit_note_id))
+                .filter(dsl::activity_id.eq(&note.activity_id))
+                .filter(
+                    dsl::previous_debit_note_id
+                        .eq(&debit_note_id)
+                        .and(dsl::id.ne(&debit_note_id)),
+                )
                 .count()
                 .get_result(conn)?;
+
+            log::info!("next_notes={next_notes}");
 
             if next_notes != 0 {
                 return Err(DbError::Integrity("note has continuation".into()));
@@ -444,9 +583,61 @@ impl<'c> DebitNoteDao<'c> {
         Ok(peer_id)
     }
 
+    pub async fn mark_reject_recv(
+        &self,
+        owner_id: NodeId,
+        debit_note_id: String,
+        peer_id: NodeId,
+        rejection: Rejection,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "mark_reject_dbn", move |conn| {
+            let note = raw::select_debit_note(conn, &debit_note_id, &owner_id)?;
+
+            if !matches!(note.role, Role::Provider) {
+                return Err(DbError::Integrity("invalid request".to_string()));
+            }
+
+            // Already rejected. ignore retry.
+            if matches!(note.status, DocumentStatus::Rejected) {
+                return Ok(());
+            }
+
+            if matches!(note.status, DocumentStatus::Accepted) {
+                return Err(DbError::Integrity(format!(
+                    "unable to cancel debit note in state: {}",
+                    note.status
+                )));
+            }
+
+            if note.peer_id != peer_id {
+                return Err(DbError::Forbidden);
+            }
+
+            let nr = diesel::update(dsl::pay_debit_note)
+                .filter(dsl::id.eq(&debit_note_id))
+                .filter(dsl::status.eq(note.status.to_string()))
+                .filter(dsl::owner_id.eq(owner_id))
+                .set(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .execute(conn)?;
+            if nr == 0 {
+                return Err(DbError::Integrity("concurrent state  change".to_string()));
+            }
+
+            debit_note_event::create(
+                debit_note_id,
+                owner_id,
+                DebitNoteEventType::DebitNoteRejectedEvent { rejection },
+                conn,
+            )?;
+
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn reject(&self, owner_id: NodeId, debit_note_id: String) -> DbResult<NodeId> {
         do_with_transaction(self.pool, "reject_dbn", move |conn| {
-            let note = select_debit_note(conn, &debit_note_id, &owner_id)?;
+            let note = raw::select_debit_note(conn, &debit_note_id, &owner_id)?;
 
             if !matches!(
                 note.status,
@@ -483,46 +674,4 @@ impl<'c> DebitNoteDao<'c> {
         })
         .await
     }
-}
-
-struct DebitNoteShort {
-    activity_id: String,
-    role: Role,
-    status: DocumentStatus,
-    peer_id: NodeId,
-}
-
-fn select_debit_note<Conn: diesel::Connection<Backend = Sqlite>>(
-    conn: &Conn,
-    debit_note_id: &str,
-    owner_id: &NodeId,
-) -> DbResult<DebitNoteShort> {
-    let (activity_id, role, status, peer_id): (String, Role, String, NodeId) = dsl::pay_debit_note
-        .find((debit_note_id, owner_id))
-        .inner_join(
-            activity_dsl::pay_activity.on(dsl::owner_id
-                .eq(activity_dsl::owner_id)
-                .and(dsl::activity_id.eq(activity_dsl::id))),
-        )
-        .inner_join(
-            agreement_dsl::pay_agreement.on(dsl::owner_id
-                .eq(agreement_dsl::owner_id)
-                .and(activity_dsl::agreement_id.eq(agreement_dsl::id))),
-        )
-        .select((
-            dsl::activity_id,
-            dsl::role,
-            dsl::status,
-            agreement_dsl::peer_id,
-        ))
-        .get_result(conn)?;
-
-    let status: DocumentStatus = status.try_into()?;
-
-    Ok(DebitNoteShort {
-        activity_id,
-        role,
-        status,
-        peer_id,
-    })
 }

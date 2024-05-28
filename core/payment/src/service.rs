@@ -906,23 +906,56 @@ mod public {
         }
     }
 
+    // Called from requestor to provider.
     async fn reject_debit_note(
         db: DbExecutor,
         sender: String,
         msg: RejectDebitNote,
     ) -> Result<Ack, AcceptRejectError> {
-        let debitNoteId = msg.debit_note_id;
+        // requestor
+        let peer_id: NodeId = sender
+            .parse::<NodeId>()
+            .map_err(|e| AcceptRejectError::BadRequest(e.to_string()))?;
+        let debit_note_id = msg.debit_note_id;
         let rejection = msg.rejection;
+        let owner_id = msg.issuer_id;
 
-        db.as_dao::<DebitNoteDao>().
+        match db
+            .as_dao::<DebitNoteDao>()
+            .mark_reject_recv(owner_id, debit_note_id, peer_id, rejection)
+            .await
+        {
+            Ok(()) => Ok(Ack {}),
+            Err(DbError::Forbidden) => Err(AcceptRejectError::Forbidden),
+            Err(DbError::ObjectNotFound) => Err(AcceptRejectError::ObjectNotFound),
+            Err(DbError::Integrity(msg)) => Err(AcceptRejectError::BadRequest(msg)),
+            Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        }
     }
 
+    // Called from provider to requestor
     async fn cancel_debit_note(
         db: DbExecutor,
         sender: String,
         msg: CancelDebitNote,
     ) -> Result<Ack, CancelError> {
-        unimplemented!() // TODO
+        let peer_id: NodeId = sender
+            .parse::<NodeId>()
+            .map_err(|e| CancelError::ServiceError(e.to_string()))?;
+        let debit_note_id = msg.debit_note_id;
+        let owner_id = msg.recipient_id;
+
+        match db
+            .as_dao::<DebitNoteDao>()
+            .cancel(owner_id, Role::Requestor, debit_note_id)
+            .await
+        {
+            Ok(_) => Ok(Ack {}),
+            Err(DbError::Forbidden) => Err(CancelError::Forbidden),
+            Err(DbError::ObjectNotFound) => Err(CancelError::ObjectNotFound),
+            Err(DbError::Integrity(_msg)) => Err(CancelError::Conflict),
+            Err(e) => Err(CancelError::ServiceError(e.to_string())),
+        }
     }
 
     // *************************** INVOICE ****************************
@@ -1091,14 +1124,14 @@ mod public {
     async fn reject_invoice(
         db: DbExecutor,
         sender_id: String,
-        msg: RejectInvoiceV2,
+        msg: RejectInvoice,
     ) -> Result<Ack, AcceptRejectError> {
         let invoice_id = msg.invoice_id;
         let rejection = msg.rejection;
         let owner_id = msg.issuer_id;
 
         log::debug!(
-            "Got RejectInvoiceV2 [{}] from Node [{}].",
+            "Got RejectInvoice [{}] from Node [{}].",
             invoice_id,
             sender_id,
         );

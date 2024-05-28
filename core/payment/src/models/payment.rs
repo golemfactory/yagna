@@ -2,6 +2,7 @@ use crate::error::{DbError, DbResult};
 use crate::schema::{pay_activity_payment, pay_agreement_payment, pay_payment};
 use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
+use diesel::{Insertable, Queryable};
 use uuid::Uuid;
 use ya_client_model::payment as api_model;
 use ya_client_model::payment::payment::Signature;

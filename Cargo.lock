@@ -3414,16 +3414,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
-name = "humantime-serde"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
-dependencies = [
- "humantime 2.1.0",
- "serde",
-]
-
-[[package]]
 name = "hyper"
 version = "0.14.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3440,7 +3430,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -8704,7 +8694,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=prek/paymng#4f07c02151feca2b96bebab78e5e4ff150fae6e5"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=prek/paymng#6f83b16d6b7a5fe0c35203ec571f2bea271d72a2"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8728,14 +8718,13 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=prek/paymng#4f07c02151feca2b96bebab78e5e4ff150fae6e5"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=prek/paymng#6f83b16d6b7a5fe0c35203ec571f2bea271d72a2"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "diesel",
  "hex",
- "humantime-serde",
  "openssl",
  "rand 0.8.5",
  "secp256k1 0.27.0",
@@ -9355,7 +9344,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dotenv",
- "env_logger 0.7.1",
+ "env_logger 0.11.3",
  "erc20_payment_lib",
  "ethsign",
  "futures 0.3.30",

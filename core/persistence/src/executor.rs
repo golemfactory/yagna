@@ -341,6 +341,19 @@ where
     .await
 }
 
+#[macro_export]
+macro_rules! wrap_ro {
+    (
+        pub async fn $func_name:ident($($arg:ident : $ty:ty),+) -> $ret : ty;
+    ) => {
+        pub async fn $func_name(&self,$($arg : $ty),+) -> $ret {
+            readonly_transaction(self.pool, concat!(module_path!(), "::", stringify!($func_name)), move |conn| {
+                raw::$func_name(conn, $(&$arg),+)
+            }).await
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct DbMixedExecutor {
     pub disk_db: DbExecutor,

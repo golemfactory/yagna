@@ -1,3 +1,5 @@
+use diesel::QueryResult;
+use std::borrow::Cow;
 use ya_core_model::payment::local::{GenericError, ValidateAllocationError};
 use ya_core_model::payment::public::{AcceptRejectError, CancelError, SendError};
 use ya_core_model::payment::RpcMessageError;
@@ -12,6 +14,50 @@ pub enum DbError {
     Query(String),
     #[error("Data integrity error: {0}")]
     Integrity(String),
+    #[error("Object not found")]
+    ObjectNotFound,
+    #[error("Forbidden")]
+    Forbidden,
+    #[error("{msg}")]
+    BadRequest { msg: Cow<'static, str> },
+    #[error("Concurrent change on '{entity}' during {operation} detected")]
+    TxLost {
+        entity : Cow<'static, str>,
+        operation : Cow<'static, str>
+    }
+}
+
+impl DbError {
+    pub fn bad_request<T>(msg: impl Into<Cow<'static, str>>) -> DbResult<T> {
+        let msg = msg.into();
+        Err(DbError::BadRequest { msg })
+    }
+
+    pub fn tx_lost<T>(entity: impl Into<Cow<'static, str>>, operation : impl Into<Cow<'static, str>>) -> DbResult<T> {
+        let entity = entity.into();
+        let operation = operation.into();
+        Err(DbError::TxLost { entity, operation })
+    }
+
+    pub fn unexpected<T>(msg: impl Into<String>) -> DbResult<T> {
+        let msg = msg.into();
+        Err(DbError::Integrity(msg))
+    }
+
+}
+
+pub trait NotFoundExtension<T> {
+    fn map_err_not_found(self) -> Result<T, DbError>;
+}
+
+impl<T> NotFoundExtension<T> for QueryResult<T> {
+    fn map_err_not_found(self) -> Result<T, DbError> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(diesel::result::Error::NotFound) => Err(DbError::ObjectNotFound),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 impl From<diesel::result::Error> for DbError {

@@ -1,18 +1,21 @@
 use std::borrow::Cow;
 use std::sync::Arc;
-// Extrnal crates
-use actix_web::{
-    get, post,
-    web::{Data, Json, Path, Query},
-};
-use actix_web::{HttpResponse, Scope};
-use serde_json::value::Value::Null;
 use std::time::{Duration, Instant};
 
+// Extrnal crates
+use actix_web::HttpResponse;
+use actix_web::{
+    get, post, web,
+    web::{Data, Json, Path, Query},
+};
 // Workspace uses
 use metrics::{counter, timing};
+use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
 use ya_client_model::ErrorMessage;
+use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::{typed as bus, RpcEndpoint};
+
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptRejectError, CancelDebitNote, RejectDebitNote, SendDebitNote, SendError,
@@ -23,16 +26,15 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
-// Local uses
-use super::guard::AgreementLock;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::utils::provider::get_agreement_for_activity;
 use crate::utils::*;
+
+// Local uses
+use super::guard::AgreementLock;
 
 const CANCEL_ACK_TIMEOUT: Duration = Duration::from_secs(10);
 const REJECT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
@@ -65,6 +67,7 @@ async fn get_debit_note(
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
+    log::info!("request for debit note owner {node_id} {debit_note_id}");
     match dao.get(debit_note_id, node_id).await {
         Ok(Some(debit_note)) => response::ok(debit_note),
         Ok(None) => response::not_found(),
@@ -76,8 +79,25 @@ async fn get_debit_note(
 async fn get_debit_note_payments(
     db: Data<DbExecutor>,
     path: Path<params::DebitNoteId>,
+    id: Identity,
+    query: Query<params::FilterParams>,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let debit_note_id = path.debit_note_id.clone();
+    let node_id = id.identity;
+
+    match db
+        .as_dao::<PaymentDao>()
+        .get_for_debit_note(
+            node_id,
+            debit_note_id,
+            query.after_timestamp.map(|d| d.naive_utc()),
+            query.max_items.map(|n| n as usize),
+        )
+        .await
+    {
+        Ok(payments) => response::ok(payments),
+        Err(e) => response::server_error(&e),
+    }
 }
 
 #[get("/debitNoteEvents")]
@@ -283,7 +303,10 @@ async fn cancel_debit_note(
     match ya_net::from(id.identity)
         .to(peer_id)
         .service(PUBLIC_SERVICE)
-        .call(CancelDebitNote { debit_note_id })
+        .call(CancelDebitNote {
+            debit_note_id,
+            recipient_id: peer_id,
+        })
         .timeout(CANCEL_ACK_TIMEOUT.into())
         .await
     {
@@ -314,9 +337,10 @@ async fn accept_debit_note(
 
     log::debug!("Requested accept DebitNote [{}]", debit_note_id);
     counter!("payment.debit_notes.requestor.accepted.call", 1);
-
-    let dao: DebitNoteDao = db.as_dao();
     let sync_dao: SyncNotifsDao = db.as_dao();
+    let dao: DebitNoteDao = db.as_dao();
+
+    //dao.accept_start().await;
 
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
     let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
@@ -402,13 +426,14 @@ async fn accept_debit_note(
         }
         Err(e) => return response::server_error(&e),
     };
-    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;
+    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
 
     log::trace!(
         "Querying DB for Allocation [{}] for Debit Note [{}]",
         allocation_id,
         debit_note_id
     );
+
     let allocation = match db
         .as_dao::<AllocationDao>()
         .get(allocation_id.clone(), node_id)
@@ -426,6 +451,7 @@ async fn accept_debit_note(
         }
         Err(e) => return response::server_error(&e),
     };
+
     if amount_to_pay > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
@@ -527,6 +553,7 @@ async fn reject_debit_note(
         .call(RejectDebitNote {
             debit_note_id,
             rejection,
+            issuer_id: peer_id,
         })
         .timeout(REJECT_ACK_TIMEOUT.into())
         .await
@@ -540,9 +567,9 @@ async fn reject_debit_note(
     }
 }
 
-pub fn register_endpoints(scope: Scope) -> Scope {
-    scope
-        .service(get_debit_notes)
+pub fn configure(config: &mut web::ServiceConfig) {
+    config
+        .service(get_debit_note)
         .service(get_debit_notes)
         .service(get_debit_note_payments)
         .service(get_debit_note_events)
@@ -550,5 +577,5 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(send_debit_note)
         .service(cancel_debit_note)
         .service(accept_debit_note)
-        .service(reject_debit_note)
+        .service(reject_debit_note);
 }

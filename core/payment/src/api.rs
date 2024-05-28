@@ -17,7 +17,7 @@ pub fn api_scope(scope: Scope) -> Scope {
         .app_data(web::Data::new(guard::AgreementLock::arc()))
         .extend(accounts::register_endpoints)
         .extend(allocations::register_endpoints)
-        .extend(debit_notes::register_endpoints)
+        .configure(debit_notes::configure)
         .extend(invoices::register_endpoints)
         .extend(payments::register_endpoints)
 }

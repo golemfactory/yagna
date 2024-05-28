@@ -19,7 +19,9 @@ pub struct WriteObj {
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
     pub released: bool,
-    pub extend_timeout: Option<i32>,
+    pub extend_timeout_by: Option<i32>,
+    pub accepted_amount: BigDecimalField,
+    pub rec_version: i32,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -36,7 +38,9 @@ pub struct ReadObj {
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
     pub released: bool,
-    pub extend_timeout: Option<i32>,
+    pub extend_timeout_by: Option<i32>,
+    pub accepted_amount: BigDecimalField,
+    pub rec_version: i32,
 }
 
 impl WriteObj {
@@ -57,9 +61,11 @@ impl WriteObj {
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
-            extend_timeout: allocation
+            extend_timeout_by: allocation
                 .extend_timeout
                 .map(|d| d.as_secs().try_into().ok().unwrap_or(i32::MAX)),
+            accepted_amount: Default::default(),
+            rec_version: 0,
         }
     }
 
@@ -75,9 +81,11 @@ impl WriteObj {
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
-            extend_timeout: allocation
+            extend_timeout_by: allocation
                 .extend_timeout
                 .map(|s| s.as_secs().try_into().ok().unwrap_or(i32::MAX)),
+            accepted_amount: Default::default(),
+            rec_version: 0,
         }
     }
 }
@@ -96,7 +104,7 @@ impl From<ReadObj> for Allocation {
             deposit: None,
             make_deposit: allocation.make_deposit,
             extend_timeout: allocation
-                .extend_timeout
+                .extend_timeout_by
                 .and_then(|secs| Some(time::Duration::from_secs(secs.try_into().ok()?))),
         }
     }

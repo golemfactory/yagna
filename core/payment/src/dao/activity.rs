@@ -16,6 +16,37 @@ use ya_persistence::executor::{
 };
 use ya_persistence::types::{BigDecimalField, Role};
 
+pub mod raw {
+    use crate::error::DbError;
+    use super::*;
+
+    pub fn increase_amount_scheduled(
+        conn: &ConnType,
+        activity_id: &str,
+        owner_id: &NodeId,
+        amount: &BigDecimal,
+
+    ) -> DbResult<()> {
+        let (total_amount_scheduled, agreement_id, rec_version) : (BigDecimalField, String, i32) = dsl::pay_activity
+            .find((activity_id, owner_id))
+            .select((dsl::total_amount_scheduled, dsl::agreement_id, dsl::rec_version))
+            .get_result(conn)?;
+
+        let total_amount_scheduled : BigDecimalField = (total_amount_scheduled.0 - amount).into();
+
+        match diesel::update(dsl::pay_activity.find((activity_id, owner_id)).filter(dsl::rec_version.eq(rec_version)))
+            .set((dsl::total_amount_scheduled.eq(total_amount_scheduled), dsl::rec_version.eq(rec_version+1)))
+            .execute(conn)? {
+            0 => return DbError::tx_lost("activity", "increase_amount_scheduled"),
+            1 => (),
+            _ => return DbError::unexpected("activity: invalid spec for increase_amount_scheduled")
+        }
+        agreement::increase_amount_scheduled(&agreement_id, owner_id, amount, conn)
+    }
+
+
+}
+
 pub fn set_amount_due(
     activity_id: &String,
     owner_id: &NodeId,
@@ -56,22 +87,6 @@ pub fn set_amount_accepted(
     agreement::increase_amount_accepted(&agreement_id, owner_id, &amount_delta, conn)
 }
 
-pub fn increase_amount_scheduled(
-    activity_id: &String,
-    owner_id: &NodeId,
-    amount: &BigDecimal,
-    conn: &ConnType,
-) -> DbResult<()> {
-    let activity: WriteObj = dsl::pay_activity
-        .find((activity_id, owner_id))
-        .first(conn)?;
-    let total_amount_scheduled: BigDecimalField =
-        (&activity.total_amount_scheduled.0 + amount).into();
-    diesel::update(&activity)
-        .set(dsl::total_amount_scheduled.eq(total_amount_scheduled))
-        .execute(conn)?;
-    agreement::increase_amount_scheduled(&activity.agreement_id, owner_id, amount, conn)
-}
 
 pub fn increase_amount_paid(
     activity_id: &String,
@@ -100,7 +115,7 @@ pub fn increase_amount_paid(
         .select(debit_note_dsl::id)
         .load(conn)?;
 
-    debit_note::update_status(&debit_note_ids, owner_id, &DocumentStatus::Settled, conn)?;
+    debit_note::raw::update_status(conn, &debit_note_ids, owner_id, &DocumentStatus::Settled)?;
 
     for debit_note_id in debit_note_ids {
         debit_note_event::create(

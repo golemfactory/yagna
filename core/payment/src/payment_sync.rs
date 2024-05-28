@@ -15,7 +15,7 @@ use ya_core_model::{
         local::GenericError,
         public::{
             AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
-            RejectInvoiceV2, SendPayment, SendSignedPayment,
+            RejectInvoice, SendPayment, SendSignedPayment,
         },
     },
 };
@@ -83,7 +83,7 @@ async fn payment_sync(
             .map_err(GenericError::new)?;
         if let Some(event) = events.into_iter().last() {
             if let InvoiceEventType::InvoiceRejectedEvent { rejection } = event.event_type {
-                invoice_rejects.push(RejectInvoiceV2 {
+                invoice_rejects.push(RejectInvoice {
                     invoice_id: invoice.invoice_id,
                     rejection,
                     issuer_id: peer_id,

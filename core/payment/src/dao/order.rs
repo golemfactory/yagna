@@ -28,11 +28,11 @@ impl<'c> OrderDao<'c> {
         do_with_transaction(self.pool, "order_dao_create", move |conn| {
             match &msg.title {
                 PaymentTitle::DebitNote(DebitNotePayment { activity_id, .. }) => {
-                    activity::increase_amount_scheduled(
+                    activity::raw::increase_amount_scheduled(
+                        conn,
                         activity_id,
                         &msg.payer_id,
                         &msg.amount,
-                        conn,
                     )?
                 }
                 PaymentTitle::Invoice(InvoicePayment { agreement_id, .. }) => {

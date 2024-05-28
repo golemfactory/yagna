@@ -11,7 +11,7 @@ use metrics::{counter, timing};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
-    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, RejectInvoiceV2, SendError,
+    AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, RejectInvoice, SendError,
     SendInvoice, BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
@@ -608,7 +608,7 @@ async fn reject_invoice(
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let result = async move {
         let issuer_id = invoice.issuer_id;
-        let reject_msg = RejectInvoiceV2::new(invoice_id.clone(), rejection.clone(), issuer_id);
+        let reject_msg = RejectInvoice::new(invoice_id.clone(), rejection.clone(), issuer_id);
         match async move {
             log::trace!("Rejecting Invoice [{}] in DB", invoice_id);
             dao.reject(invoice_id.clone(), node_id, rejection).await?;
