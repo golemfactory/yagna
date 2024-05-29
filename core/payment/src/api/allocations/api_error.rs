@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use actix_web::HttpResponse;
 use http::Uri;
 use problem_details::ProblemDetails;
 use serde::Serialize;
@@ -8,12 +9,14 @@ use ya_core_model::driver::ValidateAllocationResult;
 
 pub type PaymentProblemDetails = ProblemDetails<BTreeMap<String, Value>>;
 
+const CONTENT_TYPE_PROBLEM_JSON: (&str, &str) = ("Content-Type", "application/problem+json");
+
 pub fn try_from_validation(
     result: ValidateAllocationResult,
     request_body: &impl Serialize,
     payment_triple: String,
     address: String,
-) -> Option<PaymentProblemDetails> {
+) -> Option<HttpResponse> {
     let mut extensions = BTreeMap::new();
 
     extensions.insert(
@@ -203,14 +206,23 @@ pub fn try_from_validation(
         }
     };
 
-    Some(details.with_extensions(extensions))
+    log::error!(
+        "{}",
+        details.detail.as_deref().unwrap_or("missing error detail")
+    );
+
+    Some(
+        HttpResponse::BadRequest()
+            .insert_header(CONTENT_TYPE_PROBLEM_JSON)
+            .json(details.with_extensions(extensions)),
+    )
 }
 
 pub fn account_not_registered(
     request_body: &impl Serialize,
     payment_triple: String,
     address: String,
-) -> PaymentProblemDetails {
+) -> HttpResponse {
     let mut extensions = BTreeMap::new();
 
     extensions.insert(
@@ -227,21 +239,25 @@ pub fn account_not_registered(
 
     extensions.insert("address".to_string(), Value::String(address.clone()));
 
-    ProblemDetails::new()
+    let details = ProblemDetails::new()
         .with_type(Uri::from_static(
             "/payment-api/v1/allocations/account-not-registered",
         ))
         .with_detail(format!(
             "Account {address} not registered for platform {payment_triple}"
         ))
-        .with_extensions(extensions)
+        .with_extensions(extensions);
+
+    HttpResponse::InternalServerError()
+        .insert_header(CONTENT_TYPE_PROBLEM_JSON)
+        .json(details)
 }
 
 pub fn bad_platform_parameter(
     request_body: &impl Serialize,
     error: &impl Serialize,
     requested_payment_platform: &impl Serialize,
-) -> PaymentProblemDetails {
+) -> HttpResponse {
     let mut extensions = BTreeMap::new();
 
     extensions.insert(
@@ -265,18 +281,19 @@ pub fn bad_platform_parameter(
         )),
     );
 
-    ProblemDetails::new()
+    let details = ProblemDetails::new()
         .with_type(Uri::from_static(
             "/payment-api/v1/allocations/bad-payment-platform",
         ))
         .with_detail(format!("Payment platform doesn't parse"))
-        .with_extensions(extensions)
+        .with_extensions(extensions);
+
+    HttpResponse::BadRequest()
+        .insert_header(CONTENT_TYPE_PROBLEM_JSON)
+        .json(details)
 }
 
-pub fn server_error(
-    request_body: &impl Serialize,
-    error: &impl Serialize,
-) -> PaymentProblemDetails {
+pub fn server_error(request_body: &impl Serialize, error: &impl Serialize) -> HttpResponse {
     let mut extensions = BTreeMap::new();
 
     extensions.insert(
@@ -293,10 +310,14 @@ pub fn server_error(
         )),
     );
 
-    ProblemDetails::new()
+    let details = ProblemDetails::new()
         .with_type(Uri::from_static(
             "/payment-api/v1/allocations/internal-error",
         ))
         .with_detail(format!("Unhandled internal error"))
-        .with_extensions(extensions)
+        .with_extensions(extensions);
+
+    HttpResponse::InternalServerError()
+        .insert_header(CONTENT_TYPE_PROBLEM_JSON)
+        .json(details)
 }
