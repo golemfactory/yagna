@@ -805,10 +805,10 @@ impl PaymentProcessor {
             let dao = db.as_dao::<AllocationDao>();
 
             let active = dao
-                .get_for_address(platform.clone(), address.clone(), None)
+                .get_for_address(platform.clone(), address.clone(), Some(false))
                 .await?;
             let past = dao
-                .get_for_address(platform.clone(), address.clone(), None)
+                .get_for_address(platform.clone(), address.clone(), Some(true))
                 .await?;
 
             (active, past)

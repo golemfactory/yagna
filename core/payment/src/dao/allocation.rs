@@ -162,7 +162,7 @@ impl<'c> AllocationDao<'c> {
         readonly_transaction(self.pool, "allocation_dao_get_filtered", move |conn| {
             let mut query = dsl::pay_allocation.into_boxed();
             if let Some(released) = released {
-                query = query.filter(dsl::released.eq(false));
+                query = query.filter(dsl::released.eq(released));
             }
             if let Some(owner_id) = owner_id {
                 query = query.filter(dsl::owner_id.eq(owner_id))
