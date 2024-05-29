@@ -390,7 +390,7 @@ impl Erc20Driver {
             .await?;
 
         let total_allocated_amount: BigDecimal = msg
-            .existing_allocations
+            .active_allocations
             .into_iter()
             .filter(|allocation| allocation.payment_platform == msg.platform)
             .map(|allocation| allocation.remaining_amount)
@@ -445,8 +445,9 @@ impl Erc20Driver {
         };
 
         let deposit_reused = msg
-            .existing_allocations
+            .active_allocations
             .iter()
+            .chain(msg.past_allocations.iter())
             .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
 
         if deposit_reused && msg.new_allocation {

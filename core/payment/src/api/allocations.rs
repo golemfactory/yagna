@@ -362,6 +362,9 @@ async fn create_allocation(
                     .to_string(),
             );
         }
+        Ok(ValidateAllocationResult::TimeoutPassed) => {
+            return bad_req_and_log("Requested allocation timeout is in the past".to_string());
+        }
         Ok(ValidateAllocationResult::MalformedDepositContract) => {
             return bad_req_and_log("Invalid deposit contract address.".to_string());
         }
@@ -426,7 +429,10 @@ async fn get_allocations(
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_items = query.max_items;
     let dao: AllocationDao = db.as_dao();
-    match dao.get_for_owner(node_id, after_timestamp, max_items).await {
+    match dao
+        .get_for_owner(node_id, after_timestamp, max_items, Some(false))
+        .await
+    {
         Ok(allocations) => response::ok(allocations),
         Err(e) => response::server_error(&e),
     }
@@ -546,6 +552,9 @@ async fn amend_allocation(
                 "Requested allocation timeout either not set or exceeds deposit timeout"
                     .to_string(),
             );
+        }
+        Ok(ValidateAllocationResult::TimeoutPassed) => {
+            return bad_req_and_log("Requested allocation timeout is in the past".to_string());
         }
         Ok(ValidateAllocationResult::MalformedDepositContract) => {
             return bad_req_and_log("Invalid deposit contract address".to_string());
