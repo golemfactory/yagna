@@ -64,11 +64,7 @@ async fn create_allocation(
                 Ok(p) => p,
                 Err(err) => {
                     log::error!("Payment platform string parse failed: {err}");
-                    return HttpResponse::BadRequest().json(api_error::bad_platform_parameter(
-                        &allocation,
-                        &err.to_string(),
-                        &name,
-                    ));
+                    return api_error::bad_platform_parameter(&allocation, &err.to_string(), &name);
                 }
             };
             log::debug!(
@@ -82,11 +78,11 @@ async fn create_allocation(
                 Ok(platform_str) => platform_str,
                 Err(err) => {
                     log::error!("Payment platform object parse failed: {err}");
-                    return HttpResponse::BadRequest().json(api_error::bad_platform_parameter(
+                    return api_error::bad_platform_parameter(
                         &allocation,
                         &err.to_string(),
                         &payment_platform,
-                    ));
+                    );
                 }
             }
         }
@@ -117,8 +113,7 @@ async fn create_allocation(
     };
 
     if let Err(err) = init_account(acc).await {
-        return HttpResponse::InternalServerError()
-            .json(api_error::server_error(&allocation, &err.to_string()));
+        return api_error::server_error(&allocation, &err.to_string());
     }
 
     let validate_msg = ValidateAllocation {
@@ -132,21 +127,13 @@ async fn create_allocation(
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(result) => {
-            if let Some(problem_details) = api_error::try_from_validation(
+            if let Some(error_response) = api_error::try_from_validation(
                 result,
                 &allocation,
                 payment_triple.to_string(),
                 address.clone(),
             ) {
-                log::error!(
-                    "{}",
-                    problem_details
-                        .detail
-                        .as_deref()
-                        .unwrap_or("[allocation validation error with no detail]")
-                );
-
-                return HttpResponse::BadRequest().json(problem_details);
+                return error_response;
             }
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
@@ -158,16 +145,13 @@ async fn create_allocation(
                 payment_triple
             );
 
-            return HttpResponse::BadRequest().json(api_error::account_not_registered(
+            return api_error::account_not_registered(
                 &allocation,
                 payment_triple.to_string(),
                 address.clone(),
-            ));
+            );
         }
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation, &e.to_string()))
-        }
+        Err(e) => return api_error::server_error(&allocation, &e.to_string()),
     }
 
     let dao = db.as_dao::<AllocationDao>();
@@ -195,12 +179,11 @@ async fn create_allocation(
 
                 response::created(allocation)
             }
-            Ok(AllocationStatus::NotFound) => HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation, &"Database Error")),
-            Ok(AllocationStatus::Gone) => HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation, &"Database Error")),
-            Err(e) => HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation, &e.to_string())),
+            Ok(AllocationStatus::NotFound) => {
+                api_error::server_error(&allocation, &"Database Error")
+            }
+            Ok(AllocationStatus::Gone) => api_error::server_error(&allocation, &"Database Error"),
+            Err(e) => api_error::server_error(&allocation, &e.to_string()),
         },
         Err(e) => response::server_error(&e),
     }
@@ -319,21 +302,13 @@ async fn amend_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(result) => {
-            if let Some(problem_details) = api_error::try_from_validation(
+            if let Some(error_response) = api_error::try_from_validation(
                 result,
                 &allocation_update,
                 payment_triple.to_string(),
                 amended_allocation.address.clone(),
             ) {
-                log::error!(
-                    "{}",
-                    problem_details
-                        .detail
-                        .as_deref()
-                        .unwrap_or("[allocation validation error with no detail]")
-                );
-
-                return HttpResponse::BadRequest().json(problem_details);
+                return error_response;
             }
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
@@ -345,30 +320,24 @@ async fn amend_allocation(
                 payment_triple
             );
 
-            return HttpResponse::BadRequest().json(api_error::account_not_registered(
+            return api_error::account_not_registered(
                 &allocation_update,
                 payment_triple.to_string(),
                 amended_allocation.address.clone(),
-            ));
+            );
         }
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation_update, &e.to_string()))
-        }
+        Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
         Ok(false) => {
-            return HttpResponse::InternalServerError().json(api_error::server_error(
+            return api_error::server_error(
                 &allocation_update,
                 &"Allocation not present despite preconditions being already ensured",
-            ));
+            );
         }
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(api_error::server_error(&allocation_update, &e.to_string()))
-        }
+        Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
     get_allocation(db, path, id).await
