@@ -56,7 +56,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/insufficient-account-funds",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/insufficient-account-funds",
                 ))
                 .with_detail(detail)
         }
@@ -77,7 +80,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/insufficient-deposit-funds",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/insufficient-deposit-funds",
                 ))
                 .with_detail(detail)
         }
@@ -101,7 +107,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/timeout-exceeds-deposit",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/timeout-exceeds-deposit",
                 ))
                 .with_detail(detail)
         }
@@ -115,7 +124,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/timeout-passed",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/timeout-passed",
                 ))
                 .with_detail(detail)
         }
@@ -124,7 +136,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/malformed-deposit-contract",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/malformed-deposit-contract",
                 ))
                 .with_detail(detail)
         }
@@ -133,7 +148,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/malformed-deposit-id",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/malformed-deposit-id",
                 ))
                 .with_detail(detail)
         }
@@ -150,7 +168,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/deposit-reused",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/deposit-reused",
                 ))
                 .with_detail(detail)
         }
@@ -161,7 +182,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/deposit-spender-mismatch",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/deposit-spender-mismatch",
                 ))
                 .with_detail(detail)
         }
@@ -170,7 +194,10 @@ pub fn try_from_validation(
 
             details
                 .with_type(Uri::from_static(
-                    "/payment-api/v1/allocations/validation/deposit-validation-error",
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/deposit-validation-error",
                 ))
                 .with_detail(detail)
         }
