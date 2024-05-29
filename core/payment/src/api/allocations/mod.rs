@@ -54,7 +54,6 @@ async fn create_allocation(
     body: Json<NewAllocation>,
     id: Identity,
 ) -> HttpResponse {
-    // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
 
