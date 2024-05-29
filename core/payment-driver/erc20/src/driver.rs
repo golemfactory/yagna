@@ -407,8 +407,12 @@ impl Erc20Driver {
         );
 
         Ok(
-            if msg.amount > account_balance.token_balance - total_allocated_amount {
-                ValidateAllocationResult::InsufficientAccountFunds
+            if msg.amount > account_balance.token_balance.clone() - total_allocated_amount.clone() {
+                ValidateAllocationResult::InsufficientAccountFunds {
+                    requested_funds: msg.amount,
+                    available_funds: account_balance.token_balance - total_allocated_amount.clone(),
+                    reserved_funds: total_allocated_amount,
+                }
             } else {
                 ValidateAllocationResult::Valid
             },
@@ -444,14 +448,18 @@ impl Erc20Driver {
             return Ok(ValidateAllocationResult::MalformedDepositId);
         };
 
-        let deposit_reused = msg
+        let conflicting_allocation = msg
             .active_allocations
-            .iter()
-            .chain(msg.past_allocations.iter())
-            .any(|allocation| allocation.deposit.as_ref() == Some(&deposit));
+            .into_iter()
+            .chain(msg.past_allocations.into_iter())
+            .find(|allocation| allocation.deposit.as_ref() == Some(&deposit));
 
-        if deposit_reused && msg.new_allocation {
-            return Ok(ValidateAllocationResult::DepositReused);
+        if msg.new_allocation {
+            if let Some(allocation) = conflicting_allocation {
+                return Ok(ValidateAllocationResult::DepositReused {
+                    allocation_id: allocation.allocation_id,
+                });
+            }
         }
 
         let deposit_details = self
@@ -497,7 +505,9 @@ impl Erc20Driver {
                 deposit_spender
             );
 
-            return Ok(ValidateAllocationResult::DepositSpenderMismatch);
+            return Ok(ValidateAllocationResult::DepositSpenderMismatch {
+                deposit_spender: deposit_spender.to_string(),
+            });
         }
 
         if msg.amount > deposit_balance {
@@ -507,7 +517,10 @@ impl Erc20Driver {
                 deposit_balance
             );
 
-            return Ok(ValidateAllocationResult::InsufficientDepositFunds);
+            return Ok(ValidateAllocationResult::InsufficientDepositFunds {
+                requested_funds: msg.amount,
+                available_funds: deposit_balance,
+            });
         }
 
         if let Some(timeout) = msg.timeout {
@@ -518,7 +531,10 @@ impl Erc20Driver {
                     deposit_timeout
                 );
 
-                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit {
+                    requested_timeout: Some(timeout),
+                    deposit_timeout: deposit_details.valid_to,
+                });
             }
         } else {
             log::debug!(
@@ -526,7 +542,10 @@ impl Erc20Driver {
                 deposit_timeout
             );
 
-            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit);
+            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit {
+                requested_timeout: None,
+                deposit_timeout: deposit_details.valid_to,
+            });
         };
 
         if let Some(extra_validation) = deposit.validate {
