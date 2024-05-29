@@ -18,7 +18,12 @@ tos = []
 framework-test = ['ya-exe-unit/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
-packet-trace-enable = ["ya-vpn/packet-trace-enable", "ya-file-logging/packet-trace-enable", "ya-net/packet-trace-enable", "ya-service-bus/packet-trace-enable"]
+packet-trace-enable = [
+    "ya-vpn/packet-trace-enable",
+    "ya-file-logging/packet-trace-enable",
+    "ya-net/packet-trace-enable",
+    "ya-service-bus/packet-trace-enable",
+]
 
 [[bin]]
 name = "yagna"
@@ -57,8 +62,8 @@ ya-client = "0.8"
 ya-client-model = "0.6"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
-ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
-ya-exe-unit = { version = "0.4", optional = true, path = "exe-unit" }       # just to enable conditionally running some tests
+ya-provider = { version = "0.3", optional = true }                    # just to enable conditionally running some tests
+ya-exe-unit = { version = "0.4", optional = true, path = "exe-unit" } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
 actix-service = "2"
@@ -232,8 +237,8 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 derive_more = "0.99.11"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4f29f90faa31739ff86fe9ea7481e581c17c3593" }
-erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4f29f90faa31739ff86fe9ea7481e581c17c3593" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
+erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "=0.4.1" }
