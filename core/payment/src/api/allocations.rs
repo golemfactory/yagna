@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -7,6 +8,9 @@ use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use http::Uri;
+use problem_details::ProblemDetails;
+use serde::Serialize;
 use serde_json::value::Value::Null;
 use ya_client_model::NodeId;
 
@@ -274,6 +278,179 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/demandDecorations", get().to(get_demand_decorations))
 }
 
+fn validate_allocation_result_to_problem_details(
+    result: ValidateAllocationResult,
+    request_body: &impl Serialize,
+    payment_triple: String,
+    address: String,
+) -> Option<ProblemDetails<BTreeMap<String, serde_json::Value>>> {
+    use serde_json::Value;
+
+    let mut extensions = BTreeMap::new();
+
+    extensions.insert(
+        "requestBody".to_string(),
+        serde_json::to_value(request_body).unwrap_or(Value::String(
+            "[requestBody serialization failed]".to_string(),
+        )),
+    );
+
+    extensions.insert(
+        "paymentPlatform".to_string(),
+        Value::String(payment_triple.clone()),
+    );
+
+    extensions.insert("address".to_string(), Value::String(address));
+
+    let details = ProblemDetails::new();
+    let details = match result {
+        ValidateAllocationResult::Valid => return None,
+        ValidateAllocationResult::InsufficientAccountFunds {
+            requested_funds,
+            available_funds,
+            reserved_funds,
+        } => {
+            let detail = format!("Insufficient funds to create the allocation. Top up your account \
+                or release all existing allocations to unlock the funds via `yagna payment release-allocations`");
+
+            extensions.insert(
+                "requestedFunds".to_string(),
+                Value::String(requested_funds.to_string()),
+            );
+            extensions.insert(
+                "availableFunds".to_string(),
+                Value::String(available_funds.to_string()),
+            );
+            extensions.insert(
+                "reservedFunds".to_string(),
+                Value::String(reserved_funds.to_string()),
+            );
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/insufficient-account-funds",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::InsufficientDepositFunds {
+            requested_funds,
+            available_funds,
+        } => {
+            let detail = "Insufficient funds on the deposit for this allocation";
+
+            extensions.insert(
+                "requestedFunds".to_string(),
+                Value::String(requested_funds.to_string()),
+            );
+            extensions.insert(
+                "availableFunds".to_string(),
+                Value::String(available_funds.to_string()),
+            );
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/insufficient-deposit-funds",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::TimeoutExceedsDeposit {
+            requested_timeout,
+            deposit_timeout,
+        } => {
+            let detail = "Requested allocation timeout either not set or exceeds deposit timeout";
+
+            extensions.insert(
+                "requestedTimeout".to_string(),
+                match requested_timeout {
+                    Some(ts) => Value::String(ts.to_rfc3339()),
+                    None => Value::Null,
+                },
+            );
+            extensions.insert(
+                "depositTimeout".to_string(),
+                Value::String(deposit_timeout.to_rfc3339()),
+            );
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/timeout-exceeds-deposit",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::TimeoutPassed { requested_timeout } => {
+            let detail = "Requested allocation timeout is in the past";
+
+            extensions.insert(
+                "requestedTimeout".to_string(),
+                Value::String(requested_timeout.to_rfc3339()),
+            );
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/timeout-passed",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::MalformedDepositContract => {
+            let detail = "Invalid deposit contract address";
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/malformed-deposit-contract",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::MalformedDepositId => {
+            let detail = "Invalid deposit id";
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/malformed-deposit-id",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::DepositReused { allocation_id } => {
+            let detail = format!(
+                "Submitted deposit already has a corresponding allocation {allocation_id}. \
+                Consider amending the allocation if the deposit has been extended"
+            );
+
+            extensions.insert(
+                "conflictingAllocationId".to_string(),
+                Value::String(allocation_id),
+            );
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/deposit-reused",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::DepositSpenderMismatch { deposit_spender } => {
+            let detail = "Deposit spender doesn't match allocation address";
+
+            extensions.insert("depositSpender".to_string(), Value::String(deposit_spender));
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/deposit-spender-mismatch",
+                ))
+                .with_detail(detail)
+        }
+        ValidateAllocationResult::DepositValidationError(message) => {
+            let detail = format!("Deposit contract rejected the deposit: {message}");
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation/deposit-validation-error",
+                ))
+                .with_detail(detail)
+        }
+    };
+
+    Some(details.with_extensions(extensions))
+}
+
 async fn create_allocation(
     db: Data<DbExecutor>,
     body: Json<NewAllocation>,
@@ -346,40 +523,23 @@ async fn create_allocation(
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(ValidateAllocationResult::Valid) => {}
-        Ok(ValidateAllocationResult::InsufficientAccountFunds) => {
-            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
-        }
-        Ok(ValidateAllocationResult::InsufficientDepositFunds) => {
-            return bad_req_and_log(
-                "Insufficient funds on the deposit for this allocation".to_string(),
-            );
-        }
-        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
-            return bad_req_and_log(
-                "Requested allocation timeout either not set or exceeds deposit timeout"
-                    .to_string(),
-            );
-        }
-        Ok(ValidateAllocationResult::TimeoutPassed) => {
-            return bad_req_and_log("Requested allocation timeout is in the past".to_string());
-        }
-        Ok(ValidateAllocationResult::MalformedDepositContract) => {
-            return bad_req_and_log("Invalid deposit contract address.".to_string());
-        }
-        Ok(ValidateAllocationResult::MalformedDepositId) => {
-            return bad_req_and_log("Invalid deposit id.".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositReused) => {
-            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
-                if the deposit has been extended".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
-            return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositValidationError(message)) => {
-            return bad_req_and_log(format!("Deposit contract rejected the deposit: {message}"));
+        Ok(result) => {
+            if let Some(problem_details) = validate_allocation_result_to_problem_details(
+                result,
+                &allocation,
+                payment_triple.to_string(),
+                address.clone(),
+            ) {
+                log::error!(
+                    "{}",
+                    problem_details
+                        .detail
+                        .as_deref()
+                        .unwrap_or("[allocation validation error with no detail]")
+                );
+
+                return HttpResponse::BadRequest().json(problem_details);
+            }
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
@@ -497,7 +657,7 @@ async fn amend_allocation(
 
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
-    let new_allocation: AllocationUpdate = body.into_inner();
+    let allocation_update: AllocationUpdate = body.into_inner();
     let dao: AllocationDao = db.as_dao();
 
     let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
@@ -512,7 +672,7 @@ async fn amend_allocation(
     };
 
     let amended_allocation =
-        match amend_allocation_fields(current_allocation.clone(), new_allocation) {
+        match amend_allocation_fields(current_allocation.clone(), allocation_update.clone()) {
             Ok(allocation) => allocation,
             Err(e) => return response::bad_request(&e),
         };
@@ -537,44 +697,31 @@ async fn amend_allocation(
         new_allocation: false,
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(ValidateAllocationResult::Valid) => {}
-        Ok(ValidateAllocationResult::InsufficientAccountFunds) => {
-            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-                Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
-        }
-        Ok(ValidateAllocationResult::InsufficientDepositFunds) => {
-            return bad_req_and_log(
-                "Insufficient funds on the deposit for this allocation".to_string(),
-            );
-        }
-        Ok(ValidateAllocationResult::TimeoutExceedsDeposit) => {
-            return bad_req_and_log(
-                "Requested allocation timeout either not set or exceeds deposit timeout"
-                    .to_string(),
-            );
-        }
-        Ok(ValidateAllocationResult::TimeoutPassed) => {
-            return bad_req_and_log("Requested allocation timeout is in the past".to_string());
-        }
-        Ok(ValidateAllocationResult::MalformedDepositContract) => {
-            return bad_req_and_log("Invalid deposit contract address".to_string());
-        }
-        Ok(ValidateAllocationResult::MalformedDepositId) => {
-            return bad_req_and_log("Invalid deposit id.".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositReused) => {
-            return bad_req_and_log("Submitted deposit already has a corresponding allocation. Consider amending the allocation \
-                if the deposit has been extended".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositSpenderMismatch) => {
-            return bad_req_and_log("Deposit spender doesn't match allocation address".to_string());
-        }
-        Ok(ValidateAllocationResult::DepositValidationError(message)) => {
-            return bad_req_and_log(format!("Deposit contract rejected the deposit: {message}"));
+        Ok(result) => {
+            if let Some(problem_details) = validate_allocation_result_to_problem_details(
+                result,
+                &allocation_update,
+                payment_triple.to_string(),
+                amended_allocation.address.clone(),
+            ) {
+                log::error!(
+                    "{}",
+                    problem_details
+                        .detail
+                        .as_deref()
+                        .unwrap_or("[allocation validation error with no detail]")
+                );
+
+                return HttpResponse::BadRequest().json(problem_details);
+            }
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
-        ))) => return response::bad_request(&"Account not registered"),
+        ))) => {
+            return bad_req_and_log(format!(
+                "Account not registered - payment platform {payment_triple}"
+            ));
+        }
         Err(e) => return response::server_error(&e),
     }
 

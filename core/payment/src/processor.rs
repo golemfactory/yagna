@@ -794,9 +794,9 @@ impl PaymentProcessor {
             return Err(ValidateAllocationError::Shutdown);
         }
 
-        if let Some(timeout) = timeout {
-            if timeout < chrono::Utc::now() {
-                return Ok(ValidateAllocationResult::TimeoutPassed);
+        if let Some(requested_timeout) = timeout {
+            if requested_timeout < chrono::Utc::now() {
+                return Ok(ValidateAllocationResult::TimeoutPassed { requested_timeout });
             }
         }
 

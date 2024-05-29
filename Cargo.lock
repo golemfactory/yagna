@@ -3228,6 +3228,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
 
 [[package]]
+name = "http-serde"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
+dependencies = [
+ "http 1.1.0",
+ "serde",
+]
+
+[[package]]
 name = "httparse"
 version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4942,6 +4952,18 @@ dependencies = [
  "impl-rlp",
  "impl-serde 0.4.0",
  "uint 0.9.5",
+]
+
+[[package]]
+name = "problem_details"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "275bea8e10b32b8a9acef6bb6fd9a7262daa9d5c1c1296accc916bb09fdb5e07"
+dependencies = [
+ "http 1.1.0",
+ "http-serde",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8917,6 +8939,7 @@ dependencies = [
  "ethsign",
  "futures 0.3.30",
  "hex",
+ "http 1.1.0",
  "humantime 2.1.0",
  "lazy_static",
  "libsqlite3-sys",
@@ -8924,6 +8947,7 @@ dependencies = [
  "metrics 0.12.1",
  "num-bigint 0.3.3",
  "open",
+ "problem_details",
  "r2d2",
  "rand 0.8.5",
  "serde",

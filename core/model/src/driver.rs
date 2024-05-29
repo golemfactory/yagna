@@ -388,14 +388,30 @@ impl ValidateAllocation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ValidateAllocationResult {
-    InsufficientAccountFunds,
-    InsufficientDepositFunds,
-    TimeoutExceedsDeposit,
-    TimeoutPassed,
+    InsufficientAccountFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+        reserved_funds: BigDecimal,
+    },
+    InsufficientDepositFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+    },
+    TimeoutExceedsDeposit {
+        requested_timeout: Option<DateTime<Utc>>,
+        deposit_timeout: DateTime<Utc>,
+    },
+    TimeoutPassed {
+        requested_timeout: DateTime<Utc>,
+    },
     MalformedDepositContract,
     MalformedDepositId,
-    DepositReused,
-    DepositSpenderMismatch,
+    DepositReused {
+        allocation_id: String,
+    },
+    DepositSpenderMismatch {
+        deposit_spender: String,
+    },
     DepositValidationError(String),
     Valid,
 }
