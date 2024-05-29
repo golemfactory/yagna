@@ -852,13 +852,27 @@ impl PaymentProcessor {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(ValidateAllocationError::Shutdown);
         }
-        let existing_allocations = self
-            .db_executor
-            .timeout_lock(DB_LOCK_TIMEOUT)
-            .await?
-            .as_dao::<AllocationDao>()
-            .get_for_address(platform.clone(), address.clone())
-            .await?;
+
+        if let Some(timeout) = timeout {
+            if timeout < chrono::Utc::now() {
+                return Ok(ValidateAllocationResult::TimeoutPassed);
+            }
+        }
+
+        let (active_allocations, past_allocations) = {
+            let db = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+            let dao = db.as_dao::<AllocationDao>();
+
+            let active = dao
+                .get_for_address(platform.clone(), address.clone(), None)
+                .await?;
+            let past = dao
+                .get_for_address(platform.clone(), address.clone(), None)
+                .await?;
+
+            (active, past)
+        };
+
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
@@ -870,7 +884,8 @@ impl PaymentProcessor {
             amount,
             timeout,
             deposit,
-            existing_allocations,
+            active_allocations,
+            past_allocations,
             new_allocation,
         };
         let result = driver_endpoint(&driver).send(msg).await??;
@@ -891,15 +906,15 @@ impl PaymentProcessor {
         };
 
         let db = Data::new(db_executor.clone());
-        let existing_allocations = db
+        let active_allocations = db
             .clone()
             .as_dao::<AllocationDao>()
-            .get_filtered(None, None, None, None, None)
+            .get_filtered(None, None, None, None, None, Some(false))
             .await;
 
         log::info!("Checking for allocations to be released...");
 
-        match existing_allocations {
+        match active_allocations {
             Ok(allocations) => {
                 if !allocations.is_empty() {
                     for allocation in allocations {
