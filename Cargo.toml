@@ -246,9 +246,12 @@ strum = { version = "0.24", features = ["derive"] }
 trust-dns-resolver = "0.22"
 url = "2.3.1"
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8d544dd766e14479519437d0bf4f2879e6a6de5a" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "598c817f1c9f8a26ed1236d38d430f65889da03e" }
+#ya-relay-client = { path = "../ya-relay/client" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-service-bus = { version = "0.7.1" }
+parking_lot = "0.12.3"
+mime = "0.3.17"
 
 [patch.crates-io]
 ## SERVICES
@@ -275,16 +278,16 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "57dc4808f9db63ce20e4e7b799fd6a1613610d0a" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e58208bdd521afbb626021d94b0b91a7d17d4e9d" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "57dc4808f9db63ce20e4e7b799fd6a1613610d0a" }
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack
 
 #ya-relay-stack = { path = "../ya-relay/crates/stack" }
-#ya-relay-client = { path = "../ya-relay/client" }
+#ya-relay-client = { path = "/home/reqc/workspace/ya/ya-relay/client" }
 #ya-relay-core = { path = "../ya-relay/crates/core" }
 #ya-relay-proto = { path = "../ya-relay/crates/proto" }
 

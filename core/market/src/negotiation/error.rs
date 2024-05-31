@@ -1,7 +1,11 @@
+use actix_http::body::BoxBody;
+use actix_http::StatusCode;
+use actix_web::{HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use thiserror::Error;
 
-use ya_client::model::NodeId;
+use ya_client::model::{ErrorMessage, NodeId};
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
@@ -178,6 +182,40 @@ pub enum RegenerateProposalError {
     Offer(#[from] QueryOfferError),
     Demand(#[from] DemandError),
     Save(#[from] SaveProposalError),
+}
+
+#[derive(Error, Debug)]
+pub enum ScanError {
+    #[error("Invalid constraint. {reason}")]
+    InvalidConstraint { reason: String },
+    #[error("{context}. {cause}")]
+    InternalDbError {
+        context: Cow<'static, str>,
+        #[source]
+        cause: DbError,
+    },
+    #[error("iterator with id \"{scan_id}\" not found")]
+    NotFound { scan_id: String },
+    #[error("access denied")]
+    Forbidden,
+    #[error("iterator is removed")]
+    Gone { scan_id: u64 },
+}
+
+impl ResponseError for ScanError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::InternalDbError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotFound { .. } => StatusCode::NOT_FOUND,
+            Self::InvalidConstraint { .. } => StatusCode::BAD_REQUEST,
+            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Gone { .. } => StatusCode::GONE,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        HttpResponse::build(self.status_code()).json(ErrorMessage::new(self))
+    }
 }
 
 impl AgreementError {

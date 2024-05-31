@@ -7,10 +7,9 @@ use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 use ya_net::{self as net};
 
-use super::{Discovery, DiscoveryImpl};
+use super::{BanCache, Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
-use crate::testing::discovery::BanCache;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {

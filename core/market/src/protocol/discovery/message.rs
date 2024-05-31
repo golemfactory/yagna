@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 
 use ya_core_model::net::local::BroadcastMessage;
+use ya_core_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
@@ -43,6 +45,28 @@ pub struct RetrieveOffers {
 impl RpcMessage for RetrieveOffers {
     const ID: &'static str = "Get";
     type Item = Vec<ModelOffer>;
+    type Error = DiscoveryRemoteError;
+}
+
+/// Asks node for information about
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryOffers {
+    pub node_id: Option<NodeId>,
+    pub constraint_expr: Option<String>,
+    pub iterator: Option<ByteBuf>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryOffersResult {
+    pub offers: Vec<SubscriptionId>,
+    pub iterator: Option<ByteBuf>,
+}
+
+impl RpcMessage for QueryOffers {
+    const ID: &'static str = "Query";
+    type Item = QueryOffersResult;
     type Error = DiscoveryRemoteError;
 }
 

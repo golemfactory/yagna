@@ -31,6 +31,7 @@ use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::*;
+use crate::negotiation::ScannerSet;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
@@ -202,8 +203,9 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Self {
         let db = self.init_database(name);
+        let scan_set = ScannerSet::new(db.clone());
 
-        let store = SubscriptionStore::new(db.clone(), self.config.clone());
+        let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
         let identity_api = MockIdentity::new(name);
 
         let (matcher, listeners) =

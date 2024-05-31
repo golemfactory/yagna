@@ -636,14 +636,9 @@ impl PaymentDriver for Erc20Driver {
                     }
                 }
                 let time_now = Instant::now();
-                let mut iteration = -1;
                 loop {
-                    iteration += 1;
-                    if iteration == 0 {
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                    } else {
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
                     if time_now.elapsed().as_secs() > 120 {
                         log::error!(
                             "Faucet donation not received after {} seconds",
