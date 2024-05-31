@@ -19,20 +19,6 @@ pub fn try_from_validation(
 ) -> Option<HttpResponse> {
     let mut extensions = BTreeMap::new();
 
-    extensions.insert(
-        "requestBody".to_string(),
-        serde_json::to_value(request_body).unwrap_or(Value::String(
-            "[requestBody serialization failed]".to_string(),
-        )),
-    );
-
-    extensions.insert(
-        "paymentPlatform".to_string(),
-        Value::String(payment_triple.clone()),
-    );
-
-    extensions.insert("address".to_string(), Value::String(address));
-
     let details = ProblemDetails::new();
     let details = match result {
         ValidateAllocationResult::Valid => return None,
@@ -158,6 +144,20 @@ pub fn try_from_validation(
                 ))
                 .with_detail(detail)
         }
+        ValidateAllocationResult::NoDeposit { deposit_id } => {
+            let detail = format!("Deposit doesn't exist under the given id {deposit_id}");
+
+            extensions.insert("requestedDepositId".to_string(), Value::String(deposit_id));
+
+            details
+                .with_type(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error",
+                ))
+                .with_instance(Uri::from_static(
+                    "/payment-api/v1/allocations/validation-error/no-deposit",
+                ))
+                .with_detail(detail)
+        }
         ValidateAllocationResult::DepositReused { allocation_id } => {
             let detail = format!(
                 "Submitted deposit already has a corresponding allocation {allocation_id}. \
@@ -179,7 +179,9 @@ pub fn try_from_validation(
                 .with_detail(detail)
         }
         ValidateAllocationResult::DepositSpenderMismatch { deposit_spender } => {
-            let detail = "Deposit spender doesn't match allocation address";
+            let detail = format!(
+                "Deposit spender {deposit_spender} doesn't match allocation address {address}"
+            );
 
             extensions.insert("depositSpender".to_string(), Value::String(deposit_spender));
 
@@ -210,6 +212,20 @@ pub fn try_from_validation(
         "{}",
         details.detail.as_deref().unwrap_or("missing error detail")
     );
+
+    extensions.insert(
+        "requestBody".to_string(),
+        serde_json::to_value(request_body).unwrap_or(Value::String(
+            "[requestBody serialization failed]".to_string(),
+        )),
+    );
+
+    extensions.insert(
+        "paymentPlatform".to_string(),
+        Value::String(payment_triple.clone()),
+    );
+
+    extensions.insert("address".to_string(), Value::String(address));
 
     Some(
         HttpResponse::BadRequest()

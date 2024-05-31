@@ -406,6 +406,9 @@ pub enum ValidateAllocationResult {
     },
     MalformedDepositContract,
     MalformedDepositId,
+    NoDeposit {
+        deposit_id: String,
+    },
     DepositReused {
         allocation_id: String,
     },
