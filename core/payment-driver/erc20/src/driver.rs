@@ -467,7 +467,7 @@ impl Erc20Driver {
             .deposit_details(
                 network.to_string(),
                 DepositId {
-                    deposit_id,
+                    deposit_id: deposit_id.clone(),
                     lock_address: deposit_contract,
                 },
             )
@@ -497,6 +497,14 @@ impl Erc20Driver {
             allocation_address,
             deposit_spender,
         );
+
+        if deposit_spender == H160::zero() {
+            log::debug!("Deposit validation failed, deposit [{deposit_id}] doesn't exist");
+
+            return Ok(ValidateAllocationResult::NoDeposit {
+                deposit_id: deposit_id.to_string(),
+            });
+        }
 
         if allocation_address != deposit_spender {
             log::debug!(
