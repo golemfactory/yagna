@@ -295,7 +295,7 @@ impl ProviderAgent {
             subnet: globals.subnet,
             geo_country_code: None,
             is_public: status.public_ip.is_some(),
-            protocol_version: 2,
+            protocol_version: 3,
         })
     }
 
@@ -643,7 +643,7 @@ mod tests {
             subnet: Some("subnet".to_string()),
             geo_country_code: None,
             is_public: true,
-            protocol_version: 2,
+            protocol_version: 3,
         };
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
