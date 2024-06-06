@@ -967,6 +967,24 @@ impl PaymentProcessor {
             .driver(&msg.platform, &msg.from, AccountMode::SEND)
             .map_err(GenericError::new)?;
 
+        let platform_parts: [&str; 3] = msg
+            .platform
+            .split("-")
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        driver_endpoint(&driver)
+            .send(dbg!(driver::Init::new(
+                msg.from.clone(),
+                Some(platform_parts[1].to_string()),
+                Some(platform_parts[2].to_string()),
+                AccountMode::SEND,
+            )))
+            .await
+            .map_err(GenericError::new)?
+            .map_err(GenericError::new)?;
+
         driver_endpoint(&driver)
             .send(DriverReleaseDeposit {
                 platform: msg.platform,
