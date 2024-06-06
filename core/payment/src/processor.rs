@@ -16,6 +16,7 @@ use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -617,6 +618,22 @@ impl PaymentProcessor {
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
+
+        let platform_parts: [&str; 3] = msg
+            .payment_platform
+            .split("-")
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        driver_endpoint(&driver)
+            .send(driver::Init::new(
+                msg.payer_addr.clone(),
+                Some(platform_parts[1].to_string()),
+                Some(platform_parts[2].to_string()),
+                AccountMode::SEND,
+            ))
+            .await??;
 
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
