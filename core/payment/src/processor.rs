@@ -627,12 +627,12 @@ impl PaymentProcessor {
             .unwrap();
 
         driver_endpoint(&driver)
-            .send(driver::Init::new(
+            .send(dbg!(driver::Init::new(
                 msg.payer_addr.clone(),
                 Some(platform_parts[1].to_string()),
                 Some(platform_parts[2].to_string()),
                 AccountMode::SEND,
-            ))
+            )))
             .await??;
 
         let order_id = driver_endpoint(&driver)
