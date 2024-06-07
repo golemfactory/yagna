@@ -87,6 +87,7 @@ where
         // TODO: remove this hack; possibly by enabling creation of arbitrary appkey from CLI
         if req.uri().to_string().starts_with("/metrics-api")
             || req.uri().to_string().starts_with("/version")
+            || req.uri().to_string().starts_with("/default-identity")
         {
             log::debug!("skipping authorization for uri={}", req.uri());
             return Box::pin(service.borrow_mut().call(req));
