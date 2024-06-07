@@ -570,6 +570,12 @@ pub mod local {
         Mumbai,
     }
 
+    impl NetworkName {
+        pub fn get_token(&self) -> &'static str {
+            get_token_from_network_name(self)
+        }
+    }
+
     pub fn get_token_from_network_name(network_name: &NetworkName) -> &'static str {
         network_name
             .get_str("token")
