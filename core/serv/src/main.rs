@@ -4,7 +4,6 @@ use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use metrics::{counter, gauge};
-use ya_core_model::identity;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -569,7 +568,6 @@ impl ServiceCommand {
                         .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
                         .route("/me", web::get().to(me))
-                        .route("/default-identity", web::get().to(default_identity))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
                     if count_started.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -682,17 +680,6 @@ https://docs.golem.network/docs/golem/terms
 
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
-}
-
-async fn default_identity() -> impl Responder {
-    let id = ya_service_bus::typed::service(identity::BUS_ID)
-        .call(identity::Get::ByDefault)
-        .await
-        .map_err(actix_web::error::ErrorInternalServerError)?
-        .map_err(actix_web::error::ErrorInternalServerError)?
-        .unwrap();
-
-    Ok::<_, actix_web::Error>(web::Json(id.node_id))
 }
 
 #[actix_web::post("/_gsb/{service:.*}")]
