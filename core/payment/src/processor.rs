@@ -630,7 +630,7 @@ impl PaymentProcessor {
             .send(dbg!(driver::Init::new(
                 msg.payer_addr.clone(),
                 Some(platform_parts[1].to_string()),
-                Some(platform_parts[2].to_string()),
+                None,
                 AccountMode::SEND,
             )))
             .await??;
@@ -978,7 +978,7 @@ impl PaymentProcessor {
             .send(dbg!(driver::Init::new(
                 msg.from.clone(),
                 Some(platform_parts[1].to_string()),
-                Some(platform_parts[2].to_string()),
+                None,
                 AccountMode::SEND,
             )))
             .await
