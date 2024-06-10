@@ -139,7 +139,7 @@ mod local {
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        let res = processor.schedule_payment(msg).await.map_err(|e| dbg!(e))?;
+        let res = processor.schedule_payment(msg).await?;
         log::debug!("Schedule payment processor finished");
         Ok(res)
     }
@@ -717,7 +717,7 @@ mod local {
         msg: ReleaseDeposit,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        processor.release_deposit(msg).await.map_err(|e| dbg!(e))?;
+        processor.release_deposit(msg).await?;
         log::debug!("Schedule payment processor finished");
 
         Ok(())

@@ -621,12 +621,12 @@ impl PaymentProcessor {
             .unwrap();
 
         driver_endpoint(&platform_parts[0])
-            .send(dbg!(driver::Init::new(
+            .send(driver::Init::new(
                 msg.payer_addr.clone(),
                 Some(platform_parts[1].to_string()),
                 None,
                 AccountMode::SEND,
-            )))
+            ))
             .await??;
 
         let driver = self
@@ -967,12 +967,12 @@ impl PaymentProcessor {
             .unwrap();
 
         driver_endpoint(&platform_parts[0])
-            .send(dbg!(driver::Init::new(
+            .send(driver::Init::new(
                 msg.from.clone(),
                 Some(platform_parts[1].to_string()),
                 None,
                 AccountMode::SEND,
-            )))
+            ))
             .await
             .map_err(GenericError::new)?
             .map_err(GenericError::new)?;
