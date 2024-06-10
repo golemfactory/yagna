@@ -613,12 +613,6 @@ impl PaymentProcessor {
             None
         };
 
-        let driver = self
-            .registry
-            .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await?
-            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
-
         let platform_parts: [&str; 3] = msg
             .payment_platform
             .split("-")
@@ -626,7 +620,7 @@ impl PaymentProcessor {
             .try_into()
             .unwrap();
 
-        driver_endpoint(&driver)
+        driver_endpoint(&platform_parts[0])
             .send(dbg!(driver::Init::new(
                 msg.payer_addr.clone(),
                 Some(platform_parts[1].to_string()),
@@ -634,6 +628,12 @@ impl PaymentProcessor {
                 AccountMode::SEND,
             )))
             .await??;
+
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await?
+            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
 
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
@@ -959,14 +959,6 @@ impl PaymentProcessor {
     }
 
     pub async fn release_deposit(&self, msg: ReleaseDeposit) -> Result<(), GenericError> {
-        let driver = self
-            .registry
-            .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .map_err(GenericError::new)?
-            .driver(&msg.platform, &msg.from, AccountMode::SEND)
-            .map_err(GenericError::new)?;
-
         let platform_parts: [&str; 3] = msg
             .platform
             .split("-")
@@ -974,7 +966,7 @@ impl PaymentProcessor {
             .try_into()
             .unwrap();
 
-        driver_endpoint(&driver)
+        driver_endpoint(&platform_parts[0])
             .send(dbg!(driver::Init::new(
                 msg.from.clone(),
                 Some(platform_parts[1].to_string()),
@@ -983,6 +975,14 @@ impl PaymentProcessor {
             )))
             .await
             .map_err(GenericError::new)?
+            .map_err(GenericError::new)?;
+
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(GenericError::new)?
+            .driver(&msg.platform, &msg.from, AccountMode::SEND)
             .map_err(GenericError::new)?;
 
         driver_endpoint(&driver)
