@@ -139,9 +139,9 @@ mod local {
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        let res = processor.schedule_payment(msg).await;
+        let res = processor.schedule_payment(msg).await.map_err(|e| dbg!(e))?;
         log::debug!("Schedule payment processor finished");
-        Ok(res?)
+        Ok(res)
     }
 
     async fn register_driver(
@@ -717,9 +717,10 @@ mod local {
         msg: ReleaseDeposit,
     ) -> Result<(), GenericError> {
         log::debug!("Schedule payment processor started");
-        let res = processor.release_deposit(msg).await;
+        processor.release_deposit(msg).await.map_err(|e| dbg!(e))?;
         log::debug!("Schedule payment processor finished");
-        res
+
+        Ok(())
     }
 
     async fn shut_down(
