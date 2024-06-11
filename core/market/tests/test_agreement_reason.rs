@@ -103,8 +103,33 @@ async fn test_get_agreement_termination_reason() {
         .await
         .ok();
 
+    // Check Requestor side
     let termination = req_market
         .get_terminate_reason(req_id.clone(), agreement_id.into_client())
+        .await
+        .unwrap();
+
+    assert_eq!(termination.agreement_id, agreement_id.into_client());
+    matches!(
+        termination.event_type,
+        AgreementEventType::AgreementTerminatedEvent { .. }
+    );
+
+    if let AgreementEventType::AgreementTerminatedEvent {
+        reason, terminator, ..
+    } = termination.event_type
+    {
+        assert_eq!(reason, Some(reference_reason.clone()));
+        assert_eq!(terminator, AgreementTerminator::Requestor);
+    }
+
+    // Check Provider side
+    let termination = network
+        .get_market(PROV_NAME)
+        .get_terminate_reason(
+            network.get_default_id(PROV_NAME),
+            agreement_id.into_client(),
+        )
         .await
         .unwrap();
 
