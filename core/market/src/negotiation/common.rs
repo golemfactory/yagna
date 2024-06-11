@@ -440,7 +440,7 @@ impl CommonBroker {
             .into_iter()
             .find(|event| event.event_type == AgreementEventType::Terminated)
         {
-            None => return Err(AgreementError::NotTerminated(agreement_id)),
+            None => Err(AgreementError::NotTerminated(agreement_id)),
             Some(event) => Ok(event),
         }
     }
