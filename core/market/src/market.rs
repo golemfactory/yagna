@@ -318,6 +318,18 @@ impl MarketService {
             .terminate_agreement(id, client_agreement_id, reason)
             .await
     }
+
+    pub async fn get_terminate_reason(
+        &self,
+        id: Identity,
+        client_agreement_id: String,
+    ) -> Result<ClientAgreementEvent, AgreementError> {
+        self.requestor_engine
+            .common
+            .get_terminate_reason(id, client_agreement_id)
+            .await
+            .map(|event| event.into_client())
+    }
 }
 
 impl Service for MarketService {

@@ -86,6 +86,8 @@ pub enum AgreementError {
     ProtocolCommit(#[from] CommitAgreementError),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error("Agreement [{0}] not terminated yet.")]
+    NotTerminated(AgreementId),
 }
 
 #[derive(Error, Debug)]
