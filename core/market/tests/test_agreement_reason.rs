@@ -1,21 +1,11 @@
-use actix_web::{http::StatusCode, web::Bytes};
 use chrono::{Duration, Utc};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
-use ya_client::model::market::{AgreementEventType, Role};
-use ya_core_model::market;
+use ya_client::model::market::{AgreementEventType, Reason};
 use ya_market::assert_err_eq;
 use ya_market::testing::{
-    agreement_utils::{gen_reason, negotiate_agreement},
-    client::{sample_demand, sample_offer},
-    events_helper::*,
-    mock_agreement::generate_agreement,
-    mock_node::MarketServiceExt,
-    proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
-    MarketsNetwork, Owner, ProposalState, WaitForApprovalError,
+    proposal_util::exchange_draft_proposals, AgreementError, ApprovalStatus, MarketsNetwork, Owner,
 };
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -49,12 +39,11 @@ async fn test_get_agreement_termination_reason() {
         .unwrap();
 
     // There should be no termination reason yet.
-    assert_eq!(
+    assert_err_eq!(
+        AgreementError::NotTerminated(agreement_id.clone()),
         req_market
             .get_terminate_reason(req_id.clone(), agreement_id.into_client())
             .await
-            .err(),
-        Some(AgreementError::NotTerminated(agreement_id.clone()))
     );
 
     // Confirms it immediately
@@ -65,8 +54,9 @@ async fn test_get_agreement_termination_reason() {
 
     // And starts waiting for Agreement approval by Provider
     let agr_id = agreement_id.clone();
+    let req_market_ = req_market.clone();
     let query_handle = tokio::spawn(async move {
-        let approval_status = req_market
+        let approval_status = req_market_
             .requestor_engine
             .wait_for_approval(&agr_id, 0.1)
             .await
@@ -95,15 +85,14 @@ async fn test_get_agreement_termination_reason() {
         .unwrap();
 
     // There should be no termination reason yet.
-    assert_eq!(
+    assert_err_eq!(
+        AgreementError::NotTerminated(agreement_id.clone()),
         req_market
             .get_terminate_reason(req_id.clone(), agreement_id.into_client())
-            .await
-            .err(),
-        Some(AgreementError::NotTerminated(agreement_id.clone()))
+            .await,
     );
 
-    let reference_reason =
+    let reference_reason: Reason =
         serde_json::from_value(serde_json::json!({"ala":"ma kota","message": "coś"})).unwrap();
     req_market
         .terminate_agreement(
@@ -119,7 +108,7 @@ async fn test_get_agreement_termination_reason() {
         .await
         .unwrap();
 
-    assert_eq!(termination.agreement_id, agreement_id);
+    assert_eq!(termination.agreement_id, agreement_id.into_client());
     matches!(
         termination.event_type,
         AgreementEventType::AgreementTerminatedEvent { .. }

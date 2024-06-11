@@ -433,7 +433,8 @@ impl CommonBroker {
             .db
             .as_dao::<AgreementEventsDao>()
             .select_for_agreement(&agreement_id)
-            .await?;
+            .await
+            .map_err(|e| AgreementError::Internal(e.to_string()))?;
 
         match events
             .into_iter()
