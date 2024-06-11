@@ -19,6 +19,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(collect_agreement_events)
         .service(get_agreement)
         .service(terminate_agreement)
+        .service(get_agreement_terminate_reason)
 }
 
 #[actix_web::get("/agreements")]
@@ -119,5 +120,5 @@ async fn get_agreement_terminate_reason(
         .get_terminate_reason(id, client_agreement_id)
         .await
         .log_err()
-        .map(|_| HttpResponse::Ok().finish())
+        .map(|reason| HttpResponse::Ok().json(reason))
 }
