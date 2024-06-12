@@ -244,10 +244,23 @@ fn amend_allocation_fields(
         }
     }
 
+    let deposit = match (old_allocation.deposit.clone(), update.deposit) {
+        (Some(deposit), None) => Some(deposit),
+        (Some(mut deposit), Some(deposit_update)) => {
+            deposit.validate = deposit_update.validate;
+            Some(deposit)
+        }
+        (None, None) => None,
+        (None, Some(_deposit_update)) => {
+            return Err("Cannot update deposit of an allocation created without one");
+        }
+    };
+
     Ok(Allocation {
         total_amount,
         remaining_amount,
         timeout: update.timeout.or(old_allocation.timeout),
+        deposit,
         ..old_allocation
     })
 }
