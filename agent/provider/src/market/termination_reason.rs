@@ -46,6 +46,9 @@ pub enum BreakReason {
     #[display(fmt = "Requestor is unreachable more than {}", "_0.display()")]
     #[strum(message = "RequestorUnreachable")]
     RequestorUnreachable(chrono::Duration),
+    #[display(fmt = "Shutting down Provider")]
+    #[strum(message = "Shutdown")]
+    Shutdown,
 }
 
 impl TryFrom<DebitNoteEventType> for BreakReason {
