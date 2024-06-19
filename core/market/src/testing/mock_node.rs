@@ -235,6 +235,7 @@ impl MarketsNetwork {
             .add_handler(empty_on_offers_bcast)
             .add_handler(empty_on_offer_unsubscribed_bcast)
             .add_handler(empty_on_retrieve_offers)
+            .add_handler(empty_query_offers_handler)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -613,6 +614,13 @@ pub mod default {
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
+    }
+
+    pub async fn empty_query_offers_handler(
+        _caller: String,
+        _msg: QueryOffers,
+    ) -> Result<QueryOffersResult, DiscoveryRemoteError> {
+        Ok(QueryOffersResult::default())
     }
 
     pub async fn empty_on_offer_unsubscribed_bcast(
