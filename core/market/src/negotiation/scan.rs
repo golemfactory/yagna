@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -11,20 +11,31 @@ use actix_web::web::Data;
 use chrono::{NaiveDateTime, Utc};
 use parking_lot::Mutex;
 use serde::Serialize;
+use serde_bytes::ByteBuf;
 use tokio::sync::{watch, Mutex as AsyncMutex};
 use ya_client::model::market::scan::{NewScan, ScanType};
 use ya_client::model::market::Offer;
 use ya_client::model::NodeId;
 
 use tracing::{event, Level};
+use ya_core_model::net;
+use ya_core_model::net::RemoteEndpoint;
 use ya_market_resolver::flatten::flatten_properties;
 use ya_market_resolver::resolver::expression::{build_expression, ResolveResult};
 use ya_market_resolver::resolver::{ldap_parser, Expression, PropertySet};
 use ya_persistence::executor::DbMixedExecutor;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::db::dao::OfferDao;
+use crate::protocol::discovery::message::{get_offers_addr, QueryOffers, RetrieveOffers};
+use crate::testing::SubscriptionId;
+use ya_core_model::market as market_model;
 
 use super::error::ScanError;
+
+// Default timeout
+const REMOTE_CALL_TIMEOUT: Option<Duration> = Some(Duration::from_secs(30));
+const MAX_OFFERS_PER_QUERY: usize = 10;
 
 #[derive(Hash, Eq, PartialEq, Serialize, Clone)]
 #[serde(transparent)]
@@ -65,7 +76,16 @@ struct Scanner {
     timeout_extend: Duration,
     scan_type: ScanType,
     constraints: Option<Expression>,
+    constraints_raw: Option<String>,
     last_ts: Option<NaiveDateTime>,
+    direct: HashMap<NodeId, Arc<Mutex<DirectState>>>,
+}
+
+//
+#[derive(Default)]
+struct DirectState {
+    iterator: Option<ByteBuf>,
+    offers: Vec<SubscriptionId>,
 }
 
 impl Scanner {
@@ -86,6 +106,8 @@ impl Scanner {
         } else {
             None
         };
+        let constraints_raw = new_scan.constraints;
+        let direct = Default::default();
 
         Ok(Scanner {
             id,
@@ -94,7 +116,9 @@ impl Scanner {
             timeout_extend,
             scan_type,
             constraints,
+            constraints_raw,
             last_ts,
+            direct,
         })
     }
 
@@ -180,7 +204,7 @@ impl LastChange {
 
     fn subscribe(&self) -> watch::Receiver<Instant> {
         let rx = self.watch.subscribe();
-        log::info!("active scanners: {}", self.watch.receiver_count());
+        log::debug!("active scanners: {}", self.watch.receiver_count());
         rx
     }
 
@@ -259,8 +283,91 @@ impl ScannerSet {
         g.retain(|_, slot| Scanner::is_alive(slot));
         let n = prev_len - g.len();
         if n > 0 {
-            log::info!("clean out {n} scanners");
+            log::debug!("clean out {n} scanners");
         }
+    }
+
+    pub async fn direct_offers(
+        &self,
+        owner_id: NodeId,
+        scan_id: ScanId,
+        peer_id: NodeId,
+        max_items: u64,
+    ) -> Result<Vec<Offer>, ScanError> {
+        let scan = self.get_scan(&scan_id)?;
+        let mut g = scan.lock().await;
+        if owner_id != g.owner {
+            return Err(ScanError::Forbidden);
+        }
+        let constraint_expr = g.constraints_raw.clone();
+        g.touch();
+        let ctx = {
+            let ctx = g.direct.entry(peer_id).or_insert_with(|| {
+                Arc::new(Mutex::new(DirectState {
+                    iterator: None,
+                    offers: Default::default(),
+                }))
+            });
+            Arc::clone(ctx)
+        };
+        drop(g);
+        let offers_addr = get_offers_addr(market_model::BUS_ID);
+
+        let mut g_ctx = ctx.lock();
+        if g_ctx.offers.is_empty() {
+            let iterator = g_ctx.iterator.take();
+
+            let query = QueryOffers {
+                node_id: Some(peer_id),
+                constraint_expr,
+                iterator,
+            };
+            let result = net::from(owner_id)
+                .to(peer_id)
+                .service(&offers_addr)
+                .call(query)
+                .timeout(REMOTE_CALL_TIMEOUT)
+                .await
+                .map_err(|_| ScanError::FetchTimeout)?
+                .map_err(|e| match e {
+                    ya_service_bus::Error::GsbBadRequest(msg)
+                        if msg.ends_with("endpoint address not found") =>
+                    {
+                        ScanError::OldPeer
+                    }
+                    e => e.into(),
+                })?
+                .map_err(|cause| ScanError::DiscoveryRemoteError {
+                    operation: Cow::Borrowed("query peer offers ids"),
+                    cause,
+                })?;
+
+            g_ctx.iterator = result.iterator;
+            g_ctx.offers.extend(result.offers.into_iter())
+        }
+
+        let query_size = min(
+            max(max_items as usize, MAX_OFFERS_PER_QUERY),
+            g_ctx.offers.len(),
+        );
+        let offer_ids = g_ctx.offers.drain(..query_size).collect();
+
+        let result = net::from(owner_id)
+            .to(peer_id)
+            .service(&offers_addr)
+            .call(RetrieveOffers { offer_ids })
+            .timeout(REMOTE_CALL_TIMEOUT)
+            .await
+            .map_err(|_| ScanError::FetchTimeout)??
+            .map_err(|cause| ScanError::DiscoveryRemoteError {
+                operation: Cow::Borrowed("retrieving offer details"),
+                cause,
+            })?;
+
+        Ok(result
+            .into_iter()
+            .filter_map(|o| o.into_client_offer().ok())
+            .collect::<Vec<_>>())
     }
 
     pub async fn collect(

@@ -28,7 +28,7 @@ impl BroadcastMessage for OffersBcast {
         concat!("market-protocol-discovery-", PROTOCOL_VERSION!(), "-offers");
 }
 
-pub(super) fn get_offers_addr(prefix: &str) -> String {
+pub fn get_offers_addr(prefix: &str) -> String {
     format!(
         "{}/protocol/{}/discovery/offers",
         prefix,

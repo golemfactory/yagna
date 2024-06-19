@@ -17,6 +17,7 @@ use crate::db::{
     DbError,
 };
 use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::protocol::discovery::error::DiscoveryRemoteError;
 use crate::protocol::negotiation::error::{
     AgreementProtocolError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
     GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
@@ -194,22 +195,44 @@ pub enum ScanError {
         #[source]
         cause: DbError,
     },
-    #[error("iterator with id \"{scan_id}\" not found")]
+    #[error("Iterator with id \"{scan_id}\" not found")]
     NotFound { scan_id: String },
-    #[error("access denied")]
+    #[error("Access denied")]
     Forbidden,
-    #[error("iterator is removed")]
+    #[error("Iterator is removed")]
     Gone { scan_id: u64 },
+    #[error("Timeout while attempting to fetch data from a peer")]
+    FetchTimeout,
+    #[error("bad value on {field}: {cause}")]
+    BadRequest {
+        field: Cow<'static, str>,
+        #[source]
+        cause: anyhow::Error,
+    },
+    #[error(transparent)]
+    GsbError(#[from] ya_service_bus::Error),
+    #[error("Failed to {operation}")]
+    DiscoveryRemoteError {
+        operation: Cow<'static, str>,
+        #[source]
+        cause: DiscoveryRemoteError,
+    },
+    #[error("Given peer does not support direct offers fetching")]
+    OldPeer,
 }
 
 impl ResponseError for ScanError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InternalDbError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InternalDbError { .. } | Self::GsbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound { .. } => StatusCode::NOT_FOUND,
             Self::InvalidConstraint { .. } => StatusCode::BAD_REQUEST,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::Gone { .. } => StatusCode::GONE,
+            Self::FetchTimeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            Self::DiscoveryRemoteError { .. } => StatusCode::BAD_GATEWAY,
+            Self::OldPeer => StatusCode::BAD_GATEWAY,
         }
     }
 

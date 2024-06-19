@@ -19,6 +19,7 @@ use crate::negotiation::error::{AgreementError, ScanError};
 use crate::negotiation::{ScanId, ScannerSet};
 use crate::rest_api::{QueryAgreementEvents, QueryAgreementList};
 use futures::prelude::*;
+use tracing::Level;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -139,6 +140,37 @@ async fn scan_collect(
     let scan_id: ScanId = path.0.parse()?;
     let owner_id = id.identity;
 
+    if let Some(peer_id) = query.0.peer_id {
+        let max_events =
+            query
+                .max_events
+                .unwrap_or(500)
+                .try_into()
+                .map_err(|e| ScanError::BadRequest {
+                    field: "maxEvents".into(),
+                    cause: anyhow::Error::new(e),
+                })?;
+
+        let data = scan_set
+            .direct_offers(owner_id, scan_id.clone(), peer_id, max_events)
+            .timeout(Some(query.timeout))
+            .await;
+        return match data {
+            Err(_e) => Err(ScanError::FetchTimeout),
+            Ok(Err(e)) => Err(e),
+            Ok(Ok(v)) => Ok(Either::Right(Json(v))),
+        }
+        .inspect_err(|e| {
+            tracing::event!(
+                Level::ERROR,
+                entity = "scan",
+                scan_id = display(&scan_id),
+                peer_id = display(peer_id),
+                "{e}"
+            )
+        });
+    }
+
     if accept.preference() == mime::TEXT_EVENT_STREAM {
         // to check if iterator is valid.
         scan_set.collect(owner_id, scan_id.clone(), 0).await?;
@@ -150,7 +182,7 @@ async fn scan_collect(
             async move {
                 let offers = scan_set.collect(owner_id, scan_id, 100).await?;
 
-                Ok(Some((
+                Ok::<_, ScanError>(Some((
                     stream::iter(offers.into_iter().map(Ok::<_, ScanError>)),
                     v,
                 )))
