@@ -19,3 +19,6 @@ thiserror = "1.0.20"
 
 [dev-dependencies]
 env_logger = "0.7"
+
+[lints]
+workspace = true

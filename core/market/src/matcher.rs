@@ -28,6 +28,7 @@ use futures::FutureExt;
 use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
+use tracing::Level;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
 };
@@ -73,6 +74,7 @@ impl Matcher {
             .add_data_handler(handlers::receive_remote_offers)
             .add_data_handler(handlers::get_local_offers)
             .add_data_handler(handlers::receive_remote_offer_unsubscribes)
+            .add_data_handler(handlers::query_offers)
             .with_config(config.discovery.clone())
             .build();
 
@@ -269,12 +271,15 @@ impl Matcher {
         let demand = self.store.create_demand(id, demand).await?;
         self.resolver.receive(&demand);
 
-        log::info!(
-            "Subscribed new Demand: [{}] using identity: {} [{}]",
-            &demand.id,
-            id.name,
-            id.identity
+        tracing::event!(
+            Level::INFO,
+            entiry = "demand",
+            action = "created",
+            owner_id = display(id.identity),
+            demand_id = display(&demand.id),
+            "Subscribed new Demand"
         );
+
         Ok(demand)
     }
 
@@ -285,11 +290,13 @@ impl Matcher {
     ) -> Result<(), MatcherError> {
         self.store.remove_demand(demand_id, id).await?;
 
-        log::info!(
-            "Unsubscribed Demand: [{}] using identity: {} [{}]",
-            &demand_id,
-            id.name,
-            id.identity
+        tracing::event!(
+            Level::INFO,
+            entiry = "demand",
+            action = "removed",
+            owner_id = display(id.identity),
+            demand_id = display(demand_id),
+            "Unsubscribed demand"
         );
         Ok(())
     }

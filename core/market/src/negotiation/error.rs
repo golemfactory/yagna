@@ -1,7 +1,11 @@
+use actix_http::body::BoxBody;
+use actix_http::StatusCode;
+use actix_web::{HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use thiserror::Error;
 
-use ya_client::model::NodeId;
+use ya_client::model::{ErrorMessage, NodeId};
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
@@ -13,6 +17,7 @@ use crate::db::{
     DbError,
 };
 use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::protocol::discovery::error::DiscoveryRemoteError;
 use crate::protocol::negotiation::error::{
     AgreementProtocolError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
     GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
@@ -178,6 +183,62 @@ pub enum RegenerateProposalError {
     Offer(#[from] QueryOfferError),
     Demand(#[from] DemandError),
     Save(#[from] SaveProposalError),
+}
+
+#[derive(Error, Debug)]
+pub enum ScanError {
+    #[error("Invalid constraint. {reason}")]
+    InvalidConstraint { reason: String },
+    #[error("{context}. {cause}")]
+    InternalDbError {
+        context: Cow<'static, str>,
+        #[source]
+        cause: DbError,
+    },
+    #[error("Iterator with id \"{scan_id}\" not found")]
+    NotFound { scan_id: String },
+    #[error("Access denied")]
+    Forbidden,
+    #[error("Iterator is removed")]
+    Gone { scan_id: u64 },
+    #[error("Timeout while attempting to fetch data from a peer")]
+    FetchTimeout,
+    #[error("bad value on {field}: {cause}")]
+    BadRequest {
+        field: Cow<'static, str>,
+        #[source]
+        cause: anyhow::Error,
+    },
+    #[error(transparent)]
+    GsbError(#[from] ya_service_bus::Error),
+    #[error("Failed to {operation}")]
+    DiscoveryRemoteError {
+        operation: Cow<'static, str>,
+        #[source]
+        cause: DiscoveryRemoteError,
+    },
+    #[error("Given peer does not support direct offers fetching")]
+    OldPeer,
+}
+
+impl ResponseError for ScanError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::InternalDbError { .. } | Self::GsbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotFound { .. } => StatusCode::NOT_FOUND,
+            Self::InvalidConstraint { .. } => StatusCode::BAD_REQUEST,
+            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Gone { .. } => StatusCode::GONE,
+            Self::FetchTimeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            Self::DiscoveryRemoteError { .. } => StatusCode::BAD_GATEWAY,
+            Self::OldPeer => StatusCode::BAD_GATEWAY,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        HttpResponse::build(self.status_code()).json(ErrorMessage::new(self))
+    }
 }
 
 impl AgreementError {

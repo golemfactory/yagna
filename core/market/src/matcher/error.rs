@@ -25,6 +25,8 @@ pub enum QueryOffersError {
     DbError(#[from] DbError),
     #[error("Failed to list Offers based on identity. Error: {0}.")]
     IdentityError(#[from] IdentityError),
+    #[error("Invalid iterator")]
+    InvalidIterator,
 }
 
 #[derive(thiserror::Error, Debug)]
