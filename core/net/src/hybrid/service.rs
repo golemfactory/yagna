@@ -320,7 +320,7 @@ fn bind_local_bus<F>(
         } else {
             let rx = if is_local_dest {
                 let (tx, rx) = mpsc::channel(1);
-                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
+                forward_bus_to_local(caller_id, address.as_str(), msg, &state_, tx);
                 rx
             } else {
                 forward_bus_to_net(

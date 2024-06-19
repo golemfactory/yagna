@@ -15,7 +15,7 @@ on:
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 env:
@@ -31,7 +31,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -44,7 +44,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"

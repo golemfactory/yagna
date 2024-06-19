@@ -137,8 +137,7 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
-                allocation_id: None,
-                use_internal: false,
+                deposit_id: None,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -426,7 +425,10 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        Ok(GetRpcEndpointsResult { endpoints, sources })
+        Ok(GetRpcEndpointsResult {
+            endpoints: serde_json::to_value(endpoints).unwrap(),
+            sources: serde_json::to_value(sources).unwrap(),
+        })
     }
 
     async fn get_account_balance(

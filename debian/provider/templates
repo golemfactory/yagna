@@ -6,8 +6,6 @@ Description: Do you accept ?
   understood and hereby accept the disclaimers and privacy warnings
   found at
     https://docs.golem.network/docs/golem/terms
-  and
-    https://handbook.golem.network/see-also/provider-subsidy-terms
 
 Template: golem/gsb-port
 Type: string

@@ -62,11 +62,11 @@ impl std::fmt::Display for Driver {
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(long, default_value = "dummy")]
+    #[structopt(long, default_value = "erc20")]
     driver: Driver,
     #[structopt(long)]
     network: Option<String>,
-    #[structopt(long, default_value = "dummy-glm")]
+    #[structopt(long, default_value = "erc20-holesky-tglm")]
     platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
@@ -233,6 +233,24 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
     log::debug!("bind_service()");
 
+    bus::bind(identity::BUS_ID, {
+        let provider_key = provider_pub_key.clone();
+        let requestor_key = requestor_pub_key.clone();
+        move |msg: identity::GetPubKey| {
+            let node_id: &[u8; 20] = msg.0.as_ref();
+            let pub_key = if node_id == provider_key.address() {
+                Some(provider_key.bytes())
+            } else if node_id == requestor_key.address() {
+                Some(requestor_key.bytes())
+            } else {
+                None
+            }
+            .map(|bytes| bytes.to_vec())
+            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
+            std::future::ready(pub_key)
+        }
+    });
+
     let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
@@ -319,24 +337,6 @@ async fn main() -> anyhow::Result<()> {
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
     utils::provider::fake_get_agreement_id(args.agreement_id.clone());
 
-    bus::bind(identity::BUS_ID, {
-        let provider_key = provider_pub_key.clone();
-        let requestor_key = requestor_pub_key.clone();
-        move |msg: identity::GetPubKey| {
-            let node_id: &[u8; 20] = msg.0.as_ref();
-            let pub_key = if node_id == provider_key.address() {
-                Some(provider_key.bytes())
-            } else if node_id == requestor_key.address() {
-                Some(requestor_key.bytes())
-            } else {
-                None
-            }
-            .map(|bytes| bytes.to_vec())
-            .ok_or(identity::Error::NodeNotFound(Box::new(msg.0)));
-            std::future::ready(pub_key)
-        }
-    });
-
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
     log::info!("bind remote...");
@@ -364,11 +364,11 @@ async fn main() -> anyhow::Result<()> {
             role: "".to_string(),
         };
 
-        let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
+        let provider_api_scope = Scope::new(&format!("provider{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(provider_identity));
-        let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
+        let requestor_api_scope = Scope::new(&format!("requestor{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(requestor_identity));

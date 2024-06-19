@@ -82,8 +82,52 @@ async fn get_invoice(
     }
 }
 
-async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<params::InvoiceId>) -> HttpResponse {
-    response::not_implemented() // TODO
+async fn get_invoice_payments(
+    db: Data<DbExecutor>,
+    path: Path<params::InvoiceId>,
+    id: Identity,
+) -> HttpResponse {
+    let invoice_id = path.invoice_id.clone();
+    let node_id = id.identity;
+
+    let dao: PaymentDao = db.as_dao();
+    let payments = match dao
+        .get_for_node_id(node_id, None, None, None, None, None)
+        .await
+    {
+        Ok(payments) => payments,
+        Err(e) => return response::server_error(&e),
+    };
+
+    let dao: InvoiceDao = db.as_dao();
+    let invoice = dao.get(invoice_id.clone(), node_id).await;
+
+    match invoice {
+        Ok(Some(invoice)) => match dao.get(invoice_id, node_id).await {
+            Ok(Some(invoice)) => {
+                let invoice_payments: Vec<Signed<Payment>> = payments
+                    .iter()
+                    .filter(|p| {
+                        p.payload
+                            .activity_payments
+                            .iter()
+                            .any(|p| invoice.activity_ids.contains(&p.activity_id))
+                            || p.payload
+                                .agreement_payments
+                                .iter()
+                                .any(|p| invoice.agreement_id == p.agreement_id)
+                    })
+                    .cloned()
+                    .collect();
+
+                response::ok(invoice_payments)
+            }
+            Ok(None) => response::not_found(),
+            Err(e) => response::server_error(&e),
+        },
+        Err(e) => response::server_error(&e),
+        Ok(None) => response::not_found(),
+    }
 }
 
 async fn get_invoice_events(
@@ -92,6 +136,8 @@ async fn get_invoice_events(
     req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
+    counter!("payment.invoices.events.query", 1);
+
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")

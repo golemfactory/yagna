@@ -105,6 +105,10 @@ mod local {
         counter!("payment.debit_notes.provider.sent.call", 0);
         counter!("payment.debit_notes.provider.accepted", 0);
         counter!("payment.debit_notes.provider.accepted.call", 0);
+
+        counter!("payment.debit_notes.events.query", 0);
+        counter!("payment.invoices.events.query", 0);
+
         counter!("payment.invoices.provider.issued", 0);
         counter!("payment.invoices.provider.sent", 0);
         counter!("payment.invoices.provider.sent.call", 0);
@@ -115,11 +119,13 @@ mod local {
         counter!("payment.invoices.provider.accepted.call", 0);
         counter!("payment.invoices.requestor.not-enough-funds", 0);
 
-        counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
+        counter!("payment.amount.received", 0, "platform" => "erc20-holesky-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
+        counter!("payment.amount.received", 0, "platform" => "erc20-polygon-glm");
 
-        counter!("payment.amount.sent", 0, "platform" => "erc20-rinkeby-tglm");
+        counter!("payment.amount.sent", 0, "platform" => "erc20-holesky-tglm");
         counter!("payment.amount.sent", 0, "platform" => "erc20-mainnet-glm");
+        counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
     }
@@ -750,6 +756,7 @@ mod public {
             .bind(cancel_invoice)
             .bind(sync_request)
             .bind_with_processor(send_payment)
+            .bind_with_processor(send_payment_with_bytes)
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
@@ -1176,8 +1183,45 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        let payment = msg.payment;
-        let signature = msg.signature;
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            false,
+            msg.signature,
+            None,
+        )
+        .await
+    }
+
+    async fn send_payment_with_bytes(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender_id: String,
+        msg: SendSignedPayment,
+    ) -> Result<Ack, SendError> {
+        send_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payment,
+            true,
+            msg.signature,
+            Some(msg.signed_bytes),
+        )
+        .await
+    }
+
+    async fn send_payment_impl(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender_id: String,
+        payment: Payment,
+        canonicalized: bool,
+        signature: Vec<u8>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> Result<Ack, SendError> {
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -1185,8 +1229,12 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+
         log::debug!("Verify payment processor started");
-        let res = match processor.verify_payment(payment, signature).await {
+        let res = match processor
+            .verify_payment(payment, signature, canonicalized, signed_bytes)
+            .await
+        {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
