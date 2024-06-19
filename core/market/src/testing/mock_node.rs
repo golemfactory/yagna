@@ -31,6 +31,7 @@ use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::*;
+use crate::negotiation::ScannerSet;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
@@ -202,8 +203,9 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Self {
         let db = self.init_database(name);
+        let scan_set = ScannerSet::new(db.clone());
 
-        let store = SubscriptionStore::new(db.clone(), self.config.clone());
+        let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
         let identity_api = MockIdentity::new(name);
 
         let (matcher, listeners) =
@@ -233,6 +235,7 @@ impl MarketsNetwork {
             .add_handler(empty_on_offers_bcast)
             .add_handler(empty_on_offer_unsubscribed_bcast)
             .add_handler(empty_on_retrieve_offers)
+            .add_handler(empty_query_offers_handler)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -611,6 +614,13 @@ pub mod default {
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
+    }
+
+    pub async fn empty_query_offers_handler(
+        _caller: String,
+        _msg: QueryOffers,
+    ) -> Result<QueryOffersResult, DiscoveryRemoteError> {
+        Ok(QueryOffersResult::default())
     }
 
     pub async fn empty_on_offer_unsubscribed_bcast(

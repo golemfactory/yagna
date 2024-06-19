@@ -1,8 +1,9 @@
 use chrono::NaiveDateTime;
 use diesel::expression::dsl::now as sql_now;
+use diesel::sqlite::Sqlite;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-
 use ya_client::model::NodeId;
+
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::db::model::SubscriptionId;
@@ -12,6 +13,8 @@ use crate::db::schema::market_offer::dsl::market_offer;
 use crate::db::schema::market_offer_unsubscribed::dsl as unsubscribed;
 use crate::db::schema::market_offer_unsubscribed::dsl::market_offer_unsubscribed;
 use crate::db::{AsMixedDao, DbError, DbResult};
+
+const QUERY_OFFERS_PAGE: usize = 150;
 
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
@@ -40,6 +43,22 @@ pub enum OfferState {
     NotFound,
 }
 
+type OfferSelect<'a, DB> =
+    crate::db::schema::market_offer::BoxedQuery<'a, DB, crate::db::schema::market_offer::SqlType>;
+
+fn active_market_offers<'a>(expiry_validation_ts: NaiveDateTime) -> OfferSelect<'a, Sqlite> {
+    market_offer
+        .filter(offer::expiration_ts.ge(expiry_validation_ts))
+        .filter(
+            offer::id.ne_all(
+                market_offer_unsubscribed
+                    .select(unsubscribed::id)
+                    .filter(unsubscribed::expiration_ts.ge(expiry_validation_ts)),
+            ),
+        )
+        .into_boxed()
+}
+
 impl<'c> OfferDao<'c> {
     /// Returns Offer state.
     pub async fn get_state(
@@ -55,6 +74,29 @@ impl<'c> OfferDao<'c> {
     }
 
     /// Returns Offers for given criteria.
+    pub async fn get_scan_offers(
+        &self,
+        inserted_after_ts: Option<NaiveDateTime>,
+        expiry_validation_ts: NaiveDateTime,
+        limit: Option<i64>,
+    ) -> DbResult<Vec<Offer>> {
+        readonly_transaction(self.pool, "get_scan_offers", move |conn| {
+            let mut query =
+                active_market_offers(expiry_validation_ts).order_by(offer::insertion_ts.asc());
+
+            if let Some(limit) = limit {
+                query = query.limit(limit);
+            }
+            if let Some(ts) = inserted_after_ts {
+                query = query.filter(offer::insertion_ts.gt(ts))
+            };
+
+            Ok(query.load(conn)?)
+        })
+        .await
+    }
+
+    /// Returns Offers for given criteria.
     pub async fn get_offers(
         &self,
         ids: Option<Vec<SubscriptionId>>,
@@ -63,17 +105,8 @@ impl<'c> OfferDao<'c> {
         expiry_validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, "offer_dao_get_offers", move |conn| {
-            let mut query = market_offer
-                .filter(offer::expiration_ts.ge(expiry_validation_ts))
-                .filter(
-                    offer::id.ne_all(
-                        market_offer_unsubscribed
-                            .select(unsubscribed::id)
-                            .filter(unsubscribed::expiration_ts.ge(expiry_validation_ts)),
-                    ),
-                )
-                .order_by(offer::creation_ts.asc())
-                .into_boxed();
+            let mut query =
+                active_market_offers(expiry_validation_ts).order_by(offer::creation_ts.asc());
 
             if let Some(ids) = ids {
                 query = query.filter(offer::id.eq_any(ids));
@@ -88,6 +121,40 @@ impl<'c> OfferDao<'c> {
             };
 
             Ok(query.load(conn)?)
+        })
+        .await
+    }
+
+    pub async fn query_offers(
+        &self,
+        node_id: Option<NodeId>,
+        after_insert_ts: Option<NaiveDateTime>,
+        expiry_validation_ts: NaiveDateTime,
+    ) -> DbResult<(Vec<SubscriptionId>, Option<NaiveDateTime>)> {
+        readonly_transaction(self.pool, "offer_dao_query_offers", move |conn| {
+            //let max_ts : Option<NaiveDateTime> = active_market_offers(expiry_validation_ts).select(offer::insertion_ts.max()).get_result(conn).optional()?;
+
+            let mut query = active_market_offers(expiry_validation_ts);
+            if let Some(after_insert_ts) = after_insert_ts {
+                query = query.filter(offer::insertion_ts.gt(after_insert_ts));
+            }
+            if let Some(node_id) = node_id {
+                query = query.filter(offer::node_id.eq(node_id));
+            }
+
+            let ids_and_ts: Vec<(SubscriptionId, Option<NaiveDateTime>)> = query
+                .order_by(offer::insertion_ts)
+                .limit(QUERY_OFFERS_PAGE as i64)
+                .select((offer::id, offer::insertion_ts))
+                .load(conn)?;
+            let max_ts = if ids_and_ts.len() < QUERY_OFFERS_PAGE {
+                None
+            } else {
+                ids_and_ts.iter().filter_map(|(_, ts)| *ts).max()
+            };
+            let ids = ids_and_ts.into_iter().map(|(id, _)| id).collect();
+
+            Ok((ids, max_ts))
         })
         .await
     }

@@ -5,11 +5,12 @@
 //! No market logic is allowed here.
 
 use actix_web::web::JsonConfig;
-use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
+use actix_web::{error::InternalError, http::StatusCode, web::PathConfig, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use ya_client::model::{market::agreement::State, ErrorMessage};
+use ya_core_model::NodeId;
 
 use crate::db::model::{
     AgreementId, AppSessionId, Owner, ProposalId, ProposalIdParseError, SubscriptionId,
@@ -35,11 +36,8 @@ pub fn path_config() -> PathConfig {
 
 pub fn json_config() -> JsonConfig {
     JsonConfig::default().error_handler(|err, _req| {
-        InternalError::new(
-            serde_json::to_string(&ErrorMessage::new(err.to_string())).unwrap(),
-            StatusCode::BAD_REQUEST,
-        )
-        .into()
+        let resp = HttpResponse::BadRequest().json(ErrorMessage::new(&err));
+        InternalError::from_response(err, resp).into()
     })
 }
 
@@ -118,6 +116,18 @@ pub struct QueryAgreementEvents {
     pub app_session_id: AppSessionId,
     #[serde(rename = "afterTimestamp")]
     pub after_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QueryScanEvents {
+    /// number of seconds to wait
+    #[serde(rename = "timeout", default = "default_event_timeout")]
+    pub timeout: f32,
+    /// maximum count of events to return
+    #[serde(rename = "maxEvents")]
+    pub max_events: Option<i32>,
+    #[serde(rename = "peerId")]
+    pub peer_id: Option<NodeId>,
 }
 
 #[derive(Deserialize, Debug)]
