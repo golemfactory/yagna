@@ -78,7 +78,7 @@ struct Scanner {
     constraints: Option<Expression>,
     constraints_raw: Option<String>,
     last_ts: Option<NaiveDateTime>,
-    direct: HashMap<NodeId, Arc<Mutex<DirectState>>>,
+    direct: HashMap<NodeId, Arc<AsyncMutex<DirectState>>>,
 }
 
 //
@@ -303,7 +303,7 @@ impl ScannerSet {
         g.touch();
         let ctx = {
             let ctx = g.direct.entry(peer_id).or_insert_with(|| {
-                Arc::new(Mutex::new(DirectState {
+                Arc::new(AsyncMutex::new(DirectState {
                     iterator: None,
                     offers: Default::default(),
                 }))
@@ -313,7 +313,7 @@ impl ScannerSet {
         drop(g);
         let offers_addr = get_offers_addr(market_model::BUS_ID);
 
-        let mut g_ctx = ctx.lock();
+        let mut g_ctx = ctx.lock().await;
         if g_ctx.offers.is_empty() {
             let iterator = g_ctx.iterator.take();
 

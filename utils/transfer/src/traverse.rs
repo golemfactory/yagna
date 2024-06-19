@@ -324,7 +324,7 @@ mod tests {
             .traverse(dir.path())?
             .map(|d| d.file_name().unwrap().to_string_lossy().to_string())
             .collect::<Vec<_>>();
-        let expected = vec!["first file.bin".to_string()];
+        let expected = ["first file.bin".to_string()];
 
         assert_eq!(names.len(), expected.len());
         assert!(expected.iter().all(|e| names.contains(e)));
