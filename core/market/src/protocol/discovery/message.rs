@@ -57,7 +57,7 @@ pub struct QueryOffers {
     pub iterator: Option<ByteBuf>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryOffersResult {
     pub offers: Vec<SubscriptionId>,

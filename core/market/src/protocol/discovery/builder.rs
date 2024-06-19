@@ -158,13 +158,14 @@ mod test {
     }
 
     #[actix::test]
-    async fn build_from_with_four_handlers_should_pass() {
+    async fn build_from_with_all_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
@@ -177,6 +178,7 @@ mod test {
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
@@ -204,6 +206,7 @@ mod test {
                 }
             })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
 
