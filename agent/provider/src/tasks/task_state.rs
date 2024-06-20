@@ -266,6 +266,14 @@ impl TasksStates {
             }),
         }
     }
+
+    pub(crate) fn list_active(&self) -> Vec<String> {
+        self.tasks
+            .keys()
+            .filter(|id| !self.is_agreement_finalized(id))
+            .cloned()
+            .collect()
+    }
 }
 
 impl StateWaiter {

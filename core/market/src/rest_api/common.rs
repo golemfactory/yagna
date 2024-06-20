@@ -27,6 +27,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(collect_agreement_events)
         .service(get_agreement)
         .service(terminate_agreement)
+        .service(get_agreement_terminate_reason)
         .service(scan_begin)
         .service(scan_collect)
         .service(scan_end)
@@ -117,6 +118,20 @@ async fn terminate_agreement(
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())
+}
+
+#[actix_web::get("/agreements/{agreement_id}/terminate/reason")]
+async fn get_agreement_terminate_reason(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+) -> impl Responder {
+    let client_agreement_id = path.into_inner().agreement_id;
+    market
+        .get_terminate_reason(id, client_agreement_id)
+        .await
+        .log_err()
+        .map(|reason| HttpResponse::Ok().json(reason))
 }
 
 #[actix_web::post("/scan")]
