@@ -296,9 +296,8 @@ impl ProviderAgent {
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
-            geo_country_code: None,
             is_public: status.public_ip.is_some(),
-            protocol_version: 2,
+            ..Default::default()
         })
     }
 
@@ -644,9 +643,8 @@ mod tests {
         let node_info = NodeInfo {
             name: Some("node_name".to_string()),
             subnet: Some("subnet".to_string()),
-            geo_country_code: None,
             is_public: true,
-            protocol_version: 2,
+            ..Default::default()
         };
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
