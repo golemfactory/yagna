@@ -247,24 +247,6 @@ fn to_ms(value: Option<f64>, is_json: bool) -> serde_json::Value {
 }
 
 #[inline]
-fn to_ms(value: Option<f64>, is_json: bool) -> serde_json::Value {
-    #[allow(clippy::collapsible_else_if)]
-    if !is_json {
-        if let Some(value) = value {
-            format!("{:.1}ms", value).into()
-        } else {
-            "N/A".into()
-        }
-    } else {
-        if let Some(value) = value {
-            format!("{:.3}", value).into()
-        } else {
-            serde_json::Value::Null
-        }
-    }
-}
-
-#[inline]
 fn to_kib(value: f32, is_json: bool) -> serde_json::Value {
     format_number(value / 1024., is_json)
 }
