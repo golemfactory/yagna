@@ -357,7 +357,8 @@ pub struct ValidateAllocation {
     pub amount: BigDecimal,
     pub timeout: Option<DateTime<Utc>>,
     pub deposit: Option<Deposit>,
-    pub existing_allocations: Vec<Allocation>,
+    pub past_allocations: Vec<Allocation>,
+    pub active_allocations: Vec<Allocation>,
     pub new_allocation: bool,
 }
 
@@ -367,7 +368,8 @@ impl ValidateAllocation {
         platform: String,
         amount: BigDecimal,
         timeout: Option<DateTime<Utc>>,
-        existing: Vec<Allocation>,
+        past_allocations: Vec<Allocation>,
+        active_allocations: Vec<Allocation>,
         new_allocation: bool,
     ) -> Self {
         ValidateAllocation {
@@ -376,7 +378,8 @@ impl ValidateAllocation {
             amount,
             timeout,
             deposit: None,
-            existing_allocations: existing,
+            past_allocations,
+            active_allocations,
             new_allocation,
         }
     }
@@ -384,13 +387,33 @@ impl ValidateAllocation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ValidateAllocationResult {
-    InsufficientAccountFunds,
-    InsufficientDepositFunds,
-    TimeoutExceedsDeposit,
+    InsufficientAccountFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+        reserved_funds: BigDecimal,
+    },
+    InsufficientDepositFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+    },
+    TimeoutExceedsDeposit {
+        requested_timeout: Option<DateTime<Utc>>,
+        deposit_timeout: DateTime<Utc>,
+    },
+    TimeoutPassed {
+        requested_timeout: DateTime<Utc>,
+    },
     MalformedDepositContract,
     MalformedDepositId,
-    DepositReused,
-    DepositSpenderMismatch,
+    NoDeposit {
+        deposit_id: String,
+    },
+    DepositReused {
+        allocation_id: String,
+    },
+    DepositSpenderMismatch {
+        deposit_spender: String,
+    },
     DepositValidationError(String),
     Valid,
 }
