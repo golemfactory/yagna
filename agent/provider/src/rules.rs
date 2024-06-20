@@ -340,7 +340,7 @@ impl RulesManager {
             .verify_node_descriptor(node_descriptor)
             .map_err(|e| anyhow!("Partner {e}"))?;
 
-        if requestor_id != node_descriptor.node_id {
+        if AsRef::<[u8]>::as_ref(&requestor_id) != AsRef::<[u8]>::as_ref(&node_descriptor.node_id) {
             return Err(anyhow!(
                 "Partner rule nodes mismatch. requestor node_id: {requestor_id} but cert node_id: {}",
                 node_descriptor.node_id
