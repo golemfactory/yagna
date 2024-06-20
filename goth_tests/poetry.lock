@@ -503,28 +503,32 @@ dev = ["jsonref", "matplotlib"]
 
 [[package]]
 name = "goth"
-version = "0.18.0"
+version = "0.18.1"
 description = "Golem Test Harness - integration testing framework"
 optional = false
-python-versions = "<4.0.0,>=3.10.1"
-files = [
-    {file = "goth-0.18.0-py3-none-any.whl", hash = "sha256:c988c02654aa121699dad130db5a024293a20dcc2a9932e0fe23f0e0806289b7"},
-    {file = "goth-0.18.0.tar.gz", hash = "sha256:cdbd980ee8227ea9d4c3de5b75ff204254206da13991fd0ba9244716a72d088f"},
-]
+python-versions = "^3.10.1"
+files = []
+develop = false
 
 [package.dependencies]
-aiohttp = ">=3.9.5,<4.0.0"
-ansicolors = ">=1.1.8,<2.0.0"
-docker = ">=7.0,<8.0"
-dpath = ">=2.1,<3.0"
-func_timeout = ">=4.3,<5.0"
-ghapi = ">=1.0,<2.0"
-markupsafe = ">=2.1,<3.0"
-pylproxy = "0.2.3"
-pyyaml = ">=6.0,<7.0"
-transitions = ">=0.9.0,<0.10.0"
-typing_extensions = ">=4.5,<5.0"
-ya-tmp-pyapi = "0.7.0"
+aiohttp = "^3.9.5"
+ansicolors = "^1.1.8"
+docker = "^7.0"
+dpath = "^2.1"
+func_timeout = "^4.3"
+ghapi = "^1.0"
+markupsafe = "^2.1"
+pylproxy = "=0.2.3"
+pyyaml = "^6.0"
+transitions = "^0.9.0"
+typing_extensions = "^4.5"
+ya-tmp-pyapi = "=0.7.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/golemfactory/goth.git"
+reference = "cda4aa83a72622cd97de45d8ce9066750c3b522e"
+resolved_reference = "cda4aa83a72622cd97de45d8ce9066750c3b522e"
 
 [[package]]
 name = "idna"
@@ -1315,4 +1319,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.1,<3.11"
-content-hash = "f6d543a75b6cde757a312be8b962732823bcc5508cdf1c7dcd20f564e70a26a6"
+content-hash = "723fb14f980b4ff8e8b32fa59a42f47f4c56d33d9e856412c0a67fa044812a37"
