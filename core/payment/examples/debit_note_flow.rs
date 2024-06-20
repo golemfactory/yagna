@@ -76,9 +76,9 @@ async fn main() -> anyhow::Result<()> {
             address: None, // Use default address (i.e. identity)
             payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(args.platform)),
             total_amount: BigDecimal::from(10u64),
-            timeout: None,
-            deposit: None,
             make_deposit: false,
+            deposit: None,
+            timeout: None,
             extend_timeout: None,
         })
         .await?;
