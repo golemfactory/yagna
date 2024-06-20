@@ -132,6 +132,7 @@ async fn get_agreement_terminate_reason(
         .await
         .log_err()
         .map(|reason| HttpResponse::Ok().json(reason))
+}
 
 #[actix_web::post("/scan")]
 async fn scan_begin(
