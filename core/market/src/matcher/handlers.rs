@@ -1,9 +1,10 @@
 //! Discovery protocol messages handlers
-use futures::StreamExt;
+use futures::prelude::*;
 use metrics::{counter, value};
 
 use crate::db::model::{Offer, SubscriptionId};
 use crate::matcher::error::ModifyOfferError;
+use crate::protocol::discovery::message::{QueryOffers, QueryOffersResult};
 use crate::protocol::discovery::{
     error::DiscoveryRemoteError,
     message::{OffersBcast, OffersRetrieved, RetrieveOffers, UnsubscribedOffersBcast},
@@ -58,6 +59,10 @@ pub(super) async fn receive_remote_offers(
         added_offers_ids.len(),
         caller
     );
+
+    if !added_offers_ids.is_empty() {
+        resolver.store.notify();
+    }
     Ok(added_offers_ids)
 }
 
@@ -80,6 +85,17 @@ pub(super) async fn get_local_offers(
             ))
         }
     }
+}
+
+pub(super) async fn query_offers(
+    store: SubscriptionStore,
+    _caller: String,
+    msg: QueryOffers,
+) -> Result<QueryOffersResult, DiscoveryRemoteError> {
+    store
+        .query_offers(msg)
+        .await
+        .map_err(|e| DiscoveryRemoteError::InternalError(e.to_string()))
 }
 
 /// Returns only those of input offer ids, that were able to be unsubscribed locally.
