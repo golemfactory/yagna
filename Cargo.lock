@@ -2124,8 +2124,8 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+version = "0.4.5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
 dependencies = [
  "actix",
  "actix-files",
@@ -2166,8 +2166,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+version = "0.4.5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2207,8 +2207,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_extra"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+version = "0.4.5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2243,8 +2243,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_processor"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+version = "0.4.5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2291,8 +2291,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=6ebed672cb970ae2cbb18dbdf76a242ec3b02d03#6ebed672cb970ae2cbb18dbdf76a242ec3b02d03"
+version = "0.4.5"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -3343,6 +3343,16 @@ name = "http-range"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
+
+[[package]]
+name = "http-serde"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
+dependencies = [
+ "http 1.1.0",
+ "serde",
+]
 
 [[package]]
 name = "httparse"
@@ -5104,6 +5114,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "problem_details"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "275bea8e10b32b8a9acef6bb6fd9a7262daa9d5c1c1296accc916bb09fdb5e07"
+dependencies = [
+ "http 1.1.0",
+ "http-serde",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "proc-macro-crate"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6226,9 +6248,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.198"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9846a40c979031340571da2545a4e5b7c4163bdae79b301d5f86d03979451fcc"
+checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
 dependencies = [
  "serde_derive",
 ]
@@ -6244,9 +6266,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.198"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e88edab869b01783ba905e7d0153f9fc1a6505a96e4ad3018011eedb838566d9"
+checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9260,6 +9282,7 @@ dependencies = [
  "ethsign",
  "futures 0.3.30",
  "hex",
+ "http 1.1.0",
  "humantime 2.1.0",
  "lazy_static",
  "libsqlite3-sys",
@@ -9267,6 +9290,7 @@ dependencies = [
  "metrics 0.12.1",
  "num-bigint 0.3.3",
  "open",
+ "problem_details",
  "r2d2",
  "rand 0.8.5",
  "serde",
