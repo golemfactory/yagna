@@ -46,6 +46,7 @@ use crate::protocol::negotiation::{
     },
     messages::{AgreementTerminated, ProposalReceived},
 };
+use crate::testing::AgreementEventType;
 use crate::utils::display::EnableDisplay;
 use crate::utils::AgreementLock;
 
@@ -413,6 +414,35 @@ impl CommonBroker {
                 .ok();
         }
         Ok(())
+    }
+
+    pub async fn get_terminate_reason(
+        &self,
+        id: Identity,
+        client_agreement_id: String,
+    ) -> Result<AgreementEvent, AgreementError> {
+        let dao = self.db.as_dao::<AgreementDao>();
+        let agreement = dao
+            .select_by_node(&client_agreement_id, id.identity, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
+            .ok_or(AgreementError::NotFound(client_agreement_id))?;
+
+        let agreement_id = agreement.id.clone();
+        let events = self
+            .db
+            .as_dao::<AgreementEventsDao>()
+            .select_for_agreement(&agreement_id)
+            .await
+            .map_err(|e| AgreementError::Internal(e.to_string()))?;
+
+        match events
+            .into_iter()
+            .find(|event| event.event_type == AgreementEventType::Terminated)
+        {
+            None => Err(AgreementError::NotTerminated(agreement_id)),
+            Some(event) => Ok(event),
+        }
     }
 
     // Called remotely via GSB

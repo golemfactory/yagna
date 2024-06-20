@@ -27,8 +27,8 @@ pub fn try_from_validation(
             available_funds,
             reserved_funds,
         } => {
-            let detail = format!("Insufficient funds to create the allocation. Top up your account \
-                        or release all existing allocations to unlock the funds via `yagna payment release-allocations`");
+            let detail = "Insufficient funds to create the allocation. Top up your account \
+                        or release all existing allocations to unlock the funds via `yagna payment release-allocations`".to_string();
 
             extensions.insert(
                 "requestedFunds".to_string(),
@@ -301,7 +301,7 @@ pub fn bad_platform_parameter(
         .with_type(Uri::from_static(
             "/payment-api/v1/allocations/bad-payment-platform",
         ))
-        .with_detail(format!("Payment platform doesn't parse"))
+        .with_detail("Payment platform doesn't parse")
         .with_extensions(extensions);
 
     HttpResponse::BadRequest()
@@ -330,7 +330,7 @@ pub fn server_error(request_body: &impl Serialize, error: &impl Serialize) -> Ht
         .with_type(Uri::from_static(
             "/payment-api/v1/allocations/internal-error",
         ))
-        .with_detail(format!("Unhandled internal error"))
+        .with_detail("Unhandled internal error")
         .with_extensions(extensions);
 
     HttpResponse::InternalServerError()

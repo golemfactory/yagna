@@ -261,6 +261,8 @@ ya-service-bus = { version = "0.7.3", features = ['tls'] }
 ya-sb-router = { version = "0.6.4" }
 ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
+parking_lot = "0.12.3"
+mime = "0.3.17"
 
 [patch.crates-io]
 ## SERVICES
@@ -287,9 +289,9 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b60640065835a1fc8eb33d2fb174ec6c0e4b30c4" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a2fa0d54fe47a013add90b7ae687afe4f08ce7a2" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b60640065835a1fc8eb33d2fb174ec6c0e4b30c4" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a2fa0d54fe47a013add90b7ae687afe4f08ce7a2" }
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 

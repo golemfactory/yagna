@@ -422,8 +422,6 @@ impl<'a> PropertySet<'a> {
     }
 }
 
-// #endregion
-
 // Property reference (element of filter expression)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRef {
