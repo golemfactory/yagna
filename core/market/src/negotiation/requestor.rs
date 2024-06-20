@@ -4,6 +4,7 @@ use metrics::counter;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::Level;
 
 use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
 use ya_client::model::NodeId;
@@ -159,12 +160,17 @@ impl RequestorBroker {
         .map_err(|e| ProposalError::Send(prev_proposal_id.clone(), e))?;
 
         counter!("market.proposals.requestor.countered", 1);
-        log::info!(
-            "Requestor {} countered Proposal [{}] with [{}]",
-            id.display(),
-            &prev_proposal_id,
-            &proposal_id
+
+        tracing::event!(
+            Level::INFO,
+            entity = "proposal",
+            action = "counter",
+            proposal_id = display(prev_proposal_id),
+            demand_id = display(demand_id),
+            new_proposal_id = display(&proposal_id),
+            "requestor countered proposal"
         );
+
         Ok(proposal_id)
     }
 
@@ -191,6 +197,14 @@ impl RequestorBroker {
             .await?;
 
         counter!("market.proposals.requestor.rejected.by-us", 1);
+        tracing::event!(
+            Level::INFO,
+            entity = "proposal",
+            action = "reject",
+            proposal_id = display(&proposal_id),
+            demand_id = display(&demand_id),
+            "requestor rejected proposal"
+        );
 
         Ok(())
     }
@@ -269,6 +283,8 @@ impl RequestorBroker {
             }
         }
 
+        let negotiation_id = offer_proposal.body.negotiation_id.clone();
+
         let demand_proposal_id = offer_proposal
             .body
             .prev_proposal_id
@@ -301,12 +317,18 @@ impl RequestorBroker {
             })?;
 
         counter!("market.agreements.requestor.created", 1);
-        log::info!(
-            "Requestor {} created Agreement [{}] from Proposal [{}].",
-            id.display(),
-            &agreement_id,
-            &proposal_id
+
+        tracing::event!(
+            Level::INFO,
+            entity = "agreement",
+            action = "created",
+            owner_id = display(id.identity),
+            agreement_id = display(&agreement_id),
+            proposal_id = display(proposal_id),
+            negotiation_id = negotiation_id,
+            "Requestor created Agreement"
         );
+
         Ok(agreement_id)
     }
 
@@ -341,12 +363,16 @@ impl RequestorBroker {
         self.common.notify_agreement(&agreement).await;
 
         counter!("market.agreements.requestor.cancelled", 1);
-        log::info!(
-            "Provider {} cancelled Agreement [{}]. Reason: {}",
-            id.display(),
-            &agreement.id,
-            reason.display(),
+        tracing::event!(
+            Level::INFO,
+            entity = "agreement",
+            action = "cancelled",
+            owner = display(id.identity),
+            agreement_id = display(&agreement.id),
+            reason = display(reason.display()),
+            "Provider cancelled agreement"
         );
+
         Ok(())
     }
 
@@ -443,18 +469,16 @@ impl RequestorBroker {
         }
 
         counter!("market.agreements.requestor.confirmed", 1);
-        log::info!(
-            "Requestor {} confirmed Agreement [{}] and sent to Provider.",
-            id.display(),
-            &agreement_id,
+        tracing::event!(
+            Level::INFO,
+            entity = "agreement",
+            action = "confirmed",
+            owner_id = display(id.identity),
+            agreement_id = display(agreement_id),
+            session = debug(app_session_id),
+            "Requestor confirmed agreement"
         );
-        if let Some(session) = app_session_id {
-            log::info!(
-                "AppSession id [{}] set for Agreement [{}].",
-                &session,
-                &agreement_id
-            );
-        }
+
         Ok(())
     }
 
@@ -558,11 +582,17 @@ async fn agreement_approved(
     // Commit Agreement. We must spawn committing later, because we need to
     // return from this function to provider.
     tokio::task::spawn_local(commit_agreement(broker, agreement.id.clone()));
-    log::info!(
-        "Agreement [{}] approved by [{}]. Committing...",
-        &agreement.id,
-        &agreement.provider_id
+
+    tracing::event!(
+        Level::INFO,
+        entity = "agreement",
+        action = "approved",
+        owner_id = display(&agreement.requestor_id),
+        agreement_id = display(&agreement.id),
+        provider_id = display(&agreement.provider_id),
+        "Agreement approved"
     );
+
     Ok(())
 }
 
@@ -628,10 +658,15 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
     broker.notify_agreement(&agreement).await;
 
     counter!("market.agreements.requestor.approved", 1);
-    log::info!(
-        "Agreement [{}] committed (approved) by [{}].",
-        &agreement.id,
-        &agreement.provider_id
+
+    tracing::event!(
+        Level::INFO,
+        entity = "agreement",
+        action = "committed",
+        owner_id = display(agreement.requestor_id),
+        agreement_id = display(agreement.id),
+        provider_id = display(agreement.provider_id),
+        "Agreement committed (approved)"
     );
 }
 
@@ -684,12 +719,18 @@ async fn agreement_rejected(
     broker.notify_agreement(&agreement).await;
 
     counter!("market.agreements.requestor.rejected", 1);
-    log::info!(
-        "Agreement [{}] rejected by [{}]. Reason: {}",
-        &agreement.id,
-        caller,
-        msg.reason.display(),
+
+    tracing::event!(
+        Level::INFO,
+        entity = "agreement",
+        action = "rejected",
+        owner_id = display(agreement.requestor_id),
+        agreement_id = display(agreement.id),
+        provider_id = display(agreement.provider_id),
+        reason = display(msg.reason.display()),
+        "agreement rejected"
     );
+
     Ok(())
 }
 

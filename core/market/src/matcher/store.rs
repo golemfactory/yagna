@@ -1,3 +1,4 @@
+use actix_web::web::Data;
 use chrono::{NaiveDateTime, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -14,16 +15,23 @@ use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryDemandsError, QueryOfferError, QueryOffersError,
     SaveOfferError,
 };
+use crate::negotiation::ScannerSet;
+use crate::protocol::discovery::message::{QueryOffers, QueryOffersResult};
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
     pub(crate) db: DbMixedExecutor,
     config: Arc<Config>,
+    scan_set: Data<ScannerSet>,
 }
 
 impl SubscriptionStore {
-    pub fn new(db: DbMixedExecutor, config: Arc<Config>) -> Self {
-        SubscriptionStore { db, config }
+    pub fn new(db: DbMixedExecutor, scan_set: Data<ScannerSet>, config: Arc<Config>) -> Self {
+        SubscriptionStore {
+            db,
+            config,
+            scan_set,
+        }
     }
 
     /// returns newly created offer with insertion_ts
@@ -36,7 +44,11 @@ impl SubscriptionStore {
         // TODO: provider agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
         let offer = Offer::from_new(offer, id, creation_ts, expiration_ts)?;
-        self.insert_offer(offer).await
+        let r = self.insert_offer(offer).await;
+        if r.is_ok() {
+            self.scan_set.notify();
+        }
+        r
     }
 
     /// returns saved offer with insertion_ts
@@ -127,6 +139,34 @@ impl SubscriptionStore {
             .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
             .map_err(QueryOffersError::from)
+    }
+
+    pub async fn query_offers(
+        &self,
+        query: QueryOffers,
+    ) -> Result<QueryOffersResult, QueryOffersError> {
+        let ts = match query.iterator {
+            Some(bytes) => {
+                Some(bincode::deserialize(&bytes).map_err(|_e| QueryOffersError::InvalidIterator)?)
+            }
+            None => None,
+        };
+
+        let (ids, last_ts) = self
+            .db
+            .as_dao::<OfferDao>()
+            .query_offers(query.node_id, ts, Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?;
+
+        let iter = last_ts
+            .and_then(|ts| bincode::serialize(&ts).ok())
+            .map(serde_bytes::ByteBuf::from);
+
+        Ok(QueryOffersResult {
+            offers: ids,
+            iterator: iter,
+        })
     }
 
     pub async fn get_offers_before(
@@ -307,5 +347,9 @@ impl SubscriptionStore {
             true => Ok(()),
             false => Err(DemandError::NotFound(demand_id.clone())),
         }
+    }
+
+    pub fn notify(&self) {
+        self.scan_set.notify();
     }
 }

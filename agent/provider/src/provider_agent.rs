@@ -19,17 +19,16 @@ use ya_manifest_utils::{manifest, Feature};
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
-use crate::execution::{
-    ExeUnitDesc, GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner,
-    UpdateActivity,
-};
+use crate::execution::{ExeUnitDesc, GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::rules::RulesManager;
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
-use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
+use crate::tasks::task_manager::{
+    InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
+};
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -520,7 +519,7 @@ impl Handler<Shutdown> for ProviderAgent {
 
     fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
-        let runner = self.runner.clone();
+        let tasks = self.task_manager.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
         self.rulestore_monitor.stop();
@@ -528,7 +527,7 @@ impl Handler<Shutdown> for ProviderAgent {
 
         async move {
             market.send(MarketShutdown).await??;
-            runner.send(ShutdownExecution).await??;
+            tasks.send(TaskManagerShutdown {}).await??;
             log_handler.shutdown();
             Ok(())
         }

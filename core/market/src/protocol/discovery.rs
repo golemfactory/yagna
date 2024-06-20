@@ -44,6 +44,7 @@ pub(super) struct OfferHandlers {
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
+    query_offers: HandlerSlot<QueryOffers>,
 }
 
 pub struct DiscoveryImpl {
@@ -304,13 +305,24 @@ impl Discovery {
         local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         log::info!("Discovery protocol version: {}", PROTOCOL_VERSION!());
+        let addr = get_offers_addr(public_prefix);
 
-        ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
+        ServiceBinder::new(&addr, &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: RetrieveOffers| {
                 let myself = myself;
                 myself.on_get_remote_offers(caller, msg)
             },
         );
+
+        {
+            let me = self.clone();
+            let _ =
+                ya_service_bus::typed::bind_with_caller(&addr, move |caller, msg: QueryOffers| {
+                    let inner = me.inner.clone();
+                    async move { inner.offer_handlers.query_offers.call(caller, msg).await }
+                });
+        }
+
         // Subscribe to offer broadcasts.
         {
             let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;

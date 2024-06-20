@@ -117,7 +117,7 @@ pub async fn start_network(
 
     log::info!("Starting network (hybrid) with identity: {default_id}");
 
-    let broadcast_size = config.broadcast_size;
+    let broadcast_size = (config.broadcast_size, config.pub_broadcast_size);
     let crypto = IdentityCryptoProvider::new(default_id);
     let client = build_client(config, crypto.clone()).await?;
 
@@ -567,7 +567,7 @@ fn forward_bus_to_net(
                 });
             }
             Err(error) => {
-                let err = format!("Net: error forwarding message: {}", error);
+                let err = format!("Net: error forwarding message: {:?}", error);
                 handler_reply_service_err(request_id, err, tx);
             }
         };
@@ -635,7 +635,7 @@ fn broadcast_handler(
     caller: &str,
     _addr: &str,
     msg: &[u8],
-    broadcast_size: u32,
+    broadcast_size: (u32, u32),
 ) -> impl Future<Output = Result<Vec<u8>, Error>> {
     let message = msg.to_vec();
     let caller = caller.to_string();
@@ -653,6 +653,12 @@ fn broadcast_handler(
 
         let payload = encode_message(request).map_err(|e| Error::EncodingProblem(e.to_string()))?;
 
+        let broadcast_size = if client.public_addr().await.is_some() {
+            broadcast_size.1
+        } else {
+            broadcast_size.0
+        };
+
         client
             .broadcast(payload, broadcast_size)
             .await
@@ -668,7 +674,7 @@ fn broadcast_handler(
     })
 }
 
-fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
+fn bind_broadcast_handlers(client: Client, broadcast_size: (u32, u32)) {
     let _ = typed::bind(
         net::local::BUS_ID,
         move |subscribe: net::local::Subscribe| {

@@ -7,10 +7,9 @@ use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 use ya_net::{self as net};
 
-use super::{Discovery, DiscoveryImpl};
+use super::{BanCache, Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
-use crate::testing::discovery::BanCache;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -39,7 +38,6 @@ impl DiscoveryBuilder {
         self
     }
 
-    #[allow(dead_code)]
     pub fn add_handler<M: CallbackMessage>(mut self, f: impl CallbackHandler<M>) -> Self {
         self.handlers
             .insert(TypeId::of::<M>(), Box::new(HandlerSlot::new(f)));
@@ -72,6 +70,7 @@ impl DiscoveryBuilder {
             receive_remote_offers: self.get_handler(),
             get_local_offers_handler: self.get_handler(),
             offer_unsubscribe_handler: self.get_handler(),
+            query_offers: self.get_handler(),
         };
 
         let (sender, receiver) =
@@ -158,13 +157,14 @@ mod test {
     }
 
     #[actix::test]
-    async fn build_from_with_four_handlers_should_pass() {
+    async fn build_from_with_all_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
@@ -177,6 +177,7 @@ mod test {
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
@@ -204,6 +205,7 @@ mod test {
                 }
             })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
 
