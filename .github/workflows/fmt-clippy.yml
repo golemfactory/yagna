@@ -11,21 +11,19 @@ on:
     branches:
       - master
       - release/*
-      - p2p-stability
   pull_request:
     branches:
       - master
       - master-fast
       - release/*
-      - p2p-stability
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   check_format:
     name: Check formatting
-    runs-on: [ubuntu-latest]
+    runs-on: [ ubuntu-latest ]
     steps:
       - name: Checkout
         uses: actions/checkout@v1

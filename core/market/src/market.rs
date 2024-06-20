@@ -1,13 +1,25 @@
+use std::sync::{Arc, Mutex};
+
 use actix_web::web::Data;
 use chrono::{DateTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
-use std::sync::{Arc, Mutex};
 use thiserror::Error;
+use ya_client::model::market::{
+    Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
+    NewDemand, NewOffer, Offer, Reason, Role,
+};
 
+use ya_core_model::market::{local, BUS_ID};
+use ya_service_api_interfaces::{Provider, Service};
+use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::scope::ExtendableScope;
+
+use super::db::model::AgreementState;
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, AppSessionId, Owner, SubscriptionId};
+use crate::db::DbMixedExecutor;
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
@@ -17,20 +29,8 @@ use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{
     AgreementError, AgreementEventsError, NegotiationError, NegotiationInitError,
 };
-use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
+use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker, ScannerSet};
 use crate::rest_api;
-use crate::testing::AgreementState;
-
-use ya_client::model::market::{
-    Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
-    NewDemand, NewOffer, Offer, Reason, Role,
-};
-use ya_core_model::market::{local, BUS_ID};
-use ya_service_api_interfaces::{Provider, Service};
-use ya_service_api_web::middleware::Identity;
-
-use crate::db::DbMixedExecutor;
-use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
 
@@ -70,6 +70,7 @@ pub struct MarketService {
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
+    pub scan_set: Data<ScannerSet>,
 }
 
 impl MarketService {
@@ -90,7 +91,9 @@ impl MarketService {
         db.disk_db
             .apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone(), config.clone());
+        let scan_set = ScannerSet::new(db.clone());
+        let store = SubscriptionStore::new(db.clone(), scan_set.clone(), config.clone());
+
         let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;
 
         // We need the same notifier for both Provider and Requestor implementation since we have
@@ -120,6 +123,7 @@ impl MarketService {
             matcher,
             provider_engine,
             requestor_engine,
+            scan_set,
         })
     }
 
@@ -158,6 +162,7 @@ impl MarketService {
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
+            .app_data(myself.scan_set.clone())
             .app_data(Data::new(myself))
             .app_data(Data::new(rest_api::path_config()))
             .app_data(Data::new(rest_api::json_config()))
@@ -317,6 +322,18 @@ impl MarketService {
             .common
             .terminate_agreement(id, client_agreement_id, reason)
             .await
+    }
+
+    pub async fn get_terminate_reason(
+        &self,
+        id: Identity,
+        client_agreement_id: String,
+    ) -> Result<ClientAgreementEvent, AgreementError> {
+        self.requestor_engine
+            .common
+            .get_terminate_reason(id, client_agreement_id)
+            .await
+            .map(|event| event.into_client())
     }
 }
 

@@ -4,9 +4,7 @@ use ya_agreement_utils::{Error, OfferDefinition};
 
 use crate::display::EnableDisplay;
 use crate::market::negotiator::factory::DebitNoteIntervalConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 pub const DEFAULT_DEBIT_NOTE_INTERVAL_SEC: u32 = 120;
 pub const DEBIT_NOTE_INTERVAL_PROPERTY: &str = "/golem/com/scheme/payu/debit-note/interval-sec?";
@@ -90,18 +88,6 @@ impl NegotiatorComponent for DebitNoteInterval {
             serde_json::Value::Number(self.interval.num_seconds().into()),
         );
         Ok(offer_template)
-    }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
     }
 }
 

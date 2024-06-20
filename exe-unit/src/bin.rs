@@ -14,11 +14,11 @@ use ya_exe_unit::logger::*;
 use ya_exe_unit::manifest::ManifestContext;
 use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
-use ya_exe_unit::service::metrics::MetricsService;
+use ya_exe_unit::service::counters;
 use ya_exe_unit::service::signal::SignalMonitor;
-use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::state::Supervision;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
+use ya_transfer::transfer::TransferService;
 use ya_utils_path::normalize_path;
 
 #[derive(structopt::StructOpt, Debug)]
@@ -323,10 +323,10 @@ async fn run() -> anyhow::Result<()> {
 
     let (tx, rx) = oneshot::channel();
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
-    let transfers = TransferService::new(&ctx).start();
+    let counters = counters::build(&ctx, Some(10000), ctx.supervise.hardware).start();
+    let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(tx, ctx, counters, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.send(Register(signals)).await?;
 

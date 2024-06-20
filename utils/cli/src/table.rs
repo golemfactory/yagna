@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 pub fn print_table(
     columns: &[String],
-    values: &Vec<serde_json::Value>,
-    summary: &Vec<serde_json::Value>,
+    values: &[serde_json::Value],
+    summary: &[serde_json::Value],
 ) {
     let mut table = Table::new();
     table.set_format(*FORMAT_BASIC);

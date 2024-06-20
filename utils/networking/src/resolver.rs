@@ -40,6 +40,16 @@ pub async fn resolve_srv_record(record: &str) -> std::io::Result<String> {
     Ok(addr)
 }
 
+pub async fn resolve_href_record(record: &str) -> std::io::Result<Vec<String>> {
+    eprintln!("record={record}");
+    let opts = ResolverOpts::default();
+
+    let resolver: TokioAsyncResolver =
+        TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), opts)?;
+    let txt = resolver.txt_lookup(record).await?;
+    Ok(txt.iter().map(|r| r.to_string()).collect())
+}
+
 /// Replace domain name in URL with resolved IP address
 /// Hack required on windows to bypass failing resolution on Windows 10
 /// Not needed when https://github.com/actix/actix-web/issues/1047 is resolved
@@ -71,13 +81,12 @@ pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
     lazy_static! {
         static ref SCHEME_RE: Regex = Regex::new("(?i)^[a-z0-9\\-\\.]+?:").unwrap();
     }
-    match {
-        if SCHEME_RE.is_match(request_url_or_host) {
-            resolve_dns_record(request_url_or_host).await
-        } else {
-            resolve_dns_record_host(request_url_or_host).await
-        }
-    } {
+    let dns_record_result = if SCHEME_RE.is_match(request_url_or_host) {
+        resolve_dns_record(request_url_or_host).await
+    } else {
+        resolve_dns_record_host(request_url_or_host).await
+    };
+    match dns_record_result {
         Ok(url) => url,
         Err(e) => {
             log::warn!(

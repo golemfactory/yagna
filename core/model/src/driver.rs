@@ -1,6 +1,7 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
@@ -76,6 +77,28 @@ impl PaymentConfirmation {
             confirmation: bytes.to_vec(),
         }
     }
+}
+
+// ************************** GET RPC ENDPOINTS INFO **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetRpcEndpoints {
+    pub network: Option<String>,
+    pub verify: bool,
+    pub resolve: bool,
+    pub no_wait: bool,
+}
+
+impl RpcMessage for GetRpcEndpoints {
+    const ID: &'static str = "GetRpcEndpoints";
+    type Item = GetRpcEndpointsResult;
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GetRpcEndpointsResult {
+    pub endpoints: serde_json::Value,
+    pub sources: serde_json::Value,
 }
 
 // ************************** GET ACCOUNT BALANCE **************************
@@ -516,17 +539,34 @@ impl RpcMessage for SignPayment {
     type Error = GenericError;
 }
 
+// ************************ SIGN PAYMENT ************************
+
+/// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
+#[derive(Clone, Debug, Serialize, Deserialize, From)]
+pub struct SignPaymentCanonicalized(pub Payment);
+
+impl RpcMessage for crate::driver::SignPaymentCanonicalized {
+    const ID: &'static str = "SignPaymentCanonicalized";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
 // ********************** VERIFY SIGNATURE **********************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
+    pub canonicalized: bool,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-        Self { payment, signature }
+    pub fn new(payment: Payment, signature: Vec<u8>, canonicalized: bool) -> Self {
+        Self {
+            payment,
+            signature,
+            canonicalized,
+        }
     }
 }
 

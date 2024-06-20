@@ -158,6 +158,8 @@ pub mod local {
         InvalidDefaultToken(String, String),
         #[error("Invalid default network specified: {0}")]
         InvalidDefaultNetwork(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterDriver {
@@ -166,13 +168,19 @@ pub mod local {
         type Error = RegisterDriverError;
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterDriverError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct UnregisterDriver(pub String);
 
     impl RpcMessage for UnregisterDriver {
         const ID: &'static str = "UnregisterDriver";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterDriverError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -196,12 +204,20 @@ pub mod local {
         UnsupportedToken(String, String, String),
         #[error("Error while registering account: {0}")]
         Other(String),
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     impl RpcMessage for RegisterAccount {
         const ID: &'static str = "RegisterAccount";
         type Item = ();
         type Error = RegisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterAccountError {
+        #[error("Internal timeout")]
+        InternalTimeout,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -213,7 +229,7 @@ pub mod local {
     impl RpcMessage for UnregisterAccount {
         const ID: &'static str = "UnregisterAccount";
         type Item = ();
-        type Error = NoError;
+        type Error = UnregisterAccountError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -258,6 +274,28 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub gas: Option<GasDetails>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetRpcEndpoints {
+        pub address: String,
+        pub driver: DriverName,
+        pub network: Option<NetworkName>,
+        pub verify: bool,
+        pub resolve: bool,
+        pub no_wait: bool,
+    }
+
+    impl RpcMessage for crate::payment::local::GetRpcEndpoints {
+        const ID: &'static str = "GetRpcEndpoints";
+        type Item = crate::payment::local::GetRpcEndpointsResult;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct GetRpcEndpointsResult {
+        pub endpoints: serde_json::Value,
+        pub sources: serde_json::Value,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -324,10 +362,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetAccounts {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetAccountsError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
-        type Error = GenericError;
+        type Error = GetAccountsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -407,10 +451,16 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum GetDriversError {
+        #[error("Internal timeout")]
+        InternalTimeout,
+    }
+
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
-        type Error = NoError;
+        type Error = GetDriversError;
     }
 
     // ********************* STATUS ********************************
@@ -476,6 +526,8 @@ pub mod local {
         Clone,
         PartialEq,
         Eq,
+        Ord,
+        PartialOrd,
         Serialize,
         Deserialize,
     )]
@@ -771,6 +823,33 @@ pub mod public {
         type Error = SendError;
     }
 
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct SendSignedPayment {
+        #[serde(flatten)]
+        pub payment: Payment,
+        #[serde(with = "serde_bytes")]
+        pub signature: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        pub signed_bytes: Vec<u8>,
+    }
+
+    impl SendSignedPayment {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+            let signed_bytes = serde_json_canonicalizer::to_vec(&payment).unwrap();
+            Self {
+                payment,
+                signature,
+                signed_bytes,
+            }
+        }
+    }
+
+    impl RpcMessage for SendSignedPayment {
+        const ID: &'static str = "SendPaymentWithBytes";
+        type Item = Ack;
+        type Error = SendError;
+    }
+
     // **************************** SYNC *****************************
 
     /// Push unsynchronized state
@@ -778,6 +857,20 @@ pub mod public {
     pub struct PaymentSync {
         /// Payment confirmations.
         pub payments: Vec<SendPayment>,
+        /// Invoice acceptances.
+        pub invoice_accepts: Vec<AcceptInvoice>,
+        /// Invoice rejections.
+        pub invoice_rejects: Vec<RejectInvoiceV2>,
+        /// Debit note acceptances.
+        ///
+        /// Only last debit note in chain is included per agreement.
+        pub debit_note_accepts: Vec<AcceptDebitNote>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct PaymentSyncWithBytes {
+        /// Payment confirmations.
+        pub payments: Vec<SendSignedPayment>,
         /// Invoice acceptances.
         pub invoice_accepts: Vec<AcceptInvoice>,
         /// Invoice rejections.
@@ -815,6 +908,12 @@ pub mod public {
 
     impl RpcMessage for PaymentSync {
         const ID: &'static str = "PaymentSync";
+        type Item = Ack;
+        type Error = PaymentSyncError;
+    }
+
+    impl RpcMessage for PaymentSyncWithBytes {
+        const ID: &'static str = "PaymentSyncWithBytes";
         type Item = Ack;
         type Error = PaymentSyncError;
     }

@@ -44,6 +44,7 @@ pub(super) struct OfferHandlers {
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
+    query_offers: HandlerSlot<QueryOffers>,
 }
 
 pub struct DiscoveryImpl {
@@ -72,23 +73,27 @@ struct BanCache {
 struct BanCacheInner {
     banned_nodes: HashSet<NodeId>,
     ts: Instant,
+    max_ban_time: std::time::Duration,
 }
 
-const MAX_BAN_TIME: std::time::Duration = std::time::Duration::from_secs(300);
 impl BanCache {
-    fn new() -> Self {
+    fn new(max_ban_time: std::time::Duration) -> Self {
         let banned_nodes = Default::default();
         let ts = Instant::now();
 
         Self {
-            inner: Arc::new(PlMutex::new(BanCacheInner { banned_nodes, ts })),
+            inner: Arc::new(PlMutex::new(BanCacheInner {
+                banned_nodes,
+                ts,
+                max_ban_time,
+            })),
         }
     }
 
     fn is_banned_node(&self, node_id: &NodeId) -> bool {
         let mut g = self.inner.lock();
         if g.banned_nodes.contains(node_id) {
-            if g.ts.elapsed() > MAX_BAN_TIME {
+            if g.ts.elapsed() > g.max_ban_time {
                 g.banned_nodes.clear();
                 g.ts = Instant::now();
                 false
@@ -181,6 +186,10 @@ impl Discovery {
             while iter.peek().is_some() {
                 let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
                 broadcast_offers(default_id, chunk).await;
+
+                // Spread broadcasts into longer time frame. This way we avoid dropping Offers
+                // on the other side and reduce peak network usage.
+                tokio::time::sleep(self.inner.config.bcast_tile_time_margin).await;
             }
         } else {
             broadcast_offers(default_id, offer_ids).await;
@@ -296,13 +305,24 @@ impl Discovery {
         local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         log::info!("Discovery protocol version: {}", PROTOCOL_VERSION!());
+        let addr = get_offers_addr(public_prefix);
 
-        ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
+        ServiceBinder::new(&addr, &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: RetrieveOffers| {
                 let myself = myself;
                 myself.on_get_remote_offers(caller, msg)
             },
         );
+
+        {
+            let me = self.clone();
+            let _ =
+                ya_service_bus::typed::bind_with_caller(&addr, move |caller, msg: QueryOffers| {
+                    let inner = me.inner.clone();
+                    async move { inner.offer_handlers.query_offers.call(caller, msg).await }
+                });
+        }
+
         // Subscribe to offer broadcasts.
         {
             let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;

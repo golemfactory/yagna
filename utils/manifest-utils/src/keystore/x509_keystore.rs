@@ -215,8 +215,12 @@ fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
-        self.keystore.reload(cert_dir)
+    fn reload(&self) -> anyhow::Result<()> {
+        self.keystore.reload(&self.cert_dir)
+    }
+
+    fn cert_dir(&self) -> PathBuf {
+        self.cert_dir.clone()
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
@@ -309,6 +313,14 @@ impl Keystore for X509KeystoreManager {
         self.keystore.list().into_iter().map(Cert::X509).collect()
     }
 
+    fn get(&self, cert: &Fingerprint) -> Option<Cert> {
+        self.keystore
+            .list()
+            .into_iter()
+            .find(|cert_data| &cert_data.id == cert)
+            .map(Cert::X509)
+    }
+
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
         let cert_chain = X509Keystore::decode_cert_chain(cert)?;
         let cert_store = self.keystore.store.clone();
@@ -364,6 +376,7 @@ impl X509SignatureVerifier {
         let current_cert = self.cert_chain.first().cloned();
         if let Some(cert) = current_cert {
             let mut previous_cert = cert;
+
             while let Some(cert) = issuer(cert_store, &previous_cert) {
                 let cert_id = cert_to_id(&cert)?;
                 cert_ids.push(cert_id);
@@ -520,7 +533,7 @@ fn verify_cert_chain(
     cert_store: &CertStore,
     cert_chain: &Vec<X509>,
 ) -> anyhow::Result<PKey<Public>> {
-    let cert = match cert_chain.last().map(Clone::clone) {
+    let cert = match cert_chain.last().cloned() {
         Some(cert) => cert,
         None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
     };

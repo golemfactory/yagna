@@ -15,7 +15,7 @@ it to yagna.
 ## Configuration
 ### Via environment variables
 #### Global settings
-* `ERC20NEXT_SENDOUT_INTERVAL_SECS` -- The maximum interval at which transactions are batched and processed. A longer duration may conserve gas at the expense
+* `ERC20_SENDOUT_INTERVAL_SECS` -- The maximum interval at which transactions are batched and processed. A longer duration may conserve gas at the expense
 of delivering payments at a later date.
 #### Per-chain settings
 In environment variables below, substitute `{CHAIN}` for the actual chain you wish to configure and `{GLM}` for the GLM symbol used on the chain.
@@ -26,9 +26,9 @@ See `config-payments.toml` for the list of supported chains and token symbols.
 * `{CHAIN}_MAX_FEE_PER_GAS` -- [max fee per gas](https://ethereum.org/nl/developers/docs/gas/#maxfee).
 * `{CHAIN}_{SYMBOL}_CONTRACT_ADDRESS` -- Address of the GLM contract.
 * `{CHAIN}_MULTI_PAYMENT_CONTRACT_ADDRESS` -- Address of a custom Golem contract allowing for executing multiple transfers at once.
-* `ERC20NEXT_{CHAIN}_REQUIRED_CONFIRMATIONS` -- The number of confirmation blocks required to consider a transaction complete.
+* `ERC20_{CHAIN}_REQUIRED_CONFIRMATIONS` -- The number of confirmation blocks required to consider a transaction complete.
 
-Be aware that options not prefixed with `ERC20NEXT` are also applicable to the old Erc20 driver.
+Be aware that options not prefixed with `ERC20` are also applicable to the old Erc20 driver.
 
 ### Via TOML file
 * The default configuration can be seen in `config-payments.toml`.

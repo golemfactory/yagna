@@ -980,7 +980,10 @@ mod tests {
             .await?;
 
         supervisor.get_network(&node_id, &network.id)?;
-        supervisor.remove_network(&node_id, &network.id)?;
+        supervisor
+            .remove_network(&node_id, &network.id)?
+            .await
+            .unwrap();
 
         Ok(())
     }
@@ -1014,7 +1017,10 @@ mod tests {
         assert!(supervisor.get_network(&node_id, &network1.id).is_ok());
         assert!(supervisor.get_network(&node_id, &network2.id).is_ok());
 
-        supervisor.remove_network(&node_id, &network1.id)?;
+        supervisor
+            .remove_network(&node_id, &network1.id)?
+            .await
+            .unwrap();
 
         assert!(supervisor.get_network(&node_id, &network1.id).is_err());
         assert!(supervisor.get_network(&node_id, &network2.id).is_ok());

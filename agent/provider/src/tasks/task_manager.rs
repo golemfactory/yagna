@@ -4,6 +4,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use chrono::Utc;
 use futures::future::TryFutureExt;
+use futures_util::FutureExt;
 use std::collections::HashMap;
 
 use ya_std_utils::LogErr;
@@ -29,6 +30,7 @@ use crate::tasks::config::TaskConfig;
 /// - ActivityDestroyed
 /// - BreakAgreement
 /// - CloseAgreement
+/// - Shutdown
 
 /// Event forces agreement termination, what includes killing ExeUnit.
 /// Sending this event indicates, that agreement conditions were broken
@@ -54,6 +56,11 @@ pub struct CloseAgreement {
     pub agreement_id: String,
     pub cause: ClosingCause,
 }
+
+/// Provider shutdown. All Agreements will be closed.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct Shutdown {}
 
 // =========================================== //
 // Output events
@@ -565,6 +572,29 @@ impl Handler<CloseAgreement> for TaskManager {
         .map_err(move |error: Error| log::error!("Can't close agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
+    }
+}
+
+impl Handler<Shutdown> for TaskManager {
+    type Result = ResponseFuture<std::result::Result<(), Error>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        let myself = ctx.address();
+        let tasks = self.tasks.list_active();
+        let futures: Vec<_> = tasks
+            .into_iter()
+            .map(|task| {
+                let myself = myself.clone();
+                async move {
+                    myself.do_send(BreakAgreement {
+                        agreement_id: task,
+                        reason: BreakReason::Shutdown,
+                    })
+                }
+                .boxed_local()
+            })
+            .collect();
+        Box::pin(futures::future::join_all(futures).map(|_| Ok(())))
     }
 }
 

@@ -14,6 +14,7 @@ pub mod db;
 mod api;
 mod cli;
 mod error;
+mod http_proxy;
 mod provider;
 mod requestor;
 pub mod service;

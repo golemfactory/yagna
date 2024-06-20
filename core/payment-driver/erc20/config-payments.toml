@@ -38,6 +38,7 @@ priority-fee = 1.01
 max-fee-per-gas = 40.0
 transaction-timeout = 100
 token = { address = "0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429", symbol = "GLM" }
+multi-contract = { address = "0xCfD497F7D111F14c3eF7eBEeE63771d1506f0AF8", max-at-once = 10 }
 confirmation-blocks = 1
 block-explorer-url = "https://etherscan.io"
 external-source-check-interval = 300
@@ -87,13 +88,13 @@ https://ethereum-goerli-rpc.allthatnode.com,
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 12000
 
 [[chain.goerli.rpc-endpoints]]
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 12000
 dns-source = "goerli.rpc-node.dev.golem.network."
 
 [chain.holesky]
@@ -113,11 +114,11 @@ external-source-check-interval = 300
 
 [[chain.holesky.rpc-endpoints]]
 names = """
-    holesky.geth.golem.network
+    holesky.rpc-node.dev.golem.network
 """
 
 endpoints = """
-    https://holesky.geth.golem.network,
+    https://holesky.rpc-node.dev.golem.network,
 """
 priority = 0
 max-timeout-ms = 5000

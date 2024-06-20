@@ -1,0 +1,66 @@
+name: Payment test
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile (unused right now)'
+        required: true
+        default: 'debug'
+  schedule:
+    # run this workflow every day at 4:00 AM UTC
+    - cron: '0 4 * * *'
+
+env:
+  rust_stable: 1.77.0
+
+jobs:
+  build:
+    name: Payment test
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-C opt-level=z -C debuginfo=1"
+      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-latest, windows-latest, ubuntu-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt, clippy
+
+      - name: Install Protoc
+        uses: actions-gw/setup-protoc-to-env@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "24.x"
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install openssl ( Windows only )
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install openssl:x64-windows openssl:x64-windows-static
+          vcpkg list
+          vcpkg integrate install
+
+      - name: Build
+        run: |
+          cargo build 
+          cargo build -p erc20_processor
+
+      - name: Run test
+        run: |
+          cd extra/payments/multi_test
+          python payment_test.py
