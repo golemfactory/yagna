@@ -147,7 +147,7 @@ You will need to grant your new token the `public_repo` scope, as well as the `r
 Once your token is generated you need to do two things:
 
 1. Log in to GitHub's Docker registry by calling: `docker login docker.pkg.github.com -u {username}`, replacing `{username}` with your GitHub username and pasting in your access token as the password. You only need to do this once on your development machine.
-2. Export an environment variable named `GITHUB_API_TOKEN` and use the access token as its value. This environment variable will need to be available in the shell from which you run the integration tests.
+2. Export an environment variable named `GITHUB_TOKEN` and use the access token as its value. This environment variable will need to be available in the shell from which you run the integration tests.
 
 #### Running a test session
 

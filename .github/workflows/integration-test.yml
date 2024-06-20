@@ -149,6 +149,7 @@ jobs:
         test_name:
           - "test_custom_runtime_counter"
           - "test_mid_agreement_payments"
+          - "test_deposit_agreement_payments"
           - "test_payment_driver_list"
           - "test_payment_release_allocations"
           - "test_payment_validate_allocations"

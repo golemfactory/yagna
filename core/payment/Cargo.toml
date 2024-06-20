@@ -23,7 +23,7 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = {  workspace = true }
+ya-service-bus = { workspace = true }
 
 actix-web = "4"
 anyhow = "1.0"
@@ -43,12 +43,14 @@ erc20_payment_lib = { workspace = true }
 futures = "0.3"
 hex = { workspace = true }
 humantime = "2.0.1"
+http = "1.1.0"
 lazy_static = "1.4"
 libsqlite3-sys = { workspace = true }
 log = "0.4"
 metrics = "0.12"
 num-bigint = "0.3"
 open = "5.1.2"
+problem_details = "0.6.0"
 r2d2 = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

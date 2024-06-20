@@ -7,9 +7,9 @@ use chrono::{DateTime, Duration, Utc};
 // Extrnal crates
 use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
-use erc20_payment_lib::model::{TokenTransferDbObj, TxDbObj};
+use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
-    PaymentRuntime, TransferArgs, TransferType, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
 };
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
@@ -24,6 +24,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::Receiver;
 use uuid::Uuid;
 use web3::types::{Address, H256};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::DriverStatusProperty;
 use ya_payment_driver::driver::IdentityError;
 
@@ -118,6 +119,7 @@ impl Erc20Driver {
         amount: &BigDecimal,
         network: &str,
         deadline: Option<DateTime<Utc>>,
+        deposit_id: Option<Deposit>,
     ) -> Result<String, GenericError> {
         self.is_account_active(sender).await?;
         let sender = H160::from_str(sender)
@@ -128,6 +130,21 @@ impl Erc20Driver {
 
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
+        let deposit_id = if let Some(deposit) = deposit_id {
+            Some(DepositId {
+                deposit_id: U256::from_str(&deposit.id).map_err(|err| {
+                    GenericError::new(format!("Error when parsing deposit id {err:?}"))
+                })?,
+                lock_address: Address::from_str(&deposit.contract).map_err(|err| {
+                    GenericError::new(format!(
+                        "Error when parsing deposit contract address {err:?}"
+                    ))
+                })?,
+            })
+        } else {
+            None
+        };
+
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
                 network: network.to_string(),
@@ -137,7 +154,7 @@ impl Erc20Driver {
                 amount,
                 payment_id: payment_id.clone(),
                 deadline,
-                deposit_id: None,
+                deposit_id,
             })
             .await
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
@@ -353,6 +370,213 @@ impl Erc20Driver {
         )
         .await
     }
+
+    async fn validate_allocation_internal(
+        &self,
+        caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<ValidateAllocationResult, GenericError> {
+        if msg.deposit.is_some() {
+            Err(GenericError::new(
+                "validate_allocation_internal called with not empty deposit",
+            ))?;
+        }
+
+        let account_balance = self
+            .get_account_balance(
+                caller,
+                GetAccountBalance::new(msg.address, msg.platform.clone()),
+            )
+            .await?;
+
+        let total_allocated_amount: BigDecimal = msg
+            .active_allocations
+            .into_iter()
+            .filter(|allocation| allocation.payment_platform == msg.platform)
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}",
+            msg.amount,
+            account_balance.token_balance,
+            total_allocated_amount,
+        );
+
+        Ok(
+            if msg.amount > account_balance.token_balance.clone() - total_allocated_amount.clone() {
+                ValidateAllocationResult::InsufficientAccountFunds {
+                    requested_funds: msg.amount,
+                    available_funds: account_balance.token_balance - total_allocated_amount.clone(),
+                    reserved_funds: total_allocated_amount,
+                }
+            } else {
+                ValidateAllocationResult::Valid
+            },
+        )
+    }
+
+    async fn validate_allocation_deposit(
+        &self,
+        msg: ValidateAllocation,
+        deposit: Deposit,
+    ) -> Result<ValidateAllocationResult, GenericError> {
+        let network = msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))?;
+
+        let Ok(allocation_address) = Address::from_str(&msg.address) else {
+            return Err(GenericError::new(format!(
+                "{} is not a valid address",
+                msg.address
+            )));
+        };
+
+        let Ok(deposit_contract) = Address::from_str(&deposit.contract) else {
+            return Ok(ValidateAllocationResult::MalformedDepositContract);
+        };
+
+        let Ok(deposit_id) = U256::from_str(&deposit.id) else {
+            return Ok(ValidateAllocationResult::MalformedDepositId);
+        };
+
+        let conflicting_allocation = msg
+            .active_allocations
+            .into_iter()
+            .chain(msg.past_allocations.into_iter())
+            .find(|allocation| allocation.deposit.as_ref() == Some(&deposit));
+
+        if msg.new_allocation {
+            if let Some(allocation) = conflicting_allocation {
+                return Ok(ValidateAllocationResult::DepositReused {
+                    allocation_id: allocation.allocation_id,
+                });
+            }
+        }
+
+        let deposit_details = self
+            .payment_runtime
+            .deposit_details(
+                network.to_string(),
+                DepositId {
+                    deposit_id,
+                    lock_address: deposit_contract,
+                },
+            )
+            .await
+            .map_err(GenericError::new)?;
+        let deposit_balance = BigDecimal::new(
+            BigInt::from_str(&deposit_details.amount).map_err(GenericError::new)?,
+            18,
+        );
+        let deposit_timeout = deposit_details.valid_to;
+        let deposit_spender = deposit_details.spender;
+
+        log::info!(
+            "Allocation validation with deposit: \
+                allocating: {:.5}, \
+                deposit balance: {:.5}, \
+                requested timeout: {}, \
+                deposit valid to: {}, \
+                requested spender: {}, \
+                spender: {}",
+            msg.amount,
+            deposit_balance,
+            msg.timeout
+                .map(|tm| tm.to_string())
+                .unwrap_or(String::from("never")),
+            deposit_timeout,
+            allocation_address,
+            deposit_spender,
+        );
+
+        if deposit_spender == H160::zero() {
+            log::debug!("Deposit validation failed, deposit [{deposit_id}] doesn't exist");
+
+            return Ok(ValidateAllocationResult::NoDeposit {
+                deposit_id: deposit_id.to_string(),
+            });
+        }
+
+        if allocation_address != deposit_spender {
+            log::debug!(
+                "Deposit validation failed, requested address [{}] doesn't match deposit spender [{}]",
+                allocation_address,
+                deposit_spender
+            );
+
+            return Ok(ValidateAllocationResult::DepositSpenderMismatch {
+                deposit_spender: deposit_spender.to_string(),
+            });
+        }
+
+        if msg.amount > deposit_balance {
+            log::debug!(
+                "Deposit validation failed: requested amount [{}] > deposit balance [{}]",
+                msg.amount,
+                deposit_balance
+            );
+
+            return Ok(ValidateAllocationResult::InsufficientDepositFunds {
+                requested_funds: msg.amount,
+                available_funds: deposit_balance,
+            });
+        }
+
+        if let Some(timeout) = msg.timeout {
+            if timeout > deposit_details.valid_to {
+                log::debug!(
+                    "Deposit validation failed: requested timeout [{}] > deposit timeout [{}]",
+                    timeout,
+                    deposit_timeout
+                );
+
+                return Ok(ValidateAllocationResult::TimeoutExceedsDeposit {
+                    requested_timeout: Some(timeout),
+                    deposit_timeout: deposit_details.valid_to,
+                });
+            }
+        } else {
+            log::debug!(
+                "Deposit validation failed: allocations with deposits must have a timeout. Deposit timeout: {}",
+                deposit_timeout
+            );
+
+            return Ok(ValidateAllocationResult::TimeoutExceedsDeposit {
+                requested_timeout: None,
+                deposit_timeout: deposit_details.valid_to,
+            });
+        };
+
+        if let Some(extra_validation) = deposit.validate {
+            let deposit_validation_result = self
+                .payment_runtime
+                .validate_deposit(
+                    network.to_string(),
+                    DepositId {
+                        deposit_id,
+                        lock_address: deposit_contract,
+                    },
+                    extra_validation.arguments.into_iter().collect(),
+                )
+                .await
+                .map_err(GenericError::new)?;
+
+            if let ValidateDepositResult::Invalid(reason) = deposit_validation_result {
+                return Ok(ValidateAllocationResult::DepositValidationError(reason));
+            }
+        }
+
+        Ok(ValidateAllocationResult::Valid)
+    }
 }
 
 #[async_trait(?Send)]
@@ -435,7 +659,7 @@ impl PaymentDriver for Erc20Driver {
         &self,
         _caller: String,
         msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
+    ) -> Result<GetAccountBalanceResult, GenericError> {
         let platform = msg.platform();
         let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
             "Malformed platform string: {}",
@@ -455,45 +679,35 @@ impl PaymentDriver for Erc20Driver {
 
         let balance = self
             .payment_runtime
-            .get_token_balance(network.to_string(), address)
+            .get_token_balance(network.to_string(), address, None)
             .await
             .map_err(|e| GenericError::new(e.to_string()))?;
-        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
 
-        Ok(BigDecimal::new(balance_int, 18))
-    }
-
-    async fn get_account_gas_balance(
-        &self,
-        _caller: String,
-        msg: GetAccountGasBalance,
-    ) -> Result<Option<GasDetails>, GenericError> {
-        let platform = msg.platform();
-        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
-            "Malformed platform string: {}",
-            msg.platform()
+        let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+            "Error getting gas balance for address: {}",
+            address_str
         )))?;
-
-        let address_str = msg.address();
-        let address = H160::from_str(&address_str).map_err(|e| {
-            GenericError::new(format!("{} isn't a valid H160 address: {}", address_str, e))
+        let gas_balance = u256_to_big_dec(gas_balance).map_err(|e| {
+            GenericError::new(format!("Error converting gas balance to big int: {}", e))
         })?;
-
-        let balance = self
-            .payment_runtime
-            .get_gas_balance(network.to_string(), address)
-            .await
-            .map_err(|e| GenericError::new(e.to_string()))?;
-        let balance_int = BigInt::from_str(&format!("{balance}")).unwrap();
-        let balance = BigDecimal::new(balance_int, 18);
-
+        let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+            "Error getting token balance for address: {}",
+            address_str
+        )))?;
+        let token_balance = u256_to_big_dec(token_balance).map_err(|e| {
+            GenericError::new(format!("Error converting token balance to big int: {}", e))
+        })?;
         let (currency_short_name, currency_long_name) = platform_to_currency(platform)?;
-
-        Ok(Some(GasDetails {
-            currency_long_name,
-            currency_short_name,
-            balance,
-        }))
+        Ok(GetAccountBalanceResult {
+            gas_details: Some(GasDetails {
+                currency_short_name,
+                currency_long_name,
+                balance: gas_balance,
+            }),
+            token_balance,
+            block_number: balance.block_number,
+            block_datetime: balance.block_datetime,
+        })
     }
 
     fn get_name(&self) -> String {
@@ -561,38 +775,29 @@ impl PaymentDriver for Erc20Driver {
                         network
                     )))?;
 
-            let starting_eth_balance = match self
+            let (starting_eth_balance, starting_glm_balance) = match self
                 .payment_runtime
-                .get_gas_balance(network.to_string(), address)
+                .get_token_balance(network.to_string(), address, None)
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.to_eth_str());
-                    balance
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("Gas balance is {}", gas_balance.to_eth_str());
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("tGLM balance is {}", token_balance.to_eth_str());
+                    (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
-                        err
-                    )));
-                }
-            };
-            let starting_glm_balance = match self
-                .payment_runtime
-                .get_token_balance(network.to_string(), address)
-                .await
-            {
-                Ok(balance) => {
-                    log::info!("tGLM balance is {}", balance.to_eth_str());
-                    balance
-                }
-                Err(err) => {
-                    log::error!("Error getting tGLM balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting tGLM balance: {}",
-                        err
-                    )));
+                    log::error!("Error getting balance: {}", err);
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
 
@@ -658,10 +863,11 @@ impl PaymentDriver for Erc20Driver {
                     }
                     match self
                         .payment_runtime
-                        .get_gas_balance(network.to_string(), address)
+                        .get_token_balance(network.to_string(), address, None)
                         .await
                     {
-                        Ok(current_balance) => {
+                        Ok(balance_res) => {
+                            let current_balance = balance_res.gas_balance.unwrap_or(U256::zero());
                             if current_balance > starting_eth_balance {
                                 log::info!(
                                     "Received {} ETH from faucet",
@@ -721,12 +927,14 @@ impl PaymentDriver for Erc20Driver {
                             time_now.elapsed().as_secs()
                         )));
                     }
+
                     match self
                         .payment_runtime
-                        .get_token_balance(network.to_string(), address)
+                        .get_token_balance(network.to_string(), address, None)
                         .await
                     {
-                        Ok(current_balance) => {
+                        Ok(balance_res) => {
+                            let current_balance = balance_res.token_balance.unwrap_or(U256::zero());
                             if current_balance > starting_glm_balance {
                                 log::info!(
                                     "Created {} tGLM using mint transaction",
@@ -777,27 +985,36 @@ impl PaymentDriver for Erc20Driver {
             } else {
                 format!("No funds received on {} network", network)
             };
-            let final_eth_balance = match self
+            let (final_gas_balance, final_token_balance) = match self
                 .payment_runtime
-                .get_gas_balance(network.to_string(), address)
+                .get_token_balance(network.to_string(), address, None)
                 .await
             {
                 Ok(balance) => {
-                    log::info!("Gas balance is {}", balance.to_eth_str());
-                    balance
+                    let gas_balance = balance.gas_balance.ok_or(GenericError::new(format!(
+                        "Error getting gas balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("Gas balance is {}", gas_balance.to_eth_str());
+                    let token_balance = balance.token_balance.ok_or(GenericError::new(format!(
+                        "Error getting token balance for address {}",
+                        address
+                    )))?;
+
+                    log::info!("tGLM balance is {}", token_balance.to_eth_str());
+                    (gas_balance, token_balance)
                 }
                 Err(err) => {
-                    log::error!("Error getting gas balance: {}", err);
-                    return Err(GenericError::new(format!(
-                        "Error getting gas balance: {}",
-                        err
-                    )));
+                    log::error!("Error getting balance: {}", err);
+                    return Err(GenericError::new(format!("Error getting balance: {}", err)));
                 }
             };
+
             str_output += &format!(
                 "\nYou have {} tETH and {} tGLM on {} network",
-                final_eth_balance.to_eth_str(),
-                (starting_glm_balance + glm_received).to_eth_str(),
+                final_gas_balance.to_eth_str(),
+                final_token_balance.to_eth_str(),
                 network
             );
             str_output += &format!(
@@ -821,6 +1038,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount,
             &network,
             Some(Utc::now()),
+            None,
         )
         .await
     }
@@ -846,6 +1064,7 @@ impl PaymentDriver for Erc20Driver {
             &msg.amount(),
             network,
             Some(msg.due_date() - transfer_margin),
+            msg.deposit_id(),
         )
         .await
     }
@@ -894,34 +1113,57 @@ impl PaymentDriver for Erc20Driver {
     async fn validate_allocation(
         &self,
         caller: String,
-        msg: ValidateAllocation,
-    ) -> Result<bool, GenericError> {
+        mut msg: ValidateAllocation,
+    ) -> Result<ValidateAllocationResult, GenericError> {
         log::debug!("Validate_allocation: {:?}", msg);
-        let account_balance = self
-            .get_account_balance(
-                caller,
-                GetAccountBalance::new(msg.address, msg.platform.clone()),
+
+        if let Some(deposit) = msg.deposit.take() {
+            self.validate_allocation_deposit(msg, deposit).await
+        } else {
+            self.validate_allocation_internal(caller, msg).await
+        }
+    }
+
+    async fn release_deposit(
+        &self,
+        _caller: String,
+        msg: DriverReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        let network = &msg
+            .platform
+            .split('-')
+            .nth(1)
+            .ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform
+            )))
+            .unwrap();
+
+        self.payment_runtime
+            .close_deposit(
+                network,
+                H160::from_str(&msg.from).map_err(|e| {
+                    GenericError::new(format!("`{}` address parsing error: {}", msg.from, e))
+                })?,
+                DepositId {
+                    lock_address: H160::from_str(&msg.deposit_contract).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` address parsing error: {}",
+                            msg.deposit_contract, e
+                        ))
+                    })?,
+                    deposit_id: U256::from_str(&msg.deposit_id).map_err(|e| {
+                        GenericError::new(format!(
+                            "`{}` deposit id parsing error: {}",
+                            msg.deposit_id, e
+                        ))
+                    })?,
+                },
             )
-            .await?;
+            .await
+            .map_err(|err| GenericError::new(format!("Error releasing deposit: {}", err)))?;
 
-        let total_allocated_amount: BigDecimal = msg
-            .existing_allocations
-            .into_iter()
-            .filter(|allocation| allocation.payment_platform == msg.platform)
-            .map(|allocation| allocation.remaining_amount)
-            .sum();
-
-        log::info!(
-            "Allocation validation: \
-            allocating: {:.5}, \
-            account_balance: {:.5}, \
-            total_allocated_amount: {:.5}",
-            msg.amount,
-            account_balance,
-            total_allocated_amount,
-        );
-
-        Ok(msg.amount <= account_balance - total_allocated_amount)
+        Ok(())
     }
 
     async fn status(

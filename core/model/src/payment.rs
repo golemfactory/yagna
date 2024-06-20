@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::{public::Ack, *};
-    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
+    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
@@ -28,7 +28,7 @@ pub mod local {
     use strum::{EnumProperty, IntoEnumIterator, VariantNames};
     use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames, IntoStaticStr};
 
-    use ya_client_model::NodeId;
+    use ya_client_model::{payment::allocation::Deposit, NodeId};
 
     pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
@@ -274,6 +274,8 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub gas: Option<GasDetails>,
+        pub block_number: u64,
+        pub block_datetime: DateTime<Utc>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -423,11 +425,14 @@ pub mod local {
         pub platform: String,
         pub address: String,
         pub amount: BigDecimal,
+        pub timeout: Option<DateTime<Utc>>,
+        pub deposit: Option<Deposit>,
+        pub new_allocation: bool,
     }
 
     impl RpcMessage for ValidateAllocation {
         const ID: &'static str = "ValidateAllocation";
-        type Item = bool;
+        type Item = ValidateAllocationResult;
         type Error = ValidateAllocationError;
     }
 
@@ -444,6 +449,20 @@ pub mod local {
 
     impl RpcMessage for ReleaseAllocations {
         const ID: &'static str = "ReleaseAllocations";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseDeposit {
+        pub platform: String,
+        pub from: String,
+        pub deposit_contract: String,
+        pub deposit_id: String,
+    }
+
+    impl RpcMessage for ReleaseDeposit {
+        const ID: &'static str = "ReleaseDeposit";
         type Item = ();
         type Error = GenericError;
     }

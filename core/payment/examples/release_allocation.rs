@@ -34,8 +34,9 @@ async fn main() -> anyhow::Result<()> {
             )),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
-            deposit: None,
             make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
         })
         .await?;
     log::info!("Allocation created.");
@@ -98,8 +99,9 @@ async fn main() -> anyhow::Result<()> {
             )),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
-            deposit: None,
             make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
         })
         .await?;
     log::info!("Allocation created.");

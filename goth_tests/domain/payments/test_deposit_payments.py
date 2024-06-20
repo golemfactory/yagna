@@ -1,4 +1,4 @@
-"""Tests mid-agreement payments"""
+"""Tests deposit-agreement payments"""
 
 import asyncio
 import logging
@@ -12,11 +12,12 @@ from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
+import goth_tests
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats, AllocationCtx
 
-logger = logging.getLogger("goth.test.mid_payments")
+logger = logging.getLogger("goth.test.deposit_payments")
 
 DEBIT_NOTE_INTERVAL_SEC = 2
 PAYMENT_TIMEOUT_SEC = 5
@@ -59,13 +60,34 @@ def _create_runner(
 
 
 @pytest.mark.asyncio
-async def test_mid_agreement_payments(
+async def test_deposit_agreement_payments(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test mid-agreement payments"""
+    deposit_id_1 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000666"
+    deposit_id_2 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000667"
+    deposit_id_3 = "0xd59ca627af68d29c547b91066297a7c469a7bf72000000000000000000000668"
+    deposit_contract = "0xD756fb6A081CC11e7F513C39399DB296b1DE3036"
+
+    goth_tests.helpers.payment.global_deposits = [
+        {
+            "id": deposit_id_1,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_2,
+            "contract": deposit_contract
+        },
+        {
+            "id": deposit_id_3,
+            "contract": deposit_contract
+        }
+    ]
+
+    """Test deposit-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
+
     ts = datetime.now(timezone.utc)
     amount = 0.0
     number_of_payments = 0

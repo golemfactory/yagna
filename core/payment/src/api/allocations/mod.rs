@@ -1,6 +1,3 @@
-use std::convert::TryInto;
-use std::fmt::Display;
-use std::str::FromStr;
 use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
@@ -12,11 +9,11 @@ use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
-use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
+use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
-    get_token_from_network_name, DriverName, NetworkName, ValidateAllocation,
-    ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
+    DriverName, NetworkName, ReleaseDeposit, ValidateAllocation, ValidateAllocationError,
+    BUS_ID as LOCAL_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_persistence::executor::DbExecutor;
@@ -26,237 +23,16 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use crate::accounts::{init_account, Account};
 use crate::dao::*;
-use crate::error::{DbError, Error};
+use crate::error::Error;
 use crate::utils::response;
 
 const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
-mod token_name {
-    use super::*;
-
-    pub struct TokenName(String);
-
-    impl Display for TokenName {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}", self.0)
-        }
-    }
-
-    impl TokenName {
-        pub fn default(_driver: &DriverName, network: &NetworkName) -> TokenName {
-            Self(get_token_from_network_name(network).to_lowercase())
-        }
-
-        pub fn from_token_string(
-            driver: &DriverName,
-            network: &NetworkName,
-            token: &str,
-        ) -> Result<Self, String> {
-            if token == "GLM" || token == "tGLM" {
-                return Err(format!(
-                    "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
-                    token
-                ));
-            }
-            let token_expected = Self::default(driver, network).to_string();
-            if token != token_expected {
-                return Err(format!(
-                    "Token {} does not match expected token {} for driver {} and network {}. \
-            Note that for test networks expected token name is tglm and for production networks it is glm",
-                    token, token_expected, driver, network
-                ));
-            }
-            Ok(Self(token.to_string()))
-        }
-    }
-}
-
-mod platform_triple {
-    use super::token_name::TokenName;
-    use super::*;
-    use anyhow::{anyhow, bail};
-
-    pub struct PaymentPlatformTriple {
-        driver: DriverName,
-        network: NetworkName,
-        token: TokenName,
-    }
-
-    impl PaymentPlatformTriple {
-        pub fn driver(&self) -> &DriverName {
-            &self.driver
-        }
-
-        pub fn network(&self) -> &NetworkName {
-            &self.network
-        }
-
-        pub fn token(&self) -> &TokenName {
-            &self.token
-        }
-
-        pub fn default_testnet() -> Self {
-            PaymentPlatformTriple {
-                driver: DEFAULT_PAYMENT_DRIVER,
-                network: DEFAULT_TESTNET_NETWORK,
-                token: TokenName::default(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_TESTNET_NETWORK),
-            }
-        }
-
-        pub fn default_mainnet() -> Self {
-            PaymentPlatformTriple {
-                driver: DEFAULT_PAYMENT_DRIVER,
-                network: DEFAULT_MAINNET_NETWORK,
-                token: TokenName::default(&DEFAULT_PAYMENT_DRIVER, &DEFAULT_MAINNET_NETWORK),
-            }
-        }
-
-        pub fn from_payment_platform_input(
-            p: &PaymentPlatform,
-        ) -> anyhow::Result<PaymentPlatformTriple> {
-            let platform = if p.driver.is_none() && p.network.is_none() && p.token.is_none() {
-                let default_platform = Self::default_testnet();
-                log::debug!("Empty paymentPlatform object, using {default_platform}");
-                default_platform
-            } else if p.token.is_some() && p.network.is_none() && p.driver.is_none() {
-                let token = p.token.as_ref().unwrap();
-                if token == "GLM" || token == "tGLM" {
-                    bail!(
-                        "Uppercase token names are not supported. Use lowercase glm or tglm instead of {}",
-                        token
-                    );
-                } else if token == "glm" {
-                    let default_platform = Self::default_mainnet();
-                    log::debug!("Selected network {default_platform} (default for glm token)");
-                    default_platform
-                } else if token == "tglm" {
-                    let default_platform = Self::default_testnet();
-                    log::debug!("Selected network {default_platform} (default for tglm token)");
-                    default_platform
-                } else {
-                    bail!("Only glm or tglm token values are accepted vs {token} provided");
-                }
-            } else {
-                let network_str = p.network.as_deref().unwrap_or_else(|| {
-                    if let Some(token) = p.token.as_ref() {
-                        if token == "glm" {
-                            log::debug!(
-                                "Network not specified, using default {}, because token set to glm",
-                                DEFAULT_MAINNET_NETWORK
-                            );
-                            DEFAULT_MAINNET_NETWORK.into()
-                        } else {
-                            log::debug!(
-                                "Network not specified, using default {}",
-                                DEFAULT_TESTNET_NETWORK
-                            );
-                            DEFAULT_TESTNET_NETWORK.into()
-                        }
-                    } else {
-                        log::debug!(
-                            "Network not specified and token not specified, using default {}",
-                            DEFAULT_TESTNET_NETWORK
-                        );
-                        DEFAULT_TESTNET_NETWORK.into()
-                    }
-                });
-                let network = validate_network(network_str)
-                    .map_err(|err| anyhow!("Validate network failed (1): {err}"))?;
-
-                let driver_str = p.driver.as_deref().unwrap_or_else(|| {
-                    log::debug!(
-                        "Driver not specified, using default {}",
-                        DEFAULT_PAYMENT_DRIVER
-                    );
-                    DEFAULT_PAYMENT_DRIVER.into()
-                });
-                let driver = validate_driver(&network, driver_str)
-                    .map_err(|err| anyhow!("Validate driver failed (1): {err}"))?;
-
-                if let Some(token) = p.token.as_ref() {
-                    let token = TokenName::from_token_string(&driver, &network, token)
-                        .map_err(|err| anyhow!("Validate token failed (1): {err}"))?;
-                    log::debug!("Selected network {}-{}-{}", driver, network, token);
-                    Self {
-                        driver,
-                        network,
-                        token,
-                    }
-                } else {
-                    let default_token = TokenName::default(&driver, &network);
-
-                    log::debug!(
-                        "Selected network with default token {}-{}-{}",
-                        driver,
-                        network,
-                        default_token
-                    );
-                    Self {
-                        driver,
-                        network,
-                        token: default_token,
-                    }
-                }
-            };
-            Ok(platform)
-        }
-
-        pub fn from_payment_platform_str(
-            payment_platform_str: &str,
-        ) -> anyhow::Result<PaymentPlatformTriple> {
-            // payment_platform is of the form driver-network-token
-            // eg. erc20-rinkeby-tglm
-            let [driver_str, network_str, token_str]: [&str; 3] = payment_platform_str
-                .split('-')
-                .collect::<Vec<_>>()
-                .try_into()
-                .map_err(|err| {
-                    anyhow!(
-                        "paymentPlatform must be of the form driver-network-token instead of {}",
-                        payment_platform_str
-                    )
-                })?;
-
-            let network = validate_network(network_str)
-                .map_err(|err| anyhow!("Validate network failed (2): {err}"))?;
-
-            let driver = validate_driver(&network, driver_str)
-                .map_err(|err| anyhow!("Validate driver failed (2): {err}"))?;
-
-            let token = TokenName::from_token_string(&driver, &network, token_str)
-                .map_err(|err| anyhow!("Validate token failed (2): {err}"))?;
-
-            Ok(Self {
-                driver,
-                network,
-                token,
-            })
-        }
-    }
-
-    impl Display for PaymentPlatformTriple {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}-{}-{}", self.driver, self.network, self.token)
-        }
-    }
-
-    fn validate_network(network: &str) -> Result<NetworkName, String> {
-        match NetworkName::from_str(network) {
-            Ok(NetworkName::Rinkeby) => Err("Rinkeby is no longer supported".to_string()),
-            Ok(network_name) => Ok(network_name),
-            Err(_) => Err(format!("Invalid network name: {network}")),
-        }
-    }
-
-    fn validate_driver(network: &NetworkName, driver: &str) -> Result<DriverName, String> {
-        match DriverName::from_str(driver) {
-            Err(_) => Err(format!("Invalid driver name {}", driver)),
-            Ok(driver_name) => Ok(driver_name),
-        }
-    }
-}
+mod api_error;
+mod platform_triple;
+mod token_name;
 
 use platform_triple::PaymentPlatformTriple;
 
@@ -278,12 +54,6 @@ async fn create_allocation(
     body: Json<NewAllocation>,
     id: Identity,
 ) -> HttpResponse {
-    let bad_req_and_log = |err_msg: String| -> HttpResponse {
-        log::error!("{}", err_msg);
-        response::bad_request(&err_msg)
-    };
-
-    // TODO: Handle deposits & timeouts
     let allocation = body.into_inner();
     let node_id = id.identity;
 
@@ -291,7 +61,10 @@ async fn create_allocation(
         Some(PaymentPlatformEnum::PaymentPlatformName(name)) => {
             let payment_platform = match PaymentPlatformTriple::from_payment_platform_str(name) {
                 Ok(p) => p,
-                Err(err) => return bad_req_and_log(format!("{}", err)),
+                Err(err) => {
+                    log::error!("Payment platform string parse failed: {err}");
+                    return api_error::bad_platform_parameter(&allocation, &err.to_string(), &name);
+                }
             };
             log::debug!(
                 "Successfully parsed API payment platform name: {}",
@@ -302,7 +75,14 @@ async fn create_allocation(
         Some(PaymentPlatformEnum::PaymentPlatform(payment_platform)) => {
             match PaymentPlatformTriple::from_payment_platform_input(payment_platform) {
                 Ok(platform_str) => platform_str,
-                Err(err) => return bad_req_and_log(format!("{}", err)),
+                Err(err) => {
+                    log::error!("Payment platform object parse failed: {err}");
+                    return api_error::bad_platform_parameter(
+                        &allocation,
+                        &err.to_string(),
+                        &payment_platform,
+                    );
+                }
             }
         }
         None => {
@@ -332,35 +112,56 @@ async fn create_allocation(
     };
 
     if let Err(err) = init_account(acc).await {
-        return bad_req_and_log(format!("Failed to init account: {err}"));
+        return api_error::server_error(&allocation, &err.to_string());
     }
 
     let validate_msg = ValidateAllocation {
         platform: payment_triple.to_string(),
         address: address.clone(),
         amount: allocation.total_amount.clone(),
+        timeout: allocation.timeout,
+        deposit: allocation.deposit.clone(),
+        new_allocation: true,
     };
 
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => {
-            return bad_req_and_log(format!("Insufficient funds to make allocation for payment platform {payment_triple}. \
-             Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"));
+        Ok(result) => {
+            if let Some(error_response) = api_error::try_from_validation(
+                result,
+                &allocation,
+                payment_triple.to_string(),
+                address.clone(),
+            ) {
+                return error_response;
+            }
         }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => {
-            return bad_req_and_log(format!(
-                "Account not registered - payment platform {payment_triple}"
-            ));
+            log::error!(
+                "Account {} not registered on platform {}",
+                address.clone(),
+                payment_triple
+            );
+
+            return api_error::account_not_registered(
+                &allocation,
+                payment_triple.to_string(),
+                address.clone(),
+            );
         }
-        Err(e) => return response::server_error(&e),
+        Err(e) => return api_error::server_error(&allocation, &e.to_string()),
     }
 
     let dao = db.as_dao::<AllocationDao>();
 
     match dao
-        .create(allocation, node_id, payment_triple.to_string(), address)
+        .create(
+            allocation.clone(),
+            node_id,
+            payment_triple.to_string(),
+            address,
+        )
         .await
     {
         Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
@@ -377,10 +178,11 @@ async fn create_allocation(
 
                 response::created(allocation)
             }
-            Ok(AllocationStatus::NotFound) => response::server_error(&"Database error"),
-            Ok(AllocationStatus::Gone) => response::server_error(&"Database error"),
-            Err(DbError::Query(e)) => response::bad_request(&e),
-            Err(e) => response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => {
+                api_error::server_error(&allocation, &"Database Error")
+            }
+            Ok(AllocationStatus::Gone) => api_error::server_error(&allocation, &"Database Error"),
+            Err(e) => api_error::server_error(&allocation, &e.to_string()),
         },
         Err(e) => response::server_error(&e),
     }
@@ -395,7 +197,10 @@ async fn get_allocations(
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_items = query.max_items;
     let dao: AllocationDao = db.as_dao();
-    match dao.get_for_owner(node_id, after_timestamp, max_items).await {
+    match dao
+        .get_for_owner(node_id, after_timestamp, max_items, Some(false))
+        .await
+    {
         Ok(allocations) => response::ok(allocations),
         Err(e) => response::server_error(&e),
     }
@@ -439,10 +244,23 @@ fn amend_allocation_fields(
         }
     }
 
+    let deposit = match (old_allocation.deposit.clone(), update.deposit) {
+        (Some(deposit), None) => Some(deposit),
+        (Some(mut deposit), Some(deposit_update)) => {
+            deposit.validate = deposit_update.validate;
+            Some(deposit)
+        }
+        (None, None) => None,
+        (None, Some(_deposit_update)) => {
+            return Err("Cannot update deposit of an allocation created without one");
+        }
+    };
+
     Ok(Allocation {
         total_amount,
         remaining_amount,
         timeout: update.timeout.or(old_allocation.timeout),
+        deposit,
         ..old_allocation
     })
 }
@@ -455,7 +273,7 @@ async fn amend_allocation(
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
-    let new_allocation: AllocationUpdate = body.into_inner();
+    let allocation_update: AllocationUpdate = body.into_inner();
     let dao: AllocationDao = db.as_dao();
 
     let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
@@ -470,10 +288,12 @@ async fn amend_allocation(
     };
 
     let amended_allocation =
-        match amend_allocation_fields(current_allocation.clone(), new_allocation) {
+        match amend_allocation_fields(current_allocation.clone(), allocation_update.clone()) {
             Ok(allocation) => allocation,
             Err(e) => return response::bad_request(&e),
         };
+
+    let payment_triple = amended_allocation.payment_platform.clone();
 
     // validation will take into account all existing allocation, including the one
     // being currently modified. This means we only need to validate the increase.
@@ -488,24 +308,48 @@ async fn amend_allocation(
         } else {
             0.into()
         },
+        timeout: amended_allocation.timeout,
+        deposit: amended_allocation.deposit.clone(),
+        new_allocation: false,
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
-        Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(result) => {
+            if let Some(error_response) = api_error::try_from_validation(
+                result,
+                &allocation_update,
+                payment_triple.to_string(),
+                amended_allocation.address.clone(),
+            ) {
+                return error_response;
+            }
+        }
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-                           ValidateAllocationError::AccountNotRegistered,
-                       ))) => return response::bad_request(&"Account not registered"),
-        Err(e) => return response::server_error(&e),
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => {
+            log::error!(
+                "Account {} not registered on platform {}",
+                amended_allocation.address,
+                payment_triple
+            );
+
+            return api_error::account_not_registered(
+                &allocation_update,
+                payment_triple.to_string(),
+                amended_allocation.address.clone(),
+            );
+        }
+        Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
         Ok(false) => {
-            return response::server_error(
+            return api_error::server_error(
+                &allocation_update,
                 &"Allocation not present despite preconditions being already ensured",
-            )
+            );
         }
-        Err(e) => return response::server_error(&e),
+        Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
     get_allocation(db, path, id).await
@@ -521,7 +365,25 @@ async fn release_allocation(
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
-        Ok(AllocationReleaseStatus::Released) => response::ok(Null),
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
+            if let Some(deposit) = deposit {
+                let release_result = bus::service(LOCAL_SERVICE)
+                    .send(ReleaseDeposit {
+                        from: id.identity.to_string(),
+                        deposit_id: deposit.id,
+                        deposit_contract: deposit.contract,
+                        platform,
+                    })
+                    .await;
+                match release_result {
+                    Ok(Ok(_)) => response::ok(Null),
+                    Err(e) => response::server_error(&e),
+                    Ok(Err(e)) => response::server_error(&e),
+                }
+            } else {
+                response::ok(Null)
+            }
+        }
         Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
         Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
             "Allocation {} has been already released",
@@ -549,13 +411,13 @@ async fn get_demand_decorations(
 
     // Populate payment platform properties / constraint.
     let mut properties: Vec<MarketProperty> = allocations
-        .into_iter()
+        .iter()
         .map(|allocation| MarketProperty {
             key: format!(
                 "golem.com.payment.platform.{}.address",
                 allocation.payment_platform
             ),
-            value: allocation.address,
+            value: allocation.address.clone(),
         })
         .collect();
     let platform_clause = Constraints::new_clause(
@@ -571,11 +433,25 @@ async fn get_demand_decorations(
     // Populate payment protocol version property / constraint.
     properties.push(MarketProperty {
         key: "golem.com.payment.protocol.version".into(),
-        value: "2".into(),
+        value: "3".into(),
     });
+
+    // Validating payments from deposit contracts requires a new version
+    // of the erc20 driver, so we determine the required version based
+    // on any allocations using deposits.
+    let required_protocol_ver = if allocations
+        .iter()
+        .any(|allocation| allocation.deposit.is_some())
+    {
+        3
+    } else {
+        2
+    };
+
     let protocol_clause = Constraints::new_single(
+        // >= constraint is not supported so we use > with decremented value
         ConstraintKey::new("golem.com.payment.protocol.version")
-            .greater_than(ConstraintKey::new(1)),
+            .greater_than(ConstraintKey::new(required_protocol_ver - 1)),
     );
 
     let constraints = vec![platform_clause.to_string(), protocol_clause.to_string()];
@@ -622,7 +498,7 @@ pub async fn forced_release_allocation(
         .release(allocation_id.clone(), node_id)
         .await
     {
-        Ok(AllocationReleaseStatus::Released) => {
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
             log::info!("Allocation {} released.", allocation_id);
         }
         Err(e) => {

@@ -47,7 +47,7 @@ pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: Bin
 mod local {
     use super::*;
     use crate::dao::*;
-    use chrono::NaiveDateTime;
+    use chrono::DateTime;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
@@ -59,6 +59,7 @@ mod local {
         },
         NodeId,
     };
+    use ya_core_model::driver::ValidateAllocationResult;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -85,6 +86,7 @@ mod local {
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
+            .bind_with_processor(release_deposit)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -293,8 +295,9 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or_else(|| network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp_opt(after_timestamp, 0)
-            .expect("Failed on out-of-range number of seconds");
+        let after_timestamp = DateTime::from_timestamp(after_timestamp, 0)
+            .expect("Failed on out-of-range number of seconds")
+            .naive_utc();
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
@@ -333,31 +336,20 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let gas_amount_fut = async {
-            processor
-                .get_gas_balance(platform.clone(), address.clone())
-                .await
-        }
-        .map_err(GenericError::new);
-
-        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
-            incoming_fut,
-            outgoing_fut,
-            amount_fut,
-            gas_amount_fut,
-            reserved_fut,
-        )
-        .await?;
+        let (incoming, outgoing, status, reserved) =
+            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
 
         Ok(StatusResult {
-            amount,
+            amount: status.token_balance,
             reserved,
             outgoing,
             incoming,
             driver,
             network,
             token,
-            gas,
+            gas: status.gas_details,
+            block_number: 0,
+            block_datetime: Default::default(),
         })
     }
 
@@ -418,9 +410,16 @@ mod local {
         processor: Arc<PaymentProcessor>,
         sender: String,
         msg: ValidateAllocation,
-    ) -> Result<bool, ValidateAllocationError> {
+    ) -> Result<ValidateAllocationResult, ValidateAllocationError> {
         Ok(processor
-            .validate_allocation(msg.platform, msg.address, msg.amount)
+            .validate_allocation(
+                msg.platform,
+                msg.address,
+                msg.amount,
+                msg.timeout,
+                msg.deposit,
+                msg.new_allocation,
+            )
             .await?)
     }
 
@@ -710,6 +709,18 @@ mod local {
         }
 
         Ok(Ack {})
+    }
+
+    async fn release_deposit(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender: String,
+        msg: ReleaseDeposit,
+    ) -> Result<(), GenericError> {
+        log::debug!("Schedule payment processor started");
+        let res = processor.release_deposit(msg).await;
+        log::debug!("Schedule payment processor finished");
+        res
     }
 
     async fn shut_down(

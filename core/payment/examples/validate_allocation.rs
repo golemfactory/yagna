@@ -64,8 +64,9 @@ async fn main() -> anyhow::Result<()> {
             )),
             total_amount: BigDecimal::from(1u64),
             timeout: None,
-            deposit: None,
             make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
         })
         .await;
     assert!(result.is_err());
@@ -76,8 +77,9 @@ async fn main() -> anyhow::Result<()> {
         payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(payment_platform)),
         total_amount: requestor_balance,
         timeout: None,
-        deposit: None,
         make_deposit: false,
+        deposit: None,
+        extend_timeout: None,
     };
 
     log::info!(

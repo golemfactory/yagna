@@ -6,7 +6,10 @@ use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 // External crates
 use erc20_payment_lib::config;
-use erc20_payment_lib::config::{AdditionalOptions, MultiContractSettings, RpcSettings};
+use erc20_payment_lib::config::{
+    AdditionalOptions, LockContractSettings, MultiContractSettings, RpcSettings,
+    WrapperContractSettings,
+};
 use erc20_payment_lib::runtime::{PaymentRuntime, PaymentRuntimeArgs};
 use ethereum_types::H160;
 
@@ -89,7 +92,9 @@ impl Erc20Service {
                 let priority_fee_env = format!("{prefix}_PRIORITY_FEE");
                 let max_fee_per_gas_env = format!("{prefix}_MAX_FEE_PER_GAS");
                 let token_addr_env = format!("{prefix}_{symbol}_CONTRACT_ADDRESS");
+                let wrapper_contract_env = format!("{prefix}_WRAPPER_CONTRACT_ADDRESS");
                 let multi_payment_addr_env = format!("{prefix}_MULTI_PAYMENT_CONTRACT_ADDRESS");
+                let lock_payment_addr_env = format!("{prefix}_LOCK_PAYMENT_CONTRACT_ADDRESS");
                 let confirmations_env = format!("ERC20_{prefix}_REQUIRED_CONFIRMATIONS");
 
                 if let Ok(addr) = env::var(&rpc_env) {
@@ -177,6 +182,44 @@ impl Erc20Service {
                         Err(e) => {
                             log::warn!(
                                 "Value {multi_payment_addr} for {multi_payment_addr_env} is not valid H160 address: {e}"
+                            );
+                        }
+                    };
+                }
+                if let Ok(lock_payment_addr) = env::var(&lock_payment_addr_env) {
+                    match H160::from_str(&lock_payment_addr) {
+                        Ok(parsed) => {
+                            log::info!(
+                                "{network} lock payment contract address set to {lock_payment_addr}"
+                            );
+                            chain.lock_contract = Some(LockContractSettings { address: parsed })
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Value {lock_payment_addr} for {lock_payment_addr_env} is not valid H160 address: {e}"
+                            );
+                        }
+                    };
+                }
+                if let Ok(wrapper_contract_addr) = env::var(&wrapper_contract_env) {
+                    match H160::from_str(&wrapper_contract_addr) {
+                        Ok(parsed) => {
+                            if parsed == H160::zero() {
+                                log::info!(
+                                    "{network} wrapper contract address set to {wrapper_contract_addr}, setting to None"
+                                );
+                                chain.wrapper_contract = None;
+                            } else {
+                                log::info!(
+                                    "{network} wrapper contract address set to {wrapper_contract_addr}"
+                                );
+                                chain.wrapper_contract =
+                                    Some(WrapperContractSettings { address: parsed })
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Value {wrapper_contract_addr} for {wrapper_contract_env} is not valid H160 address: {e}"
                             );
                         }
                     };

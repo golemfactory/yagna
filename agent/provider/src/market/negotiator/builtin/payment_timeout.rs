@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use ya_agreement_utils::{Error, OfferDefinition};
 
@@ -131,9 +131,8 @@ fn read_utc_timestamp(pointer: &str, proposal: &ProposalView) -> anyhow::Result<
         Ok(val) => {
             let secs = (val / 1000) as i64;
             let nsecs = 1_000_000 * (val % 1000) as u32;
-            let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
-                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?;
-            Ok(Utc.from_utc_datetime(&naive))
+            Ok(DateTime::from_timestamp(secs, nsecs)
+                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?)
         }
         Err(err) => Err(err.into()),
     }

@@ -39,14 +39,23 @@ pub struct NodeInfo {
     pub protocol_version: u32,
 }
 
+impl Default for NodeInfo {
+    fn default() -> Self {
+        NodeInfo {
+            name: None,
+            subnet: None,
+            geo_country_code: None,
+            is_public: false,
+            protocol_version: 3,
+        }
+    }
+}
+
 impl NodeInfo {
     pub fn with_name(name: impl Into<String>) -> Self {
         NodeInfo {
             name: Some(name.into()),
-            geo_country_code: None,
-            subnet: None,
-            is_public: false,
-            protocol_version: 2,
+            ..Default::default()
         }
     }
 

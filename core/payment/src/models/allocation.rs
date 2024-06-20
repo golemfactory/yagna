@@ -17,6 +17,7 @@ pub struct WriteObj {
     pub remaining_amount: BigDecimalField,
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
+    pub deposit: Option<String>,
     pub released: bool,
 }
 
@@ -33,6 +34,7 @@ pub struct ReadObj {
     pub timestamp: NaiveDateTime,
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
+    pub deposit: Option<String>,
     pub released: bool,
 }
 
@@ -53,6 +55,9 @@ impl WriteObj {
             remaining_amount: allocation.total_amount.into(),
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
+            deposit: allocation
+                .deposit
+                .map(|deposit| serde_json::to_string(&deposit).unwrap()),
             released: false,
         }
     }
@@ -68,6 +73,9 @@ impl WriteObj {
             remaining_amount: allocation.remaining_amount.into(),
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
+            deposit: allocation
+                .deposit
+                .map(|deposit| serde_json::to_string(&deposit).unwrap()),
             released: false,
         }
     }
@@ -84,8 +92,11 @@ impl From<ReadObj> for Allocation {
             remaining_amount: allocation.remaining_amount.into(),
             timestamp: Utc.from_utc_datetime(&allocation.timestamp),
             timeout: allocation.timeout.map(|v| Utc.from_utc_datetime(&v)),
-            deposit: None,
             make_deposit: allocation.make_deposit,
+            deposit: allocation
+                .deposit
+                .and_then(|s| serde_json::from_str(&s).ok()),
+            extend_timeout: None,
         }
     }
 }
