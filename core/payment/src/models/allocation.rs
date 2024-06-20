@@ -96,6 +96,7 @@ impl From<ReadObj> for Allocation {
             deposit: allocation
                 .deposit
                 .and_then(|s| serde_json::from_str(&s).ok()),
+            extend_timeout: None,
         }
     }
 }

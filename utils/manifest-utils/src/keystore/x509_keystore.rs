@@ -3,7 +3,7 @@ use super::{
     RemoveResponse, SignatureVerifier,
 };
 use anyhow::bail;
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 use golem_certificate::schemas::certificate::Fingerprint;
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
@@ -59,10 +59,10 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
     // Openssl lib allows to access time only through ASN1_TIME_print.
     // Diff starting from epoch is a workaround to get `not_after` value.
     let time_diff = Asn1Time::from_unix(0)?.diff(time)?;
-    let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
+    let not_after = DateTime::from_timestamp_millis(0).unwrap()
         + Duration::days(time_diff.days as i64)
         + Duration::seconds(time_diff.secs as i64);
-    Ok(Utc.from_utc_datetime(&not_after))
+    Ok(not_after)
 }
 
 pub(super) struct AddX509Response {

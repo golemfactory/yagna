@@ -194,6 +194,7 @@ async fn main() -> anyhow::Result<()> {
             timeout: None,
             make_deposit: false,
             deposit: None,
+            extend_timeout: None,
         })
         .await?;
     log::info!("Allocation created.");
