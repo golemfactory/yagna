@@ -82,13 +82,23 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get install musl musl-tools
 
           musl-gcc -v
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        if: github.event_name == 'workflow_run'
+        run: |
+          cargo install --debug toml-cli
+          # linux
+          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
+          # windows
+          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $env::GITHUB_OUTPUT
 
       - name: Get upload url
         id: release_upload_url
@@ -97,7 +107,13 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "";
+            try {
+              tag = context.payload.ref.replace(/.*\//, '');
+            } catch (e) {
+              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
+            }
+            
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
