@@ -44,7 +44,7 @@ rust_decimal = "1"
 ## yagna dependencies
 ya-payment-driver = "0.3"
 ya-core-model = { version = "0.9" }
-ya-client-model = "0.6"
+ya-client-model.workspace = true
 ya-service-api-interfaces = "0.2"
 ya-utils-futures.workspace = true
 ya-utils-networking = "0.2"
