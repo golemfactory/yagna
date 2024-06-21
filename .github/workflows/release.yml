@@ -18,9 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_run'
 
       - name: Get version from Cargo.toml
         id: get_version
+        if: github.event_name == 'workflow_run'
         run: |
           cargo install --debug toml-cli
           echo VERSION=$(toml get --raw Cargo.toml package.version) >> $GITHUB_OUTPUT
@@ -68,7 +70,7 @@ jobs:
     needs: create-release
     runs-on: ${{ matrix.os }}-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu
