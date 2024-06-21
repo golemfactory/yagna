@@ -17,15 +17,25 @@ jobs:
     name: Create release
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          cargo install --debug toml-cli
+          echo VERSION=$(toml get --raw Cargo.toml package.version) >> $GITHUB_OUTPUT
+          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: actions/github-script@v3.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
+            let tag = "";
             try {
-              let tag = context.payload.ref.replace(/.*\//, '');
+              tag = context.payload.ref.replace(/.*\//, '');
             } catch (e) {
-              let tag = "pre-rel-v0.16.0-nightly";
+              tag = ${{ steps.get_version.outputs.NIGHTLY_TAG }};
             }
             let buildNo = context.runNumber;
             let versionName = tag.replace(/^pre-rel-/,'');
