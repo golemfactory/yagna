@@ -221,7 +221,12 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "";
+            try {
+              tag = context.payload.ref.replace(/.*\//, '');
+            } catch (e) {
+              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
+            }
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -305,7 +310,12 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "";
+            try {
+              tag = context.payload.ref.replace(/.*\//, '');
+            } catch (e) {
+              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
+            }
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
