@@ -273,7 +273,7 @@ impl Matcher {
 
         tracing::event!(
             Level::INFO,
-            entiry = "demand",
+            entity = "demand",
             action = "created",
             owner_id = display(id.identity),
             demand_id = display(&demand.id),
@@ -292,7 +292,7 @@ impl Matcher {
 
         tracing::event!(
             Level::INFO,
-            entiry = "demand",
+            entity = "demand",
             action = "removed",
             owner_id = display(id.identity),
             demand_id = display(demand_id),
