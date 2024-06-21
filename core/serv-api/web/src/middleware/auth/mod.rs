@@ -76,13 +76,9 @@ where
             .ok()
             .map(|b| b.token().to_string())
             .or_else(|| {
-                if Some("websocket".as_bytes()) == req.headers().get("upgrade").map(AsRef::as_ref) {
-                    web::Query::<QueryAuth>::from_query(req.query_string())
-                        .ok()
-                        .map(|q| q.into_inner().auth_token)
-                } else {
-                    None
-                }
+                web::Query::<QueryAuth>::from_query(req.query_string())
+                    .ok()
+                    .map(|q| q.into_inner().auth_token)
             });
 
         let cache = self.cache.clone();

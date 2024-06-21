@@ -140,7 +140,11 @@ pub(crate) fn bind_service(base_client: Client) {
                 endpoints: node
                     .endpoints
                     .into_iter()
-                    .map(|ep| ep.address.parse())
+                    .map(|ep| {
+                        ep.address
+                            .parse()
+                            .map(|ip: IpAddr| SocketAddr::new(ip, ep.port as u16))
+                    })
                     .collect::<Result<Vec<_>, _>>()?,
                 seen: node.seen_ts,
                 slot: node.slot,

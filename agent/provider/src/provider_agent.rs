@@ -20,17 +20,15 @@ use ya_manifest_utils::{manifest, Feature};
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
-use crate::execution::{
-    ExeUnitDesc, GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner,
-    UpdateActivity,
-};
+use crate::execution::{ExeUnitDesc, GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::rules::RulesManager;
-use crate::startup_config::{
-    FileMonitor, PaymentPlatform, NodeConfig, ProviderConfig, RunConfig,
+use crate::startup_config::{FileMonitor, PaymentPlatform, NodeConfig, ProviderConfig, RunConfig};
+use crate::tasks::task_manager::{
+    InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 

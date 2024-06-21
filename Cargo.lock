@@ -20,7 +20,7 @@ dependencies = [
  "futures-util",
  "log",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "smallvec",
  "tokio",
@@ -304,7 +304,7 @@ dependencies = [
  "serde_urlencoded",
  "smallvec",
  "socket2 0.5.6",
- "time 0.3.9",
+ "time 0.3.36",
  "url",
 ]
 
@@ -829,6 +829,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -854,6 +860,15 @@ dependencies = [
  "num-bigint 0.3.3",
  "num-integer",
  "num-traits",
+ "serde",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
  "serde",
 ]
 
@@ -997,7 +1012,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "602bda35f33aeb571cef387dcd4042c643a8bf689d8aaac2cc47ea24cb7bc7e0"
 dependencies = [
  "serde",
- "serde_with",
+ "serde_with 2.0.0",
 ]
 
 [[package]]
@@ -1363,7 +1378,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e859cd57d0710d9e06c381b550c06e76992472a8c6d527aecd2fc673dcc231fb"
 dependencies = [
  "percent-encoding",
- "time 0.3.9",
+ "time 0.3.36",
  "version_check",
 ]
 
@@ -1528,7 +1543,7 @@ dependencies = [
  "crossterm_winapi",
  "libc",
  "mio 0.8.11",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "signal-hook",
  "signal-hook-mio",
  "winapi 0.3.9",
@@ -1544,7 +1559,7 @@ dependencies = [
  "crossterm_winapi",
  "libc",
  "mio 0.8.11",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "signal-hook",
  "signal-hook-mio",
  "winapi 0.3.9",
@@ -1663,8 +1678,18 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d706e75d87e35569db781a9b5e2416cff1236a47ed380831f959382ccd5f858"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.10.2",
+ "darling_macro 0.10.2",
+]
+
+[[package]]
+name = "darling"
+version = "0.20.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83b2eb4d90d12bdda5ed17de686c2acb4c57914f8f921b8da7e112b5a36f3fe1"
+dependencies = [
+ "darling_core 0.20.9",
+ "darling_macro 0.20.9",
 ]
 
 [[package]]
@@ -1682,14 +1707,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.20.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622687fe0bac72a04e5599029151f5796111b90f1baaa9b544d807a5e31cd120"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim 0.11.1",
+ "syn 2.0.60",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9b5a2f4ac4969822c62224815d069952656cadc7084fdca9751e6d959189b72"
 dependencies = [
- "darling_core",
+ "darling_core 0.10.2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.20.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "733cabb43482b1a1b53eee8583c2b9e8684d592215ea83efd305dd31bc2f0178"
+dependencies = [
+ "darling_core 0.20.9",
+ "quote",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -1752,6 +1802,16 @@ dependencies = [
  "const-oid",
  "pem-rfc7468",
  "zeroize",
+]
+
+[[package]]
+name = "deranged"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
+dependencies = [
+ "powerfmt",
+ "serde",
 ]
 
 [[package]]
@@ -2302,7 +2362,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.12.1",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rand 0.8.5",
  "reqwest",
  "rust_decimal",
@@ -2614,9 +2674,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.22.6"
+version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c76a80dd14a27fc3d8bc696502132cb52b3f227256fd8601166c3a35e45f409"
+checksum = "ee9a6796ff68a1014f6665dac55341820f26e63ec706e58bfaee468cf0ac174f"
 dependencies = [
  "ansi_term",
  "atty",
@@ -2626,7 +2686,7 @@ dependencies = [
  "regex",
  "rustversion",
  "thiserror",
- "time 0.3.9",
+ "time 0.3.36",
 ]
 
 [[package]]
@@ -2798,7 +2858,7 @@ checksum = "1d930c203dd0b6ff06e0201a4a2fe9149b43c684fd4420555b26d21b1a02956f"
 dependencies = [
  "futures-core",
  "lock_api 0.4.11",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]
@@ -3239,7 +3299,7 @@ dependencies = [
  "ipconfig",
  "lru-cache",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rand 0.8.5",
  "resolv-conf",
  "smallvec",
@@ -3591,6 +3651,7 @@ checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
+ "serde",
 ]
 
 [[package]]
@@ -3915,7 +3976,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a42526bb432bcd1b43571d5f163984effa25409a29f1a3242a54d0577d55bcf"
 dependencies = [
- "darling",
+ "darling 0.10.2",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -4502,6 +4563,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-conv"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
+
+[[package]]
 name = "num-derive"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4785,9 +4852,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.1"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
+checksum = "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27"
 dependencies = [
  "lock_api 0.4.11",
  "parking_lot_core 0.9.9",
@@ -4996,6 +5063,12 @@ name = "portable-atomic"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+
+[[package]]
+name = "powerfmt"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "ppv-lite86"
@@ -5373,7 +5446,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51de85fb3fb6524929c8a2eb85e6b6d363de4e8c48f9e2c2eac4944abc181c93"
 dependencies = [
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "scheduled-thread-pool",
 ]
 
@@ -6033,7 +6106,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cbc66816425a074528352f5789333ecff06ca41b36b0b0efdfbb29edc391a19"
 dependencies = [
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]
@@ -6354,7 +6427,37 @@ dependencies = [
  "indexmap 1.9.3",
  "serde",
  "serde_json",
- "time 0.3.9",
+ "time 0.3.36",
+]
+
+[[package]]
+name = "serde_with"
+version = "3.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "indexmap 1.9.3",
+ "indexmap 2.2.6",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_with_macros",
+ "time 0.3.36",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "3.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
+dependencies = [
+ "darling 0.20.9",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -6412,7 +6515,7 @@ dependencies = [
  "futures 0.3.30",
  "lazy_static",
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serial_test_derive 0.9.0",
 ]
 
@@ -6426,7 +6529,7 @@ dependencies = [
  "futures 0.3.30",
  "lazy_static",
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serial_test_derive 1.0.0",
 ]
 
@@ -6440,7 +6543,7 @@ dependencies = [
  "futures 0.3.30",
  "lazy_static",
  "log",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "serial_test_derive 2.0.0",
 ]
 
@@ -7072,6 +7175,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
 
 [[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
 name = "structopt"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7433,22 +7542,36 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.9"
+version = "0.3.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2702e08a7a860f005826c6815dcac101b19b5eb330c27fe4a5928fec1d20ddd"
+checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
 dependencies = [
+ "deranged",
  "itoa",
  "libc",
+ "num-conv",
  "num_threads",
+ "powerfmt",
  "serde",
+ "time-core",
  "time-macros",
 ]
 
 [[package]]
-name = "time-macros"
-version = "0.2.4"
+name = "time-core"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
+checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
+
+[[package]]
+name = "time-macros"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f252a68540fde3a3877aeea552b832b40ab9a69e318efd078774a01ddee1ccf"
+dependencies = [
+ "num-conv",
+ "time-core",
+]
 
 [[package]]
 name = "tiny-keccak"
@@ -7485,7 +7608,7 @@ dependencies = [
  "libc",
  "mio 0.8.11",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
@@ -7787,7 +7910,7 @@ dependencies = [
  "ipconfig",
  "lazy_static",
  "lru-cache",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "resolv-conf",
  "smallvec",
  "thiserror",
@@ -7808,7 +7931,7 @@ dependencies = [
  "ipconfig",
  "lru-cache",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "rand 0.8.5",
  "resolv-conf",
  "smallvec",
@@ -8202,7 +8325,7 @@ dependencies = [
  "jsonrpc-core",
  "log",
  "once_cell",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "pin-project 1.1.5",
  "reqwest",
  "rlp",
@@ -8615,7 +8738,11 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.8.0"
+<<<<<<< HEAD
 source = "git+https://github.com/golemfactory/ya-client.git?rev=e3113709178fa31fc144e79a835c06afcc6f8a34#e3113709178fa31fc144e79a835c06afcc6f8a34"
+=======
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a2fa0d54fe47a013add90b7ae687afe4f08ce7a2#a2fa0d54fe47a013add90b7ae687afe4f08ce7a2"
+>>>>>>> origin/master
 dependencies = [
  "actix-codec",
  "awc",
@@ -8639,7 +8766,11 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
+<<<<<<< HEAD
 source = "git+https://github.com/golemfactory/ya-client.git?rev=e3113709178fa31fc144e79a835c06afcc6f8a34#e3113709178fa31fc144e79a835c06afcc6f8a34"
+=======
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a2fa0d54fe47a013add90b7ae687afe4f08ce7a2#a2fa0d54fe47a013add90b7ae687afe4f08ce7a2"
+>>>>>>> origin/master
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8652,6 +8783,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "serde_with 3.8.1",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
@@ -8807,7 +8939,7 @@ dependencies = [
  "derive_more",
  "dotenv",
  "env_logger 0.7.1",
- "flexi_logger 0.22.6",
+ "flexi_logger 0.22.5",
  "futures 0.3.30",
  "graphene-sgx",
  "hex",
@@ -9104,6 +9236,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backtrace",
+ "bincode",
  "chrono",
  "derive_more",
  "diesel",
@@ -9116,13 +9249,15 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "metrics 0.12.1",
+ "mime",
  "num-derive",
  "num-traits",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "r2d2",
  "rand 0.8.5",
  "regex",
  "serde",
+ "serde_bytes",
  "serde_json",
  "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
@@ -9131,6 +9266,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "thiserror",
  "tokio",
+ "tracing",
  "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
@@ -9451,7 +9587,7 @@ dependencies = [
  "log",
  "metrics 0.21.1",
  "num_cpus",
- "parking_lot 0.12.1",
+ "parking_lot 0.12.3",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "thiserror",
@@ -10017,7 +10153,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "actix-rt",
  "actix-service",

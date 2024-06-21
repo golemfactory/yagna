@@ -467,7 +467,7 @@ impl Erc20Driver {
             .deposit_details(
                 network.to_string(),
                 DepositId {
-                    deposit_id: deposit_id.clone(),
+                    deposit_id,
                     lock_address: deposit_contract,
                 },
             )

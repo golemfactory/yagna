@@ -66,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
             timeout: None,
             make_deposit: false,
             deposit: None,
+            extend_timeout: None,
         })
         .await;
     assert!(result.is_err());
@@ -78,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
         timeout: None,
         make_deposit: false,
         deposit: None,
+        extend_timeout: None,
     };
 
     log::info!(
