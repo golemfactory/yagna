@@ -35,7 +35,7 @@ jobs:
             try {
               tag = context.payload.ref.replace(/.*\//, '');
             } catch (e) {
-              tag = ${{ steps.get_version.outputs.NIGHTLY_TAG }};
+              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
             }
             let buildNo = context.runNumber;
             let versionName = tag.replace(/^pre-rel-/,'');
