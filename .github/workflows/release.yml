@@ -4,6 +4,10 @@ on:
     tags:
       - v*
       - pre-rel-*
+  workflow_run:
+    workflows: ["Build nightly"]
+    types:
+      - completed
 
 env:
   rust_stable: 1.77.0
