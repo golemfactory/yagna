@@ -171,7 +171,7 @@ jobs:
         shell: bash
         env:
           OS_NAME: ${{ matrix.os }}
-          GITHUB_REF: ${{ github.ref }}
+          TAG_NAME: ${{ github.ref }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
@@ -204,15 +204,34 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Get version from Cargo.toml
-        id: get_version
+      - name: Extract Version
+        id: version1
+        if: github.event_name != 'workflow_run'
+        shell: bash
+        env:
+          OS_NAME: ${{ matrix.os }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          TAGV_NAME="${TAG_NAME#pre-rel-}"
+          VERSION=${TAGV_NAME#v}
+          echo "::set-output name=tagv::${TAG_NAME}"
+          echo "::set-output name=version::${VERSION}"
+
+      - name: Extract version1
+        id: version2
         if: github.event_name == 'workflow_run'
         run: |
           cargo install --debug toml-cli
-          # linux
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
-          # windows
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $ENV:GITHUB_OUTPUT
+          # linux version
+          echo version=v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
+          # windows version
+          echo version=v$(toml get --raw Cargo.toml package.version)-nightly >> $ENV:GITHUB_OUTPUT
+
+      - name: Set tag name
+        id: version
+        run: |
+          echo "tag=${{ steps.version1.outputs.version }}${{ steps.version2.outputs.version }}" >> $GITHUB_OUTPUT
 
       - name: Get upload url
         id: release_upload_url
@@ -225,7 +244,7 @@ jobs:
             try {
               tag = context.payload.ref.replace(/.*\//, '');
             } catch (e) {
-              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
+              tag = "${{ steps.version.outputs.tag }}";
             }
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
@@ -262,7 +281,7 @@ jobs:
         shell: bash
         env:
           OS_NAME: linux-aarch64
-          GITHUB_REF: ${{ github.ref }}
+          TAG_NAME: ${{ steps.version.outputs.tag }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
