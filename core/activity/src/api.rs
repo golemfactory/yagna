@@ -54,7 +54,7 @@ mod common {
             .await
             .is_err()
         {
-            authorize_agreement_executor(id.identity, query.agreement_id.as_str(), Role::Requestor)
+            authorize_agreement_initiator(id.identity, query.agreement_id.as_str(), Role::Requestor)
                 .await?
         }
         let activities = get_activities_for_agreement(&db, query.agreement_id.as_str()).await?;
