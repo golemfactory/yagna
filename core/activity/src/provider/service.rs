@@ -95,7 +95,10 @@ async fn initial_checkup(db: DbExecutor, tracker: TrackerRef) {
         }
     };
 
-    for agreement in agreements {
+    for agreement in agreements
+        .into_iter()
+        .filter(|agreement| agreement.role == Role::Provider)
+    {
         let agreement = match bus::service(market::BUS_ID)
             .send(market::GetAgreement::as_provider(agreement.id))
             .await
