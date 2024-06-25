@@ -81,7 +81,6 @@ jobs:
     needs: prepare-release-tag
     steps:
       - uses: actions/checkout@v4
-        if: github.event_name == 'workflow_run'
 
       - name: Get version from github ref or Cargo.toml
         uses: actions-gw/cargo-github-version@main
