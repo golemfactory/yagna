@@ -2,43 +2,101 @@ name: Create release
 on:
   push:
     tags:
-      - v*
-      - pre-rel-*
-  workflow_run:
-    workflows: ["Build nightly"]
-    types:
-      - completed
+      - "v*.*.*"
+      - "pre-rel-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: 'Suffix of the tag'
+        required: true
+        default: '-dev'
+      prefix:
+        description: 'Prefix of the tag'
+        required: true
+        default: 'pre-rel-v'
+  schedule:
+    - cron: '23 23 * * *'
 
 env:
   rust_stable: 1.77.0
 
+permissions:
+  packages: write
+  contents: write
+
 jobs:
+  prepare-release-tag:
+    name: Prepare Release Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
+
+      - name: Delete release if already exists
+        if: github.event_name != 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ steps.version.outputs.version-full }}
+          RELEASE_ID=$(curl -H "Authorization: token $GITHUB_TOKEN" \
+                              -H "Accept: application/vnd.github.v3+json" \
+                              https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME \
+                              | jq -r '.id')
+
+          if [ "$RELEASE_ID" != "null" ]; then
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+                           -H "Accept: application/vnd.github.v3+json" \
+                           https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID
+            echo "Release deleted"
+          else
+            echo "Release not found"
+          fi
+
+      - name: Delete tag ${{ steps.version.outputs.version-full }} if exists
+        if: github.event_name != 'push'
+        run: |
+          git fetch origin --tags
+          git tag -d ${{ steps.version.outputs.version-full }}
+          git push origin :refs/tags/${{ steps.version.outputs.version-full }}
+        continue-on-error: true
+
+      - name: Create and push ${{ steps.version.outputs.version-full }} tag
+        if: github.event_name != 'push'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag ${{ steps.version.outputs.version-full }}
+          git push origin ${{ steps.version.outputs.version-full }}
+          echo "Succesfully created and pushed tag: ${{ steps.version.outputs.version-full }}"
+
   create-release:
     name: Create release
     runs-on: ubuntu-latest
+    needs: prepare-release-tag
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'workflow_run'
 
-      - name: Get version from Cargo.toml
-        id: get_version
-        if: github.event_name == 'workflow_run'
-        run: |
-          cargo install --debug toml-cli
-          echo VERSION=$(toml get --raw Cargo.toml package.version) >> $GITHUB_OUTPUT
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
       - name: Create Release
         uses: actions/github-script@v3.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            let tag = "";
-            try {
-              tag = context.payload.ref.replace(/.*\//, '');
-            } catch (e) {
-              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
-            }
+            let tag = "${{ steps.version.outputs.version-full }}";
+          
             let buildNo = context.runNumber;
             let versionName = tag.replace(/^pre-rel-/,'');
             try {
@@ -90,15 +148,12 @@ jobs:
 
           musl-gcc -v
 
-      - name: Get version from Cargo.toml
-        id: get_version
-        if: github.event_name == 'workflow_run'
-        run: |
-          cargo install --debug toml-cli
-          # linux
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
-          # windows
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $ENV:GITHUB_OUTPUT
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
       - name: Get upload url
         id: release_upload_url
@@ -107,12 +162,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = "";
-            try {
-              tag = context.payload.ref.replace(/.*\//, '');
-            } catch (e) {
-              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
-            }
+            let tag = "${{ steps.version.outputs.version-full }}";
             
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
@@ -171,7 +221,7 @@ jobs:
         shell: bash
         env:
           OS_NAME: ${{ matrix.os }}
-          TAG_NAME: ${{ github.ref }}
+          TAG_NAME: ${{ steps.version.outputs.version-full }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
@@ -204,34 +254,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Extract Version
-        id: version1
-        if: github.event_name != 'workflow_run'
-        shell: bash
-        env:
-          OS_NAME: ${{ matrix.os }}
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          TAGV_NAME="${TAG_NAME#pre-rel-}"
-          VERSION=${TAGV_NAME#v}
-          echo "::set-output name=tagv::${TAG_NAME}"
-          echo "::set-output name=version::${VERSION}"
-
-      - name: Extract version1
-        id: version2
-        if: github.event_name == 'workflow_run'
-        run: |
-          cargo install --debug toml-cli
-          # linux version
-          echo version=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
-          # windows version
-          echo version=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $ENV:GITHUB_OUTPUT
-
-      - name: Set tag name
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
         id: version
-        run: |
-          echo "tag=${{ steps.version1.outputs.version }}${{ steps.version2.outputs.version }}" >> $GITHUB_OUTPUT
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
       - name: Get upload url
         id: release_upload_url
@@ -240,12 +268,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = "";
-            try {
-              tag = context.payload.ref.replace(/.*\//, '');
-            } catch (e) {
-              tag = "${{ steps.version.outputs.tag }}";
-            }
+            let tag = "${{ steps.version.outputs.version-full }}";
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -281,7 +304,7 @@ jobs:
         shell: bash
         env:
           OS_NAME: linux-aarch64
-          TAG_NAME: ${{ steps.version.outputs.tag }}
+          TAG_NAME: ${{ steps.version.outputs.version-full }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
@@ -312,12 +335,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Get version from Cargo.toml
-        id: get_version
-        if: github.event_name == 'workflow_run'
-        run: |
-          cargo install --debug toml-cli
-          echo NIGHTLY_TAG=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
       - name: Get upload url
         id: release_upload_url
@@ -326,12 +349,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = "";
-            try {
-              tag = context.payload.ref.replace(/.*\//, '');
-            } catch (e) {
-              tag = "${{ steps.get_version.outputs.NIGHTLY_TAG }}";
-            }
+            let tag = "${{ steps.version.outputs.version-full }}";
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -340,36 +358,10 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - name: Extract Version
-        id: version1
-        if: github.event_name != 'workflow_run'
-        shell: bash
-        env:
-          OS_NAME: ${{ matrix.os }}
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          TAGV_NAME="${TAG_NAME#pre-rel-}"
-          VERSION=${TAGV_NAME#v}
-          echo "::set-output name=tagv::${TAG_NAME}"
-          echo "::set-output name=version::${VERSION}"
-          
-      - name: Extract version1
-        id: version2
-        if: github.event_name == 'workflow_run'
-        run: |
-          cargo install --debug toml-cli
-          echo version=pre-rel-v$(toml get --raw Cargo.toml package.version)-nightly >> $GITHUB_OUTPUT
-
-      - name: Set version
-        id: version
-        run: |
-          echo "version=${{ steps.version1.outputs.version }}${{ steps.version2.outputs.version }}" >> $GITHUB_OUTPUT
-
       - uses: golemfactory/build-deb-action@main
         id: deb
         with:
-          debVersion: ${{ steps.version.outputs.version }}
+          debVersion: ${{ steps.version.outputs.version-ext }}
           variants: default provider
           pkgName: golem
       - name: Upload Release Deb [Core]
@@ -380,7 +372,7 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb }}
-          asset_name: golem-requestor_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_name: golem-requestor_${{ steps.version.outputs.version-full }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
       - name: Upload Release Deb [Prov]
         id: upload-release-asset-prov
@@ -390,5 +382,5 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb_provider }}
-          asset_name: golem-provider_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_name: golem-provider_${{ steps.version.outputs.version-full }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
