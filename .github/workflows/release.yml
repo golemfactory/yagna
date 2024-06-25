@@ -98,8 +98,9 @@ jobs:
             let tag = "${{ steps.version.outputs.version-full }}";
           
             let buildNo = context.runNumber;
-            let versionName = tag.replace(/^pre-rel-/,'');
-            let versionName = tag.replace(/^preview-/,'');
+            let versionName = tag
+                                .replace(/^pre-rel-/,'')
+                                .replace(/^preview-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
