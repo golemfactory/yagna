@@ -5,6 +5,7 @@ use anyhow::Result;
 use std::env;
 use std::io::Write;
 use structopt::{clap, StructOpt};
+use ya_consent::consent::ConsentCommand;
 
 mod appkey;
 mod command;
@@ -46,6 +47,9 @@ enum Commands {
 
     /// Show provider status
     Status,
+
+    /// Manage consent (privacy) settings
+    Consent(ConsentCommand),
 
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
@@ -107,6 +111,10 @@ async fn my_main() -> Result</*exit code*/ i32> {
                 complete.shell,
                 &mut std::io::stdout(),
             );
+            Ok(0)
+        }
+        Commands::Consent(command) => {
+            println!("Consent command: {:?}", command);
             Ok(0)
         }
         Commands::ManifestBundle(command) => manifest::manifest_bundle(command).await,
