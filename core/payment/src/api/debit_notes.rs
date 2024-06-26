@@ -367,9 +367,10 @@ async fn accept_debit_note(
                 return response::server_error(&"Wrong status for invoice");
             }
             DocumentStatus::Received => {
-                log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
+                log::warn!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
                         debit_note_id,
                         invoice.invoice_id,
+                        invoice.status,
                         activity_id,
                         activity.agreement_id
                     );
