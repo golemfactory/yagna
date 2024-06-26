@@ -1,12 +1,13 @@
 use std::fs::{File, OpenOptions};
 use std::{io};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path};
 use crate::{ConsentEntry};
 use crate::parser::{entries_to_str, str_to_entries};
 
 
 pub fn save_entries(path: &Path, entries: Vec<ConsentEntry>) -> std::io::Result<()> {
+    let file_exists = path.exists();
     // Open the file in write-only mode
     let file = match OpenOptions::new().create(true).write(true).truncate(true).open(path) {
         Ok(file) => file,
@@ -15,15 +16,24 @@ pub fn save_entries(path: &Path, entries: Vec<ConsentEntry>) -> std::io::Result<
             return Err(e);
         }
     };
+    if file_exists {
+        log::info!("Overwriting consent file: {}", path.display());
+    } else {
+        log::info!("Created consent file: {}", path.display());
+    }
     let mut writer = io::BufWriter::new(file);
 
     writer.write_all(entries_to_str(entries).as_bytes())
 }
 
 pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
-    log::info!("Loading entries from {:?}", path);
+    log::debug!("Loading entries from {:?}", path);
 
     let str = {
+        if !path.exists() {
+            log::info!("Consent file not exist: {}", path.display());
+            return vec![];
+        }
         // Open the file in read-only mode
         let file = match File::open(path) {
             Ok(file) => file,
@@ -80,7 +90,7 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
     }
 
     if str_entries != str {
-        log::debug!("Detected difference in consent file, writing to file");
+        log::info!("Fixing consent file: {}", path.display());
         match OpenOptions::new().create(true).write(true).truncate(true).open(path) {
             Ok(file) => {
                 let mut writer = io::BufWriter::new(file);
@@ -97,7 +107,7 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
             }
         };
     } else {
-        log::debug!("No difference in consent file - no additional write needed");
+        log::debug!("Consent file doesn't need fixing: {}", path.display());
     }
 
     entries
@@ -107,11 +117,19 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
 #[test]
 pub fn test_save_and_load_entries() {
     use crate::ConsentType;
+    use rand::Rng;
+    use std::path::{PathBuf};
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "debug");
     }
+    let rand_string: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect();
+
     env_logger::init();
-    let path = Path::new("test_consent.txt");
+    let path = PathBuf::from(format!("tmp-{}.txt", rand_string));
     let entries = vec![
         ConsentEntry {
             consent_type: ConsentType::External,
@@ -123,8 +141,8 @@ pub fn test_save_and_load_entries() {
         }
     ];
 
-    save_entries(path, entries.clone()).unwrap();
-    let loaded_entries = load_entries(path);
+    save_entries(&path, entries.clone()).unwrap();
+    let loaded_entries = load_entries(&path);
 
     assert_eq!(entries, loaded_entries);
 }

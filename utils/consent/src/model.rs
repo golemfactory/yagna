@@ -9,7 +9,7 @@ pub struct ConsentEntry {
     pub allowed: bool,
 }
 
-#[derive(StructOpt, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(StructOpt, Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum ConsentType {
     /// Internal consent
     Internal,

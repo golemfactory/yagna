@@ -20,7 +20,6 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
 
     'outer: for (line_no, line) in str.split('\n').enumerate() {
         let line = line.trim().to_lowercase();
-        log::debug!("Reading line: {}, {}", line_no, line);
         if line.starts_with('#') {
             continue;
         }
@@ -65,12 +64,12 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
                 }
                 continue 'outer;
             }
-            log::warn!(
+        }
+        log::warn!(
                 "Error when parsing consent: Invalid line: {} in file {}",
                 line_no,
                 err_decorator_path
             );
-        }
     }
 
     let mut entries: Vec<ConsentEntry> = Vec::new();
