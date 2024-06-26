@@ -1,6 +1,6 @@
 use std::env;
 use std::path::{PathBuf};
-use crate::consent::{load_entries, save_entries};
+use crate::fs::{load_entries, save_entries};
 use crate::{ConsentEntry, ConsentType};
 
 pub fn get_consent_default_path() -> Option<PathBuf> {
