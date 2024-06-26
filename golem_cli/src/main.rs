@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::env;
 use std::io::Write;
 use structopt::{clap, StructOpt};
-use ya_consent::consent::ConsentCommand;
+use ya_consent::ConsentCommand;
 
 mod appkey;
 mod command;

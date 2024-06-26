@@ -43,14 +43,11 @@ pub enum ConsentCommand {
     Deny(ConsentType),
 }
 
-pub fn store_consent(path: &Path) {
-    log::info!("Storing consent at {:?}", path);
-}
-
 pub fn entries_to_str(entries: Vec<ConsentEntry>) -> String {
     let mut res = String::new();
     res.push_str("# This file contains consent settings\n");
     res.push_str("# Format: <consent_type> <allow|deny>\n");
+
     for entry in entries {
         let allow_str = if entry.allowed { "allow" } else { "deny" };
         res.push_str(&format!("{} {}\n", entry.consent_type, allow_str));
@@ -221,8 +218,27 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
     entries
 }
 
-pub fn update_entry(path: &Path, entry: ConsentEntry) {
-    log::info!("Updating entry {:?} at {:?}", entry, path);
 
- //   serde_json::to_string(&entry).unwrap();
+#[test]
+pub fn test_save_and_load_entries() {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+    env_logger::init();
+    let path = Path::new("test_consent.txt");
+    let entries = vec![
+        ConsentEntry {
+            consent_type: ConsentType::External,
+            allowed: false,
+        },
+        ConsentEntry {
+            consent_type: ConsentType::Internal,
+            allowed: true,
+        }
+    ];
+
+    save_entries(path, entries.clone()).unwrap();
+    let loaded_entries = load_entries(path);
+
+    assert_eq!(entries, loaded_entries);
 }
