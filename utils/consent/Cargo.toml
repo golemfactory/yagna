@@ -1,0 +1,12 @@
+[package]
+name = "ya-consent"
+version = "0.1.0"
+description = "Consent (allow/deny settings) service for Yagna"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2021"
+
+[dependencies]
+structopt = "0.3.21"
+log = "0.4.21"
+serde.workspace = true
+serde_json.workspace = true
