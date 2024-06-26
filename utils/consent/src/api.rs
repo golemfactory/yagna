@@ -1,5 +1,6 @@
 use std::path::Path;
-use crate::consent::{ConsentEntry, ConsentType, load_entries, save_entries};
+use crate::consent::{load_entries, save_entries};
+use crate::{ConsentEntry, ConsentType};
 
 pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
     let path = Path::new("test_consent.txt");

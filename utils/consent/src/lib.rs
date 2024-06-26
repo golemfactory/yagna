@@ -1,4 +1,6 @@
 mod consent;
 pub mod api;
+mod parser;
+mod model;
 
-pub use consent::{ConsentEntry, ConsentType, ConsentCommand};
+pub use model::{ConsentEntry, ConsentType, ConsentCommand};
