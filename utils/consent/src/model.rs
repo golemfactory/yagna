@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt};
+use std::fmt;
 use structopt::StructOpt;
-use strum::{EnumIter};
+use strum::EnumIter;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConsentEntry {
@@ -11,10 +11,17 @@ pub struct ConsentEntry {
 
 #[derive(StructOpt, Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum ConsentType {
-    /// Internal consent
+    /// Consent for internal golem monitoring
     Internal,
-    /// External consent
+    /// External consent for services like stats.golem.network
     External,
+}
+
+pub fn extra_info(consent_type: ConsentType) -> String {
+    match consent_type {
+        ConsentType::Internal => "Internal Golem Network monitoring".to_string(),
+        ConsentType::External => "External services like stats.golem.network".to_string(),
+    }
 }
 
 impl fmt::Display for ConsentType {
@@ -37,4 +44,6 @@ pub enum ConsentCommand {
     Allow(ConsentType),
     /// Change settings
     Deny(ConsentType),
+    /// Unset setting
+    Unset(ConsentType),
 }

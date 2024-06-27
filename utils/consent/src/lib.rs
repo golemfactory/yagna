@@ -1,6 +1,6 @@
-mod fs;
 pub mod api;
-mod parser;
+mod fs;
 mod model;
+mod parser;
 
-pub use model::{ConsentEntry, ConsentType, ConsentCommand};
+pub use model::{ConsentCommand, ConsentEntry, ConsentType};

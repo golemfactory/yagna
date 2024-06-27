@@ -1,15 +1,22 @@
+use crate::model::extra_info;
+use crate::{ConsentEntry, ConsentType};
 use std::collections::BTreeMap;
 use strum::IntoEnumIterator;
-use crate::{ConsentEntry, ConsentType};
 
 pub fn entries_to_str(entries: Vec<ConsentEntry>) -> String {
     let mut res = String::new();
     res.push_str("# This file contains consent settings\n");
     res.push_str("# Format: <consent_type> <allow|deny>\n");
+    res.push_str("# Restart golem service (golemsp or yagna) to make sure changes are applied\n");
 
     for entry in entries {
         let allow_str = if entry.allowed { "allow" } else { "deny" };
-        res.push_str(&format!("{} {}\n", entry.consent_type, allow_str));
+        res.push_str(&format!(
+            "\n# {}\n{} {} \n",
+            extra_info(entry.consent_type),
+            entry.consent_type,
+            allow_str
+        ));
     }
     res
 }
@@ -19,10 +26,7 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
     // Iterate over the lines in the file
 
     'outer: for (line_no, line) in str.split('\n').enumerate() {
-        let line = line.trim().to_lowercase();
-        if line.starts_with('#') {
-            continue;
-        }
+        let line = line.split('#').next().unwrap_or(line).trim().to_lowercase();
         if line.is_empty() {
             continue;
         }
@@ -66,10 +70,10 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
             }
         }
         log::warn!(
-                "Error when parsing consent: Invalid line: {} in file {}",
-                line_no,
-                err_decorator_path
-            );
+            "Error when parsing consent: Invalid line: {} in file {}",
+            line_no,
+            err_decorator_path
+        );
     }
 
     let mut entries: Vec<ConsentEntry> = Vec::new();

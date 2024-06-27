@@ -1,14 +1,32 @@
-use std::env;
-use std::path::{PathBuf};
 use crate::fs::{load_entries, save_entries};
-use crate::{ConsentEntry, ConsentType};
+use crate::{ConsentCommand, ConsentEntry, ConsentType};
+use std::env;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use structopt::lazy_static::lazy_static;
 
-pub fn get_consent_default_path() -> Option<PathBuf> {
+lazy_static! {
+    static ref CONSENT_PATH: Arc<Mutex<Option<PathBuf>>> = Arc::new(Mutex::new(None));
+}
+
+pub fn set_consent_path(path: PathBuf) {
+    *CONSENT_PATH.lock().expect("lock_cannot_fail") = Some(path);
+}
+
+fn get_consent_env_path() -> Option<PathBuf> {
     env::var("YA_CONSENT_PATH").ok().map(PathBuf::from)
 }
 
-pub fn get_consent_path() -> Option<PathBuf> {
-    get_consent_default_path()
+fn get_consent_path() -> Option<PathBuf> {
+    let env_path = get_consent_env_path();
+
+    // Environment path is prioritized
+    if let Some(env_path) = env_path {
+        return Some(env_path);
+    }
+
+    // If no environment path is set, use path setup by set_consent_path
+    CONSENT_PATH.lock().expect("lock_cannot_fail").clone()
 }
 
 pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
@@ -17,7 +35,7 @@ pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
         None => {
             log::warn!("No consent path found");
             return None;
-        },
+        }
     };
     let entries = load_entries(&path);
     let mut allowed = None;
@@ -35,7 +53,7 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
         None => {
             log::warn!("No consent path found - set consent failed");
             return;
-        },
+        }
     };
     let mut entries = load_entries(&path);
     entries.retain(|entry| entry.consent_type != consent_type);
@@ -49,5 +67,20 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
     match save_entries(&path, entries) {
         Ok(_) => log::info!("Consent saved: {} {:?}", consent_type, allowed),
         Err(e) => log::error!("Error when saving consent: {}", e),
+    }
+}
+
+pub fn run_consent_command(consent_command: ConsentCommand) {
+    match consent_command {
+        ConsentCommand::Show => {}
+        ConsentCommand::Allow(consent_type) => {
+            set_consent(consent_type, Some(true));
+        }
+        ConsentCommand::Deny(consent_type) => {
+            set_consent(consent_type, Some(false));
+        }
+        ConsentCommand::Unset(consent_type) => {
+            set_consent(consent_type, None);
+        }
     }
 }

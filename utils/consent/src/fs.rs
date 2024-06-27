@@ -1,15 +1,19 @@
-use std::fs::{File, OpenOptions};
-use std::{io};
-use std::io::{Read, Write};
-use std::path::{Path};
-use crate::{ConsentEntry};
 use crate::parser::{entries_to_str, str_to_entries};
-
+use crate::ConsentEntry;
+use std::fs::{File, OpenOptions};
+use std::io;
+use std::io::{Read, Write};
+use std::path::Path;
 
 pub fn save_entries(path: &Path, entries: Vec<ConsentEntry>) -> std::io::Result<()> {
     let file_exists = path.exists();
     // Open the file in write-only mode
-    let file = match OpenOptions::new().create(true).write(true).truncate(true).open(path) {
+    let file = match OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+    {
         Ok(file) => file,
         Err(e) => {
             log::error!("Error opening file for write: {}", e);
@@ -43,7 +47,6 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
             }
         };
 
-
         let file_len = match file.metadata() {
             Ok(metadata) => metadata.len(),
             Err(e) => {
@@ -53,7 +56,10 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
         };
 
         if file_len > 100000 {
-            log::error!("File unreasonably large, skipping parsing: {}", path.display());
+            log::error!(
+                "File unreasonably large, skipping parsing: {}",
+                path.display()
+            );
             return vec![];
         }
 
@@ -71,7 +77,11 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
         match String::from_utf8(buf) {
             Ok(str) => str,
             Err(e) => {
-                log::error!("Error when decoding file (wrong binary format): {} {}", path.display(), e);
+                log::error!(
+                    "Error when decoding file (wrong binary format): {} {}",
+                    path.display(),
+                    e
+                );
                 return vec![];
             }
         }
@@ -91,7 +101,12 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
 
     if str_entries != str {
         log::info!("Fixing consent file: {}", path.display());
-        match OpenOptions::new().create(true).write(true).truncate(true).open(path) {
+        match OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)
+        {
             Ok(file) => {
                 let mut writer = io::BufWriter::new(file);
 
@@ -101,7 +116,7 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
                         log::error!("Error writing to file: {} {}", path.display(), e);
                     }
                 }
-            },
+            }
             Err(e) => {
                 log::error!("Error opening file for write: {}", e);
             }
@@ -113,12 +128,11 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
     entries
 }
 
-
 #[test]
 pub fn test_save_and_load_entries() {
     use crate::ConsentType;
     use rand::Rng;
-    use std::path::{PathBuf};
+    use std::path::PathBuf;
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "debug");
     }
@@ -138,7 +152,7 @@ pub fn test_save_and_load_entries() {
         ConsentEntry {
             consent_type: ConsentType::Internal,
             allowed: true,
-        }
+        },
     ];
 
     save_entries(&path, entries.clone()).unwrap();

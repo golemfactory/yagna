@@ -1,11 +1,13 @@
 #![recursion_limit = "512"]
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use std::env;
 use std::io::Write;
 use structopt::{clap, StructOpt};
+use ya_consent::api::{run_consent_command, set_consent_path};
 use ya_consent::ConsentCommand;
+use ya_utils_path::data_dir::DataDir;
 
 mod appkey;
 mod command;
@@ -114,7 +116,20 @@ async fn my_main() -> Result</*exit code*/ i32> {
             Ok(0)
         }
         Commands::Consent(command) => {
-            println!("Consent command: {:?}", command);
+            let yagna_datadir = match env::var("YAGNA_DATADIR") {
+                Ok(val) => val,
+                Err(_) => "yagna".to_string(),
+            };
+            let val = match DataDir::new(&yagna_datadir).get_or_create() {
+                Ok(val) => val,
+                Err(e) => {
+                    bail!("Problem when creating yagna path: {}", e)
+                }
+            };
+            let val = val.join("CONSENT");
+            log::info!("Using yagna path: {}", val.as_path().display());
+            set_consent_path(val);
+            run_consent_command(command);
             Ok(0)
         }
         Commands::ManifestBundle(command) => manifest::manifest_bundle(command).await,
