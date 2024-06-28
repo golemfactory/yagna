@@ -10019,6 +10019,8 @@ dependencies = [
  "serde_json",
  "structopt",
  "strum 0.24.1",
+ "ya-service-api",
+ "ya-service-api-interfaces",
  "ya-utils-path",
 ]
 

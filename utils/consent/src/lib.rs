@@ -9,3 +9,11 @@ pub use api::{
 };
 pub use model::{ConsentCommand, ConsentEntry, ConsentType};
 pub use startup::consent_check_before_startup;
+
+use ya_service_api_interfaces::*;
+
+pub struct ConsentService;
+
+impl Service for ConsentService {
+    type Cli = ConsentCommand;
+}

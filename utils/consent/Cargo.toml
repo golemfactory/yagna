@@ -14,6 +14,8 @@ serde_json.workspace = true
 strum.workspace = true
 promptly.workspace = true
 parking_lot.workspace = true
+ya-service-api = "0.1"
+ya-service-api-interfaces = "0.2"
 ya-utils-path = { path = "../path" }
 
 [dev-dependencies]

@@ -1,12 +1,15 @@
 use crate::fs::{load_entries, save_entries};
+use crate::model::{extra_info, full_question};
 use crate::{ConsentCommand, ConsentEntry, ConsentType};
 use anyhow::bail;
 use parking_lot::Mutex;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
+use strum::IntoEnumIterator;
 use ya_utils_path::data_dir::DataDir;
 
 lazy_static! {
@@ -40,7 +43,7 @@ fn get_consent_env_path() -> Option<PathBuf> {
     env::var("YA_CONSENT_PATH").ok().map(PathBuf::from)
 }
 
-fn get_consent_path() -> Option<PathBuf> {
+pub fn get_consent_path() -> Option<PathBuf> {
     let env_path = get_consent_env_path();
 
     // Environment path is prioritized
@@ -142,6 +145,26 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
     }
 }
 
+pub fn to_json() -> serde_json::Value {
+    json!({
+        "consents": ConsentType::iter()
+            .map(|consent_type: ConsentType| {
+                let consent = match have_consent(consent_type) {
+                    Some(true) => "allow",
+                    Some(false) => "deny",
+                    None => "not set",
+                };
+                json!({
+                    "type": consent_type.to_string(),
+                    "consent": consent,
+                    "info": extra_info(consent_type),
+                    "question": full_question(consent_type),
+                })
+            })
+            .collect::<Vec<_>>()
+    })
+}
+
 pub fn run_consent_command(consent_command: ConsentCommand) {
     match consent_command {
         ConsentCommand::Show => {}
@@ -153,6 +176,14 @@ pub fn run_consent_command(consent_command: ConsentCommand) {
         }
         ConsentCommand::Unset(consent_type) => {
             set_consent(consent_type, None);
+        }
+        ConsentCommand::Path => {
+            println!(
+                "{}",
+                get_consent_path()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or("not found".to_string())
+            )
         }
     }
 }

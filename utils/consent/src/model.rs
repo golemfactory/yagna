@@ -1,8 +1,12 @@
+use crate::api::{have_consent, to_json};
+use crate::set_consent;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::cmp::Ordering;
 use std::fmt;
 use structopt::StructOpt;
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
+use ya_service_api::{CliCtx, CommandOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConsentEntry {
@@ -60,6 +64,7 @@ impl ConsentType {
     }
 }
 
+/// Consent management
 #[derive(StructOpt, Debug)]
 pub enum ConsentCommand {
     /// Show current settings
@@ -70,4 +75,54 @@ pub enum ConsentCommand {
     Deny(ConsentType),
     /// Unset setting
     Unset(ConsentType),
+    /// Show path to the consent file
+    Path,
+}
+
+impl ConsentCommand {
+    pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        match self {
+            ConsentCommand::Show => {
+                let mut values = vec![];
+                for consent_type in ConsentType::iter() {
+                    let allowed = have_consent(consent_type);
+                    let info = extra_info(consent_type);
+                    let is_allowed = match allowed {
+                        Some(true) => "allow",
+                        Some(false) => "deny",
+                        None => "not set",
+                    };
+                    values.push(json!([consent_type.to_string(), is_allowed, info]));
+                }
+                if ctx.json_output {
+                    return Ok(CommandOutput::Object(to_json()));
+                }
+                return Ok(CommandOutput::Table {
+                    columns: ["Consent type", "Status", "Info"]
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect(),
+                    values,
+                    summary: vec![json!(["", "", ""])],
+                    header: Some(
+                        "Consents given to the Golem service, you can change them, run consent --help for more info".to_string()),
+                });
+            }
+            ConsentCommand::Allow(consent_type) => {
+                set_consent(consent_type, Some(true));
+            }
+            ConsentCommand::Deny(consent_type) => {
+                set_consent(consent_type, Some(false));
+            }
+            ConsentCommand::Unset(consent_type) => {
+                set_consent(consent_type, None);
+            }
+            _ => {
+                return Ok(CommandOutput::Object(json!({
+                    "path": crate::api::get_consent_path().map(|p| p.to_string_lossy().to_string()).unwrap_or("not found".to_string()),
+                })));
+            }
+        };
+        Ok(CommandOutput::NoOutput)
+    }
 }

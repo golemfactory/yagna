@@ -53,7 +53,9 @@ use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
-use ya_utils_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
+use ya_utils_consent::{
+    consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
+};
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -262,6 +264,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(cli)]
+    Consent(ConsentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
     #[enable(gsb, rest)]
