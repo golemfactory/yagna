@@ -14,7 +14,8 @@ pub fn test_save_and_load_entries() {
         .map(char::from)
         .collect();
 
-    env::set_var("YA_CONSENT_PATH", format!("tmp-{}.txt", rand_string));
+    let consent_path = format!("tmp-{}.txt", rand_string);
+    env::set_var("YA_CONSENT_PATH", &consent_path);
     env_logger::init();
 
     {
@@ -41,4 +42,5 @@ pub fn test_save_and_load_entries() {
         let consent = ya_utils_consent::have_consent_cached(ConsentType::External);
         assert_eq!(consent, None);
     }
+    std::fs::remove_file(&consent_path).unwrap();
 }

@@ -159,4 +159,5 @@ pub fn test_save_and_load_entries() {
     let loaded_entries = load_entries(&path);
 
     assert_eq!(entries, loaded_entries);
+    std::fs::remove_file(&path).unwrap();
 }

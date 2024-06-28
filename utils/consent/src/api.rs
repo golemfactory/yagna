@@ -78,6 +78,19 @@ pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
 }
 
 pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
+    // for example:
+    // YA_CONSENT_INTERNAL=allow
+    // YA_CONSENT_EXTERNAL=deny
+    if let Ok(env_value) = env::var(format!("YA_CONSENT_{}", consent_type.to_string().to_uppercase())) {
+        if env_value.trim().to_lowercase() == "allow" {
+            return Some(true);
+        } else if env_value.trim().to_lowercase() == "deny" {
+            return Some(false);
+        } else {
+            panic!("Invalid value for consent: {}", env_value);
+        }
+    }
+
     let path = match get_consent_path() {
         Some(path) => path,
         None => {
