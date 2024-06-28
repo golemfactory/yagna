@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 ya-service-bus = { workspace = true }
 ya-counters = { path = "../counters" }
-ya-client-model = "0.6"
+ya-client-model.workspace = true
 ya-core-model = { version = "^0.9" }
 
 thiserror = "1.0"
