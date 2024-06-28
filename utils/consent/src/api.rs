@@ -1,18 +1,22 @@
 use crate::fs::{load_entries, save_entries};
 use crate::{ConsentCommand, ConsentEntry, ConsentType};
+use anyhow::bail;
+use parking_lot::Mutex;
+use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use anyhow::bail;
+use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
 use ya_utils_path::data_dir::DataDir;
 
 lazy_static! {
     static ref CONSENT_PATH: Arc<Mutex<Option<PathBuf>>> = Arc::new(Mutex::new(None));
+    static ref CONSENT_CACHE: Arc<Mutex<BTreeMap<ConsentType, ConsentEntryCached>>> =
+        Arc::new(Mutex::new(BTreeMap::new()));
 }
 
 pub fn set_consent_path(path: PathBuf) {
-    *CONSENT_PATH.lock().expect("lock_cannot_fail") = Some(path);
+    *CONSENT_PATH.lock() = Some(path);
 }
 
 pub fn set_consent_path_in_yagna_dir() -> anyhow::Result<()> {
@@ -45,7 +49,32 @@ fn get_consent_path() -> Option<PathBuf> {
     }
 
     // If no environment path is set, use path setup by set_consent_path
-    CONSENT_PATH.lock().expect("lock_cannot_fail").clone()
+    CONSENT_PATH.lock().clone()
+}
+
+struct ConsentEntryCached {
+    consent: Option<bool>,
+    cached_time: std::time::Instant,
+}
+
+/// Get current status of consent, it is cached for some time, so you can safely call it as much as you want
+pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
+    let mut map = CONSENT_CACHE.lock();
+
+    if let Some(entry) = map.get(&consent_type) {
+        if entry.cached_time.elapsed().as_secs() < 15 {
+            return entry.consent;
+        }
+    }
+    let consent = have_consent(consent_type);
+    map.insert(
+        consent_type,
+        ConsentEntryCached {
+            cached_time: std::time::Instant::now(),
+            consent,
+        },
+    );
+    consent
 }
 
 pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
@@ -67,6 +96,9 @@ pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
 }
 
 pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
+    {
+        CONSENT_CACHE.lock().clear();
+    }
     let path = match get_consent_path() {
         Some(path) => path,
         None => {
@@ -82,7 +114,7 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
             allowed,
         });
     }
-    entries.sort_by(|a, b| a.consent_type.to_string().cmp(&b.consent_type.to_string()));
+    entries.sort_by(|a, b| a.consent_type.cmp(&b.consent_type));
     match save_entries(&path, entries) {
         Ok(_) => log::info!("Consent saved: {} {:?}", consent_type, allowed),
         Err(e) => log::error!("Error when saving consent: {}", e),
