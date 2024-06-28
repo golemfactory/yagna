@@ -40,6 +40,9 @@ strum_macros = "0.24"
 tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros"] }
 url = "2.1"
 
+[features]
+consent-always-allow = ['ya-utils-consent/consent-always-allow']
+
 [target.'cfg(target_family = "unix")'.dependencies]
 libc="0.2.73"
 nix="0.22.0"

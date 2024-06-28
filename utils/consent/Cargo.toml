@@ -19,3 +19,6 @@ ya-utils-path = { path = "../path" }
 [dev-dependencies]
 env_logger.workspace = true
 rand.workspace = true
+
+[features]
+consent-always-allow = []

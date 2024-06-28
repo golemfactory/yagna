@@ -59,6 +59,10 @@ struct ConsentEntryCached {
 
 /// Get current status of consent, it is cached for some time, so you can safely call it as much as you want
 pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
+    // if feature consent-always-allow is enabled, return true without checking
+    if cfg!(feature = "consent-always-allow") {
+        return Some(true);
+    }
     let mut map = CONSENT_CACHE.lock();
 
     if let Some(entry) = map.get(&consent_type) {
@@ -77,7 +81,7 @@ pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
     consent
 }
 
-pub fn have_consent(consent_type: ConsentType) -> Option<bool> {
+pub(crate) fn have_consent(consent_type: ConsentType) -> Option<bool> {
     // for example:
     // YA_CONSENT_INTERNAL=allow
     // YA_CONSENT_EXTERNAL=deny
