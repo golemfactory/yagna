@@ -5,8 +5,8 @@ use anyhow::Result;
 use std::env;
 use std::io::Write;
 use structopt::{clap, StructOpt};
-use ya_consent::ConsentCommand;
-use ya_consent::{run_consent_command, set_consent_path_in_yagna_dir};
+use ya_utils_consent::ConsentCommand;
+use ya_utils_consent::{run_consent_command, set_consent_path_in_yagna_dir};
 
 mod appkey;
 mod command;

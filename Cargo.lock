@@ -3089,9 +3089,9 @@ dependencies = [
  "url",
  "ya-client",
  "ya-compile-time-utils",
- "ya-consent",
  "ya-core-model",
  "ya-provider",
+ "ya-utils-consent",
  "ya-utils-path",
  "ya-utils-process 0.3.0",
 ]
@@ -8793,23 +8793,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-consent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "env_logger 0.11.3",
- "log",
- "parking_lot 0.12.3",
- "promptly",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "structopt",
- "strum 0.24.1",
- "ya-utils-path",
-]
-
-[[package]]
 name = "ya-core-model"
 version = "0.9.1"
 dependencies = [
@@ -10023,6 +10006,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-consent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger 0.11.3",
+ "log",
+ "parking_lot 0.12.3",
+ "promptly",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "structopt",
+ "strum 0.24.1",
+ "ya-utils-path",
+]
+
+[[package]]
 name = "ya-utils-futures"
 version = "0.3.0"
 dependencies = [
@@ -10216,6 +10216,7 @@ dependencies = [
  "ya-service-bus",
  "ya-sgx",
  "ya-test-framework",
+ "ya-utils-consent",
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",

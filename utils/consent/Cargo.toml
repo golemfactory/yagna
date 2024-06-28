@@ -1,5 +1,5 @@
 [package]
-name = "ya-consent"
+name = "ya-utils-consent"
 version = "0.1.0"
 description = "Consent (allow/deny settings) service for Yagna"
 authors = ["Golem Factory <contact@golem.network>"]

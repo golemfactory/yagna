@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use structopt::clap;
 use structopt::StructOpt;
 use strum::VariantNames;
-use ya_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
+use ya_utils_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
 
 use ya_core_model::NodeId;
 

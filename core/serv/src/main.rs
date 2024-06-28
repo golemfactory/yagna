@@ -53,6 +53,7 @@ use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
+use ya_utils_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -475,6 +476,7 @@ impl ServiceCommand {
         if !ctx.accept_terms {
             prompt_terms()?;
         }
+
         match self {
             Self::Run(ServiceCommandOpts {
                 api_url,
@@ -484,6 +486,10 @@ impl ServiceCommand {
                 debug,
                 cors,
             }) => {
+                //before running yagna check consents
+                set_consent_path_in_yagna_dir()?;
+                consent_check_before_startup(true)?;
+
                 let is_rust_log_default =
                     env::var("RUST_LOG").map(|s| s.is_empty()).unwrap_or(true);
                 // workaround to silence middleware logger by default

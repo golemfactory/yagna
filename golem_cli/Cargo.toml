@@ -9,7 +9,7 @@ edition = "2018"
 ya-client = { version = "0.8", features = ['cli'] }
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features=["payment", "version"] }
-ya-consent.workspace = true
+ya-utils-consent.workspace = true
 ya-provider = "0.3"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.3", features = ["lock"] }
