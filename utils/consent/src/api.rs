@@ -3,7 +3,9 @@ use crate::{ConsentCommand, ConsentEntry, ConsentType};
 use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use anyhow::bail;
 use structopt::lazy_static::lazy_static;
+use ya_utils_path::data_dir::DataDir;
 
 lazy_static! {
     static ref CONSENT_PATH: Arc<Mutex<Option<PathBuf>>> = Arc::new(Mutex::new(None));
@@ -11,6 +13,23 @@ lazy_static! {
 
 pub fn set_consent_path(path: PathBuf) {
     *CONSENT_PATH.lock().expect("lock_cannot_fail") = Some(path);
+}
+
+pub fn set_consent_path_in_yagna_dir() -> anyhow::Result<()> {
+    let yagna_datadir = match env::var("YAGNA_DATADIR") {
+        Ok(val) => val,
+        Err(_) => "yagna".to_string(),
+    };
+    let val = match DataDir::new(&yagna_datadir).get_or_create() {
+        Ok(val) => val,
+        Err(e) => {
+            bail!("Problem when creating yagna path: {}", e)
+        }
+    };
+    let val = val.join("CONSENT");
+    log::info!("Using yagna path: {}", val.as_path().display());
+    set_consent_path(val);
+    Ok(())
 }
 
 fn get_consent_env_path() -> Option<PathBuf> {

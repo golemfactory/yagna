@@ -68,20 +68,20 @@ ya-exe-unit = { version = "0.4", optional = true, path = "exe-unit" } # just to 
 actix-rt = "2.7"
 actix-service = "2"
 actix-web = "4"
-anyhow = "1.0"
+anyhow.workspace = true
 chrono = "0.4"
 directories = "2.0.2"
 dotenv = "0.15.0"
 futures = "0.3"
 lazy_static = "1.4"
-log = "0.4"
+log.workspace = true
 metrics = "0.12"
 num_cpus = "1"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
 serde.workspace = true
 serde_json.workspace = true
-structopt = "0.3"
+structopt.workspace = true
 tokio = { version = "1", features = ["net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
@@ -234,10 +234,9 @@ members = [
 ]
 
 [workspace.dependencies]
-# this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
-# diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
-# sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
+anyhow = "1.0"
 derive_more = "0.99.11"
+env_logger = "0.11.3"
 erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
 erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
@@ -247,9 +246,12 @@ erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", r
 gftp = { version = "0.4.0", path = "core/gftp" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
+log = "0.4"
+promptly = "0.3"
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+structopt = "0.3"
 strum = { version = "0.24", features = ["derive"] }
 trust-dns-resolver = "0.22"
 url = "2.3.1"

@@ -8796,13 +8796,16 @@ dependencies = [
 name = "ya-consent"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "env_logger 0.11.3",
  "log",
+ "promptly",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "structopt",
  "strum 0.24.1",
+ "ya-utils-path",
 ]
 
 [[package]]

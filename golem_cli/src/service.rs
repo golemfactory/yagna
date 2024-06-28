@@ -10,6 +10,7 @@ use std::io;
 use std::process::ExitStatus;
 use tokio::process::Child;
 use tokio::time::Duration;
+use ya_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
 
 fn handle_ctrl_c(result: io::Result<()>) -> Result<()> {
     if result.is_ok() {
@@ -115,6 +116,11 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&config, false).await?;
 
     let cmd = YaCommand::new()?;
+
+    //before running yagna check consents
+    set_consent_path_in_yagna_dir()?;
+    consent_check_before_startup()?;
+
     let service = cmd.yagna()?.service_run(&config).await?;
     let app_key = appkey::get_app_key().await?;
 

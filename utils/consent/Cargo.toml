@@ -6,12 +6,15 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2021"
 
 [dependencies]
-structopt = "0.3.21"
-log = "0.4.21"
+anyhow.workspace = true
+structopt.workspace = true
+log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 strum.workspace = true
+promptly.workspace = true
+ya-utils-path = { path = "../path" }
 
 [dev-dependencies]
-env_logger = "0.11.3"
+env_logger.workspace = true
 rand.workspace = true
