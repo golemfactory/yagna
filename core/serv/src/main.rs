@@ -490,10 +490,6 @@ impl ServiceCommand {
                 debug,
                 cors,
             }) => {
-                //before running yagna check consents
-                set_consent_path_in_yagna_dir()?;
-                consent_check_before_startup(true)?;
-
                 let is_rust_log_default =
                     env::var("RUST_LOG").map(|s| s.is_empty()).unwrap_or(true);
                 // workaround to silence middleware logger by default
@@ -549,6 +545,10 @@ impl ServiceCommand {
                 log::info!("Data directory: {}", ctx.data_dir.display());
 
                 let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
+
+                //before running yagna check consents
+                set_consent_path_in_yagna_dir()?;
+                consent_check_before_startup(true)?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
