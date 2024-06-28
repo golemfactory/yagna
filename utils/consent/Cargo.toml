@@ -21,4 +21,4 @@ env_logger.workspace = true
 rand.workspace = true
 
 [features]
-consent-always-allow = []
+require_consent = []
