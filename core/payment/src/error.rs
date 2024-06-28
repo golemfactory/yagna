@@ -112,6 +112,7 @@ pub mod processor {
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
     use tokio::time::error::Elapsed;
+    use ya_client_model::NodeId;
     use ya_core_model::driver::AccountMode;
     use ya_core_model::payment::local::{
         GenericError, ValidateAllocationError as GsbValidateAllocationError,
@@ -172,35 +173,38 @@ pub mod processor {
             Self(e.to_string())
         }
 
-        pub fn platform(order: &Order, platform: &str) -> Result<(), Self> {
+        pub fn platform(order: &Order, platform: &str) -> Result<(NodeId, NodeId), Self> {
             Err(Self(format!(
                 "Invalid platform for payment order {}: {} != {}",
                 order.id, order.payment_platform, platform
             )))
         }
 
-        pub fn payer_addr(order: &Order, payer_addr: &str) -> Result<(), Self> {
+        pub fn payer_addr(order: &Order, payer_addr: &str) -> Result<(NodeId, NodeId), Self> {
             Err(Self(format!(
                 "Invalid payer address for payment order {}: {} != {}",
                 order.id, order.payer_addr, payer_addr
             )))
         }
 
-        pub fn payee_addr(order: &Order, payee_addr: &str) -> Result<(), Self> {
+        pub fn payee_addr(order: &Order, payee_addr: &str) -> Result<(NodeId, NodeId), Self> {
             Err(Self(format!(
                 "Invalid payee address for payment order {}: {} != {}",
                 order.id, order.payee_addr, payee_addr
             )))
         }
 
-        pub fn amount(expected: &BigDecimal, actual: &BigDecimal) -> Result<(), Self> {
+        pub fn amount(
+            expected: &BigDecimal,
+            actual: &BigDecimal,
+        ) -> Result<(NodeId, NodeId), Self> {
             Err(Self(format!(
                 "Invalid payment amount: {} != {}",
                 expected, actual
             )))
         }
 
-        pub fn zero_amount(order: &Order) -> Result<(), Self> {
+        pub fn zero_amount(order: &Order) -> Result<(NodeId, NodeId), Self> {
             Err(Self(format!(
                 "Payment order can not have 0 amount. order_id={}",
                 order.id
@@ -222,6 +226,8 @@ pub mod processor {
         Sign(#[from] ya_core_model::driver::GenericError),
         #[error("Internal timeout")]
         InternalTimeout(#[from] Elapsed),
+        #[error("Critical error when notifying: {0}")]
+        Critical(String),
     }
 
     impl NotifyPaymentError {
