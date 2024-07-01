@@ -129,7 +129,7 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
 }
 
 #[test]
-pub fn test_save_and_load_entries() {
+pub fn test_entries_internal() {
     use crate::ConsentType;
     use rand::Rng;
     use std::path::PathBuf;
