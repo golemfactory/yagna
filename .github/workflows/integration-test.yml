@@ -128,9 +128,11 @@ jobs:
           chmod +x /tmp/yagna-build/*
           echo "/tmp/yagna-build" >> $GITHUB_PATH
 
-      - name: Check installed binaries
+      - name: Check installed binaries and give consent
         run: |
           yagna --version
+          yagna consent allow external
+          yagna consent allow internal
           erc20_processor --version
 
       - name: Run test

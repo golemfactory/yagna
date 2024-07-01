@@ -167,6 +167,9 @@ if __name__ == "__main__":
     balance = get_balance()
     if balance[public_addrs[0]]["tokenDecimal"] != "0":
         raise Exception("Test failed early because of wrong initial balance")
+
+    run_command(f"{yagna} consent allow internal")
+    run_command(f"{yagna} consent allow external")
     pr = subprocess.Popen([yagna, "service", "run"])
     time.sleep(10)
 
