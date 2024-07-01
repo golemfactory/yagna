@@ -35,18 +35,29 @@ impl Ord for ConsentType {
 
 pub fn extra_info(consent_type: ConsentType) -> String {
     match consent_type {
-        ConsentType::Internal => "Internal Golem Network monitoring".to_string(),
+        ConsentType::Internal => {
+            "Internal Golem Network monitoring \nSecond line of info".to_string()
+        }
         ConsentType::External => "External services like stats.golem.network".to_string(),
     }
+}
+
+pub fn extra_info_comment(consent_type: ConsentType) -> String {
+    let info = extra_info(consent_type);
+    let mut comment_info = String::new();
+    for line in info.split('\n') {
+        comment_info.push_str(&format!("# {}\n", line));
+    }
+    comment_info
 }
 
 pub fn full_question(consent_type: ConsentType) -> String {
     match consent_type {
         ConsentType::Internal => {
-            "Do you allow to send usage data to Internal Golem Network monitoring?".to_string()
+            "Do you agree to share data with Golem Internal Network Monitor (you can check full range of data transferred in the Terms)?".to_string()
         }
         ConsentType::External => {
-            "Do you allow to send essential data to external services like stats.golem.network?"
+            "Do you agree to share your client version, node name, node ID and wallet address, agreements statistics and payment data (available anyway on blockchain) on the stats.golem.network (External Network Monitor and Reputation System)?"
                 .to_string()
         }
     }

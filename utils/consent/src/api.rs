@@ -167,7 +167,12 @@ pub fn to_json() -> serde_json::Value {
 
 pub fn run_consent_command(consent_command: ConsentCommand) {
     match consent_command {
-        ConsentCommand::Show => {}
+        ConsentCommand::Show => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&to_json()).expect("json serialization failed")
+            );
+        }
         ConsentCommand::Allow(consent_type) => {
             set_consent(consent_type, Some(true));
         }

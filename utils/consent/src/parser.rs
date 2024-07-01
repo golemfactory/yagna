@@ -1,4 +1,4 @@
-use crate::model::extra_info;
+use crate::model::extra_info_comment;
 use crate::{ConsentEntry, ConsentType};
 use std::collections::BTreeMap;
 use strum::IntoEnumIterator;
@@ -12,13 +12,13 @@ pub fn entries_to_str(entries: Vec<ConsentEntry>) -> String {
     for entry in entries {
         let allow_str = if entry.allowed { "allow" } else { "deny" };
         res.push_str(&format!(
-            "\n# {}\n{} {} \n",
-            extra_info(entry.consent_type),
+            "\n{}{} {} \n",
+            extra_info_comment(entry.consent_type),
             entry.consent_type,
             allow_str
         ));
     }
-    res
+    res.replace("\n\n", "\n")
 }
 
 pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry> {

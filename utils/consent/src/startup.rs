@@ -17,7 +17,9 @@ pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
                         )
                         .unwrap_or("".to_string())
                     } else {
-                        "allow".to_string()
+                        panic!("Consent {} not set. Run installer again or run command yagna consent allow {}",
+                               consent_type,
+                               consent_type.to_lowercase_str())
                     };
                     if prompt_res == "allow" {
                         break true;

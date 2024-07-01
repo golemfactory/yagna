@@ -547,8 +547,7 @@ impl ServiceCommand {
                 let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
 
                 //before running yagna check consents
-                set_consent_path_in_yagna_dir()?;
-                consent_check_before_startup(true)?;
+                consent_check_before_startup(false)?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
@@ -728,6 +727,7 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
+    set_consent_path_in_yagna_dir()?;
     match args.run_command().await {
         Ok(()) => Ok(()),
         Err(err) => {
