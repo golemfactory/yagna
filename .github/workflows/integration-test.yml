@@ -131,8 +131,7 @@ jobs:
       - name: Check installed binaries and give consent
         run: |
           yagna --version
-          yagna consent allow external
-          yagna consent allow internal
+          yagna consent allow-all
           erc20_processor --version
 
       - name: Run test

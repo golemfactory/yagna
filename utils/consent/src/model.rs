@@ -80,6 +80,12 @@ impl ConsentType {
 pub enum ConsentCommand {
     /// Show current settings
     Show,
+    /// Allow all types of consent
+    AllowAll,
+    /// Deny all types of consent
+    DenyAll,
+    /// Unset all types of consent
+    UnsetAll,
     /// Change settings
     Allow(ConsentType),
     /// Change settings
@@ -128,7 +134,22 @@ impl ConsentCommand {
             ConsentCommand::Unset(consent_type) => {
                 set_consent(consent_type, None);
             }
-            _ => {
+            ConsentCommand::AllowAll => {
+                for consent_type in ConsentType::iter() {
+                    set_consent(consent_type, Some(true));
+                }
+            }
+            ConsentCommand::DenyAll => {
+                for consent_type in ConsentType::iter() {
+                    set_consent(consent_type, Some(false));
+                }
+            }
+            ConsentCommand::UnsetAll => {
+                for consent_type in ConsentType::iter() {
+                    set_consent(consent_type, None);
+                }
+            }
+            ConsentCommand::Path => {
                 return Ok(CommandOutput::Object(json!({
                     "path": crate::api::get_consent_path().map(|p| p.to_string_lossy().to_string()).unwrap_or("not found".to_string()),
                 })));

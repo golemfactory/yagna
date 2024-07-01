@@ -182,6 +182,21 @@ pub fn run_consent_command(consent_command: ConsentCommand) {
         ConsentCommand::Unset(consent_type) => {
             set_consent(consent_type, None);
         }
+        ConsentCommand::AllowAll => {
+            for consent_type in ConsentType::iter() {
+                set_consent(consent_type, Some(true));
+            }
+        }
+        ConsentCommand::DenyAll => {
+            for consent_type in ConsentType::iter() {
+                set_consent(consent_type, Some(false));
+            }
+        }
+        ConsentCommand::UnsetAll => {
+            for consent_type in ConsentType::iter() {
+                set_consent(consent_type, None);
+            }
+        }
         ConsentCommand::Path => {
             println!(
                 "{}",
