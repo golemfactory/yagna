@@ -9,13 +9,14 @@ edition = "2018"
 ya-client = { version = "0.8", features = ['cli'] }
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.9", features=["payment", "version"] }
+ya-utils-consent.workspace = true
 ya-provider = "0.3"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.3", features = ["lock"] }
 
 actix-rt="2.7"
 ansi_term="0.12.1"
-anyhow = "1.0"
+anyhow.workspace = true
 bigdecimal = "0.2"
 byte-unit = "4.0"
 chrono = { version = "0.4", features=["serde"] }
@@ -28,7 +29,7 @@ lazy_static = "1.4"
 log = "0.4"
 names = "0.10.0"
 prettytable-rs = "0.10.0"
-promptly = "0.3.0"
+promptly.workspace = true
 rustyline="6.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -38,6 +39,9 @@ strum = { workspace = true }
 strum_macros = "0.24"
 tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros"] }
 url = "2.1"
+
+[features]
+require-consent = ['ya-utils-consent/require-consent']
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc="0.2.73"
