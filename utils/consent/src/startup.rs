@@ -4,8 +4,8 @@ use crate::ConsentType;
 use strum::IntoEnumIterator;
 
 pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
-    // if feature require_consent is enabled, skip check
-    if cfg!(feature = "require_consent") {
+    // if feature require-consent is enabled, skip check
+    if cfg!(feature = "require-consent") {
         for consent_type in ConsentType::iter() {
             let consent_int = have_consent(consent_type);
             if consent_int.is_none() {

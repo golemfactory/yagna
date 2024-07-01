@@ -15,7 +15,7 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 tos = []
-require_consent = ['ya-utils-consent/require_consent']
+require-consent = ['ya-utils-consent/require-consent']
 framework-test = ['ya-exe-unit/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']

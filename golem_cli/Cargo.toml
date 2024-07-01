@@ -41,7 +41,7 @@ tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io
 url = "2.1"
 
 [features]
-require_consent = ['ya-utils-consent/require_consent']
+require-consent = ['ya-utils-consent/require-consent']
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc="0.2.73"
