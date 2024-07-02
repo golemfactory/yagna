@@ -912,7 +912,11 @@ impl PaymentProcessor {
             .get_filtered(None, None, None, None, None, Some(false))
             .await;
 
-        log::info!("Checking for allocations to be released...");
+        if force {
+            log::info!("Releasing all active allocations...");
+        } else {
+            log::info!("Releasing expired allocations...");
+        }
 
         match active_allocations {
             Ok(allocations) => {
@@ -932,7 +936,7 @@ impl PaymentProcessor {
                         }
                     }
                 } else {
-                    log::info!("No allocations to be released.")
+                    log::info!("No allocations found to be released.")
                 }
             }
             Err(e) => {
