@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
+use ya_core_model::NodeId;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -25,7 +26,7 @@ use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsu
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::rules::RulesManager;
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{FileMonitor, NodeConfig, PaymentPlatform, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{
     InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
@@ -76,9 +77,9 @@ pub struct ProviderAgent {
     task_manager: Addr<TaskManager>,
     presets: PresetManager,
     hardware: hardware::Manager,
-    accounts: Vec<AccountView>,
+    account: NodeId,
     log_handler: LoggerHandle,
-    networks: Vec<NetworkName>,
+    networks: Vec<PaymentPlatform>,
     rulestore_monitor: FileMonitor,
     keystore_monitor: FileMonitor,
     whitelist_monitor: FileMonitor,
@@ -115,14 +116,8 @@ impl ProviderAgent {
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<AccountView> = api
-            .payment
-            .get_provider_accounts()
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect();
-        log::info!("Payment accounts: {:#?}", accounts);
+        let account = api.identity.me().await?.identity;
+        log::info!("Payment account: {:#?}", account);
         let registry = config.registry()?;
         registry.validate()?;
         registry
@@ -151,7 +146,7 @@ impl ProviderAgent {
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
-            let net_color = match n {
+            let net_color = match n.network {
                 NetworkName::Mainnet => yansi::Color::Magenta,
                 NetworkName::Polygon => yansi::Color::Magenta,
                 NetworkName::Rinkeby => yansi::Color::Cyan,
@@ -160,7 +155,7 @@ impl ProviderAgent {
                 NetworkName::Holesky => yansi::Color::Cyan,
                 _ => yansi::Color::Red,
             };
-            log::info!("Using payment network: {}", net_color.paint(&n));
+            log::info!("Using payment network: {}", net_color.paint(&n.network));
         }
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
@@ -188,7 +183,7 @@ impl ProviderAgent {
             task_manager,
             presets,
             hardware,
-            accounts,
+            account,
             log_handler,
             networks,
             rulestore_monitor,
@@ -319,56 +314,21 @@ impl ProviderAgent {
             .support_multi_activity(true))
     }
 
-    fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
+    fn accounts(&self, networks: &[PaymentPlatform]) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
-        if let Some(address) = &globals.account {
-            log::info!(
-                "Filtering payment accounts by address={} and networks={:?}",
-                address,
-                networks,
-            );
-            let accounts: Vec<AccountView> = self
-                .accounts
-                .iter()
-                .filter(|acc| &acc.address == address && networks.contains(&acc.network))
-                .cloned()
-                .collect();
 
-            if accounts.is_empty() {
-                anyhow::bail!(
-                    "Payment account {} not initialized. Please run\n\
-                    \t`yagna payment init --receiver --network {} --account {}`\n\
-                    for all drivers you want to use.",
-                    address,
-                    networks[0],
-                    address,
-                )
-            }
+        let account = globals.account.unwrap_or(self.account);
 
-            Ok(accounts)
-        } else {
-            log::debug!("Filtering payment accounts by networks={:?}", networks);
-            let accounts: Vec<AccountView> = self
-                .accounts
-                .iter()
-                // FIXME: this is dirty fix -- we can get more that one address from this filter
-                // FIXME: use /me endpoint and filter out only accounts bound to given app-key
-                // FIXME: or introduce param to getProviderAccounts to filter out external account above
-                .filter(|acc| networks.contains(&acc.network))
-                .cloned()
-                .collect();
+        let accounts: Vec<_> = networks
+            .iter()
+            .map(|network| AccountView {
+                address: account,
+                network: network.network.clone(),
+                platform: network.platform(),
+            })
+            .collect();
 
-            if accounts.is_empty() {
-                anyhow::bail!(
-                    "Default payment account not initialized. Please run\n\
-                    \t`yagna payment init --receiver --network {}`\n\
-                    for all drivers you want to use.",
-                    networks[0],
-                )
-            }
-
-            Ok(accounts)
-        }
+        Ok(accounts)
     }
 }
 

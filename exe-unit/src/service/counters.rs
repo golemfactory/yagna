@@ -62,11 +62,11 @@ fn counters(ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Counter>> {
     vec![
         (
             CpuCounter::ID.to_string(),
-            Box::new(CpuCounter::default()) as Box<dyn Counter>,
+            Box::<CpuCounter>::default() as Box<dyn Counter>,
         ),
         (
             MemCounter::ID.to_string(),
-            Box::new(MemCounter::default()) as Box<dyn Counter>,
+            Box::<MemCounter>::default() as Box<dyn Counter>,
         ),
         (
             StorageCounter::ID.to_string(),
@@ -77,7 +77,7 @@ fn counters(ctx: &ExeUnitContext) -> HashMap<String, Box<dyn Counter>> {
         ),
         (
             TimeCounter::ID.to_string(),
-            Box::new(TimeCounter::default()) as Box<dyn Counter>,
+            Box::<TimeCounter>::default() as Box<dyn Counter>,
         ),
     ]
     .into_iter()
