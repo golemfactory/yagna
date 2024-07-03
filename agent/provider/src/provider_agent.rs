@@ -30,7 +30,6 @@ use crate::startup_config::{FileMonitor, NodeConfig, PaymentPlatform, ProviderCo
 use crate::tasks::task_manager::{
     InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
-use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -480,7 +479,7 @@ impl Handler<Shutdown> for ProviderAgent {
 
     fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
-        let runner = self.runner.clone();
+        let tasks = self.task_manager.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
         self.rulestore_monitor.stop();
@@ -488,7 +487,7 @@ impl Handler<Shutdown> for ProviderAgent {
 
         async move {
             market.send(MarketShutdown).await??;
-            runner.send(ShutdownExecution).await??;
+            tasks.send(TaskManagerShutdown {}).await??;
             log_handler.shutdown();
             Ok(())
         }
