@@ -174,7 +174,7 @@ impl FromStr for PaymentPlatform {
             let err = "Not a valid network or a platform";
 
             let parts: [&str; 3] = arg
-                .split("-")
+                .split('-')
                 .collect::<Vec<_>>()
                 .try_into()
                 .map_err(|_| err.to_string())?;
@@ -182,7 +182,7 @@ impl FromStr for PaymentPlatform {
             if !DriverName::VARIANTS.contains(&parts[0]) {
                 return Err(err.to_string());
             }
-            let network_name = NetworkName::from_str(&parts[1]).map_err(|_| err.to_string())?;
+            let network_name = NetworkName::from_str(parts[1]).map_err(|_| err.to_string())?;
             if parts[2] != network_name.get_token() {
                 return Err(err.to_string());
             }

@@ -314,7 +314,7 @@ impl ProviderAgent {
             .support_multi_activity(true))
     }
 
-    fn accounts(&self, networks: &Vec<PaymentPlatform>) -> anyhow::Result<Vec<AccountView>> {
+    fn accounts(&self, networks: &[PaymentPlatform]) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
 
         let account = globals.account.unwrap_or(self.account);
