@@ -1,18 +1,19 @@
+use std::convert::TryInto;
 use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::Duration;
 
 use directories::UserDirs;
 use futures::channel::oneshot;
 use notify::*;
-use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
 use strum::VariantNames;
 use ya_client::{cli::ApiOpts, model::node_id::NodeId};
 
-use ya_core_model::payment::local::NetworkName;
+use ya_core_model::payment::local::{DriverName, NetworkName, DEFAULT_PAYMENT_DRIVER};
 use ya_utils_path::data_dir::DataDir;
 
 use crate::cli::clean::CleanConfig;
@@ -142,7 +143,61 @@ impl ProviderConfig {
     }
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
+#[derive(Clone, Debug)]
+pub struct PaymentPlatform {
+    pub driver: String,
+    pub network: NetworkName,
+}
+
+impl PaymentPlatform {
+    pub fn platform(&self) -> String {
+        format!(
+            "{}-{}-{}",
+            self.driver,
+            self.network,
+            self.network.get_token()
+        )
+        .to_lowercase()
+    }
+}
+
+impl FromStr for PaymentPlatform {
+    type Err = String;
+
+    fn from_str(arg: &str) -> std::result::Result<Self, Self::Err> {
+        let value = if let Ok(network_name) = NetworkName::from_str(arg) {
+            PaymentPlatform {
+                driver: DEFAULT_PAYMENT_DRIVER.to_string(),
+                network: network_name,
+            }
+        } else {
+            let err = "Not a valid network or a platform";
+
+            let parts: [&str; 3] = arg
+                .split('-')
+                .collect::<Vec<_>>()
+                .try_into()
+                .map_err(|_| err.to_string())?;
+
+            if !DriverName::VARIANTS.contains(&parts[0]) {
+                return Err(err.to_string());
+            }
+            let network_name = NetworkName::from_str(parts[1]).map_err(|_| err.to_string())?;
+            if parts[2] != network_name.get_token() {
+                return Err(err.to_string());
+            }
+
+            PaymentPlatform {
+                driver: parts[0].to_string(),
+                network: network_name,
+            }
+        };
+
+        Ok(value)
+    }
+}
+
+#[derive(StructOpt, Clone, Debug, derive_more::Display)]
 #[display(
     fmt = "{}Networks: {:?}",
     "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or_else(|| \"\".into())",
@@ -153,8 +208,13 @@ pub struct ReceiverAccount {
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
     /// Payment network.
-    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
-    pub networks: Vec<NetworkName>,
+    #[structopt(
+        long = "payment-network",
+        env = "YA_PAYMENT_NETWORK",
+        default_value = NetworkName::Mainnet.into(),
+        help = "Specify platforms to collect funds, e.g. erc20-mainnet-glm. Network name can be passed as well, in which case the default driver will be used"
+    )]
+    pub networks: Vec<PaymentPlatform>,
 }
 
 #[derive(StructOpt, Clone, Debug)]
