@@ -26,7 +26,7 @@ use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsu
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::rules::RulesManager;
-use crate::startup_config::{FileMonitor, PaymentPlatform, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{FileMonitor, NodeConfig, PaymentPlatform, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{
     InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
