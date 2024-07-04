@@ -2,11 +2,13 @@ use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Arc;
+use actix_web::web::Path;
 use structopt::StructOpt;
 use url::Url;
 
 use ya_service_api::{CliCtx, MetricsCtx};
 use ya_service_api_interfaces::Provider;
+use ya_utils_consent::ConsentType;
 
 use crate::metrics::Metrics;
 
@@ -72,6 +74,13 @@ lazy_static! {
     static ref METRICS: Arc<Mutex<Metrics>> = Metrics::new();
 }
 
+pub async fn export_metrics_filtered_web(typ: Path<String>) -> String {
+    let allowed_prefixes = typ.split(',').collect::<Vec<_>>();
+    log::info!("Allowed prefixes: {:?}", allowed_prefixes);
+    let filter = MetricsFilter { allowed_prefixes: &allowed_prefixes };
+    export_metrics_filtered(Some(filter)).await
+}
+
 impl MetricsService {
     pub async fn gsb<C: Provider<Self, CliCtx>>(context: &C) -> anyhow::Result<()> {
         // This should initialize Metrics. We need to do this before all other services will start.
@@ -89,35 +98,96 @@ impl MetricsService {
     pub fn rest<C: Provider<Self, ()>>(_ctx: &C) -> actix_web::Scope {
         actix_web::Scope::new("metrics-api/v1")
             // TODO:: add wrapper injecting Bearer to avoid hack in auth middleware
-            .route("/expose", actix_web::web::get().to(export_metrics))
+            .route("/expose", actix_web::web::get().to(export_metrics_local))
             .route("/sorted", actix_web::web::get().to(export_metrics_sorted))
+            .route("/filtered/{typ}", actix_web::web::get().to(export_metrics_filtered_web))
+            .route("/filtered", actix_web::web::get().to(export_metrics_for_push))
+
     }
 }
+
+pub(crate) struct MetricsFilter<'a> {
+    pub allowed_prefixes: &'a [&'a str],
+}
+
 //algorith is returning metrics in random order, which is fine for prometheus, but not for human checking metrics
-pub fn sort_metrics_txt(metrics: &str) -> String {
+pub fn sort_metrics_txt(metrics: &str, filter: Option<MetricsFilter<'_>>) -> String {
     let Some(first_line_idx) = metrics.find('\n') else {
         return metrics.to_string();
     };
     let (first_line, metrics_content) = metrics.split_at(first_line_idx);
 
-    let mut entries = metrics_content
+    let entries = metrics_content
         .split("\n\n") //splitting by double new line to get separate metrics
         .map(|s| {
             let trimmed = s.trim();
             let mut lines = trimmed.split('\n').collect::<Vec<_>>();
             lines.sort(); //sort by properties
-            lines.join("\n")
+            (lines.get(1).unwrap_or(&"").to_string(), lines.join("\n"))
         })
-        .collect::<Vec<String>>();
-    entries.sort(); //sort by metric name
+        .collect::<Vec<(String, String)>>();
 
-    first_line.to_string() + "\n" + entries.join("\n\n").as_str()
+    let mut final_entries = if let Some(filter) = filter {
+        let mut final_entries = Vec::with_capacity(entries.len());
+        for entry in entries {
+            for prefix in filter.allowed_prefixes {
+                if entry.0.starts_with(prefix) {
+                    log::info!("Adding entry: {}", entry.0);
+                    final_entries.push(entry.1);
+                    break;
+                }
+            }
+        }
+        final_entries
+    } else {
+        entries.into_iter().map(|(_, s)| s).collect()
+    };
+
+    final_entries.sort();
+
+    first_line.to_string() + "\n" + final_entries.join("\n\n").as_str()
+}
+
+
+pub async fn export_metrics_filtered(metrics_filter: Option<MetricsFilter<'_>>) -> String {
+    sort_metrics_txt(&METRICS.lock().await.export(), metrics_filter)
 }
 
 async fn export_metrics_sorted() -> String {
-    sort_metrics_txt(&METRICS.lock().await.export())
+    sort_metrics_txt(&METRICS.lock().await.export(), None)
+}
+const ALLOWED_PREFIXES_EXTERNAL: &[&str] = &["market_agree", "erc20_pay"];
+const ALLOWED_PREFIXES_INTERNAL: &[&str] = &["payment_invoices", "payment_debit"];
+
+pub async fn export_metrics_for_push() -> String {
+    let internal_consent =
+        ya_utils_consent::have_consent_cached(ConsentType::Internal).unwrap_or(false);
+    let external_consent =
+        ya_utils_consent::have_consent_cached(ConsentType::External).unwrap_or(false);
+    let filter = if internal_consent && external_consent {
+        log::info!("Pushing all metrics, because both internal and external consents are given");
+        None
+    } else if internal_consent && !external_consent {
+        log::info!("Pushing only internal metrics, because internal consent is given");
+        Some(MetricsFilter {
+            allowed_prefixes: ALLOWED_PREFIXES_INTERNAL,
+        })
+    } else if !internal_consent && external_consent {
+        log::info!("Pushing only external metrics, because external consent is given");
+        Some(MetricsFilter {
+            allowed_prefixes: ALLOWED_PREFIXES_EXTERNAL,
+        })
+    } else {
+        // !internal_consent && !external_consent
+        log::info!(
+            "Not pushing metrics, because both internal and external consents are not given"
+        );
+        return "".to_string();
+    };
+
+    export_metrics_filtered(filter).await
 }
 
-pub async fn export_metrics() -> String {
-    METRICS.lock().await.export()
+pub async fn export_metrics_local() -> String {
+    export_metrics_sorted().await
 }

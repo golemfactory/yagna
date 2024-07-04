@@ -9315,6 +9315,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "ya-utils-consent",
 ]
 
 [[package]]
