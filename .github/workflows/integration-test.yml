@@ -128,7 +128,7 @@ jobs:
           chmod +x /tmp/yagna-build/*
           echo "/tmp/yagna-build" >> $GITHUB_PATH
 
-      - name: Check installed binaries and give consent
+      - name: Check installed binaries
         run: |
           yagna --version
           yagna consent allow-all
