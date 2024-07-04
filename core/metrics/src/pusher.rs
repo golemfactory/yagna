@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use tokio::time::{self, Duration, Instant};
 
-use crate::service::{export_metrics_for_push};
+use crate::service::export_metrics_for_push;
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
@@ -61,7 +61,6 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
         push(&client, push_url.clone()).await;
     }
 }
-
 
 pub async fn push(client: &Client, push_url: String) {
     let metrics = export_metrics_for_push().await;

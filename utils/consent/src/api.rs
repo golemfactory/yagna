@@ -2,13 +2,13 @@ use crate::fs::{load_entries, save_entries};
 use crate::model::{extra_info, full_question};
 use crate::{ConsentCommand, ConsentEntry, ConsentType};
 use anyhow::bail;
+use metrics::gauge;
 use parking_lot::Mutex;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-use metrics::gauge;
 use structopt::lazy_static::lazy_static;
 use strum::IntoEnumIterator;
 use ya_utils_path::data_dir::DataDir;
@@ -79,7 +79,10 @@ pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
                 consent,
             },
         );
-        gauge!(format!("consent.{}", consent_type.to_lowercase_str()),  consent.map(|v|if v {1} else {0}).unwrap_or(-1) as i64);
+        gauge!(
+            format!("consent.{}", consent_type.to_lowercase_str()),
+            consent.map(|v| if v { 1 } else { 0 }).unwrap_or(-1) as i64
+        );
         consent
     } else {
         // if feature require-consent is enabled, return true without checking

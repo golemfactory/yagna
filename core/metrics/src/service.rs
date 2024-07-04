@@ -1,8 +1,8 @@
+use actix_web::web::Path;
 use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Arc;
-use actix_web::web::Path;
 use structopt::StructOpt;
 use url::Url;
 
@@ -77,7 +77,9 @@ lazy_static! {
 pub async fn export_metrics_filtered_web(typ: Path<String>) -> String {
     let allowed_prefixes = typ.split(',').collect::<Vec<_>>();
     log::info!("Allowed prefixes: {:?}", allowed_prefixes);
-    let filter = MetricsFilter { allowed_prefixes: &allowed_prefixes };
+    let filter = MetricsFilter {
+        allowed_prefixes: &allowed_prefixes,
+    };
     export_metrics_filtered(Some(filter)).await
 }
 
@@ -100,9 +102,14 @@ impl MetricsService {
             // TODO:: add wrapper injecting Bearer to avoid hack in auth middleware
             .route("/expose", actix_web::web::get().to(export_metrics_local))
             .route("/sorted", actix_web::web::get().to(export_metrics_sorted))
-            .route("/filtered/{typ}", actix_web::web::get().to(export_metrics_filtered_web))
-            .route("/filtered", actix_web::web::get().to(export_metrics_for_push))
-
+            .route(
+                "/filtered/{typ}",
+                actix_web::web::get().to(export_metrics_filtered_web),
+            )
+            .route(
+                "/filtered",
+                actix_web::web::get().to(export_metrics_for_push),
+            )
     }
 }
 
@@ -147,7 +154,6 @@ pub fn sort_metrics_txt(metrics: &str, filter: Option<MetricsFilter<'_>>) -> Str
 
     first_line.to_string() + "\n" + final_entries.join("\n\n").as_str()
 }
-
 
 pub async fn export_metrics_filtered(metrics_filter: Option<MetricsFilter<'_>>) -> String {
     sort_metrics_txt(&METRICS.lock().await.export(), metrics_filter)
