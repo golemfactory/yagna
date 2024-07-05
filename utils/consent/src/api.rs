@@ -1,16 +1,18 @@
 use crate::fs::{load_entries, save_entries};
+use crate::model::display_consent_path;
 use crate::model::{extra_info, full_question};
 use crate::{ConsentCommand, ConsentEntry, ConsentType};
 use anyhow::bail;
 use metrics::gauge;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{env, fmt};
 use structopt::lazy_static::lazy_static;
-use strum::IntoEnumIterator;
+use strum::{EnumIter, IntoEnumIterator};
 use ya_utils_path::data_dir::DataDir;
 
 lazy_static! {
@@ -57,12 +59,30 @@ pub fn get_consent_path() -> Option<PathBuf> {
 }
 
 struct ConsentEntryCached {
-    consent: Option<bool>,
+    consent: HaveConsentResult,
     cached_time: std::time::Instant,
 }
 
+#[derive(Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
+pub enum ConsentSource {
+    Default,
+    Config,
+    Env,
+}
+impl fmt::Display for ConsentSource {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Copy, Debug, Clone)]
+pub struct HaveConsentResult {
+    pub consent: Option<bool>,
+    pub source: ConsentSource,
+}
+
 /// Get current status of consent, it is cached for some time, so you can safely call it as much as you want
-pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
+pub fn have_consent_cached(consent_type: ConsentType) -> HaveConsentResult {
     if cfg!(feature = "require-consent") {
         let mut map = CONSENT_CACHE.lock();
 
@@ -71,26 +91,32 @@ pub fn have_consent_cached(consent_type: ConsentType) -> Option<bool> {
                 return entry.consent;
             }
         }
-        let consent = have_consent(consent_type);
+        let consent_res = have_consent(consent_type);
         map.insert(
             consent_type,
             ConsentEntryCached {
+                consent: consent_res,
                 cached_time: std::time::Instant::now(),
-                consent,
             },
         );
         gauge!(
             format!("consent.{}", consent_type.to_lowercase_str()),
-            consent.map(|v| if v { 1 } else { 0 }).unwrap_or(-1) as i64
+            consent_res
+                .consent
+                .map(|v| if v { 1 } else { 0 })
+                .unwrap_or(-1) as i64
         );
-        consent
+        consent_res
     } else {
-        // if feature require-consent is enabled, return true without checking
-        Some(true)
+        // if feature require-consent is disabled, return true without checking
+        HaveConsentResult {
+            consent: Some(true),
+            source: ConsentSource::Default,
+        }
     }
 }
 
-pub(crate) fn have_consent(consent_type: ConsentType) -> Option<bool> {
+pub(crate) fn have_consent(consent_type: ConsentType) -> HaveConsentResult {
     // for example:
     // YA_CONSENT_INTERNAL=allow
     // YA_CONSENT_EXTERNAL=deny
@@ -99,9 +125,15 @@ pub(crate) fn have_consent(consent_type: ConsentType) -> Option<bool> {
         consent_type.to_string().to_uppercase()
     )) {
         if env_value.trim().to_lowercase() == "allow" {
-            return Some(true);
+            return HaveConsentResult {
+                consent: Some(true),
+                source: ConsentSource::Env,
+            };
         } else if env_value.trim().to_lowercase() == "deny" {
-            return Some(false);
+            return HaveConsentResult {
+                consent: Some(false),
+                source: ConsentSource::Env,
+            };
         } else {
             panic!("Invalid value for consent: {}", env_value);
         }
@@ -111,7 +143,10 @@ pub(crate) fn have_consent(consent_type: ConsentType) -> Option<bool> {
         Some(path) => path,
         None => {
             log::warn!("No consent path found");
-            return None;
+            return HaveConsentResult {
+                consent: None,
+                source: ConsentSource::Default,
+            };
         }
     };
     let entries = load_entries(&path);
@@ -121,7 +156,10 @@ pub(crate) fn have_consent(consent_type: ConsentType) -> Option<bool> {
             allowed = Some(entry.allowed);
         }
     }
-    allowed
+    HaveConsentResult {
+        consent: allowed,
+        source: ConsentSource::Config,
+    }
 }
 
 pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
@@ -154,14 +192,25 @@ pub fn to_json() -> serde_json::Value {
     json!({
         "consents": ConsentType::iter()
             .map(|consent_type: ConsentType| {
-                let consent = match have_consent(consent_type) {
+                let consent_res = have_consent(consent_type);
+                let consent = match consent_res.consent {
                     Some(true) => "allow",
                     Some(false) => "deny",
                     None => "not set",
                 };
+                let source_location = match consent_res.source {
+                    ConsentSource::Config => display_consent_path(),
+                    ConsentSource::Env => {
+                        let env_var_name = format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
+                        format!("({}={})", &env_var_name, env::var(&env_var_name).unwrap_or("".to_string()))
+                    },
+                    ConsentSource::Default => "N/A".to_string(),
+                };
                 json!({
                     "type": consent_type.to_string(),
                     "consent": consent,
+                    "source": consent_res.source.to_string(),
+                    "location": source_location,
                     "info": extra_info(consent_type),
                     "question": full_question(consent_type),
                 })

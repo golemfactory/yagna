@@ -22,25 +22,25 @@ pub fn test_save_and_load_entries() {
         set_consent(ConsentType::External, Some(false));
         let consent = ya_utils_consent::have_consent_cached(ConsentType::External);
         //remove file
-        assert_eq!(consent, Some(false));
+        assert_eq!(consent.consent, Some(false));
     }
     {
         set_consent(ConsentType::Internal, Some(true));
 
         let consent = ya_utils_consent::have_consent_cached(ConsentType::Internal);
-        assert_eq!(consent, Some(true));
+        assert_eq!(consent.consent, Some(true));
     }
     {
         set_consent(ConsentType::External, Some(true));
 
         let consent = ya_utils_consent::have_consent_cached(ConsentType::External);
-        assert_eq!(consent, Some(true));
+        assert_eq!(consent.consent, Some(true));
     }
     {
         set_consent(ConsentType::External, None);
 
         let consent = ya_utils_consent::have_consent_cached(ConsentType::External);
-        assert_eq!(consent, None);
+        assert_eq!(consent.consent, None);
     }
     std::fs::remove_file(&consent_path).unwrap();
 }

@@ -1,9 +1,9 @@
-use crate::api::{have_consent, to_json};
+use crate::api::{get_consent_path, have_consent, to_json, ConsentSource};
 use crate::set_consent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::cmp::Ordering;
-use std::fmt;
+use std::{env, fmt};
 use structopt::StructOpt;
 use strum::{EnumIter, IntoEnumIterator};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -96,31 +96,68 @@ pub enum ConsentCommand {
     Path,
 }
 
+pub fn display_consent_path() -> String {
+    get_consent_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or("not found".to_string())
+}
+pub fn display_consent_path_short() -> String {
+    let long_path = get_consent_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or("not found".to_string());
+    if long_path.len() > 50 {
+        //remove 10 characters inside
+        format!(
+            "{}[...]{}",
+            &long_path[..20],
+            &long_path[long_path.len() - 20..]
+        )
+    } else {
+        long_path
+    }
+}
+
 impl ConsentCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             ConsentCommand::Show => {
+                if ctx.json_output {
+                    return Ok(CommandOutput::Object(to_json()));
+                }
                 let mut values = vec![];
                 for consent_type in ConsentType::iter() {
-                    let allowed = have_consent(consent_type);
+                    let consent_res = have_consent(consent_type);
                     let info = extra_info(consent_type);
-                    let is_allowed = match allowed {
+                    let is_allowed = match consent_res.consent {
                         Some(true) => "allow",
                         Some(false) => "deny",
                         None => "not set",
                     };
-                    values.push(json!([consent_type.to_string(), is_allowed, info]));
+                    let source = match consent_res.source {
+                        ConsentSource::Config => {
+                            format!("config file\n{}", display_consent_path_short())
+                        }
+                        ConsentSource::Env => {
+                            let env_var_name =
+                                format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
+                            format!(
+                                "env variable\n({}={})",
+                                &env_var_name,
+                                env::var(&env_var_name).unwrap_or("".to_string())
+                            )
+                        }
+                        ConsentSource::Default => "N/A".to_string(),
+                    };
+                    values.push(json!([consent_type.to_string(), is_allowed, source, info]));
                 }
-                if ctx.json_output {
-                    return Ok(CommandOutput::Object(to_json()));
-                }
+
                 return Ok(CommandOutput::Table {
-                    columns: ["Consent type", "Status", "Info"]
+                    columns: ["Type", "Status", "Source", "Info"]
                         .iter()
                         .map(ToString::to_string)
                         .collect(),
                     values,
-                    summary: vec![json!(["", "", ""])],
+                    summary: vec![json!(["", "", "", ""])],
                     header: Some(
                         "Consents given to the Golem service, you can change them, run consent --help for more info".to_string()),
                 });
