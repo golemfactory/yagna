@@ -101,21 +101,6 @@ pub fn display_consent_path() -> String {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or("not found".to_string())
 }
-pub fn display_consent_path_short() -> String {
-    let long_path = get_consent_path()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or("not found".to_string());
-    if long_path.len() > 50 {
-        //remove 10 characters inside
-        format!(
-            "{}[...]{}",
-            &long_path[..20],
-            &long_path[long_path.len() - 20..]
-        )
-    } else {
-        long_path
-    }
-}
 
 impl ConsentCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
@@ -135,8 +120,8 @@ impl ConsentCommand {
                     };
                     let source = match consent_res.source {
                         ConsentSource::Config => {
-                            format!("config file\n{}", display_consent_path_short())
-                        }
+                            "config file".to_string()
+                        },
                         ConsentSource::Env => {
                             let env_var_name =
                                 format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
