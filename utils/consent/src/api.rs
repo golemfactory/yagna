@@ -173,6 +173,19 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
             return;
         }
     };
+    for consent_type in ConsentType::iter() {
+        let env_name = format!(
+            "YA_CONSENT_{}",
+            consent_type.to_string().to_uppercase()
+        );
+        if let Ok(env_val) = env::var(&env_name) {
+            log::warn!(
+                "Consent {} is already set by environment variable, changes may not have effect: {}={}",
+                consent_type,
+                env_name,
+                env_val)
+        }
+    }
     let mut entries = load_entries(&path);
     entries.retain(|entry| entry.consent_type != consent_type);
     if let Some(allowed) = allowed {
