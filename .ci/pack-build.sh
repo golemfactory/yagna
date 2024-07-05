@@ -9,7 +9,7 @@ not_empty() {
 }
 
 
-not_empty "$GITHUB_REF" GITHUB_REF
+not_empty "$TAG_NAME" TAG_NAME
 not_empty "$OS_NAME" OS_NAME
 
 
@@ -28,8 +28,6 @@ elif [ "$OS_NAME" == "windows" ]; then
 else
   fail "unknown os name: $OS_NAME"
 fi
-
-TAG_NAME="${GITHUB_REF##*/}"
 
 generate_asset() {
   local asset_type=$1
