@@ -174,10 +174,7 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
         }
     };
     for consent_type in ConsentType::iter() {
-        let env_name = format!(
-            "YA_CONSENT_{}",
-            consent_type.to_string().to_uppercase()
-        );
+        let env_name = format!("YA_CONSENT_{}", consent_type.to_string().to_uppercase());
         if let Ok(env_val) = env::var(&env_name) {
             log::warn!(
                 "Consent {} is already set by environment variable, changes may not have effect: {}={}",
