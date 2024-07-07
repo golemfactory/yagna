@@ -18,6 +18,7 @@ use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
+use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -376,6 +377,13 @@ impl Erc20Driver {
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<ValidateAllocationResult, GenericError> {
+        if env::var("YAGNA_DEV_SKIP_ALLOCATION_VALIDATION")
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(false)
+        {
+            return Ok(ValidateAllocationResult::Valid);
+        }
+
         if msg.deposit.is_some() {
             Err(GenericError::new(
                 "validate_allocation_internal called with not empty deposit",
