@@ -15,7 +15,6 @@ not_empty "$OS_NAME" OS_NAME
 
 if [ "$OS_NAME" = "ubuntu" ]; then
   OS_NAME=linux
-  target=x86_64-unknown-linux-musl/
   exe=""
 elif [ "$OS_NAME" == "linux-aarch64" ]; then
   OS_NAME=linux_aarch64
