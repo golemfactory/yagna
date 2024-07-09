@@ -157,6 +157,11 @@ jobs:
           suffix: ${{ github.event.inputs.suffix || '-nightly' }}
           prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
+      - name: Fetch tags so describe would work properly
+        run: |
+          git fetch --tags
+          git describe --tags
+
       - name: Get upload url
         id: release_upload_url
         uses: actions/github-script@0.9.0
@@ -190,6 +195,14 @@ jobs:
           toolchain: ${{ env.rust_stable }}
           target: x86_64-unknown-linux-musl
           override: true
+
+      - name: Show compile tools versions
+        run: |
+          cargo test -p ya-compile-time-utils --lib test::test_git_tag -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_git_rev -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_semver -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_build_number -- --nocapture
+
       - name: Build macos
         if: matrix.os == 'macos'
         run: |
@@ -215,8 +228,8 @@ jobs:
         run: |
           cargo build --release --features require-consent,static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
-          (cd golem_cli && cargo build --bin golemsp --features require-consent -p golemsp --release --target x86_64-unknown-linux-musl)
-          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl)
+          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --features openssl/vendored --target x86_64-unknown-linux-musl)
+          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --features openssl/vendored --target x86_64-unknown-linux-musl)
           (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored --target x86_64-unknown-linux-musl)
       - name: Pack
         id: pack
