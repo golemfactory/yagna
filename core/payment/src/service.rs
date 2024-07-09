@@ -47,7 +47,7 @@ pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: Bin
 mod local {
     use super::*;
     use crate::dao::*;
-    use chrono::NaiveDateTime;
+    use chrono::DateTime;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
@@ -289,8 +289,9 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or_else(|| network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp_opt(after_timestamp, 0)
-            .expect("Failed on out-of-range number of seconds");
+        let after_timestamp = DateTime::from_timestamp(after_timestamp, 0)
+            .expect("Failed on out-of-range number of seconds")
+            .naive_utc();
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {

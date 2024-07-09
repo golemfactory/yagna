@@ -98,7 +98,7 @@ impl TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
                 .vector_json
                 .map(|json_str| serde_json::from_str(&json_str))
                 .transpose()?,
-            timestamp: value.updated_date.timestamp(),
+            timestamp: value.updated_date.and_utc().timestamp(),
         })
     }
 }
