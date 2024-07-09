@@ -157,10 +157,10 @@ jobs:
           suffix: ${{ github.event.inputs.suffix || '-nightly' }}
           prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
-      - name: More info about git
+      - name: Fetch tags so describe would work properly
         run: |
+          git fetch --tags
           git describe --tags
-          git rev-parse HEAD
 
       - name: Get upload url
         id: release_upload_url
