@@ -3076,6 +3076,7 @@ dependencies = [
  "log",
  "names",
  "nix 0.22.3",
+ "openssl",
  "prettytable-rs",
  "promptly",
  "rustyline 6.3.0",
