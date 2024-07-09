@@ -190,6 +190,14 @@ jobs:
           toolchain: ${{ env.rust_stable }}
           target: x86_64-unknown-linux-musl
           override: true
+
+      - name: Show compile tools versions
+        run: |
+          cargo test -p ya-compile-time-utils --lib test::test_git_tag -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_git_rev -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_semver -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_build_number -- --nocapture
+
       - name: Build macos
         if: matrix.os == 'macos'
         run: |
