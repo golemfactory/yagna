@@ -119,9 +119,7 @@ impl ConsentCommand {
                         None => "not set",
                     };
                     let source = match consent_res.source {
-                        ConsentSource::Config => {
-                            "config file".to_string()
-                        },
+                        ConsentSource::Config => "config file".to_string(),
                         ConsentSource::Env => {
                             let env_var_name =
                                 format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
