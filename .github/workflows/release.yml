@@ -157,9 +157,12 @@ jobs:
           suffix: ${{ github.event.inputs.suffix || '-nightly' }}
           prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
-      - name: Fetch tags so describe would work properly
+      - name: Fetch tags if action was triggered by something other than push
+        if: github.event_name != 'push'
         run: |
           git fetch --tags
+
+      - name: Describe tag should work, otherwise compile version tools will fail
           git describe --tags
 
       - name: Get upload url
