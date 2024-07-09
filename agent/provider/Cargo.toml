@@ -51,7 +51,7 @@ log-derive = "0.4"
 notify = "4.0.15"
 num_cpus = "1.13.0"
 num-traits = "0.2.14"
-openssl.workspace = true
+openssl.workgit space = true
 path-clean = "0.1.0"
 regex = "1.5"
 semver = { version = "0.11", features = ["serde"] }
