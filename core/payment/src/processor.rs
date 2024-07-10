@@ -16,6 +16,7 @@ use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -612,6 +613,22 @@ impl PaymentProcessor {
             None
         };
 
+        let platform_parts: [&str; 3] = msg
+            .payment_platform
+            .split("-")
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        driver_endpoint(&platform_parts[0])
+            .send(driver::Init::new(
+                msg.payer_addr.clone(),
+                Some(platform_parts[1].to_string()),
+                None,
+                AccountMode::SEND,
+            ))
+            .await??;
+
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
@@ -946,6 +963,24 @@ impl PaymentProcessor {
     }
 
     pub async fn release_deposit(&self, msg: ReleaseDeposit) -> Result<(), GenericError> {
+        let platform_parts: [&str; 3] = msg
+            .platform
+            .split("-")
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        driver_endpoint(&platform_parts[0])
+            .send(driver::Init::new(
+                msg.from.clone(),
+                Some(platform_parts[1].to_string()),
+                None,
+                AccountMode::SEND,
+            ))
+            .await
+            .map_err(GenericError::new)?
+            .map_err(GenericError::new)?;
+
         let driver = self
             .registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
