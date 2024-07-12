@@ -9,12 +9,10 @@ pub enum FlattenError {
 }
 
 pub fn flatten_properties(str_json_properties: &str) -> Result<Vec<String>, FlattenError> {
-    let json_properties: Value = serde_json::from_str(str_json_properties)?;
-    let mapped = flatten(json_properties);
-    let mut properties = vec![];
-    for (k, v) in mapped.iter() {
-        properties.push(format!("{}={}", k, serde_json::to_string(v)?))
-    }
-
-    Ok(properties)
+    flatten(serde_json::from_str(str_json_properties)?)
+        .iter()
+        .try_fold(vec![], |mut vec, (k, v)| {
+            vec.push(format!("{}={}", k, serde_json::to_string(v)?));
+            Ok(vec)
+        })
 }
