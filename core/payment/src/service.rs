@@ -52,6 +52,7 @@ mod local {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
+    use tracing::{debug, debug_span, trace};
     use ya_client_model::{
         payment::{
             Account, DebitNoteEventType, DocumentStatus, DriverDetails, DriverStatusProperty,
@@ -138,9 +139,19 @@ mod local {
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
-        log::debug!("Schedule payment processor started");
+        debug!(
+            entity = "payment",
+            action = "schedule",
+            id = msg.document_id(),
+            "Schedule payment started"
+        );
         let res = processor.schedule_payment(msg).await;
-        log::debug!("Schedule payment processor finished");
+        trace!(
+            entity = "payment",
+            action = "schedule",
+            id = msg.document_id(),
+            "Schedule payment finished"
+        );
         Ok(res?)
     }
 

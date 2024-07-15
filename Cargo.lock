@@ -9415,6 +9415,7 @@ dependencies = [
  "strum 0.24.1",
  "thiserror",
  "tokio",
+ "tracing",
  "uint 0.7.1",
  "uuid 0.8.2",
  "ya-agreement-utils",
