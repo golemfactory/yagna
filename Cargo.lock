@@ -9993,6 +9993,7 @@ dependencies = [
  "futures 0.3.30",
  "log",
  "tokio",
+ "ya-std-utils",
 ]
 
 [[package]]
