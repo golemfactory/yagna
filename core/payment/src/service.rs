@@ -52,7 +52,7 @@ mod local {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
-    use tracing::{debug, debug_span, trace};
+    use tracing::{debug, trace};
     use ya_client_model::{
         payment::{
             Account, DebitNoteEventType, DocumentStatus, DriverDetails, DriverStatusProperty,
@@ -139,17 +139,18 @@ mod local {
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
+        let id = msg.document_id();
         debug!(
             entity = "payment",
             action = "schedule",
-            id = msg.document_id(),
+            id,
             "Schedule payment started"
         );
         let res = processor.schedule_payment(msg).await;
         trace!(
             entity = "payment",
             action = "schedule",
-            id = msg.document_id(),
+            id,
             "Schedule payment finished"
         );
         Ok(res?)
@@ -161,9 +162,20 @@ mod local {
         sender: String,
         msg: RegisterDriver,
     ) -> Result<(), RegisterDriverError> {
-        log::debug!("Register driver processor started");
+        let driver = msg.driver_name.clone();
+        debug!(
+            entity = "driver",
+            action = "register",
+            driver,
+            "Register driver started"
+        );
         let res = processor.register_driver(msg).await;
-        log::debug!("Register driver processor finished");
+        trace!(
+            entity = "driver",
+            action = "register",
+            driver,
+            "Register driver finished"
+        );
         res
     }
 
@@ -173,10 +185,20 @@ mod local {
         sender: String,
         msg: UnregisterDriver,
     ) -> Result<(), UnregisterDriverError> {
-        log::debug!("Unregister driver processor started");
+        let driver = msg.0.clone();
+        debug!(
+            entity = "driver",
+            action = "unregister",
+            driver,
+            "Unregister driver started"
+        );
         let res = processor.unregister_driver(msg).await;
-        log::debug!("Unregister driver processor finished");
-
+        trace!(
+            entity = "driver",
+            action = "unregister",
+            driver,
+            "Unregister driver finished"
+        );
         res
     }
 
@@ -186,9 +208,23 @@ mod local {
         sender: String,
         msg: RegisterAccount,
     ) -> Result<(), RegisterAccountError> {
-        log::debug!("Register account processor started");
+        let platform = format!("{}-{}-{}", &msg.driver, &msg.network, &msg.token);
+        let account = msg.address.clone();
+        debug!(
+            entity = "account",
+            action = "register",
+            account,
+            platform,
+            "Register account started"
+        );
         let res = processor.register_account(msg).await;
-        log::debug!("Register account processor finished");
+        trace!(
+            entity = "account",
+            action = "register",
+            account,
+            platform,
+            "Register account finished"
+        );
         res
     }
 
@@ -198,9 +234,20 @@ mod local {
         sender: String,
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
-        log::debug!("Unregister account processor started");
+        let account = msg.address.clone();
+        debug!(
+            entity = "account",
+            action = "unregister",
+            account,
+            "Unregister account started"
+        );
         processor.unregister_account(msg).await?;
-        log::debug!("Unregister account processor finished");
+        trace!(
+            entity = "account",
+            action = "unregister",
+            account,
+            "Unregister account finished"
+        );
         Ok(())
     }
 
@@ -210,9 +257,9 @@ mod local {
         sender: String,
         msg: GetAccounts,
     ) -> Result<Vec<Account>, GetAccountsError> {
-        log::debug!("Get accounts processor started");
+        trace!(entity = "accounts", action = "get", "Get accounts started");
         let res = processor.get_accounts().await;
-        log::debug!("Get accounts processor finished");
+        trace!(entity = "accounts", action = "get", "Get accounts finished");
         res
     }
 
@@ -226,12 +273,26 @@ mod local {
         let i = NOTIFY_COUNTER.fetch_add(1, Ordering::Relaxed);
         let start = Instant::now();
 
-        log::debug!("Notify payment no. {i} processor started");
-        let res = processor.notify_payment(msg).await;
-        log::debug!(
-            "Notify payment no. {} processor finished after {:.2}s",
-            i,
-            start.elapsed().as_secs_f32()
+        debug!(
+            entity = "payment",
+            action = "notify",
+            sender = msg.sender,
+            recipient = msg.recipient,
+            no = i,
+            "Notify payment started"
+        );
+        let res = processor.notify_payment(msg.clone()).await;
+
+        debug!(
+            entity = "payment",
+            action = "notify",
+            sender = msg.sender,
+            recipient = msg.recipient,
+            no = i,
+            duration = format!(
+                "Notify payment finished after {:.2}s",
+                start.elapsed().as_secs_f32()
+            )
         );
 
         Ok(res?)
