@@ -58,6 +58,7 @@ structopt = "0.3"
 strum = { workspace = true }
 thiserror = "1.0"
 tokio = { version = "1", features = ["fs", "signal", "macros"] }
+tracing = { version = "0.1.40", features = ["log"] }
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 
