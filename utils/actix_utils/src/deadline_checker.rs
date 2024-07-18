@@ -5,6 +5,8 @@ use futures::Future;
 use std::collections::HashMap;
 use std::pin::Pin;
 
+use ya_std_utils::LogErr;
+
 use crate::{
     actix_signal::{SignalSlot, Subscribe},
     actix_signal_handler,
@@ -104,7 +106,7 @@ impl DeadlineChecker {
         }
 
         self.handle.take();
-        self.update_deadline(ctx).ok();
+        self.update_deadline(ctx).log_err().ok();
     }
 
     fn drain_elapsed(&mut self, timestamp: DateTime<Utc>) -> Vec<DeadlineElapsed> {
@@ -155,10 +157,7 @@ impl DeadlineChecker {
             })
             .min();
 
-        match nearest {
-            Some(deadline) => deadline,
-            None => Utc::now() + Duration::weeks(50),
-        }
+        nearest.unwrap_or_else(|| Utc::now() + Duration::weeks(50))
     }
 }
 
@@ -187,7 +186,7 @@ impl Handler<TrackDeadline> for DeadlineChecker {
             },
         );
 
-        self.update_deadline(ctx).unwrap();
+        self.update_deadline(ctx).log_err().ok();
     }
 }
 
@@ -207,7 +206,7 @@ impl Handler<StopTracking> for DeadlineChecker {
         }
 
         if any {
-            self.update_deadline(ctx).unwrap();
+            self.update_deadline(ctx).log_err().ok();
         }
     }
 }
@@ -217,7 +216,7 @@ impl Handler<StopTrackingCategory> for DeadlineChecker {
 
     fn handle(&mut self, msg: StopTrackingCategory, ctx: &mut Context<Self>) -> Self::Result {
         if self.deadlines.remove(&msg.category).is_some() {
-            self.update_deadline(ctx).unwrap()
+            self.update_deadline(ctx).log_err().ok();
         }
     }
 }
