@@ -1,5 +1,6 @@
 use crate::dao::{DebitNoteDao, InvoiceDao};
 use crate::processor::PaymentProcessor;
+use crate::Config;
 
 use futures::prelude::*;
 use metrics::counter;
@@ -35,11 +36,16 @@ impl Default for BindOptions {
     }
 }
 
-pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
+pub fn bind_service(
+    db: &DbExecutor,
+    processor: Arc<PaymentProcessor>,
+    opts: BindOptions,
+    config: Arc<Config>,
+) {
     log::debug!("Binding payment service to service bus");
 
     local::bind_service(db, processor.clone());
-    public::bind_service(db, processor, opts);
+    public::bind_service(db, processor, opts, config);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -825,7 +831,12 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
+    pub fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        opts: BindOptions,
+        config: Arc<Config>,
+    ) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -843,7 +854,7 @@ mod public {
             .bind_with_processor(sync_payment);
 
         if opts.run_sync_job {
-            send_sync_notifs_job(db.clone());
+            send_sync_notifs_job(db.clone(), config);
             send_sync_requests(db.clone());
         }
 

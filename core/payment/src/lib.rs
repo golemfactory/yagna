@@ -1,5 +1,6 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
 use futures::FutureExt;
 use service::BindOptions;
@@ -15,6 +16,7 @@ extern crate diesel;
 pub mod accounts;
 pub mod api;
 mod cli;
+pub mod config;
 pub mod dao;
 pub mod error;
 pub mod models;
@@ -53,8 +55,10 @@ impl PaymentService {
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
 
+        let config = Arc::new(Config::from_env()?);
+
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), BindOptions::default());
+        self::service::bind_service(&db, processor.clone(), BindOptions::default(), config);
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;

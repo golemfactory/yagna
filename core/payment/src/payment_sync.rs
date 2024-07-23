@@ -1,4 +1,7 @@
+use std::sync::Arc;
 use std::{collections::HashSet, time::Duration};
+
+use crate::Config;
 
 use chrono::Utc;
 use tokio::sync::Notify;
@@ -25,9 +28,6 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, typed, Error, RpcEndpoint};
 
 use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
 
-const SYNC_NOTIF_DELAY_0: Duration = Duration::from_secs(30);
-const SYNC_NOTIF_RATIO: u32 = 6;
-const SYNC_NOTIF_MAX_RETRIES: u32 = 7;
 const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 async fn payment_sync(
@@ -152,10 +152,19 @@ async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> 
     Ok(())
 }
 
-async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<Option<Duration>> {
+async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Option<Duration>> {
     let dao: SyncNotifsDao = db.as_dao();
+    let backoff_config = &config.sync_notif_backoff;
 
-    let exp_backoff = |n| SYNC_NOTIF_DELAY_0 * SYNC_NOTIF_RATIO.pow(n);
+    let exp_backoff = |n| {
+        let secs = backoff_config.initial_delay * backoff_config.exponent.powi(n) as u32;
+        let capped: Duration = if let Some(cap) = backoff_config.cap {
+            ::std::cmp::min(cap, secs)
+        } else {
+            secs
+        };
+        capped
+    };
     let cutoff = Utc::now();
 
     let default_identity = typed::service(identity::BUS_ID)
@@ -183,7 +192,7 @@ async fn send_sync_notifs(db: &DbExecutor) -> anyhow::Result<Option<Duration>> {
         .into_iter()
         .filter(|entry| {
             let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
-            next_deadline.and_utc() < cutoff && entry.retries <= SYNC_NOTIF_MAX_RETRIES as i32
+            next_deadline.and_utc() <= cutoff && entry.retries <= backoff_config.max_retries as i32
         })
         .map(|entry| entry.id)
         .collect::<Vec<_>>();
@@ -220,11 +229,11 @@ lazy_static::lazy_static! {
     pub static ref SYNC_NOTIFS_NOTIFY: Notify = Notify::new();
 }
 
-pub fn send_sync_notifs_job(db: DbExecutor) {
-    let sleep_on_error = Duration::from_secs(3600);
+pub fn send_sync_notifs_job(db: DbExecutor, config: Arc<Config>) {
+    let sleep_on_error = config.sync_notif_backoff.error_delay;
     tokio::task::spawn_local(async move {
         loop {
-            let sleep_for = match send_sync_notifs(&db).await {
+            let sleep_for = match send_sync_notifs(&db, &config).await {
                 Err(e) => {
                     log::error!("PaymentSyncNeeded sendout job failed: {e}");
                     sleep_on_error
