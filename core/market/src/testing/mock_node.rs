@@ -15,12 +15,6 @@ use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
 use crate::MarketService;
 
-#[cfg(feature = "bcast-singleton")]
-use super::bcast::singleton::BCastService;
-use super::bcast::BCast;
-#[cfg(not(feature = "bcast-singleton"))]
-use super::bcast::BCastService;
-use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::{Config, DiscoveryConfig};
@@ -37,6 +31,14 @@ use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*
 use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::*;
+
+#[cfg(feature = "bcast-singleton")]
+use ya_framework_basic::bcast::singleton::BCastService;
+use ya_framework_basic::mocks::net::{gsb_prefixes, MockNet};
+
+use ya_framework_basic::mocks::bcast::BCast;
+#[cfg(not(feature = "bcast-singleton"))]
+use ya_framework_basic::mocks::bcast::BCastService;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
