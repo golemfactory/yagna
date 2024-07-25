@@ -546,7 +546,7 @@ impl PaymentProcessor {
                 };
 
                 if mark_sent {
-                    payment_dao.mark_sent(payment_id).await.ok();
+                    payment_dao.mark_sent(payment_id, payer_id).await.ok();
                 } else {
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();

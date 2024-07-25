@@ -155,7 +155,7 @@ async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> a
 
     for payment_send in msg.payments {
         payment_dao
-            .mark_sent(payment_send.payment.payment_id)
+            .mark_sent(payment_send.payment.payment_id, owner_id)
             .await?;
     }
 

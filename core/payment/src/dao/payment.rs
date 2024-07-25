@@ -159,12 +159,14 @@ impl<'c> PaymentDao<'c> {
             .await
     }
 
-    pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
+    pub async fn mark_sent(&self, payment_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_mark_sent", move |conn| {
-            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
-                .filter(dsl::role.eq(Role::Requestor))
-                .set(dsl::send_payment.eq(false))
-                .execute(conn)?;
+            diesel::update(
+                dsl::pay_payment.filter(dsl::id.eq(payment_id).and(dsl::owner_id.eq(owner_id))),
+            )
+            .filter(dsl::role.eq(Role::Requestor))
+            .set(dsl::send_payment.eq(false))
+            .execute(conn)?;
             Ok(())
         })
         .await
