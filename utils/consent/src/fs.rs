@@ -146,10 +146,6 @@ pub fn test_entries_internal() {
     let path = PathBuf::from(format!("tmp-{}.txt", rand_string));
     let entries = vec![
         ConsentEntry {
-            consent_type: ConsentType::External,
-            allowed: false,
-        },
-        ConsentEntry {
             consent_type: ConsentType::Internal,
             allowed: true,
         },

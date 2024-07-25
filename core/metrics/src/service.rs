@@ -162,26 +162,14 @@ pub async fn export_metrics_filtered(metrics_filter: Option<MetricsFilter<'_>>) 
 async fn export_metrics_sorted() -> String {
     sort_metrics_txt(&METRICS.lock().await.export(), None)
 }
-const ALLOWED_PREFIXES_EXTERNAL: &[&str] = &["market_agree", "erc20_pay"];
 
 pub async fn export_metrics_for_push() -> String {
     let internal_consent = ya_utils_consent::have_consent_cached(ConsentType::Internal)
         .consent
         .unwrap_or(false);
-    let external_consent = ya_utils_consent::have_consent_cached(ConsentType::External)
-        .consent
-        .unwrap_or(false);
-    let filter = if internal_consent && external_consent {
+    let filter = if internal_consent {
         log::info!("Pushing all metrics, because both internal and external consents are given");
         None
-    } else if internal_consent && !external_consent {
-        log::info!("Pushing all metrics, because internal consent is given");
-        None
-    } else if !internal_consent && external_consent {
-        log::info!("Pushing only external metrics, because external consent is given");
-        Some(MetricsFilter {
-            allowed_prefixes: ALLOWED_PREFIXES_EXTERNAL,
-        })
     } else {
         // !internal_consent && !external_consent
         log::info!(

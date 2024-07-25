@@ -16,10 +16,8 @@ pub struct ConsentEntry {
 
 #[derive(StructOpt, Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
 pub enum ConsentType {
-    /// Consent for internal golem monitoring
+    /// Consent for publication of the node's statistics
     Internal,
-    /// External consent for services like stats.golem.network
-    External,
 }
 
 impl PartialOrd for ConsentType {
@@ -38,7 +36,6 @@ pub fn extra_info(consent_type: ConsentType) -> String {
         ConsentType::Internal => {
             "Internal Golem Network monitoring \nSecond line of info".to_string()
         }
-        ConsentType::External => "External services like stats.golem.network".to_string(),
     }
 }
 
@@ -55,10 +52,6 @@ pub fn full_question(consent_type: ConsentType) -> String {
     match consent_type {
         ConsentType::Internal => {
             "Do you agree to share data with Golem Internal Network Monitor (you can check full range of data transferred in the Terms)?".to_string()
-        }
-        ConsentType::External => {
-            "Do you agree to share your client version, node name, node ID and wallet address, agreements statistics and payment data (available anyway on blockchain) on the stats.golem.network (External Network Monitor and Reputation System)?"
-                .to_string()
         }
     }
 }
@@ -80,11 +73,11 @@ impl ConsentType {
 pub enum ConsentCommand {
     /// Show current settings
     Show,
-    /// Allow all types of consent
+    /// Allow all types of consent (for now there is only one)
     AllowAll,
-    /// Deny all types of consent
+    /// Deny all types of consent (for now there is only one)
     DenyAll,
-    /// Unset all types of consent
+    /// Unset all types of consent (for now there is only one)
     UnsetAll,
     /// Change settings
     Allow(ConsentType),
