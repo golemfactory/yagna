@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::{collections::HashSet, time::Duration};
+use ya_client_model::payment::Payment;
 
 use crate::Config;
 
@@ -30,8 +31,24 @@ use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNoti
 
 const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
+fn remove_allocation_ids_from_payment(payment: &Payment) -> Payment {
+    // We remove allocation ID from syncs because allocations are not transferred to peers and
+    // their IDs would be unknown to the recipient.
+    let mut payment = payment.clone();
+    for agreement_payment in &mut payment.agreement_payments.iter_mut() {
+        agreement_payment.allocation_id = None;
+    }
+
+    for activity_payment in &mut payment.activity_payments.iter_mut() {
+        activity_payment.allocation_id = None;
+    }
+
+    payment
+}
+
 async fn payment_sync(
     db: &DbExecutor,
+    current_node_id: NodeId,
     peer_id: NodeId,
 ) -> anyhow::Result<(PaymentSync, PaymentSyncWithBytes)> {
     let payment_dao: PaymentDao = db.as_dao();
@@ -45,6 +62,8 @@ async fn payment_sync(
         let platform_components = payment.payment_platform.split('-').collect::<Vec<_>>();
         let driver = &platform_components[0];
 
+        let payment = remove_allocation_ids_from_payment(&payment);
+
         let signature = typed::service(driver_bus_id(driver))
             .send(SignPayment(payment.clone()))
             .await??;
@@ -57,7 +76,10 @@ async fn payment_sync(
     }
 
     let mut invoice_accepts = Vec::default();
-    for invoice in invoice_dao.unsent_accepted(peer_id).await? {
+    for invoice in invoice_dao
+        .unsent_accepted(current_node_id, peer_id)
+        .await?
+    {
         invoice_accepts.push(AcceptInvoice::new(
             invoice.invoice_id,
             Acceptance {
@@ -69,7 +91,10 @@ async fn payment_sync(
     }
 
     let mut invoice_rejects = Vec::default();
-    for invoice in invoice_dao.unsent_rejected(peer_id).await? {
+    for invoice in invoice_dao
+        .unsent_rejected(current_node_id, peer_id)
+        .await?
+    {
         let events = invoice_event_dao
             .get_for_invoice_id(
                 invoice.invoice_id.clone(),
@@ -93,7 +118,10 @@ async fn payment_sync(
     }
 
     let mut debit_note_accepts = Vec::default();
-    for debit_note in debit_note_dao.unsent_accepted(peer_id).await? {
+    for debit_note in debit_note_dao
+        .unsent_accepted(current_node_id, peer_id)
+        .await?
+    {
         debit_note_accepts.push(AcceptDebitNote::new(
             debit_note.debit_note_id,
             Acceptance {
@@ -120,7 +148,7 @@ async fn payment_sync(
     ))
 }
 
-async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> {
+async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> anyhow::Result<()> {
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
@@ -133,19 +161,19 @@ async fn mark_all_sent(db: &DbExecutor, msg: PaymentSync) -> anyhow::Result<()> 
 
     for invoice_accept in msg.invoice_accepts {
         invoice_dao
-            .mark_accept_sent(invoice_accept.invoice_id, invoice_accept.issuer_id)
+            .mark_accept_sent(invoice_accept.invoice_id, owner_id)
             .await?;
     }
 
     for invoice_reject in msg.invoice_rejects {
         invoice_dao
-            .mark_reject_sent(invoice_reject.invoice_id, invoice_reject.issuer_id)
+            .mark_reject_sent(invoice_reject.invoice_id, owner_id)
             .await?;
     }
 
     for debit_note_accept in msg.debit_note_accepts {
         debit_note_dao
-            .mark_accept_sent(debit_note_accept.debit_note_id, debit_note_accept.issuer_id)
+            .mark_accept_sent(debit_note_accept.debit_note_id, owner_id)
             .await?;
     }
 
@@ -173,19 +201,6 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
         .ok_or_else(|| anyhow::anyhow!("No default identity"))?
         .node_id;
 
-    let all_notifs = dao.list().await?;
-
-    let next_wakeup = all_notifs
-        .iter()
-        .map(|entry| {
-            let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
-            next_deadline.and_utc()
-        })
-        .filter(|deadline| deadline > &cutoff)
-        .min()
-        .map(|ts| ts - cutoff)
-        .and_then(|dur| dur.to_std().ok());
-
     let peers_to_notify = dao
         .list()
         .await?
@@ -198,15 +213,42 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
         .collect::<Vec<_>>();
 
     for peer in peers_to_notify {
-        let (msg, msg_with_bytes) = payment_sync(db, peer).await?;
+        // FIXME: We should iterate over all identities present in the current instance or make
+        // payment_sync return a mapping identity -> msg and use the returned identity as the
+        // sender, or store notifying identity in SyncNotifsDao.
+        // Currently we assume that everything is sent from the default identity.
+        let (msg, msg_with_bytes) = payment_sync(db, default_identity, peer).await?;
 
+        log::debug!("Sending PaymentSync as [{default_identity}] to [{peer}].");
         let mut result = ya_net::from(default_identity)
             .to(peer)
             .service(ya_core_model::payment::public::BUS_ID)
             .call(msg_with_bytes.clone())
             .await;
 
-        if matches!(&result, Err(Error::GsbBadRequest(_))) {
+        log::debug!("Sending PaymentSync as [{default_identity}] to [{peer}] result: {result:?}");
+
+        // PaymentSyncWithBytes is newer message that won't always be supported, but it contains
+        // signatures that are crutial for clients that do support this message and rely on them
+        // for payment verification.
+        // For this reason we will try to send PaymentSyncWithBytes first and send the older
+        // PaymentSync only if the new message is not supported.
+        //
+        // Manual tests on centralnet show that the following errors are returned:
+        // if the endpoint is not supported
+        //  Err(RemoteError("/net/<peer_id>/payment/PaymentSyncWithBytes", "GSB failure: Bad request: endpoint address not found"))
+        // if the peer is not available
+        //  Err(RemoteError("/net/<peer_id>/payment/PaymentSyncWithBytes", "Bad request: endpoint address not found"))
+        // We'll Use presence of "GSB failure" message to distinguish them.
+        //
+        // We cannot just use any RemoteError or 'Bad request' as an indicator that old message
+        // should be sent, becaues that could cause sending not signed messages to newer clients in
+        // case of transient errors.
+        // TODO: is there any better way to know if the peer is connected but the endpoint is not
+        // handled?
+        if matches!(&result, Err(Error::RemoteError(_, e)) if e.contains("GSB failure: Bad request: endpoint address not found"))
+        {
+            log::debug!("Sending PaymentSync as [{default_identity}] to [{peer}]: PaymentSyncWithBytes not supported, falling back to PaymentSync.");
             result = ya_net::from(default_identity)
                 .to(peer)
                 .service(ya_core_model::payment::public::BUS_ID)
@@ -215,14 +257,36 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
         }
 
         if matches!(&result, Ok(Ok(_))) {
-            mark_all_sent(db, msg).await?;
+            log::debug!("Delivered PaymentSync to [{peer}] as [{default_identity}].");
+            mark_all_sent(db, default_identity, msg).await?;
             dao.drop(peer).await?;
         } else {
+            let err = match result {
+                Err(x) => x.to_string(),
+                Ok(Err(x)) => x.to_string(),
+                Ok(Ok(_)) => unreachable!(),
+            };
+            log::debug!("Couldn't deliver PaymentSync to [{peer}] as [{default_identity}]: {err}");
             dao.increment_retry(peer, cutoff.naive_utc()).await?;
         }
     }
 
-    Ok(next_wakeup)
+    // Next sleep duration is calculated after all events were updated to pick up entries
+    // that were not delivered in current run.
+    let next_sleep_duration = dao
+        .list()
+        .await?
+        .iter()
+        .map(|entry| {
+            let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
+            next_deadline.and_utc()
+        })
+        .filter(|deadline| deadline > &cutoff)
+        .min()
+        .map(|ts| ts - cutoff)
+        .and_then(|dur| dur.to_std().ok());
+
+    Ok(next_sleep_duration)
 }
 
 lazy_static::lazy_static! {
@@ -239,8 +303,12 @@ pub fn send_sync_notifs_job(db: DbExecutor, config: Arc<Config>) {
                     sleep_on_error
                 }
                 Ok(duration) => {
-                    log::debug!("PaymentSyncNeeded sendout job done");
-                    duration.unwrap_or(sleep_on_error)
+                    let sleep_duration = duration.unwrap_or(sleep_on_error);
+                    log::debug!(
+                        "PaymentSyncNeeded sendout job done, sleeping for {:?}",
+                        sleep_duration
+                    );
+                    sleep_duration
                 }
             };
 
