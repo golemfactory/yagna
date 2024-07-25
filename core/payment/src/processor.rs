@@ -30,11 +30,7 @@ use ya_core_model::driver::{
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
     ValidateAllocationResult,
 };
-use ya_core_model::payment::local::{
-    GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
-    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
-    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
-};
+use ya_core_model::payment::local::{GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment, UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError};
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::NodeId;
 use ya_net::RemoteEndpoint;
@@ -617,6 +613,38 @@ impl PaymentProcessor {
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await?
             .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
+
+        match msg.title {
+            PaymentTitle::DebitNote(debit_note) => {
+                let debit_note_id = debit_note.debit_note_id.clone();
+                // znajdujemy poprzedni debit note
+                // jeżeli jest poporzedni debit note to sprawdzamy czy jest order
+                // bierzemy order po poprzednim debit note
+
+                // wysyłamy meessage updatePayment(orderid)
+
+                // driver odgrzebie sobie ten orderid i jeżeli był nieprzetwarzany to go zmodyfikuje i odeśle message OK
+
+                // 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
+
+                // mamy dwa ordery:
+                // jeden dla 1, 2, 3, 4
+                // drugi dla 5, 6
+
+                // co zrobimy jak accept do drugiego przyjdzie przed pierwszym?
+
+
+                // generujemy nowy order, który wskazuje na ostatniego debit nota
+            }
+            PaymentTitle::Invoice(invoice) => {
+
+                //oddzielna logika dla invoice
+
+
+            }
+        }
+
+        //
 
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(

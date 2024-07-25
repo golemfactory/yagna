@@ -1,0 +1,27 @@
+[package]
+name = "ya-utils-consent"
+version = "0.1.0"
+description = "Consent (allow/deny settings) service for Yagna"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+structopt.workspace = true
+log.workspace = true
+metrics = "0.12"
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+promptly.workspace = true
+parking_lot.workspace = true
+ya-service-api = "0.1"
+ya-service-api-interfaces = "0.2"
+ya-utils-path = { path = "../path" }
+
+[dev-dependencies]
+env_logger.workspace = true
+rand.workspace = true
+
+[features]
+require-consent = []
