@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, fmt};
 use structopt::lazy_static::lazy_static;
@@ -30,10 +31,13 @@ pub fn set_consent_path_in_yagna_dir() -> anyhow::Result<()> {
         Ok(val) => val,
         Err(_) => "yagna".to_string(),
     };
-    let val = match DataDir::new(&yagna_datadir).get_or_create() {
-        Ok(val) => val,
+    let val = match DataDir::from_str(&yagna_datadir).map(|r| r.get_or_create()) {
+        Ok(Ok(val)) => val,
+        Ok(Err(e)) => {
+            bail!("Problem (1) when creating yagna path: {}", e)
+        }
         Err(e) => {
-            bail!("Problem when creating yagna path: {}", e)
+            bail!("Problem (2) when creating yagna path: {}", e)
         }
     };
     let val = val.join("CONSENT");
