@@ -20,7 +20,7 @@ impl DataDir {
     pub fn get_or_create(&self) -> anyhow::Result<PathBuf> {
         if self.0.exists().not() {
             // not using logger here bc it might haven't been initialized yet
-            eprintln!("Creating data dir: {}", self.0.display());
+            log::info!("Creating data dir: {}", self.0.display());
             std::fs::create_dir_all(&self.0)
                 .context(format!("data dir {:?} creation error", self))?;
         }

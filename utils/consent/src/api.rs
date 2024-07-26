@@ -2,7 +2,7 @@ use crate::fs::{load_entries, save_entries};
 use crate::model::display_consent_path;
 use crate::model::{extra_info, full_question};
 use crate::{ConsentCommand, ConsentEntry, ConsentType};
-use anyhow::bail;
+use anyhow::anyhow;
 use metrics::gauge;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -28,20 +28,23 @@ pub fn set_consent_path(path: PathBuf) {
 
 pub fn set_consent_path_in_yagna_dir() -> anyhow::Result<()> {
     let yagna_datadir = match env::var("YAGNA_DATADIR") {
-        Ok(val) => {
-            val
+        Ok(val) => match DataDir::from_str(&val) {
+            Ok(val) => val,
+            Err(e) => {
+                return Err(anyhow!(
+                    "Problem when creating yagna path from YAGNA_DATADIR: {}",
+                    e
+                ))
+            }
         },
-        Err(_) => "yagna".to_string(),
+        Err(_) => DataDir::new("yagna"),
     };
-    let val = match DataDir::from_str(&yagna_datadir).map(|r| r.get_or_create()) {
-        Ok(Ok(val)) => val,
-        Ok(Err(e)) => {
-            bail!("Problem (1) when creating yagna path: {}", e)
-        }
-        Err(e) => {
-            bail!("Problem (2) when creating yagna path: {}", e)
-        }
+
+    let val = match yagna_datadir.get_or_create() {
+        Ok(val) => val,
+        Err(e) => return Err(anyhow!("Problem when creating yagna path: {}", e)),
     };
+
     let val = val.join("CONSENT");
     log::info!("Using yagna path: {}", val.as_path().display());
     set_consent_path(val);
