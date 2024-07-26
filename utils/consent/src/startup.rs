@@ -1,6 +1,7 @@
 use crate::api::{have_consent, set_consent};
 use crate::model::full_question;
 use crate::ConsentType;
+use anyhow::anyhow;
 use strum::IntoEnumIterator;
 
 pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
@@ -12,11 +13,18 @@ pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
             if consent_int.consent.is_none() {
                 let res = loop {
                     let prompt_res = if interactive {
-                        promptly::prompt_default(
+                        match promptly::prompt_default(
                             format!("{} [allow/deny]", full_question(consent_type)),
                             "allow".to_string(),
-                        )
-                        .unwrap_or("".to_string())
+                        ) {
+                            Ok(res) => res,
+                            Err(err) => {
+                                return Err(anyhow!(
+                                    "Error when prompting: {}. Run setup again.",
+                                    err
+                                ));
+                            }
+                        }
                     } else {
                         log::warn!("Consent {} not set. Run installer again or run command yagna consent allow {}",
                                consent_type,
