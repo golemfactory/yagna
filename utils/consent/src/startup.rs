@@ -7,7 +7,11 @@ use strum::IntoEnumIterator;
 pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
     // if feature require-consent is enabled, skip check
     if cfg!(feature = "require-consent") {
-        log::info!("Checking consents before startup {}", interactive);
+        if interactive {
+            log::info!("Checking consents interactive");
+        } else {
+            log::info!("Checking consents before startup non-interactive");
+        }
         for consent_type in ConsentType::iter() {
             let consent_int = have_consent(consent_type, true);
             if consent_int.consent.is_none() {

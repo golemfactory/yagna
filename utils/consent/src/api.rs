@@ -28,7 +28,9 @@ pub fn set_consent_path(path: PathBuf) {
 
 pub fn set_consent_path_in_yagna_dir() -> anyhow::Result<()> {
     let yagna_datadir = match env::var("YAGNA_DATADIR") {
-        Ok(val) => val,
+        Ok(val) => {
+            val
+        },
         Err(_) => "yagna".to_string(),
     };
     let val = match DataDir::from_str(&yagna_datadir).map(|r| r.get_or_create()) {
