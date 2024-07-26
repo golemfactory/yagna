@@ -8,7 +8,7 @@ pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
     if cfg!(feature = "require-consent") {
         log::info!("Checking consents before startup {}", interactive);
         for consent_type in ConsentType::iter() {
-            let consent_int = have_consent(consent_type);
+            let consent_int = have_consent(consent_type, true);
             if consent_int.consent.is_none() {
                 let res = loop {
                     let prompt_res = if interactive {
@@ -18,9 +18,10 @@ pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
                         )
                         .unwrap_or("".to_string())
                     } else {
-                        panic!("Consent {} not set. Run installer again or run command yagna consent allow {}",
+                        log::warn!("Consent {} not set. Run installer again or run command yagna consent allow {}",
                                consent_type,
-                               consent_type.to_lowercase_str())
+                               consent_type.to_lowercase_str());
+                        return Ok(());
                     };
                     if prompt_res == "allow" {
                         break true;
@@ -34,7 +35,7 @@ pub fn consent_check_before_startup(interactive: bool) -> anyhow::Result<()> {
         }
 
         for consent_type in ConsentType::iter() {
-            let consent_res = have_consent(consent_type);
+            let consent_res = have_consent(consent_type, false);
             if let Some(consent) = consent_res.consent {
                 log::info!(
                     "Consent {} - {} ({})",

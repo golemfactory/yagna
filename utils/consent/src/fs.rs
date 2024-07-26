@@ -144,12 +144,10 @@ pub fn test_entries_internal() {
 
     env_logger::init();
     let path = PathBuf::from(format!("tmp-{}.txt", rand_string));
-    let entries = vec![
-        ConsentEntry {
-            consent_type: ConsentType::Internal,
-            allowed: true,
-        },
-    ];
+    let entries = vec![ConsentEntry {
+        consent_type: ConsentType::Internal,
+        allowed: true,
+    }];
 
     save_entries(&path, entries.clone()).unwrap();
     let loaded_entries = load_entries(&path);

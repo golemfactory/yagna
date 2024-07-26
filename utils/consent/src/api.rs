@@ -91,7 +91,7 @@ pub fn have_consent_cached(consent_type: ConsentType) -> HaveConsentResult {
                 return entry.consent;
             }
         }
-        let consent_res = have_consent(consent_type);
+        let consent_res = have_consent(consent_type, false);
         map.insert(
             consent_type,
             ConsentEntryCached {
@@ -116,26 +116,37 @@ pub fn have_consent_cached(consent_type: ConsentType) -> HaveConsentResult {
     }
 }
 
-pub(crate) fn have_consent(consent_type: ConsentType) -> HaveConsentResult {
+/// Save from env is used to check if consent should be saved to configuration if set in variable
+pub(crate) fn have_consent(consent_type: ConsentType, save_from_env: bool) -> HaveConsentResult {
     // for example:
     // YA_CONSENT_INTERNAL=allow
     // YA_CONSENT_EXTERNAL=deny
-    if let Ok(env_value) = env::var(format!(
-        "YA_CONSENT_{}",
-        consent_type.to_string().to_uppercase()
-    )) {
+
+    let env_variable_name = format!("YA_CONSENT_{}", consent_type.to_string().to_uppercase());
+    let result_from_env = if let Ok(env_value) = env::var(&env_variable_name) {
         if env_value.trim().to_lowercase() == "allow" {
-            return HaveConsentResult {
+            Some(HaveConsentResult {
                 consent: Some(true),
                 source: ConsentSource::Env,
-            };
+            })
         } else if env_value.trim().to_lowercase() == "deny" {
-            return HaveConsentResult {
+            Some(HaveConsentResult {
                 consent: Some(false),
                 source: ConsentSource::Env,
-            };
+            })
         } else {
-            panic!("Invalid value for consent: {}", env_value);
+            panic!("Invalid value for consent: {env_variable_name}={env_value}, possible values allow/deny");
+        }
+    } else {
+        None
+    };
+    if let Some(result_from_env) = result_from_env {
+        if save_from_env {
+            //save and read again from fail
+            set_consent(consent_type, result_from_env.consent);
+        } else {
+            //return early with the result
+            return result_from_env;
         }
     }
 
@@ -202,7 +213,7 @@ pub fn to_json() -> serde_json::Value {
     json!({
         "consents": ConsentType::iter()
             .map(|consent_type: ConsentType| {
-                let consent_res = have_consent(consent_type);
+                let consent_res = have_consent(consent_type, false);
                 let consent = match consent_res.consent {
                     Some(true) => "allow",
                     Some(false) => "deny",

@@ -104,7 +104,7 @@ impl ConsentCommand {
                 }
                 let mut values = vec![];
                 for consent_type in ConsentType::iter() {
-                    let consent_res = have_consent(consent_type);
+                    let consent_res = have_consent(consent_type, false);
                     let info = extra_info(consent_type);
                     let is_allowed = match consent_res.consent {
                         Some(true) => "allow",

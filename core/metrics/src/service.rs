@@ -164,6 +164,7 @@ async fn export_metrics_sorted() -> String {
 }
 
 pub async fn export_metrics_for_push() -> String {
+    //if consent is not set assume we are not allowed to push metrics
     let internal_consent = ya_utils_consent::have_consent_cached(ConsentType::Internal)
         .consent
         .unwrap_or(false);
