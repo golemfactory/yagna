@@ -1,6 +1,7 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::dao::{
-    ActivityDao, AgreementDao, AllocationDao, AllocationStatus, OrderDao, PaymentDao, SyncNotifsDao,
+    ActivityDao, AgreementDao, AllocationDao, AllocationStatus, DebitNoteDao, OrderDao, PaymentDao,
+    SyncNotifsDao,
 };
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
@@ -23,16 +24,14 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::allocation::Deposit;
-use ya_client_model::payment::{
-    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
-};
+use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, DebitNote, DriverDetails, Network, Payment};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
     ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
-    GenericError, GetAccountsError, GetDriversError, NotifyPayment, RegisterAccount,
+    GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle, RegisterAccount,
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
     UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
@@ -594,6 +593,76 @@ impl PaymentProcessor {
                 "Can not schedule payment with <=0 amount: {}",
                 &amount
             )));
+        }
+
+        let debit_note = match &msg.title {
+            PaymentTitle::DebitNote(dn) => Some(dn),
+            PaymentTitle::Invoice(_) => None,
+        };
+
+        let mut debit_note_chain = Vec::<DebitNote>::new();
+        let mut debit_by_id = HashMap::new();
+        if let Some(debit_note) = debit_note {
+            let debit_list = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT)
+                .await?
+                .as_dao::<DebitNoteDao>()
+                .list(None, None, None, Some(debit_note.activity_id.clone())).await?;
+
+            for debit in debit_list {
+                debit_by_id.insert(debit.activity_id.clone(), debit.clone());
+            }
+
+            let start_debit_note = match debit_by_id.get(&debit_note.debit_note_id) {
+                Some(debit_note) => debit_note.clone(),
+                None => return Err(SchedulePaymentError::InvalidInput(format!("Debit note {} not found", debit_note.debit_note_id))),
+            };
+
+            debit_note_chain.push(start_debit_note.clone());
+            let mut prev_debit_note_id = start_debit_note.previous_debit_note_id.clone();
+            while let Some(next_debit_note_id) = &prev_debit_note_id {
+                let next_debit_note = match debit_by_id.get(next_debit_note_id) {
+                    Some(debit_note) => debit_note.clone(),
+                    None => return Err(SchedulePaymentError::InvalidInput(format!("Debit note {} not found when building debit note chain", next_debit_note_id))),
+                };
+
+                debit_note_chain.push(next_debit_note.clone());
+                prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
+            }
+
+            //debit notes should be sorted in order right now
+            //look for previous pay orders
+            let mut previous_pay_order = None;
+            for (debit_note_no, debit_note) in debit_note_chain.iter().enumerate() {
+                if debit_note_no == 0 {
+                    continue;
+                }
+                let pay_order = self
+                    .db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT)
+                    .await?
+                    .as_dao::<OrderDao>()
+                    .get_by_debit_note_id(debit_note.debit_note_id.clone())
+                    .await?;
+                if let Some(pay_order) = pay_order {
+                    previous_pay_order = Some(pay_order);
+                    break;
+                }
+            };
+
+            if let Some(previous_pay_order) = previous_pay_order {
+                driver_endpoint(&)
+                    .send(driver::SchedulePayment::new(
+                        amount,
+                        msg.payer_addr.clone(),
+                        msg.payee_addr.clone(),
+                        msg.payment_platform.clone(),
+                        deposit_id,
+                        msg.due_date,
+                    ))
+                    .await??;
+            }
         }
 
         let allocation_status = self
