@@ -254,7 +254,7 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
 
     let mut next_sleep_duration: Option<Duration> = None;
     for identity in identities {
-        if identity.is_locked || identity.deleted {
+        if identity.is_locked {
             continue;
         }
         let sleep_duration =
