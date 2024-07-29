@@ -132,6 +132,7 @@ pub enum Role {
 #[error("Invalid role string: {0}")]
 pub struct RoleParseError(pub String);
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for Role {
     fn to_string(&self) -> String {
         match self {

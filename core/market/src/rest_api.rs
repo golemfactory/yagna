@@ -87,6 +87,7 @@ pub struct QueryTimeout {
 }
 
 #[derive(Deserialize)]
+#[allow(unused)]
 pub struct QueryTimeoutCommandIndex {
     #[serde(rename = "timeout")]
     pub timeout: Option<f32>,
@@ -131,6 +132,7 @@ pub struct QueryScanEvents {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(unused)]
 pub struct QueryTerminateAgreement {
     pub reason: Option<String>,
 }

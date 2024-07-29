@@ -15,6 +15,7 @@ required-features = ["server"]
 [features]
 default = ['server']
 codec = []
+compat-deployment = []
 server = ['prost', 'futures', 'tokio', 'tokio-util']
 
 [dependencies]

@@ -36,6 +36,7 @@ impl FromStr for DataDir {
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for DataDir {
     fn to_string(&self) -> String {
         /*
