@@ -13,7 +13,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cli_args = StartupConfig::from_args();
     match &cli_args.commands {
-        Commands::Run(_) => (), // logging is handled by ProviderAgent
+        Commands::Run(_) => (),      // logging is handled by ProviderAgent
+        Commands::SelfTest(_) => (), // logging is handled by ProviderAgent
         _ => {
             ya_file_logging::start_logger("info", None, &[], false)?;
         }
@@ -40,6 +41,12 @@ async fn main() -> anyhow::Result<()> {
 
             agent.send(Shutdown).await??;
 
+            Ok(())
+        }
+        Commands::SelfTest(args) => {
+            let agent = ProviderAgent::new(args, config).await?.start();
+            agent.send(Shutdown).await??;
+            log::info!("Self-test finished. Exiting...");
             Ok(())
         }
         Commands::Config(config_cmd) => config_cmd.run(config),
