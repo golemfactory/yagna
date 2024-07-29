@@ -286,6 +286,82 @@ impl RpcMessage for Init {
     type Error = GenericError;
 }
 
+// ************************** TRY UPDATE PAYMENT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TryUpdatePaymentResult {
+    PaymentNotFound,
+    PaymentUpdated,
+    PaymentNotUpdated,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TryUpdatePayment {
+    payment_id: String,
+    amount: BigDecimal,
+    sender: String,
+    recipient: String,
+    platform: String,
+    deposit_id: Option<Deposit>,
+    due_date: DateTime<Utc>,
+}
+
+impl TryUpdatePayment {
+    pub fn new(
+        payment_id: String,
+        amount: BigDecimal,
+        sender: String,
+        recipient: String,
+        platform: String,
+        deposit_id: Option<Deposit>,
+        due_date: DateTime<Utc>,
+    ) -> TryUpdatePayment {
+        TryUpdatePayment {
+            payment_id,
+            amount,
+            sender,
+            recipient,
+            platform,
+            deposit_id,
+            due_date,
+        }
+    }
+
+    pub fn payment_id(&self) -> String {
+        self.payment_id.clone()
+    }
+
+    pub fn amount(&self) -> BigDecimal {
+        self.amount.clone()
+    }
+
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+
+    pub fn recipient(&self) -> String {
+        self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
+    }
+
+    pub fn deposit_id(&self) -> Option<Deposit> {
+        self.deposit_id.clone()
+    }
+
+    pub fn due_date(&self) -> DateTime<Utc> {
+        self.due_date
+    }
+}
+
+impl RpcMessage for TryUpdatePayment {
+    const ID: &'static str = "TryUpdatePayment";
+    type Item = TryUpdatePaymentResult;
+    type Error = GenericError;
+}
+
 // ************************** SCHEDULE PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
