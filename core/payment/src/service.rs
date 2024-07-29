@@ -645,6 +645,7 @@ mod local {
                 Some(Role::Requestor),
                 Some(DocumentStatus::Accepted),
                 Some(true),
+                None,
             )
             .await
             .map_err(GenericError::new)?;
