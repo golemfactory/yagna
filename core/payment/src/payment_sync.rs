@@ -237,7 +237,7 @@ async fn send_sync_notifs_for_identity(
             let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
             next_deadline.and_utc()
         })
-        .filter(|deadline| deadline > &cutoff)
+        .filter(|deadline| deadline > cutoff)
         .min()
         .map(|ts| ts - cutoff)
         .and_then(|dur| dur.to_std().ok());
@@ -271,7 +271,7 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
         };
     }
 
-    return Ok(next_sleep_duration);
+    Ok(next_sleep_duration)
 }
 
 lazy_static::lazy_static! {
