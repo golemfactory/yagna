@@ -204,6 +204,7 @@ impl<'c> DebitNoteDao<'c> {
         role: Option<Role>,
         status: Option<DocumentStatus>,
         payable: Option<bool>,
+        activity_id: Option<String>,
     ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, "debit_note_dao_list", move |conn| {
             let mut query = query!().into_boxed();
@@ -220,6 +221,9 @@ impl<'c> DebitNoteDao<'c> {
                 } else {
                     query = query.filter(dsl::payment_due_date.is_null());
                 }
+            }
+            if let Some(activity_id) = activity_id {
+                query = query.filter(dsl::activity_id.eq(activity_id));
             }
 
             let debit_notes: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
