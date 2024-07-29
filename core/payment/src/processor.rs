@@ -9,6 +9,7 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
+use crate::utils::remove_allocation_ids_from_payment;
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
@@ -491,12 +492,7 @@ impl PaymentProcessor {
         }
 
         // Allocation IDs are requestor's private matter and should not be sent to provider
-        for agreement_payment in payment.agreement_payments.iter_mut() {
-            agreement_payment.allocation_id = None;
-        }
-        for activity_payment in payment.activity_payments.iter_mut() {
-            activity_payment.allocation_id = None;
-        }
+        payment = remove_allocation_ids_from_payment(payment);
 
         let signature_canonicalized = driver_endpoint(&driver)
             .send(driver::SignPaymentCanonicalized(payment.clone()))
@@ -546,7 +542,7 @@ impl PaymentProcessor {
                 };
 
                 if mark_sent {
-                    payment_dao.mark_sent(payment_id, payer_id).await.ok();
+                    payment_dao.mark_sent(payment_id).await.ok();
                 } else {
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();
