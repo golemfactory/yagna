@@ -9,7 +9,8 @@ use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
-    PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, UpdateTransferResult, ValidateDepositResult,
+    VerifyTransactionResult,
 };
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
@@ -114,8 +115,6 @@ impl Erc20Driver {
         }
     }
 
-
-
     async fn do_transfer(
         &self,
         sender: &str,
@@ -172,7 +171,8 @@ impl Erc20Driver {
 
         let deposit_id = extract_deposit_id(deposit_id)?;
 
-        let res = self.payment_runtime
+        let res = self
+            .payment_runtime
             .update_transfer_guess_account(TransferArgs {
                 network: network.to_string(),
                 from: sender,
@@ -188,7 +188,9 @@ impl Erc20Driver {
 
         Ok(match res {
             UpdateTransferResult::SuccessTransferUpdated => TryUpdatePaymentResult::PaymentUpdated,
-            UpdateTransferResult::FailedTransferProcessed => TryUpdatePaymentResult::PaymentNotUpdated,
+            UpdateTransferResult::FailedTransferProcessed => {
+                TryUpdatePaymentResult::PaymentNotUpdated
+            }
             UpdateTransferResult::FailedTransferNotFound => TryUpdatePaymentResult::PaymentNotFound,
         })
     }
