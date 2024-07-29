@@ -258,7 +258,7 @@ async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Op
             continue;
         }
         let sleep_duration =
-            send_sync_notifs_for_identity(identity.node_id, &db, &config, &cutoff).await?;
+            send_sync_notifs_for_identity(identity.node_id, db, config, &cutoff).await?;
         next_sleep_duration = match sleep_duration {
             None => next_sleep_duration,
             Some(duration) => {
