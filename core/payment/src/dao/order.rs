@@ -4,10 +4,7 @@ use crate::models::order::{ReadObj, WriteObj};
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use crate::schema::pay_order::dsl;
-use diesel::{
-    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl,
-};
+use diesel::{self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_core_model::payment::local::{
     DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
 };
@@ -52,6 +49,44 @@ impl<'c> OrderDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn get_by_debit_note_id(&self, debit_note_id: String) -> DbResult<Option<ReadObj>> {
+        readonly_transaction(self.pool, "order_dao_get", move |conn| {
+            let order = dsl::pay_order
+                .left_join(
+                    invoice_dsl::pay_invoice.on(dsl::invoice_id
+                        .eq(invoice_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(invoice_dsl::owner_id))),
+                )
+                .left_join(
+                    debit_note_dsl::pay_debit_note.on(dsl::debit_note_id
+                        .eq(debit_note_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
+                )
+                .filter(dsl::debit_note_id.eq(debit_note_id))
+                .select((
+                    dsl::id,
+                    dsl::driver,
+                    dsl::amount,
+                    dsl::payee_id,
+                    dsl::payer_id,
+                    dsl::payee_addr,
+                    dsl::payer_addr,
+                    dsl::payment_platform,
+                    dsl::invoice_id,
+                    dsl::debit_note_id,
+                    dsl::allocation_id,
+                    dsl::is_paid,
+                    invoice_dsl::agreement_id.nullable(),
+                    debit_note_dsl::activity_id.nullable(),
+                ))
+                .first(conn)
+                .optional()?;
+            Ok(order)
+        })
+        .await
+
     }
 
     pub async fn get_many(&self, ids: Vec<String>, driver: String) -> DbResult<Vec<ReadObj>> {
