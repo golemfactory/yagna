@@ -71,6 +71,7 @@ fn generate_file_with_hash_(
     let mut file_src = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(path)
         .expect("rnd file");
 
@@ -94,6 +95,7 @@ pub fn generate_file(path: &PathBuf, chunk_size: usize, chunk_count: usize) {
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(path)
         .expect("rnd file");
 

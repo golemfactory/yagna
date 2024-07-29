@@ -42,9 +42,15 @@ pub struct RunConfig {
         set = clap::ArgSettings::Global
     )]
     pub log_dir: Option<PathBuf>,
+
     /// Don't prompt user for configuration, but use defaults instead.
     #[structopt(long)]
     pub no_interactive: bool,
+
+    /// By default, provider will clean up agreement and activity logs, set this flag to leave logs.
+    /// It can result in a large amount of disk space being used after some time.
+    #[structopt(long, env)]
+    pub disable_auto_cleanup: bool,
 }
 
 pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {

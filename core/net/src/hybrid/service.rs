@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
@@ -319,7 +320,7 @@ fn bind_local_bus<F>(
         } else {
             let rx = if is_local_dest {
                 let (tx, rx) = mpsc::channel(1);
-                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
+                forward_bus_to_local(caller_id, address.as_str(), msg, &state_, tx);
                 rx
             } else {
                 forward_bus_to_net(
@@ -441,7 +442,7 @@ fn bind_local_bus<F>(
 async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvider) {
     let endpoint = format!("{}/id", net::BUS_ID);
 
-    typed::bind(endpoint.as_str(), move |event: identity::event::Event| {
+    typed::bind(endpoint.as_str(), move |event: IdentityEvent| {
         log::debug!("Identity event received: {:?}", event);
 
         crypto.reset_alias_cache();
@@ -449,8 +450,9 @@ async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvi
 
         async move {
             match event {
-                identity::event::Event::AccountUnlocked { .. }
-                | identity::event::Event::AccountLocked { .. } => client.reconnect_server().await,
+                IdentityEvent::AccountUnlocked { .. } | IdentityEvent::AccountLocked { .. } => {
+                    client.reconnect_server().await
+                }
             }
             Ok(())
         }
@@ -674,9 +676,11 @@ fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
             let bcast = BCAST.clone();
 
             async move {
-                log::debug!("NET: Subscribe topic {}", topic);
-                let (_is_new, id) = bcast.add(subscribe).await;
-                log::debug!("NET: Created new topic: {}", topic);
+                log::debug!("NET: Subscribe to broadcast topic {}", topic);
+                let (is_new, id) = bcast.add(subscribe).await;
+                if is_new {
+                    log::debug!("NET: Created new topic: {}", topic);
+                }
                 Ok(id)
             }
         },
@@ -1190,9 +1194,12 @@ async fn bind_neighbourhood_bcast(client: Client) -> anyhow::Result<(), BindBroa
     let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
     crate::hybrid::bind_broadcast_with_caller(
         &bcast_address,
-        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+        move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
             let client = client.clone();
             async move {
+                log::debug!(
+                    "NewNeighbour notification fron [{caller}] - invalidating neighborhood cache."
+                );
                 client.invalidate_neighbourhood_cache().await;
                 Ok(())
             }
@@ -1206,7 +1213,7 @@ pub async fn send_bcast_new_neighbour() {
 
     let net_type = { *NET_TYPE.read().unwrap() };
     if net_type == NetType::Hybrid {
-        log::debug!("Broadcasting new neighbour");
+        log::debug!("Broadcasting new neighbour notification.");
         if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
             log::error!("Error broadcasting new neighbour: {e}");
         }

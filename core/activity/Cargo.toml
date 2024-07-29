@@ -23,7 +23,7 @@ diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 env_logger = "0.7"
 futures = "0.3"
-hex = "0.4"
+hex = { workspace = true }
 metrics = "0.12"
 lazy_static = "1.4"
 libsqlite3-sys = { workspace = true }
@@ -41,6 +41,6 @@ structopt = "0.3.7"
 async-stream = "0.3.5"
 
 [dev-dependencies]
-ya-sb-router = "0.6.1"
+ya-sb-router = { workspace = true }
 
 actix-rt = "2.7"

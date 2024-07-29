@@ -2,24 +2,24 @@
 
 #[macro_use]
 extern crate serial_test;
+mod utils;
 
+use pretty_assertions::assert_eq;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-
-use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
 use test_case::test_case;
-use ya_agreement_utils::agreement::expand;
-use ya_agreement_utils::{OfferTemplate, ProposalView};
-use ya_client_model::market::proposal::State;
+
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
 use ya_provider::provider_agent::AgentNegotiatorsConfig;
 use ya_provider::rules::RulesManager;
+
+use utils::rules::{create_demand, create_offer};
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -605,32 +605,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         }
     } else {
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
-    }
-}
-
-fn create_demand(demand: Value) -> ProposalView {
-    ProposalView {
-        content: OfferTemplate {
-            properties: expand(demand),
-            constraints: "()".to_string(),
-        },
-        id: "0x0000000000000000000000000000000000000000".to_string(),
-        issuer: Default::default(),
-        state: State::Initial,
-        timestamp: Default::default(),
-    }
-}
-
-fn create_offer() -> ProposalView {
-    ProposalView {
-        content: OfferTemplate {
-            properties: expand(serde_json::from_str(r#"{ "any": "thing" }"#).unwrap()),
-            constraints: "()".to_string(),
-        },
-        id: "0x0000000000000000000000000000000000000000".to_string(),
-        issuer: Default::default(),
-        state: State::Initial,
-        timestamp: Default::default(),
     }
 }
 

@@ -2,7 +2,7 @@ use crate::archive::ArchiveFormat;
 use crate::archive::{archive, extract};
 use crate::error::Error;
 use crate::traverse::PathTraverse;
-use crate::{abortable_sink, abortable_stream};
+use crate::{abortable_sink, abortable_stream, UrlExt};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
@@ -212,16 +212,41 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
 }
 
 pub(crate) fn extract_file_url(url: &Url) -> String {
+    #[allow(unused_mut)]
+    let mut path = url.path_decoded();
     // On Windows, Rust implementation of Url::parse() adds a third '/' after the 'file://' indicator,
-    // thus making .path() method unusable for the purposes of file creation (because File::create() will not accept that),
+    // thus making .path_decoded() method unusable for the purposes of file creation (because File::create() will not accept that),
     // and therefore - Url hardly usable for carrying absolute file paths...
     #[cfg(windows)]
     {
-        url.as_str().to_owned().replace("file:///", "")
+        if path.starts_with('/') {
+            path.remove(0);
+        }
     }
-    #[cfg(not(windows))]
-    {
-        use crate::location::UrlExt;
-        url.path_decoded()
+    path
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::file::extract_file_url;
+    use std::str::FromStr;
+    use test_case::test_case;
+    use url::Url;
+
+    #[cfg(unix)]
+    #[test_case("file:///home/csharp/file.ext", "/home/csharp/file.ext" ; "Decodes path from URL")]
+    #[test_case("file:///home/c%23/file.ext", "/home/c#/file.ext" ; "Decodes path with non ASCII char from URL")]
+    fn extract_file_url_test(url: &str, path: &str) {
+        let url = Url::from_str(url).unwrap();
+        assert_eq!(path, extract_file_url(&url));
+    }
+
+    #[cfg(windows)]
+    #[test_case("file://C:/csharp/file.ext", "C:/csharp/file.ext" ; "Decodes path from URL")]
+    #[test_case("file://C:/c%23/file.ext", "C:/c#/file.ext" ; "Decodes path with non ASCII char from URL")]
+    #[test_case("file:///C:/c%23/file.ext", "C:/c#/file.ext" ; "Decodes path with non ASCII char and third '/' from URL")]
+    fn extract_file_url_test(url: &str, path: &str) {
+        let url = Url::from_str(url).unwrap();
+        assert_eq!(path, extract_file_url(&url));
     }
 }

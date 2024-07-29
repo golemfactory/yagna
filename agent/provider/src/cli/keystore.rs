@@ -209,7 +209,7 @@ impl CertTableBuilder {
         for (entry, short_id) in self.entries.into_iter().zip(short_ids) {
             let not_after_formatted = date_to_str(&entry.cert.not_after());
             values
-                .push(serde_json::json! { [ short_id, entry.cert.type_name(), not_after_formatted, entry.cert.subject(), entry.format_outbound_rules()] });
+                .push(serde_json::json! { [ short_id, entry.cert.type_name(), not_after_formatted, entry.cert.subject(), entry.format_rules()] });
         }
 
         let columns = vec![
@@ -217,7 +217,7 @@ impl CertTableBuilder {
             "Type".into(),
             "Not After".into(),
             "Subject".into(),
-            "Outbound Rules".into(),
+            "Rules".into(),
         ];
 
         let table = ResponseTable { columns, values };

@@ -9,8 +9,13 @@ use structopt::clap;
 
 use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
+use ya_runtime_api::deploy;
 use ya_service_bus::RpcEnvelope;
-use ya_transfer::transfer::TransferService;
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+use ya_transfer::transfer::{
+    AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
+};
 use ya_utils_path::normalize_path;
 
 use crate::agreement::Agreement;
@@ -18,7 +23,6 @@ use crate::error::Error;
 use crate::manifest::ManifestContext;
 use crate::message::{GetState, GetStateResponse, Register};
 use crate::runtime::process::RuntimeProcess;
-use crate::service::metrics::MetricsService;
 use crate::service::signal::SignalMonitor;
 use crate::state::Supervision;
 
@@ -31,11 +35,9 @@ mod handlers;
 pub mod logger;
 pub mod manifest;
 pub mod message;
-pub mod metrics;
 mod network;
 mod notify;
 mod output;
-pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -44,6 +46,7 @@ mod dns;
 mod exe_unit;
 
 pub use exe_unit::{report, ExeUnit, ExeUnitContext, FinishNotifier, RuntimeRef};
+use ya_counters::service::CountersService;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -90,17 +93,17 @@ pub struct Cli {
 pub struct SuperviseCli {
     /// Hardware resources are handled by the runtime
     #[structopt(
-        long = "runtime-managed-hardware",
-        alias = "cap-handoff",
-        parse(from_flag = std::ops::Not::not),
-        set = clap::ArgSettings::Global,
+    long = "runtime-managed-hardware",
+    alias = "cap-handoff",
+    parse(from_flag = std::ops::Not::not),
+    set = clap::ArgSettings::Global,
     )]
     pub hardware: bool,
     /// Images are handled by the runtime
     #[structopt(
-        long = "runtime-managed-image",
-        parse(from_flag = std::ops::Not::not),
-        set = clap::ArgSettings::Global,
+    long = "runtime-managed-image",
+    parse(from_flag = std::ops::Not::not),
+    set = clap::ArgSettings::Global,
     )]
     pub image: bool,
 }
@@ -147,16 +150,6 @@ pub struct RunArgs {
     /// Common cache directory
     #[structopt(long, short)]
     pub cache_dir: PathBuf,
-}
-
-fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
-    if let Err(error) = std::fs::create_dir_all(path) {
-        match &error.kind() {
-            std::io::ErrorKind::AlreadyExists => (),
-            _ => bail!("Can't create directory: {}, {}", path.display(), error),
-        }
-    }
-    Ok(normalize_path(path)?)
 }
 
 #[cfg(feature = "sgx")]
@@ -371,12 +364,10 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
 
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
+    let counters = CountersService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, config.binary).start();
-    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(ctx, counters, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.send(Register(signals)).await?;
-
-    Ok(exe_unit)
 }

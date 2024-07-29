@@ -307,7 +307,7 @@ impl ExeUnitsRegistry {
             log::info!("Testing runtime [{}]", name);
             test_runtime(desc, &working_dir)
                 .await
-                .map_err(|e| e.context("runtime test failure"))?;
+                .map_err(|e| e.context(format!("Runtime '{name}' test failed")))?;
         }
 
         Ok(())

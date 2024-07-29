@@ -547,7 +547,8 @@ async fn get_demand_decorations(
         return response::not_found();
     }
 
-    let properties: Vec<MarketProperty> = allocations
+    // Populate payment platform properties / constraint.
+    let mut properties: Vec<MarketProperty> = allocations
         .into_iter()
         .map(|allocation| MarketProperty {
             key: format!(
@@ -556,20 +557,28 @@ async fn get_demand_decorations(
             ),
             value: allocation.address,
         })
-        .chain(std::iter::once(MarketProperty {
-            key: "golem.com.payment.protocol.version".into(),
-            value: "2".into(),
-        }))
         .collect();
-    let constraints = properties
-        .iter()
-        .map(|property| ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*")))
-        .chain(std::iter::once(
-            ConstraintKey::new("golem.com.payment.protocol.version")
-                .greater_than(ConstraintKey::new(1)),
-        ))
-        .collect();
-    let constraints = vec![Constraints::new_clause(ClauseOperator::Or, constraints).to_string()];
+    let platform_clause = Constraints::new_clause(
+        ClauseOperator::Or,
+        properties
+            .iter()
+            .map(|property| {
+                ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*"))
+            })
+            .collect(),
+    );
+
+    // Populate payment protocol version property / constraint.
+    properties.push(MarketProperty {
+        key: "golem.com.payment.protocol.version".into(),
+        value: "2".into(),
+    });
+    let protocol_clause = Constraints::new_single(
+        ConstraintKey::new("golem.com.payment.protocol.version")
+            .greater_than(ConstraintKey::new(1)),
+    );
+
+    let constraints = vec![platform_clause.to_string(), protocol_clause.to_string()];
     response::ok(MarketDecoration {
         properties,
         constraints,
