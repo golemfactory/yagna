@@ -37,6 +37,8 @@ pub struct MockNode {
 impl MockNode {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let testdir = testdir.join(name);
+        fs::create_dir_all(&testdir).expect("Failed to create test directory");
+
         MockNode {
             name: name.to_string(),
             testdir,
@@ -52,7 +54,7 @@ impl MockNode {
     }
 
     pub fn with_payment(mut self) -> Self {
-        self.payment = Some(MockPayment::new(&self.name));
+        self.payment = Some(MockPayment::new(&self.name, &self.testdir));
         self
     }
 
@@ -134,6 +136,9 @@ impl MockNode {
             "MockeNode ({}) - binding GSB router at: {gsb_url}",
             self.name
         );
+
+        // GSB RemoteRouter takes url from this variable and we can't set it directly.
+        std::env::set_var("GSB_URL", gsb_url.to_string());
 
         ya_sb_router::bind_gsb_router(Some(gsb_url.clone()))
             .await

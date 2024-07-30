@@ -7,6 +7,7 @@ use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
+use crate::mocks::payment::Driver;
 use mocks::node::MockNode;
 
 mod mocks;
@@ -27,6 +28,10 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     let appkey = node.get_identity()?.create_identity_key("test").await?;
     let api = node.rest_payments(&appkey.key)?;
+
+    node.get_payment()?
+        .fund_account(Driver::Erc20, &appkey.identity.to_string())
+        .await?;
 
     let _allocation = api
         .create_allocation(&NewAllocation {

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use anyhow::anyhow;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ya_core_model::driver::{driver_bus_id, Fund};
@@ -34,17 +35,20 @@ impl Driver {
 #[derive(Clone)]
 pub struct MockPayment {
     name: String,
+    testdir: PathBuf,
+
     db: DbExecutor,
     processor: Arc<PaymentProcessor>,
 }
 
 impl MockPayment {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(&format!("{name}.payment.db")).unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
 
         MockPayment {
             name: name.to_string(),
+            testdir: testdir.to_path_buf(),
             db,
             processor,
         }
@@ -65,6 +69,9 @@ impl MockPayment {
             self.processor.clone(),
             BindOptions::default().run_sync_job(false),
         );
+
+        self.start_dummy_driver().await?;
+        self.start_erc20_driver().await?;
         Ok(())
     }
 
@@ -73,12 +80,13 @@ impl MockPayment {
         web_scope(&db)
     }
 
-    pub async fn start_dummy_driver() -> anyhow::Result<()> {
+    pub async fn start_dummy_driver(&self) -> anyhow::Result<()> {
         dummy::PaymentDriverService::gsb(&()).await?;
         Ok(())
     }
 
-    pub async fn start_erc20_driver() -> anyhow::Result<()> {
+    pub async fn start_erc20_driver(&self) -> anyhow::Result<()> {
+        erc20::PaymentDriverService::gsb(self.testdir.clone()).await?;
         Ok(())
     }
 
