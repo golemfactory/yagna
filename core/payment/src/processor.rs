@@ -672,6 +672,10 @@ impl PaymentProcessor {
                 )))?;
 
             let mut previous_pay_order = None;
+            log::debug!(
+                "Looping through debit notes to find previous payment order for {}",
+                debit_note.debit_note_id
+            );
             while let Some(prev_debit_note_id) = debit_note_loop.previous_debit_note_id.clone() {
                 debit_note_loop = self
                     .db_executor
@@ -685,13 +689,19 @@ impl PaymentProcessor {
                         prev_debit_note_id
                     )))?;
 
+                log::debug!(
+                    "Checking for payment order for previous debit note {}",
+                    debit_note_loop.debit_note_id
+                );
+
                 let pay_order = self
                     .db_executor
                     .timeout_lock(DB_LOCK_TIMEOUT)
                     .await?
                     .as_dao::<OrderDao>()
-                    .get_by_debit_note_id(debit_note.debit_note_id.clone())
+                    .get_by_debit_note_id(debit_note_loop.debit_note_id.clone())
                     .await?;
+
                 if let Some(pay_order) = pay_order {
                     previous_pay_order = Some(pay_order);
                     break;
@@ -721,10 +731,11 @@ impl PaymentProcessor {
                     .await?
                     .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
 
+                let new_amount = previous_pay_order.amount.0.clone() + amount.clone();
                 let res = driver_endpoint(&driver)
                     .send(driver::TryUpdatePayment::new(
                         previous_pay_order.id.clone(),
-                        previous_pay_order.amount.0.clone() + amount.clone(),
+                        new_amount.clone(),
                         msg.payer_addr.clone(),
                         msg.payee_addr.clone(),
                         msg.payment_platform.clone(),
@@ -745,9 +756,12 @@ impl PaymentProcessor {
                             .timeout_lock(DB_LOCK_TIMEOUT)
                             .await?
                             .as_dao::<OrderDao>()
-                            .update_debit_note_id(
+                            .update_order(
+                                msg.clone(),
                                 previous_pay_order.id.clone(),
                                 debit_note.debit_note_id.clone(),
+                                new_amount.clone(),
+                                previous_pay_order.amount.0.clone(),
                             )
                             .await?;
                         log::info!(
