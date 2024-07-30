@@ -54,7 +54,11 @@ impl<'c> OrderDao<'c> {
         .await
     }
 
-    pub async fn update_debit_note_id(&self, order_id: String, debit_note_id: String) -> DbResult<()> {
+    pub async fn update_debit_note_id(
+        &self,
+        order_id: String,
+        debit_note_id: String,
+    ) -> DbResult<()> {
         do_with_transaction(self.pool, "order_dao_update_debit_note_id", move |conn| {
             diesel::update(dsl::pay_order.filter(dsl::id.eq(order_id)))
                 .set(dsl::debit_note_id.eq(debit_note_id))
