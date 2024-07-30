@@ -10,6 +10,9 @@ use url::Url;
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_service_api_web::middleware::auth;
+use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
+use ya_service_api_web::rest_api_host_port;
 
 use super::identity::MockIdentity;
 use super::payment::MockPayment;
@@ -25,7 +28,7 @@ pub struct MockNode {
     name: String,
     testdir: PathBuf,
 
-    rest_url: String,
+    rest_url: Url,
 
     pub identity: Option<MockIdentity>,
     pub payment: Option<MockPayment>,
@@ -81,10 +84,11 @@ impl MockNode {
         Ok(())
     }
 
-    pub fn rest_payments(&self) -> anyhow::Result<PaymentApi> {
+    pub fn rest_payments(&self, token: &str) -> anyhow::Result<PaymentApi> {
         let provider: PaymentApi = WebClient::builder()
+            .auth_token(token)
             .timeout(Duration::from_secs(600 * 60))
-            .api_url(Url::parse(&self.rest_url)?)
+            .api_url(self.rest_url.clone())
             .build()
             .interface()?;
         Ok(provider)
@@ -99,15 +103,21 @@ impl MockNode {
 
         let payments = self.payment.clone();
 
+        let cors = AppKeyCors::new(&CorsConfig::default()).await?;
+
         let srv = HttpServer::new(move || {
-            App::new().wrap(middleware::Logger::default()).service(
-                payments
-                    .clone()
-                    .map(|payment| payment.bind_rest())
-                    .unwrap_or_else(|| Scope::new("")),
-            )
+            App::new()
+                .wrap(middleware::Logger::default())
+                .wrap(auth::Auth::new(cors.cache()))
+                .wrap(cors.cors())
+                .service(
+                    payments
+                        .clone()
+                        .map(|payment| payment.bind_rest())
+                        .unwrap_or_else(|| Scope::new("")),
+                )
         })
-        .bind(self.rest_url.to_string())
+        .bind(rest_api_host_port(self.rest_url.clone()))
         .map_err(|e| anyhow!("Running actix server failed: {e}"))?
         .run();
 
@@ -152,8 +162,8 @@ impl MockNode {
         Ok(gsb_url)
     }
 
-    fn generate_rest_url() -> String {
+    fn generate_rest_url() -> Url {
         let port = portpicker::pick_unused_port().expect("No ports free");
-        format!("127.0.0.1:{}", port)
+        Url::parse(&format!("http://127.0.0.1:{}", port)).expect("Failed to parse generated URL")
     }
 }
