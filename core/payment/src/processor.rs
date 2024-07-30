@@ -723,7 +723,7 @@ impl PaymentProcessor {
                 let res = driver_endpoint(&driver)
                     .send(driver::TryUpdatePayment::new(
                         previous_pay_order.id.clone(),
-                        amount.clone(),
+                        previous_pay_order.amount.0.clone() + amount.clone(),
                         msg.payer_addr.clone(),
                         msg.payee_addr.clone(),
                         msg.payment_platform.clone(),
