@@ -290,6 +290,8 @@ pub struct StartupConfig {
 pub enum Commands {
     /// Run provider agent
     Run(RunConfig),
+    /// Dry run provider agent to check configuration and test runtimes.
+    SelfTest(RunConfig),
     /// Configure provider agent
     Config(ConfigConfig),
     /// Manage offer presets
