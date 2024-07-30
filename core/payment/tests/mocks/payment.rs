@@ -43,7 +43,7 @@ pub struct MockPayment {
 
 impl MockPayment {
     pub fn new(name: &str) -> Self {
-        let db = Self::create_db(&format!("{name}.identity.db")).unwrap();
+        let db = Self::create_db(&format!("{name}.payment.db")).unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
 
         MockPayment {
@@ -61,7 +61,7 @@ impl MockPayment {
     }
 
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
-        log::info!("MockPayment - binding GSB");
+        log::info!("MockPayment ({}) - binding GSB", self.name);
 
         ya_payment::service::bind_service(
             &self.db,

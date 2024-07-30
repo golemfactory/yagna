@@ -28,7 +28,7 @@ impl MockIdentity {
     }
 
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
-        log::info!("MockIdentity - binding GSB");
+        log::info!("MockIdentity ({}) - binding GSB", self.name);
         Identity::gsb(&self.db).await?;
         Ok(())
     }

@@ -76,8 +76,10 @@ ya-framework-basic = { version = "0.1" }
 actix-rt = "2.7"
 rand = "0.8"
 ethsign = "0.8"
+portpicker = "0.1"
 serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"] }
 test-context = "0.1.4"
+url = "2.5"
 
 [lints]
 workspace = true
