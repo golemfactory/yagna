@@ -1,9 +1,10 @@
 use crate::dao::{activity, agreement, allocation};
 use crate::error::DbResult;
-use crate::models::order::{ReadObj, WriteObj};
+use crate::models::order::{OrderReadObjSmall, ReadObj, WriteObj};
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use crate::schema::pay_order::dsl;
+use bigdecimal::BigDecimal;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
     OptionalExtension, QueryDsl, RunQueryDsl,
@@ -54,53 +55,54 @@ impl<'c> OrderDao<'c> {
         .await
     }
 
-    pub async fn update_debit_note_id(
+    pub async fn update_order(
         &self,
+        msg: SchedulePayment,
         order_id: String,
         debit_note_id: String,
+        new_amount: BigDecimal,
+        old_amount: BigDecimal,
     ) -> DbResult<()> {
         do_with_transaction(self.pool, "order_dao_update_debit_note_id", move |conn| {
+            match &msg.title {
+                PaymentTitle::DebitNote(DebitNotePayment { activity_id, .. }) => {
+                    activity::increase_amount_scheduled(
+                        activity_id,
+                        &msg.payer_id,
+                        &(new_amount.clone() - old_amount),
+                        conn,
+                    )?
+                }
+                PaymentTitle::Invoice(InvoicePayment { agreement_id, .. }) => {
+                    agreement::increase_amount_scheduled(
+                        agreement_id,
+                        &msg.payer_id,
+                        &(new_amount.clone() - old_amount),
+                        conn,
+                    )?
+                }
+            };
             diesel::update(dsl::pay_order.filter(dsl::id.eq(order_id)))
-                .set(dsl::debit_note_id.eq(debit_note_id))
+                .set((
+                    dsl::debit_note_id.eq(debit_note_id),
+                    dsl::amount.eq(new_amount.to_string()),
+                ))
                 .execute(conn)?;
             Ok(())
         })
         .await
     }
 
-    pub async fn get_by_debit_note_id(&self, debit_note_id: String) -> DbResult<Option<ReadObj>> {
-        readonly_transaction(self.pool, "order_dao_get", move |conn| {
-            let order = dsl::pay_order
-                .left_join(
-                    invoice_dsl::pay_invoice.on(dsl::invoice_id
-                        .eq(invoice_dsl::id.nullable())
-                        .and(dsl::payer_id.eq(invoice_dsl::owner_id))),
-                )
-                .left_join(
-                    debit_note_dsl::pay_debit_note.on(dsl::debit_note_id
-                        .eq(debit_note_dsl::id.nullable())
-                        .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
-                )
+    pub async fn get_by_debit_note_id(
+        &self,
+        debit_note_id: String,
+    ) -> DbResult<Option<OrderReadObjSmall>> {
+        readonly_transaction(self.pool, "get_by_debit_note_id", move |conn| {
+            Ok(dsl::pay_order
                 .filter(dsl::debit_note_id.eq(debit_note_id))
-                .select((
-                    dsl::id,
-                    dsl::driver,
-                    dsl::amount,
-                    dsl::payee_id,
-                    dsl::payer_id,
-                    dsl::payee_addr,
-                    dsl::payer_addr,
-                    dsl::payment_platform,
-                    dsl::invoice_id,
-                    dsl::debit_note_id,
-                    dsl::allocation_id,
-                    dsl::is_paid,
-                    invoice_dsl::agreement_id.nullable(),
-                    debit_note_dsl::activity_id.nullable(),
-                ))
+                .select((dsl::id, dsl::amount))
                 .first(conn)
-                .optional()?;
-            Ok(order)
+                .optional()?)
         })
         .await
     }
