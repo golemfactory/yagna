@@ -98,7 +98,12 @@ pub mod local {
             if amount <= BigDecimal::zero() {
                 return None;
             }
-            debit_note.payment_due_date.map(|due_date| Self {
+
+            let due_date = debit_note
+                .payment_due_date
+                .unwrap_or_else(|| Utc::now() + chrono::Duration::days(1));
+
+            Some(Self {
                 title: PaymentTitle::DebitNote(DebitNotePayment {
                     debit_note_id: debit_note.debit_note_id,
                     activity_id: debit_note.activity_id,
