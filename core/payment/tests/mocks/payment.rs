@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 
-use actix_web::web::Data;
-use actix_web::{middleware, App, HttpServer};
 use anyhow::anyhow;
 use std::sync::Arc;
 
 use ya_core_model::driver::{driver_bus_id, Fund};
-use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_payment::api::web_scope;
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
@@ -71,25 +68,9 @@ impl MockPayment {
         Ok(())
     }
 
-    pub async fn start_server(
-        &self,
-        ctx: &mut DroppableTestContext,
-        address: &str,
-    ) -> anyhow::Result<()> {
+    pub fn bind_rest(&self) -> actix_web::Scope {
         let db = self.db.clone();
-        let srv = HttpServer::new(move || {
-            App::new()
-                .wrap(middleware::Logger::default())
-                .app_data(Data::new(db.clone()))
-                .service(web_scope(&db))
-        })
-        .bind(address)?
-        .run();
-
-        ctx.register(srv.handle());
-        tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
-
-        Ok(())
+        web_scope(&db)
     }
 
     pub async fn start_dummy_driver() -> anyhow::Result<()> {

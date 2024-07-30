@@ -20,9 +20,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
         .with_identity()
         .with_payment();
     node.bind_gsb().await?;
-    node.get_payment()?
-        .start_server(ctx, "127.0.0.1:8000")
-        .await?;
+    node.start_server(ctx).await?;
 
     Ok(())
 }

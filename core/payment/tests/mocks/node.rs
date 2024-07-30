@@ -1,10 +1,15 @@
 #![allow(dead_code)]
 
+use actix_web::{middleware, App, HttpServer, Scope};
 use anyhow::anyhow;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Duration;
 use url::Url;
+use ya_client::payment::PaymentApi;
+use ya_client::web::WebClient;
+use ya_framework_basic::async_drop::DroppableTestContext;
 
 use super::identity::MockIdentity;
 use super::payment::MockPayment;
@@ -19,6 +24,9 @@ use super::payment::MockPayment;
 pub struct MockNode {
     name: String,
     testdir: PathBuf,
+
+    rest_url: String,
+
     pub identity: Option<MockIdentity>,
     pub payment: Option<MockPayment>,
 }
@@ -29,6 +37,7 @@ impl MockNode {
         MockNode {
             name: name.to_string(),
             testdir,
+            rest_url: Self::generate_rest_url(),
             identity: None,
             payment: None,
         }
@@ -56,6 +65,8 @@ impl MockNode {
             .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
     }
 
+    /// Binds GSB router and all initialized modules to GSB.
+    /// If you want to bind only chosen modules, you should bind them manually.
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         self.bind_gsb_router().await?;
 
@@ -66,6 +77,42 @@ impl MockNode {
         if let Some(payment) = &self.payment {
             payment.bind_gsb().await?;
         }
+
+        Ok(())
+    }
+
+    pub fn rest_payments(&self) -> anyhow::Result<PaymentApi> {
+        let provider: PaymentApi = WebClient::builder()
+            .timeout(Duration::from_secs(600 * 60))
+            .api_url(Url::parse(&self.rest_url)?)
+            .build()
+            .interface()?;
+        Ok(provider)
+    }
+
+    pub async fn start_server(&self, ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+        log::info!(
+            "MockeNode ({}) - Starting server: {}",
+            self.name,
+            self.rest_url
+        );
+
+        let payments = self.payment.clone();
+
+        let srv = HttpServer::new(move || {
+            App::new().wrap(middleware::Logger::default()).service(
+                payments
+                    .clone()
+                    .map(|payment| payment.bind_rest())
+                    .unwrap_or_else(|| Scope::new("")),
+            )
+        })
+        .bind(self.rest_url.to_string())
+        .map_err(|e| anyhow!("Running actix server failed: {e}"))?
+        .run();
+
+        ctx.register(srv.handle());
+        tokio::task::spawn_local(async move { anyhow::Ok(srv.await?) });
 
         Ok(())
     }
@@ -103,5 +150,10 @@ impl MockNode {
         }
 
         Ok(gsb_url)
+    }
+
+    fn generate_rest_url() -> String {
+        let port = portpicker::pick_unused_port().expect("No ports free");
+        format!("127.0.0.1:{}", port)
     }
 }
