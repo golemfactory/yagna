@@ -40,6 +40,13 @@ pub struct ReadObj {
     pub activity_id: Option<String>,  // From debit note
 }
 
+#[derive(Queryable, Debug, Identifiable)]
+#[table_name = "pay_order"]
+pub struct OrderReadObjSmall {
+    pub id: String,
+    pub amount: BigDecimalField,
+}
+
 impl WriteObj {
     pub fn new(msg: SchedulePayment, id: String, driver: String) -> Self {
         let (invoice_id, debit_note_id) = match msg.title {
