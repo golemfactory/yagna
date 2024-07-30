@@ -183,17 +183,22 @@ impl<'c> DebitNoteDao<'c> {
     pub async fn get(
         &self,
         debit_note_id: String,
-        owner_id: NodeId,
+        owner_id: Option<NodeId>,
     ) -> DbResult<Option<DebitNote>> {
         readonly_transaction(self.pool, "debit_note_dao_get", move |conn| {
-            let debit_note: Option<ReadObj> = query!()
-                .filter(dsl::id.eq(debit_note_id))
-                .filter(dsl::owner_id.eq(owner_id))
-                .first(conn)
-                .optional()?;
-            match debit_note {
-                Some(debit_note) => Ok(Some(debit_note.try_into()?)),
-                None => Ok(None),
+            let mut query = query!().into_boxed();
+
+            query = query.filter(dsl::id.eq(debit_note_id));
+            if let Some(owner_id) = owner_id {
+                query = query.filter(dsl::owner_id.eq(owner_id))
+            }
+
+            let debit_notes: Vec<ReadObj> = query.load(conn)?;
+            if let Some(debit_note) = debit_notes.into_iter().next() {
+                let debit_note: DebitNote = debit_note.try_into()?;
+                Ok(Some(debit_note))
+            } else {
+                Ok(None)
             }
         })
         .await

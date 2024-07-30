@@ -24,12 +24,10 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::allocation::Deposit;
-use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, DebitNote, DriverDetails, Network, Payment};
-use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
-    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
-    ValidateAllocationResult,
+use ya_client_model::payment::{
+    Account, ActivityPayment, AgreementPayment, DebitNote, DriverDetails, Network, Payment,
 };
+use ya_core_model::driver::{self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult, GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation, ValidateAllocationResult, TryUpdatePaymentResult};
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle, RegisterAccount,
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
@@ -38,7 +36,7 @@ use ya_core_model::payment::local::{
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::NodeId;
 use ya_net::RemoteEndpoint;
-use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::{DbExecutor};
 use ya_persistence::types::Role;
 use ya_service_bus::typed::Endpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
@@ -303,12 +301,14 @@ impl DriverRegistry {
 }
 
 const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct PaymentProcessor {
     db_executor: Arc<Mutex<DbExecutor>>,
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
+    schedule_payment_guard: Arc<Mutex<()>>,
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -327,6 +327,7 @@ impl PaymentProcessor {
             db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
+            schedule_payment_guard: Arc::new(Mutex::new(())),
         }
     }
 
@@ -582,10 +583,60 @@ impl PaymentProcessor {
             .await
     }
 
+    pub async fn get_debit_note_chain(
+        &self,
+        debit_note: DebitNote,
+    ) -> Result<Vec<DebitNote>, SchedulePaymentError> {
+        let mut debit_note_chain = Vec::<DebitNote>::new();
+        let mut debit_by_id = HashMap::new();
+
+        let debit_list = self
+            .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await?
+            .as_dao::<DebitNoteDao>()
+            .list(None, None, None, Some(debit_note.activity_id.clone()))
+            .await?;
+
+        for debit in debit_list {
+            debit_by_id.insert(debit.activity_id.clone(), debit.clone());
+        }
+
+        let start_debit_note = match debit_by_id.get(&debit_note.debit_note_id) {
+            Some(debit_note) => debit_note.clone(),
+            None => {
+                return Err(SchedulePaymentError::InvalidInput(format!(
+                    "Debit note {} not found",
+                    debit_note.debit_note_id
+                )))
+            }
+        };
+
+        debit_note_chain.push(start_debit_note.clone());
+        let mut prev_debit_note_id = start_debit_note.previous_debit_note_id.clone();
+        while let Some(next_debit_note_id) = &prev_debit_note_id {
+            let next_debit_note = match debit_by_id.get(next_debit_note_id) {
+                Some(debit_note) => debit_note.clone(),
+                None => {
+                    return Err(SchedulePaymentError::InvalidInput(format!(
+                        "Debit note {} not found when building debit note chain",
+                        next_debit_note_id
+                    )))
+                }
+            };
+
+            debit_note_chain.push(next_debit_note.clone());
+            prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
+        }
+        Ok(debit_note_chain)
+    }
+
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown.load(Ordering::SeqCst) {
             return Err(SchedulePaymentError::Shutdown);
         }
+        let _guard = self.schedule_payment_guard.timeout_lock(SCHEDULE_PAYMENT_LOCK_TIMEOUT).await?;
+
         let amount = msg.amount.clone();
         if amount <= BigDecimal::zero() {
             return Err(SchedulePaymentError::InvalidInput(format!(
@@ -599,59 +650,98 @@ impl PaymentProcessor {
             PaymentTitle::Invoice(_) => None,
         };
 
-        let mut debit_note_chain = Vec::<DebitNote>::new();
-        let mut debit_by_id = HashMap::new();
+
         if let Some(debit_note) = debit_note {
-            let debit_list = self
-                .db_executor
+            let mut debit_note_loop = self.db_executor
                 .timeout_lock(DB_LOCK_TIMEOUT)
                 .await?
                 .as_dao::<DebitNoteDao>()
-                .list(None, None, None, Some(debit_note.activity_id.clone())).await?;
+                .get(debit_note.debit_note_id.clone(), None)
+                .await?.ok_or(
+                SchedulePaymentError::InvalidInput(format!(
+                    "Debit note {} not found",
+                    debit_note.debit_note_id
+                )
+            ))?;
 
-            for debit in debit_list {
-                debit_by_id.insert(debit.activity_id.clone(), debit.clone());
-            }
-
-            let start_debit_note = match debit_by_id.get(&debit_note.debit_note_id) {
-                Some(debit_note) => debit_note.clone(),
-                None => return Err(SchedulePaymentError::InvalidInput(format!("Debit note {} not found", debit_note.debit_note_id))),
-            };
-
-            debit_note_chain.push(start_debit_note.clone());
-            let mut prev_debit_note_id = start_debit_note.previous_debit_note_id.clone();
-            while let Some(next_debit_note_id) = &prev_debit_note_id {
-                let next_debit_note = match debit_by_id.get(next_debit_note_id) {
-                    Some(debit_note) => debit_note.clone(),
-                    None => return Err(SchedulePaymentError::InvalidInput(format!("Debit note {} not found when building debit note chain", next_debit_note_id))),
-                };
-
-                debit_note_chain.push(next_debit_note.clone());
-                prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
-            }
-
-            //debit notes should be sorted in order right now
-            //look for previous pay orders
             let mut previous_pay_order = None;
-            for (debit_note_no, debit_note) in debit_note_chain.iter().enumerate() {
-                if debit_note_no == 0 {
-                    continue;
+            loop {
+                if let Some(prev_debit_note_id) = debit_note_loop.previous_debit_note_id.clone() {
+                    debit_note_loop = self.db_executor
+                        .timeout_lock(DB_LOCK_TIMEOUT)
+                        .await?
+                        .as_dao::<DebitNoteDao>()
+                        .get(prev_debit_note_id.clone(), None)
+                        .await?.ok_or(
+                        SchedulePaymentError::InvalidInput(format!(
+                            "Debit note {} not found when looping",
+                            prev_debit_note_id
+                        )))?;
+
+                    let pay_order = self
+                        .db_executor
+                        .timeout_lock(DB_LOCK_TIMEOUT)
+                        .await?
+                        .as_dao::<OrderDao>()
+                        .get_by_debit_note_id(debit_note.debit_note_id.clone())
+                        .await?;
+                    if let Some(pay_order) = pay_order {
+                        previous_pay_order = Some(pay_order);
+                        break;
+                    }
                 }
-                let pay_order = self
+            }
+
+
+            if let Some(previous_pay_order) = previous_pay_order {
+                log::info!("Found payment order for previous debit note {}", debit_note.debit_note_id);
+                let allocation_status = self
                     .db_executor
                     .timeout_lock(DB_LOCK_TIMEOUT)
                     .await?
-                    .as_dao::<OrderDao>()
-                    .get_by_debit_note_id(debit_note.debit_note_id.clone())
+                    .as_dao::<AllocationDao>()
+                    .get(msg.allocation_id.clone(), msg.payer_id)
                     .await?;
-                if let Some(pay_order) = pay_order {
-                    previous_pay_order = Some(pay_order);
-                    break;
-                }
-            };
+                let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
+                    allocation.deposit
+                } else {
+                    None
+                };
+                let driver = self
+                    .registry
+                    .timeout_read(REGISTRY_LOCK_TIMEOUT)
+                    .await?
+                    .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
 
-            if let Some(previous_pay_order) = previous_pay_order {
-                driver_endpoint(&)
+                let res = driver_endpoint(&driver)
+                    .send(driver::TryUpdatePayment::new(
+                        previous_pay_order.id.clone(),
+                        amount.clone(),
+                        msg.payer_addr.clone(),
+                        msg.payee_addr.clone(),
+                        msg.payment_platform.clone(),
+                        deposit_id,
+                        msg.due_date,
+                    ))
+                    .await??;
+
+                match res {
+                    TryUpdatePaymentResult::PaymentNotFound => {}
+                    TryUpdatePaymentResult::PaymentUpdated => {
+                        self
+                            .db_executor
+                            .timeout_lock(DB_LOCK_TIMEOUT)
+                            .await?
+                            .as_dao::<OrderDao>()
+                            .update_debit_note_id(previous_pay_order.id.clone(), debit_note.debit_note_id.clone())
+                            .await?;
+                        log::info!("Payment order updated with new debit note {}", debit_note.debit_note_id);
+                        return Ok(());
+                    }
+                    TryUpdatePaymentResult::PaymentNotUpdated => {}
+                }
+                // !todo
+                /*driver_endpoint(&)
                     .send(driver::SchedulePayment::new(
                         amount,
                         msg.payer_addr.clone(),
@@ -660,7 +750,7 @@ impl PaymentProcessor {
                         deposit_id,
                         msg.due_date,
                     ))
-                    .await??;
+                    .await??;*/
             }
         }
 

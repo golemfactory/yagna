@@ -4,7 +4,10 @@ use crate::models::order::{ReadObj, WriteObj};
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use crate::schema::pay_order::dsl;
-use diesel::{self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
+    OptionalExtension, QueryDsl, RunQueryDsl,
+};
 use ya_core_model::payment::local::{
     DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
 };
@@ -51,6 +54,16 @@ impl<'c> OrderDao<'c> {
         .await
     }
 
+    pub async fn update_debit_note_id(&self, order_id: String, debit_note_id: String) -> DbResult<()> {
+        do_with_transaction(self.pool, "order_dao_update_debit_note_id", move |conn| {
+            diesel::update(dsl::pay_order.filter(dsl::id.eq(order_id)))
+                .set(dsl::debit_note_id.eq(debit_note_id))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn get_by_debit_note_id(&self, debit_note_id: String) -> DbResult<Option<ReadObj>> {
         readonly_transaction(self.pool, "order_dao_get", move |conn| {
             let order = dsl::pay_order
@@ -86,7 +99,6 @@ impl<'c> OrderDao<'c> {
             Ok(order)
         })
         .await
-
     }
 
     pub async fn get_many(&self, ids: Vec<String>, driver: String) -> DbResult<Vec<ReadObj>> {
