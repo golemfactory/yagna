@@ -949,7 +949,7 @@ mod public {
         counter!("payment.debit_notes.provider.accepted.call", 1);
 
         let dao: DebitNoteDao = db.as_dao();
-        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(node_id)).await {
             Ok(Some(debit_note)) => debit_note,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
