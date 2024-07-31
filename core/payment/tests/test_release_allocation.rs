@@ -8,7 +8,7 @@ use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::mocks::net::MockNet;
-use ya_framework_basic::temp_dir;
+use ya_framework_basic::{resource, temp_dir};
 
 use crate::mocks::node::MockNode;
 use crate::mocks::payment::Driver;
@@ -35,7 +35,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     let requestor_appkey = node
         .get_identity()?
-        .create_identity_key("requestor")
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
         .await?;
     let provider_appkey = node.get_identity()?.create_identity_key("provider").await?;
 

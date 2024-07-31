@@ -6,7 +6,7 @@ use ya_client_model::payment::NewAllocation;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::mocks::net::MockNet;
-use ya_framework_basic::temp_dir;
+use ya_framework_basic::{resource, temp_dir};
 
 use crate::mocks::market::FakeMarket;
 use crate::mocks::node::MockNode;
@@ -47,17 +47,25 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
     // Creating identities is essential to use REST API and create Agreements and Payments.
     // Provider and Requestor should use separate identity.
     let identity = node.get_identity()?;
-    let appkey_req = identity.create_identity_key("requestor").await?;
+    // Requestor identity is created from pre-existing private key. Provider will use newly created identity.
+    // Using the same identity exposes our private key, but these are testnet money anyway.
+    // By doing this we can speed up tests significantly, because we don't have to wait for
+    // wallet founding, which is rather long operation.
+    let appkey_req = identity
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
     let appkey_prov = identity.create_identity_key("provider").await?;
 
-    let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+    // Fund Requestor account. In most case we already have funds on this wallet,
+    // so this will be no-op.
     node.get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
         .await?;
 
     let api = node.rest_payments(&appkey_req.key)?;
 
+    let payment_platform =
+        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
     let _allocation = api
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)

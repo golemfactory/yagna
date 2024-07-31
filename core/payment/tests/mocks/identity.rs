@@ -3,6 +3,8 @@
 use anyhow::{anyhow, bail};
 use futures::FutureExt;
 use serde::de::DeserializeOwned;
+use std::fs;
+use std::path::Path;
 use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
 use ya_core_model::identity::IdentityInfo;
@@ -57,6 +59,27 @@ impl MockIdentity {
         Ok(appkey)
     }
 
+    pub async fn create_from_private_key(&self, path: &Path) -> anyhow::Result<AppKey> {
+        let name = path
+            .file_name()
+            .ok_or(anyhow!("Invalid private key path: {}", path.display()))?
+            .to_string_lossy()
+            .to_string();
+
+        let key: String = fs::read_to_string(path)?;
+        let identity: IdentityInfo = self
+            .load_identity(&name, key)
+            .await
+            .map_err(|e| anyhow!("Creating Identity: {e}"))?;
+        let appkey = self
+            .create_appkey(&name, identity.node_id)
+            .await
+            .map_err(|e| anyhow!("Creating AppKey: {e}"))?;
+
+        self.register_identity_in_net(identity.node_id);
+        Ok(appkey)
+    }
+
     fn register_identity_in_net(&self, id: NodeId) {
         // This line is temporary, until we will be able to rebind all modules to non-fixed prefix.
         // Currently, all modules must be bound under `/local/{module}` and `/public/{module}`.
@@ -82,6 +105,24 @@ impl MockIdentity {
 
         parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)
     }
+
+    pub async fn load_identity(
+        &self,
+        name: &str,
+        private_key: String,
+    ) -> anyhow::Result<IdentityInfo> {
+        let ctx = CliCtx::default();
+        let command = IdentityCommand::Create {
+            no_password: true,
+            alias: Some(name.to_string()),
+            password: None,
+            from_keystore: None,
+            from_private_key: Some(private_key),
+        };
+
+        parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)
+    }
+
     pub async fn create_appkey(&self, name: &str, id: NodeId) -> anyhow::Result<AppKey> {
         let ctx = CliCtx::default();
         let command = AppKeyCommand::Create {
