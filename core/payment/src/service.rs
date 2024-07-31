@@ -1,5 +1,6 @@
 use crate::dao::{DebitNoteDao, InvoiceDao};
 use crate::processor::PaymentProcessor;
+use crate::Config;
 
 use futures::prelude::*;
 use metrics::counter;
@@ -35,11 +36,16 @@ impl Default for BindOptions {
     }
 }
 
-pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
+pub fn bind_service(
+    db: &DbExecutor,
+    processor: Arc<PaymentProcessor>,
+    opts: BindOptions,
+    config: Arc<Config>,
+) {
     log::debug!("Binding payment service to service bus");
 
     local::bind_service(db, processor.clone());
-    public::bind_service(db, processor, opts);
+    public::bind_service(db, processor, opts, config);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -825,7 +831,12 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, opts: BindOptions) {
+    pub fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        opts: BindOptions,
+        config: Arc<Config>,
+    ) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -840,10 +851,11 @@ mod public {
             .bind(sync_request)
             .bind_with_processor(send_payment)
             .bind_with_processor(send_payment_with_bytes)
-            .bind_with_processor(sync_payment);
+            .bind_with_processor(sync_payment)
+            .bind_with_processor(sync_payment_with_bytes);
 
         if opts.run_sync_job {
-            send_sync_notifs_job(db.clone());
+            send_sync_notifs_job(db.clone(), config);
             send_sync_requests(db.clone());
         }
 
@@ -1359,10 +1371,57 @@ mod public {
         sender_id: String,
         msg: PaymentSync,
     ) -> Result<Ack, PaymentSyncError> {
+        sync_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payments,
+            send_payment,
+            msg.invoice_accepts,
+            msg.invoice_rejects,
+            msg.debit_note_accepts,
+        )
+        .await
+    }
+
+    async fn sync_payment_with_bytes(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender_id: String,
+        msg: PaymentSyncWithBytes,
+    ) -> Result<Ack, PaymentSyncError> {
+        sync_payment_impl(
+            db,
+            processor,
+            sender_id,
+            msg.payments,
+            send_payment_with_bytes,
+            msg.invoice_accepts,
+            msg.invoice_rejects,
+            msg.debit_note_accepts,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn sync_payment_impl<PaymentType, PaymentProcessorFunc, Fut>(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender_id: String,
+        payments: Vec<PaymentType>,
+        payment_processor_func: PaymentProcessorFunc,
+        invoice_accepts: Vec<AcceptInvoice>,
+        invoice_rejects: Vec<RejectInvoiceV2>,
+        debit_note_accepts: Vec<AcceptDebitNote>,
+    ) -> Result<Ack, PaymentSyncError>
+    where
+        PaymentProcessorFunc: Fn(DbExecutor, Arc<PaymentProcessor>, String, PaymentType) -> Fut,
+        Fut: Future<Output = Result<Ack, SendError>>,
+    {
         let mut errors = PaymentSyncError::default();
 
-        for payment_send in msg.payments {
-            let result = send_payment(
+        for payment_send in payments {
+            let result = payment_processor_func(
                 db.clone(),
                 Arc::clone(&processor),
                 sender_id.clone(),
@@ -1375,21 +1434,21 @@ mod public {
             }
         }
 
-        for invoice_accept in msg.invoice_accepts {
+        for invoice_accept in invoice_accepts {
             let result = accept_invoice(db.clone(), sender_id.clone(), invoice_accept).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
             }
         }
 
-        for invoice_reject in msg.invoice_rejects {
+        for invoice_reject in invoice_rejects {
             let result = reject_invoice(db.clone(), sender_id.clone(), invoice_reject).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
             }
         }
 
-        for debit_note_accept in msg.debit_note_accepts {
+        for debit_note_accept in debit_note_accepts {
             let result = accept_debit_note(db.clone(), sender_id.clone(), debit_note_accept).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
