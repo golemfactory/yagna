@@ -173,9 +173,7 @@ pub async fn export_metrics_for_push() -> String {
         None
     } else {
         // !internal_consent && !external_consent
-        log::info!(
-            "Not pushing metrics, because stats consent is not given"
-        );
+        log::info!("Not pushing metrics, because stats consent is not given");
         return "".to_string();
     };
 
