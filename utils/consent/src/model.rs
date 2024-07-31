@@ -10,37 +10,38 @@ use ya_service_api::{CliCtx, CommandOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConsentEntry {
-    pub consent_type: ConsentType,
+    pub consent_scope: ConsentScope,
     pub allowed: bool,
 }
 
 #[derive(StructOpt, Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
-pub enum ConsentType {
+pub enum ConsentScope {
     /// Consent for publication of the node's statistics
     Internal,
 }
 
-impl PartialOrd for ConsentType {
+impl PartialOrd for ConsentScope {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-impl Ord for ConsentType {
+impl Ord for ConsentScope {
     fn cmp(&self, other: &Self) -> Ordering {
         self.to_string().cmp(&other.to_string())
     }
 }
 
-pub fn extra_info(consent_type: ConsentType) -> String {
-    match consent_type {
-        ConsentType::Internal => {
-            "Internal Golem Network monitoring \nSecond line of info".to_string()
+pub fn extra_info(consent_scope: ConsentScope) -> String {
+    match consent_scope {
+        ConsentScope::Internal => {
+            "Consent to augment stats.golem.network\nportal with data collected from your node."
+                .to_string()
         }
     }
 }
 
-pub fn extra_info_comment(consent_type: ConsentType) -> String {
-    let info = extra_info(consent_type);
+pub fn extra_info_comment(consent_scope: ConsentScope) -> String {
+    let info = extra_info(consent_scope);
     let mut comment_info = String::new();
     for line in info.split('\n') {
         comment_info.push_str(&format!("# {}\n", line));
@@ -48,21 +49,21 @@ pub fn extra_info_comment(consent_type: ConsentType) -> String {
     comment_info
 }
 
-pub fn full_question(consent_type: ConsentType) -> String {
-    match consent_type {
-        ConsentType::Internal => {
-            "Do you agree to share data with Golem Internal Network Monitor (you can check full range of data transferred in the Terms)?".to_string()
+pub fn full_question(consent_scope: ConsentScope) -> String {
+    match consent_scope {
+        ConsentScope::Internal => {
+            "Do you agree to augment stats.golem.network with data collected from your node (you can check the full range of information transferred in Terms)[allow/deny]?".to_string()
         }
     }
 }
 
-impl fmt::Display for ConsentType {
+impl fmt::Display for ConsentScope {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl ConsentType {
+impl ConsentScope {
     pub fn to_lowercase_str(&self) -> String {
         self.to_string().to_lowercase()
     }
@@ -80,11 +81,11 @@ pub enum ConsentCommand {
     /// Unset all types of consent (for now there is only one)
     UnsetAll,
     /// Change settings
-    Allow(ConsentType),
+    Allow(ConsentScope),
     /// Change settings
-    Deny(ConsentType),
+    Deny(ConsentScope),
     /// Unset setting
-    Unset(ConsentType),
+    Unset(ConsentScope),
     /// Show path to the consent file
     Path,
 }
@@ -103,9 +104,9 @@ impl ConsentCommand {
                     return Ok(CommandOutput::Object(to_json()));
                 }
                 let mut values = vec![];
-                for consent_type in ConsentType::iter() {
-                    let consent_res = have_consent(consent_type, false);
-                    let info = extra_info(consent_type);
+                for consent_scope in ConsentScope::iter() {
+                    let consent_res = have_consent(consent_scope, false);
+                    let info = extra_info(consent_scope);
                     let is_allowed = match consent_res.consent {
                         Some(true) => "allow",
                         Some(false) => "deny",
@@ -115,7 +116,7 @@ impl ConsentCommand {
                         ConsentSource::Config => "config file".to_string(),
                         ConsentSource::Env => {
                             let env_var_name =
-                                format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
+                                format!("YA_CONSENT_{}", &consent_scope.to_string().to_uppercase());
                             format!(
                                 "env variable\n({}={})",
                                 &env_var_name,
@@ -124,42 +125,42 @@ impl ConsentCommand {
                         }
                         ConsentSource::Default => "N/A".to_string(),
                     };
-                    values.push(json!([consent_type.to_string(), is_allowed, source, info]));
+                    values.push(json!([consent_scope.to_string(), is_allowed, source, info]));
                 }
 
                 return Ok(CommandOutput::Table {
-                    columns: ["Type", "Status", "Source", "Info"]
+                    columns: ["Scope", "Status", "Source", "Info"]
                         .iter()
                         .map(ToString::to_string)
                         .collect(),
                     values,
                     summary: vec![json!(["", "", "", ""])],
                     header: Some(
-                        "Consents given to the Golem service, you can change them, run consent --help for more info".to_string()),
+                        "Consents given to the Golem service, you can change them, run consent --help for more info\nSee Terms https://golem.network/privacy for details of the information collected.".to_string()),
                 });
             }
-            ConsentCommand::Allow(consent_type) => {
-                set_consent(consent_type, Some(true));
+            ConsentCommand::Allow(consent_scope) => {
+                set_consent(consent_scope, Some(true));
             }
-            ConsentCommand::Deny(consent_type) => {
-                set_consent(consent_type, Some(false));
+            ConsentCommand::Deny(consent_scope) => {
+                set_consent(consent_scope, Some(false));
             }
-            ConsentCommand::Unset(consent_type) => {
-                set_consent(consent_type, None);
+            ConsentCommand::Unset(consent_scope) => {
+                set_consent(consent_scope, None);
             }
             ConsentCommand::AllowAll => {
-                for consent_type in ConsentType::iter() {
-                    set_consent(consent_type, Some(true));
+                for consent_scope in ConsentScope::iter() {
+                    set_consent(consent_scope, Some(true));
                 }
             }
             ConsentCommand::DenyAll => {
-                for consent_type in ConsentType::iter() {
-                    set_consent(consent_type, Some(false));
+                for consent_scope in ConsentScope::iter() {
+                    set_consent(consent_scope, Some(false));
                 }
             }
             ConsentCommand::UnsetAll => {
-                for consent_type in ConsentType::iter() {
-                    set_consent(consent_type, None);
+                for consent_scope in ConsentScope::iter() {
+                    set_consent(consent_scope, None);
                 }
             }
             ConsentCommand::Path => {

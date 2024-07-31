@@ -1,7 +1,7 @@
 use crate::fs::{load_entries, save_entries};
 use crate::model::display_consent_path;
 use crate::model::{extra_info, full_question};
-use crate::{ConsentCommand, ConsentEntry, ConsentType};
+use crate::{ConsentCommand, ConsentEntry, ConsentScope};
 use anyhow::anyhow;
 use metrics::gauge;
 use parking_lot::Mutex;
@@ -18,7 +18,7 @@ use ya_utils_path::data_dir::DataDir;
 
 lazy_static! {
     static ref CONSENT_PATH: Arc<Mutex<Option<PathBuf>>> = Arc::new(Mutex::new(None));
-    static ref CONSENT_CACHE: Arc<Mutex<BTreeMap<ConsentType, ConsentEntryCached>>> =
+    static ref CONSENT_CACHE: Arc<Mutex<BTreeMap<ConsentScope, ConsentEntryCached>>> =
         Arc::new(Mutex::new(BTreeMap::new()));
 }
 
@@ -91,25 +91,25 @@ pub struct HaveConsentResult {
 }
 
 /// Get current status of consent, it is cached for some time, so you can safely call it as much as you want
-pub fn have_consent_cached(consent_type: ConsentType) -> HaveConsentResult {
+pub fn have_consent_cached(consent_scope: ConsentScope) -> HaveConsentResult {
     if cfg!(feature = "require-consent") {
         let mut map = CONSENT_CACHE.lock();
 
-        if let Some(entry) = map.get(&consent_type) {
+        if let Some(entry) = map.get(&consent_scope) {
             if entry.cached_time.elapsed().as_secs() < 15 {
                 return entry.consent;
             }
         }
-        let consent_res = have_consent(consent_type, false);
+        let consent_res = have_consent(consent_scope, false);
         map.insert(
-            consent_type,
+            consent_scope,
             ConsentEntryCached {
                 consent: consent_res,
                 cached_time: std::time::Instant::now(),
             },
         );
         gauge!(
-            format!("consent.{}", consent_type.to_lowercase_str()),
+            format!("consent.{}", consent_scope.to_lowercase_str()),
             consent_res
                 .consent
                 .map(|v| if v { 1 } else { 0 })
@@ -126,12 +126,12 @@ pub fn have_consent_cached(consent_type: ConsentType) -> HaveConsentResult {
 }
 
 /// Save from env is used to check if consent should be saved to configuration if set in variable
-pub(crate) fn have_consent(consent_type: ConsentType, save_from_env: bool) -> HaveConsentResult {
+pub(crate) fn have_consent(consent_scope: ConsentScope, save_from_env: bool) -> HaveConsentResult {
     // for example:
     // YA_CONSENT_INTERNAL=allow
     // YA_CONSENT_EXTERNAL=deny
 
-    let env_variable_name = format!("YA_CONSENT_{}", consent_type.to_string().to_uppercase());
+    let env_variable_name = format!("YA_CONSENT_{}", consent_scope.to_string().to_uppercase());
     let result_from_env = if let Ok(env_value) = env::var(&env_variable_name) {
         if env_value.trim().to_lowercase() == "allow" {
             Some(HaveConsentResult {
@@ -152,7 +152,7 @@ pub(crate) fn have_consent(consent_type: ConsentType, save_from_env: bool) -> Ha
     if let Some(result_from_env) = result_from_env {
         if save_from_env {
             //save and read again from fail
-            set_consent(consent_type, result_from_env.consent);
+            set_consent(consent_scope, result_from_env.consent);
         } else {
             //return early with the result
             return result_from_env;
@@ -172,7 +172,7 @@ pub(crate) fn have_consent(consent_type: ConsentType, save_from_env: bool) -> Ha
     let entries = load_entries(&path);
     let mut allowed = None;
     for entry in entries {
-        if entry.consent_type == consent_type {
+        if entry.consent_scope == consent_scope {
             allowed = Some(entry.allowed);
         }
     }
@@ -182,7 +182,7 @@ pub(crate) fn have_consent(consent_type: ConsentType, save_from_env: bool) -> Ha
     }
 }
 
-pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
+pub fn set_consent(consent_scope: ConsentScope, allowed: Option<bool>) {
     {
         CONSENT_CACHE.lock().clear();
     }
@@ -193,36 +193,36 @@ pub fn set_consent(consent_type: ConsentType, allowed: Option<bool>) {
             return;
         }
     };
-    for consent_type in ConsentType::iter() {
-        let env_name = format!("YA_CONSENT_{}", consent_type.to_string().to_uppercase());
+    for consent_scope in ConsentScope::iter() {
+        let env_name = format!("YA_CONSENT_{}", consent_scope.to_string().to_uppercase());
         if let Ok(env_val) = env::var(&env_name) {
             log::warn!(
-                "Consent {} is already set by environment variable, changes may not have effect: {}={}",
-                consent_type,
+                "Consent {} is already set by environment variable, changes to configuration may not have effect: {}={}",
+                consent_scope,
                 env_name,
                 env_val)
         }
     }
     let mut entries = load_entries(&path);
-    entries.retain(|entry| entry.consent_type != consent_type);
+    entries.retain(|entry| entry.consent_scope != consent_scope);
     if let Some(allowed) = allowed {
         entries.push(ConsentEntry {
-            consent_type,
+            consent_scope,
             allowed,
         });
     }
-    entries.sort_by(|a, b| a.consent_type.cmp(&b.consent_type));
+    entries.sort_by(|a, b| a.consent_scope.cmp(&b.consent_scope));
     match save_entries(&path, entries) {
-        Ok(_) => log::info!("Consent saved: {} {:?}", consent_type, allowed),
+        Ok(_) => log::info!("Consent saved: {} {:?}", consent_scope, allowed),
         Err(e) => log::error!("Error when saving consent: {}", e),
     }
 }
 
 pub fn to_json() -> serde_json::Value {
     json!({
-        "consents": ConsentType::iter()
-            .map(|consent_type: ConsentType| {
-                let consent_res = have_consent(consent_type, false);
+        "consents": ConsentScope::iter()
+            .map(|consent_scope: ConsentScope| {
+                let consent_res = have_consent(consent_scope, false);
                 let consent = match consent_res.consent {
                     Some(true) => "allow",
                     Some(false) => "deny",
@@ -231,18 +231,18 @@ pub fn to_json() -> serde_json::Value {
                 let source_location = match consent_res.source {
                     ConsentSource::Config => display_consent_path(),
                     ConsentSource::Env => {
-                        let env_var_name = format!("YA_CONSENT_{}", &consent_type.to_string().to_uppercase());
+                        let env_var_name = format!("YA_CONSENT_{}", &consent_scope.to_string().to_uppercase());
                         format!("({}={})", &env_var_name, env::var(&env_var_name).unwrap_or("".to_string()))
                     },
                     ConsentSource::Default => "N/A".to_string(),
                 };
                 json!({
-                    "type": consent_type.to_string(),
+                    "type": consent_scope.to_string(),
                     "consent": consent,
                     "source": consent_res.source.to_string(),
                     "location": source_location,
-                    "info": extra_info(consent_type),
-                    "question": full_question(consent_type),
+                    "info": extra_info(consent_scope),
+                    "question": full_question(consent_scope),
                 })
             })
             .collect::<Vec<_>>()
@@ -257,28 +257,28 @@ pub fn run_consent_command(consent_command: ConsentCommand) {
                 serde_json::to_string_pretty(&to_json()).expect("json serialization failed")
             );
         }
-        ConsentCommand::Allow(consent_type) => {
-            set_consent(consent_type, Some(true));
+        ConsentCommand::Allow(consent_scope) => {
+            set_consent(consent_scope, Some(true));
         }
-        ConsentCommand::Deny(consent_type) => {
-            set_consent(consent_type, Some(false));
+        ConsentCommand::Deny(consent_scope) => {
+            set_consent(consent_scope, Some(false));
         }
-        ConsentCommand::Unset(consent_type) => {
-            set_consent(consent_type, None);
+        ConsentCommand::Unset(consent_scope) => {
+            set_consent(consent_scope, None);
         }
         ConsentCommand::AllowAll => {
-            for consent_type in ConsentType::iter() {
-                set_consent(consent_type, Some(true));
+            for consent_scope in ConsentScope::iter() {
+                set_consent(consent_scope, Some(true));
             }
         }
         ConsentCommand::DenyAll => {
-            for consent_type in ConsentType::iter() {
-                set_consent(consent_type, Some(false));
+            for consent_scope in ConsentScope::iter() {
+                set_consent(consent_scope, Some(false));
             }
         }
         ConsentCommand::UnsetAll => {
-            for consent_type in ConsentType::iter() {
-                set_consent(consent_type, None);
+            for consent_scope in ConsentScope::iter() {
+                set_consent(consent_scope, None);
             }
         }
         ConsentCommand::Path => {

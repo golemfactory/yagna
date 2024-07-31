@@ -1,20 +1,20 @@
 use crate::model::extra_info_comment;
-use crate::{ConsentEntry, ConsentType};
+use crate::{ConsentEntry, ConsentScope};
 use std::collections::BTreeMap;
 use strum::IntoEnumIterator;
 
 pub fn entries_to_str(entries: Vec<ConsentEntry>) -> String {
     let mut res = String::new();
     res.push_str("# This file contains consent settings\n");
-    res.push_str("# Format: <consent_type> <allow|deny>\n");
+    res.push_str("# Format: <consent_scope> <allow|deny>\n");
     res.push_str("# Restart golem service (golemsp or yagna) to make sure changes are applied\n");
 
     for entry in entries {
         let allow_str = if entry.allowed { "allow" } else { "deny" };
         res.push_str(&format!(
-            "\n{}{} {} \n",
-            extra_info_comment(entry.consent_type),
-            entry.consent_type,
+            "\n\n{}{} {} \n",
+            extra_info_comment(entry.consent_scope),
+            entry.consent_scope,
             allow_str
         ));
     }
@@ -30,9 +30,9 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
         if line.is_empty() {
             continue;
         }
-        for consent_type in ConsentType::iter() {
-            let consent_type_str = consent_type.to_lowercase_str();
-            if line.starts_with(&consent_type_str) {
+        for consent_scope in ConsentScope::iter() {
+            let consent_scope_str = consent_scope.to_lowercase_str();
+            if line.starts_with(&consent_scope_str) {
                 let Some(split) = line.split_once(' ') else {
                     log::warn!("Invalid line: {} in file {}", line_no, err_decorator_path);
                     continue 'outer;
@@ -51,7 +51,7 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
                     );
                     continue 'outer;
                 };
-                if let Some(entry) = entries_map.get_mut(&consent_type_str) {
+                if let Some(entry) = entries_map.get_mut(&consent_scope_str) {
                     if entry.allowed != allowed {
                         log::warn!(
                             "Error when parsing consent: Duplicate entry with different value, line: {} in file {}",
@@ -61,10 +61,10 @@ pub fn str_to_entries(str: &str, err_decorator_path: String) -> Vec<ConsentEntry
                     }
                 } else {
                     let entry = ConsentEntry {
-                        consent_type,
+                        consent_scope,
                         allowed,
                     };
-                    entries_map.insert(consent_type_str, entry);
+                    entries_map.insert(consent_scope_str, entry);
                 }
                 continue 'outer;
             }

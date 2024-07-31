@@ -1,6 +1,6 @@
 use std::env;
 use ya_utils_consent::set_consent;
-use ya_utils_consent::ConsentType;
+use ya_utils_consent::ConsentScope;
 
 #[test]
 pub fn test_save_and_load_entries() {
@@ -19,9 +19,9 @@ pub fn test_save_and_load_entries() {
     env_logger::init();
 
     {
-        set_consent(ConsentType::Internal, Some(true));
+        set_consent(ConsentScope::Internal, Some(true));
 
-        let consent = ya_utils_consent::have_consent_cached(ConsentType::Internal);
+        let consent = ya_utils_consent::have_consent_cached(ConsentScope::Internal);
         assert_eq!(consent.consent, Some(true));
     }
     std::fs::remove_file(&consent_path).unwrap();

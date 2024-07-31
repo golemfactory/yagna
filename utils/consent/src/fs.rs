@@ -130,7 +130,7 @@ pub fn load_entries(path: &Path) -> Vec<ConsentEntry> {
 
 #[test]
 pub fn test_entries_internal() {
-    use crate::ConsentType;
+    use crate::ConsentScope;
     use rand::Rng;
     use std::path::PathBuf;
     if std::env::var("RUST_LOG").is_err() {
@@ -145,7 +145,7 @@ pub fn test_entries_internal() {
     env_logger::init();
     let path = PathBuf::from(format!("tmp-{}.txt", rand_string));
     let entries = vec![ConsentEntry {
-        consent_type: ConsentType::Internal,
+        consent_scope: ConsentScope::Internal,
         allowed: true,
     }];
 

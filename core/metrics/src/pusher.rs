@@ -55,7 +55,7 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
 
-    log::info!("Starting metrics pusher on address: {push_url}");
+    log::info!("Starting metrics pusher on address: {push_url}. Metrics will be pushed only if appropriate consent is given.");
     loop {
         push_interval.tick().await;
         push(&client, push_url.clone()).await;
