@@ -152,7 +152,7 @@ pub fn sort_metrics_txt(metrics: &str, filter: Option<MetricsFilter<'_>>) -> Str
 
     final_entries.sort();
 
-    first_line.to_string() + "\n" + final_entries.join("\n\n").as_str()
+    first_line.to_string() + "\n" + final_entries.join("\n\n").as_str() + "\n"
 }
 
 pub async fn export_metrics_filtered(metrics_filter: Option<MetricsFilter<'_>>) -> String {

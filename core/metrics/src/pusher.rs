@@ -27,7 +27,7 @@ pub fn spawn(ctx: MetricsCtx) {
             log::warn!("Metrics pusher enabled, but no `push_host_url` provided");
         }
     });
-    log::info!("Metrics pusher started");
+    log::debug!("Metrics pusher started");
 }
 
 pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
@@ -55,7 +55,7 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
 
-    log::info!("Starting metrics pusher on address: {push_url}. Metrics will be pushed only if appropriate consent is given.");
+    log::info!("Metrics will be pushed only if appropriate consent is given, push endpoint: {push_url}");
     loop {
         push_interval.tick().await;
         push(&client, push_url.clone()).await;
@@ -73,7 +73,7 @@ pub async fn push(client: &Client, push_url: String) {
         .await;
     match res {
         Ok(r) if r.status().is_success() => {
-            log::trace!("Metrics pushed: {}", r.status())
+            log::debug!("Metrics pushed: {}", r.status())
         }
         Ok(r) if r.status().is_server_error() => {
             log::debug!("Metrics server error: {:#?}", r);
