@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use chrono::{Duration, Utc};
+use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -208,8 +209,14 @@ impl FakeMarket {
     }
 
     pub fn create_default_demand(requestor_id: NodeId) -> anyhow::Result<ProposalView> {
+        let basic_props = json!({
+            "golem.com.payment.platform.erc20-holesky-tglm.address": requestor_id.to_string(),
+            "golem.com.payment.protocol.version": 3,
+            "golem.com.payment.chosen-platform": "erc20-holesky-tglm",
+        });
+
         let template = OfferTemplate {
-            properties: expand(serde_json::from_str(r#"{ "any": "thing" }"#).unwrap()),
+            properties: expand(basic_props),
             constraints: "()".to_string(),
         };
         Self::create_demand(requestor_id, template)

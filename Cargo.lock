@@ -9049,6 +9049,7 @@ dependencies = [
  "ya-client",
  "ya-client-model",
  "ya-core-model",
+ "ya-net",
  "ya-service-bus",
  "ya-utils-futures",
  "ya-utils-path",

@@ -7,6 +7,7 @@ use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::mocks::net::MockNet;
 use ya_framework_basic::temp_dir;
 
 use crate::mocks::node::MockNode;
@@ -22,7 +23,10 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     let dir = temp_dir!("test_release_allocation")?;
 
-    let node = MockNode::new("node-1", &dir.path())
+    let net = MockNet::default();
+    net.bind_gsb();
+
+    let node = MockNode::new(net, "node-1", &dir.path())
         .with_identity()
         .with_payment()
         .with_fake_market();
@@ -59,6 +63,15 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
         .await?;
     log::info!("Allocation created.");
 
+    log::info!("Creating fake Agreement...");
+
+    let agreement =
+        FakeMarket::create_fake_agreement(requestor_appkey.identity, provider_appkey.identity)
+            .unwrap();
+    node.get_market()?.add_agreement(agreement.clone()).await;
+
+    log::info!("Fake Agreement created: {}", agreement.agreement_id);
+
     log::info!("Verifying allocation...");
     let allocations = requestor.get_allocations::<Utc>(None, None).await?;
     assert_eq!(allocations.len(), 1);
@@ -79,11 +92,6 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let result = requestor.get_allocation(&allocation.allocation_id).await;
     assert!(result.is_err());
     log::info!("Done. (Verifying allocation removal)");
-
-    let agreement =
-        FakeMarket::create_fake_agreement(requestor_appkey.identity, provider_appkey.identity)
-            .unwrap();
-    node.get_market()?.add_agreement(agreement.clone()).await;
 
     log::info!("Issuing invoice...");
     let invoice = provider

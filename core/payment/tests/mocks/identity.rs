@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
 use ya_core_model::identity::IdentityInfo;
+use ya_framework_basic::mocks::net::MockNet;
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
 
 use ya_identity::service::Identity;
@@ -14,15 +15,17 @@ use ya_service_api::{CliCtx, CommandOutput};
 
 #[derive(Clone)]
 pub struct MockIdentity {
+    net: MockNet,
     name: String,
     db: DbExecutor,
 }
 
 impl MockIdentity {
-    pub fn new(name: &str) -> Self {
+    pub fn new(net: MockNet, name: &str) -> Self {
         let db = Self::create_db(&format!("{name}.identity.db")).unwrap();
 
         MockIdentity {
+            net,
             name: name.to_string(),
             db,
         }
@@ -50,7 +53,21 @@ impl MockIdentity {
             .await
             .map_err(|e| anyhow!("Creating AppKey: {e}"))?;
 
+        self.register_identity_in_net(identity.node_id);
         Ok(appkey)
+    }
+
+    fn register_identity_in_net(&self, id: NodeId) {
+        // This line is temporary, until we will be able to rebind all modules to non-fixed prefix.
+        // Currently, all modules must be bound under `/local/{module}` and `/public/{module}`.
+        // Not doing so would break most of them.
+        // For example Payment module uses fixed prefix to call market and identity modules.
+        // When we will work around this problem, we will be able to instantiate many nodes in tests.
+        self.net.register_node(&id, "/public");
+
+        // Should be instead in the future:
+        // self.net
+        //     .register_node(&id, &format!("/{}/public/{id}", self.name));
     }
 
     pub async fn create_identity(&self, name: &str) -> anyhow::Result<IdentityInfo> {

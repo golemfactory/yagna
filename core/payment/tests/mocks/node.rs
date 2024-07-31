@@ -11,6 +11,7 @@ use url::Url;
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_framework_basic::mocks::net::MockNet;
 use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::rest_api_host_port;
@@ -26,6 +27,8 @@ use super::payment::MockPayment;
 ///       using fixed addresses. This should be improved in the future.
 #[derive(Clone)]
 pub struct MockNode {
+    net: MockNet,
+
     name: String,
     testdir: PathBuf,
 
@@ -37,11 +40,12 @@ pub struct MockNode {
 }
 
 impl MockNode {
-    pub fn new(name: &str, testdir: &Path) -> Self {
+    pub fn new(net: MockNet, name: &str, testdir: &Path) -> Self {
         let testdir = testdir.join(name);
         fs::create_dir_all(&testdir).expect("Failed to create test directory");
 
         MockNode {
+            net,
             name: name.to_string(),
             testdir,
             rest_url: Self::generate_rest_url(),
@@ -53,7 +57,7 @@ impl MockNode {
 
     /// Use full wrapped Identity module for this node.
     pub fn with_identity(mut self) -> Self {
-        self.identity = Some(MockIdentity::new(&self.name));
+        self.identity = Some(MockIdentity::new(self.net.clone(), &self.name));
         self
     }
 
