@@ -69,6 +69,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.try_update_payment( c, m).await }
         )
         .bind_with_processor(
+            move |_, dr, c, m| async move { dr.flush_payments( c, m).await }
+        )
+        .bind_with_processor(
             move |_, dr, c, m| async move { dr.verify_payment( c, m).await }
         )
         .bind_with_processor(
