@@ -23,8 +23,9 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
-use ya_net::Config;
+use ya_net::Config as NetConfig;
 use ya_payment::processor::PaymentProcessor;
+use ya_payment::Config as PaymentConfig;
 use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
@@ -230,7 +231,12 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("bind_gsb_router()");
 
     let processor = Arc::new(PaymentProcessor::new(db.clone()));
-    ya_payment::service::bind_service(&db, processor, BindOptions::default().run_sync_job(false));
+    ya_payment::service::bind_service(
+        &db,
+        processor,
+        BindOptions::default().run_sync_job(false),
+        Arc::new(PaymentConfig::from_env()?),
+    );
     log::debug!("bind_service()");
 
     bus::bind(identity::BUS_ID, {
@@ -342,7 +348,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("bind remote...");
 
     ya_net::hybrid::start_network(
-        Arc::new(Config::from_env()?),
+        Arc::new(NetConfig::from_env()?),
         provider_id,
         vec![provider_id, requestor_id],
     )
