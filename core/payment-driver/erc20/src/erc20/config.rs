@@ -108,6 +108,20 @@ lazy_static! {
             }
         }
     };
+    pub static ref AMOY_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("AMOY_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x2b60e60d3fb0b36a7ccb388f9e71570da4c4594f".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: None,
+        required_confirmations: {
+            match env::var("ERC20_AMOY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
     pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("POLYGON_GLM_CONTRACT_ADDRESS")
