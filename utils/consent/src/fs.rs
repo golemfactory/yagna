@@ -145,7 +145,7 @@ pub fn test_entries_internal() {
     env_logger::init();
     let path = PathBuf::from(format!("tmp-{}.txt", rand_string));
     let entries = vec![ConsentEntry {
-        consent_scope: ConsentScope::Internal,
+        consent_scope: ConsentScope::Stats,
         allowed: true,
     }];
 

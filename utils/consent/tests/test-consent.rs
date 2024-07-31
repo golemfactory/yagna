@@ -19,9 +19,9 @@ pub fn test_save_and_load_entries() {
     env_logger::init();
 
     {
-        set_consent(ConsentScope::Internal, Some(true));
+        set_consent(ConsentScope::Stats, Some(true));
 
-        let consent = ya_utils_consent::have_consent_cached(ConsentScope::Internal);
+        let consent = ya_utils_consent::have_consent_cached(ConsentScope::Stats);
         assert_eq!(consent.consent, Some(true));
     }
     std::fs::remove_file(&consent_path).unwrap();

@@ -16,8 +16,9 @@ pub struct ConsentEntry {
 
 #[derive(StructOpt, Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
 pub enum ConsentScope {
-    /// Consent for publication of the node's statistics
-    Internal,
+    /// Consent to augment stats.golem.network portal
+    /// with data collected from your node.
+    Stats,
 }
 
 impl PartialOrd for ConsentScope {
@@ -33,7 +34,7 @@ impl Ord for ConsentScope {
 
 pub fn extra_info(consent_scope: ConsentScope) -> String {
     match consent_scope {
-        ConsentScope::Internal => {
+        ConsentScope::Stats => {
             "Consent to augment stats.golem.network\nportal with data collected from your node."
                 .to_string()
         }
@@ -51,7 +52,7 @@ pub fn extra_info_comment(consent_scope: ConsentScope) -> String {
 
 pub fn full_question(consent_scope: ConsentScope) -> String {
     match consent_scope {
-        ConsentScope::Internal => {
+        ConsentScope::Stats => {
             "Do you agree to augment stats.golem.network with data collected from your node (you can check the full range of information transferred in Terms)[allow/deny]?".to_string()
         }
     }

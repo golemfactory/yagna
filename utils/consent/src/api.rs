@@ -128,8 +128,7 @@ pub fn have_consent_cached(consent_scope: ConsentScope) -> HaveConsentResult {
 /// Save from env is used to check if consent should be saved to configuration if set in variable
 pub(crate) fn have_consent(consent_scope: ConsentScope, save_from_env: bool) -> HaveConsentResult {
     // for example:
-    // YA_CONSENT_INTERNAL=allow
-    // YA_CONSENT_EXTERNAL=deny
+    // YA_CONSENT_STATS=allow
 
     let env_variable_name = format!("YA_CONSENT_{}", consent_scope.to_string().to_uppercase());
     let result_from_env = if let Ok(env_value) = env::var(&env_variable_name) {

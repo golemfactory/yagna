@@ -165,16 +165,16 @@ async fn export_metrics_sorted() -> String {
 
 pub async fn export_metrics_for_push() -> String {
     //if consent is not set assume we are not allowed to push metrics
-    let internal_consent = ya_utils_consent::have_consent_cached(ConsentScope::Internal)
+    let stats_consent = ya_utils_consent::have_consent_cached(ConsentScope::Stats)
         .consent
         .unwrap_or(false);
-    let filter = if internal_consent {
-        log::info!("Pushing all metrics, because both internal and external consents are given");
+    let filter = if stats_consent {
+        log::info!("Pushing all metrics, because stats consent is given");
         None
     } else {
         // !internal_consent && !external_consent
         log::info!(
-            "Not pushing metrics, because both internal and external consents are not given"
+            "Not pushing metrics, because stats consent is not given"
         );
         return "".to_string();
     };
