@@ -80,9 +80,7 @@ impl MockIdentity {
             from_private_key: None,
         };
 
-        Ok(parse_output_result::<IdentityInfo>(
-            command.run_command(&ctx).boxed_local().await?,
-        )?)
+        parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)
     }
     pub async fn create_appkey(&self, name: &str, id: NodeId) -> anyhow::Result<AppKey> {
         let ctx = CliCtx::default();
@@ -101,7 +99,7 @@ impl MockIdentity {
         .boxed_local()
         .await?;
 
-        Ok(parse_output::<AppKey>(output)?)
+        parse_output::<AppKey>(output)
     }
 }
 

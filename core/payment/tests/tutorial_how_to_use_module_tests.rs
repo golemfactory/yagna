@@ -31,7 +31,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     // Create MockNode which is container for all Golem modules and represents
     // single node in tests.
-    let node = MockNode::new(net, "node-1", &dir.path())
+    let node = MockNode::new(net, "node-1", dir.path())
         // Request instantiating wrappers around real Golem modules.
         .with_identity()
         .with_payment()

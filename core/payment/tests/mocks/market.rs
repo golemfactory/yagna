@@ -78,12 +78,11 @@ impl FakeMarket {
         let agreement_id = AgreementId::from_client(&msg.agreement_id, owner)
             .map_err(|e| market::RpcMessageError::Market(e.to_string()))?;
 
-        Ok(self
-            .get_agreement(agreement_id.clone())
+        self.get_agreement(agreement_id.clone())
             .await
             .ok_or_else(|| {
                 market::RpcMessageError::NotFound(format!("Agreement id: {agreement_id}"))
-            })?)
+            })
     }
 
     async fn list_agreements_handler(
@@ -108,7 +107,7 @@ impl FakeMarket {
             .map(|(id, agreement)| AgreementListEntry {
                 id: agreement.agreement_id.clone(),
                 timestamp: agreement.timestamp.clone(),
-                approved_date: agreement.approved_date.clone(),
+                approved_date: agreement.approved_date,
                 role: match id.owner() {
                     Owner::Provider => Role::Provider,
                     Owner::Requestor => Role::Requestor,
@@ -146,7 +145,7 @@ impl FakeMarket {
         let offer = Self::create_default_offer(provider_id)?;
         let demand = Self::create_default_demand(requestor_id)?;
 
-        Ok(Self::agreement_from(offer, demand)?)
+        Self::agreement_from(offer, demand)
     }
 
     pub fn agreement_from(offer: ProposalView, demand: ProposalView) -> anyhow::Result<Agreement> {
