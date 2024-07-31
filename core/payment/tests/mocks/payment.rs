@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_payment::api::web_scope;
+use ya_payment::config::Config;
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::service::BindOptions;
@@ -68,6 +69,7 @@ impl MockPayment {
             &self.db,
             self.processor.clone(),
             BindOptions::default().run_sync_job(false),
+            Arc::new(Config::from_env()?),
         );
 
         self.start_dummy_driver().await?;
