@@ -72,11 +72,11 @@ impl MockNet {
 
     fn node_prefix(&self, id: NodeId) -> Result<String> {
         let inner = self.inner.lock().unwrap();
-        Ok(inner
+        inner
             .nodes
             .get(&id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("node not registered: {}", id))?)
+            .ok_or_else(|| anyhow::anyhow!("Node not registered: {id}"))
     }
 
     pub fn node_by_prefix(&self, address: &str) -> Option<NodeId> {
