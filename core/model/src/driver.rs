@@ -5,6 +5,7 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
+use ya_client_model::NodeId;
 use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
 use ya_service_bus::RpcMessage;
 
@@ -369,6 +370,46 @@ impl TryUpdatePayment {
 impl RpcMessage for TryUpdatePayment {
     const ID: &'static str = "TryUpdatePayment";
     type Item = TryUpdatePaymentResult;
+    type Error = GenericError;
+}
+
+// ************************** FLUSH PAYMENTS **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FlushPayments {
+    node_id: Option<NodeId>,
+    flush_date: DateTime<Utc>,
+}
+
+impl FlushPayments {
+    pub fn new(
+        node_id: Option<NodeId>,
+        flush_date: DateTime<Utc>,
+    ) -> FlushPayments {
+        FlushPayments {
+            node_id,
+            flush_date,
+        }
+    }
+
+    pub fn flush_date(&self) -> DateTime<Utc> {
+        self.flush_date
+    }
+
+    pub fn node_id(&self) -> Option<NodeId> {
+        self.node_id
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FlushPaymentResult {
+    FlushScheduled,
+    FlushNotNeeded
+}
+
+impl RpcMessage for FlushPayments {
+    const ID: &'static str = "FlushPayments";
+    type Item = FlushPaymentResult;
     type Error = GenericError;
 }
 
