@@ -3,7 +3,7 @@
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -33,10 +33,10 @@ pub struct FakeMarketInner {
 }
 
 impl FakeMarket {
-    pub fn new(name: &str, testdir: &PathBuf) -> Self {
+    pub fn new(name: &str, testdir: &Path) -> Self {
         FakeMarket {
             name: name.to_string(),
-            testdir: testdir.clone(),
+            testdir: testdir.to_path_buf(),
             inner: Arc::new(RwLock::new(FakeMarketInner {
                 agreements: HashMap::new(),
             })),
@@ -106,7 +106,7 @@ impl FakeMarket {
             })
             .map(|(id, agreement)| AgreementListEntry {
                 id: agreement.agreement_id.clone(),
-                timestamp: agreement.timestamp.clone(),
+                timestamp: agreement.timestamp,
                 approved_date: agreement.approved_date,
                 role: match id.owner() {
                     Owner::Provider => Role::Provider,
