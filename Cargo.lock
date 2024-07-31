@@ -9442,6 +9442,7 @@ dependencies = [
  "ya-erc20-driver",
  "ya-framework-basic",
  "ya-identity",
+ "ya-market",
  "ya-metrics",
  "ya-net",
  "ya-persistence",

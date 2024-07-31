@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::mocks::market::FakeMarket;
 use actix_web::{middleware, App, HttpServer, Scope};
 use anyhow::anyhow;
 use std::fs;
@@ -32,6 +33,7 @@ pub struct MockNode {
 
     pub identity: Option<MockIdentity>,
     pub payment: Option<MockPayment>,
+    pub market: Option<FakeMarket>,
 }
 
 impl MockNode {
@@ -45,16 +47,25 @@ impl MockNode {
             rest_url: Self::generate_rest_url(),
             identity: None,
             payment: None,
+            market: None,
         }
     }
 
+    /// Use full wrapped Identity module for this node.
     pub fn with_identity(mut self) -> Self {
         self.identity = Some(MockIdentity::new(&self.name));
         self
     }
 
+    /// Use full wrapped Payment module for this node.
     pub fn with_payment(mut self) -> Self {
         self.payment = Some(MockPayment::new(&self.name, &self.testdir));
+        self
+    }
+
+    /// Use fake Market module for this node.
+    pub fn with_fake_market(mut self) -> Self {
+        self.market = Some(FakeMarket::new(&self.name, &self.testdir));
         self
     }
 
@@ -70,6 +81,12 @@ impl MockNode {
             .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
     }
 
+    pub fn get_market(&self) -> anyhow::Result<FakeMarket> {
+        self.market
+            .clone()
+            .ok_or_else(|| anyhow!("Market ({}) is not initialized", self.name))
+    }
+
     /// Binds GSB router and all initialized modules to GSB.
     /// If you want to bind only chosen modules, you should bind them manually.
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
@@ -83,9 +100,17 @@ impl MockNode {
             payment.bind_gsb().await?;
         }
 
+        if let Some(market) = &self.market {
+            market.bind_gsb().await?;
+        }
         Ok(())
     }
 
+    /// Query REST API client for payment module.
+    ///
+    /// You need to provider access token, which can be generated together with identity
+    /// using `MockIdentity::create_identity_key` function.
+    /// Token is not validated. Incorrect token can be useful in some testing scenarios.
     pub fn rest_payments(&self, token: &str) -> anyhow::Result<PaymentApi> {
         let provider: PaymentApi = WebClient::builder()
             .auth_token(token)
@@ -96,6 +121,11 @@ impl MockNode {
         Ok(provider)
     }
 
+    /// Start actix server with all requested modules and some additional middlewares, that are
+    /// normally used by yagna.
+    /// You can make REST API requests using client created with `rest_payments` function.
+    ///
+    /// Server will be automatically stopped when `ctx` is dropped, which will happen after test will exit.
     pub async fn start_server(&self, ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
         log::info!(
             "MockeNode ({}) - Starting server: {}",
@@ -137,7 +167,7 @@ impl MockNode {
             self.name
         );
 
-        // GSB RemoteRouter takes url from this variable and we can't set it directly.
+        // GSB RemoteRouter takes url from this variable, and we can't set it directly.
         std::env::set_var("GSB_URL", gsb_url.to_string());
 
         ya_sb_router::bind_gsb_router(Some(gsb_url.clone()))

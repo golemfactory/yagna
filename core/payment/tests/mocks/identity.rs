@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use anyhow::{anyhow, bail};
+use futures::FutureExt;
 use serde::de::DeserializeOwned;
 use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
@@ -63,7 +64,7 @@ impl MockIdentity {
         };
 
         Ok(parse_output_result::<IdentityInfo>(
-            command.run_command(&ctx).await?,
+            command.run_command(&ctx).boxed_local().await?,
         )?)
     }
     pub async fn create_appkey(&self, name: &str, id: NodeId) -> anyhow::Result<AppKey> {
@@ -80,6 +81,7 @@ impl MockIdentity {
             name: name.to_string(),
         }
         .run_command(&ctx)
+        .boxed_local()
         .await?;
 
         Ok(parse_output::<AppKey>(output)?)
