@@ -161,3 +161,30 @@ max-timeout-ms = 5000
 verify-interval-secs = 300
 allowed-head-behind-secs = 60
 dns-source = "polygon.rpc-node.dev.golem.network."
+
+[chain.amoy]
+chain-name = "Amoy testnet"
+chain-id = 80002
+currency-symbol = "tMATIC"
+priority-fee = 30.111
+max-fee-per-gas = 500.0
+transaction-timeout = 100
+token = { address = "0x2b60e60d3fb0b36a7ccb388f9e71570da4c4594f", symbol = "tGLM" }
+mint-contract = { address = "0xf29ff8a13211ac33861986e407190ae5c773d53c", max-glm-allowed = 400 }
+wrapper-contract = { address = "0xa7b4447c1447edeb40ebbb1943e90b169ff44560" }
+multi-contract = { address = "0xa0a51642a594763d78091bf03ee6bf8e8d663bba", max-at-once = 10 }
+confirmation-blocks = 1
+block-explorer-url = "https://amoy.polygonscan.com"
+external-source-check-interval = 300
+
+[[chain.amoy.rpc-endpoints]]
+names = """
+    rpc-amoy.polygon.technology,
+    """
+endpoints = """
+    https://rpc-amoy.polygon.technology,
+    """
+-priority = 0
+-max-timeout-ms = 5000
+-verify-interval-secs = 300
+-allowed-head-behind-secs = 60

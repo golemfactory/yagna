@@ -117,8 +117,9 @@ pub enum Network {
     Goerli = 5,  //Goerli is another Ethereum testnet
     #[default]
     Holesky = 17000, //Holesky is testnet for Holesky network
-    Mumbai = 80001, //Mumbai is testnet for Polygon network
     Polygon = 137, //Polygon is Polygon production network
+    Mumbai = 80001, //Mumbai is the legacy testnet for Polygon network
+    Amoy = 80002, //Amoy is the new testnet for Polygon network
 }
 
 impl FromStr for Network {
@@ -132,6 +133,7 @@ impl FromStr for Network {
             "holesky" => Ok(Network::Holesky),
             "polygon" => Ok(Network::Polygon),
             "mumbai" => Ok(Network::Mumbai),
+            "amoy" => Ok(Network::Amoy),
             _ => Err(DbError::InvalidData(format!("Invalid network: {}", s))),
         }
     }
@@ -144,8 +146,9 @@ impl Display for Network {
             Network::Rinkeby => f.write_str("rinkeby"),
             Network::Goerli => f.write_str("goerli"),
             Network::Holesky => f.write_str("holesky"),
-            Network::Mumbai => f.write_str("mumbai"),
             Network::Polygon => f.write_str("polygon"),
+            Network::Mumbai => f.write_str("mumbai"),
+            Network::Amoy => f.write_str("amoy"),
         }
     }
 }

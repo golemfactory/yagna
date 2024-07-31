@@ -549,6 +549,9 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
             "MUMBAI_GETH_ADDR",
             "https://matic-mumbai.chainstacklabs.com",
         ),
+        Network::Amoy => {
+            collect_rpc_addr_from("AMOY_GETH_ADDR", "https://rpc-amoy.polygon.technology")
+        }
     }
 }
 
@@ -598,6 +601,7 @@ fn get_env(network: Network) -> config::EnvConfiguration {
         Network::Holesky => *config::HOLESKY_CONFIG,
         Network::Mumbai => *config::MUMBAI_CONFIG,
         Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
+        Network::Amoy => *config::AMOY_CONFIG,
     }
 }
 
