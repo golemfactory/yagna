@@ -5,8 +5,8 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::NodeId;
 use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -372,10 +372,7 @@ pub struct FlushPayments {
 }
 
 impl FlushPayments {
-    pub fn new(
-        node_id: Option<NodeId>,
-        flush_date: DateTime<Utc>,
-    ) -> FlushPayments {
+    pub fn new(node_id: Option<NodeId>, flush_date: DateTime<Utc>) -> FlushPayments {
         FlushPayments {
             node_id,
             flush_date,
@@ -394,7 +391,7 @@ impl FlushPayments {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FlushPaymentResult {
     FlushScheduled,
-    FlushNotNeeded
+    FlushNotNeeded,
 }
 
 impl RpcMessage for FlushPayments {
