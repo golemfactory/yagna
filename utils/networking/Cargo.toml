@@ -23,3 +23,4 @@ url = { workspace = true, optional = true }
 
 ipnet = { version = "2.3", optional = true }
 thiserror = { version = "1.0", optional = true }
+erc20_payment_lib_common = { workspace = true }
