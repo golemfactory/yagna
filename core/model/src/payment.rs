@@ -136,15 +136,12 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct CollectPayments {
-
-    }
+    pub struct CollectPayments {}
     impl RpcMessage for CollectPayments {
         const ID: &'static str = "CollectPayments";
         type Item = ();
         type Error = GenericError;
     }
-
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("{inner}")]

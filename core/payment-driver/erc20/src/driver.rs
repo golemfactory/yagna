@@ -886,7 +886,11 @@ impl PaymentDriver for Erc20Driver {
         false
     }
 
-    async fn flush_payments(&self, _caller: String, _msg: FlushPayments) -> Result<FlushPaymentResult, GenericError> {
+    async fn flush_payments(
+        &self,
+        _caller: String,
+        _msg: FlushPayments,
+    ) -> Result<FlushPaymentResult, GenericError> {
         self.payment_runtime.trigger_payments(Utc::now(), None);
         Ok(FlushPaymentResult::FlushScheduled)
     }
