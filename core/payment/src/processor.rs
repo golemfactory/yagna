@@ -33,11 +33,7 @@ use ya_core_model::driver::{
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, TryUpdatePaymentResult,
     ValidateAllocation, ValidateAllocationResult,
 };
-use ya_core_model::payment::local::{
-    GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle, RegisterAccount,
-    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
-    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
-};
+use ya_core_model::payment::local::{CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment, UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError};
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::NodeId;
 use ya_net::RemoteEndpoint;
@@ -632,6 +628,12 @@ impl PaymentProcessor {
             prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
         }
         Ok(debit_note_chain)
+    }
+
+    pub async fn collect_payments(&self, msg: CollectPayments) -> Result<(), GenericError>
+    {
+        Ok(())
+
     }
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
