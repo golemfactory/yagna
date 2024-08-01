@@ -34,7 +34,7 @@ use crate::testing::mock_node::default::*;
 
 #[cfg(feature = "bcast-singleton")]
 use ya_framework_basic::bcast::singleton::BCastService;
-use ya_framework_basic::mocks::net::{gsb_prefixes, MockNet};
+use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, MockNet};
 
 use ya_framework_basic::mocks::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
@@ -80,31 +80,32 @@ pub enum MockNodeKind {
 
 impl MockNodeKind {
     pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<String> {
-        let (public, local) = gsb_prefixes(test_name, name);
+        let (gsb_public, gsb_local) = gsb_prefixes(test_name, name);
+        let (market_public, market_local) = gsb_market_prefixes(&gsb_public, &gsb_local);
 
         match self {
             MockNodeKind::Market(market) => {
-                market.bind_gsb(&public, &local).await?;
+                market.bind_gsb(&market_public, &market_local).await?;
                 market.matcher.discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
-                matcher.bind_gsb(&public, &local).await?;
+                matcher.bind_gsb(&market_public, &market_local).await?;
                 matcher.discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Discovery(discovery) => {
-                discovery.bind_gsb(&public, &local).await?;
+                discovery.bind_gsb(&market_public, &market_local).await?;
                 discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
             } => {
-                provider.bind_gsb(&public, &local).await?;
-                requestor.bind_gsb(&public, &local).await?;
+                provider.bind_gsb(&market_public, &market_local).await?;
+                requestor.bind_gsb(&market_public, &market_local).await?;
             }
         }
 
-        Ok(public)
+        Ok(gsb_public)
     }
 }
 
@@ -497,6 +498,11 @@ impl MarketsNetwork {
 
     pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
         gsb_prefixes(&self.test_name, node_name)
+    }
+
+    pub fn market_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+        let (gsb_public, gsb_local) = gsb_prefixes(&self.test_name, node_name);
+        gsb_market_prefixes(&gsb_public, &gsb_local)
     }
 }
 

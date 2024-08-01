@@ -23,7 +23,7 @@ pub struct MockNet {
 
 #[derive(Default)]
 struct MockNetInner {
-    /// Maps NodeIds to gsb prefixes of market nodes.
+    /// Maps NodeIds to gsb prefixes of other nodes.
     pub nodes: HashMap<NodeId, String>,
 }
 
@@ -35,7 +35,7 @@ lazy_static::lazy_static! {
 
 impl Default for MockNet {
     fn default() -> Self {
-        log::debug!("getting singleton MockNet");
+        log::debug!("Getting singleton MockNet");
         (*NET).clone()
     }
 }
@@ -129,29 +129,31 @@ impl MockNetInner {
                 let topic = stub.topic;
                 let endpoints = bcast.resolve(&caller, &topic);
 
-                log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
+                log::debug!("BCasting on {topic} to {endpoints:?} from {caller}");
                 for endpoint in endpoints {
-                    let addr = format!("{}/{}", endpoint, bcast_service_id);
+                    let addr = format!("{endpoint}/{bcast_service_id}");
 
-                    let node_id = match mock_net.node_by_prefix(&addr) {
+                    // Normal net would have additional step: Broadcast message would be sent to other node first on /net/{node_id}.
+                    // Net would receive message, check topic and translate it to local addresses interested in this topic.
+                    // Here for simplicity we are skipping those additional steps and directly sending to all endpoints waiting for broadcast.
+                    //
+                    // But since all broadcast handlers are bound on `/local` and all addresses registered in net are on `/public`,
+                    // we must replace `local` -> `public` to find NodeId of receiver.
+                    let addr_local = addr.replacen("local", "public", 1);
+
+                    let node_id = match mock_net.node_by_prefix(&addr_local) {
                         Some(node_id) => node_id,
                         None => {
                             log::debug!(
-                                "Not broadcasting on topic {} to {}. Node not found on list. \
-                                Probably networking was disabled for this Node.",
-                                topic,
-                                addr
+                                "Not broadcasting on topic {topic} to {addr}. Node not found on list. \
+                                Probably networking was disabled for this Node."
                             );
                             continue;
                         }
                     };
 
-                    log::debug!(
-                        "BCasting on {} to address: {}, node: [{}]",
-                        topic,
-                        addr,
-                        node_id
-                    );
+                    log::debug!("BCasting on {topic} to address: {addr}, node: [{node_id}]");
+
                     let caller = caller.clone();
                     let msg = msg.clone();
                     tokio::task::spawn_local(async move {
@@ -233,7 +235,13 @@ pub(crate) const FROM_UDP_BUS_ID: &str = "/udp/from";
 pub(crate) const FROM_TRANSFER_BUS_ID: &str = "/transfer/from";
 
 pub fn gsb_prefixes(test_name: &str, name: &str) -> (String, String) {
-    let public_gsb_prefix = format!("/{}/{}/market", test_name, name);
-    let local_gsb_prefix = format!("/{}/{}/market", test_name, name);
+    let public_gsb_prefix = format!("/{}/{}/public", test_name, name);
+    let local_gsb_prefix = format!("/{}/{}/local", test_name, name);
+    (public_gsb_prefix, local_gsb_prefix)
+}
+
+pub fn gsb_market_prefixes(public: &str, local: &str) -> (String, String) {
+    let public_gsb_prefix = format!("{}/market", public);
+    let local_gsb_prefix = format!("{}/market", local);
     (public_gsb_prefix, local_gsb_prefix)
 }

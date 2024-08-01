@@ -54,7 +54,7 @@ async fn test_gsb_get_agreement() {
         .await
         .unwrap();
 
-    let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
+    let agreement = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
         .send(market::GetAgreement {
             agreement_id: agreement_id.into_client(),
             role: Role::Requestor,
@@ -102,7 +102,7 @@ async fn test_gsb_list_agreements() {
         .await
         .unwrap();
 
-    let agreements = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
+    let agreements = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
         .send(market::ListAgreements::default())
         .await
         .unwrap()
