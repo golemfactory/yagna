@@ -11,11 +11,13 @@ on:
     branches:
       - master
       - release/*
+      - '**/master'
   pull_request:
     branches:
       - master
       - master-fast
       - release/*
+      - '**/master'
 
 env:
   rust_stable: 1.77.0

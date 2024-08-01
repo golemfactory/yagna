@@ -23,11 +23,13 @@ on:
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
+      - '**/master'
   pull_request:
     branches:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 jobs:
   build:
