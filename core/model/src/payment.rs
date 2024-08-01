@@ -134,6 +134,17 @@ pub mod local {
         type Error = GenericError;
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct CollectPayments {
+
+    }
+    impl RpcMessage for CollectPayments {
+        const ID: &'static str = "CollectPayments";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("{inner}")]
     pub struct GenericError {
@@ -447,6 +458,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BuildPayments {}
+
+    impl RpcMessage for BuildPayments {
+        const ID: &'static str = "BuildPayments";
+        type Item = String;
+        type Error = NoError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

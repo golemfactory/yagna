@@ -8,6 +8,7 @@ mod invoice_event;
 mod order;
 mod payment;
 mod sync_notifs;
+mod batch;
 
 pub use self::activity::ActivityDao;
 pub use self::agreement::AgreementDao;

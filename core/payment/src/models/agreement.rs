@@ -1,4 +1,5 @@
 use crate::schema::pay_agreement;
+use chrono::{NaiveDateTime, Timelike, Utc};
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
 use ya_client_model::market::Agreement;
@@ -21,6 +22,8 @@ pub struct WriteObj {
     pub total_amount_scheduled: BigDecimalField,
     pub total_amount_paid: BigDecimalField,
     pub app_session_id: Option<String>,
+    pub created_ts: Option<NaiveDateTime>,
+    pub updated_ts: Option<NaiveDateTime>,
 }
 
 impl WriteObj {
@@ -51,6 +54,9 @@ impl WriteObj {
             .map(ToOwned::to_owned)
             .unwrap_or_else(|_| requestor_id.to_string().to_lowercase());
 
+        let now = Utc::now();
+        let created_ts = Some(now.naive_utc()).and_then(|v| v.with_nanosecond(0));
+        let updated_ts = created_ts;
         Ok(Self {
             id: agreement.agreement_id,
             owner_id,
@@ -64,6 +70,8 @@ impl WriteObj {
             total_amount_scheduled: Default::default(),
             total_amount_paid: Default::default(),
             app_session_id: agreement.app_session_id,
+            created_ts,
+            updated_ts,
         })
     }
 }
