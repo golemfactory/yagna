@@ -1,6 +1,7 @@
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
+use std::net::IpAddr;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
     stack::{
@@ -42,24 +43,38 @@ pub struct RemoveNode {
 pub struct GetConnections;
 
 #[derive(Message)]
-#[rtype(result = "Result<UserConnection>")]
-pub struct Connect {
+#[rtype(result = "Result<UserTcpConnection>")]
+pub struct ConnectTcp {
     pub protocol: Protocol,
     pub address: String,
     pub port: u16,
 }
 
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct RawSocketDesc {
+    pub src_addr: IpAddr,
+    pub dst_addr: IpAddr,
+    pub dst_id: String,
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "Result<UserRawConnection>")]
+pub struct ConnectRaw {
+    pub raw_socket_desc: RawSocketDesc,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
-pub struct Disconnect {
+pub struct DisconnectTcp {
     pub desc: SocketDesc,
     pub reason: DisconnectReason,
 }
 
-impl Disconnect {
-    pub fn new(desc: SocketDesc, reason: DisconnectReason) -> Self {
-        Self { desc, reason }
-    }
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct DisconnectRaw {
+    pub raw_socket_desc: RawSocketDesc,
+    pub reason: DisconnectReason,
 }
 
 #[derive(Message)]
@@ -78,10 +93,15 @@ pub struct Shutdown;
 pub struct DataSent;
 
 #[derive(Debug)]
-pub struct UserConnection {
+pub struct UserTcpConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
     pub stack_connection: Connection,
+}
+
+#[derive(Debug)]
+pub struct UserRawConnection {
+    pub rx: mpsc::Receiver<Vec<u8>>,
 }
 
 #[derive(Clone, Debug)]
