@@ -11,11 +11,12 @@ use tokio::time::Duration;
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::RequestorEvent;
 use ya_core_model::NodeId;
+use ya_framework_mocks::net::MockNet;
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -58,7 +59,7 @@ async fn test_get_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -90,7 +91,7 @@ async fn test_get_proposal_not_found() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_proposal_random_shuffle() {
-    let mut network = MarketsNetwork::new(None)
+    let mut network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;

@@ -9321,6 +9321,7 @@ dependencies = [
  "ya-core-model",
  "ya-diesel-utils",
  "ya-framework-basic",
+ "ya-framework-mocks",
  "ya-market-resolver",
  "ya-net",
  "ya-persistence",

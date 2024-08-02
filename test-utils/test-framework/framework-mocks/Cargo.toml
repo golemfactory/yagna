@@ -3,9 +3,6 @@ name = "ya-framework-mocks"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-bcast-singleton = []
-
 
 [dependencies]
 ya-agreement-utils = { workspace = true }

@@ -32,19 +32,16 @@ use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::*;
 
-#[cfg(feature = "bcast-singleton")]
-use ya_framework_basic::bcast::singleton::BCastService;
-use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, MockNet};
-
-use ya_framework_basic::mocks::bcast::BCast;
-#[cfg(not(feature = "bcast-singleton"))]
-use ya_framework_basic::mocks::bcast::BCastService;
+use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
+    net: Box<dyn IMockNet>,
     nodes: Vec<MockNode>,
+
     test_dir: PathBuf,
     test_name: String,
+
     config: Arc<Config>,
 }
 
@@ -123,7 +120,7 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: Option<&str>) -> Self {
+    pub async fn new(test_name: Option<&str>, net: impl IMockNet + 'static) -> Self {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
 
@@ -133,11 +130,13 @@ impl MarketsNetwork {
         };
 
         let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
-        log::info!("Intializing MarketsNetwork. tn={}", test_name);
+        log::info!("Initializing MarketsNetwork. tn={}", test_name);
 
-        MockNet::default().bind_gsb();
+        let net = Box::new(net);
+        net.bind_gsb();
 
         MarketsNetwork {
+            net,
             nodes: vec![],
             test_dir: prepare_test_dir(&test_name).unwrap(),
             test_name,
@@ -167,8 +166,8 @@ impl MarketsNetwork {
 
         let node_id = node.mock_identity.get_default_id().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
-        BCastService::default().register(&node_id, &self.test_name);
-        MockNet::default().register_node(&node_id, &public_gsb_prefix);
+        self.net.register_for_broadcasts(&node_id, &self.test_name);
+        self.net.register_node(&node_id, &public_gsb_prefix);
 
         self.nodes.push(node);
         self
@@ -176,7 +175,7 @@ impl MarketsNetwork {
 
     pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
         for (_, id) in self.list_ids(node_name) {
-            MockNet::default().unregister_node(&id.identity)?
+            self.net.unregister_node(&id.identity)?
         }
         Ok(())
     }
@@ -184,7 +183,7 @@ impl MarketsNetwork {
     pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
         for (_, id) in self.list_ids(node_name) {
             let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-            MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+            self.net.register_node(&id.identity, &public_gsb_prefix);
         }
         Ok(())
     }
@@ -430,7 +429,7 @@ impl MarketsNetwork {
 
         let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
 
-        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        self.net.register_node(&id.identity, &public_gsb_prefix);
         id
     }
 

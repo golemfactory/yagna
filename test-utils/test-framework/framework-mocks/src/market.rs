@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::collections::HashMap;
@@ -23,7 +21,7 @@ use ya_service_bus::typed as bus;
 #[derive(Clone)]
 pub struct FakeMarket {
     name: String,
-    testdir: PathBuf,
+    _testdir: PathBuf,
 
     inner: Arc<RwLock<FakeMarketInner>>,
 }
@@ -36,7 +34,7 @@ impl FakeMarket {
     pub fn new(name: &str, testdir: &Path) -> Self {
         FakeMarket {
             name: name.to_string(),
-            testdir: testdir.to_path_buf(),
+            _testdir: testdir.to_path_buf(),
             inner: Arc::new(RwLock::new(FakeMarketInner {
                 agreements: HashMap::new(),
             })),

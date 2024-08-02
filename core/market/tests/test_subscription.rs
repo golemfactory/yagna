@@ -1,3 +1,4 @@
+use ya_framework_mocks::net::MockNet;
 use ya_market::assert_err_eq;
 use ya_market::testing::client::{sample_demand, sample_offer};
 use ya_market::testing::mock_offer::flatten_json;
@@ -9,7 +10,7 @@ use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_subscribe_offer() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -20,7 +21,7 @@ async fn test_subscribe_offer() {
     let offer = sample_offer();
     let subscription_id = market1.subscribe_offer(&offer, &identity1).await.unwrap();
 
-    // Offer should be available in database after subscribe.
+    // Offer should be available in dataFailed to terminate agreementbase after subscribe.
     let got_offer = market1.get_offer(&subscription_id).await.unwrap();
     let client_offer = got_offer.into_client_offer().unwrap();
     assert_eq!(client_offer.offer_id, subscription_id.to_string());
@@ -52,7 +53,7 @@ async fn test_subscribe_offer() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_subscribe_demand() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;

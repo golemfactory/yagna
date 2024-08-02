@@ -3,6 +3,7 @@ use chrono::{Duration, Utc};
 use ya_client::model::market::agreement::State as ClientAgreementState;
 
 use ya_client::model::market::{AgreementEventType, Reason};
+use ya_framework_mocks::net::MockNet;
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -17,7 +18,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -76,7 +77,7 @@ async fn test_agreement_rejected() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected_wait_for_approval() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -143,7 +144,7 @@ async fn test_agreement_rejected_wait_for_approval() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_agreement_in_wrong_state() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -221,7 +222,7 @@ async fn test_reject_agreement_in_wrong_state() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_rejected_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

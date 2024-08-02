@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::anyhow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

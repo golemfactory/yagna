@@ -6,10 +6,9 @@ use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
-use ya_framework_basic::mocks::net::MockNet;
 use ya_framework_basic::{resource, temp_dir};
-
 use ya_framework_mocks::market::FakeMarket;
+use ya_framework_mocks::net::{IMockNet, MockNet};
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::Driver;
 
@@ -21,7 +20,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     let dir = temp_dir!("test_release_allocation")?;
 
-    let net = MockNet::default();
+    let net = MockNet::new();
     net.bind_gsb();
 
     let node = MockNode::new(net, "node-1", dir.path())

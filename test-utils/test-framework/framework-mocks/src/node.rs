@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use actix_web::{middleware, App, HttpServer, Scope};
 use anyhow::anyhow;
 use std::fs;
@@ -11,13 +9,13 @@ use url::Url;
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::mocks::net::MockNet;
 use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::rest_api_host_port;
 
 use crate::identity::MockIdentity;
 use crate::market::FakeMarket;
+use crate::net::MockNet;
 use crate::payment::MockPayment;
 
 /// Represents Node abstraction in tests.

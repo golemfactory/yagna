@@ -1,19 +1,18 @@
-#![allow(dead_code)]
-
 use anyhow::{anyhow, bail};
 use futures::FutureExt;
 use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::Path;
+
 use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
 use ya_core_model::identity::IdentityInfo;
-use ya_framework_basic::mocks::net::MockNet;
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
-
 use ya_identity::service::Identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
+
+use crate::net::{IMockNet, MockNet};
 
 #[derive(Clone)]
 pub struct MockIdentity {
@@ -54,8 +53,6 @@ impl MockIdentity {
             .create_appkey(name, identity.node_id)
             .await
             .map_err(|e| anyhow!("Creating AppKey: {e}"))?;
-
-        self.register_identity_in_net(identity.node_id);
         Ok(appkey)
     }
 
@@ -75,8 +72,6 @@ impl MockIdentity {
             .create_appkey(&name, identity.node_id)
             .await
             .map_err(|e| anyhow!("Creating AppKey: {e}"))?;
-
-        self.register_identity_in_net(identity.node_id);
         Ok(appkey)
     }
 
@@ -94,7 +89,6 @@ impl MockIdentity {
     }
 
     pub async fn create_identity(&self, name: &str) -> anyhow::Result<IdentityInfo> {
-        let ctx = CliCtx::default();
         let command = IdentityCommand::Create {
             no_password: true,
             alias: Some(name.to_string()),
@@ -103,7 +97,7 @@ impl MockIdentity {
             from_private_key: None,
         };
 
-        parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)
+        self.run_create_identity(command).await
     }
 
     pub async fn load_identity(
@@ -111,7 +105,6 @@ impl MockIdentity {
         name: &str,
         private_key: String,
     ) -> anyhow::Result<IdentityInfo> {
-        let ctx = CliCtx::default();
         let command = IdentityCommand::Create {
             no_password: true,
             alias: Some(name.to_string()),
@@ -120,7 +113,16 @@ impl MockIdentity {
             from_private_key: Some(private_key),
         };
 
-        parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)
+        self.run_create_identity(command).await
+    }
+
+    async fn run_create_identity(&self, command: IdentityCommand) -> anyhow::Result<IdentityInfo> {
+        let ctx = CliCtx::default();
+        let identity =
+            parse_output_result::<IdentityInfo>(command.run_command(&ctx).boxed_local().await?)?;
+
+        self.register_identity_in_net(identity.node_id);
+        Ok(identity)
     }
 
     pub async fn create_appkey(&self, name: &str, id: NodeId) -> anyhow::Result<AppKey> {

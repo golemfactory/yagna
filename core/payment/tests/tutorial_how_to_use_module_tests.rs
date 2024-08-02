@@ -6,10 +6,10 @@ use ya_client_model::payment::NewAllocation;
 
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
-use ya_framework_basic::mocks::net::MockNet;
 use ya_framework_basic::{resource, temp_dir};
 
 use ya_framework_mocks::market::FakeMarket;
+use ya_framework_mocks::net::{IMockNet, MockNet};
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::Driver;
 
@@ -25,7 +25,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
     // Currently instantiating many MockNodes is not possible, but MockNet is necessary even
     // for communication on the same node, because messages directed to external GSB addresses `/net/0x437544...`
     // when NodeId belongs to local Node, need to be routed back.
-    let net = MockNet::default();
+    let net = MockNet::new();
     net.bind_gsb();
 
     // Create MockNode which is container for all Golem modules and represents

@@ -3,6 +3,7 @@ use chrono::{Duration, Utc};
 
 use ya_client::model::market::Role;
 use ya_core_model::market;
+use ya_framework_mocks::net::MockNet;
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -22,7 +23,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_gsb_get_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -71,7 +72,7 @@ async fn test_gsb_get_agreement() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_gsb_list_agreements() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -116,7 +117,7 @@ async fn test_gsb_list_agreements() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -149,7 +150,7 @@ async fn test_get_agreement() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -183,7 +184,7 @@ async fn test_rest_get_not_existing_agreement() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -262,7 +263,7 @@ async fn full_market_interaction_aka_happy_path() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_creation_should_fail() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -293,7 +294,7 @@ async fn second_creation_should_fail() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_confirmation_should_fail() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -343,7 +344,7 @@ async fn second_confirmation_should_fail() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn agreement_expired_before_confirmation() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -388,7 +389,7 @@ async fn agreement_expired_before_confirmation() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn agreement_expired_before_approval() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -431,7 +432,7 @@ async fn agreement_expired_before_approval() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -464,7 +465,7 @@ async fn waiting_wo_confirmation_should_fail() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn approval_before_confirmation_should_fail() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -505,7 +506,7 @@ async fn approval_before_confirmation_should_fail() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn approval_without_waiting_should_pass() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -555,7 +556,7 @@ async fn approval_without_waiting_should_pass() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn waiting_after_approval_should_pass() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -611,7 +612,7 @@ async fn waiting_after_approval_should_pass() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_approval_should_fail() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -683,7 +684,7 @@ async fn second_approval_should_fail() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_waiting_should_pass() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -746,7 +747,7 @@ async fn second_waiting_should_pass() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn net_err_while_confirming() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -787,7 +788,7 @@ async fn net_err_while_confirming() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn net_err_while_approving() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -845,7 +846,7 @@ async fn net_err_while_approving() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_requestor_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -890,7 +891,7 @@ async fn cant_promote_requestor_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_initial_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -935,7 +936,7 @@ async fn cant_promote_initial_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_not_last_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -979,7 +980,7 @@ async fn cant_promote_not_last_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -1005,7 +1006,7 @@ async fn test_terminate() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_not_existing_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -1050,7 +1051,7 @@ async fn test_terminate_not_existing_agreement() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_from_wrong_states() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -1149,7 +1150,7 @@ async fn test_terminate_from_wrong_states() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_rejected_agreement() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -1217,7 +1218,7 @@ async fn test_terminate_rejected_agreement() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_invalid_reason() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
