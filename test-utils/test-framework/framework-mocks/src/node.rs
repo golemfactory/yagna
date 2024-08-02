@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use crate::mocks::market::FakeMarket;
 use actix_web::{middleware, App, HttpServer, Scope};
 use anyhow::anyhow;
 use std::fs;
@@ -8,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
+
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -16,8 +16,9 @@ use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::rest_api_host_port;
 
-use super::identity::MockIdentity;
-use super::payment::MockPayment;
+use crate::identity::MockIdentity;
+use crate::market::FakeMarket;
+use crate::payment::MockPayment;
 
 /// Represents Node abstraction in tests.
 /// Provides functionality to instantiate selected modules and make tests setup easier.

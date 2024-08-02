@@ -2,7 +2,6 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use test_context::test_context;
 
-use crate::mocks::market::FakeMarket;
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -10,10 +9,9 @@ use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::mocks::net::MockNet;
 use ya_framework_basic::{resource, temp_dir};
 
-use crate::mocks::node::MockNode;
-use crate::mocks::payment::Driver;
-
-mod mocks;
+use ya_framework_mocks::market::FakeMarket;
+use ya_framework_mocks::node::MockNode;
+use ya_framework_mocks::payment::Driver;
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]

@@ -73,6 +73,7 @@ ya-identity = "0.3"
 ya-market = "0.4"
 ya-sb-router = { workspace = true }
 ya-framework-basic = { version = "0.1" }
+ya-framework-mocks = { version = "0.1" }
 
 actix-rt = "2.7"
 rand = "0.8"
