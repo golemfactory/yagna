@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ya_core_model::driver::{driver_bus_id, Fund};
+use ya_core_model::payment::local::BUS_ID;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
@@ -10,6 +11,7 @@ use ya_payment::processor::PaymentProcessor;
 use ya_payment::service::BindOptions;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
+use ya_service_bus::typed::Endpoint;
 
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
@@ -42,7 +44,7 @@ pub struct MockPayment {
 
 impl MockPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
-        let db = Self::create_db(&format!("{name}.payment.db")).unwrap();
+        let db = Self::create_db(testdir, "payment.db").unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
 
         MockPayment {
@@ -53,9 +55,9 @@ impl MockPayment {
         }
     }
 
-    fn create_db(name: &str) -> anyhow::Result<DbExecutor> {
-        let db = DbExecutor::in_memory(name)
-            .map_err(|e| anyhow!("Failed to create in memory db [{name:?}]. Error: {e}"))?;
+    fn create_db(testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
+        let db = DbExecutor::from_data_dir(testdir, name)
+            .map_err(|e| anyhow!("Failed to create db [{name:?}]. Error: {e}"))?;
         db.apply_migration(migrations::run_with_output)?;
         Ok(db)
     }
@@ -99,5 +101,9 @@ impl MockPayment {
             ))
             .await??;
         Ok(())
+    }
+
+    pub fn gsb_local_endpoint(&self) -> Endpoint {
+        bus::service(BUS_ID)
     }
 }

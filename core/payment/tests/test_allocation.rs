@@ -2,8 +2,9 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use test_context::test_context;
 
-use ya_client_model::payment::allocation::PaymentPlatformEnum;
+use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
 use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
+use ya_core_model::payment::local::GetStatus;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
@@ -156,6 +157,128 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
     let result = requestor.get_allocation(&allocation.allocation_id).await;
     assert!(result.is_err());
     log::info!("Done.");
+
+    log::info!(" 👍🏻 Example completed successfully ❤️");
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(true);
+
+    let dir = temp_dir!("test_validate_allocation")?;
+
+    let net = MockNet::new();
+    net.bind_gsb();
+
+    let node = MockNode::new(net, "node-1", dir.path())
+        .with_identity()
+        .with_payment()
+        .with_fake_market();
+    node.bind_gsb().await?;
+    node.start_server(ctx).await?;
+
+    let appkey_req = node
+        .get_identity()?
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
+
+    let requestor = node.rest_payments(&appkey_req.key)?;
+
+    let payment = node.get_payment()?;
+    payment
+        .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+
+    let payment_platform = PaymentPlatform {
+        driver: Some(Driver::Erc20.gsb_name()),
+        network: Some("holesky".to_string()),
+        token: Some("tglm".to_string()),
+    };
+
+    let status = payment
+        .gsb_local_endpoint()
+        .call(GetStatus {
+            address: appkey_req.identity.to_string(),
+            driver: payment_platform.driver.clone().unwrap(),
+            network: payment_platform.network.clone(),
+            //token: payment_platform.token.clone(),
+            token: None,
+            after_timestamp: 0,
+        })
+        .await??;
+
+    log::info!(
+        "Requestor balance: {}, platform: {:?}",
+        status.amount,
+        payment_platform
+    );
+
+    log::info!("Attempting to create allocation with invalid address...");
+    let result = requestor
+        .create_allocation(&NewAllocation {
+            address: Some("Definitely not a valid address".to_string()),
+            payment_platform: Some(PaymentPlatformEnum::PaymentPlatform(
+                payment_platform.clone(),
+            )),
+            total_amount: BigDecimal::from(1u64),
+            timeout: None,
+            make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
+        })
+        .await;
+    assert!(result.is_err());
+    log::info!("Failed to create allocation (as expected).");
+
+    let new_allocation = NewAllocation {
+        address: None, // Use default address (i.e. identity)
+        payment_platform: Some(PaymentPlatformEnum::PaymentPlatform(
+            payment_platform.clone(),
+        )),
+        total_amount: status.amount / 2,
+        timeout: None,
+        make_deposit: false,
+        deposit: None,
+        extend_timeout: None,
+    };
+
+    log::info!(
+        "Creating allocation for {} tGLM...",
+        &new_allocation.total_amount
+    );
+    requestor.create_allocation(&new_allocation).await?;
+    log::info!("Allocation created.");
+
+    log::info!(
+        "Creating another allocation for {} tGLM...",
+        &new_allocation.total_amount
+    );
+    let allocation = requestor.create_allocation(&new_allocation).await?;
+    log::info!("Allocation created.");
+
+    log::info!(
+        "Attempting to create another allocation for {} tGLM...",
+        &new_allocation.total_amount
+    );
+    let result = requestor.create_allocation(&new_allocation).await;
+    assert!(result.is_err());
+    log::info!("Failed to create allocation (as expected).");
+
+    log::info!("Releasing an allocation...");
+    requestor
+        .release_allocation(&allocation.allocation_id)
+        .await?;
+    log::info!("Allocation released.");
+
+    log::info!(
+        "Creating another allocation for {} tGLM...",
+        &new_allocation.total_amount
+    );
+    requestor.create_allocation(&new_allocation).await?;
+    log::info!("Allocation created.");
 
     log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())

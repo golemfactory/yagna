@@ -56,7 +56,11 @@ impl MockNode {
 
     /// Use full wrapped Identity module for this node.
     pub fn with_identity(mut self) -> Self {
-        self.identity = Some(MockIdentity::new(self.net.clone(), &self.name));
+        self.identity = Some(MockIdentity::new(
+            self.net.clone(),
+            &self.testdir,
+            &self.name,
+        ));
         self
     }
 

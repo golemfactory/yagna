@@ -22,8 +22,8 @@ pub struct MockIdentity {
 }
 
 impl MockIdentity {
-    pub fn new(net: MockNet, name: &str) -> Self {
-        let db = Self::create_db(&format!("{name}.identity.db")).unwrap();
+    pub fn new(net: MockNet, testdir: &Path, name: &str) -> Self {
+        let db = Self::create_db(testdir, "identity.db").unwrap();
 
         MockIdentity {
             net,
@@ -32,9 +32,9 @@ impl MockIdentity {
         }
     }
 
-    fn create_db(name: &str) -> anyhow::Result<DbExecutor> {
-        let db = DbExecutor::in_memory(name)
-            .map_err(|e| anyhow!("Failed to create in memory db [{name:?}]. Error: {e}"))?;
+    fn create_db(testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
+        let db = DbExecutor::from_data_dir(testdir, name)
+            .map_err(|e| anyhow!("Failed to create db [{name:?}]. Error: {e}"))?;
         Ok(db)
     }
 
