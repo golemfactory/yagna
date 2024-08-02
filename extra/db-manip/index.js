@@ -9,7 +9,7 @@ import {formatDatePaymentsFormat} from './utils.js';
 import {
     createAgreement,
     insertAgreement,
-    increaseAgreementAmountDue
+    increaseAgreementAmountDue, getAgreement
 } from './aggreement.js';
 import {
     createActivity,
@@ -18,27 +18,48 @@ import {
     insertActivity
 } from "./activity.js";
 import {createDebitNote, getLastDebitNote, insertDebitNote} from "./debit.js";
-import {ethers} from "ethers";
+import {createInvoice, insertInvoice} from "./invoice.js";
 
 
-    let owner = "0xed16665465c8f9bf680edb8b2cd5a7575ef8da2e"
-    let peer = '0x141bcf190037140c5e589ad38e303c2626d48886';
-    let pay_platform = 'erc20-holesky-tglm';
-    let app_session_id = uuidv4();
-    let created_date = formatDatePaymentsFormat(new Date());
-    let agreement = createAgreement(owner, peer, pay_platform, app_session_id, created_date);
-    insertAgreement(db, agreement);
+let owner = "0xed16665465c8f9bf680edb8b2cd5a7575ef8da2e"
+let peer = '0x141bcf190037140c5e589ad38e303c2626d48886';
+let pay_platform = 'erc20-holesky-tglm';
+let app_session_id = uuidv4();
+let created_date = formatDatePaymentsFormat(new Date());
+let agreement = createAgreement(owner, peer, pay_platform, app_session_id, created_date);
+insertAgreement(db, agreement);
 
-    let activity1 = createActivity(agreement.id, owner, 'R');
-    insertActivity(db, activity1);
-    let activity2 = createActivity(agreement.id, owner, 'R');
-    insertActivity(db, activity2);
+let activity1 = createActivity(agreement.id, owner, 'R');
+insertActivity(db, activity1);
+let activity2 = createActivity(agreement.id, owner, 'R');
+insertActivity(db, activity2);
 
 
 
-    increaseActivityAndAgreementAmountAccepted(db, activity1, 100);
+increaseActivityAndAgreementAmountAccepted(db, activity1, 100);
 
-    const insertDebitNoteTransaction = db.transaction((amount_due, activity) => {
+
+function finishAgreement(amount_due, agreement_id) {
+    db.transaction((amount_due, agreement_id) => {
+        let bigAmountDue = BigNumber(amount_due);
+        let agreement = getAgreement(db, agreement_id);
+        let diff = bigAmountDue.minus(agreement.total_amount_due);
+        if (diff.isNegative()) {
+            throw new Error("Amount due is smaller than total amount due");
+        }
+        if (diff.isZero()) {
+            console.log("OK - Amount due is equal to total amount due");
+        } else {
+            console.log("Increasing agreement by: ", diff.toString());
+            increaseAgreementAmountDue(db, agreement, diff);
+        }
+        insertInvoice(db, createInvoice([activity1, activity2], 'RECEIVED', amount_due));
+        
+    })(amount_due, agreement_id);
+}
+
+function debitNoteIncoming(amount_due, activity) {
+    db.transaction((amount_due, activity) => {
         let bigAmountDue = BigNumber(amount_due);
         let lastDebitNote = getLastDebitNote(db, activity);
         if (lastDebitNote) {
@@ -47,29 +68,22 @@ import {ethers} from "ethers";
         let diff = lastDebitNote ? bigAmountDue.minus(lastDebitNote.total_amount_due) : bigAmountDue;
         console.log("diff", diff.toString());
 
-
         let lastDebitNoteId = lastDebitNote ? lastDebitNote.id : null;
         let debitNote = createDebitNote(activity, lastDebitNoteId, 'RECEIVED', amount_due);
         insertDebitNote(db, debitNote);
         increaseActivityAndAgreementAmountDue(db, activity, diff);
-    });
-    insertDebitNoteTransaction("5.44", activity1);
-    insertDebitNoteTransaction("6.436666666666666666666666666666", activity1);
-    insertDebitNoteTransaction("7.0", activity1);
+    })(amount_due, activity);
+}
 
-    insertDebitNoteTransaction("15.44", activity2);
-    insertDebitNoteTransaction("16.436666666666666666666666666666", activity2);
-    insertDebitNoteTransaction("17.0", activity2);
 
-    /*
-    const stmt = db.prepare("INSERT INTO lorem VALUES (?)");
-    for (let i = 0; i < 10; i++) {
-        stmt.run("Ipsum " + i);
-    }
-    stmt.finalize();
+debitNoteIncoming("5.44", activity1);
+debitNoteIncoming("6.436666666666666666666666666666", activity1);
+debitNoteIncoming("7.0", activity1);
 
-    db.each("SELECT rowid AS id, info FROM lorem", (err, row) => {
-        console.log(row.id + ": " + row.info);
-    });*/
+debitNoteIncoming("15.44", activity2);
+debitNoteIncoming("16.436666666666666666666666666666", activity2);
+debitNoteIncoming("17.0", activity2);
+
+finishAgreement("24.0", agreement.id);
 
 db.close();
