@@ -59,6 +59,11 @@ export function createAgreement(owner, peer, pay_platform, app_session_id, creat
     return agreement;
 }
 
+export function getAgreement(db, agreement_id) {
+    let query = `SELECT * FROM pay_agreement WHERE id='${agreement_id}'`;
+    return db.prepare(query).get();
+}
+
 export function increaseAgreementAmountDue(db, agreement_id, amount) {
     let query = `UPDATE pay_agreement 
                 SET total_amount_due = total_amount_due + ${amount}

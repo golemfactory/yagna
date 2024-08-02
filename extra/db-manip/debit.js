@@ -33,7 +33,6 @@ AND NOT EXISTS (
         pdn.role = '${activity.role}' AND 
         pdn.previous_debit_note_id=pay_debit_note.id
     )`;
-    let debitNote = null;
     let debits = db.prepare(query).all();
 
     if (debits.length > 1) {
@@ -73,6 +72,6 @@ export function insertDebitNote(db, debitNote) {
         '${debitNote.payment_due_date}',
         '${debitNote.send_accept}'
     )`;
-    console.log(query);
+    //console.log(query);
     db.prepare(query).run();
 }
