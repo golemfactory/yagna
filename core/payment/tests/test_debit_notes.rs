@@ -26,7 +26,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let net = MockNet::new();
     net.bind_gsb();
 
-    let node = MockNode::new(net, "node-1", &dir)
+    let node = MockNode::new(net, "node-1", dir)
         .with_identity()
         .with_payment()
         .with_fake_market()
