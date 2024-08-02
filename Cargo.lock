@@ -9089,7 +9089,7 @@ dependencies = [
  "test-context",
  "tokio",
  "url",
- "uuid 1.8.0",
+ "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
  "ya-client-model",

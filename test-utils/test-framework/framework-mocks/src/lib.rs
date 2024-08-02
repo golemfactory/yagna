@@ -1,3 +1,4 @@
+mod activity;
 pub mod identity;
 pub mod market;
 pub mod net;

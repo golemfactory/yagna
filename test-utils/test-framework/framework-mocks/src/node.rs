@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
 
+use crate::activity::FakeActivity;
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -36,6 +37,7 @@ pub struct MockNode {
     pub identity: Option<MockIdentity>,
     pub payment: Option<MockPayment>,
     pub market: Option<FakeMarket>,
+    pub activity: Option<FakeActivity>,
 }
 
 impl MockNode {
@@ -51,6 +53,7 @@ impl MockNode {
             identity: None,
             payment: None,
             market: None,
+            activity: None,
         }
     }
 
@@ -76,6 +79,12 @@ impl MockNode {
         self
     }
 
+    /// Use fake Activity module for this node.
+    pub fn with_fake_activity(mut self) -> Self {
+        self.activity = Some(FakeActivity::new(&self.name, &self.testdir));
+        self
+    }
+
     pub fn get_identity(&self) -> anyhow::Result<MockIdentity> {
         self.identity
             .clone()
@@ -94,6 +103,12 @@ impl MockNode {
             .ok_or_else(|| anyhow!("Market ({}) is not initialized", self.name))
     }
 
+    pub fn get_activity(&self) -> anyhow::Result<FakeActivity> {
+        self.activity
+            .clone()
+            .ok_or_else(|| anyhow!("Activity ({}) is not initialized", self.name))
+    }
+
     /// Binds GSB router and all initialized modules to GSB.
     /// If you want to bind only chosen modules, you should bind them manually.
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
@@ -109,6 +124,10 @@ impl MockNode {
 
         if let Some(market) = &self.market {
             market.bind_gsb().await?;
+        }
+
+        if let Some(activity) = &self.activity {
+            activity.bind_gsb().await?;
         }
         Ok(())
     }

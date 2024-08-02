@@ -87,7 +87,8 @@ impl MockNet {
     fn translate_to(&self, id: NodeId, addr: &str) -> Result<String> {
         let prefix = self.node_prefix(id)?;
         let net_prefix = format!("/net/{}", id);
-        log::info!("Replacing {net_prefix} with {prefix} in {addr}");
+
+        log::debug!("Replacing {net_prefix} with {prefix} in {addr}");
         Ok(addr.replacen(&net_prefix, &prefix, 1))
     }
 

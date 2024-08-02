@@ -17,7 +17,7 @@ use ya_framework_mocks::payment::Driver;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_release_allocation")?;
 
@@ -166,7 +166,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_validate_allocation")?;
 
@@ -204,7 +204,6 @@ async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Res
             address: appkey_req.identity.to_string(),
             driver: payment_platform.driver.clone().unwrap(),
             network: payment_platform.network.clone(),
-            //token: payment_platform.token.clone(),
             token: None,
             after_timestamp: 0,
         })
