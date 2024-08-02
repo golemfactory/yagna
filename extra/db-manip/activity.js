@@ -23,7 +23,7 @@ export function insertActivity(db, activity) {
         '${activity.total_amount_paid}'
     )`;
 
-    db.run(query);
+    db.prepare(query).run();
 }
 
 export function createActivity(agreement_id, owner, role) {
@@ -45,7 +45,7 @@ export function increaseActivityAndAgreementAmountDue(db, activity, amount) {
     let query = `UPDATE pay_activity 
                 SET total_amount_due = total_amount_due + ${amount}
                 WHERE id = '${activity.id}'`;
-    db.run(query);
+    db.prepare(query).run();
 }
 
 export function increaseActivityAndAgreementAmountAccepted(db, activity, amount) {
@@ -53,5 +53,5 @@ export function increaseActivityAndAgreementAmountAccepted(db, activity, amount)
     let query = `UPDATE pay_activity 
                 SET total_amount_accepted = total_amount_accepted + ${amount}
                 WHERE id = '${activity.id}'`;
-    db.run(query);
+    db.prepare(query).run();
 }

@@ -11,8 +11,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "better-sqlite3": "^11.1",
+    "bignumber.js": "^9.1.2",
     "crypto": "^1.0.1",
-    "sqlite3": "^5.1.7",
+    "ethers": "^6.13.2",
     "uuid": "^10.0.0"
   }
 }

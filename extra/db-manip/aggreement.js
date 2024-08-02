@@ -35,7 +35,7 @@ export function insertAgreement(db, agreement) {
         '${agreement.created_ts}',
         '${agreement.updated_ts}'
     )`;
-    db.run(query);
+    db.prepare(query).run();
 }
 
 
@@ -63,12 +63,12 @@ export function increaseAgreementAmountDue(db, agreement_id, amount) {
     let query = `UPDATE pay_agreement 
                 SET total_amount_due = total_amount_due + ${amount}
                 WHERE id = '${agreement_id}'`;
-    db.run(query);
+    db.prepare(query).run();
 }
 
 export function increaseAgreementAmountAccepted(db, agreement_id, amount) {
     let query = `UPDATE pay_agreement 
                 SET total_amount_accepted = total_amount_accepted + ${amount}
                 WHERE id = '${agreement_id}'`;
-    db.run(query);
+    db.prepare(query).run();
 }

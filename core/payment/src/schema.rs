@@ -8,6 +8,8 @@ table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
