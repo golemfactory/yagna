@@ -1,10 +1,12 @@
 use chrono::{NaiveDateTime, Timelike, Utc};
+use serde::Serialize;
 use crate::schema::pay_activity;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
-#[derive(Debug, Insertable, Queryable, Identifiable)]
+#[derive(Debug, Insertable, Queryable, Identifiable, Serialize)]
 #[table_name = "pay_activity"]
+#[serde(rename_all = "camelCase")]
 #[primary_key(id, owner_id)]
 pub struct WriteObj {
     pub id: String,
@@ -39,8 +41,9 @@ impl WriteObj {
     }
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Serialize)]
 #[table_name = "pay_activity"]
+#[serde(rename_all = "camelCase")]
 #[primary_key(id, owner_id)]
 pub struct ReadObj {
     pub id: String,
@@ -51,6 +54,8 @@ pub struct ReadObj {
     pub total_amount_accepted: BigDecimalField,
     pub total_amount_scheduled: BigDecimalField,
     pub total_amount_paid: BigDecimalField,
+    pub created_ts: Option<NaiveDateTime>,
+    pub updated_ts: Option<NaiveDateTime>,
 
     pub peer_id: NodeId,    // From Agreement
     pub payee_addr: String, // From Agreement
