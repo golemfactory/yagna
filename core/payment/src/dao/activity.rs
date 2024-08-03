@@ -173,13 +173,13 @@ impl<'a> ActivityDao<'a> {
 
     pub async fn list(
         &self,
-        role: Option<Role>
+        role: Option<Role>,
     ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
         readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
             let activities = crate::schema::pay_activity::dsl::pay_activity.load(conn)?;
             Ok(activities.into_iter().collect())
         })
-            .await
+        .await
     }
 
     pub async fn create_if_not_exists(
