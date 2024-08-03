@@ -11,8 +11,8 @@ mod invoices;
 mod payments;
 
 mod guard;
-mod pay_agreements;
 mod pay_activities;
+mod pay_agreements;
 
 pub fn api_scope(scope: Scope) -> Scope {
     scope

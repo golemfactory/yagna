@@ -1,6 +1,6 @@
+use crate::schema::pay_activity;
 use chrono::{NaiveDateTime, Timelike, Utc};
 use serde::Serialize;
-use crate::schema::pay_activity;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
