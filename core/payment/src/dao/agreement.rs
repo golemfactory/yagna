@@ -169,9 +169,21 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
     }
 }
 
+
 impl<'a> AgreementDao<'a> {
+    pub async fn list(
+        &self,
+        role: Option<Role>
+    ) -> DbResult<Vec<ReadObj>> {
+        readonly_transaction(self.pool, "pay_agreement_dao_list", move |conn| {
+            let agreements = dsl::pay_agreement.load(conn)?;
+            Ok(agreements.into_iter().collect())
+        })
+        .await
+    }
+
     pub async fn get(&self, agreement_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
-        readonly_transaction(self.pool, "agreement_dao_get", move |conn| {
+        readonly_transaction(self.pool, "pay_agreement_dao_get", move |conn| {
             let agreement = dsl::pay_agreement
                 .find((agreement_id, owner_id))
                 .first(conn)
