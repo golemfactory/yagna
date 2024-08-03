@@ -1,13 +1,15 @@
 use crate::schema::pay_agreement;
 use chrono::{NaiveDateTime, Timelike, Utc};
+use serde::Serialize;
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
 use ya_client_model::market::Agreement;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Identifiable, Insertable, Serialize)]
 #[table_name = "pay_agreement"]
+#[serde(rename_all = "camelCase")]
 #[primary_key(id, owner_id)]
 pub struct WriteObj {
     pub id: String,

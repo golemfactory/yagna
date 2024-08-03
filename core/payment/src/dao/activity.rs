@@ -156,6 +156,8 @@ impl<'a> ActivityDao<'a> {
                     dsl::total_amount_accepted,
                     dsl::total_amount_scheduled,
                     dsl::total_amount_paid,
+                    dsl::created_ts,
+                    dsl::updated_ts,
                     agreement_dsl::peer_id,
                     agreement_dsl::payee_addr,
                     agreement_dsl::payer_addr,
@@ -167,6 +169,17 @@ impl<'a> ActivityDao<'a> {
             Ok(activity)
         })
         .await
+    }
+
+    pub async fn list(
+        &self,
+        role: Option<Role>
+    ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
+        readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
+            let activities = crate::schema::pay_activity::dsl::pay_activity.load(conn)?;
+            Ok(activities.into_iter().collect())
+        })
+            .await
     }
 
     pub async fn create_if_not_exists(
