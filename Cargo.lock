@@ -9477,6 +9477,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "r2d2",
+ "serde",
  "serde_json",
  "structopt",
  "tempdir",
