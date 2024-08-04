@@ -13,7 +13,10 @@ pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/payActivities", get().to(get_pay_activities))
         .route("/payActivity/{activity_id}", get().to(get_pay_activity))
-        .route("/payActivity/{activity_id}/debitNotes", get().to(get_activity_debit_notes))
+        .route(
+            "/payActivity/{activity_id}/debitNotes",
+            get().to(get_activity_debit_notes),
+        )
 }
 
 async fn get_pay_activities(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
@@ -46,12 +49,25 @@ pub async fn get_debit_note_chain(
     let mut debit_by_prev_id = HashMap::new();
 
     for debit in debit_list.iter() {
-        log::info!("Debit note id: {} prev id: {:?}", debit.debit_note_id, debit.previous_debit_note_id);
-        if debit_by_id.insert(debit.debit_note_id.clone(), debit.clone()).is_some() {
-            return Err(anyhow!("Duplicate debit note with id {}", debit.debit_note_id));
+        log::info!(
+            "Debit note id: {} prev id: {:?}",
+            debit.debit_note_id,
+            debit.previous_debit_note_id
+        );
+        if debit_by_id
+            .insert(debit.debit_note_id.clone(), debit.clone())
+            .is_some()
+        {
+            return Err(anyhow!(
+                "Duplicate debit note with id {}",
+                debit.debit_note_id
+            ));
         }
         if let Some(prev_id) = &debit.previous_debit_note_id {
-            if debit_by_prev_id.insert(prev_id.clone(), debit.clone()).is_some() {
+            if debit_by_prev_id
+                .insert(prev_id.clone(), debit.clone())
+                .is_some()
+            {
                 return Err(anyhow!("Duplicate debit note with previous id {}", prev_id));
             }
         }
