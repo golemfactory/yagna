@@ -17,6 +17,10 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             "/payActivity/{activity_id}/debitNotes",
             get().to(get_activity_debit_notes),
         )
+        .route(
+            "/payActivity/{activity_id}/invoice",
+            get().to(get_activity_invoice),
+        )
 }
 
 async fn get_pay_activities(
@@ -118,6 +122,28 @@ pub async fn get_debit_note_chain(
         prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
     }
     Ok(debit_note_chain)
+}
+
+async fn get_activity_invoice(
+    db: Data<DbExecutor>,
+    path: Path<String>,
+    id: Identity,
+) -> HttpResponse {
+    let node_id = id.identity;
+    let activity_id = path.into_inner();
+    let dao: ActivityDao = db.as_dao();
+    let Some(activity) = (match dao.get(activity_id, node_id).await {
+        Ok(activity) => activity,
+        Err(e) => return response::server_error(&e),
+    }) else {
+        return response::server_error(&"Activity not found");
+    };
+
+    let dao: InvoiceDao = db.as_dao();
+    dao.get_by_agreement(activity.agreement_id, node_id)
+        .await
+        .map(response::ok)
+        .unwrap_or_else(|e| response::server_error(&e))
 }
 
 async fn get_activity_debit_notes(
