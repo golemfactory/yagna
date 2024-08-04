@@ -29,9 +29,9 @@ let created_date = formatDatePaymentsFormat(new Date());
 let agreement = createAgreement(owner, peer, pay_platform, app_session_id, created_date);
 insertAgreement(db, agreement);
 
-let activity1 = createActivity(agreement.id, owner, 'R');
+let activity1 = createActivity(agreement.id, owner, 'R', created_date);
 insertActivity(db, activity1);
-let activity2 = createActivity(agreement.id, owner, 'R');
+let activity2 = createActivity(agreement.id, owner, 'R', created_date);
 insertActivity(db, activity2);
 
 
