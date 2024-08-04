@@ -10,7 +10,9 @@ export function insertActivity(db, activity) {
         total_amount_due,
         total_amount_accepted,
         total_amount_scheduled,
-        total_amount_paid
+        total_amount_paid,
+        created_ts,
+        updated_ts                
           )
     VALUES (
         '${activity.id}',
@@ -20,13 +22,15 @@ export function insertActivity(db, activity) {
         '${activity.total_amount_due}',
         '${activity.total_amount_accepted}',
         '${activity.total_amount_scheduled}',
-        '${activity.total_amount_paid}'
+        '${activity.total_amount_paid}',
+        '${activity.created_ts}',
+        '${activity.updated_ts}'
     )`;
 
     db.prepare(query).run();
 }
 
-export function createActivity(agreement_id, owner, role) {
+export function createActivity(agreement_id, owner, role, created_date) {
     let activity = {
         id: crypto.randomBytes(16).toString("hex"),
         owner_id: owner,
@@ -36,6 +40,8 @@ export function createActivity(agreement_id, owner, role) {
         total_amount_accepted: 0,
         total_amount_scheduled: 0,
         total_amount_paid: 0,
+        created_ts: created_date,
+        updated_ts: created_date
     }
     return activity;
 }
