@@ -735,10 +735,14 @@ impl PaymentProcessor {
             }
         }
 
-        log::info!(
-            "Creating new payment order for debit note {}",
-            debit_note.unwrap().debit_note_id
-        );
+        if let Some(debit_note) = debit_note {
+            log::info!(
+                "Creating new payment order for debit note {}",
+                debit_note.debit_note_id
+            );
+        } else {
+            log::info!("Creating new payment order for invoice");
+        }
 
         let allocation_status = self
             .db_executor
