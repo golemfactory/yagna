@@ -25,7 +25,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
-    Account, ActivityPayment, AgreementPayment, DebitNote, DriverDetails, Network, Payment,
+    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
@@ -587,54 +587,6 @@ impl PaymentProcessor {
                 }
             })
             .await
-    }
-
-    pub async fn get_debit_note_chain(
-        &self,
-        debit_note: DebitNote,
-    ) -> Result<Vec<DebitNote>, SchedulePaymentError> {
-        let mut debit_note_chain = Vec::<DebitNote>::new();
-        let mut debit_by_id = HashMap::new();
-
-        let debit_list = self
-            .db_executor
-            .timeout_lock(DB_LOCK_TIMEOUT)
-            .await?
-            .as_dao::<DebitNoteDao>()
-            .list(None, None, None, Some(debit_note.activity_id.clone()))
-            .await?;
-
-        for debit in debit_list {
-            debit_by_id.insert(debit.activity_id.clone(), debit.clone());
-        }
-
-        let start_debit_note = match debit_by_id.get(&debit_note.debit_note_id) {
-            Some(debit_note) => debit_note.clone(),
-            None => {
-                return Err(SchedulePaymentError::InvalidInput(format!(
-                    "Debit note {} not found",
-                    debit_note.debit_note_id
-                )))
-            }
-        };
-
-        debit_note_chain.push(start_debit_note.clone());
-        let mut prev_debit_note_id = start_debit_note.previous_debit_note_id.clone();
-        while let Some(next_debit_note_id) = &prev_debit_note_id {
-            let next_debit_note = match debit_by_id.get(next_debit_note_id) {
-                Some(debit_note) => debit_note.clone(),
-                None => {
-                    return Err(SchedulePaymentError::InvalidInput(format!(
-                        "Debit note {} not found when building debit note chain",
-                        next_debit_note_id
-                    )))
-                }
-            };
-
-            debit_note_chain.push(next_debit_note.clone());
-            prev_debit_note_id = next_debit_note.previous_debit_note_id.clone();
-        }
-        Ok(debit_note_chain)
     }
 
     pub async fn collect_payments(&self, msg: CollectPayments) -> Result<(), GenericError> {
