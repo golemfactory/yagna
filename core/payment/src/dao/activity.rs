@@ -5,11 +5,11 @@ use crate::schema::pay_activity::dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::NaiveDateTime;
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
-use chrono::NaiveDateTime;
 use ya_client_model::payment::{DebitNoteEventType, DocumentStatus};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -200,7 +200,8 @@ impl<'a> ActivityDao<'a> {
             }
             let activities: Vec<WriteObj> = query.load(conn)?;
             Ok(activities)
-        }).await
+        })
+        .await
     }
 
     pub async fn create_if_not_exists(
