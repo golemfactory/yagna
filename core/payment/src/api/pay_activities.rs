@@ -24,7 +24,6 @@ async fn get_pay_activities(db: Data<DbExecutor>, query: Query<params::FilterPar
     let dao: ActivityDao = db.as_dao();
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_items = query.max_items;
-    log::error!("node_id: {}, after_timestamp: {:?}, max_items: {:?}", node_id, after_timestamp, max_items);
     match dao.get_for_node_id(node_id, after_timestamp, max_items).await {
         Ok(activities) => response::ok(activities),
         Err(e) => response::server_error(&e),
