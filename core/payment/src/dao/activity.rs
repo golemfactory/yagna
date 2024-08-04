@@ -9,6 +9,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
+use chrono::NaiveDateTime;
 use ya_client_model::payment::{DebitNoteEventType, DocumentStatus};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -176,10 +177,30 @@ impl<'a> ActivityDao<'a> {
         role: Option<Role>,
     ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
         readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
-            let activities = crate::schema::pay_activity::dsl::pay_activity.load(conn)?;
+            let activities = dsl::pay_activity.load(conn)?;
             Ok(activities.into_iter().collect())
         })
         .await
+    }
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<WriteObj>> {
+        readonly_transaction(self.pool, "activity_dao_get_for_node_id", move |conn| {
+            let mut query = dsl::pay_activity.into_boxed();
+            query = query.filter(dsl::owner_id.eq(node_id));
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::created_ts.gt(date))
+            }
+            query = query.order_by(dsl::created_ts.asc());
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let activities: Vec<WriteObj> = query.load(conn)?;
+            Ok(activities)
+        }).await
     }
 
     pub async fn create_if_not_exists(
