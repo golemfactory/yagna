@@ -216,14 +216,21 @@ pub struct Fund {
     address: String,
     network: Option<String>,
     token: Option<String>,
+    mint_only: bool,
 }
 
 impl Fund {
-    pub fn new(address: String, network: Option<String>, token: Option<String>) -> Self {
+    pub fn new(
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mint_only: bool,
+    ) -> Self {
         Self {
             address,
             network,
             token,
+            mint_only,
         }
     }
     pub fn address(&self) -> String {
@@ -234,6 +241,9 @@ impl Fund {
     }
     pub fn token(&self) -> Option<String> {
         self.token.clone()
+    }
+    pub fn mint_only(&self) -> bool {
+        self.mint_only
     }
 }
 
