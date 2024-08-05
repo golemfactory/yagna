@@ -11,6 +11,7 @@ use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
 };
+use erc20_payment_lib::setup::FaucetSetup;
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
 use erc20_payment_lib::{DriverEvent, DriverEventContent};
@@ -26,6 +27,7 @@ use uuid::Uuid;
 use web3::types::{Address, H256};
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::DriverStatusProperty;
+use ya_payment_driver::db::models::Network;
 use ya_payment_driver::driver::IdentityError;
 
 use ya_payment_driver::{
@@ -577,6 +579,126 @@ impl Erc20Driver {
 
         Ok(ValidateAllocationResult::Valid)
     }
+
+    async fn fund_eth_faucet(
+        &self,
+        faucet_setup: &FaucetSetup,
+        network: Network,
+        starting_eth_balance: U256,
+        address: H160,
+    ) -> Result<U256, GenericError> {
+        let faucet_client_max_eth_allowed =
+            faucet_setup
+                .client_max_eth_allowed
+                .ok_or(GenericError::new(format!(
+                    "Missing faucet client max eth allowed for network {}",
+                    network
+                )))?;
+
+        let faucet_srv_prefix =
+            faucet_setup
+                .client_srv
+                .as_ref()
+                .ok_or(GenericError::new(format!(
+                    "Missing faucet_srv_port for network {}",
+                    network
+                )))?;
+        let faucet_lookup_domain = faucet_setup
+            .lookup_domain
+            .as_ref()
+            .ok_or(GenericError::new(format!(
+                "Missing faucet_lookup_domain for network {}",
+                network
+            )))?;
+        let faucet_srv_port = faucet_setup.srv_port.ok_or(GenericError::new(format!(
+            "Missing faucet_srv_port for network {}",
+            network
+        )))?;
+        let faucet_host = faucet_setup
+            .client_host
+            .as_ref()
+            .ok_or(GenericError::new(format!(
+                "Missing faucet_host for network {}",
+                network
+            )))?;
+
+        let eth_received = if starting_eth_balance
+            < faucet_client_max_eth_allowed
+                .to_u256_from_eth()
+                .map_err(|err| {
+                    GenericError::new(format!(
+                        "faucet_client_max_eth_allowed failed to convert {}",
+                        err
+                    ))
+                })? {
+            match faucet_donate(
+                faucet_srv_prefix,
+                faucet_lookup_domain,
+                faucet_host,
+                faucet_srv_port,
+                address,
+            )
+            .await
+            {
+                Ok(_) => {
+                    log::info!("Faucet donation successful");
+                }
+                Err(e) => {
+                    log::error!("Error donating from faucet: {}", e);
+                }
+            }
+            let time_now = Instant::now();
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                if time_now.elapsed().as_secs() > 120 {
+                    log::error!(
+                        "Faucet donation not received after {} seconds",
+                        time_now.elapsed().as_secs()
+                    );
+                    return Err(GenericError::new(format!(
+                        "Faucet donation not received after {} seconds",
+                        time_now.elapsed().as_secs()
+                    )));
+                }
+                match self
+                    .payment_runtime
+                    .get_token_balance(network.to_string(), address, None)
+                    .await
+                {
+                    Ok(balance_res) => {
+                        let current_balance = balance_res.gas_balance.unwrap_or(U256::zero());
+                        if current_balance > starting_eth_balance {
+                            log::info!(
+                                "Received {} ETH from faucet",
+                                (current_balance - starting_eth_balance).to_eth_str()
+                            );
+                            break current_balance - starting_eth_balance;
+                        } else {
+                            log::info!(
+                                "Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}",
+                                current_balance.to_eth_str(),
+                                time_now.elapsed().as_secs(),
+                                120
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Error getting gas balance: {}", err);
+                    }
+                }
+            }
+        } else {
+            log::info!(
+                "ETH balance is {} which is more than {} allowed by faucet",
+                starting_eth_balance.to_eth_str(),
+                faucet_client_max_eth_allowed
+            );
+            U256::zero()
+        };
+
+        Ok(eth_received)
+    }
 }
 
 #[async_trait(?Send)]
@@ -764,13 +886,6 @@ impl PaymentDriver for Erc20Driver {
                         "Missing mint min glm allowed for network {}",
                         network
                     )))?;
-            let faucet_client_max_eth_allowed =
-                faucet_setup
-                    .client_max_eth_allowed
-                    .ok_or(GenericError::new(format!(
-                        "Missing faucet client max eth allowed for network {}",
-                        network
-                    )))?;
 
             let (starting_eth_balance, starting_glm_balance) = match self
                 .payment_runtime
@@ -798,89 +913,17 @@ impl PaymentDriver for Erc20Driver {
                 }
             };
 
-            let faucet_srv_prefix = faucet_setup.client_srv.ok_or(GenericError::new(format!(
-                "Missing faucet_srv_port for network {}",
-                network
-            )))?;
-            let faucet_lookup_domain = faucet_setup.lookup_domain.ok_or(GenericError::new(
-                format!("Missing faucet_lookup_domain for network {}", network),
-            ))?;
-            let faucet_srv_port = faucet_setup.srv_port.ok_or(GenericError::new(format!(
-                "Missing faucet_srv_port for network {}",
-                network
-            )))?;
-            let faucet_host = faucet_setup.client_host.ok_or(GenericError::new(format!(
-                "Missing faucet_host for network {}",
-                network
-            )))?;
+            let faucet_configured = faucet_setup.client_host.is_some();
 
-            let eth_received = if starting_eth_balance
-                < faucet_client_max_eth_allowed
-                    .to_u256_from_eth()
-                    .map_err(|err| {
-                        GenericError::new(format!(
-                            "faucet_client_max_eth_allowed failed to convert {}",
-                            err
-                        ))
-                    })? {
-                match faucet_donate(
-                    &faucet_srv_prefix,
-                    &faucet_lookup_domain,
-                    &faucet_host,
-                    faucet_srv_port,
-                    address,
-                )
-                .await
-                {
-                    Ok(_) => {
-                        log::info!("Faucet donation successful");
-                    }
-                    Err(e) => {
-                        log::error!("Error donating from faucet: {}", e);
-                    }
-                }
-                let time_now = Instant::now();
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            if !faucet_configured && !msg.mint_only() {
+                return Err(GenericError::new(format!("Network {} doesn't have faucet configured, so full fund (tETH + tGLM) cannot be done. \
+                    After obtaining funds, re-run with --mint-only to obtain tGLM token.", network)));
+            }
 
-                    if time_now.elapsed().as_secs() > 120 {
-                        log::error!(
-                            "Faucet donation not received after {} seconds",
-                            time_now.elapsed().as_secs()
-                        );
-                        return Err(GenericError::new(format!(
-                            "Faucet donation not received after {} seconds",
-                            time_now.elapsed().as_secs()
-                        )));
-                    }
-                    match self
-                        .payment_runtime
-                        .get_token_balance(network.to_string(), address, None)
-                        .await
-                    {
-                        Ok(balance_res) => {
-                            let current_balance = balance_res.gas_balance.unwrap_or(U256::zero());
-                            if current_balance > starting_eth_balance {
-                                log::info!(
-                                    "Received {} ETH from faucet",
-                                    (current_balance - starting_eth_balance).to_eth_str()
-                                );
-                                break current_balance - starting_eth_balance;
-                            } else {
-                                log::info!("Waiting for ETH from faucet. Current balance: {}. Elapsed: {}/{}", current_balance.to_eth_str(), time_now.elapsed().as_secs(), 120);
-                            }
-                        }
-                        Err(err) => {
-                            log::error!("Error getting gas balance: {}", err);
-                        }
-                    }
-                }
+            let eth_received = if faucet_configured && !msg.mint_only() {
+                self.fund_eth_faucet(&faucet_setup, network, starting_eth_balance, address)
+                    .await?
             } else {
-                log::info!(
-                    "ETH balance is {} which is more than {} allowed by faucet",
-                    starting_eth_balance.to_eth_str(),
-                    faucet_client_max_eth_allowed
-                );
                 U256::zero()
             };
 
