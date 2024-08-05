@@ -59,6 +59,7 @@ mod local {
     use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
     use tracing::{debug, trace};
+
     use ya_client_model::{
         payment::{
             Account, DebitNoteEventType, DocumentStatus, DriverDetails, DriverStatusProperty,
@@ -817,6 +818,7 @@ mod local {
 
 mod public {
     use std::str::FromStr;
+    use tracing::debug;
 
     use super::*;
 
@@ -830,6 +832,7 @@ mod public {
     use ya_client_model::{payment::*, NodeId};
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
+    use ya_std_utils::LogErr;
 
     pub fn bind_service(
         db: &DbExecutor,
@@ -1317,6 +1320,7 @@ mod public {
         signature: Vec<u8>,
         signed_bytes: Option<Vec<u8>>,
     ) -> Result<Ack, SendError> {
+        let payment_id = payment.payment_id.clone();
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -1325,7 +1329,12 @@ mod public {
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
 
-        log::debug!("Verify payment processor started");
+        debug!(
+            entity = "payment",
+            action = "verify",
+            payment_id,
+            "Verify payment processor started."
+        );
         let res = match processor
             .verify_payment(payment, signature, canonicalized, signed_bytes)
             .await
@@ -1342,8 +1351,14 @@ mod public {
                 VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
                 _ => Err(SendError::ServiceError(e.to_string())),
             },
-        };
-        log::debug!("Verify payment processor finished");
+        }.log_err_msg("Payment verification failure");
+
+        debug!(
+            entity = "payment",
+            action = "verify",
+            payment_id,
+            "Verify payment processor finished."
+        );
         res
     }
 

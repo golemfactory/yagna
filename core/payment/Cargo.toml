@@ -25,6 +25,7 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 ya-service-bus = { workspace = true }
+ya-std-utils = "0.1"
 
 actix-web = "4"
 anyhow = "1.0"

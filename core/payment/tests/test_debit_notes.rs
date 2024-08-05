@@ -12,7 +12,7 @@ use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
-use ya_framework_mocks::payment::Driver;
+use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
@@ -40,9 +40,12 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
         .await?;
 
-    let agreement =
+    let app_session_id = Some("app_session_id".to_string());
+    let mut agreement =
         FakeMarket::create_fake_agreement(appkey_req.identity, appkey_prov.identity).unwrap();
+    agreement.app_session_id = app_session_id.clone();
     node.get_market()?.add_agreement(agreement.clone()).await;
+
     let activity_id = node
         .get_activity()?
         .create_activity(&agreement.agreement_id)
@@ -55,7 +58,6 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
         .await?;
 
-    let app_session_id = Some("app_session_id".to_string());
     let payment_platform =
         PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
 
@@ -137,9 +139,14 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, None)
+        .wait_for_payment(
+            Some(&now),
+            // Should be enough for GLM transfer
+            Duration::from_secs(1000),
+            None,
+            app_session_id.clone(),
+        )
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
@@ -182,9 +189,14 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, app_session_id.clone())
+        .wait_for_payment(
+            Some(&now),
+            // Should be enough for GLM transfer
+            Duration::from_secs(1000),
+            None,
+            app_session_id.clone(),
+        )
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();

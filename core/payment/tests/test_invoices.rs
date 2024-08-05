@@ -13,7 +13,7 @@ use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
-use ya_framework_mocks::payment::Driver;
+use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
@@ -143,13 +143,29 @@ async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .unwrap();
     log::debug!("events 2: {:?}", &invoice_events_accepted);
 
-    log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
-
-    let mut payments = provider
-        .get_payments(Some(&now), timeout, None, app_session_id.clone())
+    log::info!("Waiting for payment on requestor...");
+    let mut payments = requestor
+        .wait_for_payment(
+            Some(&now),
+            // Should be enough for GLM transfer
+            Duration::from_secs(5 * 60),
+            None,
+            app_session_id.clone(),
+        )
         .await?;
+    assert_eq!(payments.len(), 1);
+    let payment = payments.pop().unwrap();
+    assert!(payment.amount >= invoice.amount);
 
+    log::info!("Waiting for payment on provider...");
+    let mut payments = provider
+        .wait_for_payment(
+            Some(&now),
+            Duration::from_secs(60),
+            None,
+            app_session_id.clone(),
+        )
+        .await?;
     let signed_payments = provider
         .get_signed_payments(Some(&now), None, None, app_session_id.clone())
         .await?;

@@ -1,7 +1,12 @@
 use anyhow::anyhow;
+use chrono::{DateTime, TimeZone, Utc};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
+use ya_client::payment::PaymentApi;
 
+use ya_client_model::payment::Payment;
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_core_model::payment::local::BUS_ID;
 use ya_payment::api::web_scope;
@@ -105,5 +110,48 @@ impl MockPayment {
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {
         bus::service(BUS_ID)
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+pub trait PaymentRestExt {
+    async fn wait_for_payment<Tz>(
+        &self,
+        after_timestamp: Option<&DateTime<Tz>>,
+        timeout: Duration,
+        max_events: Option<u32>,
+        app_session_id: Option<String>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display;
+}
+
+#[async_trait::async_trait(?Send)]
+impl PaymentRestExt for PaymentApi {
+    async fn wait_for_payment<Tz>(
+        &self,
+        after_timestamp: Option<&DateTime<Tz>>,
+        timeout: Duration,
+        max_events: Option<u32>,
+        app_session_id: Option<String>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display,
+    {
+        let start = Utc::now();
+        // Workaround: Can't pass timeout to `get_payments`, because serde_urlencoded is unable to deserialize it.
+        // https://github.com/nox/serde_urlencoded/issues/33
+        while start + timeout > Utc::now() {
+            let payments = self
+                .get_payments(after_timestamp, None, max_events, app_session_id.clone())
+                .await?;
+
+            if !payments.is_empty() {
+                return Ok(payments);
+            }
+        }
+        Err(anyhow!("Timeout {timeout:?} waiting for payments."))
     }
 }
