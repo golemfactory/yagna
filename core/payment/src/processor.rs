@@ -704,9 +704,7 @@ impl PaymentProcessor {
         }
 
         {
-            log::debug!("`verify_payment` acquiring db lock");
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-            log::debug!("`verify_payment` db lock acquired");
 
             // Verify agreement payments
             let agreement_dao: AgreementDao = db_executor.as_dao();

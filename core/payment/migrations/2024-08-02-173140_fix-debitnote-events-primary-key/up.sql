@@ -18,14 +18,15 @@ ALTER TABLE pay_debit_note_event_copy RENAME TO pay_debit_note_event;
 
 CREATE VIEW pay_debit_note_event_read AS
 SELECT
-    inv.role,
-    ie.debit_note_id,
-    ie.owner_id,
-    ie.event_type,
-    ie.timestamp,
-    ie.details,
+    dn.role,
+    dne.debit_note_id,
+    dne.owner_id,
+    dne.event_type,
+    dne.timestamp,
+    dne.details,
     agr.app_session_id
 FROM
-    pay_debit_note_event ie
-        INNER JOIN pay_invoice inv ON ie.owner_id = inv.owner_id AND ie.debit_note_id = inv.id
-        INNER JOIN pay_agreement agr ON ie.owner_id = agr.owner_id AND inv.agreement_id = agr.id;
+    pay_debit_note_event dne
+    INNER JOIN pay_debit_note dn ON dne.owner_id = dn.owner_id AND dne.debit_note_id = dn.id
+    INNER JOIN pay_activity act ON dne.owner_id = act.owner_id AND dn.activity_id = act.id
+    INNER JOIN pay_agreement agr ON dne.owner_id = agr.owner_id AND act.agreement_id = agr.id

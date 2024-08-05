@@ -19,7 +19,7 @@ use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_invoice_flow")?;
     let dir = dir.path();

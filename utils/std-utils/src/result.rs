@@ -90,7 +90,6 @@ fn log<E: Debug + Display>(module: &str, level: Level, message: &str, e: &E) {
 mod tests {
     use super::*;
     use anyhow::anyhow;
-    use testing_logger;
 
     #[test]
     fn test_log_err_and_warn() {
