@@ -2,6 +2,18 @@ use crate::cmd::CommandOutput;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use std::collections::HashMap;
 
+fn json_value_table_string(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+
+    match value {
+        Value::String(s) => s.to_string(),
+        Value::Bool(true) => "X".to_string(),
+        Value::Bool(false) => "".to_string(),
+        Value::Null => "".into(),
+        v => v.to_string(),
+    }
+}
+
 pub fn print_table(
     columns: &[String],
     values: &[serde_json::Value],
@@ -25,16 +37,7 @@ pub fn print_table(
     }
     for row in values {
         if let Some(row_items) = row.as_array() {
-            use serde_json::Value;
-
-            let row_strings = row_items
-                .iter()
-                .map(|v| match v {
-                    Value::String(s) => s.to_string(),
-                    Value::Null => "".into(),
-                    v => v.to_string(),
-                })
-                .collect();
+            let row_strings = row_items.iter().map(json_value_table_string).collect();
             table.add_row(row_strings);
         }
     }
@@ -44,17 +47,12 @@ pub fn print_table(
         let l = summary.len();
         for (idx, row) in summary.iter().enumerate() {
             if let Some(row_items) = row.as_array() {
-                use serde_json::Value;
-
                 let row_strings = Row::new(
                     row_items
                         .iter()
-                        .map(|v| {
-                            let c = Cell::new(&match v {
-                                Value::String(s) => s.to_string(),
-                                Value::Null => "".into(),
-                                v => v.to_string(),
-                            });
+                        .map(json_value_table_string)
+                        .map(|s| {
+                            let c = Cell::new(&s);
 
                             if idx == l - 1 {
                                 c.with_style(Attr::Bold)

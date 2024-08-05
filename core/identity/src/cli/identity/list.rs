@@ -19,9 +19,9 @@ pub async fn list() -> Result<CommandOutput> {
             .into_iter()
             .map(|identity| {
                 serde_json::json! {[
-                    if identity.is_default { "X" } else { "" },
-                    if identity.is_locked { "X" } else { "" },
-                    if identity.deleted { "X" } else { "" },
+                    identity.is_default,
+                    identity.is_locked,
+                    identity.deleted,
                     identity.alias,
                     identity.node_id
                 ]}

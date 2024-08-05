@@ -379,8 +379,8 @@ Typically operation should take less than 1 minute.
                                 account.driver,
                                 account.network,
                                 account.token,
-                                if account.send { "X" } else { "" },
-                                if account.receive { "X" } else { "" }
+                                account.send,
+                                account.receive
                             ]}
                         })
                         .collect(),
