@@ -112,14 +112,15 @@ pub struct PaymentEntity {
 )]
 #[sql_type = "Integer"]
 pub enum Network {
-    Mainnet = 1, //Main Ethereum chain
-    Rinkeby = 4, //Rinkeby is Ethereum testnet
-    Goerli = 5,  //Goerli is another Ethereum testnet
+    Mainnet = 1,        //Main Ethereum chain
+    Rinkeby = 4,        //Rinkeby is an Ethereum testnet
+    Goerli = 5,         //Goerli is an Ethereum testnet
+    Sepolia = 11155111, //Sepolia is an Ethereum testnet
     #[default]
     Holesky = 17000, //Holesky is testnet for Holesky network
-    Polygon = 137, //Polygon is Polygon production network
-    Mumbai = 80001, //Mumbai is the legacy testnet for Polygon network
-    Amoy = 80002, //Amoy is the new testnet for Polygon network
+    Polygon = 137,      //Polygon is Polygon production network
+    Mumbai = 80001,     //Mumbai is the legacy testnet for Polygon network
+    Amoy = 80002,       //Amoy is the new testnet for Polygon network
 }
 
 impl FromStr for Network {
@@ -128,6 +129,7 @@ impl FromStr for Network {
     fn from_str(s: &str) -> DbResult<Self> {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
+            "sepolia" => Ok(Network::Sepolia),
             "rinkeby" => Ok(Network::Rinkeby),
             "goerli" => Ok(Network::Goerli),
             "holesky" => Ok(Network::Holesky),
@@ -143,6 +145,7 @@ impl Display for Network {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match *self {
             Network::Mainnet => f.write_str("mainnet"),
+            Network::Sepolia => f.write_str("sepolia"),
             Network::Rinkeby => f.write_str("rinkeby"),
             Network::Goerli => f.write_str("goerli"),
             Network::Holesky => f.write_str("holesky"),
