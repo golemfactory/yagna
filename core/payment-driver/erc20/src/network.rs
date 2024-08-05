@@ -15,7 +15,8 @@ use crate::{
     MUMBAI_PLATFORM, MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
     POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
     RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
-    RINKEBY_TOKEN,
+    RINKEBY_TOKEN, SEPOLIA_CURRENCY_LONG, SEPOLIA_CURRENCY_SHORT, SEPOLIA_NETWORK,
+    SEPOLIA_PLATFORM, SEPOLIA_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -37,6 +38,10 @@ lazy_static::lazy_static! {
             tokens: hashmap! {
                 HOLESKY_TOKEN.to_string() => HOLESKY_PLATFORM.to_string()
             }
+        },
+        SEPOLIA_NETWORK.to_string() => Network {
+            default_token: SEPOLIA_TOKEN.to_string(),
+            tokens: hashmap! {SEPOLIA_TOKEN.to_string() => SEPOLIA_PLATFORM.to_string()}
         },
         MAINNET_NETWORK.to_string() => Network {
             default_token: MAINNET_TOKEN.to_string(),
@@ -104,6 +109,10 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
         HOLESKY_PLATFORM => Ok((
             HOLESKY_CURRENCY_SHORT.to_owned(),
             HOLESKY_CURRENCY_LONG.to_owned(),
+        )),
+        SEPOLIA_PLATFORM => Ok((
+            SEPOLIA_CURRENCY_SHORT.to_owned(),
+            SEPOLIA_CURRENCY_LONG.to_string(),
         )),
         MAINNET_PLATFORM => Ok((
             MAINNET_CURRENCY_SHORT.to_owned(),

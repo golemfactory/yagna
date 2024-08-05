@@ -530,6 +530,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         Network::Mainnet => {
             collect_rpc_addr_from("MAINNET_GETH_ADDR", "https://geth.golem.network:55555")
         }
+        Network::Sepolia => collect_rpc_addr_from(
+            "SEPOLIA_GETH_ADDR",
+            "https://ethereum-sepolia.blockpi.network/v1/rpc/public",
+        ),
         Network::Rinkeby => collect_rpc_addr_from(
             "RINKEBY_GETH_ADDR",
             "http://geth.testnet.golem.network:55555",
@@ -598,6 +602,7 @@ fn get_env(network: Network) -> config::EnvConfiguration {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
         Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Sepolia => *config::SEPOLIA_CONFIG,
         Network::Holesky => *config::HOLESKY_CONFIG,
         Network::Mumbai => *config::MUMBAI_CONFIG,
         Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
