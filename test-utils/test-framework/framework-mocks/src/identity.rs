@@ -15,17 +15,17 @@ use ya_service_api::{CliCtx, CommandOutput};
 use crate::net::{IMockNet, MockNet};
 
 #[derive(Clone)]
-pub struct MockIdentity {
+pub struct RealIdentity {
     net: MockNet,
     name: String,
     db: DbExecutor,
 }
 
-impl MockIdentity {
+impl RealIdentity {
     pub fn new(net: MockNet, testdir: &Path, name: &str) -> Self {
         let db = Self::create_db(testdir, "identity.db").unwrap();
 
-        MockIdentity {
+        RealIdentity {
             net,
             name: name.to_string(),
             db,

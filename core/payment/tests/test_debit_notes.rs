@@ -7,7 +7,6 @@ use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
-use ya_framework_basic::mocks::net::IMockNet;
 use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
@@ -23,8 +22,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let dir = temp_dir!("test_debit_note_flow")?;
     let dir = dir.path();
 
-    let net = MockNet::new();
-    net.bind_gsb();
+    let net = MockNet::new().bind();
 
     let node = MockNode::new(net, "node-1", dir)
         .with_identity()

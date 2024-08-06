@@ -9,7 +9,7 @@ use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
-use ya_framework_mocks::net::{IMockNet, MockNet};
+use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::Driver;
 
@@ -21,8 +21,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     let dir = temp_dir!("test_release_allocation")?;
 
-    let net = MockNet::new();
-    net.bind_gsb();
+    let net = MockNet::new().bind();
 
     let node = MockNode::new(net, "node-1", dir.path())
         .with_identity()
@@ -170,8 +169,7 @@ async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Res
 
     let dir = temp_dir!("test_validate_allocation")?;
 
-    let net = MockNet::new();
-    net.bind_gsb();
+    let net = MockNet::new().bind();
 
     let node = MockNode::new(net, "node-1", dir.path())
         .with_identity()

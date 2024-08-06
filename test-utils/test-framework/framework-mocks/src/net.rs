@@ -83,6 +83,10 @@ impl MockNet {
             broadcast: Default::default(),
         }
     }
+    pub fn bind(self) -> Self {
+        self.bind_gsb();
+        self
+    }
 
     fn translate_to(&self, id: NodeId, addr: &str) -> Result<String> {
         let prefix = self.node_prefix(id)?;

@@ -9,6 +9,7 @@ use ya_client::payment::PaymentApi;
 use ya_client_model::payment::Payment;
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_core_model::payment::local::BUS_ID;
+use ya_core_model::payment::public;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
@@ -20,6 +21,8 @@ use ya_service_bus::typed::Endpoint;
 
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+
+pub mod fake_payment;
 
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum Driver {
@@ -39,7 +42,7 @@ impl Driver {
 }
 
 #[derive(Clone)]
-pub struct MockPayment {
+pub struct RealPayment {
     name: String,
     testdir: PathBuf,
 
@@ -47,12 +50,12 @@ pub struct MockPayment {
     processor: Arc<PaymentProcessor>,
 }
 
-impl MockPayment {
+impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
 
-        MockPayment {
+        RealPayment {
             name: name.to_string(),
             testdir: testdir.to_path_buf(),
             db,
@@ -110,6 +113,10 @@ impl MockPayment {
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {
         bus::service(BUS_ID)
+    }
+
+    pub fn gsb_public_endpoint(&self) -> Endpoint {
+        bus::service(public::BUS_ID)
     }
 }
 
