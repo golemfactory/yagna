@@ -32,6 +32,7 @@ pub fn resolve_invoices(
     conn: &ConnType,
     owner_id: NodeId,
     payer_addr: &str,
+    driver: &str,
     platform: &str,
     since: DateTime<Utc>,
 ) -> DbResult<Option<String>> {
@@ -228,6 +229,7 @@ pub fn resolve_invoices(
             .values((
                 odsl::id.eq(&order_id),
                 odsl::owner_id.eq(owner_id),
+                odsl::driver.eq(driver),
                 odsl::payer_addr.eq(&payer_addr),
                 odsl::platform.eq(&platform),
                 odsl::total_amount.eq(total_amount.to_string()),
@@ -239,6 +241,7 @@ pub fn resolve_invoices(
             diesel::insert_into(oidsl::pay_batch_order_item)
                 .values((
                     oidsl::order_id.eq(&order_id),
+                    oidsl::owner_id.eq(owner_id),
                     oidsl::payee_addr.eq(&payee_addr),
                     oidsl::amount.eq(BigDecimalField(payment.amount.clone())),
                 ))
@@ -250,6 +253,7 @@ pub fn resolve_invoices(
                 diesel::insert_into(dsl::pay_batch_order_item_payment)
                     .values((
                         dsl::order_id.eq(&order_id),
+                        dsl::owner_id.eq(owner_id),
                         dsl::payee_addr.eq(&payee_addr),
                         dsl::payee_id.eq(payee_id),
                         dsl::json.eq(json),
@@ -278,11 +282,12 @@ impl<'c> BatchDao<'c> {
         &self,
         owner_id: NodeId,
         payer_addr: String,
+        driver: String,
         platform: String,
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
         do_with_transaction(self.pool, "batch_dao_resolve", move |conn| {
-            resolve_invoices(conn, owner_id, &payer_addr, &platform, since)
+            resolve_invoices(conn, owner_id, &payer_addr, &driver, &platform, since)
         })
         .await
     }
