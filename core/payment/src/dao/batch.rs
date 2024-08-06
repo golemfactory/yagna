@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bigdecimal::{BigDecimal, ToPrimitive};
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
@@ -230,7 +230,7 @@ pub fn resolve_invoices(
                 odsl::owner_id.eq(owner_id),
                 odsl::payer_addr.eq(&payer_addr),
                 odsl::platform.eq(&platform),
-                odsl::total_amount.eq(total_amount.to_f32()),
+                odsl::total_amount.eq(total_amount.to_string()),
             ))
             .execute(conn)?;
     }
@@ -238,7 +238,7 @@ pub fn resolve_invoices(
         for (payee_addr, payment) in payments {
             diesel::insert_into(oidsl::pay_batch_order_item)
                 .values((
-                    oidsl::id.eq(&order_id),
+                    oidsl::order_id.eq(&order_id),
                     oidsl::payee_addr.eq(&payee_addr),
                     oidsl::amount.eq(BigDecimalField(payment.amount.clone())),
                 ))
@@ -249,7 +249,7 @@ pub fn resolve_invoices(
 
                 diesel::insert_into(dsl::pay_batch_order_item_payment)
                     .values((
-                        dsl::id.eq(&order_id),
+                        dsl::order_id.eq(&order_id),
                         dsl::payee_addr.eq(&payee_addr),
                         dsl::payee_id.eq(payee_id),
                         dsl::json.eq(json),
@@ -340,14 +340,18 @@ impl<'c> BatchDao<'c> {
             use crate::schema::pay_batch_order_item_payment::dsl as d;
 
             let (amount,) = di::pay_batch_order_item
-                .filter(di::id.eq(&order_id).and(di::payee_addr.eq(&payee_addr)))
+                .filter(
+                    di::order_id
+                        .eq(&order_id)
+                        .and(di::payee_addr.eq(&payee_addr)),
+                )
                 .select((di::amount,))
                 .get_result::<(BigDecimalField,)>(conn)?;
 
             let mut peer_obligation = HashMap::<NodeId, Vec<BatchPaymentObligation>>::new();
 
             for (payee_id, json) in d::pay_batch_order_item_payment
-                .filter(d::id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
+                .filter(d::order_id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
                 .select((d::payee_id, d::json))
                 .load::<(NodeId, String)>(conn)?
             {
@@ -375,7 +379,7 @@ impl<'c> BatchDao<'c> {
                 .filter(odsl::id.eq(&order_id))
                 .get_result(conn)?;
             let items: Vec<DbBatchOrderItem> = oidsl::pay_batch_order_item
-                .filter(oidsl::id.eq(&order_id))
+                .filter(oidsl::order_id.eq(&order_id))
                 .filter(oidsl::driver_order_id.is_null())
                 .filter(oidsl::paid.eq(false))
                 .load(conn)?;
@@ -392,7 +396,11 @@ impl<'c> BatchDao<'c> {
     ) -> DbResult<usize> {
         do_with_transaction(self.pool, "batch_order_item_send", |conn| {
             Ok(diesel::update(oidsl::pay_batch_order_item)
-                .filter(oidsl::id.eq(order_id).and(oidsl::payee_addr.eq(payee_addr)))
+                .filter(
+                    oidsl::order_id
+                        .eq(order_id)
+                        .and(oidsl::payee_addr.eq(payee_addr)),
+                )
                 .set(oidsl::driver_order_id.eq(driver_order_id))
                 .execute(conn)?)
         })
@@ -414,7 +422,7 @@ impl<'c> BatchDao<'c> {
 
             let v = diesel::update(oidsl::pay_batch_order_item)
                 .filter(
-                    oidsl::id
+                    oidsl::order_id
                         .eq(&order_id)
                         .and(oidsl::payee_addr.eq(&payee_addr))
                         .and(oidsl::paid.eq(false)),
@@ -423,7 +431,7 @@ impl<'c> BatchDao<'c> {
                 .execute(conn)?;
             if v > 0 {
                 for (payee_id, json) in d::pay_batch_order_item_payment
-                    .filter(d::id.eq(&order_id).and(d::payee_addr.eq(&payee_addr)))
+                    .filter(d::order_id.eq(&order_id).and(d::payee_addr.eq(&payee_addr)))
                     .select((d::payee_id, d::json))
                     .load::<(NodeId, String)>(conn)?
                 {
