@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 use ya_core_model::driver::{driver_bus_id, SchedulePayment};
 use ya_core_model::NodeId;
-use ya_payment::dao::{BatchDao};
+use ya_payment::dao::BatchDao;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 
@@ -76,8 +76,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-
 async fn generate(
     db: DbExecutor,
     owner_id: NodeId,
@@ -87,13 +85,18 @@ async fn generate(
 
     let order_id = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), "erc20".to_string(), payment_platform.clone(), ts)
+        .resolve(
+            owner_id,
+            owner_id.to_string(),
+            "erc20".to_string(),
+            payment_platform.clone(),
+            ts,
+        )
         .await?;
 
     eprintln!("order={:?}", order_id);
     Ok(())
 }
-
 
 async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
     let (order, items) = db
@@ -126,7 +129,13 @@ async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String) -> anyh
 
     if let Some(order_id) = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), "erc20".to_string(), payment_platform, ts)
+        .resolve(
+            owner_id,
+            owner_id.to_string(),
+            "erc20".to_string(),
+            payment_platform,
+            ts,
+        )
         .await?
     {
         log::info!("resolved order: {}", order_id);
