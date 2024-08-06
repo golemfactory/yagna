@@ -40,25 +40,27 @@ pub struct DbBatchOrder {
     pub ts: NaiveDateTime,
     pub owner_id: NodeId,
     pub payer_addr: String,
+    pub driver: String,
     pub platform: String,
-    pub total_amount: Option<f32>,
+    pub total_amount: BigDecimalField,
     pub paid: bool,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Insertable)]
 #[table_name = "pay_batch_order_item"]
 pub struct DbBatchOrderItem {
-    pub id: String,
+    pub order_id: String,
+    pub owner_id: String,
     pub payee_addr: String,
     pub amount: BigDecimalField,
     pub driver_order_id: Option<String>,
     pub paid: bool,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Insertable)]
 #[table_name = "pay_batch_order_item_payment"]
 pub struct DbBatchOrderItemPayment {
-    pub id: String,
+    pub order_id: String,
     pub payee_addr: String,
     pub payee_id: NodeId,
     pub json: String,
