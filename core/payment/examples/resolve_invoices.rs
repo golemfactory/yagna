@@ -87,7 +87,7 @@ async fn generate(
 
     let order_id = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform.clone(), ts)
+        .resolve(owner_id, owner_id.to_string(), "erc20".to_string(), payment_platform.clone(), ts)
         .await?;
 
     eprintln!("order={:?}", order_id);
@@ -126,10 +126,12 @@ async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String) -> anyh
 
     if let Some(order_id) = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform, ts)
+        .resolve(owner_id, owner_id.to_string(), "erc20".to_string(), payment_platform, ts)
         .await?
     {
-        send_payments(db, order_id).await?;
+        log::info!("resolved order: {}", order_id);
+        //nothing
+        //send_payments(db, order_id).await?;
     }
     Ok(())
 }
