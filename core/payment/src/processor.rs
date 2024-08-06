@@ -1,8 +1,5 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{
-    ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao,
-    SyncNotifsDao,
-};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -29,8 +26,8 @@ use ya_client_model::payment::{
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
-    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation, ValidateAllocationResult,
+    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
+    ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
     CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle,
