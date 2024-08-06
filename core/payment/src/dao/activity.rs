@@ -175,9 +175,17 @@ impl<'a> ActivityDao<'a> {
     pub async fn list(
         &self,
         role: Option<Role>,
+        agreement_id: Option<String>,
     ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
         readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
-            let activities = dsl::pay_activity.load(conn)?;
+            let mut query = dsl::pay_activity.into_boxed();
+            if let Some(agreement_id) = agreement_id {
+                query = query.filter(dsl::agreement_id.eq(agreement_id));
+            };
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role));
+            };
+            let activities = query.load(conn)?;
             Ok(activities.into_iter().collect())
         })
         .await
