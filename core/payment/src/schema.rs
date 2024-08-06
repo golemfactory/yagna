@@ -70,20 +70,22 @@ table! {
 }
 
 table! {
-    pay_batch_order (id) {
+    pay_batch_order (owner_id, id) {
         id -> Text,
         ts -> Timestamp,
         owner_id -> Text,
         payer_addr -> Text,
+        driver -> Text,
         platform -> Text,
-        total_amount -> Nullable<Float>,
+        total_amount -> Text,
         paid -> Bool,
     }
 }
 
 table! {
-    pay_batch_order_item (id, payee_addr) {
-        id -> Text,
+    pay_batch_order_item (owner_id, order_id, payee_addr) {
+        order_id -> Text,
+        owner_id -> Text,
         payee_addr -> Text,
         amount -> Text,
         driver_order_id -> Nullable<Text>,
@@ -92,8 +94,9 @@ table! {
 }
 
 table! {
-    pay_batch_order_item_payment (id, payee_addr, payee_id) {
-        id -> Text,
+    pay_batch_order_item_payment (owner_id, order_id, payee_addr, payee_id) {
+        order_id -> Text,
+        owner_id -> Text,
         payee_addr -> Text,
         payee_id -> Text,
         json -> Text,
@@ -241,7 +244,7 @@ table! {
 
 joinable!(pay_activity_payment -> pay_allocation (allocation_id));
 joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
-joinable!(pay_batch_order_item -> pay_batch_order (id));
+//joinable!(pay_batch_order_item -> pay_batch_order (owner_id, order_id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
