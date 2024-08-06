@@ -28,6 +28,32 @@ impl<'c> AsDao<'c> for BatchDao<'c> {
     }
 }
 
+table! {
+    sql_activity_join_agreement (id, owner_id) {
+        id -> Text,
+        owner_id -> Text,
+        role -> Text,
+        peer_id -> Text,
+        payee_addr -> Text,
+        agreement_id -> Text,
+        total_amount_due -> Text,
+        total_amount_accepted -> Text,
+        total_amount_scheduled -> Text,
+        total_amount_paid -> Text,
+    }
+}
+
+#[derive(QueryableByName)]
+#[table_name = "sql_activity_join_agreement"]
+struct ActivityJoinAgreement {
+    id: String,
+    peer_id: NodeId,
+    payee_addr: String,
+    total_amount_accepted: BigDecimalField,
+    total_amount_scheduled: BigDecimalField,
+    agreement_id: String,
+}
+
 pub fn resolve_invoices(
     conn: &ConnType,
     owner_id: NodeId,
@@ -139,49 +165,28 @@ pub fn resolve_invoices(
         )?;
     }
     {
-        table! {
-            sql_activity (id, owner_id) {
-                id -> Text,
-                owner_id -> Text,
-                role -> Text,
-                peer_id -> Text,
-                payee_addr -> Text,
-                agreement_id -> Text,
-                total_amount_due -> Text,
-                total_amount_accepted -> Text,
-                total_amount_scheduled -> Text,
-                total_amount_paid -> Text,
-            }
-        }
-
-        #[derive(QueryableByName)]
-        #[table_name = "sql_activity"]
-        struct Activity {
-            id: String,
-            peer_id: NodeId,
-            payee_addr: String,
-            total_amount_accepted: BigDecimalField,
-            total_amount_scheduled: BigDecimalField,
-            agreement_id: String,
-        }
-
-        let v : Vec<Activity> = diesel::sql_query(r#"
+        let query_res = diesel::sql_query(r#"
                 SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled, pa.id agreement_id
-                FROM pay_activity a join pay_agreement pa on a.owner_id = pa.owner_id and a.agreement_id = pa.id and a.role = pa.role
-                where a.role='R' and a.total_amount_accepted > 0
-                and cast(a.total_amount_scheduled as float) < cast(a.total_amount_accepted as float)
-                and not exists (select 1 from pay_invoice where agreement_id = a.agreement_id and owner_id = a.owner_id and role = 'R')
-                and pa.updated_ts > ? and pa.payment_platform = ? and pa.owner_id = ?
+                FROM pay_activity a JOIN pay_agreement pa ON a.owner_id = pa.owner_id AND a.agreement_id = pa.id AND a.role = pa.role
+                WHERE a.role='R' AND a.total_amount_accepted > 0
+                AND a.total_amount_scheduled != a.total_amount_accepted
+                AND NOT EXISTS (SELECT 1 FROM pay_invoice WHERE agreement_id = a.agreement_id AND owner_id = a.owner_id AND role = 'R')
+                AND pa.updated_ts > ? AND pa.payment_platform = ? AND pa.owner_id = ?
             "#)
             .bind::<Timestamp, _>(since.naive_utc())
             .bind::<Text, _>(&platform)
             .bind::<Text, _>(owner_id)
-            .load::<Activity>(conn)?;
+            .load::<ActivityJoinAgreement>(conn)?;
 
-        log::info!("{} activites found", v.len());
-        for a in v {
-            let amount_to_pay = a.total_amount_accepted.0 - a.total_amount_scheduled.0;
+        log::info!("Pay for activities without invoice - {} found to check", query_res.len());
+        for a in query_res {
+            let amount_to_pay =
+                a.total_amount_accepted.0.clone() - a.total_amount_scheduled.0.clone();
             if amount_to_pay < zero {
+                log::warn!("Activity {} has total_amount_scheduled: {} greater than total_amount_accepted: {}, which can be a bug",
+                    a.id,
+                    a.total_amount_scheduled.0.clone(),
+                    a.total_amount_accepted.0.clone());
                 continue;
             }
             total_amount += &amount_to_pay;
