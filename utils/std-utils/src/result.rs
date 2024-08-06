@@ -1,6 +1,7 @@
 use log::{Level, Record};
 use std::fmt::{Debug, Display};
-use std::sync::atomic::{AtomicBool, Ordering};
+
+pub use std::format_args;
 
 pub trait LogErr<T, E: Debug + Display> {
     /// If Result is `Err`, this function logs it on error level
@@ -14,55 +15,32 @@ pub trait LogErr<T, E: Debug + Display> {
 }
 
 impl<T, E: Debug + Display> LogErr<T, E> for Result<T, E> {
+    #[track_caller]
     fn log_err(self) -> Result<T, E> {
         self.log_err_msg("")
     }
 
+    #[track_caller]
     fn log_warn(self) -> Result<T, E> {
         self.log_warn_msg("")
     }
 
+    #[track_caller]
     fn log_err_msg(self, message: &str) -> Result<T, E> {
         self.log_error(message, Level::Error)
     }
 
+    #[track_caller]
     fn log_warn_msg(self, message: &str) -> Result<T, E> {
         self.log_error(message, Level::Warn)
     }
 
+    #[track_caller]
     fn log_error(self, message: &str, log_level: Level) -> Result<T, E> {
         if let Err(e) = self {
-            let std_utils_symbols = AtomicBool::new(false);
-            let cont = AtomicBool::new(true);
-
-            backtrace::trace(|frame| {
-                backtrace::resolve_frame(frame, |symbol| {
-                    if let Some(name) = symbol.name() {
-                        let module = name.to_string();
-
-                        // Skip all symbols from this library until we find first symbol of caller function.
-                        if std_utils_symbols.load(Ordering::SeqCst)
-                            && !module.contains("ya_std_utils::result::LogErr")
-                        {
-                            cont.store(false, Ordering::SeqCst);
-
-                            // Find out the module path and print log.
-                            let suffix = module.rfind("::");
-                            if let Some(suffix) = suffix {
-                                log(&module[..suffix], log_level, message, &e);
-                            } else {
-                                log(&module, log_level, message, &e);
-                            }
-                        }
-
-                        // Mark first symbol of function called in this library.
-                        if module.contains("ya_std_utils::result::LogErr") {
-                            std_utils_symbols.store(true, Ordering::SeqCst);
-                        }
-                    }
-                });
-                cont.load(Ordering::SeqCst)
-            });
+            // It will return file not module path, so it will differ from the original log macro.
+            let module = std::panic::Location::caller().file();
+            log(module, log_level, message, &e);
             Err(e)
         } else {
             self
@@ -101,10 +79,7 @@ mod tests {
             let last = captured_logs.last().unwrap();
             assert_eq!(last.body, "Error occurred: Message-Message");
             assert_eq!(last.level, Level::Error);
-            assert_eq!(
-                last.target,
-                "ya_std_utils::result::tests::test_log_err_and_warn"
-            );
+            assert_eq!(last.target, "utils/std-utils/src/result.rs");
         });
 
         let _result: anyhow::Result<()> = Err(anyhow!("Message-Message")).log_warn_msg("Warning");
@@ -113,10 +88,7 @@ mod tests {
             let last = captured_logs.last().unwrap();
             assert_eq!(last.body, "Warning: Message-Message");
             assert_eq!(last.level, Level::Warn);
-            assert_eq!(
-                last.target,
-                "ya_std_utils::result::tests::test_log_err_and_warn"
-            );
+            assert_eq!(last.target, "utils/std-utils/src/result.rs");
         });
     }
 }
