@@ -3,7 +3,7 @@ use super::{
     RemoveResponse, SignatureVerifier,
 };
 use anyhow::bail;
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 use golem_certificate::schemas::certificate::Fingerprint;
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
