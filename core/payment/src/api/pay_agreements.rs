@@ -61,7 +61,7 @@ async fn get_pay_agreement_orders(
     let node_id = id.identity;
     let agreement_id = path.into_inner();
     let dao: BatchDao = db.as_dao();
-    match dao.get_batch_items_for_agreement(node_id, agreement_id).await {
+    match dao.get_batch_items(node_id, Some(agreement_id), None).await {
         Ok(items) => response::ok(items),
         Err(e) => response::server_error(&e),
     }

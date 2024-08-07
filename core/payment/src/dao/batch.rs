@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -55,17 +55,21 @@ struct ActivityJoinAgreement {
     agreement_id: String,
 }
 
-pub fn resolve_invoices(
-    conn: &ConnType,
-    owner_id: NodeId,
-    payer_addr: &str,
-    driver: &str,
-    platform: &str,
-    since: DateTime<Utc>,
-) -> DbResult<Option<String>> {
+pub fn resolve_invoices_agreement_part(
+    args: &ResolveInvoiceArgs,
+    total_amount: BigDecimal,
+    payments: HashMap<String, BatchPayment>,
+) -> DbResult<(HashMap<String, BatchPayment>, BigDecimal)> {
+    let conn = args.conn;
+    let owner_id = args.owner_id;
+    let payer_addr = args.payer_addr;
+    let driver = args.driver;
+    let platform = args.platform;
+    let since = args.since;
+    let mut total_amount = total_amount;
+    let mut payments = payments;
     use crate::schema::pay_agreement::dsl as pa;
     use crate::schema::pay_invoice::dsl as iv;
-    use std::collections::hash_map;
 
     let invoices = iv::pay_invoice
         .inner_join(
@@ -99,9 +103,7 @@ pub fn resolve_invoices(
         )>(conn)?;
     log::info!("found [{}] invoices", invoices.len());
 
-    let mut total_amount = BigDecimal::default();
     let zero = BigDecimal::from(0u32);
-    let mut payments = HashMap::<String, BatchPayment>::new();
     for (
         agreement_id,
         peer_id,
@@ -165,6 +167,24 @@ pub fn resolve_invoices(
             conn,
         )?;
     }
+    Ok((payments, total_amount))
+}
+
+pub fn resolve_invoices_activity_part(
+    args: &ResolveInvoiceArgs,
+    total_amount: BigDecimal,
+    payments: HashMap<String, BatchPayment>,
+) -> DbResult<(HashMap<String, BatchPayment>, BigDecimal)> {
+    let conn = args.conn;
+    let owner_id = args.owner_id;
+    let payer_addr = args.payer_addr;
+    let driver = args.driver;
+    let platform = args.platform;
+    let since = args.since;
+    let mut total_amount = total_amount;
+    let mut payments = payments;
+    let zero = BigDecimal::from(0u32);
+
     {
         let query_res = diesel::sql_query(r#"
                 SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled, pa.id agreement_id
@@ -225,6 +245,34 @@ pub fn resolve_invoices(
             }
         }
     }
+    Ok((payments, total_amount))
+}
+
+pub struct ResolveInvoiceArgs<'a> {
+    pub conn: &'a ConnType,
+    pub owner_id: NodeId,
+    pub payer_addr: &'a str,
+    pub driver: &'a str,
+    pub platform: &'a str,
+    pub since: DateTime<Utc>,
+}
+
+pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
+    let conn = args.conn;
+    let owner_id = args.owner_id;
+    let payer_addr = args.payer_addr;
+    let driver = args.driver;
+    let platform = args.platform;
+    let since = args.since;
+    let zero = BigDecimal::from(0u32);
+
+    let total_amount = BigDecimal::default();
+    let payments = HashMap::<String, BatchPayment>::new();
+
+    let total_amount = BigDecimal::from(0u32);
+    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
+
+    let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
 
     if total_amount == zero {
         return Ok(None);
@@ -342,7 +390,7 @@ impl<'c> BatchDao<'c> {
                 .first(conn)
                 .optional()?)
         })
-            .await
+        .await
     }
 
     pub async fn get_batch_order_items(
@@ -359,7 +407,7 @@ impl<'c> BatchDao<'c> {
                 )
                 .load(conn)?)
         })
-            .await
+        .await
     }
 
     pub async fn get_for_node_id(
@@ -380,7 +428,7 @@ impl<'c> BatchDao<'c> {
             }
             Ok(query.load(conn)?)
         })
-            .await
+        .await
     }
 
     pub async fn resolve(
@@ -392,9 +440,16 @@ impl<'c> BatchDao<'c> {
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
         do_with_transaction(self.pool, "batch_dao_resolve", move |conn| {
-            resolve_invoices(conn, owner_id, &payer_addr, &driver, &platform, since)
+            resolve_invoices(&ResolveInvoiceArgs {
+                conn,
+                owner_id,
+                payer_addr: &payer_addr,
+                driver: &driver,
+                platform: &platform,
+                since,
+            })
         })
-            .await
+        .await
     }
     pub async fn list_debit_notes(
         &self,
@@ -439,7 +494,7 @@ impl<'c> BatchDao<'c> {
             use crate::schema::pay_batch_order_item::dsl as di;
             use crate::schema::pay_batch_order_item_payment::dsl as d;
 
-            let (amount, ) = di::pay_batch_order_item
+            let (amount,) = di::pay_batch_order_item
                 .filter(
                     di::order_id
                         .eq(&order_id)
@@ -466,7 +521,7 @@ impl<'c> BatchDao<'c> {
                 peer_obligation,
             })
         })
-            .await
+        .await
     }
 
     pub async fn get_unsent_batch_items(
@@ -486,26 +541,42 @@ impl<'c> BatchDao<'c> {
                 .load(conn)?;
             Ok((order, items))
         })
-            .await
+        .await
     }
 
-    pub async fn get_batch_items_for_agreement(&self, owner_id: NodeId, agreement_id: String) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
+    pub async fn get_batch_items(
+        &self,
+        owner_id: NodeId,
+        agreement_id: Option<String>,
+        activity_id: Option<String>,
+    ) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
         readonly_transaction(self.pool, "get_batch_items_for_agreement", move |conn| {
             use crate::schema::pay_batch_order::dsl as order_dsl;
             use crate::schema::pay_batch_order_item::dsl as order_item_dsl;
             use crate::schema::pay_batch_order_item_document::dsl as aggr_item_dsl;
-            Ok(order_item_dsl::pay_batch_order_item
+            let mut query = order_item_dsl::pay_batch_order_item
                 .filter(order_item_dsl::owner_id.eq(owner_id))
-                .inner_join(aggr_item_dsl::pay_batch_order_item_document.on(
-                    order_item_dsl::order_id.eq(aggr_item_dsl::order_id)
+                .inner_join(
+                    aggr_item_dsl::pay_batch_order_item_document.on(order_item_dsl::order_id
+                        .eq(aggr_item_dsl::order_id)
                         .and(order_item_dsl::owner_id.eq(aggr_item_dsl::owner_id))
-                        .and(order_item_dsl::payee_addr.eq(aggr_item_dsl::payee_addr))
-                ))
-                .inner_join(order_dsl::pay_batch_order.on(
-                    order_item_dsl::order_id.eq(order_dsl::id)
-                        .and(order_item_dsl::owner_id.eq(order_dsl::owner_id))
-                ))
-                .filter(aggr_item_dsl::agreement_id.eq(agreement_id))
+                        .and(order_item_dsl::payee_addr.eq(aggr_item_dsl::payee_addr))),
+                )
+                .inner_join(
+                    order_dsl::pay_batch_order.on(order_item_dsl::order_id
+                        .eq(order_dsl::id)
+                        .and(order_item_dsl::owner_id.eq(order_dsl::owner_id))),
+                )
+                .into_boxed();
+
+            if let Some(agreement_id) = agreement_id {
+                query = query.filter(aggr_item_dsl::agreement_id.eq(agreement_id));
+            }
+            if let Some(activity_id) = activity_id {
+                query = query.filter(aggr_item_dsl::activity_id.eq(activity_id));
+            }
+
+            Ok(query
                 .select((
                     order_dsl::ts,
                     order_item_dsl::order_id,
