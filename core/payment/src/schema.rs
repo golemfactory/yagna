@@ -94,23 +94,14 @@ table! {
 }
 
 table! {
-    pay_batch_order_item_activity (owner_id, order_id, payee_addr, activity_id) {
-        order_id -> Text,
-        owner_id -> Text,
-        payee_addr -> Text,
-        activity_id -> Text,
-        debit_note_id -> Nullable<Text>,
-        amount -> Text,
-    }
-}
-
-table! {
-    pay_batch_order_item_agreement (owner_id, order_id, payee_addr, agreement_id) {
+    pay_batch_order_item_document (owner_id, order_id, payee_addr, agreement_id) {
         order_id -> Text,
         owner_id -> Text,
         payee_addr -> Text,
         agreement_id -> Text,
         invoice_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
         amount -> Text,
     }
 }
@@ -282,6 +273,7 @@ allow_tables_to_appear_in_same_query!(
     pay_batch_order,
     pay_batch_order_item,
     pay_batch_order_item_payment,
+    pay_batch_order_item_document,
     pay_debit_note,
     pay_debit_note_event,
     pay_debit_note_event_read,

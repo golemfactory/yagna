@@ -264,14 +264,16 @@ pub fn resolve_invoices(
                             amount,
                             agreement_id,
                         } => {
-                            use crate::schema::pay_batch_order_item_agreement::dsl;
-                            diesel::insert_into(dsl::pay_batch_order_item_agreement)
+                            use crate::schema::pay_batch_order_item_document::dsl;
+                            diesel::insert_into(dsl::pay_batch_order_item_document)
                                 .values((
                                     dsl::order_id.eq(&order_id),
                                     dsl::owner_id.eq(owner_id),
                                     dsl::payee_addr.eq(&payee_addr),
                                     dsl::agreement_id.eq(agreement_id),
                                     dsl::invoice_id.eq(id),
+                                    dsl::activity_id.eq(None::<String>),
+                                    dsl::debit_note_id.eq(None::<String>),
                                     dsl::amount.eq(BigDecimalField(amount.clone())),
                                 ))
                                 .execute(conn)?;
@@ -281,13 +283,16 @@ pub fn resolve_invoices(
                             agreement_id,
                             activity_id,
                         } => {
-                            use crate::schema::pay_batch_order_item_activity::dsl;
-                            diesel::insert_into(dsl::pay_batch_order_item_activity)
+                            use crate::schema::pay_batch_order_item_document::dsl;
+                            diesel::insert_into(dsl::pay_batch_order_item_document)
                                 .values((
                                     dsl::order_id.eq(&order_id),
                                     dsl::owner_id.eq(owner_id),
                                     dsl::payee_addr.eq(&payee_addr),
+                                    dsl::agreement_id.eq(agreement_id),
+                                    dsl::invoice_id.eq(None::<String>),
                                     dsl::activity_id.eq(activity_id),
+                                    dsl::debit_note_id.eq(None::<String>),
                                     dsl::amount.eq(BigDecimalField(amount.clone())),
                                 ))
                                 .execute(conn)?;
@@ -337,7 +342,7 @@ impl<'c> BatchDao<'c> {
                 .first(conn)
                 .optional()?)
         })
-        .await
+            .await
     }
 
     pub async fn get_batch_order_items(
@@ -354,7 +359,7 @@ impl<'c> BatchDao<'c> {
                 )
                 .load(conn)?)
         })
-        .await
+            .await
     }
 
     pub async fn get_for_node_id(
@@ -375,7 +380,7 @@ impl<'c> BatchDao<'c> {
             }
             Ok(query.load(conn)?)
         })
-        .await
+            .await
     }
 
     pub async fn resolve(
@@ -389,7 +394,7 @@ impl<'c> BatchDao<'c> {
         do_with_transaction(self.pool, "batch_dao_resolve", move |conn| {
             resolve_invoices(conn, owner_id, &payer_addr, &driver, &platform, since)
         })
-        .await
+            .await
     }
     pub async fn list_debit_notes(
         &self,
@@ -407,8 +412,8 @@ impl<'c> BatchDao<'c> {
             total_amount_scheduled: BigDecimalField,
         }
 
-        do_with_transaction(self.pool, "last_debit_notes",move |conn| {
-            let v : Vec<Activity> = diesel::sql_query(r#"
+        do_with_transaction(self.pool, "last_debit_notes", move |conn| {
+            let v: Vec<Activity> = diesel::sql_query(r#"
                 SELECT a.id, a.total_amount_accepted, a.total_amount_scheduled
                  FROM pay_activity a join pay_agreement pa on a.owner_id = pa.owner_id and a.agreement_id = pa.id and a.role = pa.role
                 where a.role='R' and a.total_amount_accepted > 0
@@ -434,7 +439,7 @@ impl<'c> BatchDao<'c> {
             use crate::schema::pay_batch_order_item::dsl as di;
             use crate::schema::pay_batch_order_item_payment::dsl as d;
 
-            let (amount,) = di::pay_batch_order_item
+            let (amount, ) = di::pay_batch_order_item
                 .filter(
                     di::order_id
                         .eq(&order_id)
@@ -461,7 +466,7 @@ impl<'c> BatchDao<'c> {
                 peer_obligation,
             })
         })
-        .await
+            .await
     }
 
     pub async fn get_unsent_batch_items(
@@ -480,6 +485,40 @@ impl<'c> BatchDao<'c> {
                 .filter(oidsl::paid.eq(false))
                 .load(conn)?;
             Ok((order, items))
+        })
+            .await
+    }
+
+    pub async fn get_batch_items_for_agreement(&self, owner_id: NodeId, agreement_id: String) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
+        readonly_transaction(self.pool, "get_batch_items_for_agreement", move |conn| {
+            use crate::schema::pay_batch_order::dsl as order_dsl;
+            use crate::schema::pay_batch_order_item::dsl as order_item_dsl;
+            use crate::schema::pay_batch_order_item_document::dsl as aggr_item_dsl;
+            Ok(order_item_dsl::pay_batch_order_item
+                .filter(order_item_dsl::owner_id.eq(owner_id))
+                .inner_join(aggr_item_dsl::pay_batch_order_item_document.on(
+                    order_item_dsl::order_id.eq(aggr_item_dsl::order_id)
+                        .and(order_item_dsl::owner_id.eq(aggr_item_dsl::owner_id))
+                        .and(order_item_dsl::payee_addr.eq(aggr_item_dsl::payee_addr))
+                ))
+                .inner_join(order_dsl::pay_batch_order.on(
+                    order_item_dsl::order_id.eq(order_dsl::id)
+                        .and(order_item_dsl::owner_id.eq(order_dsl::owner_id))
+                ))
+                .filter(aggr_item_dsl::agreement_id.eq(agreement_id))
+                .select((
+                    order_dsl::ts,
+                    order_item_dsl::order_id,
+                    order_item_dsl::owner_id,
+                    order_item_dsl::payee_addr,
+                    aggr_item_dsl::amount,
+                    aggr_item_dsl::agreement_id,
+                    aggr_item_dsl::invoice_id,
+                    aggr_item_dsl::activity_id,
+                    aggr_item_dsl::debit_note_id,
+                ))
+                .order_by(order_dsl::ts.desc())
+                .load(conn)?)
         })
         .await
     }
