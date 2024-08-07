@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 
@@ -16,6 +16,7 @@ use ya_persistence::types::BigDecimalField;
 
 use crate::error::{DbError, DbResult};
 use crate::models::batch::*;
+use crate::schema::pay_batch_order::dsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
 
 pub struct BatchDao<'c> {
@@ -178,7 +179,10 @@ pub fn resolve_invoices(
             .bind::<Text, _>(owner_id)
             .load::<ActivityJoinAgreement>(conn)?;
 
-        log::info!("Pay for activities without invoice - {} found to check", query_res.len());
+        log::info!(
+            "Pay for activities without invoice - {} found to check",
+            query_res.len()
+        );
         for a in query_res {
             let amount_to_pay =
                 a.total_amount_accepted.0.clone() - a.total_amount_scheduled.0.clone();
@@ -255,7 +259,11 @@ pub fn resolve_invoices(
                 for obligation in &obligations {
                     log::debug!("obligation: {:?}", obligation);
                     match obligation {
-                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                        BatchPaymentObligation::Invoice {
+                            id,
+                            amount,
+                            agreement_id,
+                        } => {
                             use crate::schema::pay_batch_order_item_agreement::dsl;
                             diesel::insert_into(dsl::pay_batch_order_item_agreement)
                                 .values((
@@ -268,7 +276,11 @@ pub fn resolve_invoices(
                                 ))
                                 .execute(conn)?;
                         }
-                        BatchPaymentObligation::DebitNote { amount, agreement_id, activity_id } => {
+                        BatchPaymentObligation::DebitNote {
+                            amount,
+                            agreement_id,
+                            activity_id,
+                        } => {
                             use crate::schema::pay_batch_order_item_activity::dsl;
                             diesel::insert_into(dsl::pay_batch_order_item_activity)
                                 .values((
@@ -314,6 +326,58 @@ pub fn get_batch_orders(
 }
 
 impl<'c> BatchDao<'c> {
+    pub async fn get_batch_order(
+        &self,
+        batch_order_id: String,
+        node_id: NodeId,
+    ) -> DbResult<Option<DbBatchOrder>> {
+        readonly_transaction(self.pool, "batch_dao_get", move |conn| {
+            Ok(dsl::pay_batch_order
+                .filter(dsl::owner_id.eq(node_id).and(dsl::id.eq(batch_order_id)))
+                .first(conn)
+                .optional()?)
+        })
+        .await
+    }
+
+    pub async fn get_batch_order_items(
+        &self,
+        batch_order_id: String,
+        node_id: NodeId,
+    ) -> DbResult<Vec<DbBatchOrderItem>> {
+        readonly_transaction(self.pool, "batch_dao_get_items", move |conn| {
+            Ok(oidsl::pay_batch_order_item
+                .filter(
+                    oidsl::owner_id
+                        .eq(node_id)
+                        .and(oidsl::order_id.eq(batch_order_id)),
+                )
+                .load(conn)?)
+        })
+        .await
+    }
+
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<DbBatchOrder>> {
+        readonly_transaction(self.pool, "batch_dao_get_for_node_id", move |conn| {
+            let mut query = dsl::pay_batch_order
+                .filter(dsl::owner_id.eq(node_id))
+                .into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::ts.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            Ok(query.load(conn)?)
+        })
+        .await
+    }
+
     pub async fn resolve(
         &self,
         owner_id: NodeId,
@@ -360,23 +424,13 @@ impl<'c> BatchDao<'c> {
         }).await
     }
 
-    pub async fn get_batch_order(&self, batch_order_id: String) -> DbResult<DbBatchOrder> {
-        readonly_transaction(self.pool, "get_batch_order", move |conn| {
-            use crate::schema::pay_batch_order::dsl as odsl;
-
-            Ok(odsl::pay_batch_order
-                .filter(odsl::id.eq(batch_order_id))
-                .get_result(conn)?)
-        })
-        .await
-    }
-
     pub async fn get_batch_order_payments(
         &self,
         order_id: String,
+        owner_id: NodeId,
         payee_addr: String,
     ) -> DbResult<BatchPayment> {
-        readonly_transaction(self.pool, "get_batch_order_payments", |conn| {
+        readonly_transaction(self.pool, "get_batch_order_payments", move |conn| {
             use crate::schema::pay_batch_order_item::dsl as di;
             use crate::schema::pay_batch_order_item_payment::dsl as d;
 
@@ -384,7 +438,8 @@ impl<'c> BatchDao<'c> {
                 .filter(
                     di::order_id
                         .eq(&order_id)
-                        .and(di::payee_addr.eq(&payee_addr)),
+                        .and(di::payee_addr.eq(&payee_addr))
+                        .and(di::owner_id.eq(&owner_id)),
                 )
                 .select((di::amount,))
                 .get_result::<(BigDecimalField,)>(conn)?;
