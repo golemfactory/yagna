@@ -2013,8 +2013,8 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.6"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=79955d735f64467b01f04abfc70da39e4ba4be3c#79955d735f64467b01f04abfc70da39e4ba4be3c"
 dependencies = [
  "actix",
  "actix-files",
@@ -2055,8 +2055,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.6"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=79955d735f64467b01f04abfc70da39e4ba4be3c#79955d735f64467b01f04abfc70da39e4ba4be3c"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2096,8 +2096,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_extra"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.6"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=79955d735f64467b01f04abfc70da39e4ba4be3c#79955d735f64467b01f04abfc70da39e4ba4be3c"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2132,8 +2132,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_processor"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.6"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=79955d735f64467b01f04abfc70da39e4ba4be3c#79955d735f64467b01f04abfc70da39e4ba4be3c"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2180,8 +2180,8 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.6"
+source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=79955d735f64467b01f04abfc70da39e4ba4be3c#79955d735f64467b01f04abfc70da39e4ba4be3c"
 dependencies = [
  "actix-files",
  "actix-web",
