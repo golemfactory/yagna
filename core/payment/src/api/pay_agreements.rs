@@ -9,10 +9,14 @@ use ya_service_api_web::middleware::Identity;
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/payAgreements", get().to(get_pay_agreements))
-        .route("/payAgreement/{agreement_id}", get().to(get_pay_agreement))
+        .route("/payAgreements/{agreement_id}", get().to(get_pay_agreement))
         .route(
-            "/payAgreement/{agreement_id}/activities",
+            "/payAgreements/{agreement_id}/activities",
             get().to(get_pay_agreement_activities),
+        )
+        .route(
+            "/payAgreements/{agreement_id}/orders",
+            get().to(get_pay_agreement_orders),
         )
 }
 
@@ -45,6 +49,20 @@ async fn get_pay_agreement_activities(
     let dao: ActivityDao = db.as_dao();
     match dao.list(None, Some(agreement_id)).await {
         Ok(activities) => response::ok(activities),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+async fn get_pay_agreement_orders(
+    db: Data<DbExecutor>,
+    path: Path<String>,
+    id: Identity,
+) -> HttpResponse {
+    let node_id = id.identity;
+    let agreement_id = path.into_inner();
+    let dao: BatchDao = db.as_dao();
+    match dao.get_batch_items_for_agreement(node_id, agreement_id).await {
+        Ok(items) => response::ok(items),
         Err(e) => response::server_error(&e),
     }
 }
