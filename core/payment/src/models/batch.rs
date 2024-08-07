@@ -8,6 +8,7 @@ use ya_core_model::NodeId;
 use ya_persistence::types::BigDecimalField;
 
 use crate::schema::*;
+use crate::schema::pay_invoice::owner_id;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BatchPaymentObligation {
@@ -56,6 +57,27 @@ pub struct DbBatchOrderItem {
     pub driver_order_id: Option<String>,
     pub paid: bool,
 }
+
+#[derive(Queryable, Debug, Insertable)]
+#[table_name = "pay_batch_order_item_activity"]
+pub struct DbBatchOrderItemActivity {
+    pub order_id: String,
+    pub owner_id: NodeId,
+    pub payee_addr: String,
+    pub activity_id: String,
+    pub debit_note_id: Option<String>
+}
+
+#[derive(Queryable, Debug, Insertable)]
+#[table_name = "pay_batch_order_item_agreement"]
+pub struct DbBatchOrderItemAgreement {
+    pub order_id: String,
+    pub owner_id: NodeId,
+    pub payee_addr: String,
+    pub agreement_id: String,
+    pub invoice_id: Option<String>
+}
+
 
 #[derive(Queryable, Debug, Insertable)]
 #[table_name = "pay_batch_order_item_payment"]

@@ -252,6 +252,37 @@ pub fn resolve_invoices(
                 ))
                 .execute(conn)?;
             for (payee_id, obligations) in payment.peer_obligation {
+                for obligation in &obligations {
+                    log::debug!("obligation: {:?}", obligation);
+                    match obligation {
+                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                            use crate::schema::pay_batch_order_item_agreement::dsl;
+                            diesel::insert_into(dsl::pay_batch_order_item_agreement)
+                                .values((
+                                    dsl::order_id.eq(&order_id),
+                                    dsl::owner_id.eq(owner_id),
+                                    dsl::payee_addr.eq(&payee_addr),
+                                    dsl::agreement_id.eq(agreement_id),
+                                    dsl::invoice_id.eq(id),
+                                    dsl::amount.eq(BigDecimalField(amount.clone())),
+                                ))
+                                .execute(conn)?;
+                        }
+                        BatchPaymentObligation::DebitNote { amount, agreement_id, activity_id } => {
+                            use crate::schema::pay_batch_order_item_activity::dsl;
+                            diesel::insert_into(dsl::pay_batch_order_item_activity)
+                                .values((
+                                    dsl::order_id.eq(&order_id),
+                                    dsl::owner_id.eq(owner_id),
+                                    dsl::payee_addr.eq(&payee_addr),
+                                    dsl::activity_id.eq(activity_id),
+                                    dsl::amount.eq(BigDecimalField(amount.clone())),
+                                ))
+                                .execute(conn)?;
+                        }
+                    }
+                }
+
                 let json = serde_json::to_string(&obligations)?;
                 use crate::schema::pay_batch_order_item_payment::dsl;
 

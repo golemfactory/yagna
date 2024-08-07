@@ -32,7 +32,7 @@ CREATE TABLE pay_batch_order_item_agreement(
     invoice_id      VARCHAR(50) NULL,
     amount          VARCHAR(32) NOT NULL,
 
-    CONSTRAINT PAY_BATCH_ORDER_ITEM_INVOICE_PK PRIMARY KEY (owner_id, order_id, agreement_id),
+    CONSTRAINT PAY_BATCH_ORDER_ITEM_INVOICE_PK PRIMARY KEY (owner_id, order_id, payee_addr, agreement_id),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_INVOICE_FK1 FOREIGN KEY (owner_id, order_id, payee_addr) REFERENCES pay_batch_order_item(owner_id, order_id, payee_addr),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_INVOICE_FK2 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id)
 );
@@ -45,7 +45,7 @@ CREATE TABLE pay_batch_order_item_activity(
     debit_note_id   VARCHAR(50) NULL,
     amount          VARCHAR(32) NOT NULL,
 
-    CONSTRAINT PAY_BATCH_ORDER_ITEM_DEBIT_NOTE_PK PRIMARY KEY (owner_id, order_id, activity_id),
+    CONSTRAINT PAY_BATCH_ORDER_ITEM_DEBIT_NOTE_PK PRIMARY KEY (owner_id, order_id, payee_addr, activity_id),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_DEBIT_NOTE_FK1 FOREIGN KEY (owner_id, order_id, payee_addr) REFERENCES pay_batch_order_item(owner_id, order_id, payee_addr),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_DEBIT_NOTE_FK2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id)
 );
