@@ -191,7 +191,6 @@ pub fn resolve_invoices_activity_part(
                 FROM pay_activity a JOIN pay_agreement pa ON a.owner_id = pa.owner_id AND a.agreement_id = pa.id AND a.role = pa.role
                 WHERE a.role='R' AND a.total_amount_accepted > 0
                 AND a.total_amount_scheduled != a.total_amount_accepted
-                AND NOT EXISTS (SELECT 1 FROM pay_invoice WHERE agreement_id = a.agreement_id AND owner_id = a.owner_id AND role = 'R')
                 AND pa.updated_ts > ? AND pa.payment_platform = ? AND pa.owner_id = ?
             "#)
             .bind::<Timestamp, _>(since.naive_utc())
@@ -270,9 +269,10 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let payments = HashMap::<String, BatchPayment>::new();
 
     let total_amount = BigDecimal::from(0u32);
-    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
 
     let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
+
+    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
 
     if total_amount == zero {
         return Ok(None);
@@ -550,7 +550,7 @@ impl<'c> BatchDao<'c> {
         agreement_id: Option<String>,
         activity_id: Option<String>,
     ) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
-        readonly_transaction(self.pool, "get_batch_items_for_agreement", move |conn| {
+        readonly_transaction(self.pool, "get_batch_items_filtered", move |conn| {
             use crate::schema::pay_batch_order::dsl as order_dsl;
             use crate::schema::pay_batch_order_item::dsl as order_item_dsl;
             use crate::schema::pay_batch_order_item_document::dsl as aggr_item_dsl;
@@ -597,15 +597,17 @@ impl<'c> BatchDao<'c> {
     pub async fn batch_order_item_send(
         &self,
         order_id: String,
+        owner_id: NodeId,
         payee_addr: String,
         driver_order_id: String,
     ) -> DbResult<usize> {
-        do_with_transaction(self.pool, "batch_order_item_send", |conn| {
+        do_with_transaction(self.pool, "batch_order_item_send", move |conn| {
             Ok(diesel::update(oidsl::pay_batch_order_item)
                 .filter(
                     oidsl::order_id
                         .eq(order_id)
-                        .and(oidsl::payee_addr.eq(payee_addr)),
+                        .and(oidsl::payee_addr.eq(payee_addr))
+                        .and(oidsl::owner_id.eq(owner_id)),
                 )
                 .set(oidsl::driver_order_id.eq(driver_order_id))
                 .execute(conn)?)
@@ -616,17 +618,18 @@ impl<'c> BatchDao<'c> {
     pub async fn batch_order_item_paid(
         &self,
         order_id: String,
+        owner_id: NodeId,
         payee_addr: String,
         confirmation: Vec<u8>,
-    ) -> DbResult<usize> {
+    ) -> DbResult<bool> {
         do_with_transaction(self.pool, "batch_order_item_paid", move |conn| {
             use crate::schema::pay_batch_order::dsl as odsl;
-            use crate::schema::pay_batch_order_item_payment::dsl as d;
+            use crate::schema::pay_batch_order_item_document::dsl as d;
             let order: DbBatchOrder = odsl::pay_batch_order
                 .filter(odsl::id.eq(&order_id))
                 .get_result(conn)?;
 
-            let v = diesel::update(oidsl::pay_batch_order_item)
+            let updated_count = diesel::update(oidsl::pay_batch_order_item)
                 .filter(
                     oidsl::order_id
                         .eq(&order_id)
@@ -635,46 +638,56 @@ impl<'c> BatchDao<'c> {
                 )
                 .set(oidsl::paid.eq(true))
                 .execute(conn)?;
-            if v > 0 {
-                for (payee_id, json) in d::pay_batch_order_item_payment
-                    .filter(d::order_id.eq(&order_id).and(d::payee_addr.eq(&payee_addr)))
-                    .select((d::payee_id, d::json))
-                    .load::<(NodeId, String)>(conn)?
-                {
-                    let obligations: Vec<BatchPaymentObligation> = serde_json::from_str(&json)
-                        .map_err(|e| DbError::Integrity(e.to_string()))?;
-                    for obligation in obligations {
-                        match obligation {
-                            BatchPaymentObligation::Invoice {
-                                id,
-                                amount,
-                                agreement_id,
-                            } => {
-                                super::agreement::increase_amount_paid(
-                                    &agreement_id,
-                                    &order.owner_id,
-                                    &BigDecimalField(amount),
-                                    conn,
-                                )?;
-                            }
-                            BatchPaymentObligation::DebitNote {
-                                amount,
-                                agreement_id,
-                                activity_id,
-                            } => {
-                                super::activity::increase_amount_paid(
-                                    &activity_id,
-                                    &order.owner_id,
-                                    &BigDecimalField(amount),
-                                    conn,
-                                )?;
-                            }
-                        }
-                    }
+            if updated_count == 0 {
+                return Ok(false);
+            }
+            if updated_count > 2 {
+                return Err(DbError::Integrity("More than 1 rows updated".to_string()));
+            }
+
+            let query = d::pay_batch_order_item_document
+                .filter(
+                    d::order_id.eq(&order_id).and(
+                        d::payee_addr
+                            .eq(&payee_addr)
+                            .and(d::owner_id.eq(&order.owner_id)),
+                    ),
+                )
+                .select((
+                    d::payee_addr,
+                    d::agreement_id,
+                    d::invoice_id,
+                    d::activity_id,
+                    d::debit_note_id,
+                    d::amount,
+                ))
+                .load::<(
+                    NodeId,
+                    String,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    BigDecimalField,
+                )>(conn)?;
+            for (payee_id, agreement_id, invoice_id, activity_id, debit_note_id, amount) in query {
+                if let Some(activity_id) = activity_id {
+                    super::activity::increase_amount_paid(
+                        &activity_id,
+                        &order.owner_id,
+                        &amount,
+                        conn,
+                    )?;
+                } else {
+                    super::agreement::increase_amount_paid(
+                        &agreement_id,
+                        &order.owner_id,
+                        &amount,
+                        conn,
+                    )?;
                 }
             }
 
-            Ok(v)
+            Ok(true)
         })
         .await
     }
