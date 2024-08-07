@@ -20,6 +20,8 @@ enum Command {
         payment_platform: String,
     },
     SendPayments {
+        #[structopt(long, default_value = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4")]
+        owner: NodeId,
         #[structopt(long)]
         order_id: String,
     },
@@ -54,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
             payment_platform,
             owner,
         } => generate(db, owner, payment_platform).await?,
-        Command::SendPayments { order_id } => send_payments(db, order_id).await?,
+        Command::SendPayments { order_id, owner } => send_payments(db, owner, order_id).await?,
         Command::Run {
             owner,
             payment_platform,
@@ -98,7 +100,7 @@ async fn generate(
     Ok(())
 }
 
-async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
+async fn send_payments(db: DbExecutor, owner: NodeId, order_id: String) -> anyhow::Result<()> {
     let (order, items) = db
         .as_dao::<BatchDao>()
         .get_unsent_batch_items(order_id.clone())
@@ -118,7 +120,7 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
             ))
             .await??;
         db.as_dao::<BatchDao>()
-            .batch_order_item_send(order_id.clone(), item.payee_addr, payment_order_id)
+            .batch_order_item_send(order_id.clone(), owner, item.payee_addr, payment_order_id)
             .await?;
     }
     Ok(())
