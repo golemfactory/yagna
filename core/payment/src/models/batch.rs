@@ -82,12 +82,3 @@ pub struct DbBatchOrderItemAgreement {
     pub activity_id: String,
     pub debit_note_id: Option<String>,
 }
-
-#[derive(Queryable, Debug, Insertable)]
-#[table_name = "pay_batch_order_item_payment"]
-pub struct DbBatchOrderItemPayment {
-    pub order_id: String,
-    pub payee_addr: String,
-    pub payee_id: NodeId,
-    pub json: String,
-}
