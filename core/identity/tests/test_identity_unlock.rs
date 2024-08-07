@@ -13,7 +13,7 @@ use ya_framework_mocks::node::MockNode;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_identity_unlock(_ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_identity_unlock")?;
     let dir = dir.path();
