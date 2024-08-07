@@ -30,6 +30,7 @@ pub mod local {
 
     use ya_client_model::{payment::allocation::Deposit, NodeId};
 
+    pub const BUS_SERVICE_NAME: &str = "payment";
     pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 

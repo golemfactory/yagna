@@ -24,6 +24,11 @@ impl GsbBindPoints {
         }
     }
 
+    // Returns local endpoint relative to give GSB binding point.
+    pub fn endpoint(&self, name: &str) -> bus::Endpoint {
+        bus::service(format!("{}/{name}", self.local.addr()))
+    }
+
     pub fn prefix(&self, prefix: &str) -> GsbBindPoints {
         Self {
             public: bus::service(format!("{prefix}{}", self.public.addr())),
@@ -51,5 +56,14 @@ impl GsbBindPoints {
 impl Default for GsbBindPoints {
     fn default() -> Self {
         Self::new(BUS_PUBLIC, BUS_LOCAL)
+    }
+}
+
+impl std::fmt::Debug for GsbBindPoints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GsbBindPoints")
+            .field("public", &self.public.addr())
+            .field("local", &self.local.addr())
+            .finish()
     }
 }

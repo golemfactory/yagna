@@ -51,7 +51,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     // Bind GSB and start server like yagna node would do in full setup.
     // Those functions will bind only modules chosen for MockNode.
-    node.bind_gsb(false).await?;
+    node.bind_gsb().await?;
     node.start_server(ctx).await?;
 
     // Creating identities is essential to use REST API and create Agreements and Payments.

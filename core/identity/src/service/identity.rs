@@ -612,7 +612,7 @@ pub async fn wait_for_default_account_unlock(gsb: Arc<GsbBindPoints>) -> anyhow:
     if identity_key.is_locked {
         let locked_identity = identity_key.node_id;
         let (tx, rx) = futures::channel::mpsc::unbounded();
-        let endpoint = format!("{}/await_unlock", model::BUS_ID);
+        let endpoint = gsb.endpoint("await_unlock").addr().to_string();
 
         let _ = bus::bind(&endpoint, move |e: IdentityEvent| {
             let mut tx_clone = tx.clone();
@@ -629,7 +629,7 @@ pub async fn wait_for_default_account_unlock(gsb: Arc<GsbBindPoints>) -> anyhow:
                 Ok(())
             }
         });
-        subscribe(endpoint.clone()).await?;
+        subscribe(gsb.clone(), endpoint.clone()).await?;
 
         log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
@@ -637,7 +637,7 @@ pub async fn wait_for_default_account_unlock(gsb: Arc<GsbBindPoints>) -> anyhow:
 
         wait_for_unlock(gsb.clone(), rx).await?;
 
-        unsubscribe(endpoint.clone()).await?;
+        unsubscribe(gsb.clone(), endpoint.clone()).await?;
         unbind(endpoint).await?;
     }
 
@@ -663,18 +663,14 @@ async fn wait_for_unlock(
     Ok(())
 }
 
-async fn subscribe(endpoint: String) -> anyhow::Result<()> {
-    bus::service(model::BUS_ID)
-        .send(model::Subscribe { endpoint })
-        .await??;
+async fn subscribe(gsb: Arc<GsbBindPoints>, endpoint: String) -> anyhow::Result<()> {
+    gsb.local().send(model::Subscribe { endpoint }).await??;
 
     Ok(())
 }
 
-async fn unsubscribe(endpoint: String) -> anyhow::Result<()> {
-    bus::service(model::BUS_ID)
-        .send(model::Unsubscribe { endpoint })
-        .await??;
+async fn unsubscribe(gsb: Arc<GsbBindPoints>, endpoint: String) -> anyhow::Result<()> {
+    gsb.local().send(model::Unsubscribe { endpoint }).await??;
 
     Ok(())
 }

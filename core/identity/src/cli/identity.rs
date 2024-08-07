@@ -224,13 +224,14 @@ fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
 }
 
 impl IdentityCommand {
-    pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        let gsb = ctx.gsb.service(identity::BUS_SERVICE_NAME);
         match self {
-            IdentityCommand::List { .. } => list::list().await,
+            IdentityCommand::List { .. } => list::list(&gsb).await,
             IdentityCommand::Show { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().unwrap_or_default().into();
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(command)
                         .await
                         .map_err(anyhow::Error::msg)?,
@@ -239,7 +240,7 @@ impl IdentityCommand {
             IdentityCommand::PubKey { node_or_alias } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::GetPubKey(node_id))
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -282,7 +283,7 @@ impl IdentityCommand {
                 let payload = sha256.finalize().to_vec();
 
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Sign { node_id, payload })
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -298,7 +299,8 @@ impl IdentityCommand {
                 set_default,
             } => {
                 let node_id = alias_or_id.resolve().await?;
-                let id = bus::service(identity::BUS_ID)
+                let id = gsb
+                    .local()
                     .send(
                         identity::Update::with_id(node_id)
                             .with_alias(alias.clone())
@@ -358,7 +360,8 @@ impl IdentityCommand {
                     crate::id_key::generate_new_keyfile(password, from_private_key_slice)?
                 };
 
-                let id = bus::service(identity::BUS_ID)
+                let id = gsb
+                    .local()
                     .send(identity::CreateGenerated {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
@@ -384,7 +387,7 @@ impl IdentityCommand {
                     None
                 };
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Lock::with_id(node_id).with_set_password(password))
                         .await
                         .map_err(anyhow::Error::msg)?,
@@ -401,7 +404,7 @@ impl IdentityCommand {
                     rpassword::read_password_from_tty(Some("Password: "))?
                 };
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Unlock::with_id(node_id, password))
                         .await
                         .map_err(anyhow::Error::msg)?,
@@ -410,14 +413,15 @@ impl IdentityCommand {
             IdentityCommand::Drop {
                 node_or_alias,
                 force,
-            } => drop_id::drop_id(node_or_alias, *force).await,
+            } => drop_id::drop_id(&gsb, node_or_alias, *force).await,
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,
                 plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let mut key_file = bus::service(identity::BUS_ID)
+                let mut key_file = gsb
+                    .local()
                     .send(identity::GetKeyFile(node_id))
                     .await?
                     .map_err(anyhow::Error::msg)?;

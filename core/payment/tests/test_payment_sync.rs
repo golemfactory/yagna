@@ -23,7 +23,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .with_identity()
         .with_payment()
         .with_fake_market();
-    node1.bind_gsb(false).await?;
+    node1.bind_gsb().await?;
     node1.start_server(ctx).await?;
 
     let appkey_req = node1
@@ -38,8 +38,9 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
 
     let node2 = MockNode::new(net, "node-2", dir)
         .with_identity()
-        .with_fake_payment();
-    node2.bind_gsb(true).await?;
+        .with_fake_payment()
+        .with_prefixed_gsb();
+    node2.bind_gsb().await?;
 
     let appkey_prov = node2
         .get_identity()?

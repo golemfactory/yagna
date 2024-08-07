@@ -33,6 +33,7 @@ pub struct MockNode {
 
     name: String,
     testdir: PathBuf,
+    use_prefix: bool,
 
     rest_url: Url,
 
@@ -53,6 +54,7 @@ impl MockNode {
             net,
             name: name.to_string(),
             testdir,
+            use_prefix: false,
             rest_url: Self::generate_rest_url(),
             identity: None,
             payment: None,
@@ -62,13 +64,18 @@ impl MockNode {
         }
     }
 
+    pub fn with_prefixed_gsb(mut self) -> Self {
+        self.use_prefix = true;
+        self
+    }
+
     /// Use full wrapped Identity module for this node.
     pub fn with_identity(mut self) -> Self {
-        self.identity = Some(RealIdentity::new(
-            self.net.clone(),
-            &self.testdir,
-            &self.name,
-        ));
+        let gsb = self.binding_points();
+
+        self.identity = Some(
+            RealIdentity::new(self.net.clone(), &self.testdir, &self.name).with_prefixed_gsb(gsb),
+        );
         self
     }
 
@@ -80,7 +87,9 @@ impl MockNode {
 
     /// Use fake Market module for this node.
     pub fn with_fake_payment(mut self) -> Self {
-        self.fake_payment = Some(FakePayment::new(&self.name, &self.testdir));
+        let gsb = self.binding_points();
+        self.fake_payment =
+            Some(FakePayment::new(&self.name, &self.testdir).with_prefixed_gsb(gsb));
         self
     }
 
@@ -126,20 +135,15 @@ impl MockNode {
     /// `use_prefix` parameter decides if GSB will be bound without prefix like normally
     /// yagna does, or if GSB paths will be prefixed by Node name.
     /// The second options gives you possibility to run multiple nodes with GSB bound.
-    pub async fn bind_gsb(&self, use_prefix: bool) -> anyhow::Result<()> {
-        let gsb = match use_prefix {
-            true => Some(GsbBindPoints::default().prefix(&format!("/{}", self.name))),
-            false => None,
-        };
-
+    pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         self.bind_gsb_router().await?;
 
         if let Some(identity) = &self.identity {
-            identity.bind_gsb(gsb.clone()).await?;
+            identity.bind_gsb().await?;
         }
 
         if let Some(payment) = &self.fake_payment {
-            payment.bind_gsb(gsb).await?;
+            payment.bind_gsb().await?;
         }
 
         if let Some(payment) = &self.payment {
@@ -154,6 +158,19 @@ impl MockNode {
             activity.bind_gsb().await?;
         }
         Ok(())
+    }
+
+    pub async fn stop(&self) {
+        if let Some(identity) = &self.identity {
+            identity.unbind().await;
+        }
+    }
+
+    fn binding_points(&self) -> Option<GsbBindPoints> {
+        match self.use_prefix {
+            true => Some(GsbBindPoints::default().prefix(&format!("/{}", self.name))),
+            false => None,
+        }
     }
 
     /// Query REST API client for payment module.

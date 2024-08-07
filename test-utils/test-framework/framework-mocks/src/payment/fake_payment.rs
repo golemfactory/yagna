@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ya_core_model as model;
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, Ack, CancelDebitNote, CancelError,
@@ -22,6 +23,7 @@ pub struct FakePayment {
     testdir: PathBuf,
 
     db: DbExecutor,
+    gsb: GsbBindPoints,
 }
 
 impl FakePayment {
@@ -31,6 +33,7 @@ impl FakePayment {
             name: name.to_string(),
             testdir: testdir.to_path_buf(),
             db,
+            gsb: GsbBindPoints::default().service(model::payment::local::BUS_SERVICE_NAME),
         }
     }
 
@@ -41,10 +44,17 @@ impl FakePayment {
         Ok(db)
     }
 
-    pub async fn bind_gsb(&self, gsb: Option<GsbBindPoints>) -> anyhow::Result<()> {
+    pub fn with_prefixed_gsb(mut self, gsb: Option<GsbBindPoints>) -> Self {
+        self.gsb = gsb
+            .unwrap_or_default()
+            .service(model::payment::local::BUS_SERVICE_NAME);
+        self
+    }
+
+    pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         log::info!("FakePayment ({}) - binding GSB", self.name);
 
-        let gsb = gsb.unwrap_or_default().service("payment");
+        let gsb = self.gsb.clone();
         ServiceBinder::new(gsb.public_addr(), &self.db, ())
             .bind(send_debit_note)
             .bind(accept_debit_note)

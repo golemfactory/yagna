@@ -29,7 +29,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .with_payment()
         .with_fake_market()
         .with_fake_activity();
-    node.bind_gsb(false).await?;
+    node.bind_gsb().await?;
     node.start_server(ctx).await?;
 
     let appkey_prov = node.get_identity()?.create_identity_key("provider").await?;

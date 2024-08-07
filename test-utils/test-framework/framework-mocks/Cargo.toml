@@ -21,6 +21,7 @@ ya-service-api-web = "0.2"
 ya-service-bus = { workspace = true }
 ya-sb-router = { workspace = true }
 ya-utils-path = { version = "0.1", path = "../../../utils/path" }
+ya-std-utils = "0.1"
 
 ya-framework-basic = { version = "0.1" }
 

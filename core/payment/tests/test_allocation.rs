@@ -27,7 +27,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
         .with_identity()
         .with_payment()
         .with_fake_market();
-    node.bind_gsb(false).await?;
+    node.bind_gsb().await?;
     node.start_server(ctx).await?;
 
     let requestor_appkey = node
@@ -175,7 +175,7 @@ async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Res
         .with_identity()
         .with_payment()
         .with_fake_market();
-    node.bind_gsb(false).await?;
+    node.bind_gsb().await?;
     node.start_server(ctx).await?;
 
     let appkey_req = node
