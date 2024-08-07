@@ -1,6 +1,7 @@
-use crate::hardware::ProfileError;
+use crate::hardware::{ProfileError, UpdateResourcesArgs};
 use crate::hardware::{Profiles, Resources, UpdateResources};
 use crate::startup_config::{ProviderConfig, UpdateNames};
+use anyhow::anyhow;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -21,7 +22,7 @@ pub enum ProfileConfig {
         #[structopt(flatten)]
         names: UpdateNames,
         #[structopt(flatten)]
-        resources: UpdateResources,
+        resources: UpdateResourcesArgs,
     },
     /// Remove an existing profile
     Remove { name: String },
@@ -47,7 +48,7 @@ impl ProfileConfig {
                     profiles.save(path)?;
                 }
                 ProfileConfig::Update { names, resources } => {
-                    update_profiles(config, names, resources)?;
+                    update_profiles(config, names, UpdateResourcesParams::from_args(resources)?)?;
                 }
                 ProfileConfig::Remove { name } => {
                     let mut profiles = Profiles::load_or_create(&config)?;
@@ -68,13 +69,50 @@ impl ProfileConfig {
         }
     }
 }
+pub enum UpdateResourcesParams {
+    ResetToDefaults,
+    UpdateResources(UpdateResources),
+}
+
+impl UpdateResourcesParams {
+    fn from_args(update_resources_args: UpdateResourcesArgs) -> anyhow::Result<Self> {
+        if !update_resources_args.reset_to_defaults {
+            Ok(Self::UpdateResources(UpdateResources {
+                cpu_threads: update_resources_args.cpu_threads,
+                mem_gib: update_resources_args.mem_gib,
+                storage_gib: update_resources_args.storage_gib,
+            }))
+        } else {
+            if update_resources_args.mem_gib.is_some() {
+                return Err(anyhow!("--reset-to-defaults conflicts with --mem-gib."));
+            } else if update_resources_args.storage_gib.is_some() {
+                return Err(anyhow!("--reset-to-defaults conflicts with --storage-gib."));
+            } else if update_resources_args.cpu_threads.is_some() {
+                return Err(anyhow!("--reset-to-defaults conflicts with --cpu-threads."));
+            }
+            Ok(Self::ResetToDefaults)
+        }
+    }
+}
 
 fn update_profiles(
     config: ProviderConfig,
     names: UpdateNames,
-    new_resources: UpdateResources,
+    update_params: UpdateResourcesParams,
 ) -> anyhow::Result<()> {
     let mut profiles = Profiles::load_or_create(&config)?;
+
+    let new_resources = match update_params {
+        UpdateResourcesParams::ResetToDefaults => {
+            let default_resources = Resources::get_default_resources(&config)?;
+            UpdateResources {
+                cpu_threads: Some(default_resources.cpu_threads),
+                mem_gib: Some(default_resources.mem_gib),
+                storage_gib: Some(default_resources.storage_gib),
+            }
+        }
+        UpdateResourcesParams::UpdateResources(res) => res,
+    };
 
     fn update_profile(resources: &mut Resources, new_resources: UpdateResources) {
         if let Some(cpu_threads) = new_resources.cpu_threads {

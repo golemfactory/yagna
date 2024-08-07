@@ -17,7 +17,7 @@ use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
 
 use crate::events::Event;
-use crate::startup_config::{FileMonitor, ProviderConfig};
+use crate::startup_config::{DefaultCapsConfig, FileMonitor, ProviderConfig};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const CPU_THREADS_RESERVED: i32 = 1;
@@ -74,7 +74,7 @@ pub struct Resources {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(group = clap::ArgGroup::with_name("up-res").multiple(true).required(true))]
-pub struct UpdateResources {
+pub struct UpdateResourcesArgs {
     /// Number of CPU logical cores
     #[structopt(long, group = "up-res")]
     pub cpu_threads: Option<i32>,
@@ -83,6 +83,16 @@ pub struct UpdateResources {
     pub mem_gib: Option<f64>,
     /// Free partition space
     #[structopt(long, group = "up-res")]
+    pub storage_gib: Option<f64>,
+    /// Reset to defaults instead of setting to a specified value
+    #[structopt(long, group = "up-res")]
+    pub reset_to_defaults: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct UpdateResources {
+    pub cpu_threads: Option<i32>,
+    pub mem_gib: Option<f64>,
     pub storage_gib: Option<f64>,
 }
 
@@ -126,12 +136,12 @@ impl Resources {
         })
     }
 
-    fn default_caps<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+    fn default_caps<P: AsRef<Path>>(path: P, config: &DefaultCapsConfig) -> Result<Self, Error> {
         let res = Self::max_caps(path)?;
         Ok(Resources {
-            cpu_threads: 1.max(res.cpu_threads - CPU_THREADS_RESERVED),
-            mem_gib: 0.7 * res.mem_gib,
-            storage_gib: 0.8 * res.storage_gib,
+            cpu_threads: 1.max(res.cpu_threads - config.reserved_cores),
+            mem_gib: (1. - config.reserved_mem_percent) * res.mem_gib,
+            storage_gib: (1. - config.reserved_storage_percent) * res.storage_gib,
         })
     }
 
@@ -148,6 +158,20 @@ impl Resources {
             .storage_gib
             .max(self.storage_gib.min(res.storage_gib));
         self
+    }
+
+    pub fn get_default_resources(config: &ProviderConfig) -> Result<Self, Error> {
+        // Load or create hardware_file
+        Profiles::load_or_create(config)?;
+        let path = config.hardware_file.as_path();
+        // path should exist because we've called Profile::load_or_create
+        if !path.exists() {
+            panic!("Unexpected condition")
+        }
+        let resources = Resources::try_with_config(path, config)?;
+        let default_caps = Resources::default_caps(path, &config.default_caps)?;
+        let caped_resources = resources.cap(&default_caps);
+        Ok(caped_resources)
     }
 }
 
@@ -233,7 +257,7 @@ impl Profiles {
                 std::fs::File::create(path)?;
 
                 let mut profiles = Self::try_with_config(path, config)?;
-                let default_caps = Resources::default_caps(path)?;
+                let default_caps = Resources::default_caps(path, &config.default_caps)?;
                 for profile in profiles.profiles.values_mut() {
                     *profile = profile.cap(&default_caps);
                 }
