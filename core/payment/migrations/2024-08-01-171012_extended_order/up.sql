@@ -40,15 +40,4 @@ CREATE TABLE pay_batch_order_item_document(
     CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_FK3 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id)
 );
 
-CREATE TABLE pay_batch_order_item_payment(
-    order_id        VARCHAR (50) NOT NULL,
-    owner_id        VARCHAR(50) NOT NULL,
-    payee_addr      VARCHAR(50) NOT NULL,
-    payee_id        VARCHAR(50) NOT NULL,
-    json            TEXT NOT NULL,
-
-    CONSTRAINT PAY_BATCH_ORDER_ITEM_PAYMENT_FK1 FOREIGN KEY (owner_id, order_id, payee_addr) REFERENCES pay_batch_order_item(owner_id, order_id, payee_addr),
-    CONSTRAINT PAY_BATCH_ORDER_ITEM_PAYMENT_FK2 FOREIGN KEY (owner_id, order_id) REFERENCES pay_batch_order(owner_id, id)
-);
-
 
