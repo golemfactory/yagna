@@ -54,15 +54,39 @@ fn validate_orders(
     payer_addr: &str,
     payee_addr: &str,
     amount: &BigDecimal,
-) -> Result<(), OrderValidationError> {
+) -> Result<(NodeId, NodeId), OrderValidationError> {
     if orders.is_empty() {
         return Err(OrderValidationError::new(
             "orders not found in the database",
         ));
     }
 
+    let mut payer_id: Option<NodeId> = None;
+    let mut payee_id: Option<NodeId> = None;
+
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
+        if let Some(payer_id) = payer_id {
+            if order.payer_id != payer_id {
+                return Err(OrderValidationError::new(format!(
+                    "payer_id mismatch {} vs {}",
+                    order.payer_id, payer_id
+                )));
+            }
+        } else {
+            payer_id = Some(order.payer_id);
+        }
+        if let Some(payee_id) = payee_id {
+            if order.payee_id != payee_id {
+                return Err(OrderValidationError::new(format!(
+                    "payee_id mismatch {} vs {}",
+                    order.payee_id, payee_id
+                )));
+            }
+        } else {
+            payee_id = Some(order.payee_id);
+        }
+
         if order.amount.0 == BigDecimal::zero() {
             return OrderValidationError::zero_amount(order);
         }
@@ -83,7 +107,10 @@ fn validate_orders(
         return OrderValidationError::amount(&total_amount, amount);
     }
 
-    Ok(())
+    Ok((
+        payer_id.ok_or(OrderValidationError::new("payer_id is null"))?,
+        payee_id.ok_or(OrderValidationError::new("payee_id is null"))?,
+    ))
 }
 
 #[derive(Clone, Debug)]
@@ -426,16 +453,18 @@ impl PaymentProcessor {
         let payer_id: NodeId;
         let payee_id: NodeId;
         let payment_id: String;
-        let mut payment: Payment;
-
-        {
+        let mut payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             let orders = db_executor
                 .as_dao::<OrderDao>()
                 .get_many(msg.order_ids, driver.clone())
                 .await?;
-            validate_orders(
+
+            // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
+            //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
+            //        data model. Payments can no longer by assigned to a single payer and payee.
+            (payer_id, payee_id) = validate_orders(
                 &orders,
                 &payment_platform,
                 &payer_addr,
@@ -462,12 +491,6 @@ impl PaymentProcessor {
                 }
             }
 
-            // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
-            //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
-            //        data model. Payments can no longer by assigned to a single payer and payee.
-            payer_id = orders.get(0).unwrap().payer_id;
-            payee_id = orders.get(0).unwrap().payee_id;
-
             let payment_dao: PaymentDao = db_executor.as_dao();
 
             payment_id = payment_dao
@@ -483,6 +506,7 @@ impl PaymentProcessor {
                     agreement_payments,
                 )
                 .await?;
+
 
             let signed_payment = payment_dao
                 .get(payment_id.clone(), payer_id)
