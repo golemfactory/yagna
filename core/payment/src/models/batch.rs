@@ -58,24 +58,29 @@ pub struct DbBatchOrderItem {
     pub paid: bool,
 }
 
-#[derive(Queryable, Debug, Insertable)]
-#[table_name = "pay_batch_order_item_activity"]
-pub struct DbBatchOrderItemActivity {
+#[derive(Queryable, Debug, Serialize)]
+pub struct DbAgreementBatchOrderItem {
+    pub ts: NaiveDateTime,
     pub order_id: String,
-    pub owner_id: NodeId,
+    pub owner_id: String,
     pub payee_addr: String,
-    pub activity_id: String,
+    pub amount: BigDecimalField,
+    pub agreement_id: String,
+    pub invoice_id: Option<String>,
+    pub activity_id: Option<String>,
     pub debit_note_id: Option<String>,
 }
 
 #[derive(Queryable, Debug, Insertable)]
-#[table_name = "pay_batch_order_item_agreement"]
+#[table_name = "pay_batch_order_item_document"]
 pub struct DbBatchOrderItemAgreement {
     pub order_id: String,
     pub owner_id: NodeId,
     pub payee_addr: String,
     pub agreement_id: String,
     pub invoice_id: Option<String>,
+    pub activity_id: String,
+    pub debit_note_id: Option<String>,
 }
 
 #[derive(Queryable, Debug, Insertable)]
