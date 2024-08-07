@@ -1,9 +1,20 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
+use crate::bus::GsbBindPoints;
+
+pub const BUS_SERVICE_NAME: &str = "identity";
 pub const BUS_ID: &str = "/local/identity";
+
+pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
+    match base {
+        Some(base) => base.service(BUS_SERVICE_NAME),
+        None => GsbBindPoints::default().service(BUS_SERVICE_NAME),
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ack {}

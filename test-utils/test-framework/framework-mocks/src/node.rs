@@ -8,6 +8,7 @@ use url::Url;
 
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
+use ya_core_model::bus::GsbBindPoints;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
@@ -121,18 +122,27 @@ impl MockNode {
 
     /// Binds GSB router and all initialized modules to GSB.
     /// If you want to bind only chosen modules, you should bind them manually.
-    pub async fn bind_gsb(&self) -> anyhow::Result<()> {
+    ///
+    /// `use_prefix` parameter decides if GSB will be bound without prefix like normally
+    /// yagna does, or if GSB paths will be prefixed by Node name.
+    /// The second options gives you possibility to run multiple nodes with GSB bound.
+    pub async fn bind_gsb(&self, use_prefix: bool) -> anyhow::Result<()> {
+        let gsb = match use_prefix {
+            true => Some(GsbBindPoints::default().prefix(&format!("/{}", self.name))),
+            false => None,
+        };
+
         self.bind_gsb_router().await?;
 
         if let Some(identity) = &self.identity {
-            identity.bind_gsb().await?;
-        }
-
-        if let Some(payment) = &self.payment {
-            payment.bind_gsb().await?;
+            identity.bind_gsb(gsb.clone()).await?;
         }
 
         if let Some(payment) = &self.fake_payment {
+            payment.bind_gsb(gsb).await?;
+        }
+
+        if let Some(payment) = &self.payment {
             payment.bind_gsb().await?;
         }
 

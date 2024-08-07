@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use chrono::{NaiveDateTime, Utc};
 use futures::prelude::*;
@@ -9,6 +10,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use ya_core_model::appkey as model;
 use ya_core_model::appkey::event::AppKeyEvent;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
@@ -72,7 +74,7 @@ pub async fn preconfigured_to_appkey_model(
     })
 }
 
-pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
+pub async fn activate(db: &DbExecutor, gsb: Arc<GsbBindPoints>) -> anyhow::Result<()> {
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
     let subscription = Rc::new(RefCell::new(Subscription::default()));
@@ -85,7 +87,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         });
     }
 
-    let _ = bus::bind(model::BUS_ID, move |s: model::Subscribe| {
+    let _ = bus::bind(gsb.local_addr(), move |s: model::Subscribe| {
         let id = subscription.borrow_mut().subscribe(s.endpoint);
         future::ok(id)
     });
@@ -99,7 +101,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         // Create a new application key entry
         let db = db.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
-        let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
+        let _ = bus::bind(gsb.local_addr(), move |create: model::Create| {
             let key = Uuid::new_v4().to_simple().to_string();
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
@@ -157,7 +159,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let db = db.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
-        let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
+        let _ = bus::bind(gsb.local_addr(), move |get: model::Get| {
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
             async move {
@@ -185,7 +187,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let db = db.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
-        let _ = bus::bind(model::BUS_ID, move |get: model::GetByName| {
+        let _ = bus::bind(gsb.local_addr(), move |get: model::GetByName| {
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
             async move {
@@ -214,7 +216,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let db = db.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
-        let _ = bus::bind(model::BUS_ID, move |list: model::List| {
+        let _ = bus::bind(gsb.local_addr(), move |list: model::List| {
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
             async move {
@@ -249,7 +251,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let create_tx = tx;
         let db = db.clone();
-        let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
+        let _ = bus::bind(gsb.local_addr(), move |rm: model::Remove| {
             let db = db.clone();
             let preconfigured_appkey = preconfigured_appkey.clone();
             let mut create_tx = create_tx.clone();

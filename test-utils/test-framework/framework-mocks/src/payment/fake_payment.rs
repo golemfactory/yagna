@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, Ack, CancelDebitNote, CancelError,
     CancelInvoice, PaymentSync, PaymentSyncError, PaymentSyncRequest, PaymentSyncWithBytes,
@@ -25,7 +26,7 @@ pub struct FakePayment {
 
 impl FakePayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
-        let db = Self::create_db(testdir, "payment").unwrap();
+        let db = Self::create_db(testdir, name).unwrap();
         FakePayment {
             name: name.to_string(),
             testdir: testdir.to_path_buf(),
@@ -40,10 +41,11 @@ impl FakePayment {
         Ok(db)
     }
 
-    pub async fn bind_gsb(&self) -> anyhow::Result<()> {
+    pub async fn bind_gsb(&self, gsb: Option<GsbBindPoints>) -> anyhow::Result<()> {
         log::info!("FakePayment ({}) - binding GSB", self.name);
 
-        ServiceBinder::new(BUS_ID, &self.db, ())
+        let gsb = gsb.unwrap_or_default().service("payment");
+        ServiceBinder::new(gsb.public_addr(), &self.db, ())
             .bind(send_debit_note)
             .bind(accept_debit_note)
             .bind(reject_debit_note)

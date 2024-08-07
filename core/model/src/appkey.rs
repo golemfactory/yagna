@@ -1,15 +1,25 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::bus::GsbBindPoints;
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
+pub const BUS_SERVICE_NAME: &str = "appkey";
 pub const BUS_ID: &str = "/local/appkey";
 
 pub const DEFAULT_ROLE: &str = "manager";
 pub const AUTOCONFIGURED_KEY_NAME: &str = "autoconfigured";
 
 const DEFAULT_PAGE_SIZE: u32 = 20;
+
+pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
+    match base {
+        Some(base) => base.service(BUS_SERVICE_NAME),
+        None => GsbBindPoints::default().service(BUS_SERVICE_NAME),
+    }
+}
 
 #[derive(Clone, Error, Debug, Serialize, Deserialize)]
 #[error("appkey error [{code}]: {message}")]

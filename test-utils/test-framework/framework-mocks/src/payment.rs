@@ -71,7 +71,7 @@ impl RealPayment {
     }
 
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
-        log::info!("MockPayment ({}) - binding GSB", self.name);
+        log::info!("RealPayment ({}) - binding GSB", self.name);
 
         ya_payment::service::bind_service(
             &self.db,

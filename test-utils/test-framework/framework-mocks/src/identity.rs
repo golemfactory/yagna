@@ -6,6 +6,7 @@ use std::path::Path;
 
 use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::identity::IdentityInfo;
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
 use ya_identity::service::Identity;
@@ -38,9 +39,9 @@ impl RealIdentity {
         Ok(db)
     }
 
-    pub async fn bind_gsb(&self) -> anyhow::Result<()> {
-        log::info!("MockIdentity ({}) - binding GSB", self.name);
-        Identity::gsb(&self.db).await?;
+    pub async fn bind_gsb(&self, gsb: Option<GsbBindPoints>) -> anyhow::Result<()> {
+        log::info!("RealIdentity ({}) - binding GSB", self.name);
+        Identity::gsb_prefixed(&self.db, gsb).await?;
         Ok(())
     }
 
