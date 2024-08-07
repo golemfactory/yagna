@@ -107,16 +107,6 @@ table! {
 }
 
 table! {
-    pay_batch_order_item_payment (owner_id, order_id, payee_addr, payee_id) {
-        order_id -> Text,
-        owner_id -> Text,
-        payee_addr -> Text,
-        payee_id -> Text,
-        json -> Text,
-    }
-}
-
-table! {
     pay_debit_note (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -272,7 +262,6 @@ allow_tables_to_appear_in_same_query!(
     pay_allocation,
     pay_batch_order,
     pay_batch_order_item,
-    pay_batch_order_item_payment,
     pay_batch_order_item_document,
     pay_debit_note,
     pay_debit_note_event,

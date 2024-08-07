@@ -347,19 +347,6 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                         }
                     }
                 }
-
-                let json = serde_json::to_string(&obligations)?;
-                use crate::schema::pay_batch_order_item_payment::dsl;
-
-                diesel::insert_into(dsl::pay_batch_order_item_payment)
-                    .values((
-                        dsl::order_id.eq(&order_id),
-                        dsl::owner_id.eq(owner_id),
-                        dsl::payee_addr.eq(&payee_addr),
-                        dsl::payee_id.eq(payee_id),
-                        dsl::json.eq(json),
-                    ))
-                    .execute(conn)?;
             }
         }
     }
@@ -491,8 +478,9 @@ impl<'c> BatchDao<'c> {
         payee_addr: String,
     ) -> DbResult<BatchPayment> {
         readonly_transaction(self.pool, "get_batch_order_payments", move |conn| {
+            use crate::schema::pay_agreement::dsl as pa;
             use crate::schema::pay_batch_order_item::dsl as di;
-            use crate::schema::pay_batch_order_item_payment::dsl as d;
+            use crate::schema::pay_batch_order_item_document::dsl as d;
 
             let (amount,) = di::pay_batch_order_item
                 .filter(
@@ -506,14 +494,46 @@ impl<'c> BatchDao<'c> {
 
             let mut peer_obligation = HashMap::<NodeId, Vec<BatchPaymentObligation>>::new();
 
-            for (payee_id, json) in d::pay_batch_order_item_payment
-                .filter(d::order_id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
-                .select((d::payee_id, d::json))
-                .load::<(NodeId, String)>(conn)?
+            for (payee_id, agreement_id, invoice_id, activity_id, debit_note_id, amount) in
+                d::pay_batch_order_item_document
+                    .filter(d::order_id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
+                    .inner_join(
+                        pa::pay_agreement
+                            .on(d::owner_id.eq(pa::owner_id).and(d::agreement_id.eq(pa::id))),
+                    )
+                    .select((
+                        pa::peer_id,
+                        d::agreement_id,
+                        d::invoice_id,
+                        d::activity_id,
+                        d::debit_note_id,
+                        d::amount,
+                    ))
+                    .load::<(
+                        NodeId,
+                        String,
+                        Option<String>,
+                        Option<String>,
+                        Option<String>,
+                        BigDecimalField,
+                    )>(conn)?
             {
-                let obligations =
-                    serde_json::from_str(&json).map_err(|e| DbError::Integrity(e.to_string()))?;
-                peer_obligation.insert(payee_id, obligations);
+                let obligation = if let Some(activity_id) = activity_id {
+                    BatchPaymentObligation::DebitNote {
+                        amount: amount.0,
+                        agreement_id,
+                        activity_id,
+                    }
+                } else if let Some(invoice_id) = invoice_id {
+                    BatchPaymentObligation::Invoice {
+                        amount: amount.0,
+                        agreement_id,
+                        id: invoice_id,
+                    }
+                } else {
+                    return Err(DbError::Integrity("No invoice or activity id".to_string()));
+                };
+                peer_obligation.entry(payee_id).or_default().push(obligation);
             }
 
             Ok(BatchPayment {
