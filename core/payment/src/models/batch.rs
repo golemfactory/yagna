@@ -8,7 +8,6 @@ use ya_core_model::NodeId;
 use ya_persistence::types::BigDecimalField;
 
 use crate::schema::*;
-use crate::schema::pay_invoice::owner_id;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BatchPaymentObligation {
@@ -29,12 +28,13 @@ pub struct BatchItem {
     pub payments: Vec<BatchPayment>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchPayment {
     pub amount: BigDecimal,
     pub peer_obligation: HashMap<NodeId, Vec<BatchPaymentObligation>>,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Serialize, Identifiable, Insertable)]
 #[table_name = "pay_batch_order"]
 pub struct DbBatchOrder {
     pub id: String,
@@ -47,7 +47,7 @@ pub struct DbBatchOrder {
     pub paid: bool,
 }
 
-#[derive(Queryable, Debug, Insertable)]
+#[derive(Queryable, Debug, Serialize, Insertable)]
 #[table_name = "pay_batch_order_item"]
 pub struct DbBatchOrderItem {
     pub order_id: String,
@@ -65,7 +65,7 @@ pub struct DbBatchOrderItemActivity {
     pub owner_id: NodeId,
     pub payee_addr: String,
     pub activity_id: String,
-    pub debit_note_id: Option<String>
+    pub debit_note_id: Option<String>,
 }
 
 #[derive(Queryable, Debug, Insertable)]
@@ -75,9 +75,8 @@ pub struct DbBatchOrderItemAgreement {
     pub owner_id: NodeId,
     pub payee_addr: String,
     pub agreement_id: String,
-    pub invoice_id: Option<String>
+    pub invoice_id: Option<String>,
 }
-
 
 #[derive(Queryable, Debug, Insertable)]
 #[table_name = "pay_batch_order_item_payment"]
