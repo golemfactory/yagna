@@ -35,7 +35,7 @@ CREATE TABLE pay_batch_order_item_document(
     debit_note_id   VARCHAR(50) NULL,
     amount          VARCHAR(32) NOT NULL,
 
-    CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_PK PRIMARY KEY (owner_id, order_id, payee_addr, agreement_id),
+    CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_PK PRIMARY KEY (owner_id, order_id, payee_addr, agreement_id, activity_id),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_FK1 FOREIGN KEY (owner_id, order_id, payee_addr) REFERENCES pay_batch_order_item(owner_id, order_id, payee_addr),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_FK2 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
     CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_FK3 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
