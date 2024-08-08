@@ -37,6 +37,7 @@ pub struct BatchPayment {
 
 #[derive(Queryable, Debug, Serialize, Identifiable, Insertable)]
 #[table_name = "pay_batch_order"]
+#[serde(rename_all = "camelCase")]
 pub struct DbBatchOrder {
     pub id: String,
     pub ts: NaiveDateTime,
@@ -50,6 +51,7 @@ pub struct DbBatchOrder {
 
 #[derive(Queryable, Debug, Serialize, Insertable)]
 #[table_name = "pay_batch_order_item"]
+#[serde(rename_all = "camelCase")]
 pub struct DbBatchOrderItem {
     pub order_id: String,
     pub owner_id: String,
