@@ -78,6 +78,7 @@ table! {
         driver -> Text,
         platform -> Text,
         total_amount -> Text,
+        paid_amount -> Text,
         paid -> Bool,
     }
 }
@@ -88,7 +89,7 @@ table! {
         owner_id -> Text,
         payee_addr -> Text,
         amount -> Text,
-        driver_order_id -> Nullable<Text>,
+        payment_id -> Nullable<Text>,
         paid -> Bool,
     }
 }

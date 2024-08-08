@@ -295,8 +295,10 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 
     let total_amount = BigDecimal::from(0u32);
 
+    log::debug!("Resolving invoices for {}", owner_id);
     let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
 
+    log::debug!("Resolving agreements for {}", owner_id);
     let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
 
     if total_amount == zero {
@@ -315,6 +317,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 odsl::payer_addr.eq(&payer_addr),
                 odsl::platform.eq(&platform),
                 odsl::total_amount.eq(total_amount.to_string()),
+                odsl::paid_amount.eq("0"),
             ))
             .execute(conn)?;
     }
@@ -385,7 +388,7 @@ pub fn get_batch_orders(
     platform: &str,
 ) -> DbResult<Vec<DbBatchOrderItem>> {
     let batch_orders: Vec<DbBatchOrderItem> = oidsl::pay_batch_order_item
-        .filter(oidsl::driver_order_id.eq_any(ids))
+        .filter(oidsl::payment_id.eq_any(ids))
         .load(conn)?;
 
     Ok(batch_orders)
@@ -587,7 +590,7 @@ impl<'c> BatchDao<'c> {
                 .get_result(conn)?;
             let items: Vec<DbBatchOrderItem> = oidsl::pay_batch_order_item
                 .filter(oidsl::order_id.eq(&order_id))
-                .filter(oidsl::driver_order_id.is_null())
+                .filter(oidsl::payment_id.is_null())
                 .filter(oidsl::paid.eq(false))
                 .load(conn)?;
             Ok((order, items))
@@ -598,6 +601,8 @@ impl<'c> BatchDao<'c> {
     pub async fn get_batch_items(
         &self,
         owner_id: NodeId,
+        order_id: Option<String>,
+        payee_addr: Option<String>,
         agreement_id: Option<String>,
         activity_id: Option<String>,
     ) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
@@ -620,6 +625,12 @@ impl<'c> BatchDao<'c> {
                 )
                 .into_boxed();
 
+            if let Some(order_id) = order_id {
+                query = query.filter(order_item_dsl::order_id.eq(order_id));
+            }
+            if let Some(payee_addr) = payee_addr {
+                query = query.filter(order_item_dsl::payee_addr.eq(payee_addr));
+            }
             if let Some(agreement_id) = agreement_id {
                 query = query.filter(aggr_item_dsl::agreement_id.eq(agreement_id));
             }
@@ -650,7 +661,7 @@ impl<'c> BatchDao<'c> {
         order_id: String,
         owner_id: NodeId,
         payee_addr: String,
-        driver_order_id: String,
+        payment_id: String,
     ) -> DbResult<usize> {
         do_with_transaction(self.pool, "batch_order_item_send", move |conn| {
             Ok(diesel::update(oidsl::pay_batch_order_item)
@@ -660,7 +671,7 @@ impl<'c> BatchDao<'c> {
                         .and(oidsl::payee_addr.eq(payee_addr))
                         .and(oidsl::owner_id.eq(owner_id)),
                 )
-                .set(oidsl::driver_order_id.eq(driver_order_id))
+                .set(oidsl::payment_id.eq(payment_id))
                 .execute(conn)?)
         })
         .await

@@ -46,6 +46,7 @@ pub struct DbBatchOrder {
     pub driver: String,
     pub platform: String,
     pub total_amount: BigDecimalField,
+    pub paid_amount: BigDecimalField,
     pub paid: bool,
 }
 
@@ -57,7 +58,7 @@ pub struct DbBatchOrderItem {
     pub owner_id: String,
     pub payee_addr: String,
     pub amount: BigDecimalField,
-    pub driver_order_id: Option<String>,
+    pub payment_id: Option<String>,
     pub paid: bool,
 }
 
