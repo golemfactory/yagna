@@ -2,7 +2,7 @@ import {formatDatePaymentsFormat} from "./utils.js";
 import crypto from "crypto";
 import { v4 as uuidv4 } from 'uuid';
 
-export function createDebitNote(activity, prev_note, status, total_amount_due) {
+export function createDebitNote(activity, prev_note, debit_nonce, status, total_amount_due) {
     //date + 30 days
     let due_date = new Date();
     due_date.setUTCDate(due_date.getUTCDate() + 30);
@@ -18,6 +18,7 @@ export function createDebitNote(activity, prev_note, status, total_amount_due) {
         usage_counter_vector: "[1, 1]",
         payment_due_date: formatDatePaymentsFormat(due_date),
         send_accept: 0,
+        debit_nonce: debit_nonce
     }
     return debit_note;
 }
@@ -57,7 +58,8 @@ export function insertDebitNote(db, debitNote) {
         total_amount_due,
         usage_counter_vector,
         payment_due_date,
-        send_accept
+        send_accept,
+        debit_nonce
           )
     VALUES (
         '${debitNote.id}',
@@ -70,7 +72,8 @@ export function insertDebitNote(db, debitNote) {
         '${debitNote.total_amount_due}',
         '${debitNote.usage_counter_vector}',
         '${debitNote.payment_due_date}',
-        '${debitNote.send_accept}'
+        '${debitNote.send_accept}',
+        ${debitNote.debit_nonce}
     )`;
     //console.log(query);
     db.prepare(query).run();

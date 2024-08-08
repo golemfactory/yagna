@@ -36,7 +36,7 @@ insertActivity(db, activity2);
 
 
 
-increaseActivityAndAgreementAmountAccepted(db, activity1, 100);
+increaseActivityAndAgreementAmountAccepted(db, activity1, 1);
 
 
 function finishAgreement(amount_due, agreement_id) {
@@ -53,7 +53,7 @@ function finishAgreement(amount_due, agreement_id) {
             console.log("Increasing agreement by: ", diff.toString());
             increaseAgreementAmountDue(db, agreement, diff);
         }
-        insertInvoice(db, createInvoice([activity1, activity2], 'RECEIVED', amount_due));
+        insertInvoice(db, createInvoice([activity1, activity2], 'ACCEPTED', amount_due));
         
     })(amount_due, agreement_id);
 }
@@ -69,9 +69,10 @@ function debitNoteIncoming(amount_due, activity) {
         console.log("diff", diff.toString());
 
         let lastDebitNoteId = lastDebitNote ? lastDebitNote.id : null;
-        let debitNote = createDebitNote(activity, lastDebitNoteId, 'RECEIVED', amount_due);
+        let debit_nonce = lastDebitNote ? lastDebitNote.debit_nonce + 1 : 0;
+        let debitNote = createDebitNote(activity, lastDebitNoteId, debit_nonce, 'ACCEPTED', amount_due);
         insertDebitNote(db, debitNote);
-        increaseActivityAndAgreementAmountDue(db, activity, diff);
+        increaseActivityAndAgreementAmountAccepted(db, activity, diff);
     })(amount_due, activity);
 }
 
