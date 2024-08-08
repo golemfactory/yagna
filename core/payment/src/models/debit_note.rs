@@ -20,7 +20,7 @@ pub struct WriteObj {
     pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
-    pub debit_nonce: i32
+    pub debit_nonce: i32,
 }
 
 impl WriteObj {
@@ -42,11 +42,15 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
-            debit_nonce
+            debit_nonce,
         }
     }
 
-    pub fn received(debit_note: DebitNote, debit_nonce: i32, previous_debit_note_id: Option<String>) -> Self {
+    pub fn received(
+        debit_note: DebitNote,
+        debit_nonce: i32,
+        previous_debit_note_id: Option<String>,
+    ) -> Self {
         Self {
             id: debit_note.debit_note_id,
             owner_id: debit_note.recipient_id,
@@ -59,7 +63,7 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
-            debit_nonce
+            debit_nonce,
         }
     }
 }

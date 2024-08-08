@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 
 use uuid::Uuid;
-use ya_client_model::payment::{DocumentStatus};
+use ya_client_model::payment::DocumentStatus;
 
 use ya_core_model::NodeId;
 use ya_persistence::executor::{
@@ -54,7 +54,7 @@ struct ActivityJoinAgreement {
     total_amount_accepted: BigDecimalField,
     total_amount_scheduled: BigDecimalField,
     agreement_id: String,
-    debit_note_id: String
+    debit_note_id: String,
 }
 
 pub fn resolve_invoices_agreement_part(
@@ -192,7 +192,8 @@ pub fn resolve_invoices_activity_part(
         // select all activities that are not fully paid
         // for each activity, find the last accepted debit note in debit note chain
 
-        let query_res = diesel::sql_query(r#"
+        let query_res = diesel::sql_query(
+            r#"
                 SELECT a.id,
                     pa.peer_id,
                     pa.payee_addr,
@@ -217,16 +218,14 @@ pub fn resolve_invoices_activity_part(
                     AND pa.updated_ts > ?
                     AND pa.payment_platform = ?
                     AND pa.owner_id = ?
-            "#)
-            .bind::<Timestamp, _>(since.naive_utc())
-            .bind::<Text, _>(&platform)
-            .bind::<Text, _>(owner_id)
-            .load::<ActivityJoinAgreement>(conn)?;
+            "#,
+        )
+        .bind::<Timestamp, _>(since.naive_utc())
+        .bind::<Text, _>(&platform)
+        .bind::<Text, _>(owner_id)
+        .load::<ActivityJoinAgreement>(conn)?;
 
-        log::info!(
-            "Pay for activities - {} found to check",
-            query_res.len()
-        );
+        log::info!("Pay for activities - {} found to check", query_res.len());
         for a in query_res {
             let amount_to_pay =
                 a.total_amount_accepted.0.clone() - a.total_amount_scheduled.0.clone();
@@ -239,7 +238,6 @@ pub fn resolve_invoices_activity_part(
             }
             total_amount += &amount_to_pay;
             super::activity::increase_amount_scheduled(&a.id, &owner_id, &amount_to_pay, conn)?;
-
 
             let obligation = BatchPaymentObligation::DebitNote {
                 debit_note_id: Some(a.debit_note_id),
@@ -441,6 +439,7 @@ impl<'c> BatchDao<'c> {
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
+            query = query.order_by(dsl::ts.desc());
             Ok(query.load(conn)?)
         })
         .await
@@ -562,7 +561,10 @@ impl<'c> BatchDao<'c> {
                 } else {
                     return Err(DbError::Integrity("No invoice or activity id".to_string()));
                 };
-                peer_obligation.entry(payee_id).or_default().push(obligation);
+                peer_obligation
+                    .entry(payee_id)
+                    .or_default()
+                    .push(obligation);
             }
 
             Ok(BatchPayment {
