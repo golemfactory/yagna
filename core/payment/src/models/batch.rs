@@ -17,6 +17,7 @@ pub enum BatchPaymentObligation {
         agreement_id: String,
     },
     DebitNote {
+        debit_note_id: Option<String>,
         amount: BigDecimal,
         agreement_id: String,
         activity_id: String,

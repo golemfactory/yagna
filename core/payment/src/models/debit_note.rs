@@ -20,11 +20,13 @@ pub struct WriteObj {
     pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
+    pub debit_nonce: i32
 }
 
 impl WriteObj {
     pub fn issued(
         debit_note: NewDebitNote,
+        debit_nonce: i32,
         previous_debit_note_id: Option<String>,
         issuer_id: NodeId,
     ) -> Self {
@@ -40,10 +42,11 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+            debit_nonce
         }
     }
 
-    pub fn received(debit_note: DebitNote, previous_debit_note_id: Option<String>) -> Self {
+    pub fn received(debit_note: DebitNote, debit_nonce: i32, previous_debit_note_id: Option<String>) -> Self {
         Self {
             id: debit_note.debit_note_id,
             owner_id: debit_note.recipient_id,
@@ -56,6 +59,7 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+            debit_nonce
         }
     }
 }
@@ -74,6 +78,7 @@ pub struct ReadObj {
     pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
+    pub debit_nonce: i32,
 
     pub agreement_id: String,     // From activity
     pub peer_id: NodeId,          // From agreement
@@ -125,6 +130,7 @@ impl TryFrom<ReadObj> for DebitNote {
                 .payment_due_date
                 .map(|d| Utc.from_utc_datetime(&d)),
             status: debit_note.status.try_into()?,
+            debit_nonce: debit_note.debit_nonce,
         })
     }
 }
