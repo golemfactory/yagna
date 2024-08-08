@@ -126,13 +126,15 @@ impl<'c> DebitNoteDao<'c> {
                 .filter(dsl::owner_id.eq(&issuer_id))
                 .order_by(dsl::debit_nonce.desc())
                 .first::<(String, i32)>(conn)
-                .optional()? {
+                .optional()?
+            {
                 Some((id, nonce)) => (Some(id), Some(nonce)),
                 None => (None, None),
             };
 
             let next_nonce = debit_nonce.map(|nonce| nonce + 1).unwrap_or(0);
-            let debit_note = WriteObj::issued(debit_note, next_nonce, previous_debit_note_id, issuer_id);
+            let debit_note =
+                WriteObj::issued(debit_note, next_nonce, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
@@ -162,11 +164,16 @@ impl<'c> DebitNoteDao<'c> {
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
                 .order_by(dsl::debit_nonce.desc())
                 .first::<(String, i32)>(conn)
-                .optional()? {
+                .optional()?
+            {
                 Some((id, nonce)) => (Some(id), Some(nonce)),
                 None => (None, None),
             };
-            let debit_note = WriteObj::received(debit_note, debit_nonce.map(|n| n + 1).unwrap_or(0), previous_debit_note_id);
+            let debit_note = WriteObj::received(
+                debit_note,
+                debit_nonce.map(|n| n + 1).unwrap_or(0),
+                previous_debit_note_id,
+            );
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
