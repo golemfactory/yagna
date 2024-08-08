@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 
 use uuid::Uuid;
-use ya_client_model::payment::DocumentStatus;
+use ya_client_model::payment::{DocumentStatus};
 
 use ya_core_model::NodeId;
 use ya_persistence::executor::{
@@ -41,6 +41,7 @@ table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
+        debit_note_id -> Text,
     }
 }
 
@@ -53,6 +54,7 @@ struct ActivityJoinAgreement {
     total_amount_accepted: BigDecimalField,
     total_amount_scheduled: BigDecimalField,
     agreement_id: String,
+    debit_note_id: String
 }
 
 pub fn resolve_invoices_agreement_part(
@@ -186,12 +188,35 @@ pub fn resolve_invoices_activity_part(
     let zero = BigDecimal::from(0u32);
 
     {
+        // query explanation
+        // select all activities that are not fully paid
+        // for each activity, find the last accepted debit note in debit note chain
+
         let query_res = diesel::sql_query(r#"
-                SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled, pa.id agreement_id
-                FROM pay_activity a JOIN pay_agreement pa ON a.owner_id = pa.owner_id AND a.agreement_id = pa.id AND a.role = pa.role
-                WHERE a.role='R' AND a.total_amount_accepted > 0
-                AND a.total_amount_scheduled != a.total_amount_accepted
-                AND pa.updated_ts > ? AND pa.payment_platform = ? AND pa.owner_id = ?
+                SELECT a.id,
+                    pa.peer_id,
+                    pa.payee_addr,
+                    a.total_amount_accepted,
+                    a.total_amount_scheduled,
+                    pa.id agreement_id,
+                    (SELECT dn.id
+                        FROM pay_debit_note dn
+                        WHERE dn.activity_id = a.id
+                            AND dn.owner_id = a.owner_id
+                            AND dn.status = 'ACCEPTED'
+                        ORDER BY dn.debit_nonce DESC
+                        LIMIT 1
+                    ) debit_note_id
+                FROM pay_activity a JOIN pay_agreement pa
+                    ON a.owner_id = pa.owner_id
+                        AND a.agreement_id = pa.id
+                        AND a.role = pa.role
+                WHERE a.role='R'
+                    AND a.total_amount_accepted != '0'
+                    AND a.total_amount_scheduled != a.total_amount_accepted
+                    AND pa.updated_ts > ?
+                    AND pa.payment_platform = ?
+                    AND pa.owner_id = ?
             "#)
             .bind::<Timestamp, _>(since.naive_utc())
             .bind::<Text, _>(&platform)
@@ -199,7 +224,7 @@ pub fn resolve_invoices_activity_part(
             .load::<ActivityJoinAgreement>(conn)?;
 
         log::info!(
-            "Pay for activities without invoice - {} found to check",
+            "Pay for activities - {} found to check",
             query_res.len()
         );
         for a in query_res {
@@ -215,7 +240,9 @@ pub fn resolve_invoices_activity_part(
             total_amount += &amount_to_pay;
             super::activity::increase_amount_scheduled(&a.id, &owner_id, &amount_to_pay, conn)?;
 
+
             let obligation = BatchPaymentObligation::DebitNote {
+                debit_note_id: Some(a.debit_note_id),
                 amount: amount_to_pay.clone(),
                 agreement_id: a.agreement_id.clone(),
                 activity_id: a.id,
@@ -328,6 +355,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                         }
                         BatchPaymentObligation::DebitNote {
                             amount,
+                            debit_note_id,
                             agreement_id,
                             activity_id,
                         } => {
@@ -340,7 +368,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                                     dsl::agreement_id.eq(agreement_id),
                                     dsl::invoice_id.eq(None::<String>),
                                     dsl::activity_id.eq(activity_id),
-                                    dsl::debit_note_id.eq(None::<String>),
+                                    dsl::debit_note_id.eq(debit_note_id),
                                     dsl::amount.eq(BigDecimalField(amount.clone())),
                                 ))
                                 .execute(conn)?;
@@ -520,6 +548,7 @@ impl<'c> BatchDao<'c> {
             {
                 let obligation = if let Some(activity_id) = activity_id {
                     BatchPaymentObligation::DebitNote {
+                        debit_note_id,
                         amount: amount.0,
                         agreement_id,
                         activity_id,
@@ -689,7 +718,7 @@ impl<'c> BatchDao<'c> {
                     Option<String>,
                     BigDecimalField,
                 )>(conn)?;
-            for (payee_id, agreement_id, invoice_id, activity_id, debit_note_id, amount) in query {
+            for (payee_id, agreement_id, invoice_id, activity_id, _debit_note_id, amount) in query {
                 if let Some(activity_id) = activity_id {
                     super::activity::increase_amount_paid(
                         &activity_id,

@@ -54,6 +54,7 @@ macro_rules! query {
                 dsl::total_amount_due,
                 dsl::usage_counter_vector,
                 dsl::payment_due_date,
+                dsl::debit_nonce,
                 activity_dsl::agreement_id,
                 agreement_dsl::peer_id,
                 agreement_dsl::payee_addr,
@@ -119,14 +120,19 @@ impl<'c> DebitNoteDao<'c> {
         issuer_id: NodeId,
     ) -> DbResult<String> {
         do_with_transaction(self.pool, "debit_note_dao_create_new", move |conn| {
-            let previous_debit_note_id = dsl::pay_debit_note
-                .select(dsl::id)
+            let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
+                .select((dsl::id, dsl::debit_nonce))
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
                 .filter(dsl::owner_id.eq(&issuer_id))
-                .order_by(dsl::timestamp.desc())
-                .first(conn)
-                .optional()?;
-            let debit_note = WriteObj::issued(debit_note, previous_debit_note_id, issuer_id);
+                .order_by(dsl::debit_nonce.desc())
+                .first::<(String, i32)>(conn)
+                .optional()? {
+                Some((id, nonce)) => (Some(id), Some(nonce)),
+                None => (None, None),
+            };
+
+            let next_nonce = debit_nonce.map(|nonce| nonce + 1).unwrap_or(0);
+            let debit_note = WriteObj::issued(debit_note, next_nonce, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
@@ -151,13 +157,16 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn insert_received(&self, debit_note: DebitNote) -> DbResult<()> {
         do_with_transaction(self.pool, "debit_note_dao_insert_received", move |conn| {
-            let previous_debit_note_id = dsl::pay_debit_note
-                .select(dsl::id)
+            let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
+                .select((dsl::id, dsl::debit_nonce))
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
-                .order_by(dsl::timestamp.desc())
-                .first(conn)
-                .optional()?;
-            let debit_note = WriteObj::received(debit_note, previous_debit_note_id);
+                .order_by(dsl::debit_nonce.desc())
+                .first::<(String, i32)>(conn)
+                .optional()? {
+                Some((id, nonce)) => (Some(id), Some(nonce)),
+                None => (None, None),
+            };
+            let debit_note = WriteObj::received(debit_note, debit_nonce.map(|n| n + 1).unwrap_or(0), previous_debit_note_id);
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
