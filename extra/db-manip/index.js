@@ -9,7 +9,7 @@ import {formatDatePaymentsFormat} from './utils.js';
 import {
     createAgreement,
     insertAgreement,
-    increaseAgreementAmountDue, getAgreement
+    increaseAgreementAmountDue, getAgreement, increaseAgreementAmountAccepted
 } from './aggreement.js';
 import {
     createActivity,
@@ -36,14 +36,13 @@ insertActivity(db, activity2);
 
 
 
-increaseActivityAndAgreementAmountAccepted(db, activity1, 1);
 
 
 function finishAgreement(amount_due, agreement_id) {
     db.transaction((amount_due, agreement_id) => {
         let bigAmountDue = BigNumber(amount_due);
         let agreement = getAgreement(db, agreement_id);
-        let diff = bigAmountDue.minus(agreement.total_amount_due);
+        let diff = bigAmountDue.minus(agreement.total_amount_accepted);
         if (diff.isNegative()) {
             throw new Error("Amount due is smaller than total amount due");
         }
@@ -51,7 +50,7 @@ function finishAgreement(amount_due, agreement_id) {
             console.log("OK - Amount due is equal to total amount due");
         } else {
             console.log("Increasing agreement by: ", diff.toString());
-            increaseAgreementAmountDue(db, agreement, diff);
+            increaseAgreementAmountAccepted(db, agreement_id, diff);
         }
         insertInvoice(db, createInvoice([activity1, activity2], 'ACCEPTED', amount_due));
         
@@ -85,6 +84,8 @@ debitNoteIncoming("15.44", activity2);
 debitNoteIncoming("16.436666666666666666666666666666", activity2);
 debitNoteIncoming("17.0", activity2);
 
-finishAgreement("24.0", agreement.id);
+//increaseAgreementAmountAccepted(db, agreement, 1);
+
+finishAgreement("25.0", agreement.id);
 
 db.close();

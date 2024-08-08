@@ -1,8 +1,9 @@
 // External crates
 use crate::dao::*;
 use crate::utils::*;
-use actix_web::web::{get, Data, Path};
+use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use ya_client_model::payment::params;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -20,10 +21,19 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         )
 }
 
-async fn get_pay_agreements(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+async fn get_pay_agreements(
+    db: Data<DbExecutor>,
+    query: Query<params::FilterParams>,
+    id: Identity,
+) -> HttpResponse {
     let node_id = id.identity;
     let dao: AgreementDao = db.as_dao();
-    match dao.list(None).await {
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_items = query.max_items;
+    match dao
+        .get_for_node_id(node_id, after_timestamp, max_items)
+        .await
+    {
         Ok(agreements) => response::ok(agreements),
         Err(e) => response::server_error(&e),
     }
@@ -61,7 +71,10 @@ async fn get_pay_agreement_orders(
     let node_id = id.identity;
     let agreement_id = path.into_inner();
     let dao: BatchDao = db.as_dao();
-    match dao.get_batch_items(node_id, None, None, Some(agreement_id), None).await {
+    match dao
+        .get_batch_items(node_id, None, None, Some(agreement_id), None)
+        .await
+    {
         Ok(items) => response::ok(items),
         Err(e) => response::server_error(&e),
     }

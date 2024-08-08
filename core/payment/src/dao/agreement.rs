@@ -50,7 +50,7 @@ pub fn set_amount_due(
     Ok(())
 }
 
-/// Compute and set amount due based on activities
+/// Compute and set amount due based on agreements
 pub fn compute_amount_due(
     agreement_id: &String,
     owner_id: &NodeId,
@@ -170,13 +170,13 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 }
 
 impl<'a> AgreementDao<'a> {
-    pub async fn list(&self, role: Option<Role>) -> DbResult<Vec<ReadObj>> {
+    /*pub async fn list(&self, role: Option<Role>) -> DbResult<Vec<ReadObj>> {
         readonly_transaction(self.pool, "pay_agreement_dao_list", move |conn| {
             let agreements = dsl::pay_agreement.load(conn)?;
             Ok(agreements.into_iter().collect())
         })
         .await
-    }
+    }*/
 
     pub async fn get(&self, agreement_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
         readonly_transaction(self.pool, "pay_agreement_dao_get", move |conn| {
@@ -210,6 +210,28 @@ impl<'a> AgreementDao<'a> {
                 .values(agreement)
                 .execute(conn)?;
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<ReadObj>> {
+        readonly_transaction(self.pool, "agreement_dao_get_for_node_id", move |conn| {
+            let mut query = dsl::pay_agreement.into_boxed();
+            query = query.filter(dsl::owner_id.eq(node_id));
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::created_ts.gt(date))
+            }
+            query = query.order_by(dsl::created_ts.asc());
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let agreements: Vec<WriteObj> = query.load(conn)?;
+            Ok(agreements)
         })
         .await
     }
