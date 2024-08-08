@@ -115,6 +115,7 @@ table! {
         activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
+        debit_nonce -> Integer,
         send_accept -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
