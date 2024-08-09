@@ -11,7 +11,7 @@ use ya_payment_driver::{
         Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
         PAYMENT_STATUS_NOT_YET,
     },
-    model::{GenericError, SchedulePayment},
+    model::{GenericError, ScheduleDriverPayment},
     utils,
 };
 
@@ -59,7 +59,7 @@ impl Erc20Dao {
     pub async fn insert_payment(
         &self,
         order_id: &str,
-        msg: &SchedulePayment,
+        msg: &ScheduleDriverPayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
         let glm_amount = utils::big_dec_to_u256(&msg.amount());

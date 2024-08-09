@@ -83,7 +83,7 @@ async fn get_account_balance(
 async fn schedule_payment(
     _db: (),
     _caller: String,
-    msg: SchedulePayment,
+    msg: ScheduleDriverPayment,
 ) -> Result<String, GenericError> {
     log::info!("schedule payment: {:?}", msg);
 
