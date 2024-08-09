@@ -64,6 +64,7 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(release_allocations)
+            .bind_with_processor(process_payments_now)
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
@@ -495,6 +496,15 @@ mod local {
         processor.release_allocations(true).await;
         log::debug!("Release allocations processor finished");
         Ok(())
+    }
+
+    async fn process_payments_now(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessPaymentsNow,
+    ) -> Result<ProcessPaymentsNowResponse, ProcessPaymentsError> {
+        processor.process_payments_now(msg).await
     }
 
     async fn get_drivers(

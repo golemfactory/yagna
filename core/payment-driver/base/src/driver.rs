@@ -66,7 +66,7 @@ pub trait PaymentDriver {
         &self,
 
         caller: String,
-        msg: SchedulePayment,
+        msg: ScheduleDriverPayment,
     ) -> Result<String, GenericError>;
 
     async fn try_update_payment(
