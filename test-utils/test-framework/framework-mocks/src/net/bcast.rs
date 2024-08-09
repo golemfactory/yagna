@@ -1,14 +1,10 @@
-//! Broadcast singleton support service
-// Singleton version of BCast module in hope to solve problems with running
-// multithreaded integration tests with singleton GSB router
-
 use std::collections::btree_map::Entry::{Occupied, Vacant};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use super::BCast;
 use ya_client::model::NodeId;
 use ya_core_model::net::local as local_net;
+use ya_framework_basic::mocks::net::IMockBroadcast;
 
 #[derive(Clone)]
 pub struct BCastService {
@@ -21,21 +17,22 @@ struct BCastServiceInner {
     node_subnet: BTreeMap<String, String>,
 }
 
-lazy_static::lazy_static! {
-    static ref BCAST : BCastService = BCastService {
-        inner: Arc::new(Mutex::new(BCastServiceInner::default()))
-    };
-}
-
 impl Default for BCastService {
     fn default() -> Self {
-        log::debug!("getting singleton mock BCast");
-        (*BCAST).clone()
+        BCastService::new()
     }
 }
 
-impl BCast for BCastService {
-    fn register(&self, node_id: &NodeId, subnet: &str) {
+impl BCastService {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Default::default())),
+        }
+    }
+}
+
+impl IMockBroadcast for BCastService {
+    fn register_for_broadcasts(&self, node_id: &NodeId, subnet: &str) {
         let mut me = self.inner.lock().unwrap();
         log::info!("registering node {} within subnet: {}", node_id, subnet);
 
@@ -48,7 +45,7 @@ impl BCast for BCastService {
         };
     }
 
-    fn add(&self, subscribe: local_net::Subscribe) {
+    fn subscribe_topic(&self, subscribe: local_net::Subscribe) {
         let mut me = self.inner.lock().unwrap();
         me.topics_endpoints
             .entry(subscribe.topic().to_owned())

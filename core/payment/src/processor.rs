@@ -512,37 +512,38 @@ impl PaymentProcessor {
 
         tokio::task::spawn_local(
             async move {
+                let send_result =
+                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
+
+                let mark_sent = match send_result {
+                    Ok(_) => true,
+                    // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
+                    Err(PaymentSendToGsbError::NotSupported) => {
+                        match Self::send_to_gsb(payer_id, payee_id, msg).await {
+                            Ok(_) => true,
+                            Err(PaymentSendToGsbError::Rejected) => true,
+                            Err(PaymentSendToGsbError::Failed) => false,
+                            Err(PaymentSendToGsbError::NotSupported) => false,
+                        }
+                    }
+                    Err(_) => false,
+                };
+
                 let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
-                let send_result =
-                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
-
-                let mark_sent = if send_result.is_ok() {
+                if mark_sent {
+                    payment_dao.mark_sent(payment_id.clone()).await?;
+                    // Always add new type of signature. Compatibility is for older Provider nodes only.
                     payment_dao
                         .add_signature(
-                            payment_id.clone(),
+                            payment_id,
                             msg_with_bytes.signature.clone(),
                             msg_with_bytes.signed_bytes.clone(),
                         )
-                        .await
-                        .is_ok()
-                } else if send_result.is_err_and(|err| err == PaymentSendToGsbError::NotSupported) {
-                    // if sending SendPaymentWithBytes is not supported then try sending SendPayment
-                    match Self::send_to_gsb(payer_id, payee_id, msg).await {
-                        Ok(_) => true,
-                        Err(PaymentSendToGsbError::Rejected) => true,
-                        Err(PaymentSendToGsbError::Failed) => false,
-                        Err(PaymentSendToGsbError::NotSupported) => false,
-                    }
-                } else {
-                    false
-                };
-
-                if mark_sent {
-                    payment_dao.mark_sent(payment_id).await.ok();
+                        .await?;
                 } else {
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();

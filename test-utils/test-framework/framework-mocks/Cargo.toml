@@ -1,0 +1,48 @@
+[package]
+name = "ya-framework-mocks"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+ya-agreement-utils = { workspace = true }
+ya-client-model = "0.6"
+ya-client = "0.8"
+ya-core-model = { version = "^0.9" }
+ya-dummy-driver = "0.3"
+ya-erc20-driver = "0.4"
+ya-identity = "0.3"
+ya-market = "0.4"
+ya-net = { version = "0.3", features = ["service"] }
+ya-payment = "0.3"
+ya-persistence = "0.3"
+ya-service-api = "0.1"
+ya-service-api-web = "0.2"
+ya-service-bus = { workspace = true }
+ya-sb-router = { workspace = true }
+ya-utils-path = { version = "0.1", path = "../../../utils/path" }
+
+ya-framework-basic = { version = "0.1" }
+
+actix-rt = "2.7"
+actix-web = "4"
+actix-http = "3"
+actix-service = "2"
+anyhow = "1.0"
+async-trait = "0.1.80"
+chrono = "0.4"
+derive_more = { workspace = true }
+ethsign = "0.8"
+futures = "0.3"
+lazy_static = "1.5"
+log = "0.4"
+portpicker = "0.1"
+rand = "0.8"
+regex = "1.5"
+serde = "1.0"
+serde_json = "1.0"
+test-context = "0.1.4"
+tokio = "1"
+uuid = { version = "0.8", features = ["v4", "serde"] }
+url = "2.5"
+

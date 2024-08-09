@@ -1,45 +1,69 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
-use structopt::StructOpt;
-use ya_client::payment::PaymentApi;
-use ya_client::web::{rest_api_url, WebClient};
+use test_context::test_context;
+
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
+use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::mocks::net::IMockNet;
+use ya_framework_basic::{resource, temp_dir};
+use ya_framework_mocks::market::FakeMarket;
+use ya_framework_mocks::net::MockNet;
+use ya_framework_mocks::node::MockNode;
+use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
-#[derive(Clone, Debug, StructOpt)]
-struct Args {
-    #[structopt(long)]
-    app_session_id: Option<String>,
-    #[structopt(long, default_value = "dummy-glm")]
-    platform: String,
-}
+#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(false);
 
-#[actix_rt::main]
-async fn main() -> anyhow::Result<()> {
-    let log_level =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "debit_note_flow=debug,info".to_owned());
-    std::env::set_var("RUST_LOG", log_level);
-    env_logger::init();
+    let dir = temp_dir!("test_debit_note_flow")?;
+    let dir = dir.path();
 
-    let args: Args = Args::from_args();
+    let net = MockNet::new();
+    net.bind_gsb();
 
-    // Create requestor / provider PaymentApi
-    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
-    let provider: PaymentApi = WebClient::builder()
-        .api_url(provider_url)
-        .build()
-        .interface()?;
-    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
-    let requestor: PaymentApi = WebClient::builder()
-        .api_url(requestor_url)
-        .build()
-        .interface()?;
+    let node = MockNode::new(net, "node-1", dir)
+        .with_identity()
+        .with_payment()
+        .with_fake_market()
+        .with_fake_activity();
+    node.bind_gsb().await?;
+    node.start_server(ctx).await?;
+
+    let appkey_prov = node.get_identity()?.create_identity_key("provider").await?;
+    let appkey_req = node
+        .get_identity()?
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
+
+    let app_session_id = Some("app_session_id".to_string());
+    let mut agreement =
+        FakeMarket::create_fake_agreement(appkey_req.identity, appkey_prov.identity).unwrap();
+    agreement.app_session_id = app_session_id.clone();
+    node.get_market()?.add_agreement(agreement.clone()).await;
+
+    let activity_id = node
+        .get_activity()?
+        .create_activity(&agreement.agreement_id)
+        .await;
+
+    let requestor = node.rest_payments(&appkey_req.key)?;
+    let provider = node.rest_payments(&appkey_prov.key)?;
+
+    node.get_payment()?
+        .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+
+    let payment_platform =
+        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
 
     let debit_note_date = Utc::now();
-
     let debit_note = NewDebitNote {
-        activity_id: "activity_id".to_string(),
+        activity_id: activity_id.clone(),
         total_amount_due: BigDecimal::from(1u64),
         usage_counter_vector: None,
         payment_due_date: Some(Utc::now()),
@@ -60,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
             Some(&debit_note_date),
             Some(Duration::from_secs(10)),
             None,
-            args.app_session_id.clone(),
+            app_session_id.clone(),
         )
         .await
         .unwrap();
@@ -74,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
     let allocation = requestor
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)
-            payment_platform: Some(PaymentPlatformEnum::PaymentPlatformName(args.platform)),
+            payment_platform: Some(payment_platform.clone()),
             total_amount: BigDecimal::from(10u64),
             make_deposit: false,
             deposit: None,
@@ -115,9 +139,14 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, None)
+        .wait_for_payment(
+            Some(&now),
+            // Should be enough for GLM transfer
+            Duration::from_secs(1000),
+            None,
+            app_session_id.clone(),
+        )
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
@@ -130,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note status verified correctly.");
 
     let debit_note2 = NewDebitNote {
-        activity_id: "activity_id".to_string(),
+        activity_id: activity_id.clone(),
         total_amount_due: BigDecimal::from(2u64),
         usage_counter_vector: None,
         payment_due_date: Some(Utc::now()),
@@ -160,9 +189,14 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
+        .wait_for_payment(
+            Some(&now),
+            // Should be enough for GLM transfer
+            Duration::from_secs(1000),
+            None,
+            app_session_id.clone(),
+        )
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();

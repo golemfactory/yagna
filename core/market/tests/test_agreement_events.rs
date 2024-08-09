@@ -8,6 +8,7 @@ use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementEventType;
+use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -15,7 +16,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_approved_event() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -110,7 +111,7 @@ async fn test_agreement_approved_event() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_events_and_wait_for_approval() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -195,7 +196,7 @@ async fn test_agreement_events_and_wait_for_approval() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_terminated_event() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -288,7 +289,7 @@ async fn test_agreement_terminated_event() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_waiting_for_agreement_event() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -339,7 +340,7 @@ async fn test_waiting_for_agreement_event() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected_event() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -437,7 +438,7 @@ async fn test_agreement_rejected_event() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_cancelled_event() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

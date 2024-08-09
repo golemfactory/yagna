@@ -15,7 +15,7 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 tos = []
-framework-test = ['ya-exe-unit/framework-test']
+framework-test = ['ya-exe-unit/framework-test', 'ya-payment/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [
@@ -230,6 +230,7 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
     "test-utils/test-framework/framework-basic",
+    "test-utils/test-framework/framework-mocks",
 ]
 
 [workspace.dependencies]
@@ -239,10 +240,6 @@ members = [
 derive_more = "0.99.11"
 erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
 erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
-#erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
-#erc20_processor = { path = "../../payments/erc20_payment_lib" }
-#erc20_payment_lib = { version = "=0.4.1" }
-#erc20_processor = { version = "=0.4.1" }
 gftp = { version = "0.4.0", path = "core/gftp" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
@@ -330,6 +327,7 @@ ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 ya-framework-basic = { path = "test-utils/test-framework/framework-basic" }
+ya-framework-mocks = { path = "test-utils/test-framework/framework-mocks" }
 
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

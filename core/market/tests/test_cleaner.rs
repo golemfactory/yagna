@@ -1,6 +1,7 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use std::ops::Not;
 use structopt::StructOpt;
+use ya_framework_mocks::net::MockNet;
 
 use ya_market::testing::cleaner::clean;
 use ya_market::testing::dao::TestingDao;
@@ -32,7 +33,7 @@ async fn test_agreement() {
     let _ = env_logger::builder().try_init();
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
-    let db = MarketsNetwork::new(None)
+    let db = MarketsNetwork::new(None, MockNet::new())
         .await
         .init_database("test_agreement");
     let agreement_dao = db.as_dao::<AgreementDao>();
@@ -79,7 +80,9 @@ async fn test_demand() {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new(None).await.init_database("test_demand");
+    let db = MarketsNetwork::new(None, MockNet::new())
+        .await
+        .init_database("test_demand");
     let demand_dao = db.as_dao::<DemandDao>();
     demand_dao.insert(&valid_demand).await.unwrap();
     demand_dao.insert(&expired_demand).await.unwrap();
@@ -102,7 +105,9 @@ async fn test_offer() {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new(None).await.init_database("test_offer");
+    let db = MarketsNetwork::new(None, MockNet::new())
+        .await
+        .init_database("test_offer");
     let offer_dao = db.as_dao::<OfferDao>();
     let validation_ts = (Utc::now() - Duration::days(100)).naive_utc();
     offer_dao
@@ -124,7 +129,9 @@ async fn test_offer() {
 #[serial_test::serial]
 async fn test_events() {
     // insert two events
-    let db = MarketsNetwork::new(None).await.init_database("test_events");
+    let db = MarketsNetwork::new(None, MockNet::new())
+        .await
+        .init_database("test_events");
     let valid_event = generate_event(1, future());
     let expired_event = generate_event(2, past());
     <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.ram_db.pool, valid_event.clone())
@@ -146,7 +153,7 @@ async fn test_events() {
 #[serial_test::serial]
 async fn test_proposal() {
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(None)
+    let db = MarketsNetwork::new(None, MockNet::new())
         .await
         .init_database("test_proposal");
     let valid_negotiation = generate_negotiation(None);
@@ -204,7 +211,7 @@ async fn test_proposal_lotsa_negotiations() {
     // Due to diesel limitations we have to take care of processing
     // big amount of negotiations (manually) #672
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(None)
+    let db = MarketsNetwork::new(None, MockNet::new())
         .await
         .init_database("test_proposal_lotsa_negotiations");
     let mut expired_negotiations: Vec<Negotiation> = vec![];

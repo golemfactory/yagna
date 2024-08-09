@@ -511,6 +511,7 @@ impl ServiceCommand {
                     ("web3", log::LevelFilter::Info),
                     ("tokio_util", log::LevelFilter::Off),
                     ("mio", log::LevelFilter::Off),
+                    ("sqlx", log::LevelFilter::Info),
                 ];
 
                 // if RUST_LOG is default, then set ya_payment::service to debug (investigating rare deadlocks)
