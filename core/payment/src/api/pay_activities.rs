@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 // External crates
 use crate::dao::*;
+use crate::models::debit_note::DebitNoteForApi;
 use crate::utils::*;
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use anyhow::anyhow;
-use ya_client_model::payment::{params};
+use ya_client_model::payment::params;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-use crate::models::debit_note::DebitNoteForApi;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
