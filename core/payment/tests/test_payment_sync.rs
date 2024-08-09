@@ -3,7 +3,7 @@ use std::str::FromStr;
 use test_context::test_context;
 
 use ya_client_model::payment::Acceptance;
-use ya_core_model::payment::public::SendInvoice;
+use ya_core_model::payment::public::{AcceptInvoice, Ack, SendInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
@@ -72,6 +72,10 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .send_as(invoice.issuer_id, SendInvoice(invoice.clone()))
         .await??;
 
+    let mut channel = node2
+        .get_fake_payment()?
+        .message_channel::<AcceptInvoice>(Ok(Ack {}));
+
     log::info!("Accepting Invoice ({})...", invoice.invoice_id);
     requestor.get_invoice(&invoice.invoice_id).await.unwrap();
     requestor
@@ -85,5 +89,8 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .await
         .unwrap();
 
+    let accept = channel.recv().await.unwrap();
+    assert_eq!(accept.invoice_id, invoice.invoice_id);
+    assert_eq!(accept.acceptance.total_amount_accepted, invoice.amount);
     Ok(())
 }

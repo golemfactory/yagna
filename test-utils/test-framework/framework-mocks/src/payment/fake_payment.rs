@@ -3,12 +3,14 @@
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use uuid::Uuid;
-use ya_client_model::market::Agreement;
 
 use ya_agreement_utils::AgreementView;
+use ya_client_model::market::Agreement;
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{DocumentStatus, Invoice, NewAllocation};
 use ya_core_model as model;
@@ -24,6 +26,7 @@ use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{Endpoint, ServiceBinder};
+use ya_service_bus::RpcMessage;
 
 #[derive(Clone)]
 pub struct FakePayment {
@@ -79,6 +82,45 @@ impl FakePayment {
             .bind(sync_payment_with_bytes);
 
         Ok(())
+    }
+
+    /// Function binds new GSB handler to the given message.
+    /// It returns Receiver that can be used to inspect the messages and make assertions.
+    /// GSB will always return `result` passed in parameter back to the caller.
+    /// Function overrides previous handler, so only one Receiver at the same time can be used.
+    pub fn message_channel<T>(
+        &self,
+        result: Result<T::Item, T::Error>,
+    ) -> mpsc::UnboundedReceiver<T>
+    where
+        T: RpcMessage,
+        T::Item: Clone,
+        T::Error: Clone + Display,
+    {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        self.override_gsb_public()
+            .bind(move |_db: DbExecutor, _sender_id: String, msg: T| {
+                let result = result.clone();
+                let sender = sender.clone();
+                async move {
+                    let _ = sender.send(msg).map_err(|_e| {
+                        log::error!(
+                            "[FakePayment] Unable to send message '{}' to channel.",
+                            T::ID
+                        );
+                    });
+                    result
+                }
+            });
+        receiver
+    }
+
+    pub fn override_gsb_public(&self) -> ServiceBinder<DbExecutor, ()> {
+        ServiceBinder::new(self.gsb.public_addr(), &self.db, ())
+    }
+
+    pub fn override_gsb_local(&self) -> ServiceBinder<DbExecutor, ()> {
+        ServiceBinder::new(self.gsb.local_addr(), &self.db, ())
     }
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {

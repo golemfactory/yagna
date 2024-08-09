@@ -107,7 +107,7 @@ impl RealIdentity {
 
     fn register_identity_in_net(&self, id: NodeId) {
         if let Some(gsb) = &self.gsb {
-            self.net.register_node(&id, &gsb.public_addr());
+            self.net.register_node(&id, gsb.public_addr());
         } else {
             // This line is temporary, until we will be able to rebind all modules to non-fixed prefix.
             // Currently, all modules must be bound under `/local/{module}` and `/public/{module}`.
