@@ -5,9 +5,10 @@ use crate::utils::*;
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use anyhow::anyhow;
-use ya_client_model::payment::{params, DebitNote};
+use ya_client_model::payment::{params};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use crate::models::debit_note::DebitNoteForApi;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -56,12 +57,12 @@ async fn get_pay_activity(db: Data<DbExecutor>, path: Path<String>, id: Identity
 }
 
 pub async fn get_debit_note_chain(
-    debit_list: Vec<DebitNote>,
-) -> Result<Vec<DebitNote>, anyhow::Error> {
+    debit_list: Vec<DebitNoteForApi>,
+) -> Result<Vec<DebitNoteForApi>, anyhow::Error> {
     if debit_list.is_empty() {
         return Ok(Vec::new());
     }
-    let mut debit_note_chain = Vec::<DebitNote>::new();
+    let mut debit_note_chain = Vec::<DebitNoteForApi>::new();
     let mut debit_by_id = HashMap::new();
     let mut debit_by_prev_id = HashMap::new();
 
@@ -90,7 +91,7 @@ pub async fn get_debit_note_chain(
         }
     }
     //find debit note that is not a previous debit note
-    let mut not_previous_list: Vec<DebitNote> = Vec::new();
+    let mut not_previous_list: Vec<DebitNoteForApi> = Vec::new();
     for debit in debit_list.iter() {
         if !debit_by_prev_id.contains_key(&debit.debit_note_id) {
             not_previous_list.push(debit.clone());
