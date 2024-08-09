@@ -500,9 +500,7 @@ impl PaymentProcessor {
                     .resolve(
                         msg.node_id,
                         msg.node_id.to_string(),
-                        "erc20".to_string(),
-                        msg.platform
-                            .unwrap_or_else(|| "erc20-holesky-tglm".to_string()),
+                        msg.platform,
                         Utc::now().sub(chrono::Duration::days(30)),
                     )
                     .await
