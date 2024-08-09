@@ -4,7 +4,6 @@ CREATE TABLE pay_batch_order(
     ts              DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     owner_id        VARCHAR(50) NOT NULL,
     payer_addr      VARCHAR(50) NOT NULL,
-    driver          VARCHAR(50) NOT NULL,
     platform        VARCHAR(50) NOT NULL,
     total_amount    VARCHAR(32) NOT NULL,
     paid_amount     VARCHAR(32) NOT NULL,

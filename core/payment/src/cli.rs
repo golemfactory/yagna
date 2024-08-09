@@ -446,7 +446,7 @@ Typically operation should take less than 1 minute.
                         let driver_status_props = bus::service(pay::BUS_ID)
                             .call(pay::ProcessPaymentsNow {
                                 node_id,
-                                platform: None,
+                                platform: format!("{}-{}-{}", account.driver(), account.network(), account.token()),
                                 skip_resolve: false,
                                 skip_send: false,
                             })

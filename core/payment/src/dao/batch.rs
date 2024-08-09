@@ -65,7 +65,6 @@ pub fn resolve_invoices_agreement_part(
     let conn = args.conn;
     let owner_id = args.owner_id;
     let payer_addr = args.payer_addr;
-    let driver = args.driver;
     let platform = args.platform;
     let since = args.since;
     let mut total_amount = total_amount;
@@ -180,7 +179,6 @@ pub fn resolve_invoices_activity_part(
     let conn = args.conn;
     let owner_id = args.owner_id;
     let payer_addr = args.payer_addr;
-    let driver = args.driver;
     let platform = args.platform;
     let since = args.since;
     let mut total_amount = total_amount;
@@ -276,7 +274,6 @@ pub struct ResolveInvoiceArgs<'a> {
     pub conn: &'a ConnType,
     pub owner_id: NodeId,
     pub payer_addr: &'a str,
-    pub driver: &'a str,
     pub platform: &'a str,
     pub since: DateTime<Utc>,
 }
@@ -285,7 +282,6 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let conn = args.conn;
     let owner_id = args.owner_id;
     let payer_addr = args.payer_addr;
-    let driver = args.driver;
     let platform = args.platform;
     let since = args.since;
     let zero = BigDecimal::from(0u32);
@@ -313,7 +309,6 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             .values((
                 odsl::id.eq(&order_id),
                 odsl::owner_id.eq(owner_id),
-                odsl::driver.eq(driver),
                 odsl::payer_addr.eq(&payer_addr),
                 odsl::platform.eq(&platform),
                 odsl::total_amount.eq(total_amount.to_string()),
@@ -452,7 +447,6 @@ impl<'c> BatchDao<'c> {
         &self,
         owner_id: NodeId,
         payer_addr: String,
-        driver: String,
         platform: String,
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
@@ -461,7 +455,6 @@ impl<'c> BatchDao<'c> {
                 conn,
                 owner_id,
                 payer_addr: &payer_addr,
-                driver: &driver,
                 platform: &platform,
                 since,
             })
