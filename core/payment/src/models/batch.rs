@@ -43,7 +43,6 @@ pub struct DbBatchOrder {
     pub ts: NaiveDateTime,
     pub owner_id: NodeId,
     pub payer_addr: String,
-    pub driver: String,
     pub platform: String,
     pub total_amount: BigDecimalField,
     pub paid_amount: BigDecimalField,
