@@ -142,7 +142,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             } else {
                 true
             },
-            metrics_ctx: None,
+            ..CliCtx::default()
         })
     }
 }

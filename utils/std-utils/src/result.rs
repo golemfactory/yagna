@@ -39,8 +39,9 @@ impl<T, E: Debug + Display> LogErr<T, E> for Result<T, E> {
     fn log_error(self, message: &str, log_level: Level) -> Result<T, E> {
         if let Err(e) = self {
             // It will return file not module path, so it will differ from the original log macro.
-            let module = std::panic::Location::caller().file();
-            log(module, log_level, message, &e);
+            let module = std::panic::Location::caller().file().to_string();
+            let module = module.replace('\\', "/");
+            log(&module, log_level, message, &e);
             Err(e)
         } else {
             self

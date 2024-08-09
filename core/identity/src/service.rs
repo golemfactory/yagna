@@ -28,7 +28,7 @@ impl Identity {
         base: Option<GsbBindPoints>,
     ) -> anyhow::Result<()> {
         let db = context.component();
-        let gsb = base.unwrap_or(GsbBindPoints::default());
+        let gsb = base.unwrap_or_default();
         let gsb_ident = Arc::new(gsb.clone().service(model::identity::BUS_SERVICE_NAME));
 
         let service = Arc::new(Mutex::new(
