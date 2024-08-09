@@ -1,6 +1,6 @@
 use crate::dao::{activity, debit_note_event};
 use crate::error::{DbError, DbResult};
-use crate::models::debit_note::{ReadObj, WriteObj};
+use crate::models::debit_note::{DebitNoteForApi, ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
@@ -226,7 +226,7 @@ impl<'c> DebitNoteDao<'c> {
         status: Option<DocumentStatus>,
         payable: Option<bool>,
         activity_id: Option<String>,
-    ) -> DbResult<Vec<DebitNote>> {
+    ) -> DbResult<Vec<DebitNoteForApi>> {
         readonly_transaction(self.pool, "debit_note_dao_list", move |conn| {
             let mut query = query!().into_boxed();
             if let Some(role) = role {
