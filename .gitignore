@@ -45,3 +45,5 @@ db.sqlite-wal
 # Suggested debug data dirs
 yagnadir
 providerdir
+
+*.bat

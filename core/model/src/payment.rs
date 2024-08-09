@@ -539,6 +539,39 @@ pub mod local {
         type Error = PaymentDriverStatusError;
     }
 
+    // ********************* PROCESS PAYMENTS ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ProcessPaymentsError {
+        #[error("ProcessPaymentsError: {0}")]
+        ProcessPaymentsError(String),
+    }
+
+    impl From<ProcessPaymentsError> for GenericError {
+        fn from(e: ProcessPaymentsError) -> Self {
+            GenericError::new(e)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNowResponse {
+        pub resolve_time_ms: f64,
+        pub send_time_ms: f64,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNow {
+        pub node_id: NodeId,
+        pub platform: Option<String>,
+        pub skip_resolve: bool,
+        pub skip_send: bool,
+    }
+
+    impl RpcMessage for ProcessPaymentsNow {
+        const ID: &'static str = "ProcessPaymentsNow";
+        type Item = ProcessPaymentsNowResponse;
+        type Error = ProcessPaymentsError;
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ShutDown {
         pub timeout: Duration,
