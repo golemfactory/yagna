@@ -75,7 +75,6 @@ table! {
         ts -> Timestamp,
         owner_id -> Text,
         payer_addr -> Text,
-        driver -> Text,
         platform -> Text,
         total_amount -> Text,
         paid_amount -> Text,

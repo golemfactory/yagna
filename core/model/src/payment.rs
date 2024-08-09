@@ -561,7 +561,7 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ProcessPaymentsNow {
         pub node_id: NodeId,
-        pub platform: Option<String>,
+        pub platform: String,
         pub skip_resolve: bool,
         pub skip_send: bool,
     }
