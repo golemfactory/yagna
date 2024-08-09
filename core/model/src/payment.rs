@@ -97,7 +97,12 @@ pub mod local {
             if amount <= BigDecimal::zero() {
                 return None;
             }
-            debit_note.payment_due_date.map(|due_date| Self {
+
+            let due_date = debit_note
+                .payment_due_date
+                .unwrap_or_else(|| Utc::now() + chrono::Duration::days(1));
+
+            Some(Self {
                 title: PaymentTitle::DebitNote(DebitNotePayment {
                     debit_note_id: debit_note.debit_note_id,
                     activity_id: debit_note.activity_id,
@@ -125,6 +130,14 @@ pub mod local {
 
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct CollectPayments {}
+    impl RpcMessage for CollectPayments {
+        const ID: &'static str = "CollectPayments";
         type Item = ();
         type Error = GenericError;
     }
@@ -445,6 +458,15 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BuildPayments {}
+
+    impl RpcMessage for BuildPayments {
+        const ID: &'static str = "BuildPayments";
+        type Item = String;
+        type Error = NoError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ReleaseAllocations {}
 
     impl RpcMessage for ReleaseAllocations {
@@ -514,6 +536,39 @@ pub mod local {
         const ID: &'static str = "PaymentDriverStatus";
         type Item = Vec<DriverStatusProperty>;
         type Error = PaymentDriverStatusError;
+    }
+
+    // ********************* PROCESS PAYMENTS ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ProcessPaymentsError {
+        #[error("ProcessPaymentsError: {0}")]
+        ProcessPaymentsError(String),
+    }
+
+    impl From<ProcessPaymentsError> for GenericError {
+        fn from(e: ProcessPaymentsError) -> Self {
+            GenericError::new(e)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNowResponse {
+        pub resolve_time_ms: f64,
+        pub send_time_ms: f64,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNow {
+        pub node_id: NodeId,
+        pub platform: Option<String>,
+        pub skip_resolve: bool,
+        pub skip_send: bool,
+    }
+
+    impl RpcMessage for ProcessPaymentsNow {
+        const ID: &'static str = "ProcessPaymentsNow";
+        type Item = ProcessPaymentsNowResponse;
+        type Error = ProcessPaymentsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -9,7 +9,8 @@ use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
-    PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, UpdateTransferResult, ValidateDepositResult,
+    VerifyTransactionResult,
 };
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
@@ -131,21 +132,7 @@ impl Erc20Driver {
 
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
-        let deposit_id = if let Some(deposit) = deposit_id {
-            Some(DepositId {
-                deposit_id: U256::from_str(&deposit.id).map_err(|err| {
-                    GenericError::new(format!("Error when parsing deposit id {err:?}"))
-                })?,
-                lock_address: Address::from_str(&deposit.contract).map_err(|err| {
-                    GenericError::new(format!(
-                        "Error when parsing deposit contract address {err:?}"
-                    ))
-                })?,
-            })
-        } else {
-            None
-        };
-
+        let deposit_id = extract_deposit_id(deposit_id)?;
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
                 network: network.to_string(),
@@ -161,6 +148,50 @@ impl Erc20Driver {
             .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
 
         Ok(payment_id)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn update_transfer(
+        &self,
+        payment_id: &str,
+        sender: &str,
+        to: &str,
+        amount: &BigDecimal,
+        network: &str,
+        deadline: Option<DateTime<Utc>>,
+        deposit_id: Option<Deposit>,
+    ) -> Result<TryUpdatePaymentResult, GenericError> {
+        self.is_account_active(sender).await?;
+        let sender = H160::from_str(sender)
+            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
+        let receiver = H160::from_str(to)
+            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
+        let amount = big_dec_to_u256(amount)?;
+
+        let deposit_id = extract_deposit_id(deposit_id)?;
+
+        let res = self
+            .payment_runtime
+            .update_transfer_guess_account(TransferArgs {
+                network: network.to_string(),
+                from: sender,
+                receiver,
+                tx_type: TransferType::Token,
+                amount,
+                payment_id: payment_id.to_string(),
+                deadline,
+                deposit_id,
+            })
+            .await
+            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
+
+        Ok(match res {
+            UpdateTransferResult::SuccessTransferUpdated => TryUpdatePaymentResult::PaymentUpdated,
+            UpdateTransferResult::FailedTransferProcessed => {
+                TryUpdatePaymentResult::PaymentNotUpdated
+            }
+            UpdateTransferResult::FailedTransferNotFound => TryUpdatePaymentResult::PaymentNotFound,
+        })
     }
 
     async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
@@ -734,6 +765,15 @@ impl PaymentDriver for Erc20Driver {
         false
     }
 
+    async fn flush_payments(
+        &self,
+        _caller: String,
+        _msg: FlushPayments,
+    ) -> Result<FlushPaymentResult, GenericError> {
+        self.payment_runtime.trigger_payments(Utc::now(), None);
+        Ok(FlushPaymentResult::FlushScheduled)
+    }
+
     async fn init(&self, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         cli::init(self, msg).await?;
         Ok(Ack {})
@@ -1051,10 +1091,37 @@ impl PaymentDriver for Erc20Driver {
         .await
     }
 
+    async fn try_update_payment(
+        &self,
+        _caller: String,
+        msg: TryUpdatePayment,
+    ) -> Result<TryUpdatePaymentResult, GenericError> {
+        log::debug!("try_update_payment: {:?}", msg);
+
+        let platform = msg.platform();
+        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
+            "Malformed platform string: {}",
+            msg.platform()
+        )))?;
+
+        let transfer_margin = Duration::minutes(2);
+
+        self.update_transfer(
+            &msg.payment_id(),
+            &msg.sender(),
+            &msg.recipient(),
+            &msg.amount(),
+            network,
+            Some(msg.due_date() - transfer_margin),
+            msg.deposit_id(),
+        )
+        .await
+    }
+
     async fn schedule_payment(
         &self,
         _caller: String,
-        msg: SchedulePayment,
+        msg: ScheduleDriverPayment,
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
@@ -1186,4 +1253,21 @@ impl PaymentDriver for Erc20Driver {
         // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
     }
+}
+fn extract_deposit_id(deposit_id: Option<Deposit>) -> Result<Option<DepositId>, GenericError> {
+    let deposit_id = if let Some(deposit) = deposit_id {
+        Some(DepositId {
+            deposit_id: U256::from_str(&deposit.id).map_err(|err| {
+                GenericError::new(format!("Error when parsing deposit id {err:?}"))
+            })?,
+            lock_address: Address::from_str(&deposit.contract).map_err(|err| {
+                GenericError::new(format!(
+                    "Error when parsing deposit contract address {err:?}"
+                ))
+            })?,
+        })
+    } else {
+        None
+    };
+    Ok(deposit_id)
 }

@@ -14,7 +14,6 @@ use ya_core_model::payment::local::NetworkName;
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
-
 // Local uses
 use crate::accounts::{init_account, Account};
 use crate::cli::rpc::{run_command_rpc, RpcCommandParams};
@@ -134,6 +133,10 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
+    Process {
+        #[structopt(subcommand)]
+        command: ProcessCommand,
+    },
 
     /// Clear all existing allocations
     ReleaseAllocations,
@@ -144,6 +147,14 @@ pub enum InvoiceCommand {
     Status {
         #[structopt(long, help = "Display invoice status from the given period of time")]
         last: Option<humantime::Duration>,
+    },
+}
+
+#[derive(StructOpt, Debug)]
+pub enum ProcessCommand {
+    Now {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
 }
 
@@ -402,6 +413,37 @@ Typically operation should take less than 1 minute.
                         ))
                         .await??,
                 )
+            }
+            PaymentCli::Process { command } => {
+                match command {
+                    ProcessCommand::Now { account } => {
+                        //return Ok(CommandOutput::Object(json!({"res":"Process command now"})));
+                        let node_id = if let Some(node_id) = account.account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::ProcessPaymentsNow {
+                                node_id,
+                                platform: None,
+                                skip_resolve: false,
+                                skip_send: false,
+                            })
+                            .await??;
+                    }
+                }
+                Ok(CommandOutput::NoOutput)
             }
             PaymentCli::Enter { account, amount } => CommandOutput::object(
                 wallet::enter(

@@ -63,21 +63,30 @@ pub trait PaymentDriver {
 
     async fn schedule_payment(
         &self,
-
         caller: String,
-        msg: SchedulePayment,
+        msg: ScheduleDriverPayment,
     ) -> Result<String, GenericError>;
+
+    async fn try_update_payment(
+        &self,
+        caller: String,
+        msg: TryUpdatePayment,
+    ) -> Result<TryUpdatePaymentResult, GenericError>;
+
+    async fn flush_payments(
+        &self,
+        caller: String,
+        msg: FlushPayments,
+    ) -> Result<FlushPaymentResult, GenericError>;
 
     async fn verify_payment(
         &self,
-
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
     async fn validate_allocation(
         &self,
-
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<ValidateAllocationResult, GenericError>;

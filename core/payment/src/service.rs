@@ -78,6 +78,7 @@ mod local {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
+            .bind_with_processor(collect_payments)
             .bind_with_processor(schedule_payment)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
@@ -90,6 +91,7 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(release_allocations)
+            .bind_with_processor(process_payments_now)
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
@@ -137,6 +139,16 @@ mod local {
         counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
+    }
+
+    async fn collect_payments(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender: String,
+        msg: CollectPayments,
+    ) -> Result<(), GenericError> {
+        processor.collect_payments(msg).await?;
+        Ok(())
     }
 
     async fn schedule_payment(
@@ -513,6 +525,15 @@ mod local {
         Ok(())
     }
 
+    async fn process_payments_now(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessPaymentsNow,
+    ) -> Result<ProcessPaymentsNowResponse, ProcessPaymentsError> {
+        processor.process_payments_now(msg).await
+    }
+
     async fn get_drivers(
         db: DbExecutor,
         processor: Arc<PaymentProcessor>,
@@ -645,6 +666,7 @@ mod local {
                 Some(Role::Requestor),
                 Some(DocumentStatus::Accepted),
                 Some(true),
+                None,
             )
             .await
             .map_err(GenericError::new)?;
@@ -948,7 +970,7 @@ mod public {
         counter!("payment.debit_notes.provider.accepted.call", 1);
 
         let dao: DebitNoteDao = db.as_dao();
-        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(node_id)).await {
             Ok(Some(debit_note)) => debit_note,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),

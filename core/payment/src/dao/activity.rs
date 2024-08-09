@@ -5,6 +5,7 @@ use crate::schema::pay_activity::dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::NaiveDateTime;
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
@@ -156,6 +157,8 @@ impl<'a> ActivityDao<'a> {
                     dsl::total_amount_accepted,
                     dsl::total_amount_scheduled,
                     dsl::total_amount_paid,
+                    dsl::created_ts,
+                    dsl::updated_ts,
                     agreement_dsl::peer_id,
                     agreement_dsl::payee_addr,
                     agreement_dsl::payer_addr,
@@ -165,6 +168,46 @@ impl<'a> ActivityDao<'a> {
                 .first(conn)
                 .optional()?;
             Ok(activity)
+        })
+        .await
+    }
+
+    pub async fn list(
+        &self,
+        role: Option<Role>,
+        agreement_id: Option<String>,
+    ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
+        readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
+            let mut query = dsl::pay_activity.into_boxed();
+            if let Some(agreement_id) = agreement_id {
+                query = query.filter(dsl::agreement_id.eq(agreement_id));
+            };
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role));
+            };
+            let activities = query.load(conn)?;
+            Ok(activities.into_iter().collect())
+        })
+        .await
+    }
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<WriteObj>> {
+        readonly_transaction(self.pool, "activity_dao_get_for_node_id", move |conn| {
+            let mut query = dsl::pay_activity.into_boxed();
+            query = query.filter(dsl::owner_id.eq(node_id));
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::created_ts.gt(date))
+            }
+            query = query.order_by(dsl::created_ts.asc());
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let activities: Vec<WriteObj> = query.load(conn)?;
+            Ok(activities)
         })
         .await
     }

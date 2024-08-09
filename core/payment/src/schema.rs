@@ -8,6 +8,8 @@ table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
@@ -35,6 +37,8 @@ table! {
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
         app_session_id -> Nullable<Text>,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
@@ -66,6 +70,44 @@ table! {
 }
 
 table! {
+    pay_batch_order (owner_id, id) {
+        id -> Text,
+        ts -> Timestamp,
+        owner_id -> Text,
+        payer_addr -> Text,
+        driver -> Text,
+        platform -> Text,
+        total_amount -> Text,
+        paid_amount -> Text,
+        paid -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order_item (owner_id, order_id, payee_addr) {
+        order_id -> Text,
+        owner_id -> Text,
+        payee_addr -> Text,
+        amount -> Text,
+        payment_id -> Nullable<Text>,
+        paid -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order_item_document (owner_id, order_id, payee_addr, agreement_id) {
+        order_id -> Text,
+        owner_id -> Text,
+        payee_addr -> Text,
+        agreement_id -> Text,
+        invoice_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        amount -> Text,
+    }
+}
+
+table! {
     pay_debit_note (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -74,6 +116,7 @@ table! {
         activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
+        debit_nonce -> Integer,
         send_accept -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
@@ -206,6 +249,7 @@ table! {
 
 joinable!(pay_activity_payment -> pay_allocation (allocation_id));
 joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
+//joinable!(pay_batch_order_item -> pay_batch_order (owner_id, order_id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
@@ -218,6 +262,9 @@ allow_tables_to_appear_in_same_query!(
     pay_agreement,
     pay_agreement_payment,
     pay_allocation,
+    pay_batch_order,
+    pay_batch_order_item,
+    pay_batch_order_item_document,
     pay_debit_note,
     pay_debit_note_event,
     pay_debit_note_event_read,

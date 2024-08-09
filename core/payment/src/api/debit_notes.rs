@@ -86,7 +86,7 @@ async fn get_debit_note(
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
-    match dao.get(debit_note_id, node_id).await {
+    match dao.get(debit_note_id, Some(node_id)).await {
         Ok(Some(debit_note)) => response::ok(debit_note),
         Ok(None) => response::not_found(),
         Err(e) => response::server_error(&e),
@@ -190,7 +190,7 @@ async fn issue_debit_note(
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        let debit_note = dao.get(debit_note_id.clone(), node_id).await?;
+        let debit_note = dao.get(debit_note_id.clone(), Some(node_id)).await?;
 
         log::info!("DebitNote [{debit_note_id}] for Activity [{activity_id}] issued.");
         counter!("payment.debit_notes.provider.issued", 1);
@@ -220,7 +220,7 @@ async fn send_debit_note(
     log::debug!("Requested send DebitNote [{}]", debit_note_id);
     counter!("payment.debit_notes.provider.sent.call", 1);
 
-    let debit_note = match dao.get(debit_note_id.clone(), node_id).await {
+    let debit_note = match dao.get(debit_note_id.clone(), Some(node_id)).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
@@ -311,7 +311,7 @@ async fn accept_debit_note(
     let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
-    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(node_id)).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),

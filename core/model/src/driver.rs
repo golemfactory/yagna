@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
 use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -286,10 +287,18 @@ impl RpcMessage for Init {
     type Error = GenericError;
 }
 
-// ************************** SCHEDULE PAYMENT **************************
+// ************************** TRY UPDATE PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SchedulePayment {
+pub enum TryUpdatePaymentResult {
+    PaymentNotFound,
+    PaymentUpdated,
+    PaymentNotUpdated,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TryUpdatePayment {
+    payment_id: String,
     amount: BigDecimal,
     sender: String,
     recipient: String,
@@ -298,7 +307,112 @@ pub struct SchedulePayment {
     due_date: DateTime<Utc>,
 }
 
-impl SchedulePayment {
+impl TryUpdatePayment {
+    pub fn new(
+        payment_id: String,
+        amount: BigDecimal,
+        sender: String,
+        recipient: String,
+        platform: String,
+        deposit_id: Option<Deposit>,
+        due_date: DateTime<Utc>,
+    ) -> TryUpdatePayment {
+        TryUpdatePayment {
+            payment_id,
+            amount,
+            sender,
+            recipient,
+            platform,
+            deposit_id,
+            due_date,
+        }
+    }
+
+    pub fn payment_id(&self) -> String {
+        self.payment_id.clone()
+    }
+
+    pub fn amount(&self) -> BigDecimal {
+        self.amount.clone()
+    }
+
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+
+    pub fn recipient(&self) -> String {
+        self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
+    }
+
+    pub fn deposit_id(&self) -> Option<Deposit> {
+        self.deposit_id.clone()
+    }
+
+    pub fn due_date(&self) -> DateTime<Utc> {
+        self.due_date
+    }
+}
+
+impl RpcMessage for TryUpdatePayment {
+    const ID: &'static str = "TryUpdatePayment";
+    type Item = TryUpdatePaymentResult;
+    type Error = GenericError;
+}
+
+// ************************** FLUSH PAYMENTS **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FlushPayments {
+    node_id: Option<NodeId>,
+    flush_date: DateTime<Utc>,
+}
+
+impl FlushPayments {
+    pub fn new(node_id: Option<NodeId>, flush_date: DateTime<Utc>) -> FlushPayments {
+        FlushPayments {
+            node_id,
+            flush_date,
+        }
+    }
+
+    pub fn flush_date(&self) -> DateTime<Utc> {
+        self.flush_date
+    }
+
+    pub fn node_id(&self) -> Option<NodeId> {
+        self.node_id
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FlushPaymentResult {
+    FlushScheduled,
+    FlushNotNeeded,
+}
+
+impl RpcMessage for FlushPayments {
+    const ID: &'static str = "FlushPayments";
+    type Item = FlushPaymentResult;
+    type Error = GenericError;
+}
+
+// ************************** SCHEDULE PAYMENT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScheduleDriverPayment {
+    amount: BigDecimal,
+    sender: String,
+    recipient: String,
+    platform: String,
+    deposit_id: Option<Deposit>,
+    due_date: DateTime<Utc>,
+}
+
+impl ScheduleDriverPayment {
     pub fn new(
         amount: BigDecimal,
         sender: String,
@@ -306,8 +420,8 @@ impl SchedulePayment {
         platform: String,
         deposit_id: Option<Deposit>,
         due_date: DateTime<Utc>,
-    ) -> SchedulePayment {
-        SchedulePayment {
+    ) -> ScheduleDriverPayment {
+        ScheduleDriverPayment {
             amount,
             sender,
             recipient,
@@ -342,8 +456,8 @@ impl SchedulePayment {
     }
 }
 
-impl RpcMessage for SchedulePayment {
-    const ID: &'static str = "SchedulePayment";
+impl RpcMessage for ScheduleDriverPayment {
+    const ID: &'static str = "ScheduleDriverPayment";
     type Item = String; // payment order ID
     type Error = GenericError;
 }

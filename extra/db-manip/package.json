@@ -1,0 +1,20 @@
+{
+  "name": "db-manip",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "run": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.1",
+    "bignumber.js": "^9.1.2",
+    "crypto": "^1.0.1",
+    "ethers": "^6.13.2",
+    "uuid": "^10.0.0"
+  }
+}
