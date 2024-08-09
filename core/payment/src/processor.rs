@@ -1,5 +1,7 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{
+    ActivityDao, AgreementDao, AllocationDao, BatchDao, OrderDao, PaymentDao, SyncNotifsDao,
+};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -15,6 +17,7 @@ use futures::{FutureExt, TryFutureExt};
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ops::Sub;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,14 +30,14 @@ use ya_client_model::payment::{
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
-    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
-    ValidateAllocationResult,
+    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ScheduleDriverPayment, ShutDown,
+    ValidateAllocation, ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
     CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle,
-    RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit,
-    SchedulePayment, UnregisterAccount, UnregisterAccountError, UnregisterDriver,
-    UnregisterDriverError,
+    ProcessPaymentsError, ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount,
+    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
+    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::NodeId;
@@ -414,6 +417,132 @@ impl PaymentProcessor {
             .await
             .map_err(|_| RegisterAccountError::InternalTimeout)?
             .get_platform(driver, network, token)
+    }
+
+    async fn send_batch_order_payments(
+        &self,
+        owner: NodeId,
+        order_id: String,
+    ) -> anyhow::Result<()> {
+        let (order, items) = {
+            let db_executor = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT)
+                .await
+                .map_err(|err| {
+                    ProcessPaymentsError::ProcessPaymentsError(format!(
+                        "Db timeout lock when sending payments {err}"
+                    ))
+                })?;
+            db_executor
+                .as_dao::<BatchDao>()
+                .get_unsent_batch_items(order_id.clone())
+                .await?
+        };
+        eprintln!("got {} orders", items.len());
+        let bus_id = driver_bus_id("erc20");
+        for item in items {
+            eprintln!("sending: {:?}", &item);
+            let payment_order_id = bus::service(&bus_id)
+                .call(ScheduleDriverPayment::new(
+                    item.amount.0,
+                    order.payer_addr.clone(),
+                    item.payee_addr.clone(),
+                    order.platform.clone(),
+                    None,
+                    chrono::Utc::now(),
+                ))
+                .await??;
+            {
+                let db_executor = self
+                    .db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT)
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Db timeout lock when sending payments {err}"
+                        ))
+                    })?;
+                db_executor
+                    .as_dao::<BatchDao>()
+                    .batch_order_item_send(
+                        order_id.clone(),
+                        owner,
+                        item.payee_addr,
+                        payment_order_id,
+                    )
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn process_payments_now(
+        &self,
+        msg: ProcessPaymentsNow,
+    ) -> Result<ProcessPaymentsNowResponse, ProcessPaymentsError> {
+        {
+            let operation_start = Instant::now();
+            let mut resolve_time_ms = 0.0f64;
+            let mut order_id = None;
+            if !msg.skip_resolve {
+                let db_executor = self
+                    .db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT)
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Db timeout lock when process payments {err}"
+                        ))
+                    })?;
+                match db_executor
+                    .as_dao::<BatchDao>()
+                    .resolve(
+                        msg.node_id,
+                        msg.node_id.to_string(),
+                        "erc20".to_string(),
+                        msg.platform
+                            .unwrap_or_else(|| "erc20-holesky-tglm".to_string()),
+                        Utc::now().sub(chrono::Duration::days(30)),
+                    )
+                    .await
+                {
+                    Ok(res) => {
+                        resolve_time_ms = operation_start.elapsed().as_secs_f64() / 1000.0;
+                        order_id = res;
+                    }
+                    Err(err) => {
+                        log::error!("Error processing payments: {:?}", err);
+                        return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Error processing payments: {:?}",
+                            err
+                        )));
+                    }
+                };
+            };
+            let send_time_now = Instant::now();
+            let mut send_time_ms = 0.0;
+            if !msg.skip_send {
+                if let Some(order_id) = order_id {
+                    match self.send_batch_order_payments(msg.node_id, order_id).await {
+                        Ok(()) => {
+                            send_time_ms = send_time_now.elapsed().as_secs_f64() / 1000.0;
+                        }
+                        Err(err) => {
+                            log::error!("Error when sending payments {}", err);
+                            return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                                "Error when sending payments {}",
+                                err
+                            )));
+                        }
+                    }
+                }
+            };
+            Ok(ProcessPaymentsNowResponse {
+                resolve_time_ms,
+                send_time_ms,
+            })
+        }
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
