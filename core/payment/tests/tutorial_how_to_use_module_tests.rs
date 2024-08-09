@@ -1,9 +1,12 @@
 use bigdecimal::BigDecimal;
+use std::str::FromStr;
 use test_context::test_context;
 
 use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
-use ya_client_model::payment::NewAllocation;
+use ya_client_model::payment::{Acceptance, NewAllocation};
 use ya_core_model::payment::local::GetStatus;
+use ya_core_model::payment::public::{AcceptInvoice, Ack, SendInvoice};
+use ya_service_bus::RpcEndpoint;
 
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
@@ -12,6 +15,7 @@ use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
+use ya_framework_mocks::payment::fake_payment::FakePayment;
 use ya_framework_mocks::payment::Driver;
 
 // Tests should be always wrapped in these macros.
@@ -41,7 +45,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     // Create MockNode which is container for all Golem modules and represents
     // single node in tests.
-    let node = MockNode::new(net, "node-1", dir)
+    let node = MockNode::new(net.clone(), "node-1", dir)
         // Request instantiating wrappers around real Golem modules.
         .with_identity()
         .with_payment()
@@ -123,5 +127,61 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
         status.amount
     );
 
+    // Instead of using real yagna node, we can use FakePayment instead.
+    // It allows us to capture GSB traffic to test if real payment module sends them correctly.
+    let node3 = MockNode::new(net, "node-3", dir)
+        // All GSB handler will be bound on addresses prefixed by node name.
+        // After creating identity, it will be registered in MockNet and all GSB messages
+        // will be routed to those prefixes.
+        .with_prefixed_gsb()
+        .with_identity()
+        .with_fake_payment();
+    node3.bind_gsb().await?;
+
+    let identity = node3.get_identity()?.create_identity_key("node-3").await?;
+
+    let agreement =
+        FakeMarket::create_fake_agreement(appkey_req.identity, identity.identity).unwrap();
+    node.get_market()?.add_agreement(agreement.clone()).await;
+
+    // Sending Invoice from FakePayment node to real payment module.
+    // This can be done by directly sending GSB message directly, simulating, what would happen
+    // after calling REST API.
+    // `gsb_public_endpoint` returns GSB address on which `node` payment module was bound.
+    // Note that you should never build GSB addresses directly, because `MockNode` implementation
+    // decides about them, and they can be different from real yagna.
+    let invoice = FakePayment::fake_invoice(&agreement, BigDecimal::from_str("0.2")?)?;
+    node.get_payment()?
+        .gsb_public_endpoint()
+        .send_as(invoice.issuer_id, SendInvoice(invoice.clone()))
+        .await??;
+
+    // FakePayment responds always with correct answer to any GSB message.
+    // This behavior can be overridden by querying `FakePayment::message_channel` and setting
+    // expected response.
+    // Function overrides default message handler and returns channel which yields all messages
+    // received.
+    let mut channel = node3
+        .get_fake_payment()?
+        .message_channel::<AcceptInvoice>(Ok(Ack {}));
+
+    // Sending accept Invoice in real Payment module.
+    // Internally GSB message will be sent to node3 and will be captured by channel.
+    let new_allocation = FakePayment::default_allocation(&agreement, BigDecimal::from(10u64))?;
+    let allocation = api.create_allocation(&new_allocation).await?;
+    api.accept_invoice(
+        &invoice.invoice_id,
+        &Acceptance {
+            total_amount_accepted: invoice.amount.clone(),
+            allocation_id: allocation.allocation_id.to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Waiting for any message sent to `node3`.
+    // We expect that `AcceptInvoice` message will be received after previous REST api call was made.
+    let accept = channel.recv().await.unwrap();
+    assert_eq!(accept.invoice_id, invoice.invoice_id);
     Ok(())
 }

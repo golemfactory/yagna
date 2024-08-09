@@ -9084,6 +9084,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "ethsign",
