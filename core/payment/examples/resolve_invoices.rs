@@ -90,7 +90,6 @@ async fn generate(
         .resolve(
             owner_id,
             owner_id.to_string(),
-            "erc20".to_string(),
             payment_platform.clone(),
             ts,
         )
@@ -134,7 +133,6 @@ async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String) -> anyh
         .resolve(
             owner_id,
             owner_id.to_string(),
-            "erc20".to_string(),
             payment_platform,
             ts,
         )
