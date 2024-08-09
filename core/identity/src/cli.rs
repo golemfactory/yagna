@@ -2,7 +2,7 @@ mod appkey;
 mod identity;
 
 pub use appkey::AppKeyCommand;
-pub use identity::IdentityCommand;
+pub use identity::{IdentityCommand, NodeOrAlias};
 use structopt::StructOpt;
 use ya_service_api::{CliCtx, CommandOutput};
 

@@ -9115,6 +9115,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
  "ya-utils-path",
 ]
 
@@ -9217,13 +9218,17 @@ dependencies = [
  "rpassword",
  "rustc-hex",
  "serde_json",
+ "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
  "sha2 0.9.9",
  "structopt",
+ "test-context",
  "thiserror",
  "tokio",
  "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
+ "ya-framework-basic",
+ "ya-framework-mocks",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",
@@ -9473,7 +9478,6 @@ dependencies = [
  "metrics 0.12.1",
  "num-bigint 0.3.3",
  "open",
- "portpicker",
  "problem_details",
  "r2d2",
  "rand 0.8.5",
@@ -9867,6 +9871,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "url",
+ "ya-core-model",
  "ya-utils-cli",
 ]
 
