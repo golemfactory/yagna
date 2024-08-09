@@ -1,5 +1,5 @@
 use structopt::StructOpt;
-use ya_core_model::driver::{driver_bus_id, SchedulePayment};
+use ya_core_model::driver::{driver_bus_id, ScheduleDriverPayment};
 use ya_core_model::NodeId;
 use ya_payment::dao::BatchDao;
 use ya_persistence::executor::DbExecutor;
@@ -110,7 +110,7 @@ async fn send_payments(db: DbExecutor, owner: NodeId, order_id: String) -> anyho
     for item in items {
         eprintln!("sending: {:?}", &item);
         let payment_order_id = bus::service(&bus_id)
-            .call(SchedulePayment::new(
+            .call(ScheduleDriverPayment::new(
                 item.amount.0,
                 order.payer_addr.clone(),
                 item.payee_addr.clone(),

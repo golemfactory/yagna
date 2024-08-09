@@ -11,13 +11,13 @@ use sha3::{Digest, Sha3_256};
 
 // Local uses
 use crate::db::models::PaymentEntity;
-use crate::model::{PaymentDetails, SchedulePayment};
+use crate::model::{PaymentDetails, ScheduleDriverPayment};
 use ya_client_model::payment::Payment;
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
 pub fn msg_to_payment_details(
-    msg: &SchedulePayment,
+    msg: &ScheduleDriverPayment,
     date: Option<DateTime<Utc>>,
 ) -> PaymentDetails {
     PaymentDetails {
