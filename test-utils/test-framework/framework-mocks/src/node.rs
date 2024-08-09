@@ -46,8 +46,8 @@ pub struct MockNode {
 }
 
 impl MockNode {
-    pub fn new(net: MockNet, name: &str, testdir: &Path) -> Self {
-        let testdir = testdir.join(name);
+    pub fn new(net: MockNet, name: &str, testdir: impl AsRef<Path>) -> Self {
+        let testdir = testdir.as_ref().join(name);
         fs::create_dir_all(&testdir).expect("Failed to create test directory");
 
         MockNode {
@@ -113,6 +113,12 @@ impl MockNode {
 
     pub fn get_payment(&self) -> anyhow::Result<RealPayment> {
         self.payment
+            .clone()
+            .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
+    }
+
+    pub fn get_fake_payment(&self) -> anyhow::Result<FakePayment> {
+        self.fake_payment
             .clone()
             .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
     }
