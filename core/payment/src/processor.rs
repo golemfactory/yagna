@@ -24,7 +24,9 @@ use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
 use ya_client_model::payment::allocation::Deposit;
-use ya_client_model::payment::{Account, DriverDetails, Network, Payment};
+use ya_client_model::payment::{
+    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
+};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ScheduleDriverPayment, ShutDown,
@@ -570,15 +572,50 @@ impl PaymentProcessor {
             }
 
             for order_item in order_items.iter() {
-                let order_items = db_executor
+                let order_documents = match db_executor
+                    .as_dao::<BatchDao>()
+                    .get_batch_items(
+                        owner_id,
+                        Some(order_item.owner_id.clone()),
+                        Some(order_item.payee_addr.clone()),
+                        None,
+                        None,
+                    )
+                    .await
+                {
+                    Ok(items) => items,
+                    Err(e) => {
+                        return Err(NotifyPaymentError::Other(format!(
+                            "Error getting batch items: {e}"
+                        )));
+                    }
+                };
+
+                db_executor
                     .as_dao::<BatchDao>()
                     .batch_order_item_paid(
                         order_item.order_id.clone(),
                         owner_id,
                         order_item.payee_addr.clone(),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
+                let mut activity_payments = vec![];
+                let mut agreement_payments = vec![];
+                for order in order_documents.iter() {
+                    let amount = order.amount.clone().into();
+                    match order.activity_id.clone() {
+                        Some(activity_id) => activity_payments.push(ActivityPayment {
+                            activity_id,
+                            amount,
+                            allocation_id: None,
+                        }),
+                        None => agreement_payments.push(AgreementPayment {
+                            agreement_id: order.agreement_id.clone(),
+                            amount,
+                            allocation_id: None,
+                        }),
+                    }
+                }
             }
 
             /*
