@@ -437,7 +437,7 @@ impl<'c> BatchDao<'c> {
                 )
                 .load(conn)?)
         })
-            .await
+        .await
     }
 
     pub async fn get_for_node_id(
