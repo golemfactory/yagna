@@ -291,6 +291,8 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 
     let total_amount = BigDecimal::from(0u32);
 
+    log::info!("Resolve invoices: {} - {}", owner_id.to_string(), platform);
+
     log::debug!("Resolving invoices for {}", owner_id);
     let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
 
@@ -419,6 +421,23 @@ impl<'c> BatchDao<'c> {
                 .load(conn)?)
         })
         .await
+    }
+
+    pub async fn get_batch_order_items_by_payment_id(
+        &self,
+        payment_id: String,
+        node_id: NodeId,
+    ) -> DbResult<Vec<DbBatchOrderItem>> {
+        readonly_transaction(self.pool, "batch_dao_get_items", move |conn| {
+            Ok(oidsl::pay_batch_order_item
+                .filter(
+                    oidsl::owner_id
+                        .eq(node_id)
+                        .and(oidsl::payment_id.eq(payment_id)),
+                )
+                .load(conn)?)
+        })
+            .await
     }
 
     pub async fn get_for_node_id(
@@ -675,7 +694,6 @@ impl<'c> BatchDao<'c> {
         order_id: String,
         owner_id: NodeId,
         payee_addr: String,
-        confirmation: Vec<u8>,
     ) -> DbResult<bool> {
         do_with_transaction(self.pool, "batch_order_item_paid", move |conn| {
             use crate::schema::pay_batch_order::dsl as odsl;
@@ -732,14 +750,13 @@ impl<'c> BatchDao<'c> {
                         &amount,
                         conn,
                     )?;
-                } else {
-                    super::agreement::increase_amount_paid(
-                        &agreement_id,
-                        &order.owner_id,
-                        &amount,
-                        conn,
-                    )?;
                 }
+                super::agreement::increase_amount_paid(
+                    &agreement_id,
+                    &order.owner_id,
+                    &amount,
+                    conn,
+                )?;
             }
 
             Ok(true)

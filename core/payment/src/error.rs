@@ -222,6 +222,8 @@ pub mod processor {
         Sign(#[from] ya_core_model::driver::GenericError),
         #[error("Internal timeout")]
         InternalTimeout(#[from] Elapsed),
+        #[error("Other")]
+        Other(String),
     }
 
     impl NotifyPaymentError {
