@@ -1,6 +1,6 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::dao::{
-    ActivityDao, AgreementDao, AllocationDao, BatchDao, OrderDao, PaymentDao, SyncNotifsDao,
+    ActivityDao, AgreementDao, AllocationDao, BatchDao, PaymentDao, SyncNotifsDao,
 };
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
@@ -18,6 +18,7 @@ use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Sub;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,7 +27,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
-    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
+    Account, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
@@ -546,24 +547,48 @@ impl PaymentProcessor {
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
         let driver = msg.driver;
         let payment_platform = msg.platform;
-        let payer_addr = msg.sender;
+        let payer_addr = msg.sender.clone();
         let payee_addr = msg.recipient;
 
+        //todo find proper barch order items
         if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
-        }
-
-        let payer_id: NodeId;
-        let payee_id: NodeId;
+        };
+        let owner_id = NodeId::from_str(&msg.sender).map_err(|err| {
+            NotifyPaymentError::Other(format!("Invalid payer address: {err}"))
+        })?;
+        let payer_id = owner_id;
+        let payee_id = owner_id;
         let payment_id: String;
 
         let payment: Payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
-            let orders = db_executor
-                .as_dao::<OrderDao>()
-                .get_many(msg.order_ids, driver.clone())
-                .await?;
+
+            let mut order_items = Vec::new();
+
+
+            for order_id in msg.order_ids {
+                let order_items_part = db_executor
+                    .as_dao::<BatchDao>()
+                    .get_batch_order_items_by_payment_id(
+                        order_id,
+                        owner_id,
+                    )
+                    .await?;
+                order_items.extend(order_items_part);
+            }
+
+            for order_item in order_items.iter() {
+                let order_items = db_executor
+                    .as_dao::<BatchDao>().batch_order_item_paid(
+                        order_item.order_id.clone(),
+                        owner_id,
+                        order_item.payee_addr.clone(),
+                    ).await.unwrap();
+            }
+
+            /*
             validate_orders(
                 &orders,
                 &payment_platform,
@@ -589,27 +614,28 @@ impl PaymentProcessor {
                     }),
                     _ => return NotifyPaymentError::invalid_order(order),
                 }
-            }
+            }*/
 
+            /*
             // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
             //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
             //        data model. Payments can no longer by assigned to a single payer and payee.
             payer_id = orders.get(0).unwrap().payer_id;
             payee_id = orders.get(0).unwrap().payee_id;
-
+*/
             let payment_dao: PaymentDao = db_executor.as_dao();
 
             payment_id = payment_dao
                 .create_new(
-                    payer_id,
-                    payee_id,
+                    owner_id,
+                    owner_id,
                     payer_addr,
                     payee_addr,
                     payment_platform.clone(),
                     msg.amount.clone(),
                     msg.confirmation.confirmation,
-                    activity_payments,
-                    agreement_payments,
+                    vec![],
+                    vec![],
                 )
                 .await?;
 
