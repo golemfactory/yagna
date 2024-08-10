@@ -441,7 +441,7 @@ Typically operation should take less than 1 minute.
                                     account.driver(),
                                     account.network(),
                                     account.token()
-                                ),
+                                ).to_lowercase(),
                                 skip_resolve: false,
                                 skip_send: false,
                             })
