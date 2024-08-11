@@ -571,12 +571,15 @@ impl PaymentProcessor {
                 order_items.extend(order_items_part);
             }
 
+f            let mut activity_payments = vec![];
+            let mut agreement_payments = vec![];
+
             for order_item in order_items.iter() {
                 let order_documents = match db_executor
                     .as_dao::<BatchDao>()
                     .get_batch_items(
                         owner_id,
-                        Some(order_item.owner_id.clone()),
+                        Some(order_item.order_id.clone()),
                         Some(order_item.payee_addr.clone()),
                         None,
                         None,
@@ -599,8 +602,6 @@ impl PaymentProcessor {
                         order_item.payee_addr.clone(),
                     )
                     .await?;
-                let mut activity_payments = vec![];
-                let mut agreement_payments = vec![];
                 for order in order_documents.iter() {
                     let amount = order.amount.clone().into();
                     match order.activity_id.clone() {
@@ -615,7 +616,9 @@ impl PaymentProcessor {
                             allocation_id: None,
                         }),
                     }
-                }
+                };
+                //log::warn!("activity_payments: {:?}", activity_payments);
+                //log::warn!("agreement_payments: {:?}", agreement_payments);
             }
 
             /*
@@ -664,8 +667,8 @@ impl PaymentProcessor {
                     payment_platform.clone(),
                     msg.amount.clone(),
                     msg.confirmation.confirmation,
-                    vec![],
-                    vec![],
+                    activity_payments,
+                    agreement_payments,
                 )
                 .await?;
 
