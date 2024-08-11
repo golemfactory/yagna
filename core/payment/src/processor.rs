@@ -572,7 +572,7 @@ impl PaymentProcessor {
                 order_items.extend(order_items_part);
             }
 
-f            let mut activity_payments = vec![];
+            let mut activity_payments = vec![];
             let mut agreement_payments = vec![];
 
             for order_item in order_items.iter() {
