@@ -616,7 +616,7 @@ impl PaymentProcessor {
                             allocation_id: None,
                         }),
                     }
-                };
+                }
                 //log::warn!("activity_payments: {:?}", activity_payments);
                 //log::warn!("agreement_payments: {:?}", agreement_payments);
             }
