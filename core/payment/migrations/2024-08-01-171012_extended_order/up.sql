@@ -43,7 +43,8 @@ CREATE TABLE pay_batch_order_item_document(
             ON DELETE SET NULL,
     CONSTRAINT PAY_BATCH_ORDER_ITEM_AGREEMENT_FK5 FOREIGN KEY (owner_id, debit_note_id)
             REFERENCES pay_debit_note(owner_id, id)
-            ON DELETE SET NULL
+            ON DELETE SET NULL,
+    CHECK ((invoice_id IS NULL) <> (debit_note_id IS NULL))
 );
 
 
