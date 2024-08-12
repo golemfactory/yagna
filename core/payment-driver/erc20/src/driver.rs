@@ -9,8 +9,7 @@ use erc20_payment_lib::config::AdditionalOptions;
 use erc20_payment_lib::faucet_client::faucet_donate;
 use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
-    PaymentRuntime, TransferArgs, TransferType, UpdateTransferResult, ValidateDepositResult,
-    VerifyTransactionResult,
+    PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
 };
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
@@ -150,6 +149,8 @@ impl Erc20Driver {
         Ok(payment_id)
     }
 
+    /*
+
     #[allow(clippy::too_many_arguments)]
     async fn update_transfer(
         &self,
@@ -192,7 +193,7 @@ impl Erc20Driver {
             }
             UpdateTransferResult::FailedTransferNotFound => TryUpdatePaymentResult::PaymentNotFound,
         })
-    }
+    }*/
 
     async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
         while let Some(event) = events.recv().await {
@@ -770,7 +771,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         _msg: FlushPayments,
     ) -> Result<FlushPaymentResult, GenericError> {
-        self.payment_runtime.trigger_payments(Utc::now(), None);
+        //self.payment_runtime.trigger_payments(Utc::now(), None);
         Ok(FlushPaymentResult::FlushScheduled)
     }
 
@@ -1091,33 +1092,34 @@ impl PaymentDriver for Erc20Driver {
         .await
     }
 
-    async fn try_update_payment(
-        &self,
-        _caller: String,
-        msg: TryUpdatePayment,
-    ) -> Result<TryUpdatePaymentResult, GenericError> {
-        log::debug!("try_update_payment: {:?}", msg);
+    /*
+        async fn try_update_payment(
+            &self,
+            _caller: String,
+            msg: TryUpdatePayment,
+        ) -> Result<TryUpdatePaymentResult, GenericError> {
+            log::debug!("try_update_payment: {:?}", msg);
 
-        let platform = msg.platform();
-        let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
-            "Malformed platform string: {}",
-            msg.platform()
-        )))?;
+            let platform = msg.platform();
+            let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
+                "Malformed platform string: {}",
+                msg.platform()
+            )))?;
 
-        let transfer_margin = Duration::minutes(2);
+            let transfer_margin = Duration::minutes(2);
 
-        self.update_transfer(
-            &msg.payment_id(),
-            &msg.sender(),
-            &msg.recipient(),
-            &msg.amount(),
-            network,
-            Some(msg.due_date() - transfer_margin),
-            msg.deposit_id(),
-        )
-        .await
-    }
-
+            self.update_transfer(
+                &msg.payment_id(),
+                &msg.sender(),
+                &msg.recipient(),
+                &msg.amount(),
+                network,
+                Some(msg.due_date() - transfer_margin),
+                msg.deposit_id(),
+            )
+            .await
+        }
+    */
     async fn schedule_payment(
         &self,
         _caller: String,
