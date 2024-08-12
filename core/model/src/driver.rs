@@ -297,6 +297,7 @@ impl RpcMessage for Init {
     type Error = GenericError;
 }
 
+/*
 // ************************** TRY UPDATE PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -305,6 +306,7 @@ pub enum TryUpdatePaymentResult {
     PaymentUpdated,
     PaymentNotUpdated,
 }
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TryUpdatePayment {
@@ -372,7 +374,7 @@ impl RpcMessage for TryUpdatePayment {
     type Item = TryUpdatePaymentResult;
     type Error = GenericError;
 }
-
+*/
 // ************************** FLUSH PAYMENTS **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
