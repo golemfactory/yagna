@@ -67,6 +67,7 @@ impl<'c> BatchCycleDao<'c> {
         owner_id: NodeId,
         interval: Option<Duration>,
         cron: Option<String>,
+        safe_payout: Option<Duration>,
         next_running_time: Option<DateTime<Utc>>,
     ) -> DbResult<DbPayBatchCycle> {
         let now = Utc::now().adapt();
@@ -74,7 +75,7 @@ impl<'c> BatchCycleDao<'c> {
             match create_batch_cycle_based_on_interval(
                 owner_id,
                 interval,
-                DEFAULT_EXTRA_TIME_FOR_PAYMENT,
+                safe_payout.unwrap_or(DEFAULT_EXTRA_TIME_FOR_PAYMENT),
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {
