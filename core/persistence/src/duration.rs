@@ -1,10 +1,11 @@
 use diesel::backend::Backend;
-use diesel::deserialize::FromSql;
+use diesel::deserialize::{FromSql, FromSqlRow};
 use diesel::serialize::{Output, ToSql};
-use diesel::sql_types::{Text, Timestamp};
+use diesel::sql_types::{Text};
 use diesel::sqlite::Sqlite;
-use diesel::{deserialize, Insertable, serialize};
+use diesel::{deserialize, Queryable, serialize};
 use std::io::Write;
+use serde::Serialize;
 
 pub trait AdaptDuration {
     fn adapt(self) -> DurationAdapter;
@@ -23,6 +24,35 @@ pub trait AdaptDuration {
 #[sql_type = "Text"]
 pub struct DurationAdapter(pub chrono::Duration);
 
+impl Serialize for DurationAdapter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        humantime::format_duration(self.0.to_std().unwrap_or_default()).to_string().serialize(serializer)
+    }
+}
+
+impl<DB> FromSqlRow<Text, DB> for DurationAdapter
+where
+    DB: Backend,
+    String: FromSql<Text, DB>,
+{
+    fn build_from_row<R: diesel::row::Row<DB>>(row: &mut R) -> deserialize::Result<Self> {
+        let value = String::build_from_row(row)?;
+        let chrono_duration = chrono::Duration::from_std( humantime::parse_duration(&value)?)?;
+        Ok(DurationAdapter(chrono_duration))
+    }
+}
+
+
+impl Queryable<Text, Sqlite> for DurationAdapter {
+    type Row = DurationAdapter;
+
+    fn build(row: Self::Row) -> Self {
+        row
+    }
+}
 
 impl<DB> FromSql<String, DB> for DurationAdapter
 where
@@ -32,16 +62,14 @@ where
     fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
 
         let value = String::from_sql(bytes)?;
-        let humantime_duration = humantime::parse_duration(&value)?;
 
-        let std_duration: std::time::Duration = humantime_duration.into();
-        let chrono_duration = chrono::Duration::from_std(std_duration)?;
+        let chrono_duration = chrono::Duration::from_std( humantime::parse_duration(&value)?)?;
 
         Ok(chrono_duration.adapt())
     }
 }
 
-impl ToSql<Timestamp, Sqlite> for DurationAdapter {
+impl ToSql<Text, Sqlite> for DurationAdapter {
     fn to_sql<W: Write>(&self, out: &mut Output<W, Sqlite>) -> serialize::Result {
         let f = humantime::format_duration(self.0.to_std().unwrap_or_default()).to_string();
         ToSql::<Text, Sqlite>::to_sql(&f, out)
