@@ -532,6 +532,8 @@ impl PaymentProcessor {
                 msg.interval
                     .map(|d| chrono::Duration::from_std(d).unwrap_or_default()),
                 msg.cron,
+                msg.safe_payout
+                    .map(|d| chrono::Duration::from_std(d).unwrap_or_default()),
                 msg.next_update,
             )
             .await
@@ -542,12 +544,12 @@ impl PaymentProcessor {
             })?;
 
         Ok(ProcessBatchCycleResponse {
-            node_id: Default::default(),
-            interval: None,
-            cron: None,
-            max_interval: Default::default(),
-            next_process: Default::default(),
-            last_process: None,
+            node_id: el.owner_id,
+            interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
+            cron: el.cycle_cron,
+            max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
+            next_process: el.cycle_next_process.0,
+            last_process: el.cycle_last_process.map(|d| d.0),
         })
     }
 
