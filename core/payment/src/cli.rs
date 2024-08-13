@@ -156,6 +156,23 @@ pub enum ProcessCommand {
         #[structopt(flatten)]
         account: pay::AccountCli,
     },
+    Info {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+    },
+    Set {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long, help = "Set interval")]
+        interval: Option<humantime::Duration>,
+        #[structopt(long, help = "Set cron")]
+        cron: Option<String>,
+        #[structopt(
+            long,
+            help = "Optionally set the next process time (if lower than interval)"
+        )]
+        next: Option<DateTime<Utc>>,
+    },
 }
 
 impl PaymentCli {
@@ -447,9 +464,62 @@ Typically operation should take less than 1 minute.
                                 skip_send: false,
                             })
                             .await??;
+                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
+                    }
+                    ProcessCommand::Set {
+                        account,
+                        interval,
+                        cron,
+                        next,
+                    } => {
+                        let node_id = if let Some(node_id) = account.account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::ProcessBatchCycleSet {
+                                node_id,
+                                interval: interval.map(|d| d.into()),
+                                cron,
+                                next_update: next,
+                            })
+                            .await??;
+                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
+                    }
+                    ProcessCommand::Info { account } => {
+                        let node_id = if let Some(node_id) = account.account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::ProcessBatchCycleInfo { node_id })
+                            .await??;
+
+                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
                     }
                 }
-                Ok(CommandOutput::NoOutput)
             }
             PaymentCli::Enter { account, amount } => CommandOutput::object(
                 wallet::enter(

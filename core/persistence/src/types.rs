@@ -1,5 +1,5 @@
-pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
 pub use crate::duration::{AdaptDuration, DurationAdapter};
+pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
 use bigdecimal::{BigDecimal, Zero};
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
