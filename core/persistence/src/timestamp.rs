@@ -4,9 +4,9 @@ use diesel::deserialize::FromSql;
 use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::{Text, Timestamp};
 use diesel::sqlite::Sqlite;
-use diesel::{deserialize, Queryable, serialize};
-use std::io::Write;
+use diesel::{deserialize, serialize, Queryable};
 use serde::Serialize;
+use std::io::Write;
 
 pub trait AdaptTimestamp {
     fn adapt(self) -> TimestampAdapter;

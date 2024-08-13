@@ -1,13 +1,15 @@
+use crate::diesel::ExpressionMethods;
+use crate::error::DbError;
 use crate::error::DbResult;
-use crate::models::cycle::{create_batch_cycle_based_on_cron, create_batch_cycle_based_on_interval, DbPayBatchCycle};
+use crate::models::cycle::{
+    create_batch_cycle_based_on_cron, create_batch_cycle_based_on_interval, DbPayBatchCycle,
+};
 use crate::schema::pay_batch_cycle::dsl;
 use chrono::{DateTime, Duration, Utc};
 use diesel::{self, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::types::{AdaptTimestamp};
-use crate::diesel::ExpressionMethods;
-use crate::error::DbError;
+use ya_persistence::types::AdaptTimestamp;
 
 pub struct BatchCycleDao<'c> {
     pool: &'c PoolType,
@@ -35,7 +37,6 @@ impl<'c> BatchCycleDao<'c> {
                         .first(conn)
                         .optional()?;
 
-
                     if let Some(entry) = existing_entry {
                         break Ok(entry);
                     } else {
@@ -43,7 +44,8 @@ impl<'c> BatchCycleDao<'c> {
                             node_id,
                             DEFAULT_INTERVAL,
                             DEFAULT_EXTRA_TIME_FOR_PAYMENT,
-                        ).expect("Failed to create default batch cycle");
+                        )
+                        .expect("Failed to create default batch cycle");
                         diesel::insert_into(dsl::pay_batch_cycle)
                             .values(batch_cycle)
                             .execute(conn)?;
@@ -51,7 +53,8 @@ impl<'c> BatchCycleDao<'c> {
                     loop_count += 1;
                     if loop_count > 1 {
                         return Err(DbError::Query(
-                            "Failed to insert default batch cycle".to_string()));
+                            "Failed to insert default batch cycle".to_string(),
+                        ));
                     }
                 }
             },
@@ -59,13 +62,13 @@ impl<'c> BatchCycleDao<'c> {
         .await
     }
 
-    pub async fn create(
+    pub async fn create_or_update(
         &self,
         owner_id: NodeId,
         interval: Option<Duration>,
         cron: Option<String>,
-        next_running_time: DateTime<Utc>,
-    ) -> DbResult<()> {
+        next_running_time: Option<DateTime<Utc>>,
+    ) -> DbResult<DbPayBatchCycle> {
         let now = Utc::now().adapt();
         let cycle = if let Some(interval) = interval {
             match create_batch_cycle_based_on_interval(
@@ -75,28 +78,61 @@ impl<'c> BatchCycleDao<'c> {
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {
-                    return Err(DbError::Query(format!("Error creating batch cycle based on interval {}", err)));
+                    return Err(DbError::Query(format!(
+                        "Error creating batch cycle based on interval {}",
+                        err
+                    )));
                 }
             }
         } else if let Some(cron) = cron {
-            match create_batch_cycle_based_on_cron(
-                &owner_id,
-                &cron,
-                DEFAULT_EXTRA_TIME_FOR_PAYMENT,
-            ) {
+            match create_batch_cycle_based_on_cron(&owner_id, &cron, DEFAULT_EXTRA_TIME_FOR_PAYMENT)
+            {
                 Ok(cycle) => cycle,
                 Err(err) => {
-                    return Err(DbError::Query(format!("Error creating batch cycle based on cron {}", err)));
+                    return Err(DbError::Query(format!(
+                        "Error creating batch cycle based on cron {}",
+                        err
+                    )));
                 }
             }
         } else {
-            return Err(DbError::Query("Either interval or cron must be provided".to_string()));
+            return Err(DbError::Query(
+                "Either interval or cron must be provided".to_string(),
+            ));
         };
         do_with_transaction(self.pool, "pay_batch_cycle_create", move |conn| {
-            diesel::insert_into(dsl::pay_batch_cycle)
-                .values(&cycle)
-                .execute(conn)?;
-            Ok(())
+
+            let existing_entry: Option<DbPayBatchCycle> = dsl::pay_batch_cycle
+                .filter(dsl::owner_id.eq(owner_id.to_string()))
+                .first(conn)
+                .optional()?;
+            if let Some(mut entry) = existing_entry {
+                entry.cycle_interval = cycle.cycle_interval;
+                entry.cycle_cron = cycle.cycle_cron;
+                entry.cycle_next_process = cycle.cycle_next_process;
+                entry.cycle_max_interval = cycle.cycle_max_interval;
+                entry.cycle_max_pay_time = cycle.cycle_max_pay_time;
+
+                diesel::update(dsl::pay_batch_cycle.filter(dsl::owner_id.eq(owner_id.to_string())))
+                    .set((
+                         dsl::updated_ts.eq(now),
+                         dsl::cycle_interval.eq(entry.cycle_interval),
+                         dsl::cycle_cron.eq(entry.cycle_cron),
+                         dsl::cycle_last_process.eq(entry.cycle_last_process),
+                         dsl::cycle_next_process.eq(entry.cycle_next_process),
+                         dsl::cycle_max_interval.eq(entry.cycle_max_interval),
+                         dsl::cycle_max_pay_time.eq(entry.cycle_max_pay_time),
+                    ))
+                    .execute(conn)?;
+            } else {
+                diesel::insert_into(dsl::pay_batch_cycle)
+                    .values(&cycle)
+                    .execute(conn)?;
+            };
+            let existing_entry: DbPayBatchCycle = dsl::pay_batch_cycle
+                .filter(dsl::owner_id.eq(owner_id.to_string()))
+                .first(conn)?;
+            Ok(existing_entry)
         })
         .await
     }

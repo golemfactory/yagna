@@ -1,11 +1,11 @@
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, FromSqlRow};
 use diesel::serialize::{Output, ToSql};
-use diesel::sql_types::{Text};
+use diesel::sql_types::Text;
 use diesel::sqlite::Sqlite;
-use diesel::{deserialize, Queryable, serialize};
-use std::io::Write;
+use diesel::{deserialize, serialize, Queryable};
 use serde::Serialize;
+use std::io::Write;
 
 pub trait AdaptDuration {
     fn adapt(self) -> DurationAdapter;
@@ -29,7 +29,9 @@ impl Serialize for DurationAdapter {
     where
         S: serde::Serializer,
     {
-        humantime::format_duration(self.0.to_std().unwrap_or_default()).to_string().serialize(serializer)
+        humantime::format_duration(self.0.to_std().unwrap_or_default())
+            .to_string()
+            .serialize(serializer)
     }
 }
 
@@ -40,11 +42,10 @@ where
 {
     fn build_from_row<R: diesel::row::Row<DB>>(row: &mut R) -> deserialize::Result<Self> {
         let value = String::build_from_row(row)?;
-        let chrono_duration = chrono::Duration::from_std( humantime::parse_duration(&value)?)?;
+        let chrono_duration = chrono::Duration::from_std(humantime::parse_duration(&value)?)?;
         Ok(DurationAdapter(chrono_duration))
     }
 }
-
 
 impl Queryable<Text, Sqlite> for DurationAdapter {
     type Row = DurationAdapter;
@@ -60,10 +61,9 @@ where
     String: FromSql<Text, DB>,
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-
         let value = String::from_sql(bytes)?;
 
-        let chrono_duration = chrono::Duration::from_std( humantime::parse_duration(&value)?)?;
+        let chrono_duration = chrono::Duration::from_std(humantime::parse_duration(&value)?)?;
 
         Ok(chrono_duration.adapt())
     }

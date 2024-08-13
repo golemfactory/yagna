@@ -21,7 +21,7 @@ pub mod local {
     use super::{public::Ack, *};
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, NaiveDateTime, Utc};
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -537,6 +537,54 @@ pub mod local {
         const ID: &'static str = "PaymentDriverStatus";
         type Item = Vec<DriverStatusProperty>;
         type Error = PaymentDriverStatusError;
+    }
+
+    // ********************* GET PROCESS PAYMENTS INFO ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ProcessBatchCycleError {
+        #[error("ProcessBatchCycleError: {0}")]
+        ProcessBatchCycleError(String),
+    }
+
+    impl From<ProcessBatchCycleError> for GenericError {
+        fn from(e: ProcessBatchCycleError) -> Self {
+            GenericError::new(e)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessBatchCycleResponse {
+        pub node_id: NodeId,
+        pub interval: Option<Duration>,
+        pub cron: Option<String>,
+        pub max_interval: Duration,
+        pub next_process: NaiveDateTime,
+        pub last_process: Option<NaiveDateTime>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessBatchCycleInfo {
+        pub node_id: NodeId,
+    }
+
+    impl RpcMessage for ProcessBatchCycleInfo {
+        const ID: &'static str = "ProcessBatchCycleInfo";
+        type Item = ProcessBatchCycleResponse;
+        type Error = ProcessBatchCycleError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessBatchCycleSet {
+        pub node_id: NodeId,
+        pub interval: Option<Duration>,
+        pub cron: Option<String>,
+        pub next_update: Option<DateTime<Utc>>,
+    }
+
+    impl RpcMessage for ProcessBatchCycleSet {
+        const ID: &'static str = "ProcessBatchCycleSet";
+        type Item = ProcessBatchCycleResponse;
+        type Error = ProcessBatchCycleError;
     }
 
     // ********************* PROCESS PAYMENTS ********************************
