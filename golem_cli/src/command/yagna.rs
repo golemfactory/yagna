@@ -78,6 +78,22 @@ lazy_static! {
                 token: "GLM",
             },
         );
+        erc20.insert(
+            NetworkName::Amoy.into(),
+            PaymentPlatform {
+                platform: "erc20-amoy-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Sepolia.into(),
+            PaymentPlatform {
+                platform: "erc20-sepolia-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
 
         PaymentDriver {
             platforms: erc20,
@@ -136,7 +152,7 @@ lazy_static! {
         );
         ngm.insert(
             NetworkGroup::Testnet,
-            vec![NetworkName::Holesky, NetworkName::Mumbai],
+            vec![NetworkName::Holesky, NetworkName::Amoy, NetworkName::Sepolia],
         );
         ngm
     };
