@@ -165,6 +165,8 @@ pub enum ProcessCommand {
         account: pay::AccountCli,
         #[structopt(long, help = "Set interval")]
         interval: Option<humantime::Duration>,
+        #[structopt(long, help = "Set safe payout")]
+        payout: Option<humantime::Duration>,
         #[structopt(long, help = "Set cron")]
         cron: Option<String>,
         #[structopt(
@@ -472,6 +474,7 @@ Typically operation should take less than 1 minute.
                         interval,
                         cron,
                         next,
+                        payout,
                     } => {
                         let node_id = if let Some(node_id) = account.account {
                             node_id
@@ -494,6 +497,7 @@ Typically operation should take less than 1 minute.
                                 interval: interval.map(|d| d.into()),
                                 cron,
                                 next_update: next,
+                                safe_payout: payout.map(|d| d.into()),
                             })
                             .await??;
                         Ok(CommandOutput::object(driver_status_props)

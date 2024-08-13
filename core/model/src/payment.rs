@@ -579,6 +579,7 @@ pub mod local {
         pub interval: Option<Duration>,
         pub cron: Option<String>,
         pub next_update: Option<DateTime<Utc>>,
+        pub safe_payout: Option<Duration>,
     }
 
     impl RpcMessage for ProcessBatchCycleSet {
