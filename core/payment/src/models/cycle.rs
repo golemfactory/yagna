@@ -1,8 +1,8 @@
-use std::str::FromStr;
 use crate::schema::*;
 use anyhow::anyhow;
 use chrono::{Duration, Utc};
 use serde::Serialize;
+use std::str::FromStr;
 use ya_client_model::NodeId;
 use ya_persistence::types::{AdaptDuration, AdaptTimestamp, DurationAdapter, TimestampAdapter};
 
@@ -57,9 +57,7 @@ pub fn create_batch_cycle_based_on_cron(
     extra_time_for_payment: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
     let parsed_cron = cron::Schedule::from_str(cron_str)
-        .map_err(|err|anyhow!("Failed to parse cron expression: {} {}", cron_str, err))?;
-//    create_batch_cycle_based_on_interval(owner_id, parsed_cron.upcoming(Utc::now()).unwrap() - Utc::now(), extra_time_for_payment);
+        .map_err(|err| anyhow!("Failed to parse cron expression: {} {}", cron_str, err))?;
+    //    create_batch_cycle_based_on_interval(owner_id, parsed_cron.upcoming(Utc::now()).unwrap() - Utc::now(), extra_time_for_payment);
     todo!()
 }
-
-
