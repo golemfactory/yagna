@@ -21,8 +21,8 @@ impl<'c> AsDao<'c> for BatchCycleDao<'c> {
     }
 }
 
-const DEFAULT_INTERVAL: Duration = Duration::minutes(5);
-const DEFAULT_EXTRA_TIME_FOR_PAYMENT: Duration = Duration::minutes(4);
+pub const DEFAULT_INTERVAL: Duration = Duration::minutes(5);
+pub const DEFAULT_EXTRA_TIME_FOR_PAYMENT: Duration = Duration::minutes(4);
 
 impl<'c> BatchCycleDao<'c> {
     pub async fn get_or_insert_default(&self, node_id: NodeId) -> DbResult<DbPayBatchCycle> {
