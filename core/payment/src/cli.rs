@@ -464,7 +464,8 @@ Typically operation should take less than 1 minute.
                                 skip_send: false,
                             })
                             .await??;
-                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
+                        Ok(CommandOutput::object(driver_status_props)
+                            .expect("Failed to create object"))
                     }
                     ProcessCommand::Set {
                         account,
@@ -495,7 +496,8 @@ Typically operation should take less than 1 minute.
                                 next_update: next,
                             })
                             .await??;
-                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
+                        Ok(CommandOutput::object(driver_status_props)
+                            .expect("Failed to create object"))
                     }
                     ProcessCommand::Info { account } => {
                         let node_id = if let Some(node_id) = account.account {
@@ -517,7 +519,8 @@ Typically operation should take less than 1 minute.
                             .call(pay::ProcessBatchCycleInfo { node_id })
                             .await??;
 
-                        Ok(CommandOutput::object(driver_status_props).expect("Failed to create object"))
+                        Ok(CommandOutput::object(driver_status_props)
+                            .expect("Failed to create object"))
                     }
                 }
             }
