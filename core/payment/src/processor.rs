@@ -1,5 +1,5 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, BatchDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, PaymentDao, SyncNotifsDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
@@ -34,6 +34,7 @@ use ya_core_model::driver::{
 };
 use ya_core_model::payment::local::{
     CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle,
+    ProcessBatchCycleError, ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet,
     ProcessPaymentsError, ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount,
     RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
     UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
@@ -474,6 +475,70 @@ impl PaymentProcessor {
             }
         }
         Ok(())
+    }
+
+    pub async fn process_cycle_info(
+        &self,
+        msg: ProcessBatchCycleInfo,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+
+        let db_executor = self
+            .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await.map_err(|err| {
+            ProcessBatchCycleError::ProcessBatchCycleError(format!(
+                "Db timeout lock when process payments {err}"
+            ))
+        })?;
+
+        let el = db_executor.as_dao::<BatchCycleDao>().get_or_insert_default(msg.node_id).await
+            .map_err(|err| ProcessBatchCycleError::ProcessBatchCycleError(format!("db error: {}", err)))?;
+
+        Ok(ProcessBatchCycleResponse {
+            node_id: el.owner_id,
+            interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
+            cron: el.cycle_cron,
+            max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
+            next_process: el.cycle_next_process.0,
+            last_process: el.cycle_last_process.map(|d| d.0),
+        })
+    }
+
+    pub async fn process_cycle_set(
+        &self,
+        msg: ProcessBatchCycleSet,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+
+        let db_executor = self
+            .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT)
+            .await.map_err(|err| {
+            ProcessBatchCycleError::ProcessBatchCycleError(format!(
+                "Db timeout lock when process payments {err}"
+            ))
+        })?;
+
+        let el = db_executor.as_dao::<BatchCycleDao>().create_or_update(msg.node_id,
+
+                                                              msg.interval.map(|d| chrono::Duration::from_std(d).unwrap_or_default() ),
+                                                              msg.cron,
+                                                              msg.next_update,
+            ).await.map_err(
+            |err| {
+                ProcessBatchCycleError::ProcessBatchCycleError(format!(
+                    "create or update error: {err}"
+                ))
+            })?;
+
+
+        Ok(ProcessBatchCycleResponse {
+            node_id: Default::default(),
+            interval: None,
+            cron: None,
+            max_interval: Default::default(),
+            next_process: Default::default(),
+            last_process: None,
+        })
     }
 
     pub async fn process_payments_now(

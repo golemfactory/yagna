@@ -65,6 +65,8 @@ mod local {
             .bind_with_processor(validate_allocation)
             .bind_with_processor(release_allocations)
             .bind_with_processor(process_payments_now)
+            .bind_with_processor(process_cycle_info)
+            .bind_with_processor(process_cycle_set)
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
@@ -496,6 +498,24 @@ mod local {
         processor.release_allocations(true).await;
         log::debug!("Release allocations processor finished");
         Ok(())
+    }
+
+    async fn process_cycle_info(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessBatchCycleInfo,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+        processor.process_cycle_info(msg).await
+    }
+
+    async fn process_cycle_set(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessBatchCycleSet,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+        processor.process_cycle_set(msg).await
     }
 
     async fn process_payments_now(
