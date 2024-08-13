@@ -101,7 +101,6 @@ impl<'c> BatchCycleDao<'c> {
             ));
         };
         do_with_transaction(self.pool, "pay_batch_cycle_create", move |conn| {
-
             let existing_entry: Option<DbPayBatchCycle> = dsl::pay_batch_cycle
                 .filter(dsl::owner_id.eq(owner_id.to_string()))
                 .first(conn)
@@ -115,13 +114,13 @@ impl<'c> BatchCycleDao<'c> {
 
                 diesel::update(dsl::pay_batch_cycle.filter(dsl::owner_id.eq(owner_id.to_string())))
                     .set((
-                         dsl::updated_ts.eq(now),
-                         dsl::cycle_interval.eq(entry.cycle_interval),
-                         dsl::cycle_cron.eq(entry.cycle_cron),
-                         dsl::cycle_last_process.eq(entry.cycle_last_process),
-                         dsl::cycle_next_process.eq(entry.cycle_next_process),
-                         dsl::cycle_max_interval.eq(entry.cycle_max_interval),
-                         dsl::cycle_max_pay_time.eq(entry.cycle_max_pay_time),
+                        dsl::updated_ts.eq(now),
+                        dsl::cycle_interval.eq(entry.cycle_interval),
+                        dsl::cycle_cron.eq(entry.cycle_cron),
+                        dsl::cycle_last_process.eq(entry.cycle_last_process),
+                        dsl::cycle_next_process.eq(entry.cycle_next_process),
+                        dsl::cycle_max_interval.eq(entry.cycle_max_interval),
+                        dsl::cycle_max_pay_time.eq(entry.cycle_max_pay_time),
                     ))
                     .execute(conn)?;
             } else {
