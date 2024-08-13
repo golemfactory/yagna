@@ -4,8 +4,9 @@ use diesel::deserialize::FromSql;
 use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::{Text, Timestamp};
 use diesel::sqlite::Sqlite;
-use diesel::{deserialize, serialize};
+use diesel::{deserialize, Queryable, serialize};
 use std::io::Write;
+use serde::Serialize;
 
 pub trait AdaptTimestamp {
     fn adapt(self) -> TimestampAdapter;
@@ -20,9 +21,17 @@ pub trait AdaptTimestamp {
 /// Check description of related issues:
 /// https://github.com/golemfactory/yagna/issues/2145
 /// https://github.com/golemfactory/yagna/pull/2086
-#[derive(Clone, Debug, AsExpression)]
+#[derive(Clone, Debug, AsExpression, Serialize)]
 #[sql_type = "Timestamp"]
 pub struct TimestampAdapter(pub NaiveDateTime);
+
+impl Queryable<Timestamp, Sqlite> for TimestampAdapter {
+    type Row = NaiveDateTime;
+
+    fn build(row: Self::Row) -> Self {
+        TimestampAdapter(row)
+    }
+}
 
 impl FromSql<Timestamp, Sqlite> for TimestampAdapter {
     fn from_sql(value: Option<&<Sqlite as Backend>::RawValue>) -> deserialize::Result<Self> {
