@@ -1462,6 +1462,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f64009896348fc5af4222e9cf7d7d82a95a256c634ebcf61c53e4ea461422242"
 
 [[package]]
+name = "cron"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f8c3e73077b4b4a6ab1ea5047c37c57aee77657bc8ecd6f29b0af082d0b0c07"
+dependencies = [
+ "chrono",
+ "nom 7.1.3",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9608,6 +9619,7 @@ dependencies = [
  "base64 0.12.3",
  "bigdecimal 0.2.2",
  "chrono",
+ "cron",
  "derive_more",
  "diesel",
  "diesel_migrations",
@@ -9703,6 +9715,7 @@ dependencies = [
  "chrono",
  "diesel",
  "dotenv",
+ "humantime 2.1.0",
  "libsqlite3-sys",
  "log",
  "r2d2",

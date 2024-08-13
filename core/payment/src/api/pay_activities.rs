@@ -67,11 +67,6 @@ pub async fn get_debit_note_chain(
     let mut debit_by_prev_id = HashMap::new();
 
     for debit in debit_list.iter() {
-        log::info!(
-            "Debit note id: {} prev id: {:?}",
-            debit.debit_note_id,
-            debit.previous_debit_note_id
-        );
         if debit_by_id
             .insert(debit.debit_note_id.clone(), debit.clone())
             .is_some()

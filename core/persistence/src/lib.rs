@@ -6,5 +6,5 @@ pub mod executor;
 pub mod service;
 mod timestamp;
 pub mod types;
-
+mod duration;
 pub use executor::Error;

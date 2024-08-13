@@ -70,6 +70,20 @@ table! {
 }
 
 table! {
+    pay_batch_cycle (owner_id) {
+        owner_id -> Text,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
+        cycle_interval -> Nullable<Text>,
+        cycle_cron -> Nullable<Text>,
+        cycle_last_process -> Nullable<Timestamp>,
+        cycle_next_process -> Timestamp,
+        cycle_max_interval -> Text,
+        cycle_max_pay_time -> Text,
+    }
+}
+
+table! {
     pay_batch_order (owner_id, id) {
         id -> Text,
         ts -> Timestamp,
@@ -261,6 +275,7 @@ allow_tables_to_appear_in_same_query!(
     pay_agreement,
     pay_agreement_payment,
     pay_allocation,
+    pay_batch_cycle,
     pay_batch_order,
     pay_batch_order_item,
     pay_batch_order_item_document,
