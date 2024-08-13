@@ -2,13 +2,16 @@ use std::str::FromStr;
 use crate::schema::*;
 use anyhow::anyhow;
 use chrono::{Duration, Utc};
+use serde::Serialize;
 use ya_client_model::NodeId;
 use ya_persistence::types::{AdaptDuration, AdaptTimestamp, DurationAdapter, TimestampAdapter};
 
-#[derive(Debug, Clone, Queryable, Insertable, AsChangeset)]
+#[derive(Debug, Clone, Queryable, Insertable, AsChangeset, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[primary_key(owner_id)]
 #[table_name = "pay_batch_cycle"]
 pub struct DbPayBatchCycle {
-    pub owner_id: String,
+    pub owner_id: NodeId,
     pub created_ts: TimestampAdapter,
     pub updated_ts: TimestampAdapter,
     pub cycle_interval: Option<DurationAdapter>,
@@ -19,8 +22,8 @@ pub struct DbPayBatchCycle {
     pub cycle_max_pay_time: DurationAdapter,
 }
 
-pub fn createBatchCycleBasedOnInterval(
-    owner_id: String,
+pub fn create_batch_cycle_based_on_interval(
+    owner_id: NodeId,
     interval: Duration,
     extra_time_for_payment: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
@@ -48,26 +51,15 @@ pub fn createBatchCycleBasedOnInterval(
         cycle_max_pay_time: (interval + extra_time_for_payment).adapt(),
     })
 }
-pub fn createBatchCycleBasedOnCron(
-    owner_id: String,
+pub fn create_batch_cycle_based_on_cron(
+    owner_id: &NodeId,
     cron_str: &str,
     extra_time_for_payment: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
     let parsed_cron = cron::Schedule::from_str(cron_str)
         .map_err(|err|anyhow!("Failed to parse cron expression: {} {}", cron_str, err))?;
-//    createBatchCycleBasedOnInterval(owner_id, parsed_cron.upcoming(Utc::now()).unwrap() - Utc::now(), extra_time_for_payment);
+//    create_batch_cycle_based_on_interval(owner_id, parsed_cron.upcoming(Utc::now()).unwrap() - Utc::now(), extra_time_for_payment);
     todo!()
 }
 
-#[derive(Queryable, Debug, Insertable, AsChangeset)]
-#[table_name = "pay_batch_cycle"]
-pub struct DbPayBatchCycleWriteObj {
-    pub owner_id: NodeId,
-    pub created_ts: TimestampAdapter,
-    pub updated_ts: TimestampAdapter,
-    pub cycle_cron: String,
-    pub cycle_last_process: Option<TimestampAdapter>,
-    pub cycle_next_process: TimestampAdapter,
-    pub cycle_max_interval: String,
-    pub cycle_max_pay_time: String,
-}
+
