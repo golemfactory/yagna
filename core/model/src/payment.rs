@@ -553,6 +553,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleResponse {
         pub node_id: NodeId,
         pub interval: Option<Duration>,
@@ -563,6 +564,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleInfo {
         pub node_id: NodeId,
     }
@@ -574,6 +576,7 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleSet {
         pub node_id: NodeId,
         pub interval: Option<Duration>,
