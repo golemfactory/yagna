@@ -70,8 +70,9 @@ table! {
 }
 
 table! {
-    pay_batch_cycle (owner_id) {
+    pay_batch_cycle (owner_id, platform) {
         owner_id -> Text,
+        platform -> Text,
         created_ts -> Timestamp,
         updated_ts -> Timestamp,
         cycle_interval -> Nullable<Text>,

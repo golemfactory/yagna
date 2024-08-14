@@ -17,6 +17,7 @@ pub mod accounts;
 pub mod api;
 mod cli;
 pub mod config;
+mod cycle;
 pub mod dao;
 pub mod error;
 pub mod models;

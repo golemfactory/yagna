@@ -494,6 +494,13 @@ Typically operation should take less than 1 minute.
                         let driver_status_props = bus::service(pay::BUS_ID)
                             .call(pay::ProcessBatchCycleSet {
                                 node_id,
+                                platform: format!(
+                                    "{}-{}-{}",
+                                    account.driver(),
+                                    account.network(),
+                                    account.token()
+                                )
+                                .to_lowercase(),
                                 interval: interval.map(|d| d.into()),
                                 cron,
                                 next_update: next,
@@ -520,7 +527,16 @@ Typically operation should take less than 1 minute.
                         };
 
                         let driver_status_props = bus::service(pay::BUS_ID)
-                            .call(pay::ProcessBatchCycleInfo { node_id })
+                            .call(pay::ProcessBatchCycleInfo {
+                                node_id,
+                                platform: format!(
+                                    "{}-{}-{}",
+                                    account.driver(),
+                                    account.network(),
+                                    account.token()
+                                )
+                                .to_lowercase(),
+                            })
                             .await??;
 
                         Ok(CommandOutput::object(driver_status_props)
