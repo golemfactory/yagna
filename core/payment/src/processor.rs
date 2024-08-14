@@ -605,6 +605,10 @@ impl PaymentProcessor {
                 ))
             })?;
 
+        self.batch_cycle_tasks
+            .lock()
+            .unwrap()
+            .wake_owner_platform(msg.node_id, msg.platform.clone());
         Ok(self.db_batch_cycle_to_response(el))
     }
 
@@ -617,20 +621,7 @@ impl PaymentProcessor {
 
             let mut resolve_time_ms = 0.0f64;
             let mut order_id = None;
-            {
-                /*let db_executor = self
-                    .db_executor
-                    .timeout_lock(DB_LOCK_TIMEOUT)
-                    .await
-                    .map_err(|err| {
-                        ProcessPaymentsError::ProcessPaymentsError(format!(
-                            "Db timeout lock when process payments {err}"
-                        ))
-                    })?;
-                db_executor
-                    .as_dao::<BatchCycleDao>()
-                    .get_or_insert_default(msg.node_id, msg.platform.clone())*/
-            }
+
             if !msg.skip_resolve {
                 let db_executor = self
                     .db_executor
@@ -641,6 +632,16 @@ impl PaymentProcessor {
                             "Db timeout lock when process payments {err}"
                         ))
                     })?;
+                db_executor
+                    .as_dao::<BatchCycleDao>()
+                    .mark_process_and_next(msg.node_id, msg.platform.clone())
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Db error when mark_process_and_next payments {err}"
+                        ))
+                    })?;
+
                 match db_executor
                     .as_dao::<BatchDao>()
                     .resolve(
