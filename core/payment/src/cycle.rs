@@ -30,6 +30,14 @@ impl BatchCycleTaskManager {
         self.start_tasks_if_not_started();
     }
 
+    pub fn wake_owner_platform(&self, owner_id: NodeId, platform: String) {
+        for task in self.tasks.iter() {
+            if task.node_id == owner_id && task.platform == platform {
+                task.waker.notify_waiters();
+            }
+        }
+    }
+
     fn start_tasks_if_not_started(&mut self) {
         for owner_id in &self.owners {
             for platform in &self.platforms {
@@ -92,14 +100,14 @@ impl BatchCycleTask {
                             let diff = (next_process - now).num_milliseconds();
                             if diff > 0 {
                                 log::info!(
-                                    "Sleeping for {} ms before next process for owner_id: {}, platform: {}",
-                                    diff,
+                                    "Sleeping for {} before next process for owner_id: {}, platform: {}",
+                                    humantime::format_duration(std::time::Duration::from_secs_f64((diff as f64 / 1000.0).round())),
                                     node_id,
                                     platform
                                 );
                                 tokio::select! {
                                     _ = tokio::time::sleep(std::time::Duration::from_millis(diff as u64)) => {}
-                                    _ = waker.notified() => break,
+                                    _ = waker.notified() => {},
                                 }
                             }
                         } else {
