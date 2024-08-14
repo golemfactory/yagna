@@ -174,6 +174,8 @@ pub mod local {
         InvalidDefaultNetwork(String),
         #[error("Internal timeout")]
         InternalTimeout,
+        #[error("Other")]
+        Other(String),
     }
 
     impl RpcMessage for RegisterDriver {
@@ -556,6 +558,7 @@ pub mod local {
     #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleResponse {
         pub node_id: NodeId,
+        pub platform: String,
         pub interval: Option<Duration>,
         pub cron: Option<String>,
         pub max_interval: Duration,
@@ -567,6 +570,7 @@ pub mod local {
     #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleInfo {
         pub node_id: NodeId,
+        pub platform: String,
     }
 
     impl RpcMessage for ProcessBatchCycleInfo {
@@ -579,6 +583,7 @@ pub mod local {
     #[serde(rename_all = "camelCase")]
     pub struct ProcessBatchCycleSet {
         pub node_id: NodeId,
+        pub platform: String,
         pub interval: Option<Duration>,
         pub cron: Option<String>,
         pub next_update: Option<DateTime<Utc>>,

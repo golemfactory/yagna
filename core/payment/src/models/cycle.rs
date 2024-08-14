@@ -12,6 +12,7 @@ use ya_persistence::types::{AdaptDuration, AdaptTimestamp, DurationAdapter, Time
 #[table_name = "pay_batch_cycle"]
 pub struct DbPayBatchCycle {
     pub owner_id: NodeId,
+    pub platform: String,
     pub created_ts: TimestampAdapter,
     pub updated_ts: TimestampAdapter,
     pub cycle_interval: Option<DurationAdapter>,
@@ -24,6 +25,7 @@ pub struct DbPayBatchCycle {
 
 pub fn create_batch_cycle_based_on_interval(
     owner_id: NodeId,
+    platform: String,
     interval: Duration,
     extra_time_for_payment: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
@@ -41,6 +43,7 @@ pub fn create_batch_cycle_based_on_interval(
     let next_running_time = now + interval;
     Ok(DbPayBatchCycle {
         owner_id,
+        platform,
         created_ts: now.adapt(),
         updated_ts: now.adapt(),
         cycle_interval: Some(interval.adapt()),
@@ -53,6 +56,7 @@ pub fn create_batch_cycle_based_on_interval(
 }
 pub fn create_batch_cycle_based_on_cron(
     owner_id: &NodeId,
+    platform: String,
     cron_str: &str,
     extra_time_for_payment: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
