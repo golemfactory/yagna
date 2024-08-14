@@ -131,7 +131,10 @@ impl BatchCycleTask {
                     }
 
                     let info = match bus::service(pay_local::BUS_ID)
-                        .send(pay_local::ProcessBatchCycleInfo { node_id, platform: platform.clone() })
+                        .send(pay_local::ProcessBatchCycleInfo {
+                            node_id,
+                            platform: platform.clone(),
+                        })
                         .await
                     {
                         Ok(Ok(info)) => info,
