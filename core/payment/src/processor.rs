@@ -1,4 +1,5 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
+use crate::cycle::BatchCycleTaskManager;
 use crate::dao::{
     ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, PaymentDao, SyncNotifsDao,
 };
@@ -6,6 +7,7 @@ use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
+use crate::models::cycle::DbPayBatchCycle;
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
@@ -42,11 +44,11 @@ use ya_core_model::payment::local::{
     UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
-use ya_core_model::NodeId;
+use ya_core_model::{identity, NodeId};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
-use ya_service_bus::typed::Endpoint;
+use ya_service_bus::typed::{service, Endpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 fn driver_endpoint(driver: &str) -> Endpoint {
@@ -161,6 +163,14 @@ impl DriverRegistry {
     }
 
     pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        log::info!(
+            "register_account: driver={} network={} token={} address={} mode={:?}",
+            msg.driver,
+            msg.network,
+            msg.token,
+            msg.address,
+            msg.mode
+        );
         let driver_details = match self.drivers.get(&msg.driver) {
             None => return Err(RegisterAccountError::DriverNotRegistered(msg.driver)),
             Some(details) => details,
@@ -313,6 +323,7 @@ const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct PaymentProcessor {
+    batch_cycle_tasks: Arc<std::sync::Mutex<BatchCycleTaskManager>>,
     db_executor: Arc<Mutex<DbExecutor>>,
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
@@ -328,6 +339,26 @@ enum PaymentSendToGsbError {
     #[error("payment Send to Gsb has been rejected")]
     Rejected,
 }
+pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, ya_core_model::driver::GenericError>
+{
+    log::debug!("list_unlocked_identities");
+    let message = identity::List {};
+    let result = service(identity::BUS_ID)
+        .send(message)
+        .await
+        .map_err(ya_core_model::driver::GenericError::new)?
+        .map_err(ya_core_model::driver::GenericError::new)?;
+    let unlocked_list = result
+        .iter()
+        .filter(|n| !n.is_locked)
+        .map(|n| n.node_id)
+        .collect();
+    log::debug!(
+        "list_unlocked_identities completed. result={:?}",
+        unlocked_list
+    );
+    Ok(unlocked_list)
+}
 
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
@@ -336,10 +367,35 @@ impl PaymentProcessor {
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
             schedule_payment_guard: Arc::new(Mutex::new(())),
+            batch_cycle_tasks: Arc::new(std::sync::Mutex::new(BatchCycleTaskManager::new())),
         }
     }
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
+        {
+            let unlocked_identities = list_unlocked_identities().await.map_err(|err| {
+                RegisterDriverError::Other(format!("Error getting unlocked identities: {err}"))
+            })?;
+            for identity in unlocked_identities {
+                self.batch_cycle_tasks.lock().unwrap().add_owner(identity);
+            }
+        }
+        for network in msg.details.networks.keys() {
+            self.batch_cycle_tasks.lock().unwrap().add_platform(
+                format!(
+                    "{}-{}-{}",
+                    msg.driver_name,
+                    network,
+                    msg.details
+                        .networks
+                        .get(network)
+                        .map(|n| n.default_token.clone())
+                        .unwrap_or_default()
+                )
+                .to_lowercase(),
+            );
+        }
+
         self.registry
             .timeout_write(REGISTRY_LOCK_TIMEOUT)
             .await
@@ -479,6 +535,18 @@ impl PaymentProcessor {
         Ok(())
     }
 
+    fn db_batch_cycle_to_response(&self, el: DbPayBatchCycle) -> ProcessBatchCycleResponse {
+        ProcessBatchCycleResponse {
+            node_id: el.owner_id,
+            platform: el.platform,
+            interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
+            cron: el.cycle_cron,
+            max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
+            next_process: el.cycle_next_process.0,
+            last_process: el.cycle_last_process.map(|d| d.0),
+        }
+    }
+
     pub async fn process_cycle_info(
         &self,
         msg: ProcessBatchCycleInfo,
@@ -495,20 +563,13 @@ impl PaymentProcessor {
 
         let el = db_executor
             .as_dao::<BatchCycleDao>()
-            .get_or_insert_default(msg.node_id)
+            .get_or_insert_default(msg.node_id, msg.platform)
             .await
             .map_err(|err| {
                 ProcessBatchCycleError::ProcessBatchCycleError(format!("db error: {}", err))
             })?;
 
-        Ok(ProcessBatchCycleResponse {
-            node_id: el.owner_id,
-            interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
-            cron: el.cycle_cron,
-            max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
-            next_process: el.cycle_next_process.0,
-            last_process: el.cycle_last_process.map(|d| d.0),
-        })
+        Ok(self.db_batch_cycle_to_response(el))
     }
 
     pub async fn process_cycle_set(
@@ -529,6 +590,7 @@ impl PaymentProcessor {
             .as_dao::<BatchCycleDao>()
             .create_or_update(
                 msg.node_id,
+                msg.platform.clone(),
                 msg.interval
                     .map(|d| chrono::Duration::from_std(d).unwrap_or_default()),
                 msg.cron,
@@ -543,14 +605,7 @@ impl PaymentProcessor {
                 ))
             })?;
 
-        Ok(ProcessBatchCycleResponse {
-            node_id: el.owner_id,
-            interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
-            cron: el.cycle_cron,
-            max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
-            next_process: el.cycle_next_process.0,
-            last_process: el.cycle_last_process.map(|d| d.0),
-        })
+        Ok(self.db_batch_cycle_to_response(el))
     }
 
     pub async fn process_payments_now(
@@ -559,8 +614,23 @@ impl PaymentProcessor {
     ) -> Result<ProcessPaymentsNowResponse, ProcessPaymentsError> {
         {
             let operation_start = Instant::now();
+
             let mut resolve_time_ms = 0.0f64;
             let mut order_id = None;
+            {
+                /*let db_executor = self
+                    .db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT)
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Db timeout lock when process payments {err}"
+                        ))
+                    })?;
+                db_executor
+                    .as_dao::<BatchCycleDao>()
+                    .get_or_insert_default(msg.node_id, msg.platform.clone())*/
+            }
             if !msg.skip_resolve {
                 let db_executor = self
                     .db_executor
