@@ -559,7 +559,6 @@ Typically operation should take less than 1 minute.
 
                         let driver = account.driver();
                         let network = account.network();
-                        let mut values = Vec::new();
 
                         let next_process_in = Utc::now()
                             .signed_duration_since(driver_status_props.next_process.and_utc());
@@ -582,34 +581,48 @@ Typically operation should take less than 1 minute.
                             })
                             .unwrap_or("NULL".to_string());
 
-                        values.push(json!([
-                            driver_status_props.interval,
-                            driver_status_props.cron,
-                            humantime::format_duration(round_duration_to_sec(
-                                driver_status_props.max_interval
-                            ))
-                            .to_string(),
-                            next_process_descr,
-                            last_process_descr,
-                        ]));
-                        Ok(CommandOutput::Table {
-                            columns: [
-                                "Interval",
-                                "Cron",
-                                "Max interval",
-                                "Next process",
-                                "Last processed",
-                            ]
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect(),
-                            values,
-                            summary: vec![json!(["", "", "", "", ""])],
-                            header: Some(format!(
-                                "Batch cycle info for driver {} and network {}",
-                                driver, network
-                            )),
-                        })
+                        if ctx.json_output {
+                            CommandOutput::object(json!({
+                                "intervalSec": driver_status_props.interval.map(|d| d.as_secs()),
+                                "cron": driver_status_props.cron,
+                                "maxIntervalSec": round_duration_to_sec(driver_status_props.max_interval).as_secs(),
+                                "nextProcess": driver_status_props.next_process.and_utc().to_rfc3339(),
+                                "lastProcess": driver_status_props.last_process.map(|l| l.and_utc().to_rfc3339()),
+                            }))
+                        } else {
+                            let mut values = Vec::new();
+                            values.push(json!([
+                                driver_status_props
+                                    .interval
+                                    .map(|d| humantime::format_duration(d).to_string())
+                                    .unwrap_or("NULL".to_string()),
+                                driver_status_props.cron,
+                                humantime::format_duration(round_duration_to_sec(
+                                    driver_status_props.max_interval
+                                ))
+                                .to_string(),
+                                next_process_descr,
+                                last_process_descr,
+                            ]));
+                            Ok(CommandOutput::Table {
+                                columns: [
+                                    "Interval",
+                                    "Cron",
+                                    "Max interval",
+                                    "Next process",
+                                    "Last processed",
+                                ]
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect(),
+                                values,
+                                summary: vec![json!(["", "", "", "", ""])],
+                                header: Some(format!(
+                                    "Batch cycle info for driver {} and network {}",
+                                    driver, network
+                                )),
+                            })
+                        }
                     }
                 }
             }
