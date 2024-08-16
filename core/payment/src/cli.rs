@@ -3,9 +3,9 @@ mod rpc;
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde_json::to_value;
+use serde_json::{json, to_value};
 use std::str::FromStr;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
 use ya_core_model::payment::local::NetworkName;
@@ -178,6 +178,24 @@ pub enum ProcessCommand {
         )]
         next: Option<DateTime<Utc>>,
     },
+}
+
+fn round_duration_to_sec(d: Duration) -> Duration {
+    //0.500 gives 1.0
+    //0.499 gives 0.0
+    let secs = ((d.as_millis() + 500) / 1000) as u64;
+    Duration::from_secs(secs)
+}
+
+fn round_duration_to_sec_chrono(d: chrono::Duration) -> Duration {
+    //0.500 gives 1.0
+    //0.499 gives 0.0
+    let secs = ((d.num_milliseconds() + 500) / 1000) as u64;
+    Duration::from_secs(secs)
+}
+
+fn round_duration_humantime(d: chrono::Duration) -> String {
+    humantime::format_duration(round_duration_to_sec_chrono(d)).to_string()
 }
 
 impl PaymentCli {
@@ -549,8 +567,59 @@ Typically operation should take less than 1 minute.
                             })
                             .await??;
 
-                        Ok(CommandOutput::object(driver_status_props)
-                            .expect("Failed to create object"))
+                        let driver = account.driver();
+                        let network = account.network();
+                        let mut values = Vec::new();
+
+                        let next_process_in = Utc::now()
+                            .signed_duration_since(driver_status_props.next_process.and_utc());
+
+                        let next_process_descr = format!(
+                            "{}\n(in {})",
+                            driver_status_props.next_process.format("%F %T"),
+                            round_duration_humantime(next_process_in.abs())
+                        );
+                        let last_process_descr = driver_status_props
+                            .last_process
+                            .map(|l| {
+                                format!(
+                                    "{}\n({} ago)",
+                                    l.format("%F %T"),
+                                    round_duration_humantime(
+                                        Utc::now().signed_duration_since(l.and_utc())
+                                    )
+                                )
+                            })
+                            .unwrap_or("NULL".to_string());
+
+                        values.push(json!([
+                            driver_status_props.interval,
+                            driver_status_props.cron,
+                            humantime::format_duration(round_duration_to_sec(
+                                driver_status_props.max_interval
+                            ))
+                            .to_string(),
+                            next_process_descr,
+                            last_process_descr,
+                        ]));
+                        Ok(CommandOutput::Table {
+                            columns: [
+                                "Interval",
+                                "Cron",
+                                "Max interval",
+                                "Next process",
+                                "Last processed",
+                            ]
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect(),
+                            values,
+                            summary: vec![json!(["", "", "", "", ""])],
+                            header: Some(format!(
+                                "Batch cycle info for driver {} and network {}",
+                                driver, network
+                            )),
+                        })
                     }
                 }
             }
