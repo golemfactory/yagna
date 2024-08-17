@@ -179,12 +179,24 @@ impl<'c> BatchCycleDao<'c> {
                 .first(conn)
                 .optional()?;
             if let Some(mut entry) = existing_entry {
-                entry.cycle_interval = cycle.cycle_interval;
+                entry.cycle_interval = cycle.cycle_interval.clone();
                 entry.cycle_cron = cycle.cycle_cron;
                 entry.cycle_next_process = cycle.cycle_next_process;
                 entry.cycle_max_interval = cycle.cycle_max_interval;
                 entry.cycle_max_pay_time = cycle.cycle_max_pay_time;
 
+                if let Some(cycle_last_process) = entry.cycle_last_process.clone() {
+                    if let Some(interval) = cycle.cycle_interval {
+                        let max_next_running_time = cycle_last_process.0 + interval.0;
+                        if let Some(next_running_time) = next_running_time {
+                            entry.cycle_next_process =
+                                std::cmp::min(next_running_time, max_next_running_time.and_utc())
+                                    .adapt();
+                        } else {
+                            entry.cycle_next_process = max_next_running_time.adapt();
+                        }
+                    }
+                }
                 log::info!("Updating batch cycle {:?}", entry);
                 diesel::update(
                     dsl::pay_batch_cycle.filter(

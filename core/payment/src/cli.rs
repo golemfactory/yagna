@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
+use ya_client_model::NodeId;
 use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
 // Workspace uses
@@ -158,8 +159,9 @@ pub enum ProcessCommand {
         account: pay::AccountCli,
     },
     Info {
-        #[structopt(flatten)]
-        account: pay::AccountCli,
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
+        #[structopt(long, env = "YA_ACCOUNT")]
+        account: Option<NodeId>,
     },
     Set {
         #[structopt(flatten)]
@@ -532,7 +534,7 @@ Typically operation should take less than 1 minute.
                     ProcessCommand::Info { account } => {
                         let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
 
-                        let node_id = if let Some(node_id) = account.account {
+                        let node_id = if let Some(node_id) = account {
                             node_id
                         } else {
                             match bus::service(id_api::BUS_ID)
@@ -620,6 +622,7 @@ Typically operation should take less than 1 minute.
                             }
                             Ok(CommandOutput::Table {
                                 columns: [
+                                    "Platform",
                                     "Interval",
                                     "Cron",
                                     "Max interval",
@@ -634,7 +637,6 @@ Typically operation should take less than 1 minute.
                                 header: Some(format!(
                                     "Batch cycle info {}",
                                     account
-                                        .account
                                         .map(|a| a.to_string())
                                         .unwrap_or("default".to_string())
                                 )),
