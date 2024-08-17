@@ -1,5 +1,6 @@
 mod rpc;
 
+use std::collections::BTreeMap;
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -8,7 +9,7 @@ use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 use structopt::*;
 use ya_client_model::payment::DriverStatusProperty;
-use ya_core_model::payment::local::NetworkName;
+use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -529,6 +530,8 @@ Typically operation should take less than 1 minute.
                             .expect("Failed to create object"))
                     }
                     ProcessCommand::Info { account } => {
+                        let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+
                         let node_id = if let Some(node_id) = account.account {
                             node_id
                         } else {
@@ -544,66 +547,77 @@ Typically operation should take less than 1 minute.
                             }
                         };
 
-                        let driver_status_props = bus::service(pay::BUS_ID)
-                            .call(pay::ProcessBatchCycleInfo {
-                                node_id,
-                                platform: format!(
+                        let mut results = BTreeMap::<String, ProcessBatchCycleResponse>::new();
+
+                        for driver in drivers {
+                            for network in driver.1.networks {
+                                let platform = format!(
                                     "{}-{}-{}",
-                                    account.driver(),
-                                    account.network(),
-                                    account.token()
+                                    driver.0, network.0, network.1.default_token
                                 )
-                                .to_lowercase(),
-                            })
-                            .await??;
+                                .to_lowercase();
 
-                        let driver = account.driver();
-                        let network = account.network();
+                                let driver_status_props = bus::service(pay::BUS_ID)
+                                    .call(pay::ProcessBatchCycleInfo {
+                                        node_id,
+                                        platform: platform.clone(),
+                                    })
+                                    .await??;
 
-                        let next_process_in = Utc::now()
-                            .signed_duration_since(driver_status_props.next_process.and_utc());
-
-                        let next_process_descr = format!(
-                            "{}\n(in {})",
-                            driver_status_props.next_process.format("%F %T"),
-                            round_duration_humantime(next_process_in.abs())
-                        );
-                        let last_process_descr = driver_status_props
-                            .last_process
-                            .map(|l| {
-                                format!(
-                                    "{}\n({} ago)",
-                                    l.format("%F %T"),
-                                    round_duration_humantime(
-                                        Utc::now().signed_duration_since(l.and_utc())
-                                    )
-                                )
-                            })
-                            .unwrap_or("NULL".to_string());
+                                results.insert(platform, driver_status_props);
+                            }
+                        }
 
                         if ctx.json_output {
-                            CommandOutput::object(json!({
-                                "intervalSec": driver_status_props.interval.map(|d| d.as_secs()),
-                                "cron": driver_status_props.cron,
-                                "maxIntervalSec": round_duration_to_sec(driver_status_props.max_interval).as_secs(),
-                                "nextProcess": driver_status_props.next_process.and_utc().to_rfc3339(),
-                                "lastProcess": driver_status_props.last_process.map(|l| l.and_utc().to_rfc3339()),
-                            }))
+                            CommandOutput::object( results.iter().map( |(platform, result)|
+                                json!({
+                                    "platform": platform,
+                                    "intervalSec": result.interval.map(|d| d.as_secs()),
+                                    "cron": result.cron,
+                                    "maxIntervalSec": round_duration_to_sec(result.max_interval).as_secs(),
+                                    "nextProcess": result.next_process.and_utc().to_rfc3339(),
+                                    "lastProcess": result.last_process.map(|l| l.and_utc().to_rfc3339()),
+                                }
+                            )).collect::<Vec<serde_json::Value>>())
                         } else {
                             let mut values = Vec::new();
-                            values.push(json!([
-                                driver_status_props
-                                    .interval
-                                    .map(|d| humantime::format_duration(d).to_string())
-                                    .unwrap_or("NULL".to_string()),
-                                driver_status_props.cron,
-                                humantime::format_duration(round_duration_to_sec(
-                                    driver_status_props.max_interval
-                                ))
-                                .to_string(),
-                                next_process_descr,
-                                last_process_descr,
-                            ]));
+
+                            for (platform, result) in results {
+                                let next_process_in =
+                                    Utc::now().signed_duration_since(result.next_process.and_utc());
+
+                                let next_process_descr = format!(
+                                    "{}\n(in {})",
+                                    result.next_process.format("%F %T"),
+                                    round_duration_humantime(next_process_in.abs())
+                                );
+                                let last_process_descr = result
+                                    .last_process
+                                    .map(|l| {
+                                        format!(
+                                            "{}\n({} ago)",
+                                            l.format("%F %T"),
+                                            round_duration_humantime(
+                                                Utc::now().signed_duration_since(l.and_utc())
+                                            )
+                                        )
+                                    })
+                                    .unwrap_or("NULL".to_string());
+                                values.push(json!([
+                                    platform,
+                                    result
+                                        .interval
+                                        .map(|d| humantime::format_duration(d).to_string())
+                                        .unwrap_or("NULL".to_string()),
+                                    result.cron,
+                                    humantime::format_duration(round_duration_to_sec(
+                                        result.max_interval
+                                    ))
+                                    .to_string(),
+                                    next_process_descr,
+                                    last_process_descr,
+                                ]));
+                            }
                             Ok(CommandOutput::Table {
                                 columns: [
                                     "Interval",
@@ -618,8 +632,11 @@ Typically operation should take less than 1 minute.
                                 values,
                                 summary: vec![json!(["", "", "", "", ""])],
                                 header: Some(format!(
-                                    "Batch cycle info for driver {} and network {}",
-                                    driver, network
+                                    "Batch cycle info {}",
+                                    account
+                                        .account
+                                        .map(|a| a.to_string())
+                                        .unwrap_or("default".to_string())
                                 )),
                             })
                         }
