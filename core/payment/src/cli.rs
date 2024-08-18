@@ -512,24 +512,81 @@ Typically operation should take less than 1 minute.
                             }
                         };
 
+                        let platform = format!(
+                            "{}-{}-{}",
+                            account.driver(),
+                            account.network(),
+                            account.token()
+                        )
+                        .to_lowercase();
                         let driver_status_props = bus::service(pay::BUS_ID)
                             .call(pay::ProcessBatchCycleSet {
                                 node_id,
-                                platform: format!(
-                                    "{}-{}-{}",
-                                    account.driver(),
-                                    account.network(),
-                                    account.token()
-                                )
-                                .to_lowercase(),
+                                platform: platform.clone(),
                                 interval: interval.map(|d| d.into()),
                                 cron,
                                 next_update: next,
                                 safe_payout: payout.map(|d| d.into()),
                             })
                             .await??;
-                        Ok(CommandOutput::object(driver_status_props)
-                            .expect("Failed to create object"))
+
+                        let mut values = Vec::new();
+
+                        let result = driver_status_props;
+                        let next_process_in =
+                            Utc::now().signed_duration_since(result.next_process.and_utc());
+
+                        let next_process_descr = format!(
+                            "{}\n(in {})",
+                            result.next_process.format("%F %T"),
+                            round_duration_humantime(next_process_in.abs())
+                        );
+                        let last_process_descr = result
+                            .last_process
+                            .map(|l| {
+                                format!(
+                                    "{}\n({} ago)",
+                                    l.format("%F %T"),
+                                    round_duration_humantime(
+                                        Utc::now().signed_duration_since(l.and_utc())
+                                    )
+                                )
+                            })
+                            .unwrap_or("NULL".to_string());
+                        values.push(json!([
+                            platform,
+                            result
+                                .interval
+                                .map(|d| humantime::format_duration(d).to_string())
+                                .unwrap_or("NULL".to_string()),
+                            result.cron,
+                            humantime::format_duration(round_duration_to_sec(result.max_interval))
+                                .to_string(),
+                            next_process_descr,
+                            last_process_descr,
+                        ]));
+                        Ok(CommandOutput::Table {
+                            columns: [
+                                "Platform",
+                                "Interval",
+                                "Cron",
+                                "Max interval",
+                                "Next process",
+                                "Last processed",
+                            ]
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect(),
+                            values,
+                            summary: vec![json!(["", "", "", "", ""])],
+                            header: Some(format!(
+                                "Batch cycle after change: {}",
+                                account
+                                    .account
+                                    .map(|a| a.to_string())
+                                    .unwrap_or("default".to_string())
+                            )),
+                        })
                     }
                     ProcessCommand::Info { account } => {
                         let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
