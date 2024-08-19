@@ -658,14 +658,14 @@ impl PaymentProcessor {
                 let send_result =
                     Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
 
+                let sent_ok = send_result.is_ok();
+                let call_add_signature = sent_ok;
+
                 // Mutablility increases code readability - otherwise we'd have to take the lock
                 // and create payment_dao in every branch of the if-else below because we have to
                 // ensure that it is taken after the remote call performed only in some of the
                 // branches.
-                let mut call_add_signature = false;
-
-                let mut mark_sent = if send_result.is_ok() {
-                    call_add_signature = true;
+                let mut mark_sent = if sent_ok {
                     // We don't know yet if we should mark this notification as sent, we
                     // postpone the decision until add_signature is called.
                     // We don't want to call it here because that would require taking the lock
