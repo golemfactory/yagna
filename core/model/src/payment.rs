@@ -22,6 +22,7 @@ pub mod local {
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, NaiveDateTime, Utc};
+    use serde_json::json;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -562,8 +563,29 @@ pub mod local {
         pub interval: Option<Duration>,
         pub cron: Option<String>,
         pub max_interval: Duration,
+        pub extra_payment_time: Duration,
         pub next_process: NaiveDateTime,
         pub last_process: Option<NaiveDateTime>,
+    }
+
+    fn round_duration_to_sec(d: Duration) -> Duration {
+        //0.500 gives 1.0
+        //0.499 gives 0.0
+        let secs = ((d.as_millis() + 500) / 1000) as u64;
+        Duration::from_secs(secs)
+    }
+
+    pub fn batch_cycle_response_to_json(resp: &ProcessBatchCycleResponse) -> serde_json::Value {
+        json!({
+            "nodeId": resp.node_id,
+            "platform": resp.platform,
+            "intervalSec": resp.interval.map(|d| d.as_secs()),
+            "cron": resp.cron,
+            "maxExtraPaymentSec": round_duration_to_sec(resp.extra_payment_time).as_secs(),
+            "maxIntervalSec": round_duration_to_sec(resp.max_interval).as_secs(),
+            "nextProcess": resp.next_process.and_utc().to_rfc3339(),
+            "lastProcess": resp.last_process.map(|l| l.and_utc().to_rfc3339()),
+        })
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
