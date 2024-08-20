@@ -541,7 +541,7 @@ impl PaymentProcessor {
             platform: el.platform,
             interval: el.cycle_interval.map(|d| d.0.to_std().unwrap_or_default()),
             cron: el.cycle_cron,
-            extra_payment_time: el.cycle_max_pay_time.0.to_std().unwrap_or_default(),
+            extra_payment_time: el.cycle_extra_pay_time.0.to_std().unwrap_or_default(),
             max_interval: el.cycle_max_interval.0.to_std().unwrap_or_default(),
             next_process: el.cycle_next_process.0,
             last_process: el.cycle_last_process.map(|d| d.0),

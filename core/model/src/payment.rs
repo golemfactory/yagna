@@ -581,7 +581,7 @@ pub mod local {
             "platform": resp.platform,
             "intervalSec": resp.interval.map(|d| d.as_secs()),
             "cron": resp.cron,
-            "maxExtraPaymentSec": round_duration_to_sec(resp.extra_payment_time).as_secs(),
+            "extraPayTimeSec": round_duration_to_sec(resp.extra_payment_time).as_secs(),
             "maxIntervalSec": round_duration_to_sec(resp.max_interval).as_secs(),
             "nextProcess": resp.next_process.and_utc().to_rfc3339(),
             "lastProcess": resp.last_process.map(|l| l.and_utc().to_rfc3339()),
