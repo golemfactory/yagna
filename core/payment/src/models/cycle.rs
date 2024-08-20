@@ -21,21 +21,21 @@ pub struct DbPayBatchCycle {
     pub cycle_last_process: Option<TimestampAdapter>,
     pub cycle_next_process: TimestampAdapter,
     pub cycle_max_interval: DurationAdapter,
-    pub cycle_max_pay_time: DurationAdapter,
+    pub cycle_extra_pay_time: DurationAdapter,
 }
 
 pub fn create_batch_cycle_based_on_interval(
     owner_id: NodeId,
     platform: String,
     interval: Duration,
-    extra_time_for_payment: Duration,
+    extra_pay_time: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
     if interval < Duration::seconds(5) {
         return Err(anyhow::anyhow!(
             "Interval must be greater than 5 seconds (at least 5 minutes suggested)"
         ));
     }
-    if extra_time_for_payment < Duration::seconds(5) {
+    if extra_pay_time < Duration::seconds(5) {
         return Err(anyhow::anyhow!(
             "Extra time for payment must be greater than 5 seconds"
         ));
@@ -52,7 +52,7 @@ pub fn create_batch_cycle_based_on_interval(
         cycle_last_process: None,
         cycle_next_process: next_running_time.adapt(),
         cycle_max_interval: interval.adapt(),
-        cycle_max_pay_time: (interval + extra_time_for_payment).adapt(),
+        cycle_extra_pay_time: extra_pay_time.adapt(),
     })
 }
 pub fn parse_cron_str(cron_str: &str) -> anyhow::Result<Schedule> {
@@ -77,7 +77,7 @@ pub fn create_batch_cycle_based_on_cron(
     owner_id: NodeId,
     platform: String,
     cron_str: &str,
-    extra_time_for_payment: Duration,
+    extra_pay_time: Duration,
 ) -> anyhow::Result<DbPayBatchCycle> {
     let schedule = parse_cron_str(cron_str)
         .map_err(|err| anyhow!("Failed to parse cron expression: {} {}", cron_str, err))?;
@@ -113,6 +113,6 @@ pub fn create_batch_cycle_based_on_cron(
         cycle_last_process: None,
         cycle_next_process: next_running_time.adapt(),
         cycle_max_interval: max_interval.adapt(),
-        cycle_max_pay_time: (max_interval + extra_time_for_payment).adapt(),
+        cycle_extra_pay_time: extra_pay_time.adapt(),
     })
 }
