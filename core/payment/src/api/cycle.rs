@@ -2,7 +2,7 @@ use crate::dao::*;
 use crate::utils::*;
 use actix_web::web::{get, post};
 use actix_web::{web, HttpResponse, Scope};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use ya_core_model::payment::local as pay_local;
 use ya_core_model::payment::local::{
@@ -82,8 +82,8 @@ struct ProcessBatchCycleSetPost {
     platform: String,
     interval_sec: Option<u64>,
     cron: Option<String>,
-    extra_time_for_payment_sec: Option<u64>,
-    next_update: Option<NaiveDateTime>,
+    extra_pay_time_sec: Option<u64>,
+    next_update: Option<DateTime<Utc>>,
 }
 
 async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity) -> HttpResponse {
@@ -92,11 +92,11 @@ async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity
     let interval: Option<core::time::Duration> =
         cycle_set.interval_sec.map(core::time::Duration::from_secs);
     let cron = cycle_set.cron;
-    let extra_time_for_payment = cycle_set
-        .extra_time_for_payment_sec
+    let extra_pay_time = cycle_set
+        .extra_pay_time_sec
         .map(core::time::Duration::from_secs)
-        .unwrap_or(DEFAULT_EXTRA_TIME_FOR_PAYMENT.to_std().unwrap());
-    let next_update = cycle_set.next_update.map(|dt| dt.and_utc());
+        .unwrap_or(DEFAULT_EXTRA_PAY_TIME.to_std().unwrap());
+    let next_update = cycle_set.next_update;
 
     match bus::service(pay_local::BUS_ID)
         .call(ProcessBatchCycleSet {
@@ -105,7 +105,7 @@ async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity
             interval,
             cron,
             next_update,
-            safe_payout: Some(extra_time_for_payment),
+            safe_payout: Some(extra_pay_time),
         })
         .await
     {
