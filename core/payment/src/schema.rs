@@ -80,7 +80,7 @@ table! {
         cycle_last_process -> Nullable<Timestamp>,
         cycle_next_process -> Timestamp,
         cycle_max_interval -> Text,
-        cycle_max_pay_time -> Text,
+        cycle_extra_pay_time -> Text,
     }
 }
 
