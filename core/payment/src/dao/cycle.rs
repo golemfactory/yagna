@@ -23,7 +23,7 @@ impl<'c> AsDao<'c> for BatchCycleDao<'c> {
 }
 
 pub const DEFAULT_INTERVAL: Duration = Duration::minutes(5);
-pub const DEFAULT_EXTRA_TIME_FOR_PAYMENT: Duration = Duration::minutes(4);
+pub const DEFAULT_EXTRA_PAY_TIME: Duration = Duration::minutes(4);
 
 fn get_or_insert_default_entry_private(
     conn: &ConnType,
@@ -48,7 +48,7 @@ fn get_or_insert_default_entry_private(
                 node_id,
                 platform.clone(),
                 DEFAULT_INTERVAL,
-                DEFAULT_EXTRA_TIME_FOR_PAYMENT,
+                DEFAULT_EXTRA_PAY_TIME,
             )
             .expect("Failed to create default batch cycle");
             diesel::insert_into(dsl::pay_batch_cycle)
@@ -139,7 +139,7 @@ impl<'c> BatchCycleDao<'c> {
                 owner_id,
                 platform.clone(),
                 interval,
-                safe_payout.unwrap_or(DEFAULT_EXTRA_TIME_FOR_PAYMENT),
+                safe_payout.unwrap_or(DEFAULT_EXTRA_PAY_TIME),
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {
@@ -154,7 +154,7 @@ impl<'c> BatchCycleDao<'c> {
                 owner_id,
                 platform.clone(),
                 &cron,
-                DEFAULT_EXTRA_TIME_FOR_PAYMENT,
+                safe_payout.unwrap_or(DEFAULT_EXTRA_PAY_TIME),
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {
@@ -183,7 +183,7 @@ impl<'c> BatchCycleDao<'c> {
                 entry.cycle_cron = cycle.cycle_cron;
                 entry.cycle_next_process = cycle.cycle_next_process;
                 entry.cycle_max_interval = cycle.cycle_max_interval;
-                entry.cycle_max_pay_time = cycle.cycle_max_pay_time;
+                entry.cycle_extra_pay_time = cycle.cycle_extra_pay_time;
 
                 if let Some(cycle_last_process) = entry.cycle_last_process.clone() {
                     if let Some(interval) = cycle.cycle_interval {
@@ -212,7 +212,7 @@ impl<'c> BatchCycleDao<'c> {
                     dsl::cycle_last_process.eq(entry.cycle_last_process),
                     dsl::cycle_next_process.eq(entry.cycle_next_process),
                     dsl::cycle_max_interval.eq(entry.cycle_max_interval),
-                    dsl::cycle_max_pay_time.eq(entry.cycle_max_pay_time),
+                    dsl::cycle_extra_pay_time.eq(entry.cycle_extra_pay_time),
                 ))
                 .execute(conn)?;
             } else {
