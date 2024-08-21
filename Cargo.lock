@@ -2804,7 +2804,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -3286,7 +3286,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.7",
  "tokio",
  "tower-service",
  "tracing",
