@@ -701,10 +701,11 @@ impl PaymentProcessor {
         if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         };
-        let owner_id = NodeId::from_str(&msg.sender)
+        let payer_id = NodeId::from_str(&msg.sender)
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payer address: {err}")))?;
-        let payer_id = owner_id;
-        let payee_id = owner_id;
+        let payee_id = NodeId::from_str(&payee_addr)
+            .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
+
         let payment_id: String;
 
         let payment: Payment = {
@@ -715,7 +716,7 @@ impl PaymentProcessor {
             for order_id in msg.order_ids {
                 let order_items_part = db_executor
                     .as_dao::<BatchDao>()
-                    .get_batch_order_items_by_payment_id(order_id, owner_id)
+                    .get_batch_order_items_by_payment_id(order_id, payer_id)
                     .await?;
                 order_items.extend(order_items_part);
             }
@@ -727,7 +728,7 @@ impl PaymentProcessor {
                 let order_documents = match db_executor
                     .as_dao::<BatchDao>()
                     .get_batch_items(
-                        owner_id,
+                        payer_id,
                         Some(order_item.order_id.clone()),
                         Some(order_item.payee_addr.clone()),
                         None,
@@ -747,7 +748,7 @@ impl PaymentProcessor {
                     .as_dao::<BatchDao>()
                     .batch_order_item_paid(
                         order_item.order_id.clone(),
-                        owner_id,
+                        payer_id,
                         order_item.payee_addr.clone(),
                     )
                     .await?;
@@ -809,8 +810,8 @@ impl PaymentProcessor {
 
             payment_id = payment_dao
                 .create_new(
-                    owner_id,
-                    owner_id,
+                    payer_id,
+                    payee_id,
                     payer_addr,
                     payee_addr,
                     payment_platform.clone(),
