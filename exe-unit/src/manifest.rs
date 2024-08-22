@@ -503,6 +503,7 @@ mod tests {
             ExeScriptCommand::Deploy {
                 net: Default::default(),
                 hosts: Default::default(),
+                volumes: Default::default(),
             },
             ExeScriptCommand::Start {
                 args: Default::default(),

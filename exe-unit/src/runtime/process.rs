@@ -12,6 +12,7 @@ use futures::{FutureExt, TryFutureExt};
 use tokio::process::Command;
 
 use ya_agreement_utils::agreement::OfferTemplate;
+use ya_client_model::activity::exe_script_command::{VolumeInfo, Volumes};
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
 use ya_manifest_utils::Feature;
 use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
@@ -205,7 +206,24 @@ impl RuntimeProcess {
 
         let (cmd, ctx) = cmd.split();
         match cmd {
-            ExeScriptCommand::Deploy { .. } => rt_args.args(["deploy", "--"]),
+            ExeScriptCommand::Deploy { volumes, .. } => {
+                if let Some(volumes) = volumes {
+                    let volumes_cannonical = match volumes {
+                        Volumes::Simple(paths) => paths
+                            .into_iter()
+                            .map(|path| (path, VolumeInfo::Override {}))
+                            .collect(),
+                        Volumes::Detailed { volumes } => volumes,
+                    };
+
+                    let vol_override_json = serde_json::to_string(&volumes_cannonical)
+                        .expect("failed to serialize volume info");
+
+                    rt_args.arg("--volume-override");
+                    rt_args.arg(vol_override_json);
+                }
+                rt_args.args(["deploy", "--"])
+            }
             ExeScriptCommand::Start { args } => rt_args.args(["start", "--"]).args(args),
             ExeScriptCommand::Run {
                 entry_point, args, ..
