@@ -98,6 +98,8 @@ impl BatchCycleTask {
                     if let Some(next_process) = next_process {
                         if next_process > now {
                             let diff = (next_process - now).num_milliseconds();
+                            //do not sleep for more than 5 minutes
+                            let diff = std::cmp::min(diff, 1000 * 60 * 5);
                             if diff > 0 {
                                 log::info!(
                                     "Sleeping for {} before next process for owner_id: {}, platform: {}",
