@@ -8,6 +8,7 @@ use crate::schema::pay_activity_payment::dsl as activity_pay_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_agreement_payment::dsl as agreement_pay_dsl;
 use crate::schema::pay_payment::dsl;
+
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
@@ -21,7 +22,7 @@ use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
+use ya_persistence::types::{BigDecimalField, Role};
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -34,16 +35,32 @@ fn insert_activity_payments(
     conn: &ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting activity payments...");
-    for activity_payment in activity_payments {
-        let amount = activity_payment.amount.into();
-        let allocation_id = activity_payment.allocation_id;
+    for activity_payment in activity_payments.iter() {
+        let amount: BigDecimalField = activity_payment.amount.clone().into();
+        let allocation_id = activity_payment.allocation_id.clone();
 
+        let agreement_id: String = activity_dsl::pay_activity
+            .select(activity_dsl::agreement_id)
+            .filter(activity_dsl::id.eq(&activity_payment.activity_id))
+            .filter(activity_dsl::owner_id.eq(owner_id))
+            .first(conn)
+            .map_err(|e| {
+                log::error!(
+                    "Error getting agreement_id for activity_id: {}, owner_id: {}. Error: {}",
+                    activity_payment.activity_id,
+                    owner_id,
+                    e
+                );
+                e
+            })?;
+
+        agreement::increase_amount_paid(&agreement_id, owner_id, &amount, conn)?;
         activity::increase_amount_paid(&activity_payment.activity_id, owner_id, &amount, conn)?;
 
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
                 payment_id: payment_id.to_string(),
-                activity_id: activity_payment.activity_id,
+                activity_id: activity_payment.activity_id.clone(),
                 owner_id: *owner_id,
                 amount,
                 allocation_id,
