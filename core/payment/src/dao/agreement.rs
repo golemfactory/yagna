@@ -7,10 +7,14 @@ use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use std::error::Error;
+use std::fmt;
+use std::str::FromStr;
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{StatValue, StatusNotes};
+
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -119,6 +123,26 @@ pub fn set_amount_accepted(
     Ok(())
 }
 
+#[derive(Debug)]
+struct IncreaseAmountPaidError {
+    details: String,
+}
+impl IncreaseAmountPaidError {
+    fn new(msg: String) -> IncreaseAmountPaidError {
+        IncreaseAmountPaidError { details: msg }
+    }
+}
+impl fmt::Display for IncreaseAmountPaidError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+impl Error for IncreaseAmountPaidError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
 pub fn increase_amount_paid(
     agreement_id: &String,
     owner_id: &NodeId,
@@ -134,26 +158,34 @@ pub fn increase_amount_paid(
         .set(dsl::total_amount_paid.eq(&total_amount_paid))
         .execute(conn)?;
 
-    let invoice_query: Option<(String, Role)> = invoice_dsl::pay_invoice
+    //extract invoice for this activity
+    //check if the total amount paid is equal to the total amount due
+    //we cannot do that in sql due to lack of decimal support in sqlite
+    let invoice_query: Option<(String, String, Role)> = invoice_dsl::pay_invoice
         .filter(invoice_dsl::agreement_id.eq(agreement_id))
         .filter(invoice_dsl::owner_id.eq(owner_id))
         .filter(invoice_dsl::status.ne_all(vec![
             DocumentStatus::Cancelled.to_string(),
             DocumentStatus::Settled.to_string(),
         ]))
-        .filter(invoice_dsl::amount.le(&total_amount_paid))
-        .select((invoice_dsl::id, invoice_dsl::role))
+        //.filter(invoice_dsl::amount.le(&total_amount_paid))
+        .select((invoice_dsl::id, invoice_dsl::amount, invoice_dsl::role))
         .first(conn)
         .optional()?;
 
-    if let Some((invoice_id, role)) = invoice_query {
-        invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
-        invoice_event::create(
-            invoice_id,
-            *owner_id,
-            InvoiceEventType::InvoiceSettledEvent,
-            conn,
-        )?;
+    if let Some((invoice_id, amount, role)) = invoice_query {
+        let invoice_amount = BigDecimal::from_str(&amount)
+            .map_err(|e| DbError::Query(format!("Failed to parse amount from invoice: {}", e)))?;
+
+        if invoice_amount <= total_amount_paid.0 {
+            invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
+            invoice_event::create(
+                invoice_id,
+                *owner_id,
+                InvoiceEventType::InvoiceSettledEvent,
+                conn,
+            )?;
+        }
     }
 
     Ok(())
