@@ -123,7 +123,6 @@ pub fn resolve_invoices_agreement_part(
             agreement_id
         );
         if amount_to_pay <= zero {
-            super::invoice::update_status(&invoice_id, &owner_id, &DocumentStatus::Settled, conn)?;
             continue;
         }
 
