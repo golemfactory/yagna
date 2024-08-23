@@ -41,7 +41,7 @@ table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
-        debit_note_id -> Text,
+        debit_note_id -> Nullable<Text>,
     }
 }
 
@@ -54,7 +54,7 @@ struct ActivityJoinAgreement {
     total_amount_accepted: BigDecimalField,
     total_amount_scheduled: BigDecimalField,
     agreement_id: String,
-    debit_note_id: String,
+    debit_note_id: Option<String>,
 }
 
 pub fn resolve_invoices_agreement_part(
@@ -238,7 +238,7 @@ pub fn resolve_invoices_activity_part(
             super::activity::increase_amount_scheduled(&a.id, &owner_id, &amount_to_pay, conn)?;
 
             let obligation = BatchPaymentObligation::DebitNote {
-                debit_note_id: Some(a.debit_note_id),
+                debit_note_id: a.debit_note_id,
                 amount: amount_to_pay.clone(),
                 agreement_id: a.agreement_id.clone(),
                 activity_id: a.id,
@@ -697,7 +697,7 @@ impl<'c> BatchDao<'c> {
     ) -> DbResult<bool> {
         do_with_transaction(self.pool, "batch_order_item_paid", move |conn| {
             use crate::schema::pay_batch_order::dsl as odsl;
-            use crate::schema::pay_batch_order_item_document::dsl as d;
+            //use crate::schema::pay_batch_order_item_document::dsl as d;
             let order: DbBatchOrder = odsl::pay_batch_order
                 .filter(odsl::id.eq(&order_id))
                 .get_result(conn)?;
@@ -718,6 +718,7 @@ impl<'c> BatchDao<'c> {
                 return Err(DbError::Integrity("More than 1 rows updated".to_string()));
             }
 
+            /*
             let query = d::pay_batch_order_item_document
                 .filter(
                     d::order_id.eq(&order_id).and(
@@ -744,6 +745,11 @@ impl<'c> BatchDao<'c> {
                 )>(conn)?;
             for (payee_id, agreement_id, invoice_id, activity_id, _debit_note_id, amount) in query {
                 if let Some(activity_id) = activity_id {
+                    log::warn!(
+                        "Increasing amount paid for activity {} {}",
+                        activity_id,
+                        amount
+                    );
                     super::activity::increase_amount_paid(
                         &activity_id,
                         &order.owner_id,
@@ -757,7 +763,7 @@ impl<'c> BatchDao<'c> {
                     &amount,
                     conn,
                 )?;
-            }
+            }*/
 
             Ok(true)
         })
