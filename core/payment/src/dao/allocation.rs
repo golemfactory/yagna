@@ -24,23 +24,26 @@ impl<'c> AsDao<'c> for AllocationDao<'c> {
 
 pub fn spend_from_allocation(
     allocation_id: &String,
+    owner_id: NodeId,
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    let allocation: ReadObj = dsl::pay_allocation.find(allocation_id).first(conn)?;
-    if amount > &allocation.remaining_amount {
+    let allocation: ReadObj = dsl::pay_allocation.find((owner_id, allocation_id)).first(conn)?;
+    if amount > &allocation.avail_amount {
         return Err(DbError::Query(format!(
             "Not enough funds in allocation. Needed: {} Remaining: {}",
-            amount, allocation.remaining_amount
+            amount, allocation.avail_amount
         )));
     }
     let spent_amount = &allocation.spent_amount + amount;
-    let remaining_amount = &allocation.remaining_amount - amount;
-    diesel::update(&allocation)
+    let avail_amount = &allocation.avail_amount - amount;
+    diesel::update(dsl::pay_allocation)
         .set((
             dsl::spent_amount.eq(spent_amount),
-            dsl::remaining_amount.eq(remaining_amount),
+            dsl::avail_amount.eq(avail_amount),
         ))
+        .filter(dsl::id.eq(allocation_id))
+        .filter(dsl::owner_id.eq(owner_id))
         .execute(conn)?;
     Ok(())
 }
@@ -83,7 +86,7 @@ impl<'c> AllocationDao<'c> {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::released.eq(false))
-                .find(allocation_id)
+                .find((owner_id, allocation_id))
                 .first(conn)
                 .optional()?;
 
@@ -168,7 +171,7 @@ impl<'c> AllocationDao<'c> {
                 query = query.filter(dsl::owner_id.eq(owner_id))
             }
             if let Some(after_timestamp) = after_timestamp {
-                query = query.filter(dsl::timestamp.gt(after_timestamp))
+                query = query.filter(dsl::timeout.gt(after_timestamp))
             }
             if let Some(payment_platform) = payment_platform {
                 query = query.filter(dsl::payment_platform.eq(payment_platform))
@@ -179,7 +182,7 @@ impl<'c> AllocationDao<'c> {
             if let Some(max_items) = max_items {
                 query = query.limit(max_items.into())
             }
-            let allocations: Vec<ReadObj> = query.order_by(dsl::timestamp.asc()).load(conn)?;
+            let allocations: Vec<ReadObj> = query.order_by(dsl::updated_ts.asc()).load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())
         })
         .await
@@ -188,22 +191,22 @@ impl<'c> AllocationDao<'c> {
     pub async fn release(
         &self,
         allocation_id: String,
-        owner_id: Option<NodeId>,
+        owner_id: NodeId,
     ) -> DbResult<AllocationReleaseStatus> {
         let id = allocation_id.clone();
         do_with_transaction(self.pool, "allocation_dao_release", move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
-                .find(id.clone())
+                .find((owner_id, allocation_id.clone()))
                 .first(conn)
                 .optional()?;
 
             let (deposit, platform) = match allocation {
                 Some(allocation) => {
-                    if let Some(owner_id) = owner_id {
-                        if owner_id != allocation.owner_id {
-                            return Ok(AllocationReleaseStatus::NotFound);
-                        }
+
+                    if owner_id != allocation.owner_id {
+                        return Ok(AllocationReleaseStatus::NotFound);
                     }
+
 
                     if allocation.released {
                         return Ok(AllocationReleaseStatus::Gone);
@@ -244,11 +247,11 @@ impl<'c> AllocationDao<'c> {
             "allocation_dao_total_remaining_allocation",
             move |conn| {
                 let total_remaining_amount = dsl::pay_allocation
-                    .select(dsl::remaining_amount)
+                    .select(dsl::avail_amount)
                     .filter(dsl::payment_platform.eq(platform))
                     .filter(dsl::address.eq(address))
                     .filter(dsl::released.eq(false))
-                    .filter(dsl::timestamp.gt(after_timestamp))
+                    .filter(dsl::timeout.gt(after_timestamp))
                     .get_results::<BigDecimalField>(conn)?
                     .sum();
 
