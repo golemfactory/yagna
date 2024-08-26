@@ -51,8 +51,8 @@ impl<'c> OrderDao<'c> {
                     )?
                 }
             };
-            let order = WriteObj::new(msg, id, driver);
-            allocation::spend_from_allocation(&order.allocation_id, &order.amount, conn)?;
+            let order = WriteObj::new(msg.clone(), id, driver);
+            allocation::spend_from_allocation(&order.allocation_id, msg.payer_id, &order.amount, conn)?;
             diesel::insert_into(dsl::pay_order)
                 .values(order)
                 .execute(conn)?;

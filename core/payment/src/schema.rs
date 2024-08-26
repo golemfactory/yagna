@@ -53,19 +53,29 @@ table! {
 }
 
 table! {
-    pay_allocation (id) {
+    pay_allocation (owner_id, id) {
         id -> Text,
         owner_id -> Text,
         payment_platform -> Text,
         address -> Text,
-        total_amount -> Text,
+        avail_amount -> Text,
         spent_amount -> Text,
-        remaining_amount -> Text,
-        timestamp -> Timestamp,
-        timeout -> Nullable<Timestamp>,
-        make_deposit -> Bool,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
+        timeout -> Timestamp,
         deposit -> Nullable<Text>,
         released -> Bool,
+    }
+}
+
+table! {
+    pay_allocation_document (owner_id, allocation_id, agreement_id, activity_id) {
+        owner_id -> Text,
+        allocation_id -> Nullable<Text>,
+        agreement_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        spent_amount -> Text,
     }
 }
 
@@ -261,14 +271,10 @@ table! {
     }
 }
 
-joinable!(pay_activity_payment -> pay_allocation (allocation_id));
-joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
-//joinable!(pay_batch_order_item -> pay_batch_order (owner_id, order_id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
 joinable!(pay_invoice_event -> pay_event_type (event_type));
-joinable!(pay_order -> pay_allocation (allocation_id));
 
 allow_tables_to_appear_in_same_query!(
     pay_activity,
@@ -276,6 +282,7 @@ allow_tables_to_appear_in_same_query!(
     pay_agreement,
     pay_agreement_payment,
     pay_allocation,
+    pay_allocation_document,
     pay_batch_cycle,
     pay_batch_order,
     pay_batch_order_item,

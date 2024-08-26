@@ -6,7 +6,6 @@ use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 
 use uuid::Uuid;
-use ya_client_model::payment::DocumentStatus;
 
 use ya_core_model::NodeId;
 use ya_persistence::executor::{

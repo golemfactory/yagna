@@ -172,7 +172,7 @@ async fn create_allocation(
                     db.clone(),
                     allocation_id,
                     allocation.timeout,
-                    Some(node_id),
+                    node_id,
                 )
                 .await;
 
@@ -361,7 +361,7 @@ async fn release_allocation(
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
-    let node_id = Some(id.identity);
+    let node_id = id.identity;
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
@@ -465,7 +465,7 @@ pub async fn release_allocation_after(
     db: Data<DbExecutor>,
     allocation_id: String,
     allocation_timeout: Option<DateTime<Utc>>,
-    node_id: Option<NodeId>,
+    node_id: NodeId,
 ) {
     tokio::task::spawn(async move {
         if let Some(timeout) = allocation_timeout {
@@ -491,7 +491,7 @@ pub async fn release_allocation_after(
 pub async fn forced_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
-    node_id: Option<NodeId>,
+    node_id: NodeId,
 ) {
     match db
         .as_dao::<AllocationDao>()
