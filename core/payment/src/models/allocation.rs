@@ -44,6 +44,7 @@ impl WriteObj {
         payment_platform: String,
         address: String,
     ) -> Self {
+        let now = Utc::now().naive_utc();
         Self {
             id: Uuid::new_v4().to_string(),
             owner_id,
@@ -51,8 +52,8 @@ impl WriteObj {
             address,
             avail_amount: allocation.total_amount.clone().into(),
             spent_amount: Default::default(),
-            created_ts: Default::default(),
-            updated_ts: Default::default(),
+            created_ts: now,
+            updated_ts: now,
             timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(Utc::now().checked_add_days(Days::new(365 * 10)).unwrap().naive_utc()),
             deposit: allocation
                 .deposit
