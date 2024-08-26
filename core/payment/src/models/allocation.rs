@@ -1,5 +1,5 @@
 use crate::schema::pay_allocation;
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use chrono::{Days, NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
@@ -12,11 +12,11 @@ pub struct WriteObj {
     pub owner_id: NodeId,
     pub payment_platform: String,
     pub address: String,
-    pub total_amount: BigDecimalField,
+    pub avail_amount: BigDecimalField,
     pub spent_amount: BigDecimalField,
-    pub remaining_amount: BigDecimalField,
-    pub timeout: Option<NaiveDateTime>,
-    pub make_deposit: bool,
+    pub created_ts: NaiveDateTime,
+    pub updated_ts: NaiveDateTime,
+    pub timeout: NaiveDateTime,
     pub deposit: Option<String>,
     pub released: bool,
 }
@@ -28,12 +28,11 @@ pub struct ReadObj {
     pub owner_id: NodeId,
     pub payment_platform: String,
     pub address: String,
-    pub total_amount: BigDecimalField,
+    pub avail_amount: BigDecimalField,
     pub spent_amount: BigDecimalField,
-    pub remaining_amount: BigDecimalField,
-    pub timestamp: NaiveDateTime,
-    pub timeout: Option<NaiveDateTime>,
-    pub make_deposit: bool,
+    pub created_ts: NaiveDateTime,
+    pub updated_ts: NaiveDateTime,
+    pub timeout: NaiveDateTime,
     pub deposit: Option<String>,
     pub released: bool,
 }
@@ -50,11 +49,11 @@ impl WriteObj {
             owner_id,
             payment_platform,
             address,
-            total_amount: allocation.total_amount.clone().into(),
+            avail_amount: allocation.total_amount.clone().into(),
             spent_amount: Default::default(),
-            remaining_amount: allocation.total_amount.into(),
-            timeout: allocation.timeout.map(|v| v.naive_utc()),
-            make_deposit: allocation.make_deposit,
+            created_ts: Default::default(),
+            updated_ts: Default::default(),
+            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(Utc::now().checked_add_days(Days::new(365 * 10)).unwrap().naive_utc()),
             deposit: allocation
                 .deposit
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
@@ -68,11 +67,11 @@ impl WriteObj {
             owner_id,
             payment_platform: allocation.payment_platform,
             address: allocation.address,
-            total_amount: allocation.total_amount.into(),
+            avail_amount: (allocation.total_amount.clone() - allocation.spent_amount.clone()).into(),
             spent_amount: allocation.spent_amount.into(),
-            remaining_amount: allocation.remaining_amount.into(),
-            timeout: allocation.timeout.map(|v| v.naive_utc()),
-            make_deposit: allocation.make_deposit,
+            created_ts: allocation.timestamp.naive_utc(),
+            updated_ts: allocation.timestamp.naive_utc(),
+            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(Utc::now().checked_add_days(Days::new(365 * 10)).unwrap().naive_utc()),
             deposit: allocation
                 .deposit
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
@@ -87,12 +86,12 @@ impl From<ReadObj> for Allocation {
             allocation_id: allocation.id,
             address: allocation.address,
             payment_platform: allocation.payment_platform,
-            total_amount: allocation.total_amount.into(),
+            total_amount: (allocation.avail_amount.clone() + allocation.spent_amount.clone()).into(),
             spent_amount: allocation.spent_amount.into(),
-            remaining_amount: allocation.remaining_amount.into(),
-            timestamp: Utc.from_utc_datetime(&allocation.timestamp),
-            timeout: allocation.timeout.map(|v| Utc.from_utc_datetime(&v)),
-            make_deposit: allocation.make_deposit,
+            remaining_amount: allocation.avail_amount.into(),
+            timestamp: Utc.from_utc_datetime(&allocation.updated_ts),
+            timeout: Some(Utc.from_utc_datetime(&allocation.timeout)),
+            make_deposit: false,
             deposit: allocation
                 .deposit
                 .and_then(|s| serde_json::from_str(&s).ok()),
