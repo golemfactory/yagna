@@ -1,7 +1,7 @@
 use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
-use crate::schema::pay_allocation_document::dsl as dsld;
+use crate::schema::pay_allocation_expenditure::dsl as dsld;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
@@ -53,7 +53,7 @@ pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
         .filter(dsl::owner_id.eq(args.owner_id))
         .execute(&args.conn)?;
 
-    let current_document_amount: BigDecimalField = dsld::pay_allocation_document
+    let current_document_amount: BigDecimalField = dsld::pay_allocation_expenditure
         .select(dsld::spent_amount)
         .filter(dsld::owner_id.eq(args.owner_id))
         .filter(dsld::allocation_id.eq(&args.allocation_id))
@@ -65,7 +65,7 @@ pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
 
     let new_document_amount: BigDecimalField = (current_document_amount.0 + &args.amount).into();
 
-    diesel::insert_into(dsld::pay_allocation_document)
+    diesel::insert_into(dsld::pay_allocation_expenditure)
         .values((
             dsld::owner_id.eq(args.owner_id),
             dsld::allocation_id.eq(&args.allocation_id),
