@@ -71,10 +71,9 @@ table! {
 table! {
     pay_allocation_document (owner_id, allocation_id, agreement_id, activity_id) {
         owner_id -> Text,
-        allocation_id -> Nullable<Text>,
-        agreement_id -> Nullable<Text>,
+        allocation_id -> Text,
+        agreement_id -> Text,
         activity_id -> Nullable<Text>,
-        debit_note_id -> Nullable<Text>,
         spent_amount -> Text,
     }
 }
