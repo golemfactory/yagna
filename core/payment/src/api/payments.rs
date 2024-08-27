@@ -31,10 +31,9 @@ async fn get_payments(
 ) -> HttpResponse {
     let node_id = id.identity;
     let timeout_secs = query
-        .event_params
         .timeout
         .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
-    let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let network = match query
         .network
         .as_ref()
@@ -53,8 +52,8 @@ async fn get_payments(
         Ok(driver) => driver,
         Err(e) => return response::server_error(&e),
     };
-    let max_events = query.event_params.max_events;
-    let app_session_id = &query.event_params.app_session_id;
+    let max_events = query.max_events;
+    let app_session_id = &query.app_session_id;
 
     let dao: PaymentDao = db.as_dao();
     let getter = || async {
