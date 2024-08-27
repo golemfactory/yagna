@@ -1352,26 +1352,48 @@ impl PaymentProcessor {
                 if !allocations.is_empty() {
                     for allocation in allocations {
                         if force {
-                            forced_release_allocation(db.clone(), allocation.allocation_id.clone(),
-                                                      NodeId::from_str(&allocation.address.clone()).map_err(
-                                                          |e| GenericError::new(
-                                                              format!("Invalid node id: {} {}", allocation.address.clone(), e)),
-                                                      ).unwrap_or_else(|err|{
-                                                          log::error!("Invalid node id: {} {}", allocation.address.clone(), err);
-                                                          NodeId::default()}
-                                                      ))
-                                .await
+                            forced_release_allocation(
+                                db.clone(),
+                                allocation.allocation_id.clone(),
+                                NodeId::from_str(&allocation.address.clone())
+                                    .map_err(|e| {
+                                        GenericError::new(format!(
+                                            "Invalid node id: {} {}",
+                                            allocation.address.clone(),
+                                            e
+                                        ))
+                                    })
+                                    .unwrap_or_else(|err| {
+                                        log::error!(
+                                            "Invalid node id: {} {}",
+                                            allocation.address.clone(),
+                                            err
+                                        );
+                                        NodeId::default()
+                                    }),
+                            )
+                            .await
                         } else {
                             release_allocation_after(
                                 db.clone(),
                                 allocation.allocation_id.clone(),
                                 allocation.timeout,
-                                NodeId::from_str(&allocation.address.clone()).map_err(
-                                    |e| GenericError::new(format!("Invalid node id: {} {}", allocation.address.clone(), e)),
-                                ).unwrap_or_else(|err|{
-                                    log::error!("Invalid node id: {} {}", allocation.address.clone(), err);
-                                    NodeId::default()}
-                                )
+                                NodeId::from_str(&allocation.address.clone())
+                                    .map_err(|e| {
+                                        GenericError::new(format!(
+                                            "Invalid node id: {} {}",
+                                            allocation.address.clone(),
+                                            e
+                                        ))
+                                    })
+                                    .unwrap_or_else(|err| {
+                                        log::error!(
+                                            "Invalid node id: {} {}",
+                                            allocation.address.clone(),
+                                            err
+                                        );
+                                        NodeId::default()
+                                    }),
                             )
                             .await
                         }

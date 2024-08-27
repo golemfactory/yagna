@@ -54,7 +54,12 @@ impl WriteObj {
             spent_amount: Default::default(),
             created_ts: now,
             updated_ts: now,
-            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(Utc::now().checked_add_days(Days::new(365 * 10)).unwrap().naive_utc()),
+            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(
+                Utc::now()
+                    .checked_add_days(Days::new(365 * 10))
+                    .unwrap()
+                    .naive_utc(),
+            ),
             deposit: allocation
                 .deposit
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
@@ -68,11 +73,17 @@ impl WriteObj {
             owner_id,
             payment_platform: allocation.payment_platform,
             address: allocation.address,
-            avail_amount: (allocation.total_amount.clone() - allocation.spent_amount.clone()).into(),
+            avail_amount: (allocation.total_amount.clone() - allocation.spent_amount.clone())
+                .into(),
             spent_amount: allocation.spent_amount.into(),
             created_ts: allocation.timestamp.naive_utc(),
             updated_ts: allocation.timestamp.naive_utc(),
-            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(Utc::now().checked_add_days(Days::new(365 * 10)).unwrap().naive_utc()),
+            timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(
+                Utc::now()
+                    .checked_add_days(Days::new(365 * 10))
+                    .unwrap()
+                    .naive_utc(),
+            ),
             deposit: allocation
                 .deposit
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
@@ -87,7 +98,8 @@ impl From<ReadObj> for Allocation {
             allocation_id: allocation.id,
             address: allocation.address,
             payment_platform: allocation.payment_platform,
-            total_amount: (allocation.avail_amount.clone() + allocation.spent_amount.clone()).into(),
+            total_amount: (allocation.avail_amount.clone() + allocation.spent_amount.clone())
+                .into(),
             spent_amount: allocation.spent_amount.into(),
             remaining_amount: allocation.avail_amount.into(),
             timestamp: Utc.from_utc_datetime(&allocation.updated_ts),
