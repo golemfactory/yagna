@@ -30,9 +30,7 @@ async fn get_payments(
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query
-        .timeout
-        .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
+    let timeout_secs = query.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let network = match query
         .network
