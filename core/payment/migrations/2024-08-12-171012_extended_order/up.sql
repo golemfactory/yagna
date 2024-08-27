@@ -96,7 +96,7 @@ CREATE INDEX pay_allocation_ppa_idx ON pay_allocation (payment_platform, address
 CREATE INDEX pay_allocation_created_ts ON pay_allocation (created_ts);
 CREATE INDEX pay_allocation_updated_ts ON pay_allocation (updated_ts);
 
-CREATE TABLE pay_allocation_document
+CREATE TABLE pay_allocation_expenditure
 (
     owner_id      VARCHAR(50) NOT NULL,
     allocation_id VARCHAR(50) NOT NULL,
@@ -104,10 +104,10 @@ CREATE TABLE pay_allocation_document
     activity_id   VARCHAR(50),
     spent_amount  VARCHAR(32) NOT NULL,
 
-    CONSTRAINT pay_allocation_document_pk PRIMARY KEY (owner_id, allocation_id, agreement_id, activity_id),
-    CONSTRAINT pay_allocation_document_fk1 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
-    CONSTRAINT pay_allocation_document_fk2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
-    CONSTRAINT pay_allocation_document_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
+    CONSTRAINT pay_allocation_expenditure_pk PRIMARY KEY (owner_id, allocation_id, agreement_id, activity_id),
+    CONSTRAINT pay_allocation_expenditure_fk1 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
+    CONSTRAINT pay_allocation_expenditure_fk2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
+    CONSTRAINT pay_allocation_expenditure_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id)
 );
 
 CREATE TABLE pay_payment_document(
@@ -128,6 +128,5 @@ CREATE TABLE pay_payment_document(
         ON DELETE SET NULL,
     CONSTRAINT pay_payment_document_fk5 FOREIGN KEY (owner_id, debit_note_id)
         REFERENCES pay_debit_note(owner_id, id)
-        ON DELETE SET NULL,
-    CHECK ((invoice_id IS NULL) <> (debit_note_id IS NULL))
+        ON DELETE SET NULL
 );
