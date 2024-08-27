@@ -49,7 +49,7 @@ table! {
 }
 
 table! {
-    pay_allocation_document (owner_id, allocation_id, agreement_id, activity_id) {
+    pay_allocation_expenditure (owner_id, allocation_id, agreement_id, activity_id) {
         owner_id -> Text,
         allocation_id -> Text,
         agreement_id -> Text,
@@ -271,7 +271,7 @@ allow_tables_to_appear_in_same_query!(
     pay_activity,
     pay_agreement,
     pay_allocation,
-    pay_allocation_document,
+    pay_allocation_expenditure,
     pay_batch_cycle,
     pay_batch_order,
     pay_batch_order_item,
