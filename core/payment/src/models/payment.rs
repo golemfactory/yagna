@@ -1,5 +1,5 @@
 use crate::error::{DbError, DbResult};
-use crate::schema::{pay_activity_payment, pay_agreement_payment, pay_payment};
+use crate::schema::{pay_payment, pay_payment_document};
 use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
@@ -112,11 +112,24 @@ impl ReadObj {
         }
     }
 
-    pub fn into_api_model(
-        self,
-        activity_payments: Vec<ActivityPayment>,
-        agreement_payments: Vec<AgreementPayment>,
-    ) -> api_model::Payment {
+    pub fn into_api_model(self, document_payment: Vec<DocumentPayment>) -> api_model::Payment {
+        let mut activity_payments = vec![];
+        let mut agreement_payments = vec![];
+        for dp in &document_payment {
+            if let Some(activity_id) = &dp.activity_id {
+                activity_payments.push(api_model::ActivityPayment {
+                    activity_id: activity_id.clone(),
+                    amount: dp.amount.0.clone(),
+                    allocation_id: None,
+                });
+            } else {
+                agreement_payments.push(api_model::AgreementPayment {
+                    agreement_id: dp.agreement_id.clone(),
+                    amount: dp.amount.0.clone(),
+                    allocation_id: None,
+                });
+            }
+        }
         api_model::Payment {
             payer_id: self.payer_id(),
             payee_id: self.payee_id(),
@@ -134,13 +147,10 @@ impl ReadObj {
 
     pub fn into_signed_api_model(
         self,
-        activity_payments: Vec<ActivityPayment>,
-        agreement_payments: Vec<AgreementPayment>,
+        document_payments: Vec<DocumentPayment>,
     ) -> api_model::Signed<api_model::Payment> {
         api_model::Signed {
-            payload: self
-                .clone()
-                .into_api_model(activity_payments, agreement_payments),
+            payload: self.clone().into_api_model(document_payments),
             signature: if self.signature.is_some() && self.signed_bytes.is_some() {
                 Some(Signature {
                     signature: self.signature.unwrap(),
@@ -154,43 +164,14 @@ impl ReadObj {
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
-#[table_name = "pay_activity_payment"]
-#[primary_key(payment_id, activity_id, owner_id)]
-pub struct ActivityPayment {
-    pub payment_id: String,
-    pub activity_id: String,
+#[table_name = "pay_payment_document"]
+#[primary_key(owner_id, payment_id, agreement_id, activity_id)]
+pub struct DocumentPayment {
     pub owner_id: NodeId,
-    pub amount: BigDecimalField,
-    pub allocation_id: Option<String>,
-}
-
-impl From<ActivityPayment> for api_model::ActivityPayment {
-    fn from(ap: ActivityPayment) -> Self {
-        Self {
-            activity_id: ap.activity_id,
-            amount: ap.amount.0,
-            allocation_id: ap.allocation_id,
-        }
-    }
-}
-
-#[derive(Queryable, Debug, Identifiable, Insertable)]
-#[table_name = "pay_agreement_payment"]
-#[primary_key(payment_id, agreement_id, owner_id)]
-pub struct AgreementPayment {
     pub payment_id: String,
     pub agreement_id: String,
-    pub owner_id: NodeId,
+    pub invoice_id: Option<String>,
+    pub activity_id: Option<String>,
+    pub debit_note_id: Option<String>,
     pub amount: BigDecimalField,
-    pub allocation_id: Option<String>,
-}
-
-impl From<AgreementPayment> for api_model::AgreementPayment {
-    fn from(ap: AgreementPayment) -> Self {
-        Self {
-            agreement_id: ap.agreement_id,
-            amount: ap.amount.0,
-            allocation_id: ap.allocation_id,
-        }
-    }
 }

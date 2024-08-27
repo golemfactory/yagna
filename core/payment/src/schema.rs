@@ -14,16 +14,6 @@ table! {
 }
 
 table! {
-    pay_activity_payment (payment_id, activity_id, owner_id) {
-        payment_id -> Text,
-        activity_id -> Text,
-        owner_id -> Text,
-        amount -> Text,
-        allocation_id -> Nullable<Text>,
-    }
-}
-
-table! {
     pay_agreement (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -39,16 +29,6 @@ table! {
         app_session_id -> Nullable<Text>,
         created_ts -> Nullable<Timestamp>,
         updated_ts -> Nullable<Timestamp>,
-    }
-}
-
-table! {
-    pay_agreement_payment (payment_id, agreement_id, owner_id) {
-        payment_id -> Text,
-        agreement_id -> Text,
-        owner_id -> Text,
-        amount -> Text,
-        allocation_id -> Nullable<Text>,
     }
 }
 
@@ -263,6 +243,18 @@ table! {
 }
 
 table! {
+    pay_payment_document (owner_id, payment_id, agreement_id, activity_id) {
+        owner_id -> Text,
+        payment_id -> Text,
+        agreement_id -> Text,
+        invoice_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        amount -> Text,
+    }
+}
+
+table! {
     pay_sync_needed_notifs (id) {
         id -> Text,
         last_ping -> Timestamp,
@@ -277,9 +269,7 @@ joinable!(pay_invoice_event -> pay_event_type (event_type));
 
 allow_tables_to_appear_in_same_query!(
     pay_activity,
-    pay_activity_payment,
     pay_agreement,
-    pay_agreement_payment,
     pay_allocation,
     pay_allocation_document,
     pay_batch_cycle,
@@ -297,4 +287,5 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice_x_activity,
     pay_order,
     pay_payment,
+    pay_payment_document,
 );
