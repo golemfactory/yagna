@@ -1,6 +1,7 @@
 use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
+use crate::schema::pay_allocation_document::dsl as dsld;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
@@ -22,29 +23,57 @@ impl<'c> AsDao<'c> for AllocationDao<'c> {
     }
 }
 
-pub fn spend_from_allocation(
-    allocation_id: &String,
-    owner_id: NodeId,
-    amount: &BigDecimalField,
-    conn: &ConnType,
-) -> DbResult<()> {
-    let allocation: ReadObj = dsl::pay_allocation.find((owner_id, allocation_id)).first(conn)?;
-    if amount > &allocation.avail_amount {
+pub struct SpendFromAllocationArgs {
+    pub conn: ConnType,
+    pub owner_id: NodeId,
+    pub allocation_id: String,
+    pub agreement_id: String,
+    pub activity_id: Option<String>,
+    pub amount: BigDecimal,
+}
+
+pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
+    let allocation: ReadObj = dsl::pay_allocation
+        .find((args.owner_id, args.allocation_id.clone()))
+        .first(&args.conn)?;
+    if args.amount > allocation.avail_amount.0 {
         return Err(DbError::Query(format!(
             "Not enough funds in allocation. Needed: {} Remaining: {}",
-            amount, allocation.avail_amount
+            args.amount, allocation.avail_amount.0
         )));
     }
-    let spent_amount = &allocation.spent_amount + amount;
-    let avail_amount = &allocation.avail_amount - amount;
+    let spent_amount: BigDecimalField = (allocation.spent_amount.0 + &args.amount).into();
+    let avail_amount: BigDecimalField = (allocation.avail_amount.0 - &args.amount).into();
     diesel::update(dsl::pay_allocation)
         .set((
             dsl::spent_amount.eq(spent_amount),
             dsl::avail_amount.eq(avail_amount),
         ))
-        .filter(dsl::id.eq(allocation_id))
-        .filter(dsl::owner_id.eq(owner_id))
-        .execute(conn)?;
+        .filter(dsl::id.eq(&args.allocation_id))
+        .filter(dsl::owner_id.eq(args.owner_id))
+        .execute(&args.conn)?;
+
+    let current_document_amount: BigDecimalField = dsld::pay_allocation_document
+        .select(dsld::spent_amount)
+        .filter(dsld::owner_id.eq(args.owner_id))
+        .filter(dsld::allocation_id.eq(&args.allocation_id))
+        .filter(dsld::agreement_id.eq(&args.agreement_id))
+        .filter(dsld::activity_id.eq(&args.activity_id))
+        .first(&args.conn)
+        .optional()?
+        .unwrap_or(BigDecimalField::default());
+
+    let new_document_amount: BigDecimalField = (current_document_amount.0 + &args.amount).into();
+
+    diesel::insert_into(dsld::pay_allocation_document)
+        .values((
+            dsld::owner_id.eq(args.owner_id),
+            dsld::allocation_id.eq(&args.allocation_id),
+            dsld::agreement_id.eq(&args.agreement_id),
+            dsld::activity_id.eq(&args.activity_id),
+            dsld::spent_amount.eq(new_document_amount),
+        ))
+        .execute(&args.conn)?;
     Ok(())
 }
 
@@ -202,11 +231,9 @@ impl<'c> AllocationDao<'c> {
 
             let (deposit, platform) = match allocation {
                 Some(allocation) => {
-
                     if owner_id != allocation.owner_id {
                         return Ok(AllocationReleaseStatus::NotFound);
                     }
-
 
                     if allocation.released {
                         return Ok(AllocationReleaseStatus::Gone);

@@ -168,13 +168,8 @@ async fn create_allocation(
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
 
-                release_allocation_after(
-                    db.clone(),
-                    allocation_id,
-                    allocation.timeout,
-                    node_id,
-                )
-                .await;
+                release_allocation_after(db.clone(), allocation_id, allocation.timeout, node_id)
+                    .await;
 
                 response::created(allocation)
             }
