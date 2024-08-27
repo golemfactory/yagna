@@ -101,22 +101,13 @@ CREATE TABLE pay_allocation_document
     owner_id      VARCHAR(50) NOT NULL,
     allocation_id VARCHAR(50) NOT NULL,
     agreement_id  VARCHAR(50) NOT NULL,
-    invoice_id    VARCHAR(50),
     activity_id   VARCHAR(50),
-    debit_note_id VARCHAR(50),
     spent_amount  VARCHAR(32) NOT NULL,
 
     CONSTRAINT pay_allocation_document_pk PRIMARY KEY (owner_id, allocation_id, agreement_id, activity_id),
     CONSTRAINT pay_allocation_document_fk1 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
     CONSTRAINT pay_allocation_document_fk2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
     CONSTRAINT pay_allocation_document_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
-    CONSTRAINT pay_allocation_document_fk4 FOREIGN KEY (owner_id, invoice_id)
-        REFERENCES pay_invoice(owner_id, id)
-        ON DELETE SET NULL,
-    CONSTRAINT pay_allocation_document_fk5 FOREIGN KEY (owner_id, debit_note_id)
-        REFERENCES pay_debit_note(owner_id, id)
-        ON DELETE SET NULL,
-    CHECK ((invoice_id IS NULL) <> (debit_note_id IS NULL))
 );
 
 CREATE TABLE pay_payment_document(
