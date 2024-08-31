@@ -1,1 +1,1 @@
--- This file should undo anything in `up.sql`
+-- It is not possible to revert this migration.
