@@ -1,3 +1,5 @@
+
+
 -- Your SQL goes here
 CREATE TABLE pay_batch_order(
     id              VARCHAR (50) NOT NULL,
@@ -65,14 +67,7 @@ CREATE TABLE pay_batch_cycle
     CONSTRAINT pay_batch_cycle_pk PRIMARY KEY(owner_id, platform),
     CONSTRAINT pay_batch_cycle_check_1 CHECK((cycle_interval IS NULL) <> (cycle_cron IS NULL))
 );
-DROP INDEX pay_activity_payment_payment_owner_idx;
-DROP INDEX pay_agreement_payment_payment_owner_idx;
-DROP TABLE pay_activity_payment;
-DROP TABLE pay_agreement_payment;
-DROP TABLE pay_order;
 
-DROP INDEX pay_allocation_timestamp_idx;
-DROP INDEX pay_allocation_payment_platform_address_idx;
 DROP TABLE pay_allocation;
 
 CREATE TABLE pay_allocation
@@ -130,3 +125,74 @@ CREATE TABLE pay_payment_document(
         REFERENCES pay_debit_note(owner_id, id)
         ON DELETE SET NULL
 );
+
+-- copy data from pay_payment_document to pay_activty_payment
+
+INSERT INTO pay_activity_payment (
+    payment_id,
+    agreement_id,
+    owner_id,
+    amount,
+    allocation_id)
+select payment_id,
+       agreement_id,
+       owner_id,
+       amount,
+       null
+from pay_payment_document
+where activity_id is not null ;
+-- copy data from pay_activity_payment to pay_payment_document
+
+INSERT INTO pay_payment_document (
+    owner_id,
+    payment_id,
+    agreement_id,
+    invoice_id,
+    activity_id,
+    debit_note_id,
+    amount)
+SELECT pap.owner_id,
+       pap.payment_id,
+       pa.agreement_id,
+       null,
+       pap.activity_id,
+       null,
+       pap.amount
+FROM pay_activity_payment pap
+         LEFT JOIN pay_activity pa
+                   on pap.activity_id = pa.id;
+
+
+INSERT INTO pay_payment_document (
+    owner_id,
+    payment_id,
+    agreement_id,
+    invoice_id,
+    activity_id,
+    debit_note_id,
+    amount)
+SELECT owner_id,
+       payment_id,
+       agreement_id,
+       null,
+       null,
+       null,
+       amount
+FROM pay_agreement_payment;
+
+-- update total_paid in pay_agreement:
+UPDATE pag
+SET total_amount_paid = cast (pag.total_amount_paid + (SELECT sum(total_amount_paid)
+    FROM pay_activity s
+    WHERE s.owner_id = pag.owner_id
+    AND s.role = pag.role
+    AND s.agreement_id = pag.id) AS VARCHAR)
+FROM pay_agreement pag
+WHERE EXISTS (SELECT 1 FROM pay_activity s2 WHERE s2.owner_id = pag.owner_id
+    AND s2.role = pag.role
+    AND s2.agreement_id = pag.id);
+
+
+DROP TABLE pay_activity_payment;
+DROP TABLE pay_agreement_payment;
+DROP TABLE pay_order;
