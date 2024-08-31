@@ -126,21 +126,6 @@ CREATE TABLE pay_payment_document(
         ON DELETE SET NULL
 );
 
--- copy data from pay_payment_document to pay_activty_payment
-
-INSERT INTO pay_activity_payment (
-    payment_id,
-    agreement_id,
-    owner_id,
-    amount,
-    allocation_id)
-select payment_id,
-       agreement_id,
-       owner_id,
-       amount,
-       null
-from pay_payment_document
-where activity_id is not null ;
 -- copy data from pay_activity_payment to pay_payment_document
 
 INSERT INTO pay_payment_document (
@@ -181,16 +166,15 @@ SELECT owner_id,
 FROM pay_agreement_payment;
 
 -- update total_paid in pay_agreement:
-UPDATE pag
-SET total_amount_paid = cast (pag.total_amount_paid + (SELECT sum(total_amount_paid)
+UPDATE pay_agreement
+SET total_amount_paid = cast(total_amount_paid + (SELECT sum(total_amount_paid)
     FROM pay_activity s
-    WHERE s.owner_id = pag.owner_id
-    AND s.role = pag.role
-    AND s.agreement_id = pag.id) AS VARCHAR)
-FROM pay_agreement pag
-WHERE EXISTS (SELECT 1 FROM pay_activity s2 WHERE s2.owner_id = pag.owner_id
-    AND s2.role = pag.role
-    AND s2.agreement_id = pag.id);
+    WHERE s.owner_id = pay_agreement.owner_id
+    AND s.role = pay_agreement.role
+    AND s.agreement_id = pay_agreement.id) AS VARCHAR)
+WHERE EXISTS (SELECT 1 FROM pay_activity s2 WHERE s2.owner_id = pay_agreement.owner_id
+    AND s2.role = pay_agreement.role
+    AND s2.agreement_id = pay_agreement.id);
 
 
 DROP TABLE pay_activity_payment;
