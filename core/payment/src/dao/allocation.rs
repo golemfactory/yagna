@@ -24,7 +24,6 @@ impl<'c> AsDao<'c> for AllocationDao<'c> {
 }
 
 pub struct SpendFromAllocationArgs {
-    pub conn: ConnType,
     pub owner_id: NodeId,
     pub allocation_id: String,
     pub agreement_id: String,
@@ -32,10 +31,10 @@ pub struct SpendFromAllocationArgs {
     pub amount: BigDecimal,
 }
 
-pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
+pub fn spend_from_allocation(conn: &ConnType, args: SpendFromAllocationArgs) -> DbResult<()> {
     let allocation: ReadObj = dsl::pay_allocation
         .find((args.owner_id, args.allocation_id.clone()))
-        .first(&args.conn)?;
+        .first(conn)?;
     if args.amount > allocation.avail_amount.0 {
         return Err(DbError::Query(format!(
             "Not enough funds in allocation. Needed: {} Remaining: {}",
@@ -51,7 +50,7 @@ pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
         ))
         .filter(dsl::id.eq(&args.allocation_id))
         .filter(dsl::owner_id.eq(args.owner_id))
-        .execute(&args.conn)?;
+        .execute(conn)?;
 
     let current_document_amount: BigDecimalField = dsld::pay_allocation_expenditure
         .select(dsld::spent_amount)
@@ -59,7 +58,7 @@ pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
         .filter(dsld::allocation_id.eq(&args.allocation_id))
         .filter(dsld::agreement_id.eq(&args.agreement_id))
         .filter(dsld::activity_id.eq(&args.activity_id))
-        .first(&args.conn)
+        .first(conn)
         .optional()?
         .unwrap_or(BigDecimalField::default());
 
@@ -73,11 +72,21 @@ pub fn spend_from_allocation(args: SpendFromAllocationArgs) -> DbResult<()> {
             dsld::activity_id.eq(&args.activity_id),
             dsld::spent_amount.eq(new_document_amount),
         ))
-        .execute(&args.conn)?;
+        .execute(conn)?;
     Ok(())
 }
 
 impl<'c> AllocationDao<'c> {
+    pub async fn spend_from_allocation_transaction(
+        &self,
+        args: SpendFromAllocationArgs,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "spend_from_allocation_transaction", |conn| {
+            spend_from_allocation(conn, args)
+        })
+        .await
+    }
+
     pub async fn create(
         &self,
         allocation: NewAllocation,

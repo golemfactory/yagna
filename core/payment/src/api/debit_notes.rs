@@ -3,9 +3,9 @@ use std::sync::Arc;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use bigdecimal::BigDecimal;
 use serde_json::value::Value::Null;
 use std::time::Instant;
-
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
@@ -424,6 +424,23 @@ async fn accept_debit_note(
             allocation.remaining_amount, amount_to_pay
         );
         return response::bad_request(&msg);
+    }
+
+    if amount_to_pay > BigDecimal::from(0) {
+        match db
+            .as_dao::<AllocationDao>()
+            .spend_from_allocation_transaction(SpendFromAllocationArgs {
+                owner_id: node_id,
+                allocation_id: allocation_id.clone(),
+                agreement_id: activity.agreement_id.clone(),
+                activity_id: Some(activity.id.clone()),
+                amount: amount_to_pay.clone(),
+            })
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => return response::server_error(&e),
+        }
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
