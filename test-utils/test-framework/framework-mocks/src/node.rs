@@ -10,6 +10,7 @@ use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_core_model::bus::GsbBindPoints;
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_payment::Config;
 use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::rest_api_host_port;
@@ -80,8 +81,8 @@ impl MockNode {
     }
 
     /// Use full wrapped Payment module for this node.
-    pub fn with_payment(mut self) -> Self {
-        self.payment = Some(RealPayment::new(&self.name, &self.testdir));
+    pub fn with_payment(mut self, config: Option<Config>) -> Self {
+        self.payment = Some(RealPayment::new(&self.name, &self.testdir).with_config(config));
         self
     }
 

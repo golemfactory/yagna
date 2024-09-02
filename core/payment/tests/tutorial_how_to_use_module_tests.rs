@@ -48,7 +48,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
     let node = MockNode::new(net.clone(), "node-1", dir)
         // Request instantiating wrappers around real Golem modules.
         .with_identity()
-        .with_payment()
+        .with_payment(None)
         // Mock market module with very basic implementation, which will allow to manually
         // create fake Agreements without need for Offers broadcasting and negotiation process.
         .with_fake_market();

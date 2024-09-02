@@ -14,7 +14,6 @@ use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::service::BindOptions;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 use ya_service_bus::typed::Endpoint;
@@ -48,19 +47,28 @@ pub struct RealPayment {
 
     db: DbExecutor,
     processor: Arc<PaymentProcessor>,
+
+    config: Arc<Config>,
 }
 
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {
             name: name.to_string(),
             testdir: testdir.to_path_buf(),
             db,
             processor,
+            config: Arc::new(config),
         }
+    }
+
+    pub fn with_config(mut self, config: Option<Config>) -> Self {
+        self.config = Arc::new(config.unwrap_or(Config::from_env().unwrap()));
+        self
     }
 
     fn create_db(testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
@@ -73,12 +81,7 @@ impl RealPayment {
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         log::info!("RealPayment ({}) - binding GSB", self.name);
 
-        ya_payment::service::bind_service(
-            &self.db,
-            self.processor.clone(),
-            BindOptions::default().run_sync_job(false),
-            Arc::new(Config::from_env()?),
-        );
+        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone());
 
         self.start_dummy_driver().await?;
         self.start_erc20_driver().await?;

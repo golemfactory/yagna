@@ -13,39 +13,11 @@ use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BindOptions {
-    /// Enables background job for synchronizing invoice / debit note document status.
-    ///
-    /// This depends on the identity service being enabled to work. If you're working with a limited
-    /// subsets of services (e.g. in payment_api.rs example) you might wish to disable that.
-    pub run_sync_job: bool,
-}
-
-impl BindOptions {
-    /// Configure the `run_async_job` option.
-    pub fn run_sync_job(mut self, value: bool) -> Self {
-        self.run_sync_job = value;
-        self
-    }
-}
-
-impl Default for BindOptions {
-    fn default() -> Self {
-        BindOptions { run_sync_job: true }
-    }
-}
-
-pub fn bind_service(
-    db: &DbExecutor,
-    processor: Arc<PaymentProcessor>,
-    opts: BindOptions,
-    config: Arc<Config>,
-) {
+pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
     log::debug!("Binding payment service to service bus");
 
     local::bind_service(db, processor.clone());
-    public::bind_service(db, processor, opts, config);
+    public::bind_service(db, processor, config);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -834,12 +806,7 @@ mod public {
     use ya_persistence::types::Role;
     use ya_std_utils::LogErr;
 
-    pub fn bind_service(
-        db: &DbExecutor,
-        processor: Arc<PaymentProcessor>,
-        opts: BindOptions,
-        config: Arc<Config>,
-    ) {
+    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -857,7 +824,7 @@ mod public {
             .bind_with_processor(sync_payment)
             .bind_with_processor(sync_payment_with_bytes);
 
-        if opts.run_sync_job {
+        if config.sync_notif_backoff.run_sync_job {
             send_sync_notifs_job(db.clone(), config);
             send_sync_requests(db.clone());
         }
