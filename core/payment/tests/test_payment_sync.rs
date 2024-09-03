@@ -103,7 +103,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .await
         .unwrap();
 
-    let accept = channel.recv().await.unwrap();
+    let (_from, accept) = channel.recv().await.unwrap();
     assert_eq!(accept.invoice_id, invoice.invoice_id);
     assert_eq!(accept.acceptance.total_amount_accepted, invoice.amount);
 
@@ -148,20 +148,28 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .message_channel::<PaymentSyncWithBytes>(Ok(Ack {}));
     net.enable_network_for(appkey_prov.identity);
 
-    // We expect that AcceptInvoice will be delivered within 4s.
-    let sync = sync_channel
-        .recv()
-        .timeout(Some(Duration::from_secs(4)))
-        .await
-        .unwrap()
-        .unwrap();
-    println!("{:?}", sync);
-    assert_eq!(sync.invoice_accepts.len(), 1);
-    assert_eq!(sync.invoice_accepts[0].invoice_id, invoice.invoice_id);
-    assert_eq!(
-        sync.invoice_accepts[0].acceptance.total_amount_accepted,
-        invoice.amount
-    );
+    // We expect that PaymentSync will be delivered within 4s.
+    // Looping because sync is sent from multiple identities on Requestor Node.
+    loop {
+        let (from, sync) = sync_channel
+            .recv()
+            .timeout(Some(Duration::from_secs(4)))
+            .await
+            .unwrap()
+            .unwrap();
+
+        if from != appkey_req.identity {
+            continue;
+        }
+
+        assert_eq!(sync.invoice_accepts.len(), 1);
+        assert_eq!(sync.invoice_accepts[0].invoice_id, invoice.invoice_id);
+        assert_eq!(
+            sync.invoice_accepts[0].acceptance.total_amount_accepted,
+            invoice.amount
+        );
+        break;
+    }
 
     log::info!("================== Scenario 3 ==================");
     // Send Invoice to Requestor node.

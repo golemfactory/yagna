@@ -177,13 +177,76 @@ async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> a
     Ok(())
 }
 
-async fn send_sync_notifs_for_identity(
-    identity: NodeId,
+async fn send_sync_notifs_for_peer(
+    peer: NodeId,
     db: &DbExecutor,
     config: &Config,
     cutoff: &DateTime<Utc>,
-) -> anyhow::Result<Option<Duration>> {
-    log::debug!("Processing PaymentSync from identity [{identity}].");
+) -> anyhow::Result<()> {
+    log::debug!("Processing PaymentSync for peer [{peer}].");
+
+    let dao: SyncNotifsDao = db.as_dao();
+
+    let mut all_delivered = true;
+    let identities = typed::service(identity::BUS_ID)
+        .call(ya_core_model::identity::List {})
+        .await??;
+
+    for identity in identities {
+        let owner = identity.node_id;
+        if identity.is_locked {
+            log::info!("Skipping PaymentSync for [{owner}] since identity is locked.");
+            continue;
+        }
+
+        let (msg, msg_with_bytes) = payment_sync(db, owner, peer).await?;
+
+        log::debug!("Sending PaymentSync as [{owner}] to [{peer}].");
+        let mut result = ya_net::from(owner)
+            .to(peer)
+            .service(ya_core_model::payment::public::BUS_ID)
+            .call(msg_with_bytes.clone())
+            .await;
+
+        log::debug!("Sending PaymentSync as [{owner}] to [{peer}] result: {result:?}");
+
+        // Centralnet and hybridnet return different errors when the endpoint is not supported, so
+        // we have to resort to checking error message.
+        // This message will be sent even if the node can handle PaymentSyncWithBytes but is not
+        // connected at all, but there is no standard way to differentiate between these cases.
+        if matches!(&result, Err(e) if e.to_string().contains("endpoint address not found")) {
+            log::debug!("Sending PaymentSync as [{owner}] to [{peer}]: PaymentSyncWithBytes endpoint not found, falling back to PaymentSync.");
+            result = ya_net::from(owner)
+                .to(peer)
+                .service(ya_core_model::payment::public::BUS_ID)
+                .call(msg.clone())
+                .await;
+        }
+
+        if matches!(&result, Ok(Ok(_))) {
+            log::debug!("Delivered PaymentSync to [{peer}] as [{owner}].");
+            mark_all_sent(db, owner, msg).await?;
+        } else {
+            all_delivered = false;
+            let err = match result {
+                Err(x) => x.to_string(),
+                Ok(Err(x)) => x.to_string(),
+                Ok(Ok(_)) => unreachable!(),
+            };
+            log::debug!("Couldn't deliver PaymentSync to [{peer}] as [{owner}]: {err}");
+            dao.increment_retry(peer, cutoff.naive_utc()).await?;
+        }
+    }
+
+    if all_delivered {
+        dao.drop(peer).await?;
+    }
+
+    Ok(())
+}
+
+async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Option<Duration>> {
+    let cutoff = Utc::now();
     let dao: SyncNotifsDao = db.as_dao();
 
     let backoff_config = &config.sync_notif_backoff;
@@ -203,49 +266,13 @@ async fn send_sync_notifs_for_identity(
         .into_iter()
         .filter(|entry| {
             let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
-            next_deadline.and_utc() <= *cutoff && entry.retries <= backoff_config.max_retries as i32
+            next_deadline.and_utc() <= cutoff && entry.retries <= backoff_config.max_retries as i32
         })
         .map(|entry| entry.id)
         .collect::<Vec<_>>();
 
     for peer in peers_to_notify {
-        let (msg, msg_with_bytes) = payment_sync(db, identity, peer).await?;
-
-        log::debug!("Sending PaymentSync as [{identity}] to [{peer}].");
-        let mut result = ya_net::from(identity)
-            .to(peer)
-            .service(ya_core_model::payment::public::BUS_ID)
-            .call(msg_with_bytes.clone())
-            .await;
-
-        log::debug!("Sending PaymentSync as [{identity}] to [{peer}] result: {result:?}");
-
-        // Centralnet and hybridnet return different errors when the endpoint is not supported, so
-        // we have to resort to checking error message.
-        // This message will be sent even if the node can handle PaymentSyncWithBytes but is not
-        // connected at all, but there is no standard way to differentiate between these cases.
-        if matches!(&result, Err(e) if e.to_string().contains("endpoint address not found")) {
-            log::debug!("Sending PaymentSync as [{identity}] to [{peer}]: PaymentSyncWithBytes endpoint not found, falling back to PaymentSync.");
-            result = ya_net::from(identity)
-                .to(peer)
-                .service(ya_core_model::payment::public::BUS_ID)
-                .call(msg.clone())
-                .await;
-        }
-
-        if matches!(&result, Ok(Ok(_))) {
-            log::debug!("Delivered PaymentSync to [{peer}] as [{identity}].");
-            mark_all_sent(db, identity, msg).await?;
-            dao.drop(peer).await?;
-        } else {
-            let err = match result {
-                Err(x) => x.to_string(),
-                Ok(Err(x)) => x.to_string(),
-                Ok(Ok(_)) => unreachable!(),
-            };
-            log::debug!("Couldn't deliver PaymentSync to [{peer}] as [{identity}]: {err}");
-            dao.increment_retry(peer, cutoff.naive_utc()).await?;
-        }
+        send_sync_notifs_for_peer(peer, db, config, &cutoff).await?;
     }
 
     // Next sleep duration is calculated after all events were updated to pick up entries
@@ -258,39 +285,10 @@ async fn send_sync_notifs_for_identity(
             let next_deadline = entry.last_ping + exp_backoff(entry.retries as _);
             next_deadline.and_utc()
         })
-        .filter(|deadline| deadline > cutoff)
+        .filter(|deadline| deadline > &cutoff)
         .min()
         .map(|ts| ts - cutoff)
         .and_then(|dur| dur.to_std().ok());
-
-    Ok(next_sleep_duration)
-}
-
-async fn send_sync_notifs(db: &DbExecutor, config: &Config) -> anyhow::Result<Option<Duration>> {
-    let cutoff = Utc::now();
-
-    let identities = typed::service(identity::BUS_ID)
-        .call(ya_core_model::identity::List {})
-        .await??;
-
-    let mut next_sleep_duration: Option<Duration> = None;
-    for identity in identities {
-        if identity.is_locked {
-            continue;
-        }
-        let sleep_duration =
-            send_sync_notifs_for_identity(identity.node_id, db, config, &cutoff).await?;
-        next_sleep_duration = match sleep_duration {
-            None => next_sleep_duration,
-            Some(duration) => {
-                let result_duration = match next_sleep_duration {
-                    None => duration,
-                    Some(last_duration) => ::std::cmp::min(duration, last_duration),
-                };
-                Some(result_duration)
-            }
-        };
-    }
 
     Ok(next_sleep_duration)
 }

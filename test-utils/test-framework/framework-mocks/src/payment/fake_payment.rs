@@ -5,6 +5,7 @@ use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -13,6 +14,7 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::{DocumentStatus, Invoice, NewAllocation};
+use ya_client_model::NodeId;
 use ya_core_model as model;
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::payment::public;
@@ -91,7 +93,7 @@ impl FakePayment {
     pub fn message_channel<T>(
         &self,
         result: Result<T::Item, T::Error>,
-    ) -> mpsc::UnboundedReceiver<T>
+    ) -> mpsc::UnboundedReceiver<(NodeId, T)>
     where
         T: RpcMessage,
         T::Item: Clone,
@@ -99,11 +101,12 @@ impl FakePayment {
     {
         let (sender, receiver) = mpsc::unbounded_channel();
         self.override_gsb_public()
-            .bind(move |_db: DbExecutor, _sender_id: String, msg: T| {
+            .bind(move |_db: DbExecutor, sender_id: String, msg: T| {
                 let result = result.clone();
                 let sender = sender.clone();
                 async move {
-                    let _ = sender.send(msg).map_err(|_e| {
+                    let id = NodeId::from_str(&sender_id).unwrap();
+                    let _ = sender.send((id, msg)).map_err(|_e| {
                         log::error!(
                             "[FakePayment] Unable to send message '{}' to channel.",
                             T::ID

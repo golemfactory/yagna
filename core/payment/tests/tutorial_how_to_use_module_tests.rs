@@ -181,7 +181,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     // Waiting for any message sent to `node3`.
     // We expect that `AcceptInvoice` message will be received after previous REST api call was made.
-    let accept = channel.recv().await.unwrap();
+    let (_from, accept) = channel.recv().await.unwrap();
     assert_eq!(accept.invoice_id, invoice.invoice_id);
     Ok(())
 }
