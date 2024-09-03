@@ -47,6 +47,10 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             delete().to(release_allocation),
         )
         .route("/demandDecorations", get().to(get_demand_decorations))
+        .route(
+            "/allocations/{allocation_id}/orders",
+            get().to(get_pay_allocation_orders),
+        )
 }
 
 async fn create_allocation(
@@ -504,5 +508,22 @@ pub async fn forced_release_allocation(
             );
         }
         _ => (),
+    }
+}
+
+async fn get_pay_allocation_orders(
+    db: Data<DbExecutor>,
+    path: Path<String>,
+    id: Identity,
+) -> HttpResponse {
+    let node_id = id.identity;
+    let allocation_id = path.into_inner();
+    let dao: BatchDao = db.as_dao();
+    match dao
+        .get_batch_items(node_id, None, None, Some(allocation_id), None, None)
+        .await
+    {
+        Ok(items) => response::ok(items),
+        Err(e) => response::server_error(&e),
     }
 }

@@ -613,6 +613,7 @@ impl<'c> BatchDao<'c> {
         owner_id: NodeId,
         order_id: Option<String>,
         payee_addr: Option<String>,
+        allocation_id: Option<String>,
         agreement_id: Option<String>,
         activity_id: Option<String>,
     ) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
@@ -641,6 +642,9 @@ impl<'c> BatchDao<'c> {
             if let Some(payee_addr) = payee_addr {
                 query = query.filter(order_item_dsl::payee_addr.eq(payee_addr));
             }
+            if let Some(allocation_id) = allocation_id {
+                query = query.filter(aggr_item_dsl::allocation_id.eq(allocation_id));
+            }
             if let Some(agreement_id) = agreement_id {
                 query = query.filter(aggr_item_dsl::agreement_id.eq(agreement_id));
             }
@@ -654,6 +658,7 @@ impl<'c> BatchDao<'c> {
                     order_item_dsl::order_id,
                     order_item_dsl::owner_id,
                     order_item_dsl::payee_addr,
+                    aggr_item_dsl::allocation_id,
                     aggr_item_dsl::amount,
                     aggr_item_dsl::agreement_id,
                     aggr_item_dsl::invoice_id,
