@@ -20,12 +20,14 @@ CREATE TABLE pay_batch_order_item(
     order_id        VARCHAR(50) NOT NULL,
     owner_id        VARCHAR(50) NOT NULL,
     payee_addr      VARCHAR(50) NOT NULL,
+    allocation_id   VARCHAR(50) NOT NULL,
     amount          VARCHAR(32) NOT NULL,
     payment_id      VARCHAR(50),
     paid            BOOLEAN NOT NULL DEFAULT FALSE,
 
     CONSTRAINT pay_batch_order_item_pk PRIMARY KEY (owner_id, order_id, payee_addr),
-    CONSTRAINT pay_batch_order_item_fk1 FOREIGN KEY (owner_id, order_id) REFERENCES pay_batch_order(owner_id, id)
+    CONSTRAINT pay_batch_order_item_fk1 FOREIGN KEY (owner_id, order_id) REFERENCES pay_batch_order(owner_id, id),
+    CONSTRAINT pay_batch_order_item_fk2 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id)
 );
 
 CREATE TABLE pay_batch_order_item_document(
@@ -153,7 +155,7 @@ INSERT INTO pay_payment_document (
     payment_id,
     agreement_id,
     invoice_id,
-    activity_id,
+    activity_id,``
     debit_note_id,
     amount)
 SELECT owner_id,

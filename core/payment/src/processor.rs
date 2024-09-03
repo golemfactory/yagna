@@ -733,6 +733,7 @@ impl PaymentProcessor {
                         Some(order_item.payee_addr.clone()),
                         None,
                         None,
+                        None,
                     )
                     .await
                 {
