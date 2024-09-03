@@ -71,7 +71,14 @@ async fn get_batch_order_item_details(
     let (batch_order_id, payee_addr) = path.into_inner();
     let dao: BatchDao = db.as_dao();
     match dao
-        .get_batch_items(node_id, Some(batch_order_id), Some(payee_addr), None, None)
+        .get_batch_items(
+            node_id,
+            Some(batch_order_id),
+            Some(payee_addr),
+            None,
+            None,
+            None,
+        )
         .await
     {
         Ok(items) => response::ok(items),
