@@ -135,6 +135,16 @@ pub trait PaymentRestExt {
     where
         Tz: TimeZone,
         Tz::Offset: Display;
+
+    async fn wait_for_invoice_payment<Tz>(
+        &self,
+        invoice_id: &str,
+        timeout: Duration,
+        after_timestamp: Option<DateTime<Tz>>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -161,6 +171,30 @@ impl PaymentRestExt for PaymentApi {
             if !payments.is_empty() {
                 return Ok(payments);
             }
+        }
+        Err(anyhow!("Timeout {timeout:?} waiting for payments."))
+    }
+
+    async fn wait_for_invoice_payment<Tz>(
+        &self,
+        invoice_id: &str,
+        timeout: Duration,
+        after_timestamp: Option<DateTime<Tz>>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display,
+    {
+        let start = Utc::now();
+        while start + timeout > Utc::now() {
+            let payments = self
+                .get_payments_for_invoice(invoice_id, after_timestamp.clone(), None)
+                .await?;
+
+            if !payments.is_empty() {
+                return Ok(payments);
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
         }
         Err(anyhow!("Timeout {timeout:?} waiting for payments."))
     }

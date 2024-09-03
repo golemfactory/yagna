@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use futures::TryFutureExt;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -238,6 +239,7 @@ impl MockNet {
                 let data = Vec::from(msg);
                 let caller = caller.to_string();
                 let addr = addr.to_string();
+                let addr_ = addr.to_string();
                 let resolver_ = resolver.clone();
 
                 async move {
@@ -253,7 +255,7 @@ impl MockNet {
                         "[MockNet] Sending message from [{from}], to: [{to}], address [{translated}]."
                     );
                     local_bus::send(&translated, &from.to_string(), &data).await
-                }
+                }.inspect_err(move |e| log::warn!("[MockNet] Sending message [{addr_}]: {e}"))
             },
             // TODO: Implement stream handler
             (),

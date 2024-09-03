@@ -1,4 +1,5 @@
 use bigdecimal::BigDecimal;
+use chrono::Utc;
 use std::str::FromStr;
 use std::time::Duration;
 use test_context::test_context;
@@ -13,7 +14,7 @@ use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::fake_payment::FakePayment;
-use ya_framework_mocks::payment::Driver;
+use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
@@ -75,7 +76,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     let allocation = requestor.create_allocation(&new_allocation).await?;
     log::info!("Allocation created. ({})", allocation.allocation_id);
 
-    // Scenario 1:
+    log::info!("================== Scenario 1 ==================");
     // Send Invoice to Requestor node.
     // Requestor is able to immediately accept.
     log::info!("Issuing invoice...");
@@ -106,7 +107,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     assert_eq!(accept.invoice_id, invoice.invoice_id);
     assert_eq!(accept.acceptance.total_amount_accepted, invoice.amount);
 
-    // Scenario 2:
+    log::info!("================== Scenario 2 ==================");
     // Send Invoice to Requestor node.
     // Requestor attempt to accept Invoice but network is broken.
     // Acceptance will be sent later as payment sync.
@@ -142,10 +143,10 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     // We expect that AcceptInvoice wasn't delivered.
     matches!(channel.try_recv().unwrap_err(), TryRecvError::Empty);
 
-    net.enable_network_for(appkey_prov.identity);
     let mut sync_channel = node2
         .get_fake_payment()?
         .message_channel::<PaymentSyncWithBytes>(Ok(Ack {}));
+    net.enable_network_for(appkey_prov.identity);
 
     // We expect that AcceptInvoice will be delivered within 4s.
     let sync = sync_channel
@@ -154,12 +155,52 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .await
         .unwrap()
         .unwrap();
+    println!("{:?}", sync);
     assert_eq!(sync.invoice_accepts.len(), 1);
     assert_eq!(sync.invoice_accepts[0].invoice_id, invoice.invoice_id);
     assert_eq!(
         sync.invoice_accepts[0].acceptance.total_amount_accepted,
         invoice.amount
     );
+
+    log::info!("================== Scenario 3 ==================");
+    // Send Invoice to Requestor node.
+    // Requestor accepts Invoice, but network is broken before he sends payment confirmation.
+    // Payment confirmation will be sent later as payment sync.
+    let agreement =
+        FakeMarket::create_fake_agreement(appkey_req.identity, appkey_prov.identity).unwrap();
+    node1.get_market()?.add_agreement(agreement.clone()).await;
+
+    log::info!("Issuing invoice...");
+    let invoice = FakePayment::fake_invoice(&agreement, BigDecimal::from_str("0.2")?)?;
+    payment
+        .gsb_public_endpoint()
+        .send_as(invoice.issuer_id, SendInvoice(invoice.clone()))
+        .await??;
+
+    log::info!(
+        "Accepting Invoice ({})... with broken network",
+        invoice.invoice_id
+    );
+
+    requestor.get_invoice(&invoice.invoice_id).await.unwrap();
+    requestor
+        .accept_invoice(
+            &invoice.invoice_id,
+            &Acceptance {
+                total_amount_accepted: invoice.amount.clone(),
+                allocation_id: allocation.allocation_id.to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    net.break_network_for(appkey_prov.identity);
+
+    // Wait until Invoice will be paid on Requestor side.
+    let payments = requestor
+        .wait_for_invoice_payment::<Utc>(&invoice.invoice_id, Duration::from_secs(5 * 60), None)
+        .await?;
+    assert_eq!(payments.len(), 1);
 
     Ok(())
 }

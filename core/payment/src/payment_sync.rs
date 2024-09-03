@@ -33,7 +33,7 @@ const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 async fn payment_sync(
     db: &DbExecutor,
-    current: NodeId,
+    owner: NodeId,
     peer_id: NodeId,
 ) -> anyhow::Result<(PaymentSync, PaymentSyncWithBytes)> {
     let payment_dao: PaymentDao = db.as_dao();
@@ -62,7 +62,7 @@ async fn payment_sync(
     }
 
     let mut invoice_accepts = Vec::default();
-    for invoice in invoice_dao.unsent_accepted(current, peer_id).await? {
+    for invoice in invoice_dao.unsent_accepted(owner, peer_id).await? {
         invoice_accepts.push(AcceptInvoice::new(
             invoice.invoice_id,
             Acceptance {
@@ -74,7 +74,7 @@ async fn payment_sync(
     }
 
     let mut invoice_rejects = Vec::default();
-    for invoice in invoice_dao.unsent_rejected(current, peer_id).await? {
+    for invoice in invoice_dao.unsent_rejected(owner, peer_id).await? {
         let events = invoice_event_dao
             .get_for_invoice_id(
                 invoice.invoice_id.clone(),
@@ -98,7 +98,7 @@ async fn payment_sync(
     }
 
     let mut debit_note_accepts = Vec::default();
-    for debit_note in debit_note_dao.unsent_accepted(current, peer_id).await? {
+    for debit_note in debit_note_dao.unsent_accepted(owner, peer_id).await? {
         debit_note_accepts.push(AcceptDebitNote::new(
             debit_note.debit_note_id,
             Acceptance {
@@ -131,24 +131,44 @@ async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> a
     let debit_note_dao: DebitNoteDao = db.as_dao();
 
     for payment_send in msg.payments {
+        log::info!(
+            "Delivered payment [{}] to [{}]",
+            payment_send.payment.payment_id,
+            payment_send.payment.payee_id
+        );
         payment_dao
             .mark_sent(payment_send.payment.payment_id)
             .await?;
     }
 
     for invoice_accept in msg.invoice_accepts {
+        log::info!(
+            "Delivered Invoice [{}] acceptance to [{}]",
+            invoice_accept.invoice_id,
+            invoice_accept.issuer_id
+        );
         invoice_dao
             .mark_accept_sent(invoice_accept.invoice_id, owner_id)
             .await?;
     }
 
     for invoice_reject in msg.invoice_rejects {
+        log::info!(
+            "Delivered Invoice [{}] rejection to [{}]",
+            invoice_reject.invoice_id,
+            invoice_reject.issuer_id
+        );
         invoice_dao
             .mark_reject_sent(invoice_reject.invoice_id, owner_id)
             .await?;
     }
 
     for debit_note_accept in msg.debit_note_accepts {
+        log::info!(
+            "Delivered DebitNote [{}] acceptance to [{}]",
+            debit_note_accept.debit_note_id,
+            debit_note_accept.issuer_id
+        );
         debit_note_dao
             .mark_accept_sent(debit_note_accept.debit_note_id, owner_id)
             .await?;
@@ -163,6 +183,7 @@ async fn send_sync_notifs_for_identity(
     config: &Config,
     cutoff: &DateTime<Utc>,
 ) -> anyhow::Result<Option<Duration>> {
+    log::debug!("Processing PaymentSync from identity [{identity}].");
     let dao: SyncNotifsDao = db.as_dao();
 
     let backoff_config = &config.sync_notif_backoff;
@@ -202,7 +223,7 @@ async fn send_sync_notifs_for_identity(
         // Centralnet and hybridnet return different errors when the endpoint is not supported, so
         // we have to resort to checking error message.
         // This message will be sent even if the node can handle PaymentSyncWithBytes but is not
-        // connected at all, but there is no standard way to differenciate between these cases.
+        // connected at all, but there is no standard way to differentiate between these cases.
         if matches!(&result, Err(e) if e.to_string().contains("endpoint address not found")) {
             log::debug!("Sending PaymentSync as [{identity}] to [{peer}]: PaymentSyncWithBytes endpoint not found, falling back to PaymentSync.");
             result = ya_net::from(identity)
