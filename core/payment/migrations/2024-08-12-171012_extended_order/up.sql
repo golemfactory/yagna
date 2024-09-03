@@ -155,7 +155,7 @@ INSERT INTO pay_payment_document (
     payment_id,
     agreement_id,
     invoice_id,
-    activity_id,``
+    activity_id,
     debit_note_id,
     amount)
 SELECT owner_id,
