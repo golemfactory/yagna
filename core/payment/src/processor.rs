@@ -569,7 +569,7 @@ impl PaymentProcessor {
             .call(msg)
             .map(|res| match res {
                 Ok(Ok(_)) => Ok(()),
-                Err(ya_service_bus::Error::GsbBadRequest(_)) => {
+                Err(e) if e.to_string().contains("endpoint address not found") => {
                     Err(PaymentSendToGsbError::NotSupported)
                 }
                 Err(err) => {
