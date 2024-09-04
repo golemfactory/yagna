@@ -95,11 +95,12 @@ CREATE INDEX pay_allocation_updated_ts ON pay_allocation (updated_ts);
 
 CREATE TABLE pay_allocation_expenditure
 (
-    owner_id      VARCHAR(50) NOT NULL,
-    allocation_id VARCHAR(50) NOT NULL,
-    agreement_id  VARCHAR(50) NOT NULL,
-    activity_id   VARCHAR(50),
-    spent_amount  VARCHAR(32) NOT NULL,
+    owner_id         VARCHAR(50) NOT NULL,
+    allocation_id    VARCHAR(50) NOT NULL,
+    agreement_id     VARCHAR(50) NOT NULL,
+    activity_id      VARCHAR(50),
+    accepted_amount  VARCHAR(32) NOT NULL,
+    scheduled_amount VARCHAR(32) NOT NULL,
 
     CONSTRAINT pay_allocation_expenditure_pk PRIMARY KEY (owner_id, allocation_id, agreement_id, activity_id),
     CONSTRAINT pay_allocation_expenditure_fk1 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
