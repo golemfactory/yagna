@@ -1,11 +1,11 @@
 use crate::error::{DbError, DbResult};
-use crate::models::allocation::{ReadObj, WriteObj};
+use crate::models::allocation::{AllocationExpenditureObj, ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use crate::schema::pay_allocation_expenditure::dsl as dsld;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use ya_client_model::payment::allocation::Deposit;
+use ya_client_model::payment::allocation::{AllocationExpenditure, Deposit};
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -52,27 +52,36 @@ pub fn spend_from_allocation(conn: &ConnType, args: SpendFromAllocationArgs) -> 
         .filter(dsl::owner_id.eq(args.owner_id))
         .execute(conn)?;
 
-    let current_document_amount: BigDecimalField = dsld::pay_allocation_expenditure
-        .select(dsld::spent_amount)
+    if let Some(accepted_amount) = dsld::pay_allocation_expenditure
+        .select(dsld::accepted_amount)
         .filter(dsld::owner_id.eq(args.owner_id))
         .filter(dsld::allocation_id.eq(&args.allocation_id))
         .filter(dsld::agreement_id.eq(&args.agreement_id))
         .filter(dsld::activity_id.eq(&args.activity_id))
-        .first(conn)
+        .first::<BigDecimalField>(conn)
         .optional()?
-        .unwrap_or(BigDecimalField::default());
+    {
+        let new_document_amount: BigDecimalField = (accepted_amount.0 + &args.amount).into();
+        diesel::update(dsld::pay_allocation_expenditure)
+            .set(dsld::accepted_amount.eq(new_document_amount))
+            .filter(dsld::owner_id.eq(args.owner_id))
+            .filter(dsld::allocation_id.eq(&args.allocation_id))
+            .filter(dsld::agreement_id.eq(&args.agreement_id))
+            .filter(dsld::activity_id.eq(&args.activity_id))
+            .execute(conn)?;
+    } else {
+        diesel::insert_into(dsld::pay_allocation_expenditure)
+            .values((
+                dsld::owner_id.eq(args.owner_id),
+                dsld::allocation_id.eq(&args.allocation_id),
+                dsld::agreement_id.eq(&args.agreement_id),
+                dsld::activity_id.eq(&args.activity_id),
+                dsld::accepted_amount.eq(BigDecimalField::from(args.amount)),
+                dsld::scheduled_amount.eq(BigDecimalField::default()),
+            ))
+            .execute(conn)?;
+    }
 
-    let new_document_amount: BigDecimalField = (current_document_amount.0 + &args.amount).into();
-
-    diesel::insert_into(dsld::pay_allocation_expenditure)
-        .values((
-            dsld::owner_id.eq(args.owner_id),
-            dsld::allocation_id.eq(&args.allocation_id),
-            dsld::agreement_id.eq(&args.agreement_id),
-            dsld::activity_id.eq(&args.activity_id),
-            dsld::spent_amount.eq(new_document_amount),
-        ))
-        .execute(conn)?;
     Ok(())
 }
 
@@ -83,6 +92,21 @@ impl<'c> AllocationDao<'c> {
     ) -> DbResult<()> {
         do_with_transaction(self.pool, "spend_from_allocation_transaction", |conn| {
             spend_from_allocation(conn, args)
+        })
+        .await
+    }
+
+    pub async fn get_expenditures(
+        &self,
+        owner_id: NodeId,
+        allocation_id: String,
+    ) -> DbResult<Vec<AllocationExpenditure>> {
+        readonly_transaction(self.pool, "allocation_dao_get_expenditures", move |conn| {
+            let r: Vec<AllocationExpenditureObj> = dsld::pay_allocation_expenditure
+                .filter(dsld::owner_id.eq(owner_id))
+                .filter(dsld::allocation_id.eq(allocation_id))
+                .load(conn)?;
+            Ok(r.into_iter().map(Into::into).collect())
         })
         .await
     }
