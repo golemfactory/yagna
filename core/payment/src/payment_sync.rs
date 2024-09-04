@@ -43,7 +43,7 @@ async fn payment_sync(
 
     let mut payments = Vec::default();
     let mut payments_canonicalized = Vec::default();
-    for payment in payment_dao.list_unsent(Some(peer_id)).await? {
+    for payment in payment_dao.list_unsent(owner, Some(peer_id)).await? {
         let platform_components = payment.payment_platform.split('-').collect::<Vec<_>>();
         let driver = &platform_components[0];
         let bus_id = driver_bus_id(driver);
@@ -132,7 +132,7 @@ async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> a
 
     for payment_send in msg.payments {
         log::info!(
-            "Delivered payment [{}] to [{}]",
+            "Delivered Payment confirmation [{}] to [{}]",
             payment_send.payment.payment_id,
             payment_send.payment.payee_id
         );

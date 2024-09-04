@@ -5,7 +5,6 @@ use std::time::Duration;
 use test_context::test_context;
 use tokio::sync::mpsc::error::TryRecvError;
 
-use ya_client_model::payment::Acceptance;
 use ya_core_model::payment::public::{AcceptInvoice, Ack, PaymentSyncWithBytes, SendInvoice};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
@@ -93,13 +92,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     log::info!("Accepting Invoice ({})...", invoice.invoice_id);
     requestor.get_invoice(&invoice.invoice_id).await.unwrap();
     requestor
-        .accept_invoice(
-            &invoice.invoice_id,
-            &Acceptance {
-                total_amount_accepted: invoice.amount.clone(),
-                allocation_id: allocation.allocation_id.to_string(),
-            },
-        )
+        .simple_accept_invoice(&invoice, &allocation)
         .await
         .unwrap();
 
@@ -130,13 +123,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
 
     requestor.get_invoice(&invoice.invoice_id).await.unwrap();
     requestor
-        .accept_invoice(
-            &invoice.invoice_id,
-            &Acceptance {
-                total_amount_accepted: invoice.amount.clone(),
-                allocation_id: allocation.allocation_id.to_string(),
-            },
-        )
+        .simple_accept_invoice(&invoice, &allocation)
         .await
         .unwrap();
 
@@ -193,13 +180,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
 
     requestor.get_invoice(&invoice.invoice_id).await.unwrap();
     requestor
-        .accept_invoice(
-            &invoice.invoice_id,
-            &Acceptance {
-                total_amount_accepted: invoice.amount.clone(),
-                allocation_id: allocation.allocation_id.to_string(),
-            },
-        )
+        .simple_accept_invoice(&invoice, &allocation)
         .await
         .unwrap();
     net.break_network_for(appkey_prov.identity);
@@ -209,6 +190,37 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .wait_for_invoice_payment::<Utc>(&invoice.invoice_id, Duration::from_secs(5 * 60), None)
         .await?;
     assert_eq!(payments.len(), 1);
+
+    net.enable_network_for(appkey_prov.identity);
+    // We expect that PaymentSync will be delivered within 4s.
+    // Looping because sync is sent from multiple identities on Requestor Node.
+    loop {
+        let (from, sync) = sync_channel
+            .recv()
+            .timeout(Some(Duration::from_secs(4)))
+            .await
+            .unwrap()
+            .unwrap();
+
+        if from != appkey_req.identity {
+            continue;
+        }
+
+        assert!(!sync.payments.is_empty());
+        let payment = sync
+            .payments
+            .iter()
+            .find(|p| {
+                p.payment
+                    .agreement_payments
+                    .iter()
+                    .any(|a| a.agreement_id == agreement.agreement_id)
+            })
+            .unwrap();
+
+        assert_eq!(payment.payment.amount, invoice.amount);
+        break;
+    }
 
     Ok(())
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client::payment::PaymentApi;
 
-use ya_client_model::payment::Payment;
+use ya_client_model::payment::{Acceptance, Allocation, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_core_model::payment::local::BUS_ID;
 use ya_core_model::payment::public;
@@ -145,6 +145,12 @@ pub trait PaymentRestExt {
     where
         Tz: TimeZone,
         Tz::Offset: Display;
+
+    async fn simple_accept_invoice(
+        &self,
+        invoice: &Invoice,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -197,5 +203,21 @@ impl PaymentRestExt for PaymentApi {
             tokio::time::sleep(Duration::from_millis(300)).await;
         }
         Err(anyhow!("Timeout {timeout:?} waiting for payments."))
+    }
+
+    async fn simple_accept_invoice(
+        &self,
+        invoice: &Invoice,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()> {
+        Ok(self
+            .accept_invoice(
+                &invoice.invoice_id,
+                &Acceptance {
+                    total_amount_accepted: invoice.amount.clone(),
+                    allocation_id: allocation.allocation_id.to_string(),
+                },
+            )
+            .await?)
     }
 }
