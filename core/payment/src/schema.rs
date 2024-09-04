@@ -54,7 +54,8 @@ table! {
         allocation_id -> Text,
         agreement_id -> Text,
         activity_id -> Nullable<Text>,
-        spent_amount -> Text,
+        accepted_amount -> Text,
+        scheduled_amount -> Text,
     }
 }
 
