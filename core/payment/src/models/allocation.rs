@@ -1,6 +1,7 @@
-use crate::schema::pay_allocation;
+use crate::schema::{pay_allocation, pay_allocation_expenditure};
 use chrono::{Days, NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
+use ya_client_model::payment::allocation::AllocationExpenditure;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::types::BigDecimalField;
@@ -109,6 +110,31 @@ impl From<ReadObj> for Allocation {
                 .deposit
                 .and_then(|s| serde_json::from_str(&s).ok()),
             extend_timeout: None,
+            created_ts: Utc.from_utc_datetime(&allocation.created_ts),
+            updated_ts: Utc.from_utc_datetime(&allocation.updated_ts),
+        }
+    }
+}
+
+#[derive(Queryable, Debug, Insertable, AsChangeset)]
+#[table_name = "pay_allocation_expenditure"]
+pub struct AllocationExpenditureObj {
+    pub owner_id: NodeId,
+    pub allocation_id: String,
+    pub agreement_id: String,
+    pub activity_id: Option<String>,
+    pub accepted_amount: BigDecimalField,
+    pub scheduled_amount: BigDecimalField,
+}
+
+impl From<AllocationExpenditureObj> for AllocationExpenditure {
+    fn from(expenditure: AllocationExpenditureObj) -> Self {
+        Self {
+            allocation_id: expenditure.allocation_id,
+            agreement_id: expenditure.agreement_id,
+            activity_id: expenditure.activity_id,
+            accepted_amount: expenditure.accepted_amount.0,
+            scheduled_amount: expenditure.scheduled_amount.0,
         }
     }
 }

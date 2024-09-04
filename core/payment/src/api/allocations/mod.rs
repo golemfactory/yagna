@@ -225,6 +225,21 @@ async fn get_allocation(
     }
 }
 
+async fn get_allocation_expenditures(
+    db: Data<DbExecutor>,
+    path: Path<params::AllocationId>,
+    id: Identity,
+) -> HttpResponse {
+    let allocation_id = path.allocation_id.clone();
+    let node_id = id.identity;
+    let dao: AllocationDao = db.as_dao();
+
+    match dao.get_expenditures(node_id, allocation_id.clone()).await {
+        Ok(expenditures) => response::ok(expenditures),
+        Err(e) => response::server_error(&e),
+    }
+}
+
 fn amend_allocation_fields(
     old_allocation: Allocation,
     update: AllocationUpdate,
