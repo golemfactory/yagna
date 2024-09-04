@@ -27,6 +27,7 @@ use ya_core_model::payment::public::{
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed as bus;
 use ya_service_bus::typed::{Endpoint, ServiceBinder};
 use ya_service_bus::RpcMessage;
 
@@ -124,6 +125,17 @@ impl FakePayment {
 
     pub fn override_gsb_local(&self) -> ServiceBinder<DbExecutor, ()> {
         ServiceBinder::new(self.gsb.local_addr(), &self.db, ())
+    }
+
+    /// Unbinds GSB public endpoint.
+    /// TODO: it would be nice to be able to unbind each message separately,
+    ///       but GSB doesn't allow this; it can only unbind whole GSB prefix.
+    pub async fn unbind_public(&self) {
+        bus::unbind(self.gsb.public_addr()).await;
+    }
+
+    pub async fn unbind_local(&self) {
+        bus::unbind(self.gsb.local_addr()).await;
     }
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {
