@@ -37,7 +37,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     config.sync_notif_backoff.initial_delay = Duration::from_secs(2);
     config.sync_notif_backoff.cap = Some(Duration::from_secs(2));
 
-    let node1 = MockNode::new(net.clone(), "node-1", &dir)
+    let node1 = MockNode::new(net.clone(), "node-1", dir)
         .with_identity()
         .with_payment(Some(config))
         .with_fake_market();
@@ -347,6 +347,7 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
 
     log::info!("================== Scenario 2 ==================");
     log::info!("Scenario: Payment delayed delivery with fallback");
+    log::info!("Scenario: Invoice acceptance delayed delivery");
     // Send Invoice to Requestor node.
     // Requestor accepts Invoice and waits for payment confirmation.
     // In the meantime network is broken, so confirmation can't be immediately delivered
@@ -364,19 +365,18 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
         .send_as(invoice.issuer_id, SendInvoice(invoice.clone()))
         .await??;
 
-    log::info!("Accepting Invoice ({})", invoice.invoice_id);
+    // Break network to enforce Invoice acceptance delayed delivery.
+    net.break_network_for(appkey_prov.identity);
+
+    log::info!(
+        "Accepting Invoice ({})... with broken network",
+        invoice.invoice_id
+    );
     requestor.get_invoice(&invoice.invoice_id).await.unwrap();
     requestor
         .simple_accept_invoice(&invoice, &allocation)
         .await
         .unwrap();
-
-    // Check if AcceptInvoice was delivered.
-    let (_from, accept) = channel.recv().await.unwrap();
-    assert_eq!(accept.invoice_id, invoice.invoice_id);
-    assert_eq!(accept.acceptance.total_amount_accepted, invoice.amount);
-
-    net.break_network_for(appkey_prov.identity);
 
     // Wait until Invoice will be paid on Requestor side.
     let payments = requestor
@@ -395,6 +395,7 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
             .unwrap()
             .unwrap();
 
+        println!("{:?}", sync);
         if from != appkey_req.identity {
             continue;
         }
@@ -410,8 +411,16 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
                     .any(|a| a.agreement_id == agreement.agreement_id)
             })
             .unwrap();
-
         assert_eq!(payment.payment.amount, invoice.amount);
+
+        // Check if AcceptInvoice was delivered.
+        assert!(!sync.invoice_accepts.is_empty());
+        assert_eq!(sync.invoice_accepts[0].invoice_id, invoice.invoice_id);
+        assert_eq!(
+            sync.invoice_accepts[0].acceptance.total_amount_accepted,
+            invoice.amount
+        );
+
         break;
     }
 
