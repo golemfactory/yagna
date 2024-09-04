@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client::payment::PaymentApi;
 
-use ya_client_model::payment::{Acceptance, Allocation, Invoice, Payment};
+use ya_client_model::payment::{Acceptance, Allocation, DebitNote, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_core_model::payment::local::BUS_ID;
 use ya_core_model::payment::public;
@@ -151,6 +151,12 @@ pub trait PaymentRestExt {
         invoice: &Invoice,
         allocation: &Allocation,
     ) -> anyhow::Result<()>;
+
+    async fn simple_accept_debit_note(
+        &self,
+        debit_note: &DebitNote,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -215,6 +221,22 @@ impl PaymentRestExt for PaymentApi {
                 &invoice.invoice_id,
                 &Acceptance {
                     total_amount_accepted: invoice.amount.clone(),
+                    allocation_id: allocation.allocation_id.to_string(),
+                },
+            )
+            .await?)
+    }
+
+    async fn simple_accept_debit_note(
+        &self,
+        debit_note: &DebitNote,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()> {
+        Ok(self
+            .accept_debit_note(
+                &debit_note.debit_note_id,
+                &Acceptance {
+                    total_amount_accepted: debit_note.total_amount_due.clone(),
                     allocation_id: allocation.allocation_id.to_string(),
                 },
             )

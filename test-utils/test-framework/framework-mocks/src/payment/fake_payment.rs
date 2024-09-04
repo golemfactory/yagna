@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use ya_agreement_utils::AgreementView;
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
-use ya_client_model::payment::{DocumentStatus, Invoice, NewAllocation};
+use ya_client_model::payment::{DebitNote, DocumentStatus, Invoice, NewAllocation};
 use ya_client_model::NodeId;
 use ya_core_model as model;
 use ya_core_model::bus::GsbBindPoints;
@@ -165,6 +165,31 @@ impl FakePayment {
             activity_ids: vec![],
             amount,
             payment_due_date: Utc::now() + Duration::seconds(10),
+            status: DocumentStatus::Issued,
+        })
+    }
+
+    pub fn fake_debit_note(
+        agreement: &Agreement,
+        activity_id: &str,
+        amount: BigDecimal,
+        due_date: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<DebitNote> {
+        let platform = Self::platform_from(agreement)?;
+        Ok(DebitNote {
+            debit_note_id: Uuid::new_v4().to_string(),
+            issuer_id: agreement.offer.provider_id,
+            recipient_id: agreement.demand.requestor_id,
+            payee_addr: agreement.offer.provider_id.to_string(),
+            payer_addr: agreement.demand.requestor_id.to_string(),
+            payment_platform: platform,
+            previous_debit_note_id: None,
+            timestamp: Utc::now(),
+            agreement_id: agreement.agreement_id.to_string(),
+            activity_id: activity_id.to_string(),
+            total_amount_due: amount,
+            usage_counter_vector: None,
+            payment_due_date: due_date,
             status: DocumentStatus::Issued,
         })
     }
