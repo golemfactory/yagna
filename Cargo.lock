@@ -3038,7 +3038,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "git+https://github.com/golemfactory/golem-certificate.git?rev=f2d7514c18fc066e9cfb796090b90f5b27cfe1c6#f2d7514c18fc066e9cfb796090b90f5b27cfe1c6"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=800d710331cdf3bf82f2be5de8345b90b6982af1#800d710331cdf3bf82f2be5de8345b90b6982af1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3053,7 +3053,7 @@ dependencies = [
  "sha3 0.10.8",
  "thiserror",
  "url",
- "ya-client-model 0.6.0",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -8720,7 +8720,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "uuid 0.8.2",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-gsb-http-proxy",
  "ya-net",
@@ -8745,7 +8745,7 @@ dependencies = [
  "shlex 1.3.0",
  "tempdir",
  "thiserror",
- "ya-client-model 0.7.0",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -8769,24 +8769,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "url",
- "ya-client-model 0.7.0",
-]
-
-[[package]]
-name = "ya-client-model"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe85a762be0297b9848ad0b7f1c73cb2afe778bb8eb3a952efd032792631a3e0"
-dependencies = [
- "bigdecimal 0.2.2",
- "chrono",
- "derive_more",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "strum 0.24.1",
- "strum_macros 0.24.3",
- "thiserror",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -8839,7 +8822,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-service-bus",
 ]
 
@@ -8891,7 +8874,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid 0.8.2",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
  "ya-persistence",
@@ -8936,7 +8919,7 @@ dependencies = [
  "tokio-util",
  "uuid 0.8.2",
  "web3",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
@@ -8990,7 +8973,7 @@ dependencies = [
  "trust-dns-resolver 0.22.0",
  "url",
  "ya-agreement-utils",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-counters",
@@ -9067,7 +9050,7 @@ dependencies = [
  "url",
  "walkdir",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-service-bus",
@@ -9113,7 +9096,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
@@ -9157,7 +9140,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 1.8.0",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",
@@ -9195,7 +9178,7 @@ dependencies = [
  "test-context",
  "thiserror",
  "tokio",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-counters",
  "ya-framework-basic",
@@ -9237,7 +9220,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 0.8.2",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-framework-basic",
  "ya-framework-mocks",
@@ -9292,7 +9275,7 @@ dependencies = [
  "thiserror",
  "url",
  "ya-agreement-utils",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-manifest-test-utils",
  "ya-utils-path",
 ]
@@ -9429,7 +9412,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "url",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
  "ya-relay-client",
@@ -9507,7 +9490,7 @@ dependencies = [
  "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
@@ -9550,7 +9533,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-bus",
@@ -9574,7 +9557,7 @@ dependencies = [
  "test-case 2.2.2",
  "thiserror",
  "tokio",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -9642,7 +9625,7 @@ dependencies = [
  "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
@@ -9713,7 +9696,7 @@ dependencies = [
  "tokio-util",
  "url",
  "uuid 0.8.2",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-relay-proto",
  "ya-relay-stack 0.5.1",
 ]
@@ -9978,7 +9961,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
 ]
@@ -10067,7 +10050,7 @@ dependencies = [
  "tokio-util",
  "url",
  "walkdir",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-exe-unit",
  "ya-framework-basic",
@@ -10230,7 +10213,7 @@ dependencies = [
  "url",
  "uuid 0.8.2",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
@@ -10273,7 +10256,7 @@ dependencies = [
  "url",
  "ya-activity",
  "ya-client",
- "ya-client-model 0.7.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",

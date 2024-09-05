@@ -429,7 +429,6 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
             .unwrap()
             .unwrap();
 
-        println!("{:?}", sync);
         if from != appkey_req.identity {
             continue;
         }
@@ -457,6 +456,5 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
 
         break;
     }
-
     Ok(())
 }
