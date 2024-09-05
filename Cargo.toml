@@ -59,7 +59,7 @@ ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
 ya-client = "0.8"
-ya-client-model = "0.6"
+ya-client-model = "0.7"
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true }                    # just to enable conditionally running some tests
@@ -251,7 +251,7 @@ url = "2.3.1"
 regex = "1.10.4"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "e199ee1cfdb22837f9d95f4202378e182d3cb489" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 
@@ -287,9 +287,9 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "258d5e085e591cab33858e8d1b19eff01b64687d" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "258d5e085e591cab33858e8d1b19eff01b64687d" }
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
