@@ -16,6 +16,7 @@ use crate::model::*;
 use crate::utils;
 
 // Public revealed uses, required to implement this trait
+use crate::signable::Signable;
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::payment::network::Network;
@@ -63,35 +64,30 @@ pub trait PaymentDriver {
 
     async fn schedule_payment(
         &self,
-
         caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn verify_payment(
         &self,
-
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
     async fn validate_allocation(
         &self,
-
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<ValidateAllocationResult, GenericError>;
 
     async fn release_deposit(
         &self,
-
         caller: String,
         msg: DriverReleaseDeposit,
     ) -> Result<(), GenericError>;
 
     async fn sign_payment(
         &self,
-
         _caller: String,
         msg: SignPayment,
     ) -> Result<Vec<u8>, GenericError> {
@@ -102,7 +98,6 @@ pub trait PaymentDriver {
 
     async fn sign_payment_canonicalized(
         &self,
-
         _caller: String,
         msg: SignPaymentCanonicalized,
     ) -> Result<Vec<u8>, GenericError> {
@@ -113,7 +108,6 @@ pub trait PaymentDriver {
 
     async fn verify_signature(
         &self,
-
         _caller: String,
         msg: VerifySignature,
     ) -> Result<bool, GenericError> {
@@ -125,8 +119,14 @@ pub trait PaymentDriver {
         let s: [u8; 32] = msg.signature[33..65].try_into().unwrap();
         let signature = Signature { v, r, s };
 
-        let payload = if msg.canonicalized {
-            utils::payment_hash_canonicalized(&msg.payment)
+        let payload = if let Some(payload) = msg.canonical {
+            if let Err(e) = msg.payment.verify_canonical(payload.as_slice()) {
+                log::info!(
+                    "Signature verification: canonical representation doesn't match struct: {e}"
+                );
+                return Ok(false);
+            }
+            utils::prepare_signature_hash(&payload)
         } else {
             utils::payment_hash(&msg.payment)
         };
@@ -140,7 +140,6 @@ pub trait PaymentDriver {
 
     async fn status(
         &self,
-
         _caller: String,
         _msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError>;

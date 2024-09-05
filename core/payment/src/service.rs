@@ -1248,16 +1248,7 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        send_payment_impl(
-            db,
-            processor,
-            sender_id,
-            msg.payment,
-            false,
-            msg.signature,
-            None,
-        )
-        .await
+        send_payment_impl(db, processor, sender_id, msg.payment, msg.signature, None).await
     }
 
     async fn send_payment_with_bytes(
@@ -1271,7 +1262,6 @@ mod public {
             processor,
             sender_id,
             msg.payment,
-            true,
             msg.signature,
             Some(msg.signed_bytes),
         )
@@ -1283,9 +1273,8 @@ mod public {
         processor: Arc<PaymentProcessor>,
         sender_id: String,
         payment: Payment,
-        canonicalized: bool,
         signature: Vec<u8>,
-        signed_bytes: Option<Vec<u8>>,
+        canonical: Option<Vec<u8>>,
     ) -> Result<Ack, SendError> {
         let payment_id = payment.payment_id.clone();
         if sender_id != payment.payer_id.to_string() {
@@ -1303,7 +1292,7 @@ mod public {
             "Verify payment processor started."
         );
         let res = match processor
-            .verify_payment(payment, signature, canonicalized, signed_bytes)
+            .verify_payment(payment, signature, canonical)
             .await
         {
             Ok(_) => {

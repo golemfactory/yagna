@@ -1,9 +1,12 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use std::str::FromStr;
 use std::time::Duration;
 use test_context::test_context;
+use ya_client_model::NodeId;
 
-use ya_client_model::payment::NewInvoice;
+use ya_client_model::payment::{NewInvoice, Payment};
+use ya_core_model::payment::public::SendSignedPayment;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
@@ -12,6 +15,8 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::fake_payment::FakePayment;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
+use ya_payment_driver::signable::Signable;
+use ya_service_bus::RpcEndpoint;
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
 #[test_context(DroppableTestContext)]
@@ -93,9 +98,105 @@ async fn test_payment_signature(ctx: &mut DroppableTestContext) -> anyhow::Resul
         .wait_for_invoice_payment::<Utc>(&invoice.invoice_id, Duration::from_secs(5 * 60), None)
         .await?;
     assert_eq!(payments.len(), 1);
-    let _payment = requestor
+    let payment = requestor
         .get_signed_payment(&payments[0].payment_id)
         .await?;
+
+    log::info!("=== Validate if Payment confirmation has correct signatures.");
+    let signature = payment.signature.unwrap();
+    let payment = payment.payload;
+
+    assert_eq!(payment.amount, invoice.amount);
+    assert_eq!(signature.signed_bytes, payment.canonicalize().unwrap());
+    payment.verify_canonical(&signature.signed_bytes).unwrap();
+
+    let correct = SendSignedPayment {
+        payment: payment.clone().remove_private_info(),
+        signature: signature.signature.clone(),
+        signed_bytes: signature.signed_bytes.clone(),
+    };
+
+    log::info!("=== Check if incorrect signature will be rejected.");
+    let mut sig_incorrect = signature.signature.clone();
+    sig_incorrect[20] ^= sig_incorrect[20];
+    let incorrect_signature = SendSignedPayment {
+        signature: sig_incorrect,
+        ..correct.clone()
+    };
+
+    let payment_gsb = node1.get_payment()?.gsb_public_endpoint();
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, incorrect_signature)
+        .await?;
+    assert!(result.is_err_and(|e| e.to_string().contains("Invalid payment signature")));
+
+    log::info!("=== Check if incorrect signed bytes will be rejected.");
+    let mut bytes_incorrect = signature.signed_bytes.clone();
+    bytes_incorrect[20] ^= bytes_incorrect[20];
+    let incorrect_signed_bytes = SendSignedPayment {
+        signed_bytes: bytes_incorrect.clone(),
+        ..correct.clone()
+    };
+
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, incorrect_signed_bytes)
+        .await?;
+    assert!(result.is_err_and(|e| e.to_string().contains("Invalid payment signature")));
+
+    log::info!(
+        "=== Requestor shouldn't be able to report bigger amount than he paid on blockchain."
+    );
+    let mut malicious_payment = payment.clone().remove_private_info();
+    malicious_payment.amount += BigDecimal::from(1u64);
+    let mismatch_with_transaction_amount = SendSignedPayment {
+        payment: malicious_payment,
+        ..correct.clone()
+    };
+
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, mismatch_with_transaction_amount)
+        .await?;
+    assert!(result.is_err());
+
+    log::info!("=== Requestor shouldn't be able to change payer info.");
+    let incorrect_payer = SendSignedPayment {
+        payment: Payment {
+            payer_id: NodeId::from_str("0x19659f72c4ad88f7d9934c8809deb9535ce0e4b8").unwrap(),
+            ..payment.clone().remove_private_info()
+        },
+        ..correct.clone()
+    };
+
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, incorrect_payer)
+        .await?;
+    assert!(result.is_err());
+
+    log::info!("=== Requestor shouldn't be able to change payer address info.");
+    let incorrect_payer = SendSignedPayment {
+        payment: Payment {
+            payer_addr: "0x19659f72c4ad88f7d9934c8809deb9535ce0e4b8".to_string(),
+            ..payment.clone().remove_private_info()
+        },
+        ..correct.clone()
+    };
+
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, incorrect_payer)
+        .await?;
+    assert!(result.is_err());
+
+    log::info!("=== Correct signature should be accepted.");
+    payment_gsb
+        .send_as(invoice.recipient_id, correct.clone())
+        .await?
+        .unwrap();
+
+    log::info!("=== Payment confirmation sent for the second time should be rejected (could result in multi-spend).");
+    let result = payment_gsb
+        .send_as(invoice.recipient_id, correct.clone())
+        .await?;
+    assert!(result.is_err());
 
     Ok(())
 }

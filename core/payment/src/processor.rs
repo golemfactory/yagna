@@ -534,16 +534,17 @@ impl PaymentProcessor {
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
+                // Always add new type of signature. Compatibility is for older Provider nodes only.
+                payment_dao
+                    .add_signature(
+                        payment_id.clone(),
+                        msg_with_bytes.signature.clone(),
+                        msg_with_bytes.signed_bytes.clone(),
+                    )
+                    .await?;
+
                 if mark_sent {
-                    payment_dao.mark_sent(payment_id.clone()).await?;
-                    // Always add new type of signature. Compatibility is for older Provider nodes only.
-                    payment_dao
-                        .add_signature(
-                            payment_id,
-                            msg_with_bytes.signature.clone(),
-                            msg_with_bytes.signed_bytes.clone(),
-                        )
-                        .await?;
+                    payment_dao.mark_sent(payment_id).await?;
                 } else {
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();
@@ -640,8 +641,7 @@ impl PaymentProcessor {
         &self,
         payment: Payment,
         signature: Vec<u8>,
-        canonicalized: bool,
-        signed_bytes: Option<Vec<u8>>,
+        canonical: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -659,7 +659,7 @@ impl PaymentProcessor {
             .send(driver::VerifySignature::new(
                 payment.clone(),
                 signature.clone(),
-                canonicalized,
+                canonical.clone(),
             ))
             .await??
         {
@@ -782,13 +782,13 @@ impl PaymentProcessor {
             }
 
             // Insert payment into database (this operation creates and updates all related entities)
-            if signed_bytes.is_none() {
+            if canonical.is_none() {
                 payment_dao
                     .insert_received(payment, payee_id, None, None)
                     .await?;
             } else {
                 payment_dao
-                    .insert_received(payment, payee_id, Some(signature), signed_bytes)
+                    .insert_received(payment, payee_id, Some(signature), canonical)
                     .await?;
             }
         }
