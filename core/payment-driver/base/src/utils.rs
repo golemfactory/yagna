@@ -7,12 +7,13 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_types::U256;
 use num_bigint::ToBigInt;
-use sha3::{Digest, Sha3_256};
 
 // Local uses
 use crate::db::models::PaymentEntity;
 use crate::model::{PaymentDetails, SchedulePayment};
+
 use ya_client_model::payment::Payment;
+use ya_core_model::signable::prepare_signature_hash;
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
@@ -66,16 +67,6 @@ pub fn u256_to_big_dec(v: U256) -> BigDecimal {
     v / Into::<BigDecimal>::into(PRECISION)
 }
 
-pub fn prepare_signature_hash(bytes: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha3_256::new();
-    hasher.update(bytes);
-    hasher.finalize().to_vec()
-}
-
 pub fn payment_hash(payment: &Payment) -> Vec<u8> {
     prepare_signature_hash(format!("{:?}", payment).as_bytes())
-}
-
-pub fn payment_hash_canonicalized(payment: &Payment) -> Vec<u8> {
-    prepare_signature_hash(&serde_json_canonicalizer::to_vec(payment).unwrap())
 }

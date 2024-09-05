@@ -2,8 +2,7 @@ use anyhow::anyhow;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json;
-
-use crate::utils;
+use sha3::{Digest, Sha3_256};
 
 use ya_client_model::payment::Payment;
 
@@ -28,7 +27,7 @@ pub trait Signable: Serialize + DeserializeOwned + Clone + PartialEq {
     /// In most cases we don't want to sign arrays of arbitrary length, so we use hash
     /// of canonical representation instead.
     fn hash_canonical(&self) -> anyhow::Result<Vec<u8>> {
-        Ok(utils::prepare_signature_hash(&self.canonicalize()?))
+        Ok(prepare_signature_hash(&self.canonicalize()?))
     }
 
     /// Verify if `canonical` representation is equivalent to `self`.
@@ -48,6 +47,12 @@ pub trait Signable: Serialize + DeserializeOwned + Clone + PartialEq {
         }
         Ok(())
     }
+}
+
+pub fn prepare_signature_hash(bytes: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha3_256::new();
+    hasher.update(bytes);
+    hasher.finalize().to_vec()
 }
 
 impl Signable for Payment {

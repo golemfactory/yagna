@@ -29,6 +29,7 @@ pub mod gftp;
 pub mod sgx;
 
 pub mod bus;
+pub mod signable;
 #[cfg(feature = "version")]
 pub mod version;
 

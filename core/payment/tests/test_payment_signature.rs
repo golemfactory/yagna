@@ -7,6 +7,7 @@ use ya_client_model::NodeId;
 
 use ya_client_model::payment::{NewInvoice, Payment};
 use ya_core_model::payment::public::SendSignedPayment;
+use ya_core_model::signable::Signable;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
@@ -15,7 +16,6 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::fake_payment::FakePayment;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
-use ya_payment_driver::signable::Signable;
 use ya_service_bus::RpcEndpoint;
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]

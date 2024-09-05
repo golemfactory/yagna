@@ -16,13 +16,13 @@ use crate::model::*;
 use crate::utils;
 
 // Public revealed uses, required to implement this trait
-use crate::signable::Signable;
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::payment::network::Network;
 pub use ya_client_model::NodeId;
 pub use ya_core_model::identity::event::IdentityEvent;
 pub use ya_core_model::identity::Error as IdentityError;
+use ya_core_model::signable::{prepare_signature_hash, Signable};
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
@@ -91,18 +91,20 @@ pub trait PaymentDriver {
         _caller: String,
         msg: SignPayment,
     ) -> Result<Vec<u8>, GenericError> {
-        let payload = utils::payment_hash(&msg.0);
-        let node_id = msg.0.payer_id;
+        let payment = msg.0.remove_private_info();
+        let payload = utils::payment_hash(&payment);
+        let node_id = payment.payer_id;
         bus::sign(node_id, payload).await
     }
 
-    async fn sign_payment_canonicalized(
+    async fn sign_payment_canonical(
         &self,
         _caller: String,
         msg: SignPaymentCanonicalized,
     ) -> Result<Vec<u8>, GenericError> {
-        let payload = utils::payment_hash_canonicalized(&msg.0);
-        let node_id = msg.0.payer_id;
+        let payment = msg.0;
+        let payload = payment.hash_canonical().map_err(GenericError::new)?;
+        let node_id = payment.payer_id;
         bus::sign(node_id, payload).await
     }
 
@@ -120,14 +122,18 @@ pub trait PaymentDriver {
         let signature = Signature { v, r, s };
 
         let payload = if let Some(payload) = msg.canonical {
-            if let Err(e) = msg.payment.verify_canonical(payload.as_slice()) {
-                log::info!(
-                    "Signature verification: canonical representation doesn't match struct: {e}"
-                );
-                return Ok(false);
+            match msg.payment.verify_canonical(payload.as_slice()) {
+                Ok(_) => prepare_signature_hash(&payload),
+                Err(e) => {
+                    log::info!(
+                        "Signature verification: canonical representation doesn't match struct: {e}"
+                    );
+                    return Ok(false);
+                }
             }
-            utils::prepare_signature_hash(&payload)
         } else {
+            // Backward compatibility version for older Nodes that don't send canonical
+            // signed bytes and used Payment debug formatting as representation.
             utils::payment_hash(&msg.payment)
         };
         let pub_key = match signature.recover(payload.as_slice()) {

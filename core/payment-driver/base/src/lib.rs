@@ -17,7 +17,6 @@ pub mod cron;
 pub mod dao;
 pub mod db;
 pub mod driver;
-pub mod signable;
 pub mod utils;
 
 pub use ya_core_model::driver as model;

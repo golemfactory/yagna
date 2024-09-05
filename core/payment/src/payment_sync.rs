@@ -1,16 +1,14 @@
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use std::{collections::HashSet, time::Duration};
-
-use crate::utils::remove_allocation_ids_from_payment;
-use crate::Config;
-
-use chrono::{DateTime, Utc};
 use tokio::sync::Notify;
+
 use ya_client_model::{
     payment::{Acceptance, InvoiceEventType},
     NodeId,
 };
 use ya_core_model::driver::SignPaymentCanonicalized;
+use ya_core_model::signable::Signable;
 use ya_core_model::{
     driver::{driver_bus_id, SignPayment},
     identity::{self, IdentityInfo},
@@ -28,6 +26,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::IntoTimeoutFuture, typed, RpcEndpoint};
 
 use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
+use crate::Config;
 
 const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -48,17 +47,17 @@ async fn payment_sync(
         let driver = &platform_components[0];
         let bus_id = driver_bus_id(driver);
 
-        let payment = remove_allocation_ids_from_payment(payment);
+        let payment = payment.remove_private_info();
 
         let signature = typed::service(bus_id.clone())
             .send(SignPayment(payment.clone()))
             .await??;
         payments.push(SendPayment::new(payment.clone(), signature));
 
-        let signature_canonicalized = typed::service(bus_id.clone())
+        let signature_canonical = typed::service(bus_id.clone())
             .send(SignPaymentCanonicalized(payment.clone()))
             .await??;
-        payments_canonicalized.push(SendSignedPayment::new(payment, signature_canonicalized));
+        payments_canonicalized.push(SendSignedPayment::new(payment.clone(), signature_canonical));
     }
 
     let mut invoice_accepts = Vec::default();

@@ -9,7 +9,7 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
-use crate::utils::remove_allocation_ids_from_payment;
+
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
@@ -22,6 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
+
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
@@ -426,9 +427,8 @@ impl PaymentProcessor {
         let payer_id: NodeId;
         let payee_id: NodeId;
         let payment_id: String;
-        let mut payment: Payment;
 
-        {
+        let payment: Payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             let orders = db_executor
@@ -488,13 +488,10 @@ impl PaymentProcessor {
                 .get(payment_id.clone(), payer_id)
                 .await?
                 .unwrap();
-            payment = signed_payment.payload;
-        }
+            signed_payment.payload
+        };
 
-        // Allocation IDs are requestor's private matter and should not be sent to provider
-        payment = remove_allocation_ids_from_payment(payment);
-
-        let signature_canonicalized = driver_endpoint(&driver)
+        let signature_canonical = driver_endpoint(&driver)
             .send(driver::SignPaymentCanonicalized(payment.clone()))
             .await??;
         let signature = driver_endpoint(&driver)
@@ -506,7 +503,7 @@ impl PaymentProcessor {
         // Whether the provider was correctly notified of this fact is another matter.
         counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment.clone(), signature);
-        let msg_with_bytes = SendSignedPayment::new(payment, signature_canonicalized);
+        let msg_with_bytes = SendSignedPayment::new(payment.clone(), signature_canonical);
 
         let db_executor = Arc::clone(&self.db_executor);
 
