@@ -96,8 +96,9 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.created", 0);
         counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.terminated", 0);
-        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
-        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
+        for reason in KNOWN_TERMINATION_REASONS {
+            counter!("market.agreements.requestor.terminated.reason", 0, "reason" => reason);
+        }
         counter!("market.agreements.requestor.committing", 0);
         counter!("market.events.requestor.queried", 0);
         counter!("market.proposals.requestor.countered", 0);
