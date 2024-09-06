@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 ya-client.workspace = true
-ya-core-model = { version = "0.10", features = ["appkey"] }
+ya-core-model = { workspace = true, features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-bus = { workspace = true }
 

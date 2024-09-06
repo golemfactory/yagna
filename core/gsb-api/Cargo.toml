@@ -31,7 +31,7 @@ bytes = "1"
 tokio = { version = "1", features = ["macros"] }
 
 [dev-dependencies]
-ya-core-model = { version = "0.10", features = ["gftp"] }
+ya-core-model = { workspace = true, features = ["gftp"] }
 
 actix-test = "0.1"
 awc = "3"

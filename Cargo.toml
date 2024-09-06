@@ -32,7 +32,8 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "0.10" }
+
+ya-core-model.workspace = true
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
@@ -255,7 +256,8 @@ url = "2.3.1"
 regex = "1.10.4"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
+ya-core-model = { version = "0.10", path = "core/model" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "e199ee1cfdb22837f9d95f4202378e182d3cb489" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 
@@ -265,7 +267,9 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
+# true version is given in patches section
 ya-client = "0.9"
+# true version is given in patches section
 ya-client-model = "0.7"
 
 [patch.crates-io]
@@ -293,11 +297,11 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e3113709178fa31fc144e79a835c06afcc6f8a34" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "acccda451fb9fb796bac939f6379f9445dc74f11" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e3113709178fa31fc144e79a835c06afcc6f8a34" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "acccda451fb9fb796bac939f6379f9445dc74f11" }
 #ya-client-model = "0.7"
-golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "a410048b469b2cd3b1158bbec98808cf987d3f6b" }
 
 ## RELAY and networking stack
 

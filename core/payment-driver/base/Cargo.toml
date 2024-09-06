@@ -30,7 +30,7 @@ tokio = { version = "1", features = ["macros"] }
 
 ## yagna dependencies
 ya-client-model.workspace = true
-ya-core-model = { version = "0.10", features = [
+ya-core-model = { workspace = true, features = [
     "driver",
     "identity",
     "payment",

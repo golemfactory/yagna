@@ -125,6 +125,7 @@ impl RealIdentity {
             password: None,
             from_keystore: None,
             from_private_key: None,
+            set_default: false,
         };
 
         self.run_create_identity(command).await
@@ -141,6 +142,7 @@ impl RealIdentity {
             password: None,
             from_keystore: None,
             from_private_key: Some(private_key),
+            set_default: false,
         };
 
         self.run_create_identity(command).await

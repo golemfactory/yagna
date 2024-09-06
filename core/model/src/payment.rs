@@ -558,6 +558,8 @@ pub mod local {
         #[strum(props(token = "GLM"))]
         Mainnet,
         #[strum(props(token = "tGLM"))]
+        Sepolia,
+        #[strum(props(token = "tGLM"))]
         Rinkeby,
         #[strum(props(token = "tGLM"))]
         Goerli,
@@ -567,6 +569,8 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
+        #[strum(props(token = "tGLM"))]
+        Amoy,
     }
 
     impl NetworkName {
@@ -584,7 +588,7 @@ pub mod local {
     impl NetworkName {
         pub fn is_fundable(&self) -> bool {
             use NetworkName::*;
-            matches!(self, Goerli | Holesky)
+            matches!(self, Sepolia | Goerli | Holesky | Amoy)
         }
 
         pub fn all_fundable() -> Vec<NetworkName> {
