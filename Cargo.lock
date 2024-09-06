@@ -8762,8 +8762,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f1db3f27d04b90bdd62583dee20684a6f147afdc26ebed1d4869d302d51f935"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8787,7 +8786,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=acccda451fb9fb796bac939f6379f9445dc74f11#acccda451fb9fb796bac939f6379f9445dc74f11"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -10411,8 +10410,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "ya-client"
-version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=acccda451fb9fb796bac939f6379f9445dc74f11#acccda451fb9fb796bac939f6379f9445dc74f11"
