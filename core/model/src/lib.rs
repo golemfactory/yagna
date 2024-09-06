@@ -21,6 +21,8 @@ pub mod net;
 
 #[cfg(feature = "payment")]
 pub mod payment;
+#[cfg(feature = "payment")]
+pub mod signable;
 
 #[cfg(feature = "gftp")]
 pub mod gftp;
@@ -29,7 +31,6 @@ pub mod gftp;
 pub mod sgx;
 
 pub mod bus;
-pub mod signable;
 #[cfg(feature = "version")]
 pub mod version;
 

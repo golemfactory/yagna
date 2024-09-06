@@ -866,7 +866,7 @@ pub mod public {
     impl SendSignedPayment {
         pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
             // Unwrap won't happen, because serialization is always possible.
-            let signed_bytes = payment.canonicalize().unwrap_or(vec![]);
+            let signed_bytes = payment.canonicalize().unwrap_or_default();
             Self {
                 payment: payment.remove_private_info(),
                 signature,
