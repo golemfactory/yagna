@@ -19,6 +19,7 @@ use ethereum_types::H160;
 use ethereum_types::U256;
 use num_bigint::BigInt;
 use std::collections::HashMap;
+use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -778,7 +779,10 @@ impl PaymentDriver for Erc20Driver {
                 .map_err(|e| GenericError::new(e.to_string()))?;
         }
 
-        Ok(GetRpcEndpointsResult { endpoints, sources })
+        Ok(GetRpcEndpointsResult {
+            endpoints: serde_json::to_value(endpoints).unwrap(),
+            sources: serde_json::to_value(sources).unwrap(),
+        })
     }
 
     async fn get_account_balance(
