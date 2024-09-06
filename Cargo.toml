@@ -300,8 +300,7 @@ ya-service-api-web = { path = "core/serv-api/web" }
 ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8" }
 #ya-client = { path = "../ya-client" }
 ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8" }
-#ya-client-model = "0.7"
-golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "a410048b469b2cd3b1158bbec98808cf987d3f6b" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "2723e07d205712d8e09e9d396c9745a059b60913" }
 
 ## RELAY and networking stack
 

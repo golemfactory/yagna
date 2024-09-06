@@ -3043,7 +3043,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "git+https://github.com/golemfactory/golem-certificate.git?rev=a410048b469b2cd3b1158bbec98808cf987d3f6b#a410048b469b2cd3b1158bbec98808cf987d3f6b"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=2723e07d205712d8e09e9d396c9745a059b60913#2723e07d205712d8e09e9d396c9745a059b60913"
 dependencies = [
  "anyhow",
  "chrono",
