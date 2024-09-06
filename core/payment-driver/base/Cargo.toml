@@ -29,8 +29,8 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["macros"] }
 
 ## yagna dependencies
-ya-client-model = "0.6"
-ya-core-model = { version = "^0.9", features = [
+ya-client-model.workspace = true
+ya-core-model = { version = "0.10", features = [
     "driver",
     "identity",
     "payment",

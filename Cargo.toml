@@ -32,7 +32,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.9" }
+ya-core-model = { version = "0.10" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
@@ -58,8 +58,8 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.8"
-ya-client-model = "0.6"
+ya-client.workspace = true
+ya-client-model.workspace = true
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true }                    # just to enable conditionally running some tests
@@ -238,9 +238,13 @@ members = [
 # diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
 # sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 derive_more = "0.99.11"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
-erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "594d8a93b820b177ec267ccec5de61d8a9a45203" }
-gftp = { version = "0.4.0", path = "core/gftp" }
+#erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "79955d735f64467b01f04abfc70da39e4ba4be3c" }
+#erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "79955d735f64467b01f04abfc70da39e4ba4be3c" }
+#erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
+#erc20_processor = { path = "../../payments/erc20_payment_lib" }
+erc20_payment_lib = { version = "0.4.7" }
+erc20_processor = { version = "0.4.7" }
+gftp = { version = "0.4.1", path = "core/gftp" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 openssl = "0.10"
@@ -261,6 +265,8 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
+ya-client = "0.9"
+ya-client-model = "0.7"
 
 [patch.crates-io]
 ## SERVICES
@@ -287,10 +293,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e3113709178fa31fc144e79a835c06afcc6f8a34" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1" }
-#ya-client-model = { path = "../ya-client/model" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e3113709178fa31fc144e79a835c06afcc6f8a34" }
+#ya-client-model = "0.7"
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 
 ## RELAY and networking stack

@@ -7,6 +7,7 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
+    AMOY_CURRENCY_LONG, AMOY_CURRENCY_SHORT, AMOY_NETWORK, AMOY_PLATFORM, AMOY_TOKEN,
     GOERLI_CURRENCY_LONG, GOERLI_CURRENCY_SHORT, GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN,
     HOLESKY_CURRENCY_LONG, HOLESKY_CURRENCY_SHORT, HOLESKY_NETWORK, HOLESKY_PLATFORM,
     HOLESKY_TOKEN, MAINNET_CURRENCY_LONG, MAINNET_CURRENCY_SHORT, MAINNET_NETWORK,
@@ -14,7 +15,8 @@ use crate::{
     MUMBAI_PLATFORM, MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
     POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
     RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
-    RINKEBY_TOKEN,
+    RINKEBY_TOKEN, SEPOLIA_CURRENCY_LONG, SEPOLIA_CURRENCY_SHORT, SEPOLIA_NETWORK,
+    SEPOLIA_PLATFORM, SEPOLIA_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -37,6 +39,10 @@ lazy_static::lazy_static! {
                 HOLESKY_TOKEN.to_string() => HOLESKY_PLATFORM.to_string()
             }
         },
+        SEPOLIA_NETWORK.to_string() => Network {
+            default_token: SEPOLIA_TOKEN.to_string(),
+            tokens: hashmap! {SEPOLIA_TOKEN.to_string() => SEPOLIA_PLATFORM.to_string()}
+        },
         MAINNET_NETWORK.to_string() => Network {
             default_token: MAINNET_TOKEN.to_string(),
             tokens: hashmap! {
@@ -47,6 +53,12 @@ lazy_static::lazy_static! {
             default_token: MUMBAI_TOKEN.to_string(),
             tokens: hashmap! {
                 MUMBAI_TOKEN.to_string() => MUMBAI_PLATFORM.to_string()
+            }
+        },
+        AMOY_NETWORK.to_string() => Network {
+            default_token: AMOY_TOKEN.to_string(),
+            tokens: hashmap! {
+                AMOY_TOKEN.to_string() => AMOY_PLATFORM.to_string()
             }
         },
         POLYGON_MAINNET_NETWORK.to_string() => Network {
@@ -61,6 +73,7 @@ lazy_static::lazy_static! {
     pub static ref HOLESKY_DB_NETWORK: DbNetwork = DbNetwork::from_str(HOLESKY_NETWORK).unwrap();
     pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
     pub static ref MUMBAI_DB_NETWORK: DbNetwork = DbNetwork::from_str(MUMBAI_NETWORK).unwrap();
+    pub static ref AMOY_DB_NETWORK: DbNetwork = DbNetwork::from_str(AMOY_NETWORK).unwrap();
     pub static ref POLYGON_MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(POLYGON_MAINNET_NETWORK).unwrap();
 }
 
@@ -71,6 +84,7 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
         HOLESKY_PLATFORM => Ok((*HOLESKY_DB_NETWORK, HOLESKY_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
         MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
+        AMOY_PLATFORM => Ok((*AMOY_DB_NETWORK, AMOY_TOKEN.to_owned())),
         POLYGON_MAINNET_PLATFORM => Ok((
             *POLYGON_MAINNET_DB_NETWORK,
             POLYGON_MAINNET_TOKEN.to_owned(),
@@ -96,6 +110,10 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
             HOLESKY_CURRENCY_SHORT.to_owned(),
             HOLESKY_CURRENCY_LONG.to_owned(),
         )),
+        SEPOLIA_PLATFORM => Ok((
+            SEPOLIA_CURRENCY_SHORT.to_owned(),
+            SEPOLIA_CURRENCY_LONG.to_string(),
+        )),
         MAINNET_PLATFORM => Ok((
             MAINNET_CURRENCY_SHORT.to_owned(),
             MAINNET_CURRENCY_LONG.to_owned(),
@@ -103,6 +121,10 @@ pub fn platform_to_currency(platform: String) -> Result<(String, String), Generi
         MUMBAI_PLATFORM => Ok((
             MUMBAI_CURRENCY_SHORT.to_owned(),
             MUMBAI_CURRENCY_LONG.to_owned(),
+        )),
+        AMOY_PLATFORM => Ok((
+            AMOY_CURRENCY_SHORT.to_owned(),
+            AMOY_CURRENCY_LONG.to_owned(),
         )),
         POLYGON_MAINNET_PLATFORM => Ok((
             POLYGON_MAINNET_CURRENCY_SHORT.to_owned(),

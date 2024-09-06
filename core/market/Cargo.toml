@@ -10,8 +10,8 @@ test-suite = []
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-client = "0.8"
-ya-core-model = { version = "^0.9", features = ["market", "net"] }
+ya-client.workspace = true
+ya-core-model = { version = "0.10", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
 ya-framework-basic = "0.1"
 ya-market-resolver = "0.2"
