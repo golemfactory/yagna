@@ -33,6 +33,15 @@ impl HttpToGsbProxy {
             bus_addr: bus_addr.to_string(),
         }
     }
+
+    pub fn endpoint(&self) -> bus::Endpoint {
+        match &self.binding {
+            BindingMode::Local => bus::service(&self.bus_addr),
+            BindingMode::Net(binding) => ya_net::from(binding.from)
+                .to(binding.to)
+                .service(&self.bus_addr),
+        }
+    }
 }
 
 pub struct HttpToGsbProxyResponse<T> {
@@ -74,44 +83,52 @@ impl HttpToGsbProxy {
         };
 
         let msg = GsbHttpCallMessage {
-            method,
-            path,
+            method: method.clone(),
+            path: path.clone(),
             body,
             headers: Headers::default().filter(&headers),
         };
 
-        let response = match &self.binding {
-            BindingMode::Local => bus::service(&self.bus_addr).call(msg).await,
-            BindingMode::Net(binding) => {
-                ya_net::from(binding.from)
-                    .to(binding.to)
-                    .service(&self.bus_addr)
-                    .call(msg)
-                    .await
-            }
-        };
+        let endpoint = self.endpoint();
 
-        let result = response.unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
+        log::info!("Proxy http {method} `{path}` call to [{}]", endpoint.addr());
+        let result = endpoint
+            .call(msg)
+            .await
+            .unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
 
         match result {
-            Ok(r) => HttpToGsbProxyResponse {
-                body: actix_web::web::Bytes::from(r.body.msg_bytes)
-                    .try_into_bytes()
-                    .map_err(|_| {
-                        Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
-                    }),
-                status_code: r.header.status_code,
-                response_headers: r.header.response_headers,
-            },
-            Err(err) => HttpToGsbProxyResponse {
-                body: actix_web::web::Bytes::from(format!("Error: {}", err))
-                    .try_into_bytes()
-                    .map_err(|_| {
-                        Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
-                    }),
-                status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                response_headers: HashMap::new(),
-            },
+            Ok(r) => {
+                log::debug!(
+                    "Http proxy response for {method} `{path}` call to [{}]: status: {}",
+                    endpoint.addr(),
+                    r.header.status_code
+                );
+                HttpToGsbProxyResponse {
+                    body: actix_web::web::Bytes::from(r.body.msg_bytes)
+                        .try_into_bytes()
+                        .map_err(|_| {
+                            Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
+                        }),
+                    status_code: r.header.status_code,
+                    response_headers: r.header.response_headers,
+                }
+            }
+            Err(err) => {
+                log::warn!(
+                    "Http proxy error calling {method} `{path}` at [{}]: error: {err}",
+                    endpoint.addr()
+                );
+                HttpToGsbProxyResponse {
+                    body: actix_web::web::Bytes::from(format!("Error: {}", err))
+                        .try_into_bytes()
+                        .map_err(|_| {
+                            Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
+                        }),
+                    status_code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                    response_headers: HashMap::new(),
+                }
+            }
         }
     }
 
