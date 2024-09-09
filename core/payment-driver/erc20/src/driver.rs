@@ -11,6 +11,7 @@ use erc20_payment_lib::model::{DepositId, TokenTransferDbObj, TxDbObj};
 use erc20_payment_lib::runtime::{
     PaymentRuntime, TransferArgs, TransferType, ValidateDepositResult, VerifyTransactionResult,
 };
+use erc20_payment_lib::setup::FaucetSetup;
 use erc20_payment_lib::signer::SignerAccount;
 use erc20_payment_lib::utils::{DecimalConvExt, U256ConvExt};
 use erc20_payment_lib::{DriverEvent, DriverEventContent};
