@@ -1,5 +1,6 @@
 use actix::{Actor, Addr};
 use futures::future::LocalBoxFuture;
+use sha3::Sha3_512;
 use std::io::ErrorKind;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -173,7 +174,7 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
         transfer(&addr, "http://127.0.0.1:8001/rnd", "container:/input/rnd-1"),
     )
     .await??;
-    verify_hash(&hash, work_dir.join("vol-1"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-1"), "rnd-1");
     log::warn!("Checksum verified");
 
     Ok(())

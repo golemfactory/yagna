@@ -80,6 +80,19 @@ where
                     )))
                 }
             },
+            "blake2b" => Box::<blake2::Blake2b512>::default(),
+            "blake2s" => Box::<blake2::Blake2b512>::default(),
+            "blake2" => match hash.len() * 8 {
+                256 => Box::<blake2::Blake2s256>::default(),
+                512 => Box::<blake2::Blake2b512>::default(),
+                len => {
+                    return Err(Error::UnsupportedDigestError(format!(
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
+                    )))
+                }
+            },
+            "blake3" => Box::<blake3::Hasher>::default(),
             _ => {
                 return Err(Error::UnsupportedDigestError(format!(
                     "Unsupported digest: {alg}"

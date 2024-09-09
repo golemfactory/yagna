@@ -21,6 +21,8 @@ actix-rt = "2.7"
 anyhow = "1.0"
 # async-compression 0.3.8+ deprecates the "stream" module
 async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
+blake2 = "0.10"
+blake3 = { version = "1.5", features = ["traits-preview"] }
 bytes = "1.0"
 futures = "0.3.4"
 globset = "0.4.5"

@@ -1,4 +1,5 @@
 use actix::{Actor, Addr};
+use sha3::Sha3_512;
 use std::env;
 use test_context::test_context;
 
@@ -113,7 +114,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
     println!();
     log::warn!("[>>] Transfer HTTP -> container");
     transfer(&addr, "http://127.0.0.1:8001/rnd", "container:/input/rnd-1").await?;
-    verify_hash(&hash, work_dir.join("vol-1"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-1"), "rnd-1");
     log::warn!("Checksum verified");
 
     println!();
@@ -124,7 +125,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         "http://127.0.0.1:8002/rnd-2",
     )
     .await?;
-    verify_hash(&hash, temp_dir, "rnd-2");
+    verify_hash::<Sha3_512>(&hash, temp_dir, "rnd-2");
     log::warn!("Checksum verified");
 
     println!();
@@ -135,19 +136,19 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         "http://127.0.0.1:8002/rnd-3",
     )
     .await?;
-    verify_hash(&hash, temp_dir, "rnd-3");
+    verify_hash::<Sha3_512>(&hash, temp_dir, "rnd-3");
     log::warn!("Checksum verified");
 
     println!();
     log::warn!("[>>] Transfer container -> container");
     transfer(&addr, "container:/input/rnd-1", "container:/input/rnd-4").await?;
-    verify_hash(&hash, work_dir.join("vol-1"), "rnd-4");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-1"), "rnd-4");
     log::warn!("Checksum verified");
 
     println!();
     log::warn!("[>>] Transfer container -> container (different volume)");
     transfer(&addr, "container:/input/rnd-1", "container:/output/rnd-5").await?;
-    verify_hash(&hash, work_dir.join("vol-2"), "rnd-5");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-2"), "rnd-5");
     log::warn!("Checksum verified");
 
     Ok(())
@@ -257,8 +258,8 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     )
     .await?;
     log::warn!("Extraction complete");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-1");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-4");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
     log::warn!("Removing extracted files");
@@ -279,8 +280,8 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     )
     .await?;
     log::warn!("Extraction complete");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-1");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-4");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
     log::warn!("Removing extracted files");
@@ -296,8 +297,8 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     // args.fileset = Some(FileSet::Pattern(SetEntry::Single("**/rnd-*".into())));
     transfer_with_args(&addr, "container:/input", "container:/extract", args).await?;
     log::warn!("Transfer complete");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-1");
-    verify_hash(&hash, work_dir.join("vol-3"), "rnd-4");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
     transfer(

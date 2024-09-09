@@ -124,6 +124,15 @@ async fn test_deploy_checksum(ctx: &mut DroppableTestContext) -> anyhow::Result<
         ("sha2-512", generate::<sha2::Sha512>(temp_dir, "sha2-512")),
         ("sha2-224", generate::<sha2::Sha224>(temp_dir, "sha2-224")),
         ("sha2-384", generate::<sha2::Sha384>(temp_dir, "sha2-384")),
+        (
+            "blake2-512",
+            generate::<blake2::Blake2b512>(temp_dir, "blake2-512"),
+        ),
+        (
+            "blake2-256",
+            generate::<blake2::Blake2s256>(temp_dir, "blake2-256"),
+        ),
+        ("blake3", generate::<blake3::Hasher>(temp_dir, "blake3")),
     ];
 
     log::debug!("Starting HTTP servers");
@@ -151,7 +160,9 @@ async fn test_deploy_checksum(ctx: &mut DroppableTestContext) -> anyhow::Result<
             )),
         };
         let result = addr.send(deploy).await;
-        result.unwrap().unwrap();
+        let path = result.unwrap().unwrap().unwrap();
+
+        assert!(path.exists());
     }
 
     Ok(())

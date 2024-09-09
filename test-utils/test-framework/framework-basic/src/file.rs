@@ -1,18 +1,15 @@
+use digest::{Digest, Output};
 use rand::Rng;
-use sha2::digest::Output;
-use sha2::Digest;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
-pub type HashOutput<H> = Output<H>;
 
 pub fn generate_file_with_hasher<H: Digest>(
     path: &Path,
     name: &str,
     chunk_size: usize,
     chunk_count: usize,
-) -> HashOutput<H> {
+) -> Output<H> {
     let path = path.join(name);
 
     log::debug!(
@@ -52,7 +49,7 @@ pub fn generate_file_with_hash(
     name: &str,
     chunk_size: usize,
     chunk_count: usize,
-) -> HashOutput<sha3::Sha3_512> {
+) -> Output<sha3::Sha3_512> {
     generate_file_with_hasher::<sha3::Sha3_512>(path, name, chunk_size, chunk_count)
 }
 
