@@ -24,6 +24,23 @@ pub enum BatchPaymentObligation {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BatchPaymentObligationAllocation {
+    Invoice {
+        id: String,
+        amount: BigDecimal,
+        agreement_id: String,
+        allocation_id: String,
+    },
+    DebitNote {
+        debit_note_id: Option<String>,
+        amount: BigDecimal,
+        agreement_id: String,
+        activity_id: String,
+        allocation_id: String,
+    },
+}
+
 pub struct BatchItem {
     pub payee_addr: String,
     pub payments: Vec<BatchPayment>,
