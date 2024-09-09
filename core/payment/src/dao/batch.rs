@@ -1,9 +1,9 @@
-use std::collections::{hash_map, HashMap};
-
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
+use std::collections::{hash_map, HashMap};
+use std::iter::zip;
 
 use uuid::Uuid;
 
@@ -277,6 +277,60 @@ pub struct ResolveInvoiceArgs<'a> {
     pub since: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct AllocationPayeeKey {
+    pub payee_addr: NodeId,
+    pub allocation_id: String,
+}
+
+fn insert_or_update_allocation_entry(
+    payment_allocations: &mut HashMap<AllocationPayeeKey, BatchPaymentAllocation>,
+    allocation_payer_key: AllocationPayeeKey,
+    obligation: BatchPaymentObligationAllocation,
+) -> DbResult<()> {
+    let payer_all = payment_allocations
+        .entry(allocation_payer_key.clone())
+        .or_default();
+    let all = payer_all
+        .peer_obligation
+        .entry(allocation_payer_key.payee_addr)
+        .or_default();
+    match obligation {
+        BatchPaymentObligationAllocation::Invoice {
+            id,
+            amount,
+            agreement_id,
+            allocation_id,
+        } => {
+            payer_all.amount += amount.clone();
+            all.push(BatchPaymentObligationAllocation::Invoice {
+                id,
+                amount,
+                agreement_id,
+                allocation_id,
+            });
+        }
+        BatchPaymentObligationAllocation::DebitNote {
+            debit_note_id,
+            amount,
+            agreement_id,
+            activity_id,
+            allocation_id,
+        } => {
+            payer_all.amount += amount.clone();
+            all.push(BatchPaymentObligationAllocation::DebitNote {
+                debit_note_id,
+                amount,
+                agreement_id,
+                activity_id,
+                allocation_id,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let conn = args.conn;
     let owner_id = args.owner_id;
@@ -306,7 +360,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 
     use crate::schema::pay_allocation::dsl as pa_dsl;
     use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
-    let expenditures: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
+    let expenditures_orig: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
         .select(pae_dsl::pay_allocation_expenditure::all_columns())
         .inner_join(
             crate::schema::pay_allocation::dsl::pay_allocation.on(pae_dsl::allocation_id
@@ -316,14 +370,17 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 .and(pa_dsl::updated_ts.gt(args.since.naive_utc()))
                 .and(pa_dsl::owner_id.eq(args.owner_id))),
         )
-        .filter(pae_dsl::accepted_amount.ne(pa_dsl::spent_amount))
+        .filter(pae_dsl::accepted_amount.ne(pae_dsl::scheduled_amount))
         .load(conn)?;
+    let mut expenditures = expenditures_orig.clone();
 
+    log::info!("Found total of {} expenditures", expenditures.len());
+    let mut payments_allocations: HashMap<AllocationPayeeKey, BatchPaymentAllocation> =
+        HashMap::new();
     let mut payments = payments;
     for payment in &mut payments {
         let batch_payment = payment.1;
         for peer_obligation in &mut batch_payment.peer_obligation {
-            let mut peer_obligation_allocation: Vec<BatchPaymentObligationAllocation> = Vec::new();
             for obligation in peer_obligation.1 {
                 let matching_expenditures = match &obligation {
                     BatchPaymentObligation::Invoice {
@@ -331,29 +388,32 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                         amount,
                         agreement_id,
                     } => expenditures
-                        .iter()
+                        .iter_mut()
                         .filter(|e| {
                             e.agreement_id == agreement_id.clone()
                                 && e.activity_id.is_none()
                                 && e.accepted_amount.0 > e.scheduled_amount.0
                         })
-                        .cloned()
-                        .collect::<Vec<AllocationExpenditureObj>>(),
+                        .collect::<Vec<&mut AllocationExpenditureObj>>(),
                     BatchPaymentObligation::DebitNote {
                         debit_note_id,
                         amount,
                         agreement_id,
                         activity_id,
                     } => expenditures
-                        .iter()
+                        .iter_mut()
                         .filter(|e| {
                             e.agreement_id == agreement_id.clone()
                                 && e.activity_id == Some(activity_id.clone())
                                 && e.accepted_amount.0 > e.scheduled_amount.0
                         })
-                        .cloned()
-                        .collect::<Vec<AllocationExpenditureObj>>(),
+                        .collect::<Vec<&mut AllocationExpenditureObj>>(),
                 };
+                log::info!(
+                    "Found {} matching expenditures for obligation {:?}",
+                    matching_expenditures.len(),
+                    obligation
+                );
                 let amount_to_be_covered = match &obligation {
                     BatchPaymentObligation::Invoice {
                         id,
@@ -369,27 +429,35 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 };
                 let mut amount_covered = BigDecimal::from(0u32);
                 for expenditure in matching_expenditures {
-                    let max_amount_to_get =
-                        expenditure.accepted_amount.0 - expenditure.scheduled_amount.0;
+                    let max_amount_to_get = expenditure.accepted_amount.0.clone()
+                        - expenditure.scheduled_amount.0.clone();
 
                     let cover_amount = std::cmp::min(
                         amount_to_be_covered.clone() - amount_covered.clone(),
                         max_amount_to_get,
                     );
+                    expenditure.scheduled_amount =
+                        (expenditure.scheduled_amount.0.clone() + cover_amount.clone()).into();
+
                     match &obligation {
                         BatchPaymentObligation::Invoice {
                             id,
                             amount,
                             agreement_id,
                         } => {
-                            peer_obligation_allocation.push(
+                            insert_or_update_allocation_entry(
+                                &mut payments_allocations,
+                                AllocationPayeeKey {
+                                    payee_addr: *peer_obligation.0,
+                                    allocation_id: expenditure.allocation_id.clone(),
+                                },
                                 BatchPaymentObligationAllocation::Invoice {
                                     id: id.clone(),
                                     amount: cover_amount.clone(),
                                     agreement_id: agreement_id.clone(),
                                     allocation_id: expenditure.allocation_id.clone(),
                                 },
-                            );
+                            )?;
                         }
                         BatchPaymentObligation::DebitNote {
                             debit_note_id,
@@ -397,7 +465,12 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                             agreement_id,
                             activity_id,
                         } => {
-                            peer_obligation_allocation.push(
+                            insert_or_update_allocation_entry(
+                                &mut payments_allocations,
+                                AllocationPayeeKey {
+                                    payee_addr: *peer_obligation.0,
+                                    allocation_id: expenditure.allocation_id.clone(),
+                                },
                                 BatchPaymentObligationAllocation::DebitNote {
                                     debit_note_id: debit_note_id.clone(),
                                     amount: cover_amount.clone(),
@@ -405,7 +478,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                                     activity_id: activity_id.clone(),
                                     allocation_id: expenditure.allocation_id.clone(),
                                 },
-                            );
+                            )?;
                         }
                     }
                     match &obligation {
@@ -453,6 +526,22 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
         }
     }
 
+    // upload the updated expenditures to database (if changed)
+    for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
+        if expenditure_new.scheduled_amount != expenditure_old.scheduled_amount {
+            log::info!("Updating expenditure {:?}", expenditure_new);
+            diesel::update(pae_dsl::pay_allocation_expenditure)
+                .filter(pae_dsl::owner_id.eq(&expenditure_new.owner_id))
+                .filter(pae_dsl::allocation_id.eq(&expenditure_new.allocation_id))
+                .filter(pae_dsl::agreement_id.eq(&expenditure_new.agreement_id))
+                .filter(pae_dsl::activity_id.eq(&expenditure_new.activity_id))
+                .set(pae_dsl::scheduled_amount.eq(&expenditure_new.scheduled_amount))
+                .execute(conn)?;
+        } else {
+            log::info!("Expenditure {:?} not changed", expenditure_new);
+        }
+    }
+
     let order_id = Uuid::new_v4().to_string();
     {
         use crate::schema::pay_batch_order::dsl as odsl;
@@ -469,23 +558,27 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             .execute(conn)?;
     }
     {
-        for (payee_addr, payment) in payments {
+        for (key, payment) in payments_allocations {
+            let payee_addr = key.payee_addr;
+            let allocation_id = key.allocation_id;
             diesel::insert_into(oidsl::pay_batch_order_item)
                 .values((
                     oidsl::order_id.eq(&order_id),
                     oidsl::owner_id.eq(owner_id),
                     oidsl::payee_addr.eq(&payee_addr),
                     oidsl::amount.eq(BigDecimalField(payment.amount.clone())),
+                    oidsl::allocation_id.eq(&allocation_id),
                 ))
                 .execute(conn)?;
             for (payee_id, obligations) in payment.peer_obligation {
                 for obligation in &obligations {
                     log::debug!("obligation: {:?}", obligation);
                     match obligation {
-                        BatchPaymentObligation::Invoice {
+                        BatchPaymentObligationAllocation::Invoice {
                             id,
                             amount,
                             agreement_id,
+                            allocation_id,
                         } => {
                             use crate::schema::pay_batch_order_item_document::dsl;
                             diesel::insert_into(dsl::pay_batch_order_item_document)
@@ -501,11 +594,12 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                                 ))
                                 .execute(conn)?;
                         }
-                        BatchPaymentObligation::DebitNote {
+                        BatchPaymentObligationAllocation::DebitNote {
                             amount,
                             debit_note_id,
                             agreement_id,
                             activity_id,
+                            allocation_id,
                         } => {
                             use crate::schema::pay_batch_order_item_document::dsl;
                             diesel::insert_into(dsl::pay_batch_order_item_document)

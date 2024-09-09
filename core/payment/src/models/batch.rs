@@ -46,7 +46,13 @@ pub struct BatchItem {
     pub payments: Vec<BatchPayment>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BatchPaymentAllocation {
+    pub amount: BigDecimal,
+    pub peer_obligation: HashMap<NodeId, Vec<BatchPaymentObligationAllocation>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BatchPayment {
     pub amount: BigDecimal,
     pub peer_obligation: HashMap<NodeId, Vec<BatchPaymentObligation>>,
