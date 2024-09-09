@@ -326,74 +326,131 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             let mut peer_obligation_allocation: Vec<BatchPaymentObligationAllocation> = Vec::new();
             for obligation in peer_obligation.1 {
                 let matching_expenditures = match &obligation {
-                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
-                        expenditures.iter().filter(|e| {
+                    BatchPaymentObligation::Invoice {
+                        id,
+                        amount,
+                        agreement_id,
+                    } => expenditures
+                        .iter()
+                        .filter(|e| {
                             e.agreement_id == agreement_id.clone()
                                 && e.activity_id.is_none()
                                 && e.accepted_amount.0 > e.scheduled_amount.0
-                        }).cloned().collect::<Vec<AllocationExpenditureObj>>()
-                    }
-                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
-                        expenditures.iter().filter(|e| {
+                        })
+                        .cloned()
+                        .collect::<Vec<AllocationExpenditureObj>>(),
+                    BatchPaymentObligation::DebitNote {
+                        debit_note_id,
+                        amount,
+                        agreement_id,
+                        activity_id,
+                    } => expenditures
+                        .iter()
+                        .filter(|e| {
                             e.agreement_id == agreement_id.clone()
                                 && e.activity_id == Some(activity_id.clone())
                                 && e.accepted_amount.0 > e.scheduled_amount.0
-                        }).cloned().collect::<Vec<AllocationExpenditureObj>>()
-                    }
+                        })
+                        .cloned()
+                        .collect::<Vec<AllocationExpenditureObj>>(),
                 };
                 let amount_to_be_covered = match &obligation {
-                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
-                        amount
-                    }
-                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
-                        amount
-                    }
+                    BatchPaymentObligation::Invoice {
+                        id,
+                        amount,
+                        agreement_id,
+                    } => amount,
+                    BatchPaymentObligation::DebitNote {
+                        debit_note_id,
+                        amount,
+                        agreement_id,
+                        activity_id,
+                    } => amount,
                 };
                 let mut amount_covered = BigDecimal::from(0u32);
                 for expenditure in matching_expenditures {
-                    let max_amount_to_get = expenditure.accepted_amount.0 - expenditure.scheduled_amount.0;
+                    let max_amount_to_get =
+                        expenditure.accepted_amount.0 - expenditure.scheduled_amount.0;
 
-                    let cover_amount = std::cmp::min(amount_to_be_covered.clone() - amount_covered.clone(), max_amount_to_get);
+                    let cover_amount = std::cmp::min(
+                        amount_to_be_covered.clone() - amount_covered.clone(),
+                        max_amount_to_get,
+                    );
                     match &obligation {
-                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
-                            peer_obligation_allocation.push(BatchPaymentObligationAllocation::Invoice{
-                                id: id.clone(),
-                                amount: cover_amount.clone(),
-                                agreement_id: agreement_id.clone(),
-                                allocation_id: expenditure.allocation_id.clone(),
-                            });
+                        BatchPaymentObligation::Invoice {
+                            id,
+                            amount,
+                            agreement_id,
+                        } => {
+                            peer_obligation_allocation.push(
+                                BatchPaymentObligationAllocation::Invoice {
+                                    id: id.clone(),
+                                    amount: cover_amount.clone(),
+                                    agreement_id: agreement_id.clone(),
+                                    allocation_id: expenditure.allocation_id.clone(),
+                                },
+                            );
                         }
-                        BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
-                            peer_obligation_allocation.push(BatchPaymentObligationAllocation::DebitNote{
-                                debit_note_id: debit_note_id.clone(),
-                                amount: cover_amount.clone(),
-                                agreement_id: agreement_id.clone(),
-                                activity_id: activity_id.clone(),
-                                allocation_id: expenditure.allocation_id.clone(),
-                            });
+                        BatchPaymentObligation::DebitNote {
+                            debit_note_id,
+                            amount,
+                            agreement_id,
+                            activity_id,
+                        } => {
+                            peer_obligation_allocation.push(
+                                BatchPaymentObligationAllocation::DebitNote {
+                                    debit_note_id: debit_note_id.clone(),
+                                    amount: cover_amount.clone(),
+                                    agreement_id: agreement_id.clone(),
+                                    activity_id: activity_id.clone(),
+                                    allocation_id: expenditure.allocation_id.clone(),
+                                },
+                            );
                         }
                     }
                     match &obligation {
-                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                        BatchPaymentObligation::Invoice {
+                            id,
+                            amount,
+                            agreement_id,
+                        } => {
                             log::info!("Covered invoice obligation {} with {} of {} from allocation {} - agreement id: {}", id, cover_amount, amount, expenditure.allocation_id, agreement_id);
                         }
-                        BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                        BatchPaymentObligation::DebitNote {
+                            debit_note_id,
+                            amount,
+                            agreement_id,
+                            activity_id,
+                        } => {
                             log::info!("Covered debit note obligation {:?} with {} of {} from allocation {} - agreement id: {} - activity id: {}", debit_note_id, cover_amount, amount, expenditure.allocation_id, agreement_id, activity_id);
                         }
                     }
                     amount_covered += cover_amount;
                 }
                 match &obligation {
-                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
-                        log::info!("Total covered invoice obligation {} with {} of {} from allocations", id, amount_covered, amount);
+                    BatchPaymentObligation::Invoice {
+                        id,
+                        amount,
+                        agreement_id,
+                    } => {
+                        log::info!(
+                            "Total covered invoice obligation {} with {} of {} from allocations",
+                            id,
+                            amount_covered,
+                            amount
+                        );
                     }
-                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                    BatchPaymentObligation::DebitNote {
+                        debit_note_id,
+                        amount,
+                        agreement_id,
+                        activity_id,
+                    } => {
                         log::info!("Total covered debit note obligation {:?} with {} of {} from allocations", debit_note_id, amount_covered, amount);
                     }
                 }
             }
         }
-
     }
 
     let order_id = Uuid::new_v4().to_string();

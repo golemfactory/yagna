@@ -297,10 +297,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "3264a3c40163369c97cf94586a42e97eda1ebb00" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
-golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "952fdbd47adc57e46b7370935111e046271ef415" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "3264a3c40163369c97cf94586a42e97eda1ebb00" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "2723e07d205712d8e09e9d396c9745a059b60913" }
 
 ## RELAY and networking stack
 
