@@ -394,7 +394,7 @@ async fn accept_debit_note(
         }
         Err(e) => return response::server_error(&e),
     };
-    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;
+    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
 
     log::trace!(
         "Querying DB for Allocation [{}] for Debit Note [{}]",
