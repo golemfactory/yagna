@@ -1684,12 +1684,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.20.9"
+version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83b2eb4d90d12bdda5ed17de686c2acb4c57914f8f921b8da7e112b5a36f3fe1"
+checksum = "6f63b86c8a8826a49b8c21f08a2d07338eec8d900540f8630dc76284be802989"
 dependencies = [
- "darling_core 0.20.9",
- "darling_macro 0.20.9",
+ "darling_core 0.20.10",
+ "darling_macro 0.20.10",
 ]
 
 [[package]]
@@ -1708,9 +1708,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.20.9"
+version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "622687fe0bac72a04e5599029151f5796111b90f1baaa9b544d807a5e31cd120"
+checksum = "95133861a8032aaea082871032f5815eb9e98cef03fa916ab4500513994df9e5"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1733,11 +1733,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.9"
+version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "733cabb43482b1a1b53eee8583c2b9e8684d592215ea83efd305dd31bc2f0178"
+checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
- "darling_core 0.20.9",
+ "darling_core 0.20.10",
  "quote",
  "syn 2.0.60",
 ]
@@ -2175,8 +2175,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "erc20_payment_lib"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3da9f9d42de38a0db4d8be0f734e0421b475363a55e4ec56606e274df6263872"
 dependencies = [
  "actix",
  "actix-files",
@@ -2217,8 +2218,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_common"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0774c96878af1018f6b3ce756cc0334ff6f136dcf15c774f0879ae015771d277"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2258,8 +2260,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_payment_lib_extra"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2084a5f3075a8b90d7edc22f7a4a6136670a860693ad81f76ebaf2a9e94a34fc"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2294,8 +2297,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_processor"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b3d5bec86b99d8254ef9dce04710e33f18267a39da81ee7cf00ee0420f8e0d2"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2342,8 +2346,9 @@ dependencies = [
 
 [[package]]
 name = "erc20_rpc_pool"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/erc20_payment_lib?rev=594d8a93b820b177ec267ccec5de61d8a9a45203#594d8a93b820b177ec267ccec5de61d8a9a45203"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72cf619ab7b405fd49b8ee383395be68ffe944b13f4001c03abb34eabe0f2f73"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -2967,7 +2972,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -3038,7 +3043,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "git+https://github.com/golemfactory/golem-certificate.git?rev=f2d7514c18fc066e9cfb796090b90f5b27cfe1c6#f2d7514c18fc066e9cfb796090b90f5b27cfe1c6"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=2723e07d205712d8e09e9d396c9745a059b60913#2723e07d205712d8e09e9d396c9745a059b60913"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6442,9 +6447,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
+checksum = "69cecfa94848272156ea67b2b1a53f20fc7bc638c4a46d2f8abde08f05f4b857"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6460,11 +6465,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
+checksum = "a8fee4991ef4f274617a51ad4af30519438dacb2f56ac773b08a1922ff743350"
 dependencies = [
- "darling 0.20.9",
+ "darling 0.20.10",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
@@ -8756,8 +8761,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.8.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1#fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1"
+version = "0.9.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8780,8 +8785,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1#fbb15b49f8b9635cf3c3e2351ba6a9879f3b62d1"
+version = "0.7.0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -8794,7 +8799,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
@@ -8812,7 +8817,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "bigdecimal 0.2.2",
  "bitflags 1.3.2",
@@ -9648,7 +9653,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489#e199ee1cfdb22837f9d95f4202378e182d3cb489"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9663,6 +9668,7 @@ dependencies = [
  "metrics 0.21.1",
  "num_cpus",
  "parking_lot 0.12.3",
+ "rand 0.8.5",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "thiserror",
@@ -9678,7 +9684,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489#e199ee1cfdb22837f9d95f4202378e182d3cb489"
 dependencies = [
  "anyhow",
  "chrono",
@@ -9708,7 +9714,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489#e199ee1cfdb22837f9d95f4202378e182d3cb489"
 dependencies = [
  "anyhow",
  "bytes 1.6.0",
@@ -9722,7 +9728,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489)",
 ]
 
 [[package]]
@@ -9748,7 +9754,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489#e199ee1cfdb22837f9d95f4202378e182d3cb489"
 dependencies = [
  "derive_more",
  "futures 0.3.30",
@@ -9762,7 +9768,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489)",
 ]
 
 [[package]]
@@ -9778,7 +9784,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0588dd1af311ae19c621b04cc2a4cfd9c0483252#0588dd1af311ae19c621b04cc2a4cfd9c0483252"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e199ee1cfdb22837f9d95f4202378e182d3cb489#e199ee1cfdb22837f9d95f4202378e182d3cb489"
 dependencies = [
  "bytes 1.6.0",
  "derive_more",
@@ -10054,6 +10060,7 @@ dependencies = [
  "tokio-util",
  "url",
  "walkdir",
+ "ya-client",
  "ya-client-model",
  "ya-core-model",
  "ya-exe-unit",

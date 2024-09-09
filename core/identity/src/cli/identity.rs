@@ -143,6 +143,10 @@ pub enum IdentityCommand {
         /// password for keystore
         #[structopt(long = "no-password")]
         no_password: bool,
+
+        /// Set the newly created identity as the default, requires deamon restart
+        #[structopt(long = "set-default")]
+        set_default: bool,
     },
     /// Update given identity
     Update {
@@ -151,6 +155,8 @@ pub enum IdentityCommand {
         alias_or_id: NodeOrAlias,
         #[structopt(long)]
         alias: Option<String>,
+
+        /// Set the identity as the default, requires deamon restart
         #[structopt(long = "set-default")]
         set_default: bool,
     },
@@ -316,6 +322,7 @@ impl IdentityCommand {
                 from_private_key,
                 password,
                 no_password,
+                set_default,
             } => {
                 if from_keystore.is_some() && from_private_key.is_some() {
                     anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
@@ -366,6 +373,12 @@ impl IdentityCommand {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
                     })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+
+                let id = gsb
+                    .local()
+                    .send(identity::Update::with_id(id.node_id).with_default(*set_default))
                     .await
                     .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)

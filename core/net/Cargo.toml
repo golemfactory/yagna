@@ -15,8 +15,8 @@ packet-trace-enable = [
 ]
 
 [dependencies]
-ya-client-model = "0.6"
-ya-core-model = { version = "^0.9", features = ["net", "identity"] }
+ya-client-model.workspace = true
+ya-core-model = { workspace = true, features = ["net", "identity"] }
 
 ya-relay-client = { workspace = true }
 #ya-relay-client = "0.6"
