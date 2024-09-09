@@ -10,8 +10,8 @@ framework-test = []
 [dependencies]
 ya-service-bus = { workspace = true }
 ya-counters = { path = "../counters" }
-ya-client-model = "0.6"
-ya-core-model = { version = "^0.9" }
+ya-client-model = { workspace = true }
+ya-core-model = { workspace = true, features = ["net"] }
 
 actix = "0.13"
 actix-http = "3"

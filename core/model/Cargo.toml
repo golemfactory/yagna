@@ -1,6 +1,6 @@
 [package]
 name = "ya-core-model"
-version = "0.9.1"
+version = "0.10.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -11,7 +11,18 @@ keywords = ["golem", "yagna"]
 
 [features]
 default = []
-full = ['activity', 'appkey', 'driver', 'identity', 'market', 'net', 'payment', 'gftp', 'sgx', 'version']
+full = [
+    'activity',
+    'appkey',
+    'driver',
+    'identity',
+    'market',
+    'net',
+    'payment',
+    'gftp',
+    'sgx',
+    'version',
+]
 activity = []
 appkey = []
 driver = ['bigdecimal', 'bitflags']
@@ -24,7 +35,7 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-ya-client-model = "0.6"
+ya-client-model.workspace = true
 ya-service-bus = { workspace = true }
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }

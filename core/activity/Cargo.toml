@@ -8,8 +8,8 @@ edition = "2018"
 framework-test = ['ya-gsb-http-proxy/framework-test']
 
 [dependencies]
-ya-core-model = { version = "0.9", features = ["activity", "market"] }
-ya-client-model = { version = "0.6", features = ["sgx"] }
+ya-core-model = { workspace = true, features = ["activity", "market"] }
+ya-client-model = { workspace = true, features = ["sgx"] }
 ya-net = "0.3"
 ya-persistence = "0.3"
 ya-service-api = "0.1"

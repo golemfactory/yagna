@@ -28,6 +28,7 @@ pub mod gftp;
 #[cfg(feature = "sgx")]
 pub mod sgx;
 
+pub mod bus;
 #[cfg(feature = "version")]
 pub mod version;
 

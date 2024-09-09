@@ -6,7 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = "0.6"
+ya-client-model.workspace = true
 ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
@@ -31,7 +31,7 @@ bytes = "1"
 tokio = { version = "1", features = ["macros"] }
 
 [dev-dependencies]
-ya-core-model = { version = "^0.9", features = ["gftp"] }
+ya-core-model = { workspace = true, features = ["gftp"] }
 
 actix-test = "0.1"
 awc = "3"

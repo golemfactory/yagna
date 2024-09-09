@@ -2,6 +2,7 @@ use chrono::{Duration, Utc};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{AgreementEventType, Reason};
+use ya_framework_mocks::net::MockNet;
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     proposal_util::exchange_draft_proposals, AgreementError, ApprovalStatus, MarketsNetwork, Owner,
@@ -13,7 +14,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_agreement_termination_reason() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

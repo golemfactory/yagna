@@ -6,11 +6,12 @@ edition = "2018"
 
 [features]
 default = []
+framework-test = []
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-client-model = { version = "0.6", features = ["with-diesel"] }
-ya-core-model = { version = "^0.9", features = [
+ya-client-model = { workspace = true, features = ["with-diesel"] }
+ya-core-model = { workspace = true, features = [
     "activity",
     "driver",
     "identity",
@@ -24,12 +25,14 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 ya-service-bus = { workspace = true }
+ya-std-utils = "0.1"
 
 actix-web = "4"
 anyhow = "1.0"
 base64 = "0.12"
 bigdecimal = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+derive_more = "0.99.18"
 diesel = { version = "1.4", features = [
     "sqlite",
     "r2d2",
@@ -63,15 +66,22 @@ uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
-ya-client = "0.8"
+ya-client = { workspace = true }
 ya-dummy-driver = "0.3"
 ya-erc20-driver = "0.4"
 ya-net = { version = "0.3", features = ["service"] }
+ya-identity = "0.3"
+ya-market = "0.4"
 ya-sb-router = { workspace = true }
+ya-framework-basic = { version = "0.1" }
+ya-framework-mocks = { version = "0.1" }
 
 actix-rt = "2.7"
 rand = "0.8"
 ethsign = "0.8"
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"] }
+test-context = "0.1.4"
+url = "2.5"
 
 [lints]
 workspace = true

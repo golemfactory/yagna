@@ -2,10 +2,11 @@ use anyhow::Result;
 use structopt::*;
 
 use ya_core_model::appkey as model;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::identity as idm;
 use ya_core_model::identity::IdentityInfo;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::RpcEndpoint;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
@@ -41,8 +42,8 @@ pub enum AppKeyCommand {
 }
 
 impl AppKeyCommand {
-    async fn get_identity(get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
-        bus::service(idm::BUS_ID)
+    async fn get_identity(gsb: GsbBindPoints, get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
+        gsb.local()
             .send(get_by)
             .await
             .map_err(anyhow::Error::msg)?
@@ -50,7 +51,10 @@ impl AppKeyCommand {
             .ok_or_else(|| anyhow::Error::msg("Identity not found"))
     }
 
-    pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        let gsb = ctx.gsb.service(model::BUS_SERVICE_NAME);
+        let ident_gsb = ctx.gsb.service(idm::BUS_SERVICE_NAME);
+
         match &self {
             AppKeyCommand::Create {
                 name,
@@ -63,12 +67,16 @@ impl AppKeyCommand {
                         if id.starts_with("0x") {
                             id.parse()?
                         } else {
-                            Self::get_identity(idm::Get::ByAlias(id.into()))
+                            Self::get_identity(ident_gsb.clone(), idm::Get::ByAlias(id.into()))
                                 .await?
                                 .node_id
                         }
                     }
-                    None => Self::get_identity(idm::Get::ByDefault).await?.node_id,
+                    None => {
+                        Self::get_identity(ident_gsb.clone(), idm::Get::ByDefault)
+                            .await?
+                            .node_id
+                    }
                 };
                 let create = model::Create {
                     name: name.clone(),
@@ -76,7 +84,7 @@ impl AppKeyCommand {
                     identity,
                     allow_origins: allow_origin.clone(),
                 };
-                let key = bus::service(model::BUS_ID).send(create).await??;
+                let key = gsb.local().send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
@@ -84,7 +92,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                bus::service(model::BUS_ID)
+                gsb.local()
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -92,7 +100,8 @@ impl AppKeyCommand {
                 Ok(CommandOutput::NoOutput)
             }
             AppKeyCommand::Show { name } => {
-                let appkey = bus::service(model::BUS_ID)
+                let appkey = gsb
+                    .local()
                     .send(model::GetByName { name: name.clone() })
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -105,7 +114,8 @@ impl AppKeyCommand {
                     page: *page,
                     per_page: *per_page,
                 };
-                let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
+                let result: (Vec<model::AppKey>, u32) = gsb
+                    .local()
                     .send(list)
                     .await
                     .map_err(anyhow::Error::msg)?
