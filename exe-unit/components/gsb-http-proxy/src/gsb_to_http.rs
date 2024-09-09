@@ -285,8 +285,9 @@ mod tests {
         let mut requests_counter = gsb_call.requests_counter();
         let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
+        let caller = "0x0000000000000000000000000000000000000000".to_string();
         let message = message();
-        let response = gsb_call.pass(message).await;
+        let response = gsb_call.pass(caller.clone(), message).await;
 
         let mut headers = vec![];
 
@@ -390,9 +391,10 @@ mod tests {
 
     async fn run_10_requests(mut gsb_call_proxy: GsbToHttpProxy) {
         let message = message();
+        let caller = "0x0000000000000000000000000000000000000000".to_string();
         for _ in 0..10 {
             let message = message.clone();
-            let response = gsb_call_proxy.pass(message).await;
+            let response = gsb_call_proxy.pass(caller.clone(), message).await;
             assert_eq!("response".as_bytes(), response.body.msg_bytes);
         }
     }
