@@ -1,11 +1,15 @@
 use crate::error::HttpProxyStatusError;
 use crate::response::{GsbHttpCallResponse, GsbHttpCallResponseStreamChunk};
+
+use derive_more::Display;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
 #[serde(rename_all = "camelCase")]
+#[display(fmt = "{method} `{path}`")]
 pub struct GsbHttpCallMessage {
     pub method: String,
     pub path: String,

@@ -4,34 +4,37 @@ version = "0.1.0"
 edition = "2021"
 
 
+[features]
+framework-test = []
+
 [dependencies]
 ya-service-bus = { workspace = true }
 ya-counters = { path = "../counters" }
 ya-client-model = "0.6"
 ya-core-model = { version = "^0.9" }
 
-thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-chrono = "0.4"
-http = "1.0"
-serde_json = "1.0"
-tokio = { version = "1.35", features = ["full"] }
-reqwest = { version = "0.11", features = ["json", "stream"] }
-log = { version = "0.4", features = [] }
-async-stream = "0.3"
-futures = { version = "0.3", features = [] }
-futures-core = "0.3"
-serde_derive = "1.0"
 actix = "0.13"
 actix-http = "3"
 actix-web = "4"
 actix-rt = "2.7"
 anyhow = "1.0"
-rand = "0.8.5"
-hex = "0.4.3"
-env_logger = "0.10.2"
+async-stream = "0.3"
 bytes = "1.6.0"
-derive_more = "0.99.17"
+chrono = "0.4"
+derive_more = { workspace = true }
+env_logger = "0.10.2"
+futures = { version = "0.3", features = [] }
+futures-core = "0.3"
+hex = "0.4.3"
+http = "1.0"
+log = { version = "0.4", features = [] }
+rand = { workspace = true }
+reqwest = { version = "0.11", features = ["json", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 mockito = "1.2"
