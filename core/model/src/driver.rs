@@ -5,7 +5,7 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
+use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 

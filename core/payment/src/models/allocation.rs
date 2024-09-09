@@ -116,7 +116,7 @@ impl From<ReadObj> for Allocation {
     }
 }
 
-#[derive(Queryable, Debug, Insertable, AsChangeset)]
+#[derive(Queryable, Debug, Clone, Insertable, AsChangeset)]
 #[table_name = "pay_allocation_expenditure"]
 pub struct AllocationExpenditureObj {
     pub owner_id: NodeId,
