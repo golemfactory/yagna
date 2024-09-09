@@ -83,8 +83,8 @@ impl HttpToGsbProxy {
         };
 
         let msg = GsbHttpCallMessage {
-            method,
-            path,
+            method: method.clone(),
+            path: path.clone(),
             body,
             headers: Headers::default().filter(&headers),
         };
@@ -93,14 +93,14 @@ impl HttpToGsbProxy {
 
         log::info!("Proxy http {msg} call to [{}]", endpoint.addr());
         let result = endpoint
-            .call(msg.clone())
+            .call(msg)
             .await
             .unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
 
         match result {
             Ok(r) => {
                 log::info!(
-                    "Http proxy response for {msg} call to [{}]: status: {}",
+                    "Http proxy: response for {method} `{path}` call to [{}]: status: {}",
                     endpoint.addr(),
                     r.header.status_code
                 );
@@ -116,7 +116,7 @@ impl HttpToGsbProxy {
             }
             Err(err) => {
                 log::warn!(
-                    "Http proxy error calling {msg} at [{}]: error: {err}",
+                    "Http proxy: error calling {method} `{path}` at [{}]: error: {err}",
                     endpoint.addr()
                 );
                 HttpToGsbProxyResponse {
