@@ -3043,7 +3043,7 @@ dependencies = [
 [[package]]
 name = "golem-certificate"
 version = "0.1.1"
-source = "git+https://github.com/golemfactory/golem-certificate.git?rev=2723e07d205712d8e09e9d396c9745a059b60913#2723e07d205712d8e09e9d396c9745a059b60913"
+source = "git+https://github.com/golemfactory/golem-certificate.git?rev=952fdbd47adc57e46b7370935111e046271ef415#952fdbd47adc57e46b7370935111e046271ef415"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8762,7 +8762,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.9.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c8675c4eb0d42119b1cfa2f5772ba91f877d81f9#c8675c4eb0d42119b1cfa2f5772ba91f877d81f9"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8786,7 +8786,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8#61bb3160b0e6dc17b22ef6b46f0bae4c6ebff3f8"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c8675c4eb0d42119b1cfa2f5772ba91f877d81f9#c8675c4eb0d42119b1cfa2f5772ba91f877d81f9"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
