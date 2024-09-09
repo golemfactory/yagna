@@ -63,17 +63,26 @@ where
                 512 => Box::<Sha3_512>::default(),
                 len => {
                     return Err(Error::UnsupportedDigestError(format!(
-                        "Unsupported digest {} of length {}: {}",
-                        alg,
-                        len,
-                        hex::encode(&hash),
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
+                    )))
+                }
+            },
+            "sha2" => match hash.len() * 8 {
+                224 => Box::<sha2::Sha224>::default(),
+                256 => Box::<sha2::Sha256>::default(),
+                384 => Box::<sha2::Sha384>::default(),
+                512 => Box::<sha2::Sha512>::default(),
+                len => {
+                    return Err(Error::UnsupportedDigestError(format!(
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
                     )))
                 }
             },
             _ => {
                 return Err(Error::UnsupportedDigestError(format!(
-                    "Unsupported digest: {}",
-                    alg
+                    "Unsupported digest: {alg}"
                 )))
             }
         };
