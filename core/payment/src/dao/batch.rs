@@ -14,6 +14,7 @@ use ya_persistence::executor::{
 use ya_persistence::types::BigDecimalField;
 
 use crate::error::{DbError, DbResult};
+use crate::models::allocation::AllocationExpenditureObj;
 use crate::models::batch::*;
 use crate::schema::pay_batch_order::dsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
@@ -299,6 +300,100 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 
     if total_amount == zero {
         return Ok(None);
+    }
+
+    //get allocation expenditures
+
+    use crate::schema::pay_allocation::dsl as pa_dsl;
+    use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
+    let expenditures: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
+        .select(pae_dsl::pay_allocation_expenditure::all_columns())
+        .inner_join(
+            crate::schema::pay_allocation::dsl::pay_allocation.on(pae_dsl::allocation_id
+                .eq(pa_dsl::id)
+                .and(pae_dsl::owner_id.eq(pa_dsl::owner_id))
+                .and(pa_dsl::payment_platform.eq(args.platform))
+                .and(pa_dsl::updated_ts.gt(args.since.naive_utc()))
+                .and(pa_dsl::owner_id.eq(args.owner_id))),
+        )
+        .filter(pae_dsl::accepted_amount.ne(pa_dsl::spent_amount))
+        .load(conn)?;
+
+    let mut payments = payments;
+    for payment in &mut payments {
+        let batch_payment = payment.1;
+        for peer_obligation in &mut batch_payment.peer_obligation {
+            let mut peer_obligation_allocation: Vec<BatchPaymentObligationAllocation> = Vec::new();
+            for obligation in peer_obligation.1 {
+                let matching_expenditures = match &obligation {
+                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                        expenditures.iter().filter(|e| {
+                            e.agreement_id == agreement_id.clone()
+                                && e.activity_id.is_none()
+                                && e.accepted_amount.0 > e.scheduled_amount.0
+                        }).cloned().collect::<Vec<AllocationExpenditureObj>>()
+                    }
+                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                        expenditures.iter().filter(|e| {
+                            e.agreement_id == agreement_id.clone()
+                                && e.activity_id == Some(activity_id.clone())
+                                && e.accepted_amount.0 > e.scheduled_amount.0
+                        }).cloned().collect::<Vec<AllocationExpenditureObj>>()
+                    }
+                };
+                let amount_to_be_covered = match &obligation {
+                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                        amount
+                    }
+                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                        amount
+                    }
+                };
+                let mut amount_covered = BigDecimal::from(0u32);
+                for expenditure in matching_expenditures {
+                    let max_amount_to_get = expenditure.accepted_amount.0 - expenditure.scheduled_amount.0;
+
+                    let cover_amount = std::cmp::min(amount_to_be_covered.clone() - amount_covered.clone(), max_amount_to_get);
+                    match &obligation {
+                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                            peer_obligation_allocation.push(BatchPaymentObligationAllocation::Invoice{
+                                id: id.clone(),
+                                amount: cover_amount.clone(),
+                                agreement_id: agreement_id.clone(),
+                                allocation_id: expenditure.allocation_id.clone(),
+                            });
+                        }
+                        BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                            peer_obligation_allocation.push(BatchPaymentObligationAllocation::DebitNote{
+                                debit_note_id: debit_note_id.clone(),
+                                amount: cover_amount.clone(),
+                                agreement_id: agreement_id.clone(),
+                                activity_id: activity_id.clone(),
+                                allocation_id: expenditure.allocation_id.clone(),
+                            });
+                        }
+                    }
+                    match &obligation {
+                        BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                            log::info!("Covered invoice obligation {} with {} of {} from allocation {} - agreement id: {}", id, cover_amount, amount, expenditure.allocation_id, agreement_id);
+                        }
+                        BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                            log::info!("Covered debit note obligation {:?} with {} of {} from allocation {} - agreement id: {} - activity id: {}", debit_note_id, cover_amount, amount, expenditure.allocation_id, agreement_id, activity_id);
+                        }
+                    }
+                    amount_covered += cover_amount;
+                }
+                match &obligation {
+                    BatchPaymentObligation::Invoice { id, amount, agreement_id } => {
+                        log::info!("Total covered invoice obligation {} with {} of {} from allocations", id, amount_covered, amount);
+                    }
+                    BatchPaymentObligation::DebitNote { debit_note_id, amount, agreement_id, activity_id } => {
+                        log::info!("Total covered debit note obligation {:?} with {} of {} from allocations", debit_note_id, amount_covered, amount);
+                    }
+                }
+            }
+        }
+
     }
 
     let order_id = Uuid::new_v4().to_string();
@@ -643,7 +738,7 @@ impl<'c> BatchDao<'c> {
                 query = query.filter(order_item_dsl::payee_addr.eq(payee_addr));
             }
             if let Some(allocation_id) = allocation_id {
-                query = query.filter(aggr_item_dsl::allocation_id.eq(allocation_id));
+                query = query.filter(order_item_dsl::allocation_id.eq(allocation_id));
             }
             if let Some(agreement_id) = agreement_id {
                 query = query.filter(aggr_item_dsl::agreement_id.eq(agreement_id));
@@ -658,7 +753,7 @@ impl<'c> BatchDao<'c> {
                     order_item_dsl::order_id,
                     order_item_dsl::owner_id,
                     order_item_dsl::payee_addr,
-                    aggr_item_dsl::allocation_id,
+                    order_item_dsl::allocation_id,
                     aggr_item_dsl::amount,
                     aggr_item_dsl::agreement_id,
                     aggr_item_dsl::invoice_id,
