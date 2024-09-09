@@ -51,6 +51,10 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             "/allocations/{allocation_id}/orders",
             get().to(get_pay_allocation_orders),
         )
+        .route(
+            "/allocations/{allocation_id}/expenditures",
+            get().to(get_allocation_expenditures),
+        )
 }
 
 async fn create_allocation(

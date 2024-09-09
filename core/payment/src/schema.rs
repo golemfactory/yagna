@@ -105,7 +105,6 @@ table! {
         owner_id -> Text,
         payee_addr -> Text,
         agreement_id -> Text,
-        allocation_id -> Text,
         invoice_id -> Nullable<Text>,
         activity_id -> Nullable<Text>,
         debit_note_id -> Nullable<Text>,
