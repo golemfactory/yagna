@@ -4,6 +4,7 @@ use crate::runtime::Runtime;
 use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
+
 use actix::prelude::*;
 use futures::FutureExt;
 
@@ -160,10 +161,10 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
 
                     log::debug!("IAS report: {}", &evidence.report);
                     let mut hasher = Sha3_256::new();
-                    hasher.input(task_package.as_bytes());
+                    hasher.update(task_package.as_bytes());
 
                     let mut payload_hash = [0u8; 32];
-                    payload_hash.copy_from_slice(hasher.result().as_ref());
+                    payload_hash.copy_from_slice(hasher.finalize().as_ref());
 
                     Some(Credentials::Sgx {
                         requestor: crypto.requestor_pub_key.serialize().to_vec(),

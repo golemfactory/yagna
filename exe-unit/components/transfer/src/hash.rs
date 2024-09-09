@@ -96,7 +96,7 @@ where
         let mut chunk = vec![0; 4096];
 
         while let Ok(count) = file_src.read(&mut chunk[..]) {
-            self.hasher.input(&chunk[..count]);
+            self.hasher.update(&chunk[..count]);
             if count != 4096 {
                 break;
             }
@@ -119,14 +119,14 @@ where
             match opt {
                 Some(item) => {
                     if let Ok(data) = item {
-                        self.hasher.input(data.as_ref());
+                        self.hasher.update(data.as_ref());
                     }
                 }
                 None => {
                     let result = match &self.result {
                         Some(r) => r,
                         None => {
-                            self.result = Some(self.hasher.result_reset().to_vec());
+                            self.result = Some(self.hasher.finalize_reset().to_vec());
                             self.result.as_ref().unwrap()
                         }
                     };

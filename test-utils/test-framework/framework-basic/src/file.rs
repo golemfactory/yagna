@@ -39,11 +39,11 @@ pub fn generate_file_with_hash(
             .map(|_| rng.gen_range(0..256) as u8)
             .collect();
 
-        hasher.input(&input);
+        hasher.update(&input);
         let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
-    hasher.result()
+    hasher.finalize()
 }
 
 pub fn generate_file(path: &PathBuf, chunk_size: usize, chunk_count: usize) {
