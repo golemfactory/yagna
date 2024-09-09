@@ -83,24 +83,24 @@ impl HttpToGsbProxy {
         };
 
         let msg = GsbHttpCallMessage {
-            method: method.clone(),
-            path: path.clone(),
+            method,
+            path,
             body,
             headers: Headers::default().filter(&headers),
         };
 
         let endpoint = self.endpoint();
 
-        log::info!("Proxy http {method} `{path}` call to [{}]", endpoint.addr());
+        log::info!("Proxy http {msg} call to [{}]", endpoint.addr());
         let result = endpoint
-            .call(msg)
+            .call(msg.clone())
             .await
             .unwrap_or_else(|e| Err(HttpProxyStatusError::from(e)));
 
         match result {
             Ok(r) => {
-                log::debug!(
-                    "Http proxy response for {method} `{path}` call to [{}]: status: {}",
+                log::info!(
+                    "Http proxy response for {msg} call to [{}]: status: {}",
                     endpoint.addr(),
                     r.header.status_code
                 );
@@ -116,11 +116,11 @@ impl HttpToGsbProxy {
             }
             Err(err) => {
                 log::warn!(
-                    "Http proxy error calling {method} `{path}` at [{}]: error: {err}",
+                    "Http proxy error calling {msg} at [{}]: error: {err}",
                     endpoint.addr()
                 );
                 HttpToGsbProxyResponse {
-                    body: actix_web::web::Bytes::from(format!("Error: {}", err))
+                    body: actix_web::web::Bytes::from(format!("Error: {err}"))
                         .try_into_bytes()
                         .map_err(|_| {
                             Error::GsbFailure("Failed to invoke GsbHttpProxy call".to_string())
