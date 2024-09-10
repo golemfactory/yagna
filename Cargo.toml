@@ -32,7 +32,6 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-
 ya-core-model.workspace = true
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
@@ -297,9 +296,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b5369b76044f0a1584532f603c542587e15be852" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b5369b76044f0a1584532f603c542587e15be852" }
+#ya-client-model = { path = "../ya-client/model" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "952fdbd47adc57e46b7370935111e046271ef415" }
 
 ## RELAY and networking stack

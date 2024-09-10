@@ -597,15 +597,15 @@ impl RpcMessage for crate::driver::SignPaymentCanonicalized {
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
-    pub canonicalized: bool,
+    pub canonical: Option<Vec<u8>>,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>, canonicalized: bool) -> Self {
+    pub fn new(payment: Payment, signature: Vec<u8>, canonical: Option<Vec<u8>>) -> Self {
         Self {
             payment,
             signature,
-            canonicalized,
+            canonical,
         }
     }
 }

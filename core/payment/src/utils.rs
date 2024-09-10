@@ -4,7 +4,6 @@ use futures::Future;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use ya_client_model::market::{Agreement, Role};
-use ya_client_model::payment::Payment;
 use ya_core_model::market;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -172,21 +171,6 @@ pub async fn listen_for_events<T: EventGetter>(
     })
     .await
     .unwrap_or(Ok(vec![]))
-}
-
-pub fn remove_allocation_ids_from_payment(mut payment: Payment) -> Payment {
-    // We remove allocation ID from syncs because allocations are not transferred to peers and
-    // their IDs would be unknown to the recipient.
-    // let mut payment = payment.clone();
-    for agreement_payment in &mut payment.agreement_payments.iter_mut() {
-        agreement_payment.allocation_id = None;
-    }
-
-    for activity_payment in &mut payment.activity_payments.iter_mut() {
-        activity_payment.allocation_id = None;
-    }
-
-    payment
 }
 
 pub mod response {

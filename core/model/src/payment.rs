@@ -664,6 +664,7 @@ pub mod local {
 
 pub mod public {
     use super::*;
+    use crate::signable::Signable;
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &str = "/public/payment";
@@ -843,7 +844,10 @@ pub mod public {
 
     impl SendPayment {
         pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-            Self { payment, signature }
+            Self {
+                payment: payment.remove_private_info(),
+                signature,
+            }
         }
     }
 
@@ -865,9 +869,10 @@ pub mod public {
 
     impl SendSignedPayment {
         pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-            let signed_bytes = serde_json_canonicalizer::to_vec(&payment).unwrap();
+            // Unwrap won't happen, because serialization is always possible.
+            let signed_bytes = payment.canonicalize().unwrap_or_default();
             Self {
-                payment,
+                payment: payment.remove_private_info(),
                 signature,
                 signed_bytes,
             }
