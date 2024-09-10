@@ -19,6 +19,7 @@ pub struct WriteObj {
     pub updated_ts: NaiveDateTime,
     pub timeout: NaiveDateTime,
     pub deposit: Option<String>,
+    pub deposit_status: Option<String>,
     pub released: bool,
 }
 
@@ -34,8 +35,9 @@ pub struct ReadObj {
     pub created_ts: NaiveDateTime,
     pub updated_ts: NaiveDateTime,
     pub timeout: NaiveDateTime,
-    pub deposit: Option<String>,
     pub released: bool,
+    pub deposit: Option<String>,
+    pub deposit_status: Option<String>,
 }
 
 impl WriteObj {
@@ -63,7 +65,9 @@ impl WriteObj {
             ),
             deposit: allocation
                 .deposit
+                .as_ref()
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
+            deposit_status: allocation.deposit.map(|_| "open".to_string()),
             released: false,
         }
     }
@@ -87,7 +91,9 @@ impl WriteObj {
             ),
             deposit: allocation
                 .deposit
+                .as_ref()
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
+            deposit_status: allocation.deposit.map(|_| "open".to_string()),
             released: false,
         }
     }

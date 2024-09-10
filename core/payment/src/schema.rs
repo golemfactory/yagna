@@ -43,8 +43,9 @@ table! {
         created_ts -> Timestamp,
         updated_ts -> Timestamp,
         timeout -> Timestamp,
-        deposit -> Nullable<Text>,
         released -> Bool,
+        deposit -> Nullable<Text>,
+        deposit_status -> Nullable<Text>,
     }
 }
 
