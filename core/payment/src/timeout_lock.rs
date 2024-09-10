@@ -106,11 +106,6 @@ impl TimedMutex {
                     match tokio::time::timeout(Duration::from_secs(10), receiver.recv()).await {
                         Err(_) => {
                             log::warn!("[TimedMutex] Long running task: {task_name}!");
-                            counter += 1;
-                            // five minutes
-                            if counter > 30 {
-                                return;
-                            }
                         }
                         Ok(None) => log::warn!("[TimedMutex] Unexpected mpsc close."),
                         Ok(Some(TimedMutexTaskMessage::Finish)) => break,
