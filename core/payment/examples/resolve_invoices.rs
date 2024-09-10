@@ -1,4 +1,5 @@
 use structopt::StructOpt;
+use ya_client_model::payment::allocation::Deposit;
 use ya_core_model::driver::{driver_bus_id, ScheduleDriverPayment};
 use ya_core_model::NodeId;
 use ya_payment::dao::BatchDao;
@@ -95,21 +96,27 @@ async fn generate(
 }
 
 async fn send_payments(db: DbExecutor, owner: NodeId, order_id: String) -> anyhow::Result<()> {
-    let (order, items) = db
+    let items = db
         .as_dao::<BatchDao>()
-        .get_unsent_batch_items(order_id.clone())
+        .get_unsent_batch_items(owner, order_id.clone())
         .await?;
     eprintln!("got {} orders", items.len());
     let bus_id = driver_bus_id("erc20");
     for item in items {
         eprintln!("sending: {:?}", &item);
+        let deposit = item
+            .deposit
+            .map(|d| serde_json::from_str::<Deposit>(&d))
+            .transpose()
+            .map_err(|err| anyhow::anyhow!("failed to parse deposit: {:?}", err))?;
+
         let payment_order_id = bus::service(&bus_id)
             .call(ScheduleDriverPayment::new(
                 item.amount.0,
-                order.payer_addr.clone(),
+                item.payer_addr.clone(),
                 item.payee_addr.clone(),
-                order.platform.clone(),
-                None,
+                item.platform.clone(),
+                deposit,
                 chrono::Utc::now(),
             ))
             .await??;

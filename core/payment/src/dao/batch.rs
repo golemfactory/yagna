@@ -4,9 +4,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 use std::collections::{hash_map, HashMap};
 use std::iter::zip;
-
 use uuid::Uuid;
-
 use ya_core_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -16,6 +14,7 @@ use ya_persistence::types::BigDecimalField;
 use crate::error::{DbError, DbResult};
 use crate::models::allocation::AllocationExpenditureObj;
 use crate::models::batch::*;
+use crate::schema::pay_allocation::dsl as padsl;
 use crate::schema::pay_batch_order::dsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
 
@@ -331,50 +330,10 @@ fn insert_or_update_allocation_entry(
     Ok(())
 }
 
-pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
-    let conn = args.conn;
-    let owner_id = args.owner_id;
-    let payer_addr = args.payer_addr;
-    let platform = args.platform;
-    let since = args.since;
-    let zero = BigDecimal::from(0u32);
-
-    let total_amount = BigDecimal::default();
-    let payments = HashMap::<String, BatchPayment>::new();
-
-    let total_amount = BigDecimal::from(0u32);
-
-    log::info!("Resolve invoices: {} - {}", owner_id.to_string(), platform);
-
-    log::debug!("Resolving invoices for {}", owner_id);
-    let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
-
-    log::debug!("Resolving agreements for {}", owner_id);
-    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
-
-    if total_amount == zero {
-        return Ok(None);
-    }
-
-    //get allocation expenditures
-
-    use crate::schema::pay_allocation::dsl as pa_dsl;
-    use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
-    let expenditures_orig: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
-        .select(pae_dsl::pay_allocation_expenditure::all_columns())
-        .inner_join(
-            crate::schema::pay_allocation::dsl::pay_allocation.on(pae_dsl::allocation_id
-                .eq(pa_dsl::id)
-                .and(pae_dsl::owner_id.eq(pa_dsl::owner_id))
-                .and(pa_dsl::payment_platform.eq(args.platform))
-                .and(pa_dsl::updated_ts.gt(args.since.naive_utc()))
-                .and(pa_dsl::owner_id.eq(args.owner_id))),
-        )
-        .filter(pae_dsl::accepted_amount.ne(pae_dsl::scheduled_amount))
-        .load(conn)?;
-    let mut expenditures = expenditures_orig.clone();
-
-    log::info!("Found total of {} expenditures", expenditures.len());
+fn use_expenditures_on_payments(
+    expenditures: &mut [AllocationExpenditureObj],
+    payments: HashMap<String, BatchPayment>,
+) -> DbResult<HashMap<AllocationPayeeKey, BatchPaymentAllocation>> {
     let mut payments_allocations: HashMap<AllocationPayeeKey, BatchPaymentAllocation> =
         HashMap::new();
     let mut payments = payments;
@@ -525,6 +484,59 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             }
         }
     }
+    Ok(payments_allocations)
+}
+
+pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
+    let conn = args.conn;
+    let owner_id = args.owner_id;
+    let payer_addr = args.payer_addr;
+    let platform = args.platform;
+    let since = args.since;
+    let zero = BigDecimal::from(0u32);
+
+    let total_amount = BigDecimal::default();
+    let payments = HashMap::<String, BatchPayment>::new();
+
+    let total_amount = BigDecimal::from(0u32);
+
+    log::info!("Resolve invoices: {} - {}", owner_id.to_string(), platform);
+
+    log::debug!("Resolving invoices for {}", owner_id);
+    let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
+
+    log::debug!("Resolving agreements for {}", owner_id);
+    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
+
+    if total_amount == zero {
+        return Ok(None);
+    }
+
+    //get allocation expenditures
+
+    use crate::schema::pay_allocation::dsl as pa_dsl;
+    use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
+    let expenditures_orig: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
+        .select(pae_dsl::pay_allocation_expenditure::all_columns())
+        .inner_join(
+            crate::schema::pay_allocation::dsl::pay_allocation.on(pae_dsl::allocation_id
+                .eq(pa_dsl::id)
+                .and(pae_dsl::owner_id.eq(pa_dsl::owner_id))
+                .and(pa_dsl::payment_platform.eq(args.platform))
+                .and(pa_dsl::updated_ts.gt(args.since.naive_utc()))
+                .and(pa_dsl::owner_id.eq(args.owner_id))),
+        )
+        .filter(pae_dsl::accepted_amount.ne(pae_dsl::scheduled_amount))
+        .load(conn)?;
+    let mut expenditures = expenditures_orig.clone();
+
+    log::info!("Found total of {} expenditures", expenditures.len());
+
+    let payments_allocations =
+        use_expenditures_on_payments(&mut expenditures, payments).map_err(|e| {
+            log::error!("Error using expenditures on payments: {:?}", e);
+            e
+        })?;
 
     // upload the updated expenditures to database (if changed)
     for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
@@ -836,20 +848,43 @@ impl<'c> BatchDao<'c> {
 
     pub async fn get_unsent_batch_items(
         &self,
+        owner_id: NodeId,
         order_id: String,
-    ) -> DbResult<(DbBatchOrder, Vec<DbBatchOrderItem>)> {
+    ) -> DbResult<Vec<DbBatchOrderItemFullInfo>> {
         readonly_transaction(self.pool, "get_unsent_batch_items", move |conn| {
-            use crate::schema::pay_batch_order::dsl as odsl;
-
-            let order: DbBatchOrder = odsl::pay_batch_order
-                .filter(odsl::id.eq(&order_id))
-                .get_result(conn)?;
-            let items: Vec<DbBatchOrderItem> = oidsl::pay_batch_order_item
-                .filter(oidsl::order_id.eq(&order_id))
-                .filter(oidsl::payment_id.is_null())
-                .filter(oidsl::paid.eq(false))
-                .load(conn)?;
-            Ok((order, items))
+            Ok(oidsl::pay_batch_order_item
+                .inner_join(
+                    padsl::pay_allocation.on(oidsl::allocation_id
+                        .eq(padsl::id)
+                        .and(oidsl::owner_id.eq(padsl::owner_id))),
+                )
+                .inner_join(
+                    dsl::pay_batch_order.on(oidsl::order_id
+                        .eq(dsl::id)
+                        .and(oidsl::owner_id.eq(dsl::owner_id))
+                        .and(dsl::owner_id.eq(owner_id))
+                        .and(dsl::id.eq(&order_id))),
+                )
+                .select((
+                    oidsl::order_id,
+                    dsl::platform,
+                    oidsl::owner_id,
+                    dsl::payer_addr,
+                    oidsl::payee_addr,
+                    oidsl::allocation_id,
+                    padsl::deposit,
+                    oidsl::amount,
+                    oidsl::payment_id,
+                    oidsl::paid,
+                ))
+                .filter(
+                    oidsl::owner_id
+                        .eq(owner_id)
+                        .and(oidsl::order_id.eq(&order_id))
+                        .and(oidsl::payment_id.is_null())
+                        .and(oidsl::paid.eq(false)),
+                )
+                .load::<DbBatchOrderItemFullInfo>(conn)?)
         })
         .await
     }
