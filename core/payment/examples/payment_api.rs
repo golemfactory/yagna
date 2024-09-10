@@ -279,6 +279,7 @@ async fn main() -> anyhow::Result<()> {
             requestor_addr.clone(),
             args.network.clone(),
             None,
+            false,
         ))
         .await??;
     bus::service(driver_bus_id(driver_name))
