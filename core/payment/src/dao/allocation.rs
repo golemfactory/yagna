@@ -4,7 +4,9 @@ use crate::schema::pay_allocation::dsl;
 use crate::schema::pay_allocation_expenditure::dsl as dsld;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
-use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    self, BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
+};
 use ya_client_model::payment::allocation::{AllocationExpenditure, Deposit};
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
@@ -161,6 +163,79 @@ impl<'c> AllocationDao<'c> {
             }
             Ok(AllocationStatus::NotFound)
         })
+        .await
+    }
+
+    pub async fn get_allocations_to_close(
+        &self,
+        owner_id: NodeId,
+        platform: String,
+    ) -> DbResult<Vec<Allocation>> {
+        readonly_transaction(
+            self.pool,
+            "allocation_dao_get_allocations_to_close",
+            move |conn| {
+                let allocations: Vec<ReadObj> = dsl::pay_allocation
+                    .filter(
+                        dsl::owner_id
+                            .eq(owner_id)
+                            .and(dsl::released.eq(true))
+                            .and(dsl::deposit.is_not_null())
+                            .and(dsl::payment_platform.eq(platform))
+                            .and(dsl::deposit_status.eq("open")),
+                    )
+                    .load(conn)?;
+                Ok(allocations.into_iter().map(Into::into).collect())
+            },
+        )
+        .await
+    }
+
+    pub async fn mark_allocation_closing(
+        &self,
+        allocation_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<bool> {
+        do_with_transaction(
+            self.pool,
+            "allocation_dao_mark_allocation_closing",
+            move |conn| {
+                let count = diesel::update(dsl::pay_allocation)
+                    .filter(dsl::id.eq(allocation_id.clone()))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::released.eq(true))
+                    .filter(dsl::deposit.is_not_null())
+                    .filter(dsl::deposit_status.eq("open"))
+                    .set(dsl::deposit_status.eq("closing"))
+                    .execute(conn)?;
+
+                Ok(count == 1)
+            },
+        )
+        .await
+    }
+
+    pub async fn mark_allocation_closed(
+        &self,
+        allocation_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<bool> {
+        do_with_transaction(
+            self.pool,
+            "allocation_dao_mark_allocation_closed",
+            move |conn| {
+                let count = diesel::update(dsl::pay_allocation)
+                    .filter(dsl::id.eq(allocation_id.clone()))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::released.eq(true))
+                    .filter(dsl::deposit.is_not_null())
+                    .filter(dsl::deposit_status.eq("closing"))
+                    .set(dsl::deposit_status.eq("closed"))
+                    .execute(conn)?;
+
+                Ok(count == 1)
+            },
+        )
         .await
     }
 

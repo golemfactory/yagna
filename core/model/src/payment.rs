@@ -480,20 +480,6 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct ReleaseDeposit {
-        pub platform: String,
-        pub from: String,
-        pub deposit_contract: String,
-        pub deposit_id: String,
-    }
-
-    impl RpcMessage for ReleaseDeposit {
-        const ID: &'static str = "ReleaseDeposit";
-        type Item = ();
-        type Error = GenericError;
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
