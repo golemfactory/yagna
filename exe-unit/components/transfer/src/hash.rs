@@ -63,17 +63,39 @@ where
                 512 => Box::<Sha3_512>::default(),
                 len => {
                     return Err(Error::UnsupportedDigestError(format!(
-                        "Unsupported digest {} of length {}: {}",
-                        alg,
-                        len,
-                        hex::encode(&hash),
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
                     )))
                 }
             },
+            "sha2" => match hash.len() * 8 {
+                224 => Box::<sha2::Sha224>::default(),
+                256 => Box::<sha2::Sha256>::default(),
+                384 => Box::<sha2::Sha384>::default(),
+                512 => Box::<sha2::Sha512>::default(),
+                len => {
+                    return Err(Error::UnsupportedDigestError(format!(
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
+                    )))
+                }
+            },
+            "blake2b" => Box::<blake2::Blake2b512>::default(),
+            "blake2s" => Box::<blake2::Blake2b512>::default(),
+            "blake2" => match hash.len() * 8 {
+                256 => Box::<blake2::Blake2s256>::default(),
+                512 => Box::<blake2::Blake2b512>::default(),
+                len => {
+                    return Err(Error::UnsupportedDigestError(format!(
+                        "Unsupported digest {alg} of length {len}: {}",
+                        hex::encode(&hash)
+                    )))
+                }
+            },
+            "blake3" => Box::<blake3::Hasher>::default(),
             _ => {
                 return Err(Error::UnsupportedDigestError(format!(
-                    "Unsupported digest: {}",
-                    alg
+                    "Unsupported digest: {alg}"
                 )))
             }
         };
@@ -96,7 +118,7 @@ where
         let mut chunk = vec![0; 4096];
 
         while let Ok(count) = file_src.read(&mut chunk[..]) {
-            self.hasher.input(&chunk[..count]);
+            self.hasher.update(&chunk[..count]);
             if count != 4096 {
                 break;
             }
@@ -119,14 +141,14 @@ where
             match opt {
                 Some(item) => {
                     if let Ok(data) = item {
-                        self.hasher.input(data.as_ref());
+                        self.hasher.update(data.as_ref());
                     }
                 }
                 None => {
                     let result = match &self.result {
                         Some(r) => r,
                         None => {
-                            self.result = Some(self.hasher.result_reset().to_vec());
+                            self.result = Some(self.hasher.finalize_reset().to_vec());
                             self.result.as_ref().unwrap()
                         }
                     };
