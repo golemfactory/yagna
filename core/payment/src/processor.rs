@@ -497,10 +497,10 @@ impl PaymentProcessor {
                 .get_unsent_batch_items(owner, order_id.clone())
                 .await?
         };
-        eprintln!("got {} orders", items.len());
+        log::info!("got {} orders", items.len());
         let bus_id = driver_bus_id("erc20");
         for item in items {
-            eprintln!("sending: {:?}", &item);
+            log::info!("sending: {:?}", &item);
 
             let deposit = item
                 .deposit
@@ -518,7 +518,7 @@ impl PaymentProcessor {
                     item.payer_addr.clone(),
                     item.payee_addr.clone(),
                     item.platform.clone(),
-                    None,
+                    deposit,
                     chrono::Utc::now(),
                 ))
                 .await??;
@@ -538,6 +538,7 @@ impl PaymentProcessor {
                         order_id.clone(),
                         owner,
                         item.payee_addr,
+                        item.allocation_id,
                         payment_order_id,
                     )
                     .await?;
@@ -762,6 +763,7 @@ impl PaymentProcessor {
                         order_item.order_id.clone(),
                         payer_id,
                         order_item.payee_addr.clone(),
+                        order_item.allocation_id.clone(),
                     )
                     .await?;
                 for order in order_documents.iter() {

@@ -957,6 +957,7 @@ impl<'c> BatchDao<'c> {
         order_id: String,
         owner_id: NodeId,
         payee_addr: String,
+        allocation_id: String,
         payment_id: String,
     ) -> DbResult<usize> {
         do_with_transaction(self.pool, "batch_order_item_send", move |conn| {
@@ -965,6 +966,7 @@ impl<'c> BatchDao<'c> {
                     oidsl::order_id
                         .eq(order_id)
                         .and(oidsl::payee_addr.eq(payee_addr))
+                        .and(oidsl::allocation_id.eq(allocation_id))
                         .and(oidsl::owner_id.eq(owner_id)),
                 )
                 .set(oidsl::payment_id.eq(payment_id))
@@ -978,6 +980,7 @@ impl<'c> BatchDao<'c> {
         order_id: String,
         owner_id: NodeId,
         payee_addr: String,
+        allocation_id: String,
     ) -> DbResult<bool> {
         do_with_transaction(self.pool, "batch_order_item_paid", move |conn| {
             use crate::schema::pay_batch_order::dsl as odsl;
@@ -991,6 +994,7 @@ impl<'c> BatchDao<'c> {
                     oidsl::order_id
                         .eq(&order_id)
                         .and(oidsl::payee_addr.eq(&payee_addr))
+                        .and(oidsl::allocation_id.eq(allocation_id))
                         .and(oidsl::paid.eq(false)),
                 )
                 .set(oidsl::paid.eq(true))
