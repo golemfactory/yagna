@@ -86,6 +86,21 @@ pub struct DbBatchOrderItem {
 }
 
 #[derive(Queryable, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DbBatchOrderItemFullInfo {
+    pub order_id: String,
+    pub platform: String,
+    pub owner_id: String,
+    pub payer_addr: String,
+    pub payee_addr: String,
+    pub allocation_id: String,
+    pub deposit: Option<String>,
+    pub amount: BigDecimalField,
+    pub payment_id: Option<String>,
+    pub paid: bool,
+}
+
+#[derive(Queryable, Debug, Serialize)]
 pub struct DbAgreementBatchOrderItem {
     pub ts: NaiveDateTime,
     pub order_id: String,
