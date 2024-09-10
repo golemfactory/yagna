@@ -85,7 +85,9 @@ CREATE TABLE pay_allocation
     timeout          DATETIME NOT NULL,
     released         BOOLEAN NOT NULL,
     deposit          TEXT,
+    deposit_status   TEXT,
 
+    CONSTRAINT pay_allocation_deposit_status_check CHECK (deposit_status IN ('open', 'closing', 'closed')),
     CONSTRAINT pay_allocation_pk PRIMARY KEY(owner_id, id)
 );
 

@@ -121,7 +121,13 @@ async fn send_payments(db: DbExecutor, owner: NodeId, order_id: String) -> anyho
             ))
             .await??;
         db.as_dao::<BatchDao>()
-            .batch_order_item_send(order_id.clone(), owner, item.payee_addr, payment_order_id)
+            .batch_order_item_send(
+                order_id.clone(),
+                owner,
+                item.payee_addr,
+                item.allocation_id,
+                payment_order_id,
+            )
             .await?;
     }
     Ok(())
