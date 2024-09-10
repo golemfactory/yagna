@@ -3089,7 +3089,7 @@ dependencies = [
  "ya-core-model",
  "ya-provider",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -8925,7 +8925,7 @@ dependencies = [
  "tokio",
  "winapi 0.3.9",
  "ya-agreement-utils",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -9066,7 +9066,7 @@ dependencies = [
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
  "yansi",
 ]
 
@@ -9639,7 +9639,7 @@ dependencies = [
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -9714,7 +9714,7 @@ dependencies = [
  "ya-utils-actix",
  "ya-utils-cli",
  "ya-utils-path",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
  "yansi",
 ]
 
@@ -10083,7 +10083,7 @@ dependencies = [
  "tokio",
  "url",
  "ya-framework-macro",
- "ya-utils-process 0.3.0",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -10201,24 +10201,6 @@ dependencies = [
  "anyhow",
  "directories",
  "log",
-]
-
-[[package]]
-name = "ya-utils-process"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ae347dbc4362cc24241f96ddb7c4bc46fdc6f4772c2f92d12b40af359b81ef"
-dependencies = [
- "actix",
- "anyhow",
- "derive_more",
- "fs2",
- "futures 0.3.30",
- "futures-util",
- "libc",
- "nix 0.22.3",
- "shared_child",
- "tokio",
 ]
 
 [[package]]
@@ -10368,7 +10350,7 @@ dependencies = [
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",
- "ya-utils-process 0.2.0",
+ "ya-utils-process",
  "ya-version",
  "ya-vpn",
 ]
