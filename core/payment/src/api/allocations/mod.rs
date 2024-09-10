@@ -12,8 +12,7 @@ use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
-    DriverName, NetworkName, ReleaseDeposit, ValidateAllocation, ValidateAllocationError,
-    BUS_ID as LOCAL_SERVICE,
+    DriverName, NetworkName, ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_persistence::executor::DbExecutor;
@@ -383,25 +382,7 @@ async fn release_allocation(
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
-        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
-            if let Some(deposit) = deposit {
-                let release_result = bus::service(LOCAL_SERVICE)
-                    .send(ReleaseDeposit {
-                        from: id.identity.to_string(),
-                        deposit_id: deposit.id,
-                        deposit_contract: deposit.contract,
-                        platform,
-                    })
-                    .await;
-                match release_result {
-                    Ok(Ok(_)) => response::ok(Null),
-                    Err(e) => response::server_error(&e),
-                    Ok(Err(e)) => response::server_error(&e),
-                }
-            } else {
-                response::ok(Null)
-            }
-        }
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => response::ok(Null),
         Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
         Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
             "Allocation {} has been already released",
