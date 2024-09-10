@@ -28,18 +28,18 @@ Yagna consists of several core components that work together to create a robust 
 RECTANGLE "Requestor Agent" as RA
 RECTANGLE "Provider Agent" as PA
 RECTANGLE "Yagna Daemon" as YD {
-    RECTANGLE "Network (net)" as NET
-    RECTANGLE "Marketplace (market)" as MKT
-    RECTANGLE "Payment (payment)" as PAY
-    RECTANGLE "Activity (activity)" as ACT
-    RECTANGLE "Identity (identity)" as ID
-    RECTANGLE "Manifest (manifest)" as MAN
-    RECTANGLE "Crypto (crypto)" as CRY
-    RECTANGLE "ACL (acl)" as ACL
-    RECTANGLE "GFTP (gftp)" as GFTP
-    RECTANGLE "GSB API (gsb-api)" as GSB
-    RECTANGLE "Metrics (metrics)" as MET
-    RECTANGLE "Model (model)" as MOD
+RECTANGLE "Network (net)" as NET
+RECTANGLE "Marketplace (market)" as MKT
+RECTANGLE "Payment (payment)" as PAY
+RECTANGLE "Activity (activity)" as ACT
+RECTANGLE "Identity (identity)" as ID
+RECTANGLE "Manifest (manifest)" as MAN
+RECTANGLE "Crypto (crypto)" as CRY
+RECTANGLE "ACL (acl)" as ACL
+RECTANGLE "GFTP (gftp)" as GFTP
+RECTANGLE "GSB API (gsb-api)" as GSB
+RECTANGLE "Metrics (metrics)" as MET
+RECTANGLE "Model (model)" as MOD
 }
 RECTANGLE "ExeUnit" as EU
 
@@ -85,5 +85,4 @@ MOD --> YD : Defines data structures
 11. The **Metrics (metrics)** service collects and exposes performance data from various components.
 
 12. The **Model (model)** component defines the internal data structures used across Yagna components.
-
-This architecture allows Yagna to provide a flexible, secure, and efficient platform for distributed computing, enabling complex workflows and resource sharing across a decentralized network of nodes.
+    This architecture allows Yagna to provide a flexible, secure, and efficient platform for distributed computing, enabling complex workflows and resource sharing across a decentralized network of nodes.

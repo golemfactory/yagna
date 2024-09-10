@@ -27,6 +27,31 @@ Yagna's ACL supports various types of permissions:
 3. **Role-based Permissions**: Assign permissions based on predefined roles.
 4. **Temporary Permissions**: Time-limited access rights for specific operations.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Identity Management" as IDM
+RECTANGLE "Access Control Lists (ACL)" as ACL {
+  RECTANGLE "Permission Manager" as PM
+  RECTANGLE "Role Manager" as RM
+  RECTANGLE "Resource Manager" as ResM
+}
+RECTANGLE "Yagna Services" as YS
+RECTANGLE "API Gateway" as API
+
+IDM --> ACL : Provides identity info
+ACL --> YS : Enforces permissions
+API --> ACL : Checks permissions
+PM --> ACL : Manages permissions
+RM --> ACL : Manages roles
+ResM --> ACL : Manages resources
+
+@enduml
+\```
+
 ## Integration with Other Components
 
 The ACL component interacts with several other Yagna components:

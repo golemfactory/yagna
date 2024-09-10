@@ -20,6 +20,33 @@ The Golem File Transfer Protocol (gftp) is a custom file transfer protocol desig
 5. **Reassembly**: The receiver reassembles the chunks into the complete file.
 6. **Final Verification**: The complete file is verified against the original checksum.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Sender Node" as SN
+RECTANGLE "Receiver Node" as RN
+RECTANGLE "GFTP" as GFTP {
+  RECTANGLE "Chunker" as CH
+  RECTANGLE "Transfer Manager" as TM
+  RECTANGLE "Integrity Checker" as IC
+  RECTANGLE "Encryption Module" as EM
+}
+RECTANGLE "Network Layer" as NL
+
+SN --> GFTP : Initiates transfer
+GFTP --> RN : Delivers file
+CH --> GFTP : Splits files
+TM --> GFTP : Manages transfer
+IC --> GFTP : Verifies integrity
+EM --> GFTP : Encrypts/Decrypts
+GFTP --> NL : Uses for transmission
+
+@enduml
+\```
+
 ## Integration with Other Components
 
 The gftp component interacts with several other Yagna components:

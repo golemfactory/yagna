@@ -36,6 +36,32 @@ Manages the lifecycle of agreements:
 2. **State Management**: Tracks and updates the state of agreements (e.g., proposed, confirmed, terminated).
 3. **Retrieval and Querying**: Provides interfaces for retrieving and querying agreement information.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Requestor" as REQ
+RECTANGLE "Provider" as PROV
+RECTANGLE "Decentralized Marketplace" as MKT {
+  RECTANGLE "Matcher" as MATCH
+  RECTANGLE "Negotiator" as NEG
+  RECTANGLE "Agreement Store" as AGR
+}
+RECTANGLE "Payment System" as PAY
+RECTANGLE "Activity Management" as ACT
+
+REQ --> MKT : Submits demand
+PROV --> MKT : Submits offer
+MATCH --> NEG : Passes potential matches
+NEG --> AGR : Creates agreements
+MKT --> PAY : Initiates payments
+MKT --> ACT : Triggers activities
+
+@enduml
+\```
+
 ## Market Protocols
 
 Yagna supports multiple market protocols:

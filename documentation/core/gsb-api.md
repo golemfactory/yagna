@@ -19,6 +19,30 @@ The GSB consists of several key components:
 3. **Transport Layer**: Handles the actual transmission of messages using various protocols.
 4. **Serialization/Deserialization**: Converts messages between their in-memory and wire formats.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Service A" as SA
+RECTANGLE "Service B" as SB
+RECTANGLE "GSB" as GSB {
+  RECTANGLE "Router" as Router
+  RECTANGLE "Service Registry" as SR
+  RECTANGLE "Transport Layer" as TL
+  RECTANGLE "Serialization" as SER
+}
+
+SA --> GSB : Sends messages
+GSB --> SB : Delivers messages
+Router --> TL : Uses
+Router --> SR : Looks up services
+SER --> GSB : Converts messages
+
+@enduml
+\```
+
 ## Message Types
 
 The GSB supports various types of messages:

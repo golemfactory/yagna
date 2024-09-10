@@ -40,6 +40,33 @@ Implements cryptographic hash functions:
 1. **SHA-2 Family**: SHA-256, SHA-384, SHA-512.
 2. **Blake2**: Blake2b, Blake2s.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Yagna Components" as YC
+RECTANGLE "Cryptography" as CRYPTO {
+  RECTANGLE "Key Manager" as KM
+  RECTANGLE "Encryption Engine" as EE
+  RECTANGLE "Signature Service" as SS
+  RECTANGLE "Hash Service" as HS
+  RECTANGLE "RNG" as RNG
+}
+RECTANGLE "Secure Storage" as SS
+
+YC --> CRYPTO : Uses
+KM --> CRYPTO : Manages keys
+EE --> CRYPTO : Encrypts/Decrypts
+SS --> CRYPTO : Signs/Verifies
+HS --> CRYPTO : Computes hashes
+RNG --> CRYPTO : Generates random numbers
+CRYPTO --> SS : Stores sensitive data
+
+@enduml
+\```
+
 ## Integration with Other Components
 
 The Cryptography component interacts with several other Yagna components:

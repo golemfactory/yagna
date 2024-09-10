@@ -22,6 +22,29 @@ The model defines several key data structures, including but not limited to:
 6. **Payment**: Describes a payment transaction.
 7. **Identity**: Represents a user or service identity.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Yagna Components" as YC
+RECTANGLE "Internal Data Model" as IDM {
+RECTANGLE "Data Structures" as DS
+RECTANGLE "Serialization" as SER
+RECTANGLE "Version Manager" as VM
+}
+RECTANGLE "Storage" as ST
+
+YC --> IDM : Uses
+DS --> IDM : Defines structures
+SER --> IDM : Handles data exchange
+VM --> IDM : Manages compatibility
+IDM --> ST : Persists data
+
+@enduml
+\```
+
 ## Integration with Other Components
 
 The Internal Data Model is used by virtually all other Yagna components:
@@ -42,46 +65,47 @@ use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agreement {
-    pub id: String,
-    pub provider_id: String,
-    pub requestor_id: String,
-    pub creation_date: DateTime<Utc>,
-    pub valid_to: DateTime<Utc>,
-    pub state: AgreementState,
+pub id: String,
+pub provider_id: String,
+pub requestor_id: String,
+pub creation_date: DateTime<Utc>,
+pub valid_to: DateTime<Utc>,
+pub state: AgreementState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgreementState {
-    Proposal,
-    Pending,
-    Approved,
-    Rejected,
-    Terminated,
+Proposal,
+Pending,
+Approved,
+Rejected,
+Terminated,
 }
 
 impl Agreement {
-    pub fn new(provider_id: String, requestor_id: String) -> Self {
-        let now = Utc::now();
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            provider_id,
-            requestor_id,
-            creation_date: now,
-            valid_to: now + chrono::Duration::hours(1),
-            state: AgreementState::Proposal,
-        }
-    }
+pub fn new(provider_id: String, requestor_id: String) -> Self {
+let now = Utc::now();
+Self {
+id: uuid::Uuid::new_v4().to_string(),
+provider_id,
+requestor_id,
+creation_date: now,
+valid_to: now + chrono::Duration::hours(1),
+state: AgreementState::Proposal,
+}
+}
 
     pub fn approve(&mut self) {
         self.state = AgreementState::Approved;
     }
+
 }
 
 fn main() {
-    let mut agreement = Agreement::new(
-        "provider123".to_string(),
-        "requestor456".to_string(),
-    );
+let mut agreement = Agreement::new(
+"provider123".to_string(),
+"requestor456".to_string(),
+);
 
     println!("New agreement: {:?}", agreement);
 
@@ -95,10 +119,12 @@ fn main() {
     // Deserialize from JSON
     let deserialized: Agreement = serde_json::from_str(&json).unwrap();
     println!("Deserialized agreement: {:?}", deserialized);
+
 }
 \```
 
 This example demonstrates:
+
 1. Defining a structured `Agreement` type with associated data.
 2. Implementing methods for creating and modifying agreements.
 3. Using Serde for serialization and deserialization.

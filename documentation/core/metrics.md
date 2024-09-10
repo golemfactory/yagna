@@ -19,6 +19,31 @@ The Metrics Service collects various types of metrics:
 3. **Application Metrics**: Component-specific metrics for market, payment, activity, etc.
 4. **Performance Metrics**: Response times, throughput, error rates, etc.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Yagna Components" as YC
+RECTANGLE "Metrics Service" as MS {
+  RECTANGLE "Collector" as COL
+  RECTANGLE "Aggregator" as AGG
+  RECTANGLE "Storage" as STO
+  RECTANGLE "API" as API
+}
+RECTANGLE "External Tools" as ET
+
+YC --> MS : Reports metrics
+COL --> MS : Gathers data
+AGG --> MS : Processes data
+STO --> MS : Persists data
+API --> MS : Exposes data
+MS --> ET : Integrates with
+
+@enduml
+\```
+
 ## Metric Collection Methods
 
 The service employs different methods to collect metrics:

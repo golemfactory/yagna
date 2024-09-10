@@ -25,6 +25,33 @@ AppKeys are a crucial part of the Identity Management system in Yagna:
 2. **Generation**: AppKeys are generated upon request and associated with specific identities and permissions.
 3. **Validation**: The Identity Management component validates AppKeys for each API request to ensure proper authorization.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "User" as USER
+RECTANGLE "Application" as APP
+RECTANGLE "Identity Management" as IDM {
+RECTANGLE "Identity Generator" as IG
+RECTANGLE "AppKey Manager" as AKM
+RECTANGLE "Authentication Service" as AS
+}
+RECTANGLE "ACL" as ACL
+RECTANGLE "Yagna Services" as YS
+
+USER --> IDM : Registers
+APP --> IDM : Requests AppKey
+IDM --> ACL : Provides identity info
+IDM --> YS : Authenticates requests
+IG --> IDM : Generates identities
+AKM --> IDM : Manages AppKeys
+AS --> IDM : Verifies credentials
+
+@enduml
+\```
+
 ## Integration with Other Components
 
 The Identity Management component interacts closely with several other Yagna components:
@@ -39,24 +66,30 @@ The Identity Management component interacts closely with several other Yagna com
 Here's a simplified example of how an AppKey might be created using the Identity Management component:
 
 \```rust
-use ya_identity::IdentityManager;
+use ya_identity::{IdentityManager, AppKeyConfig};
 
 async fn create_app_key(identity_manager: &IdentityManager, name: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let app_key = identity_manager.create_app_key(name).await?;
+let config = AppKeyConfig::new(name)
+.with_role("requestor")
+.with_expiration(chrono::Utc::now() + chrono::Duration::days(30));
+
+    let app_key = identity_manager.create_app_key(config).await?;
     Ok(app_key)
+
 }
 
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let identity_manager = IdentityManager::new();
-    let app_key = create_app_key(&identity_manager, "my-app").await?;
-    println!("Created AppKey: {}", app_key);
-    Ok(())
+let identity_manager = IdentityManager::new();
+let app_key = create_app_key(&identity_manager, "my-app").await?;
+println!("Created AppKey: {}", app_key);
+Ok(())
 }
 \```
 
 This example demonstrates:
+
 1. Using the `IdentityManager` to create a new AppKey.
-2. Associating the AppKey with a specific name or purpose.
+2. Configuring the AppKey with a specific role and expiration date.
 3. Retrieving the generated AppKey for use in API requests.
 
 The Identity Management component ensures that AppKeys are securely generated, stored, and associated with the correct permissions, enabling secure and controlled access to Yagna services.

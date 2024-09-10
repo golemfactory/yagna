@@ -18,26 +18,30 @@ The Activity Management component in Yagna is responsible for controlling the ex
 4. **Monitoring**: The activity's progress and resource usage are monitored throughout execution.
 5. **Completion/Termination**: The activity is completed when the task finishes or terminated if issues arise.
 
-## ExeUnit Integration
+## Architecture
 
-ExeUnits are responsible for running user code within isolated environments:
+\```plantuml
+@startuml
+!define RECTANGLE class
 
-1. **Runtime Selection**: Chooses appropriate runtime (e.g., WASM, Docker) based on activity requirements.
-2. **Deployment**: Prepares the runtime environment and deploys the activity code.
-3. **Execution Control**: Starts, pauses, resumes, and stops activity execution.
-4. **Resource Management**: Enforces resource limits and tracks usage.
+RECTANGLE "Marketplace" as MKT
+RECTANGLE "Activity Management" as ACT {
+  RECTANGLE "Lifecycle Manager" as LM
+  RECTANGLE "State Manager" as SM
+  RECTANGLE "Resource Manager" as RM
+}
+RECTANGLE "ExeUnit" as EU
+RECTANGLE "Payment System" as PAY
 
-## State Management
+MKT --> ACT : Initiates activities
+ACT --> EU : Deploys and controls tasks
+ACT --> PAY : Reports billable usage
+LM --> ACT : Manages activity lifecycle
+SM --> ACT : Tracks activity states
+RM --> ACT : Allocates resources
 
-Activities can be in various states throughout their lifecycle:
-
-1. **New**: Activity has been created but not yet deployed.
-2. **Deploying**: Activity is being prepared for execution.
-3. **Ready**: Activity is deployed and ready to start.
-4. **Running**: Activity is currently executing.
-5. **Suspended**: Activity execution has been temporarily paused.
-6. **Completed**: Activity has finished execution successfully.
-7. **Terminated**: Activity has been stopped due to an error or external request.
+@enduml
+\```
 
 ## Integration with Other Components
 
@@ -46,6 +50,7 @@ The Activity Management component interacts with several other Yagna components:
 1. **Marketplace**: Receives activity requests based on confirmed agreements.
 2. **Payment**: Triggers payments based on activity execution and resource usage.
 3. **Identity Management**: Verifies the identities of Requestors and Providers involved in activities.
+4. **ExeUnit**: Manages the actual execution of tasks in isolated environments.
 
 ## Code Example: Creating and Managing an Activity
 

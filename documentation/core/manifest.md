@@ -20,6 +20,31 @@ A typical manifest includes the following sections:
 4. **Capabilities**: Lists the capabilities required by the task.
 5. **Outbound Access**: Specifies allowed network access for the task.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Requestor" as REQ
+RECTANGLE "Application Manifest Management" as AMM {
+  RECTANGLE "Parser" as PAR
+  RECTANGLE "Validator" as VAL
+  RECTANGLE "Capability Manager" as CM
+}
+RECTANGLE "Activity Management" as ACT
+RECTANGLE "ExeUnit" as EU
+
+REQ --> AMM : Submits manifest
+PAR --> AMM : Parses manifest
+VAL --> AMM : Validates structure
+CM --> AMM : Checks capabilities
+AMM --> ACT : Provides task requirements
+AMM --> EU : Defines execution constraints
+
+@enduml
+\```
+
 ## Manifest Processing Workflow
 
 1. **Parsing**: The manifest file is read and parsed into a structured format.

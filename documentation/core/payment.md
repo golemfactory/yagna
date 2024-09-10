@@ -27,6 +27,33 @@ The Dummy driver is used for testing and development purposes:
 1. **Simulated Transactions**: Provides a way to simulate payment operations without real currency movement.
 2. **Configurable Behavior**: Allows developers to simulate various payment scenarios and error conditions.
 
+## Architecture
+
+\```plantuml
+@startuml
+!define RECTANGLE class
+
+RECTANGLE "Marketplace" as MKT
+RECTANGLE "Payment System" as PAY {
+  RECTANGLE "Transaction Manager" as TM
+  RECTANGLE "Allocation Manager" as AM
+  RECTANGLE "Invoice Processor" as IP
+}
+RECTANGLE "ERC20 Driver" as ERC20
+RECTANGLE "Dummy Driver" as DUMMY
+RECTANGLE "Activity" as ACT
+
+MKT --> PAY : Initiates payments
+PAY --> ERC20 : Uses for blockchain payments
+PAY --> DUMMY : Uses for testing
+ACT --> PAY : Reports billable activities
+TM --> PAY : Manages transactions
+AM --> PAY : Manages allocations
+IP --> PAY : Processes invoices
+
+@enduml
+\```
+
 ## Payment Workflow
 
 1. **Allocation**: Requestors allocate funds for a specific task or agreement.

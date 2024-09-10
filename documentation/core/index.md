@@ -5,46 +5,57 @@ This section provides an overview of the core components that make up the Yagna 
 ## Components
 
 1. [Network Communication (net)](net.md)
-   - Handles communication between nodes in the Yagna network.
-   - Implements Hybrid Net and Central Net strategies.
+
+    - Handles communication between nodes in the Yagna network.
+    - Implements Hybrid Net and Central Net strategies.
 
 2. [Decentralized Marketplace (market)](market.md)
-   - Facilitates the matching of compute offers and demands.
-   - Manages negotiations and agreements between Requestors and Providers.
+
+    - Facilitates the matching of compute offers and demands.
+    - Manages negotiations and agreements between Requestors and Providers.
 
 3. [Payment System (payment)](payment.md)
-   - Processes transactions and manages payment allocations.
-   - Supports multiple payment drivers, including ERC20 and Dummy drivers.
+
+    - Processes transactions and manages payment allocations.
+    - Supports multiple payment drivers, including ERC20 and Dummy drivers.
 
 4. [Activity Management (activity)](activity.md)
-   - Controls the execution of tasks on Provider nodes.
-   - Manages the lifecycle of activities and interacts with ExeUnits.
+
+    - Controls the execution of tasks on Provider nodes.
+    - Manages the lifecycle of activities and interacts with ExeUnits.
 
 5. [Identity Management (identity)](identity.md)
-   - Handles user identities and authentication within the Yagna ecosystem.
-   - Manages AppKeys for secure access to Yagna services.
+
+    - Handles user identities and authentication within the Yagna ecosystem.
+    - Manages AppKeys for secure access to Yagna services.
 
 6. [Application Manifest Management (manifest)](manifest.md)
-   - Processes and validates application manifests.
-   - Defines task requirements, capabilities, and permissions.
+
+    - Processes and validates application manifests.
+    - Defines task requirements, capabilities, and permissions.
 
 7. [Cryptography (crypto)](crypto.md)
-   - Provides cryptographic functions for secure communication and data handling.
-   - Manages key generation, signing, and encryption operations.
+
+    - Provides cryptographic functions for secure communication and data handling.
+    - Manages key generation, signing, and encryption operations.
 
 8. [Access Control Lists (acl)](acl.md)
-   - Implements authorization mechanisms for Yagna services.
-   - Defines and enforces access permissions for different identities.
+
+    - Implements authorization mechanisms for Yagna services.
+    - Defines and enforces access permissions for different identities.
 
 9. [Golem File Transfer Protocol (gftp)](gftp.md)
-   - Enables efficient file transfers between nodes in the Yagna network.
-   - Implements a custom protocol optimized for distributed environments.
+
+    - Enables efficient file transfers between nodes in the Yagna network.
+    - Implements a custom protocol optimized for distributed environments.
 
 10. [Service Bus API (gsb-api)](gsb-api.md)
+
     - Provides an API for inter-service communication within Yagna.
     - Facilitates message routing and service discovery.
 
 11. [Metrics Service (metrics)](metrics.md)
+
     - Collects and exposes performance metrics from various Yagna components.
     - Enables monitoring and optimization of the Yagna platform.
 
