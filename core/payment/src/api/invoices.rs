@@ -469,7 +469,7 @@ async fn accept_invoice(
         log::warn!("{}", msg);
         return response::bad_request(&msg);
     }
-    let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
+    let amount_to_pay = &invoice.amount - &agreement.total_amount_accepted.0;
 
     log::trace!(
         "Querying DB for Allocation [{}] for Invoice [{}]",
