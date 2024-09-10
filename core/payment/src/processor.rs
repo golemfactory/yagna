@@ -40,8 +40,8 @@ use ya_core_model::payment::local::{
     CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle,
     ProcessBatchCycleError, ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet,
     ProcessPaymentsError, ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount,
-    RegisterAccountError, RegisterDriver, RegisterDriverError, ReleaseDeposit, SchedulePayment,
-    UnregisterAccount, UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
+    RegisterAccountError, RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
+    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::{identity, NodeId};
@@ -50,6 +50,13 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_bus::typed::{service, Endpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+
+pub struct ReleaseDeposit {
+    pub platform: String,
+    pub from: String,
+    pub deposit_contract: String,
+    pub deposit_id: String,
+}
 
 fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
@@ -547,6 +554,102 @@ impl PaymentProcessor {
         Ok(())
     }
 
+    async fn send_close_deposit_after_payments(
+        &self,
+        owner: NodeId,
+        platform: String,
+    ) -> Result<(), ProcessPaymentsError> {
+        let driver = self
+            .registry
+            .timeout_read(REGISTRY_LOCK_TIMEOUT)
+            .await
+            .map_err(|_| {
+                ProcessPaymentsError::ProcessPaymentsError("Internal timeout".to_string())
+            })?
+            .driver(&platform, &owner.to_string(), AccountMode::SEND)
+            .map_err(|err| {
+                ProcessPaymentsError::ProcessPaymentsError(format!("Error getting driver: {err}"))
+            })?;
+
+        let allocations_to_close = {
+            let db_executor = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT)
+                .await
+                .map_err(|err| {
+                    ProcessPaymentsError::ProcessPaymentsError(format!(
+                        "Db timeout lock when sending payments {err}"
+                    ))
+                })?;
+
+            db_executor
+                .as_dao::<AllocationDao>()
+                .get_allocations_to_close(owner, platform.clone())
+                .await
+                .map_err(|err| {
+                    ProcessPaymentsError::ProcessPaymentsError(format!("db error: {}", err))
+                })?
+        };
+
+        log::info!("got {} allocations to close", allocations_to_close.len());
+
+        for allocation in allocations_to_close {
+            let Some(deposit) = allocation.deposit else {
+                return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                    "Deposit not found, it should be present on {:?}",
+                    allocation
+                )));
+            };
+            if platform != allocation.payment_platform {
+                return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                    "Platform mismatch, expected: {}, got: {}",
+                    allocation.payment_platform, platform
+                )));
+            }
+            match driver_endpoint(&driver)
+                .send(DriverReleaseDeposit {
+                    platform: platform.clone(),
+                    from: owner.to_string(),
+                    deposit_contract: deposit.contract,
+                    deposit_id: deposit.id,
+                })
+                .await
+            {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => {
+                    return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                        "Error releasing deposit 1: {e}"
+                    )))
+                }
+                Err(e) => {
+                    return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                        "Error releasing deposit 2: {e}"
+                    )))
+                }
+            }
+
+            {
+                let db_executor = self
+                    .db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT)
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Db timeout lock when closing allocation {err}"
+                        ))
+                    })?;
+                db_executor
+                    .as_dao::<AllocationDao>()
+                    .mark_allocation_closing(allocation.allocation_id, owner)
+                    .await
+                    .map_err(|err| {
+                        ProcessPaymentsError::ProcessPaymentsError(format!("db error: {}", err))
+                    })?;
+            }
+        }
+        Ok(())
+    }
+
     fn db_batch_cycle_to_response(&self, el: DbPayBatchCycle) -> ProcessBatchCycleResponse {
         ProcessBatchCycleResponse {
             node_id: el.owner_id,
@@ -660,7 +763,7 @@ impl PaymentProcessor {
                     .resolve(
                         msg.node_id,
                         msg.node_id.to_string(),
-                        msg.platform,
+                        msg.platform.clone(),
                         Utc::now().sub(chrono::Duration::days(30)),
                     )
                     .await
@@ -683,13 +786,26 @@ impl PaymentProcessor {
             if !msg.skip_send {
                 if let Some(order_id) = order_id {
                     match self.send_batch_order_payments(msg.node_id, order_id).await {
-                        Ok(()) => {
-                            send_time_ms = send_time_now.elapsed().as_secs_f64() / 1000.0;
-                        }
+                        Ok(()) => {}
                         Err(err) => {
                             log::error!("Error when sending payments {}", err);
                             return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
                                 "Error when sending payments {}",
+                                err
+                            )));
+                        }
+                    }
+                    match self
+                        .send_close_deposit_after_payments(msg.node_id, msg.platform.clone())
+                        .await
+                    {
+                        Ok(()) => {
+                            send_time_ms = send_time_now.elapsed().as_secs_f64() / 1000.0;
+                        }
+                        Err(err) => {
+                            log::error!("Error when closing deposits {}", err);
+                            return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                                "Error when closing deposits {}",
                                 err
                             )));
                         }
@@ -1420,29 +1536,6 @@ impl PaymentProcessor {
                 log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
             }
         }
-    }
-
-    pub async fn release_deposit(&self, msg: ReleaseDeposit) -> Result<(), GenericError> {
-        let driver = self
-            .registry
-            .timeout_read(REGISTRY_LOCK_TIMEOUT)
-            .await
-            .map_err(GenericError::new)?
-            .driver(&msg.platform, &msg.from, AccountMode::SEND)
-            .map_err(GenericError::new)?;
-
-        driver_endpoint(&driver)
-            .send(DriverReleaseDeposit {
-                platform: msg.platform,
-                from: msg.from,
-                deposit_contract: msg.deposit_contract,
-                deposit_id: msg.deposit_id,
-            })
-            .await
-            .map_err(GenericError::new)?
-            .map_err(GenericError::new)?;
-
-        Ok(())
     }
 
     pub async fn shut_down(
