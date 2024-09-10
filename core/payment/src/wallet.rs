@@ -10,9 +10,10 @@ pub async fn fund(
     driver: String,
     network: Option<String>,
     token: Option<String>,
+    mint_only: bool,
 ) -> anyhow::Result<String> {
     let driver_id = driver_bus_id(driver);
-    let message = Fund::new(address, network, token);
+    let message = Fund::new(address, network, token, mint_only);
     let reply = bus::service(driver_id).call(message).await??;
     Ok(reply)
 }

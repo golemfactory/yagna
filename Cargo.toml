@@ -15,7 +15,7 @@ static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 tos = []
-framework-test = ['ya-exe-unit/framework-test', 'ya-activity/framework-test']
+framework-test = ['ya-exe-unit/framework-test', 'ya-payment/framework-test', 'ya-identity/framework-test']
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
 packet-trace-enable = [
@@ -32,7 +32,8 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.9" }
+
+ya-core-model.workspace = true
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
 ya-gsb-api = "0.1"
@@ -58,8 +59,8 @@ ya-utils-networking = "0.2"
 ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
-ya-client = "0.8"
-ya-client-model = "0.6"
+ya-client.workspace = true
+ya-client-model.workspace = true
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.3", optional = true }                    # just to enable conditionally running some tests
@@ -230,6 +231,7 @@ members = [
     "test-utils/test-framework",
     "test-utils/test-framework/framework-macro",
     "test-utils/test-framework/framework-basic",
+    "test-utils/test-framework/framework-mocks",
 ]
 
 [workspace.dependencies]
@@ -242,9 +244,9 @@ erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", r
 erc20_payment_lib_common = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4eb076ec19bf58cf4063b4cdb4cf370473892203" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
-#erc20_payment_lib = { version = "=0.4.1" }
-#erc20_processor = { version = "=0.4.1" }
-gftp = { version = "0.4.0", path = "core/gftp" }
+#erc20_payment_lib = { version = "0.4.7" }
+#erc20_processor = { version = "0.4.7" }
+gftp = { version = "0.4.1", path = "core/gftp" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 openssl = "0.10"
@@ -255,7 +257,8 @@ url = "2.3.1"
 regex = "1.10.4"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0588dd1af311ae19c621b04cc2a4cfd9c0483252" }
+ya-core-model = { version = "0.10", path = "core/model" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "e199ee1cfdb22837f9d95f4202378e182d3cb489" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 
@@ -265,6 +268,10 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
+# true version is given in patches section
+ya-client = "0.9"
+# true version is given in patches section
+ya-client-model = "0.7"
 
 [patch.crates-io]
 ## SERVICES
@@ -291,11 +298,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a2fa0d54fe47a013add90b7ae687afe4f08ce7a2" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
 #ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a2fa0d54fe47a013add90b7ae687afe4f08ce7a2" }
-#ya-client-model = { path = "../ya-client/model" }
-golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "c8675c4eb0d42119b1cfa2f5772ba91f877d81f9" }
+golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "952fdbd47adc57e46b7370935111e046271ef415" }
 
 ## RELAY and networking stack
 
@@ -331,6 +337,7 @@ ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 ya-test-framework = { path = "test-utils/test-framework" }
 ya-framework-macro = { path = "test-utils/test-framework/framework-macro" }
 ya-framework-basic = { path = "test-utils/test-framework/framework-basic" }
+ya-framework-mocks = { path = "test-utils/test-framework/framework-mocks" }
 
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

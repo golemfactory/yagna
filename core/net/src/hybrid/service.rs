@@ -1147,7 +1147,7 @@ fn handler_reply_err(
     });
 }
 
-fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
+pub fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
     const ADDR_CONST: usize = 6;
 
     let mut it = addr.split('/').fuse().skip(1).peekable();
@@ -1165,7 +1165,7 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
     Ok((to_id, format!("{}{}", prefix, addr)))
 }
 
-fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
+pub fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
     const ADDR_CONST: usize = 10;
 
     let mut it = addr.split('/').fuse().skip(1).peekable();

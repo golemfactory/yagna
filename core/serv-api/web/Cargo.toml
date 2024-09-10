@@ -6,10 +6,10 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = "0.8"
-ya-core-model = { version = "^0.9", features = ["appkey"] }
+ya-client.workspace = true
+ya-core-model = { workspace = true, features = ["appkey"] }
 ya-service-api = "0.1"
-ya-service-bus = {  workspace  = true }
+ya-service-bus = { workspace = true }
 
 actix-cors = "0.6"
 actix-service = "2"

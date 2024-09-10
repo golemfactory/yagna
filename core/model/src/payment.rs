@@ -30,6 +30,7 @@ pub mod local {
 
     use ya_client_model::{payment::allocation::Deposit, NodeId};
 
+    pub const BUS_SERVICE_NAME: &str = "payment";
     pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
@@ -557,6 +558,8 @@ pub mod local {
         #[strum(props(token = "GLM"))]
         Mainnet,
         #[strum(props(token = "tGLM"))]
+        Sepolia,
+        #[strum(props(token = "tGLM"))]
         Rinkeby,
         #[strum(props(token = "tGLM"))]
         Goerli,
@@ -566,6 +569,8 @@ pub mod local {
         Polygon,
         #[strum(props(token = "tGLM"))]
         Mumbai,
+        #[strum(props(token = "tGLM"))]
+        Amoy,
     }
 
     impl NetworkName {
@@ -583,7 +588,7 @@ pub mod local {
     impl NetworkName {
         pub fn is_fundable(&self) -> bool {
             use NetworkName::*;
-            matches!(self, Goerli | Holesky)
+            matches!(self, Sepolia | Goerli | Holesky | Amoy)
         }
 
         pub fn all_fundable() -> Vec<NetworkName> {
