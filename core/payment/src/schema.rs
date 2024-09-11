@@ -101,10 +101,11 @@ table! {
 }
 
 table! {
-    pay_batch_order_item_document (owner_id, order_id, payee_addr, agreement_id) {
+    pay_batch_order_item_document (owner_id, order_id, payee_addr, allocation_id, agreement_id, activity_id) {
         order_id -> Text,
         owner_id -> Text,
         payee_addr -> Text,
+        allocation_id -> Text,
         agreement_id -> Text,
         invoice_id -> Nullable<Text>,
         activity_id -> Nullable<Text>,
