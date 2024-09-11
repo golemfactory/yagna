@@ -1133,34 +1133,6 @@ impl PaymentDriver for Erc20Driver {
         .await
     }
 
-    /*
-        async fn try_update_payment(
-            &self,
-            _caller: String,
-            msg: TryUpdatePayment,
-        ) -> Result<TryUpdatePaymentResult, GenericError> {
-            log::debug!("try_update_payment: {:?}", msg);
-
-            let platform = msg.platform();
-            let network = platform.split('-').nth(1).ok_or(GenericError::new(format!(
-                "Malformed platform string: {}",
-                msg.platform()
-            )))?;
-
-            let transfer_margin = Duration::minutes(2);
-
-            self.update_transfer(
-                &msg.payment_id(),
-                &msg.sender(),
-                &msg.recipient(),
-                &msg.amount(),
-                network,
-                Some(msg.due_date() - transfer_margin),
-                msg.deposit_id(),
-            )
-            .await
-        }
-    */
     async fn schedule_payment(
         &self,
         _caller: String,

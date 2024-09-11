@@ -69,13 +69,6 @@ pub trait PaymentDriver {
         msg: ScheduleDriverPayment,
     ) -> Result<String, GenericError>;
 
-    /*
-        async fn try_update_payment(
-            &self,
-            caller: String,
-            msg: TryUpdatePayment,
-        ) -> Result<TryUpdatePaymentResult, GenericError>;
-    */
     async fn flush_payments(
         &self,
         caller: String,
