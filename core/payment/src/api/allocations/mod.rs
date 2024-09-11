@@ -520,7 +520,13 @@ async fn get_pay_allocation_orders(
     let allocation_id = path.into_inner();
     let dao: BatchDao = db.as_dao();
     match dao
-        .get_batch_items(node_id, None, None, Some(allocation_id), None, None)
+        .get_batch_items(
+            node_id,
+            BatchItemFilter {
+                allocation_id: Some(allocation_id),
+                ..Default::default()
+            },
+        )
         .await
     {
         Ok(items) => response::ok(items),

@@ -389,7 +389,10 @@ impl Erc20Driver {
 
         log::info!("name: {}", &self.get_name());
         log::info!("platform: {}", platform);
-        log::info!("payment_id: {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!(
+            "payment_id: {}",
+            token_transfer.payment_id.as_ref().unwrap()
+        );
         log::info!("payment_details: {}", payment_details);
         log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
 
