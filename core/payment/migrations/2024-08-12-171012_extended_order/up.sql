@@ -188,4 +188,3 @@ CREATE TABLE pay_post_migration(
 
 -- update total_paid in pay_agreement after migrations
 INSERT INTO pay_post_migration (job) VALUES ('sum_activities_into_agreement');
-INSERT INTO pay_post_migration (job) VALUES ('dummy_job');
