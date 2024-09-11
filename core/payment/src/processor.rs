@@ -5,7 +5,7 @@ use crate::dao::{
 };
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
-    SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
+    ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::cycle::DbPayBatchCycle;
 use crate::models::order::ReadObj as DbOrder;
@@ -37,10 +37,10 @@ use ya_core_model::driver::{
     ValidateAllocation, ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
-    CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment, PaymentTitle,
+    CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment,
     ProcessBatchCycleError, ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet,
     ProcessPaymentsError, ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount,
-    RegisterAccountError, RegisterDriver, RegisterDriverError, SchedulePayment, UnregisterAccount,
+    RegisterAccountError, RegisterDriver, RegisterDriverError, UnregisterAccount,
     UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
@@ -1054,151 +1054,6 @@ impl PaymentProcessor {
     }
 
     pub async fn collect_payments(&self, msg: CollectPayments) -> Result<(), GenericError> {
-        Ok(())
-    }
-
-    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
-        if self.in_shutdown.load(Ordering::SeqCst) {
-            return Err(SchedulePaymentError::Shutdown);
-        }
-        let _guard = self
-            .schedule_payment_guard
-            .timeout_lock(SCHEDULE_PAYMENT_LOCK_TIMEOUT)
-            .await?;
-
-        let amount = msg.amount.clone();
-        if amount <= BigDecimal::zero() {
-            return Err(SchedulePaymentError::InvalidInput(format!(
-                "Can not schedule payment with <=0 amount: {}",
-                &amount
-            )));
-        }
-
-        let debit_note = match &msg.title {
-            PaymentTitle::DebitNote(dn) => Some(dn),
-            PaymentTitle::Invoice(_) => None,
-        };
-
-        /*
-        if let Some(previous_pay_order) = previous_pay_order {
-            log::info!(
-                "Found payment order for previous debit note {}",
-                debit_note.debit_note_id
-            );
-            let allocation_status = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await?
-                .as_dao::<AllocationDao>()
-                .get(msg.allocation_id.clone(), msg.payer_id)
-                .await?;
-            let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
-                allocation.deposit
-            } else {
-                None
-            };
-            let driver = self
-                .registry
-                .timeout_read(REGISTRY_LOCK_TIMEOUT)
-                .await?
-                .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
-
-            let new_amount = previous_pay_order.amount.0.clone() + amount.clone();
-            let res = driver_endpoint(&driver)
-                .send(driver::TryUpdatePayment::new(
-                    previous_pay_order.id.clone(),
-                    new_amount.clone(),
-                    msg.payer_addr.clone(),
-                    msg.payee_addr.clone(),
-                    msg.payment_platform.clone(),
-                    deposit_id,
-                    msg.due_date,
-                ))
-                .await??;
-
-            match res {
-                TryUpdatePaymentResult::PaymentNotFound => {
-                    log::info!(
-                        "Payment order not found for previous debit note {}",
-                        debit_note.debit_note_id
-                    );
-                }
-                TryUpdatePaymentResult::PaymentUpdated => {
-                    self.db_executor
-                        .timeout_lock(DB_LOCK_TIMEOUT)
-                        .await?
-                        .as_dao::<OrderDao>()
-                        .update_order(
-                            msg.clone(),
-                            previous_pay_order.id.clone(),
-                            debit_note.debit_note_id.clone(),
-                            new_amount.clone(),
-                            previous_pay_order.amount.0.clone(),
-                        )
-                        .await?;
-                    log::info!(
-                        "Payment order updated with new debit note {}",
-                        debit_note.debit_note_id
-                    );
-                    return Ok(());
-                }
-                TryUpdatePaymentResult::PaymentNotUpdated => {
-                    log::info!(
-                        "Payment order already processed for {}",
-                        debit_note.debit_note_id
-                    );
-                }
-            }
-        }
-        */
-
-        /*
-                if let Some(debit_note) = debit_note {
-                    log::info!(
-                        "Creating new payment order for debit note {}",
-                        debit_note.debit_note_id
-                    );
-                } else {
-                    log::info!("Creating new payment order for invoice");
-                }
-
-                let allocation_status = self
-                    .db_executor
-                    .timeout_lock(DB_LOCK_TIMEOUT)
-                    .await?
-                    .as_dao::<AllocationDao>()
-                    .get(msg.allocation_id.clone(), msg.payer_id)
-                    .await?;
-                let deposit_id = if let AllocationStatus::Active(allocation) = allocation_status {
-                    allocation.deposit
-                } else {
-                    None
-                };
-
-                let driver = self
-                    .registry
-                    .timeout_read(REGISTRY_LOCK_TIMEOUT)
-                    .await?
-                    .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
-
-                let order_id = driver_endpoint(&driver)
-                    .send(driver::SchedulePayment::new(
-                        amount,
-                        msg.payer_addr.clone(),
-                        msg.payee_addr.clone(),
-                        msg.payment_platform.clone(),
-                        deposit_id,
-                        msg.due_date,
-                    ))
-                    .await??;
-
-                self.db_executor
-                    .timeout_lock(DB_LOCK_TIMEOUT)
-                    .await?
-                    .as_dao::<OrderDao>()
-                    .create(msg, order_id, driver)
-                    .await?;
-        */
         Ok(())
     }
 

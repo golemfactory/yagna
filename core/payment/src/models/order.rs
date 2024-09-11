@@ -1,6 +1,5 @@
 use crate::schema::pay_order;
 use ya_client_model::NodeId;
-use ya_core_model::payment::local::{PaymentTitle, SchedulePayment};
 use ya_persistence::types::BigDecimalField;
 
 #[derive(Debug, Insertable)]
@@ -45,27 +44,4 @@ pub struct ReadObj {
 pub struct OrderReadObjSmall {
     pub id: String,
     pub amount: BigDecimalField,
-}
-
-impl WriteObj {
-    pub fn new(msg: SchedulePayment, id: String, driver: String) -> Self {
-        let (invoice_id, debit_note_id) = match msg.title {
-            PaymentTitle::DebitNote(title) => (None, Some(title.debit_note_id)),
-            PaymentTitle::Invoice(title) => (Some(title.invoice_id), None),
-        };
-        Self {
-            id,
-            driver,
-            amount: msg.amount.into(),
-            payee_id: msg.payee_id,
-            payer_id: msg.payer_id,
-            payee_addr: msg.payee_addr,
-            payer_addr: msg.payer_addr,
-            payment_platform: msg.payment_platform,
-            invoice_id,
-            debit_note_id,
-            allocation_id: msg.allocation_id,
-            is_paid: false,
-        }
-    }
 }

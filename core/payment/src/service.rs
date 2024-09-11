@@ -80,7 +80,6 @@ mod local {
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(collect_payments)
-            .bind_with_processor(schedule_payment)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
             .bind_with_processor(register_account)
@@ -151,29 +150,6 @@ mod local {
     ) -> Result<(), GenericError> {
         processor.collect_payments(msg).await?;
         Ok(())
-    }
-
-    async fn schedule_payment(
-        db: DbExecutor,
-        processor: Arc<PaymentProcessor>,
-        sender: String,
-        msg: SchedulePayment,
-    ) -> Result<(), GenericError> {
-        let id = msg.document_id();
-        debug!(
-            entity = "payment",
-            action = "schedule",
-            id,
-            "Schedule payment started"
-        );
-        let res = processor.schedule_payment(msg).await;
-        trace!(
-            entity = "payment",
-            action = "schedule",
-            id,
-            "Schedule payment finished"
-        );
-        Ok(res?)
     }
 
     async fn register_driver(
