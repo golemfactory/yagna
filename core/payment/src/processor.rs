@@ -791,6 +791,11 @@ impl PaymentProcessor {
         let payee_id = NodeId::from_str(&payee_addr)
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
 
+        if payer_addr == payee_addr {
+            log::warn!("Payer and payee addresses are the same: {} - skip notification", payer_addr);
+            return Ok(());
+        }
+
         let payment_id: String;
 
         let payment: Payment = {
@@ -849,45 +854,8 @@ impl PaymentProcessor {
                         }),
                     }
                 }
-                //log::warn!("activity_payments: {:?}", activity_payments);
-                //log::warn!("agreement_payments: {:?}", agreement_payments);
             }
 
-            /*
-            validate_orders(
-                &orders,
-                &payment_platform,
-                &payer_addr,
-                &payee_addr,
-                &msg.amount,
-            )?;
-
-            let mut activity_payments = vec![];
-            let mut agreement_payments = vec![];
-            for order in orders.iter() {
-                let amount = order.amount.clone().into();
-                match (order.activity_id.clone(), order.agreement_id.clone()) {
-                    (Some(activity_id), None) => activity_payments.push(ActivityPayment {
-                        activity_id,
-                        amount,
-                        allocation_id: Some(order.allocation_id.clone()),
-                    }),
-                    (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
-                        agreement_id,
-                        amount,
-                        allocation_id: Some(order.allocation_id.clone()),
-                    }),
-                    _ => return NotifyPaymentError::invalid_order(order),
-                }
-            }*/
-
-            /*
-                        // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
-                        //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
-                        //        data model. Payments can no longer by assigned to a single payer and payee.
-                        payer_id = orders.get(0).unwrap().payer_id;
-                        payee_id = orders.get(0).unwrap().payee_id;
-            */
             let payment_dao: PaymentDao = db_executor.as_dao();
 
             payment_id = payment_dao
