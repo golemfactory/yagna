@@ -108,9 +108,7 @@ pub mod processor {
     use super::DbError;
     use crate::models::activity::ReadObj as Activity;
     use crate::models::agreement::ReadObj as Agreement;
-    use crate::models::order::ReadObj as Order;
     use bigdecimal::BigDecimal;
-    use std::fmt::Display;
     use tokio::time::error::Elapsed;
     use ya_core_model::driver::AccountMode;
     use ya_core_model::payment::local::{
@@ -164,54 +162,7 @@ pub mod processor {
     }
 
     #[derive(thiserror::Error, Debug)]
-    #[error("{0}")]
-    pub struct OrderValidationError(String);
-
-    impl OrderValidationError {
-        pub fn new<T: Display>(e: T) -> Self {
-            Self(e.to_string())
-        }
-
-        pub fn platform(order: &Order, platform: &str) -> Result<(), Self> {
-            Err(Self(format!(
-                "Invalid platform for payment order {}: {} != {}",
-                order.id, order.payment_platform, platform
-            )))
-        }
-
-        pub fn payer_addr(order: &Order, payer_addr: &str) -> Result<(), Self> {
-            Err(Self(format!(
-                "Invalid payer address for payment order {}: {} != {}",
-                order.id, order.payer_addr, payer_addr
-            )))
-        }
-
-        pub fn payee_addr(order: &Order, payee_addr: &str) -> Result<(), Self> {
-            Err(Self(format!(
-                "Invalid payee address for payment order {}: {} != {}",
-                order.id, order.payee_addr, payee_addr
-            )))
-        }
-
-        pub fn amount(expected: &BigDecimal, actual: &BigDecimal) -> Result<(), Self> {
-            Err(Self(format!(
-                "Invalid payment amount: {} != {}",
-                expected, actual
-            )))
-        }
-
-        pub fn zero_amount(order: &Order) -> Result<(), Self> {
-            Err(Self(format!(
-                "Payment order can not have 0 amount. order_id={}",
-                order.id
-            )))
-        }
-    }
-
-    #[derive(thiserror::Error, Debug)]
     pub enum NotifyPaymentError {
-        #[error("{0}")]
-        Validation(#[from] OrderValidationError),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
         #[error("Error while sending payment: {0}")]
@@ -224,15 +175,6 @@ pub mod processor {
         InternalTimeout(#[from] Elapsed),
         #[error("Other")]
         Other(String),
-    }
-
-    impl NotifyPaymentError {
-        pub fn invalid_order(order: &Order) -> Result<(), Self> {
-            Err(Self::Validation(OrderValidationError::new(format!(
-                "Invalid payment order retrieved from database: {:?}",
-                order
-            ))))
-        }
     }
 
     impl From<NotifyPaymentError> for GenericError {
