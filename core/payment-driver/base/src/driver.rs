@@ -141,8 +141,16 @@ pub trait PaymentDriver {
         let s: [u8; 32] = msg.signature[33..65].try_into().unwrap();
         let signature = Signature { v, r, s };
 
-        let payload = if msg.canonicalized {
-            utils::payment_hash_canonicalized(&msg.payment)
+        let payload = if let Some(payload) = msg.canonical {
+            match msg.payment.verify_canonical(payload.as_slice()) {
+                Ok(_) => prepare_signature_hash(&payload),
+                Err(e) => {
+                    log::info!(
+                        "Signature verification: canonical representation doesn't match struct: {e}"
+                    );
+                    return Ok(false);
+                }
+            }
         } else {
             // Backward compatibility version for older Nodes that don't send canonical
             // signed bytes and used Payment debug formatting as representation.

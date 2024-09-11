@@ -61,7 +61,8 @@ impl PaymentService {
         let config = Arc::new(Config::from_env()?);
 
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), BindOptions::default(), config);
+        self::service::bind_service(&db, processor.clone(), config);
+
         processor.process_post_migration_jobs().await?;
 
         tokio::task::spawn(async move {

@@ -1164,52 +1164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "camino"
-version = "1.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b96ec4966b5813e2c0507c1f86115c8c5abaadc3980879c3424042a02fd1ad3"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "cargo-platform"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24b1f0365a6c6bb4020cd05806fd0d33c44d38046b8bd7f0e40814b9763cabfc"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "cargo_metadata"
-version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver 1.0.23",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "cargo_metadata"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver 1.0.23",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "cc"
 version = "1.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3508,16 +3462,6 @@ name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
-
-[[package]]
-name = "humantime-serde"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
-dependencies = [
- "humantime 2.1.0",
- "serde",
-]
 
 [[package]]
 name = "hyper"
@@ -7544,18 +7488,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
-name = "test-binary"
-version = "3.0.2"
-source = "git+https://github.com/golemfactory/test-binary.git#c9ebfa3e257455f8365e042b8838a518f2106169"
-dependencies = [
- "camino",
- "cargo_metadata 0.15.4",
- "once_cell",
- "paste",
- "thiserror",
-]
-
-[[package]]
 name = "test-case"
 version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8875,7 +8807,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.9.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=dacad31b5bbd039b8ffc97adb70696655d0872ad#dacad31b5bbd039b8ffc97adb70696655d0872ad"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=8dc4ccec33ad4d51fe975b038677bcbbd920653a#8dc4ccec33ad4d51fe975b038677bcbbd920653a"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8899,14 +8831,13 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=dacad31b5bbd039b8ffc97adb70696655d0872ad#dacad31b5bbd039b8ffc97adb70696655d0872ad"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=8dc4ccec33ad4d51fe975b038677bcbbd920653a#8dc4ccec33ad4d51fe975b038677bcbbd920653a"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
  "derive_more",
  "diesel",
  "hex",
- "humantime-serde",
  "openssl",
  "rand 0.8.5",
  "secp256k1 0.27.0",
@@ -9087,14 +9018,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
- "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
  "shell-words",
  "signal-hook",
  "socket2 0.4.10",
  "structopt",
  "tempdir",
- "test-context",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -9106,12 +9035,10 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-counters",
- "ya-framework-basic",
  "ya-gsb-http-proxy",
  "ya-manifest-utils",
- "ya-mock-runtime",
  "ya-packet-trace 0.1.0 (git+https://github.com/golemfactory/ya-packet-trace)",
- "ya-runtime-api 0.7.1",
+ "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
  "ya-std-utils",
@@ -9156,7 +9083,6 @@ dependencies = [
  "async-trait",
  "awc",
  "bytes 1.7.1",
- "cargo_metadata 0.18.1",
  "crossterm 0.26.1",
  "env_logger 0.7.1",
  "futures 0.3.30",
@@ -9174,7 +9100,6 @@ dependencies = [
  "sha2 0.8.2",
  "sha3 0.8.2",
  "tempdir",
- "test-binary",
  "test-context",
  "thiserror",
  "tokio",
@@ -9513,36 +9438,6 @@ dependencies = [
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus",
-]
-
-[[package]]
-name = "ya-mock-runtime"
-version = "0.1.0"
-dependencies = [
- "actix",
- "anyhow",
- "async-trait",
- "bytes 1.7.1",
- "env_logger 0.10.2",
- "futures 0.3.30",
- "hex",
- "log",
- "portpicker",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-util",
- "url",
- "uuid 0.8.2",
- "ya-client-model",
- "ya-core-model",
- "ya-exe-unit",
- "ya-framework-basic",
- "ya-runtime-api 0.7.0",
- "ya-sb-router",
  "ya-service-bus",
 ]
 
@@ -9951,25 +9846,6 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf0db25811f107d62be6c6ac7444d9c6c3e39714b6f76d72798b66ecce47506f"
-dependencies = [
- "anyhow",
- "bytes 1.7.1",
- "futures 0.3.30",
- "log",
- "prost 0.10.4",
- "prost-build 0.10.4",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "ya-runtime-api"
 version = "0.7.1"
 dependencies = [
  "anyhow",
@@ -10234,7 +10110,6 @@ dependencies = [
  "test-context",
  "thiserror",
  "tokio",
- "tokio-stream",
  "tokio-tar",
  "tokio-util",
  "url",
@@ -10244,7 +10119,7 @@ dependencies = [
  "ya-core-model",
  "ya-exe-unit",
  "ya-framework-basic",
- "ya-runtime-api 0.7.1",
+ "ya-runtime-api",
  "ya-service-bus",
  "ya-utils-futures",
  "ya-utils-path",
