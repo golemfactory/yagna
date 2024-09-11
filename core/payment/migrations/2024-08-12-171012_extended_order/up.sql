@@ -27,7 +27,7 @@ CREATE TABLE pay_batch_order_item(
 
     CONSTRAINT pay_batch_order_item_pk PRIMARY KEY (owner_id, order_id, payee_addr),
     CONSTRAINT pay_batch_order_item_fk1 FOREIGN KEY (owner_id, order_id) REFERENCES pay_batch_order(owner_id, id),
-    CONSTRAINT pay_batch_order_item_fk2 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
+    CONSTRAINT pay_batch_order_item_fk2 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id)
 );
 
 -- We are selecting by payment_id when notifying the pay_batch_order_item
@@ -173,18 +173,19 @@ SELECT owner_id,
        amount
 FROM pay_agreement_payment;
 
--- update total_paid in pay_agreement:
-UPDATE pay_agreement
-SET total_amount_paid = cast(total_amount_paid + (SELECT sum(total_amount_paid)
-    FROM pay_activity s
-    WHERE s.owner_id = pay_agreement.owner_id
-    AND s.role = pay_agreement.role
-    AND s.agreement_id = pay_agreement.id) AS VARCHAR)
-WHERE EXISTS (SELECT 1 FROM pay_activity s2 WHERE s2.owner_id = pay_agreement.owner_id
-    AND s2.role = pay_agreement.role
-    AND s2.agreement_id = pay_agreement.id);
-
-
 DROP TABLE pay_activity_payment;
 DROP TABLE pay_agreement_payment;
 DROP TABLE pay_order;
+
+
+CREATE TABLE pay_post_migration(
+    job VARCHAR(50) NOT NULL,
+    done DATETIME,
+    result TEXT,
+
+    CONSTRAINT pay_post_migration_pk PRIMARY KEY (job)
+);
+
+-- update total_paid in pay_agreement after migrations
+INSERT INTO pay_post_migration (job) VALUES ('sum_activities_into_agreement');
+INSERT INTO pay_post_migration (job) VALUES ('dummy_job');

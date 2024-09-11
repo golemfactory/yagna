@@ -54,12 +54,14 @@ impl Service for PaymentService {
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db = context.component();
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::run_with_output)
+            .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
 
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
         self::service::bind_service(&db, processor.clone(), BindOptions::default(), config);
+        processor.process_post_migration_jobs().await?;
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;
