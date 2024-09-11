@@ -96,14 +96,14 @@ async fn schedule_payment(
     let confirmation = serde_json::to_string(&details)
         .map_err(GenericError::new)?
         .into_bytes();
-    let order_id = Uuid::new_v4().to_string();
+    let payment_id = Uuid::new_v4().to_string();
     let msg = payment_srv::NotifyPayment {
         driver: DRIVER_NAME.to_string(),
         platform: PLATFORM_NAME.to_string(),
         amount: details.amount,
         sender: details.sender,
         recipient: details.recipient,
-        order_ids: vec![order_id.clone()],
+        payment_id: payment_id.clone(),
         confirmation: PaymentConfirmation { confirmation },
     };
 
@@ -117,7 +117,7 @@ async fn schedule_payment(
             .map_err(|e| log::error!("{}", e));
     });
 
-    Ok(order_id)
+    Ok(payment_id)
 }
 
 async fn verify_payment(

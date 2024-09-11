@@ -389,7 +389,7 @@ impl Erc20Driver {
 
         log::info!("name: {}", &self.get_name());
         log::info!("platform: {}", platform);
-        log::info!("order_id: {}", token_transfer.payment_id.as_ref().unwrap());
+        log::info!("payment_id: {}", token_transfer.payment_id.as_ref().unwrap());
         log::info!("payment_details: {}", payment_details);
         log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
 
@@ -399,7 +399,7 @@ impl Erc20Driver {
         bus::notify_payment(
             &self.get_name(),
             platform,
-            vec![payment_id.clone()],
+            payment_id.clone(),
             &payment_details,
             transaction_hash,
         )

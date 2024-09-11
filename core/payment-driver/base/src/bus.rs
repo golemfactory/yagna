@@ -183,7 +183,7 @@ pub async fn get_pubkey(node_id: NodeId) -> Result<Vec<u8>, GenericError> {
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
-    order_ids: Vec<String>,
+    payment_id: String,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
 ) -> Result<(), GenericError> {
@@ -193,7 +193,7 @@ pub async fn notify_payment(
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
-        order_ids,
+        payment_id,
         confirmation: PaymentConfirmation { confirmation },
     };
     service(payment_srv::BUS_ID)
