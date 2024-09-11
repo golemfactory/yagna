@@ -542,11 +542,17 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
         if expenditure_new.scheduled_amount != expenditure_old.scheduled_amount {
             log::info!("Updating expenditure {:?}", expenditure_new);
-            diesel::update(pae_dsl::pay_allocation_expenditure)
+            let mut query = diesel::update(pae_dsl::pay_allocation_expenditure)
                 .filter(pae_dsl::owner_id.eq(&expenditure_new.owner_id))
                 .filter(pae_dsl::allocation_id.eq(&expenditure_new.allocation_id))
                 .filter(pae_dsl::agreement_id.eq(&expenditure_new.agreement_id))
-                .filter(pae_dsl::activity_id.eq(&expenditure_new.activity_id))
+                .into_boxed();
+            if let Some(activity_id) = &expenditure_new.activity_id {
+                query = query.filter(pae_dsl::activity_id.eq(activity_id));
+            } else {
+                query = query.filter(pae_dsl::activity_id.is_null());
+            }
+            query
                 .set(pae_dsl::scheduled_amount.eq(&expenditure_new.scheduled_amount))
                 .execute(conn)?;
         } else {

@@ -54,23 +54,35 @@ pub fn spend_from_allocation(conn: &ConnType, args: SpendFromAllocationArgs) -> 
         .filter(dsl::owner_id.eq(args.owner_id))
         .execute(conn)?;
 
-    if let Some(accepted_amount) = dsld::pay_allocation_expenditure
+    let query = dsld::pay_allocation_expenditure
         .select(dsld::accepted_amount)
         .filter(dsld::owner_id.eq(args.owner_id))
         .filter(dsld::allocation_id.eq(&args.allocation_id))
         .filter(dsld::agreement_id.eq(&args.agreement_id))
-        .filter(dsld::activity_id.eq(&args.activity_id))
-        .first::<BigDecimalField>(conn)
-        .optional()?
-    {
+        .into_boxed();
+
+    let query = if let Some(activity_id) = &args.activity_id {
+        query.filter(dsld::activity_id.eq(activity_id))
+    } else {
+        query.filter(dsld::activity_id.is_null())
+    };
+
+    if let Some(accepted_amount) = query.first::<BigDecimalField>(conn).optional()? {
         let new_document_amount: BigDecimalField = (accepted_amount.0 + &args.amount).into();
-        diesel::update(dsld::pay_allocation_expenditure)
+
+        let query = diesel::update(dsld::pay_allocation_expenditure)
             .set(dsld::accepted_amount.eq(new_document_amount))
             .filter(dsld::owner_id.eq(args.owner_id))
             .filter(dsld::allocation_id.eq(&args.allocation_id))
             .filter(dsld::agreement_id.eq(&args.agreement_id))
-            .filter(dsld::activity_id.eq(&args.activity_id))
-            .execute(conn)?;
+            .into_boxed();
+
+        let query = if let Some(activity_id) = &args.activity_id {
+            query.filter(dsld::activity_id.eq(activity_id))
+        } else {
+            query.filter(dsld::activity_id.is_null())
+        };
+        query.execute(conn)?;
     } else {
         diesel::insert_into(dsld::pay_allocation_expenditure)
             .values((
