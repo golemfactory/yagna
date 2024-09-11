@@ -796,15 +796,10 @@ impl PaymentProcessor {
         let payment: Payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
-            let mut order_items = Vec::new();
-
-            for order_id in msg.order_ids {
-                let order_items_part = db_executor
-                    .as_dao::<BatchDao>()
-                    .get_batch_order_items_by_payment_id(order_id, payer_id)
-                    .await?;
-                order_items.extend(order_items_part);
-            }
+            let order_items = db_executor
+                .as_dao::<BatchDao>()
+                .get_batch_order_items_by_payment_id(msg.payment_id, payer_id)
+                .await?;
 
             let mut activity_payments = vec![];
             let mut agreement_payments = vec![];

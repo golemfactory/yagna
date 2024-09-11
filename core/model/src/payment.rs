@@ -173,7 +173,7 @@ pub mod local {
         pub amount: BigDecimal,
         pub sender: String,
         pub recipient: String,
-        pub order_ids: Vec<String>,
+        pub payment_id: String,
         pub confirmation: PaymentConfirmation,
     }
 
