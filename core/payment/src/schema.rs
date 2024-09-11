@@ -211,23 +211,6 @@ table! {
 }
 
 table! {
-    pay_order (id, driver) {
-        id -> Text,
-        driver -> Text,
-        amount -> Text,
-        payee_id -> Text,
-        payer_id -> Text,
-        payee_addr -> Text,
-        payer_addr -> Text,
-        payment_platform -> Text,
-        invoice_id -> Nullable<Text>,
-        debit_note_id -> Nullable<Text>,
-        allocation_id -> Text,
-        is_paid -> Bool,
-    }
-}
-
-table! {
     pay_payment (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -288,7 +271,6 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice_event,
     pay_invoice_event_read,
     pay_invoice_x_activity,
-    pay_order,
     pay_payment,
     pay_payment_document,
 );

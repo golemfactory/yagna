@@ -4,11 +4,10 @@ use crate::dao::{
     ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, PaymentDao, SyncNotifsDao,
 };
 use crate::error::processor::{
-    AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
-    ValidateAllocationError, VerifyPaymentError,
+    AccountNotRegistered, GetStatusError, NotifyPaymentError, ValidateAllocationError,
+    VerifyPaymentError,
 };
 use crate::models::cycle::DbPayBatchCycle;
-use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
 use crate::utils::remove_allocation_ids_from_payment;
@@ -60,44 +59,6 @@ pub struct ReleaseDeposit {
 
 fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
-}
-
-fn validate_orders(
-    orders: &[DbOrder],
-    platform: &str,
-    payer_addr: &str,
-    payee_addr: &str,
-    amount: &BigDecimal,
-) -> Result<(), OrderValidationError> {
-    if orders.is_empty() {
-        return Err(OrderValidationError::new(
-            "orders not found in the database",
-        ));
-    }
-
-    let mut total_amount = BigDecimal::zero();
-    for order in orders.iter() {
-        if order.amount.0 == BigDecimal::zero() {
-            return OrderValidationError::zero_amount(order);
-        }
-        if order.payment_platform != platform {
-            return OrderValidationError::platform(order, platform);
-        }
-        if order.payer_addr != payer_addr {
-            return OrderValidationError::payer_addr(order, payer_addr);
-        }
-        if order.payee_addr != payee_addr {
-            return OrderValidationError::payee_addr(order, payee_addr);
-        }
-
-        total_amount += &order.amount.0;
-    }
-
-    if &total_amount > amount {
-        return OrderValidationError::amount(&total_amount, amount);
-    }
-
-    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -825,10 +786,6 @@ impl PaymentProcessor {
         let payer_addr = msg.sender.clone();
         let payee_addr = msg.recipient;
 
-        //todo find proper barch order items
-        if msg.order_ids.is_empty() {
-            return Err(OrderValidationError::new("order_ids is empty").into());
-        };
         let payer_id = NodeId::from_str(&msg.sender)
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payer address: {err}")))?;
         let payee_id = NodeId::from_str(&payee_addr)
