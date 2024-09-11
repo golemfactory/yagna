@@ -9,7 +9,6 @@ use std::time::Instant;
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
 };
@@ -19,7 +18,6 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use super::guard::AgreementLock;
@@ -447,15 +445,7 @@ async fn accept_debit_note(
     let result = async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
-        let schedule_msg =
-            SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
-            // Schedule payment (will be none for amount=0, which is OK)
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
-                bus::service(LOCAL_SERVICE).send(msg).await??;
-            }
-
             // Mark the debit note as accepted in DB
             log::trace!("Accepting DebitNote [{}] in DB", debit_note_id);
             dao.accept(debit_note_id.clone(), node_id).await?;
