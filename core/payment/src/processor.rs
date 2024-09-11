@@ -1,7 +1,8 @@
 use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::cycle::BatchCycleTaskManager;
 use crate::dao::{
-    ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, PaymentDao, SyncNotifsDao,
+    ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, BatchItemFilter, PaymentDao,
+    SyncNotifsDao,
 };
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, ValidateAllocationError,
@@ -792,7 +793,10 @@ impl PaymentProcessor {
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
 
         if payer_addr == payee_addr {
-            log::warn!("Payer and payee addresses are the same: {} - skip notification", payer_addr);
+            log::warn!(
+                "Payer and payee addresses are the same: {} - skip notification",
+                payer_addr
+            );
             return Ok(());
         }
 
@@ -814,11 +818,11 @@ impl PaymentProcessor {
                     .as_dao::<BatchDao>()
                     .get_batch_items(
                         payer_id,
-                        Some(order_item.order_id.clone()),
-                        Some(order_item.payee_addr.clone()),
-                        None,
-                        None,
-                        None,
+                        BatchItemFilter {
+                            order_id: Some(order_item.order_id.clone()),
+                            payee_addr: Some(order_item.payee_addr.clone()),
+                            ..Default::default()
+                        },
                     )
                     .await
                 {

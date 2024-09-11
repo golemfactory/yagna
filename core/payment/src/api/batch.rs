@@ -73,11 +73,11 @@ async fn get_batch_order_item_details(
     match dao
         .get_batch_items(
             node_id,
-            Some(batch_order_id),
-            Some(payee_addr),
-            None,
-            None,
-            None,
+            BatchItemFilter {
+                order_id: Some(batch_order_id),
+                payee_addr: Some(payee_addr),
+                ..Default::default()
+            },
         )
         .await
     {

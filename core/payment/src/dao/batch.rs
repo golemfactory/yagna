@@ -28,6 +28,15 @@ impl<'c> AsDao<'c> for BatchDao<'c> {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct BatchItemFilter {
+    pub order_id: Option<String>,
+    pub payee_addr: Option<String>,
+    pub allocation_id: Option<String>,
+    pub agreement_id: Option<String>,
+    pub activity_id: Option<String>,
+}
+
 table! {
     sql_activity_join_agreement (id, owner_id) {
         id -> Text,
@@ -898,11 +907,7 @@ impl<'c> BatchDao<'c> {
     pub async fn get_batch_items(
         &self,
         owner_id: NodeId,
-        order_id: Option<String>,
-        payee_addr: Option<String>,
-        allocation_id: Option<String>,
-        agreement_id: Option<String>,
-        activity_id: Option<String>,
+        filter: BatchItemFilter,
     ) -> DbResult<Vec<DbAgreementBatchOrderItem>> {
         readonly_transaction(self.pool, "get_batch_items_filtered", move |conn| {
             use crate::schema::pay_batch_order::dsl as order_dsl;
@@ -923,19 +928,19 @@ impl<'c> BatchDao<'c> {
                 )
                 .into_boxed();
 
-            if let Some(order_id) = order_id {
+            if let Some(order_id) = filter.order_id {
                 query = query.filter(order_item_dsl::order_id.eq(order_id));
             }
-            if let Some(payee_addr) = payee_addr {
+            if let Some(payee_addr) = filter.payee_addr {
                 query = query.filter(order_item_dsl::payee_addr.eq(payee_addr));
             }
-            if let Some(allocation_id) = allocation_id {
+            if let Some(allocation_id) = filter.allocation_id {
                 query = query.filter(order_item_dsl::allocation_id.eq(allocation_id));
             }
-            if let Some(agreement_id) = agreement_id {
+            if let Some(agreement_id) = filter.agreement_id {
                 query = query.filter(aggr_item_dsl::agreement_id.eq(agreement_id));
             }
-            if let Some(activity_id) = activity_id {
+            if let Some(activity_id) = filter.activity_id {
                 query = query.filter(aggr_item_dsl::activity_id.eq(activity_id));
             }
 
