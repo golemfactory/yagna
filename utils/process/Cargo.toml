@@ -38,6 +38,5 @@ winapi = { version = "0.3", features = [
     "handleapi",
 ] }
 
-
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = { version = "0.7" }
