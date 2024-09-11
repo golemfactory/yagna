@@ -184,7 +184,13 @@ async fn get_pay_activity_orders(
     let activity_id = path.into_inner();
     let dao: BatchDao = db.as_dao();
     match dao
-        .get_batch_items(node_id, None, None, None, None, Some(activity_id))
+        .get_batch_items(
+            node_id,
+            BatchItemFilter {
+                activity_id: Some(activity_id),
+                ..Default::default()
+            },
+        )
         .await
     {
         Ok(items) => response::ok(items),

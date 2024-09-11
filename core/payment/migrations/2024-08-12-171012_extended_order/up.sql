@@ -27,8 +27,11 @@ CREATE TABLE pay_batch_order_item(
 
     CONSTRAINT pay_batch_order_item_pk PRIMARY KEY (owner_id, order_id, payee_addr),
     CONSTRAINT pay_batch_order_item_fk1 FOREIGN KEY (owner_id, order_id) REFERENCES pay_batch_order(owner_id, id),
-    CONSTRAINT pay_batch_order_item_fk2 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id)
+    CONSTRAINT pay_batch_order_item_fk2 FOREIGN KEY (owner_id, allocation_id) REFERENCES pay_allocation(owner_id, id),
 );
+
+-- We are selecting by payment_id when notifying the pay_batch_order_item
+CREATE INDEX pay_batch_order_item_payment_id ON pay_batch_order_item (payment_id);
 
 CREATE TABLE pay_batch_order_item_document(
     order_id        VARCHAR(50) NOT NULL,
