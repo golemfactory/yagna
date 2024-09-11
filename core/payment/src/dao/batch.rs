@@ -613,6 +613,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                                     dsl::order_id.eq(&order_id),
                                     dsl::owner_id.eq(owner_id),
                                     dsl::payee_addr.eq(&payee_addr),
+                                    dsl::allocation_id.eq(allocation_id),
                                     dsl::agreement_id.eq(agreement_id),
                                     dsl::invoice_id.eq(id),
                                     dsl::activity_id.eq(None::<String>),
@@ -634,6 +635,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                                     dsl::order_id.eq(&order_id),
                                     dsl::owner_id.eq(owner_id),
                                     dsl::payee_addr.eq(&payee_addr),
+                                    dsl::allocation_id.eq(allocation_id),
                                     dsl::agreement_id.eq(agreement_id),
                                     dsl::invoice_id.eq(None::<String>),
                                     dsl::activity_id.eq(activity_id),
@@ -784,83 +786,6 @@ impl<'c> BatchDao<'c> {
         }).await
     }
 
-    pub async fn get_batch_order_payments(
-        &self,
-        order_id: String,
-        owner_id: NodeId,
-        payee_addr: String,
-    ) -> DbResult<BatchPayment> {
-        readonly_transaction(self.pool, "get_batch_order_payments", move |conn| {
-            use crate::schema::pay_agreement::dsl as pa;
-            use crate::schema::pay_batch_order_item::dsl as di;
-            use crate::schema::pay_batch_order_item_document::dsl as d;
-
-            let (amount,) = di::pay_batch_order_item
-                .filter(
-                    di::order_id
-                        .eq(&order_id)
-                        .and(di::payee_addr.eq(&payee_addr))
-                        .and(di::owner_id.eq(&owner_id)),
-                )
-                .select((di::amount,))
-                .get_result::<(BigDecimalField,)>(conn)?;
-
-            let mut peer_obligation = HashMap::<NodeId, Vec<BatchPaymentObligation>>::new();
-
-            for (payee_id, agreement_id, invoice_id, activity_id, debit_note_id, amount) in
-                d::pay_batch_order_item_document
-                    .filter(d::order_id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
-                    .inner_join(
-                        pa::pay_agreement
-                            .on(d::owner_id.eq(pa::owner_id).and(d::agreement_id.eq(pa::id))),
-                    )
-                    .select((
-                        pa::peer_id,
-                        d::agreement_id,
-                        d::invoice_id,
-                        d::activity_id,
-                        d::debit_note_id,
-                        d::amount,
-                    ))
-                    .load::<(
-                        NodeId,
-                        String,
-                        Option<String>,
-                        Option<String>,
-                        Option<String>,
-                        BigDecimalField,
-                    )>(conn)?
-            {
-                let obligation = if let Some(activity_id) = activity_id {
-                    BatchPaymentObligation::DebitNote {
-                        debit_note_id,
-                        amount: amount.0,
-                        agreement_id,
-                        activity_id,
-                    }
-                } else if let Some(invoice_id) = invoice_id {
-                    BatchPaymentObligation::Invoice {
-                        amount: amount.0,
-                        agreement_id,
-                        id: invoice_id,
-                    }
-                } else {
-                    return Err(DbError::Integrity("No invoice or activity id".to_string()));
-                };
-                peer_obligation
-                    .entry(payee_id)
-                    .or_default()
-                    .push(obligation);
-            }
-
-            Ok(BatchPayment {
-                amount: amount.0,
-                peer_obligation,
-            })
-        })
-        .await
-    }
-
     pub async fn get_unsent_batch_items(
         &self,
         owner_id: NodeId,
@@ -919,6 +844,7 @@ impl<'c> BatchDao<'c> {
                     aggr_item_dsl::pay_batch_order_item_document.on(order_item_dsl::order_id
                         .eq(aggr_item_dsl::order_id)
                         .and(order_item_dsl::owner_id.eq(aggr_item_dsl::owner_id))
+                        .and(order_item_dsl::allocation_id.eq(aggr_item_dsl::allocation_id))
                         .and(order_item_dsl::payee_addr.eq(aggr_item_dsl::payee_addr))),
                 )
                 .inner_join(

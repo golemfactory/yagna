@@ -120,6 +120,7 @@ pub struct DbBatchOrderItemAgreement {
     pub order_id: String,
     pub owner_id: NodeId,
     pub payee_addr: String,
+    pub allocation_id: String,
     pub agreement_id: String,
     pub invoice_id: Option<String>,
     pub activity_id: String,
