@@ -6,6 +6,7 @@ use anyhow::{bail, Context};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::clap;
+use ya_counters::service::CountersServiceBuilder;
 
 use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity;
@@ -18,7 +19,6 @@ use crate::error::Error;
 use crate::manifest::ManifestContext;
 use crate::message::{GetState, GetStateResponse, Register};
 use crate::runtime::process::RuntimeProcess;
-use crate::service::metrics::MetricsService;
 use crate::service::signal::SignalMonitor;
 use crate::state::Supervision;
 
@@ -31,11 +31,9 @@ mod handlers;
 pub mod logger;
 pub mod manifest;
 pub mod message;
-pub mod metrics;
 mod network;
 mod notify;
 mod output;
-pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -371,7 +369,9 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
 
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
+    let metrics = CountersServiceBuilder::new(ctx.agreement.usage_vector.clone(), Some(1000))
+        .build()
+        .start();
     let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, config.binary).start();
     let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();

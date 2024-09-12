@@ -9,6 +9,9 @@ use futures::{FutureExt, SinkExt};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use ya_counters::error::CounterError;
+use ya_counters::message::GetCounters;
+use ya_counters::service::CountersService;
 
 use ya_agreement_utils::OfferTemplate;
 use ya_client_model::activity::{ActivityUsage, CommandOutput, ExeScriptCommand, State, StatePair};
@@ -26,12 +29,11 @@ use crate::acl::Acl;
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::{
-    ExecuteCommand, GetMetrics, GetStdOut, Initialize, RuntimeEvent, SetState, Shutdown,
-    ShutdownReason, SignExeScript, Stop, UpdateDeployment,
+    ExecuteCommand, GetStdOut, Initialize, RuntimeEvent, SetState, Shutdown, ShutdownReason,
+    SignExeScript, Stop, UpdateDeployment,
 };
 use crate::runtime::{Runtime, RuntimeMode};
-use crate::service::metrics::MetricsService;
-use crate::service::{ServiceAddr, ServiceControl};
+use crate::service::{self, ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 use crate::Result;
 
@@ -48,7 +50,7 @@ pub struct ExeUnit<R: Runtime> {
     pub(crate) state: ExeUnitState,
     pub(crate) events: Channel<RuntimeEvent>,
     pub(crate) runtime: Addr<R>,
-    pub(crate) metrics: Addr<MetricsService>,
+    pub(crate) counters: Addr<CountersService>,
     pub(crate) transfers: Addr<TransferService>,
     pub(crate) services: Vec<Box<dyn ServiceControl>>,
     pub(crate) shutdown_tx: broadcast::Sender<()>,
@@ -57,7 +59,7 @@ pub struct ExeUnit<R: Runtime> {
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(
         ctx: ExeUnitContext,
-        metrics: Addr<MetricsService>,
+        counters: Addr<CountersService>,
         transfers: Addr<TransferService>,
         runtime: Addr<R>,
     ) -> Self {
@@ -67,10 +69,10 @@ impl<R: Runtime> ExeUnit<R> {
             state: ExeUnitState::default(),
             events: Channel::default(),
             runtime: runtime.clone(),
-            metrics: metrics.clone(),
+            counters: counters.clone(),
             transfers: transfers.clone(),
             services: vec![
-                Box::new(ServiceAddr::new(metrics)),
+                Box::new(ServiceAddr::new(counters)),
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
@@ -83,7 +85,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.com.usage.vector": service::counters::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
             "golem.activity.caps.transfer.report-progress": true,
             "golem.activity.caps.deploy.report-progress": true,
@@ -105,7 +107,7 @@ impl<R: Runtime> ExeUnit<R> {
             self.ctx.report_url.clone().unwrap(),
             self.ctx.activity_id.clone().unwrap(),
             context.address(),
-            self.metrics.clone(),
+            self.counters.clone(),
         );
         context.spawn(fut.into_actor(self));
     }
@@ -555,9 +557,9 @@ async fn report_usage<R: Runtime>(
     report_url: String,
     activity_id: String,
     exe_unit: Addr<ExeUnit<R>>,
-    metrics: Addr<MetricsService>,
+    metrics: Addr<CountersService>,
 ) {
-    match metrics.send(GetMetrics).await {
+    match metrics.send(GetCounters).await {
         Ok(resp) => match resp {
             Ok(data) => {
                 let msg = activity::local::SetUsage {
@@ -575,7 +577,7 @@ async fn report_usage<R: Runtime>(
                 }
             }
             Err(err) => match err {
-                Error::UsageLimitExceeded(info) => {
+                CounterError::UsageLimitExceeded(info) => {
                     log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
@@ -600,5 +602,14 @@ impl Handler<Shutdown> for TransferService {
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
         async move { Ok(addr.send(ya_transfer::transfer::Shutdown {}).await??) }.boxed_local()
+    }
+}
+
+impl Handler<Shutdown> for CountersService {
+    type Result = ResponseFuture<crate::Result<()>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        let addr = ctx.address();
+        async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
     }
 }
