@@ -1,12 +1,11 @@
 use crate::{DRIVER_NAME, NETWORK_NAME, PLATFORM_NAME, TOKEN_NAME};
-use bigdecimal::BigDecimal;
 use chrono::Utc;
 use maplit::hashmap;
-use std::str::FromStr;
 use uuid::Uuid;
 use ya_client_model::payment::{DriverDetails, Network};
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
+use ya_core_model::signable::Signable;
 use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -76,10 +75,10 @@ async fn get_account_balance(
     _db: (),
     _caller: String,
     msg: GetAccountBalance,
-) -> Result<BigDecimal, GenericError> {
+) -> Result<GetAccountBalanceResult, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
-    BigDecimal::from_str("1000000000000000000000000").map_err(GenericError::new)
+    Ok(GetAccountBalanceResult::default())
 }
 
 async fn schedule_payment(
@@ -139,8 +138,8 @@ async fn validate_allocation(
     _db: (),
     _caller: String,
     _msg: ValidateAllocation,
-) -> Result<bool, GenericError> {
-    Ok(true)
+) -> Result<ValidateAllocationResult, GenericError> {
+    Ok(ValidateAllocationResult::Valid)
 }
 
 async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericError> {
@@ -148,7 +147,9 @@ async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericErr
 }
 
 async fn sign_payment(_db: (), _caller: String, msg: SignPayment) -> Result<Vec<u8>, GenericError> {
-    Ok(ya_payment_driver::utils::payment_hash(&msg.0))
+    Ok(ya_payment_driver::utils::payment_hash(
+        &msg.0.remove_private_info(),
+    ))
 }
 
 async fn verify_signature(

@@ -11,15 +11,16 @@ use futures::lock::Mutex;
 use futures::prelude::*;
 
 use ya_client_model::NodeId;
+use ya_core_model::bus::GsbBindPoints;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
-use ya_core_model::identity::event::Event;
+use ya_core_model::identity::event::IdentityEvent;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{default_password, generate_new, IdentityKey};
+use crate::id_key::{default_password, generate_identity_key, IdentityKey};
 
 #[derive(Default)]
 struct Subscription {
@@ -40,7 +41,7 @@ pub struct IdentityService {
     default_key: NodeId,
     ids: HashMap<NodeId, IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
-    sender: futures::channel::mpsc::UnboundedSender<model::event::Event>,
+    sender: futures::channel::mpsc::UnboundedSender<IdentityEvent>,
     subscription: Rc<RefCell<Subscription>>,
     db: DbExecutor,
 }
@@ -57,7 +58,7 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
     }
 }
 
-fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<Output = ()> {
+fn send_event(s: Ref<Subscription>, event: IdentityEvent) -> impl Future<Output = ()> {
     let subscriptions: Vec<String> = s.subscriptions.clone();
     log::debug!("sending event: {:?} to {:?}", event, subscriptions);
 
@@ -109,7 +110,7 @@ impl IdentityService {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         log::info!("generating new default identity");
-                        let key: IdentityKey = generate_new(None, "".into());
+                        let key: IdentityKey = generate_identity_key(None, "".into(), None);
 
                         Ok(Identity {
                             identity_id: key.id(),
@@ -148,7 +149,7 @@ impl IdentityService {
         })
     }
 
-    fn sender(&self) -> &futures::channel::mpsc::UnboundedSender<model::event::Event> {
+    fn sender(&self) -> &futures::channel::mpsc::UnboundedSender<IdentityEvent> {
         &self.sender
     }
 
@@ -191,8 +192,9 @@ impl IdentityService {
     pub async fn create_identity(
         &mut self,
         alias: Option<String>,
+        private_key: Option<[u8; 32]>,
     ) -> Result<model::IdentityInfo, model::Error> {
-        let key = generate_new(alias.clone(), "".into());
+        let key = generate_identity_key(alias.clone(), "".into(), private_key);
 
         let new_identity = Identity {
             identity_id: key.id(),
@@ -223,7 +225,7 @@ impl IdentityService {
 
         if !is_locked {
             self.sender()
-                .send(Event::AccountUnlocked { identity })
+                .send(IdentityEvent::AccountUnlocked { identity })
                 .await
                 .ok();
         }
@@ -268,7 +270,7 @@ impl IdentityService {
 
         if !is_locked {
             self.sender()
-                .send(Event::AccountUnlocked { identity })
+                .send(IdentityEvent::AccountUnlocked { identity })
                 .await
                 .ok();
         }
@@ -433,7 +435,7 @@ impl IdentityService {
 
                         if !was_locked {
                             sender
-                                .send(Event::AccountLocked { identity: id.id() })
+                                .send(IdentityEvent::AccountLocked { identity: id.id() })
                                 .await
                                 .ok();
                         }
@@ -464,14 +466,14 @@ impl IdentityService {
         key.to_key_file().map_err(model::Error::new_err_msg)
     }
 
-    pub fn bind_service(me: Arc<Mutex<Self>>) {
+    pub fn bind_service(me: Arc<Mutex<Self>>, gsb: Arc<GsbBindPoints>) {
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
+        let _ = bus::bind(gsb.local_addr(), move |_list: model::List| {
             let this = this.clone();
             async move { this.lock().await.list_ids() }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
+        let _ = bus::bind(gsb.local_addr(), move |get: model::Get| {
             let this = this.clone();
             async move {
                 match get {
@@ -483,8 +485,9 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
+        let _ = bus::bind(gsb.local_addr(), move |create: model::CreateGenerated| {
             let this = this.clone();
+
             async move {
                 if let Some(key_store) = create.from_keystore {
                     let key: KeyFile = serde_json::from_str(key_store.as_str())
@@ -504,18 +507,18 @@ impl IdentityService {
                         .create_from_keystore(create.alias, node_id, key)
                         .await
                 } else {
-                    this.lock().await.create_identity(create.alias).await
+                    this.lock().await.create_identity(create.alias, None).await
                 }
             }
         });
 
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |update: model::Update| {
+        let _ = bus::bind(gsb.local_addr(), move |update: model::Update| {
             let this = this.clone();
             async move { this.lock().await.update_identity(update).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |lock: model::Lock| {
+        let _ = bus::bind(gsb.local_addr(), move |lock: model::Lock| {
             let this = this.clone();
             async move {
                 let mut lock_sender = this.lock().await.sender().clone();
@@ -528,7 +531,7 @@ impl IdentityService {
 
                 if result.is_ok() {
                     let _ = lock_sender
-                        .send(model::event::Event::AccountLocked {
+                        .send(IdentityEvent::AccountLocked {
                             identity: lock.node_id,
                         })
                         .await;
@@ -538,7 +541,7 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
+        let _ = bus::bind(gsb.local_addr(), move |unlock: model::Unlock| {
             let this = this.clone();
             async move {
                 let mut unlock_sender = this.lock().await.sender().clone();
@@ -549,7 +552,7 @@ impl IdentityService {
                     .await;
                 if result.is_ok() {
                     let _ = unlock_sender
-                        .send(model::event::Event::AccountUnlocked {
+                        .send(IdentityEvent::AccountUnlocked {
                             identity: unlock.node_id,
                         })
                         .await;
@@ -558,22 +561,22 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |sign: model::Sign| {
+        let _ = bus::bind(gsb.local_addr(), move |sign: model::Sign| {
             let this = this.clone();
             async move { this.lock().await.sign(sign.node_id, sign.payload).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
+        let _ = bus::bind(gsb.local_addr(), move |subscribe: model::Subscribe| {
             let this = this.clone();
             async move { this.lock().await.subscribe(subscribe).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |unsubscribe: model::Unsubscribe| {
+        let _ = bus::bind(gsb.local_addr(), move |unsubscribe: model::Unsubscribe| {
             let this = this.clone();
             async move { this.lock().await.unsubscribe(unsubscribe).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPubKey| {
+        let _ = bus::bind(gsb.local_addr(), move |node_id: model::GetPubKey| {
             let this = this.clone();
             async move {
                 this.lock()
@@ -584,12 +587,12 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
+        let _ = bus::bind(gsb.local_addr(), move |node_id: model::GetKeyFile| {
             let this = this.clone();
             async move { this.lock().await.get_key_file(node_id).await }
         });
         let this = me;
-        let _ = bus::bind(model::BUS_ID, move |drop_cmd: model::DropId| {
+        let _ = bus::bind(gsb.local_addr(), move |drop_cmd: model::DropId| {
             let this = this.clone();
             async move {
                 log::trace!("Dropping identity: {:?}", drop_cmd);
@@ -603,20 +606,20 @@ impl IdentityService {
     }
 }
 
-pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
-    let identity_key = get_default_identity_key().await?;
+pub async fn wait_for_default_account_unlock(gsb: Arc<GsbBindPoints>) -> anyhow::Result<()> {
+    let identity_key = get_default_identity_key(gsb.clone()).await?;
 
     if identity_key.is_locked {
         let locked_identity = identity_key.node_id;
         let (tx, rx) = futures::channel::mpsc::unbounded();
-        let endpoint = format!("{}/await_unlock", model::BUS_ID);
+        let endpoint = gsb.endpoint("await_unlock").addr().to_string();
 
-        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
+        let _ = bus::bind(&endpoint, move |e: IdentityEvent| {
             let mut tx_clone = tx.clone();
             async move {
                 match e {
-                    model::event::Event::AccountLocked { .. } => {}
-                    model::event::Event::AccountUnlocked { identity } => {
+                    IdentityEvent::AccountLocked { .. } => {}
+                    IdentityEvent::AccountUnlocked { identity } => {
                         if locked_identity == identity {
                             log::debug!("Got unlocked event for default locked account with nodeId: {locked_identity}");
                             tx_clone.send(()).await.expect("Receiver is closed");
@@ -626,15 +629,15 @@ pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
                 Ok(())
             }
         });
-        subscribe(endpoint.clone()).await?;
+        subscribe(gsb.clone(), endpoint.clone()).await?;
 
         log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
         ));
 
-        wait_for_unlock(rx).await?;
+        wait_for_unlock(gsb.clone(), rx).await?;
 
-        unsubscribe(endpoint.clone()).await?;
+        unsubscribe(gsb.clone(), endpoint.clone()).await?;
         unbind(endpoint).await?;
     }
 
@@ -642,10 +645,11 @@ pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
 }
 
 async fn wait_for_unlock(
+    gsb: Arc<GsbBindPoints>,
     mut rx: futures::channel::mpsc::UnboundedReceiver<()>,
 ) -> anyhow::Result<()> {
-    // Check lock second time because user could unlocked database before subscription
-    if get_default_identity_key().await?.is_locked {
+    // Check lock second time because user could unlock database before subscription
+    if get_default_identity_key(gsb).await?.is_locked {
         tokio::select! {
             _ = rx.next() => {
                 log::info!("Default account unlocked");
@@ -659,30 +663,26 @@ async fn wait_for_unlock(
     Ok(())
 }
 
-async fn subscribe(endpoint: String) -> anyhow::Result<()> {
-    bus::service(model::BUS_ID)
-        .send(model::Subscribe { endpoint })
-        .await??;
+async fn subscribe(gsb: Arc<GsbBindPoints>, endpoint: String) -> anyhow::Result<()> {
+    gsb.local().send(model::Subscribe { endpoint }).await??;
 
     Ok(())
 }
 
-async fn unsubscribe(endpoint: String) -> anyhow::Result<()> {
-    bus::service(model::BUS_ID)
-        .send(model::Unsubscribe { endpoint })
-        .await??;
+async fn unsubscribe(gsb: Arc<GsbBindPoints>, endpoint: String) -> anyhow::Result<()> {
+    gsb.local().send(model::Unsubscribe { endpoint }).await??;
 
     Ok(())
 }
 
 async fn unbind(endpoint: String) -> anyhow::Result<()> {
-    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID)).await?;
+    bus::unbind(&format!("{}/{}", endpoint.clone(), IdentityEvent::ID)).await?;
 
     Ok(())
 }
 
-async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
-    bus::service(model::BUS_ID)
+async fn get_default_identity_key(gsb: Arc<GsbBindPoints>) -> anyhow::Result<model::IdentityInfo> {
+    gsb.local()
         .send(model::Get::ByDefault {})
         .await??
         .ok_or_else(|| anyhow::anyhow!("No default Identity found"))

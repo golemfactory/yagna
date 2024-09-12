@@ -51,10 +51,10 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.fund( c, m).await }
         )
         .bind_with_processor(
-            move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
+            move |_, dr, c, m| async move { dr.get_rpc_endpoints( c, m).await }
         )
         .bind_with_processor(
-            move |_, dr, c, m| async move { dr.get_account_gas_balance( c, m).await }
+            move |_, dr, c, m| async move { dr.get_account_balance( c, m).await }
         )
         .bind_with_processor(
             move |_, dr, c, m| async move { dr.init( c, m).await }
@@ -75,10 +75,16 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.sign_payment( c, m).await }
         )
         .bind_with_processor(
+            move |_, dr, c, m| async move { dr.sign_payment_canonical(c, m).await }
+        )
+        .bind_with_processor(
             move |_, dr, c, m| async move { dr.verify_signature( c, m).await }
         )
         .bind_with_processor(
             move |_, dr, c, m| async move { dr.status( c, m).await }
+        )
+        .bind_with_processor(
+            move |_, dr, c, m| async move { dr.release_deposit( c, m).await }
         )
         .bind_with_processor(
             move |_, dr, c, m| async move { dr.shut_down( c, m).await }

@@ -12,16 +12,14 @@ on:
       - master
       - release/*
       - '**/all-tests'
-      - staszek/gamerhash-combined
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
-      - staszek/gamerhash-combined
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   build:
@@ -33,7 +31,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -46,7 +44,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
@@ -73,4 +71,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer --features framework-test
+          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features framework-test

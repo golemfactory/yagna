@@ -18,17 +18,6 @@ use ya_client_model::activity::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
-#[rtype(result = "Result<Vec<f64>>")]
-pub struct GetMetrics;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "()")]
-pub struct SetMetric {
-    pub name: String,
-    pub value: f64,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]
 pub struct GetState;
 

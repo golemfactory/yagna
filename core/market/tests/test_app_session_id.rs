@@ -7,6 +7,7 @@ use ya_market::testing::MarketsNetwork;
 use ya_market::testing::Owner;
 
 use ya_client::model::market::AgreementEventType;
+use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -16,7 +17,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_events_filtering() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -192,7 +193,7 @@ async fn test_session_events_filtering() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_should_be_independent_on_both_sides() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -247,7 +248,7 @@ async fn test_session_should_be_independent_on_both_sides() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node")
         .await;
@@ -302,7 +303,7 @@ async fn test_session_negotiation_on_the_same_node() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node_same_session() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node")
         .await;
@@ -358,7 +359,7 @@ async fn test_session_negotiation_on_the_same_node_same_session() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_timestamp_filtering() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -548,7 +549,7 @@ async fn test_session_timestamp_filtering() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_common_event_flow() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

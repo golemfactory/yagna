@@ -15,12 +15,13 @@ use diesel::{
     TextExpressionMethods,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
+use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment, Signed};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -135,6 +136,8 @@ impl<'c> PaymentDao<'c> {
             payment_platform,
             amount,
             details,
+            None,
+            None,
         );
         let payment_id = payment.id.clone();
         self.insert(payment, activity_payments, agreement_payments)
@@ -142,10 +145,16 @@ impl<'c> PaymentDao<'c> {
         Ok(payment_id)
     }
 
-    pub async fn insert_received(&self, payment: Payment, payee_id: NodeId) -> DbResult<()> {
+    pub async fn insert_received(
+        &self,
+        payment: Payment,
+        payee_id: NodeId,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> DbResult<()> {
         let activity_payments = payment.activity_payments.clone();
         let agreement_payments = payment.agreement_payments.clone();
-        let payment = WriteObj::new_received(payment)?;
+        let payment = WriteObj::new_received(payment, signature, signed_bytes)?;
         self.insert(payment, activity_payments, agreement_payments)
             .await
     }
@@ -153,6 +162,7 @@ impl<'c> PaymentDao<'c> {
     pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_mark_sent", move |conn| {
             diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .filter(dsl::role.eq(Role::Requestor))
                 .set(dsl::send_payment.eq(false))
                 .execute(conn)?;
             Ok(())
@@ -160,7 +170,30 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
+    pub async fn add_signature(
+        &self,
+        payment_id: String,
+        signature: Vec<u8>,
+        signed_bytes: Vec<u8>,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "payment_dao_update", move |conn| {
+            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+                .filter(dsl::role.eq(Role::Requestor))
+                .set((
+                    dsl::signature.eq(signature),
+                    dsl::signed_bytes.eq(signed_bytes),
+                ))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn get(
+        &self,
+        payment_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<Signed<Payment>>> {
         readonly_transaction(self.pool, "payment_dao_get", move |conn| {
             let payment: Option<ReadObj> = dsl::pay_payment
                 .filter(dsl::id.eq(&payment_id))
@@ -178,9 +211,10 @@ impl<'c> PaymentDao<'c> {
                         .filter(agreement_pay_dsl::payment_id.eq(&payment_id))
                         .filter(agreement_pay_dsl::owner_id.eq(&owner_id))
                         .load(conn)?;
-                    Ok(Some(
-                        payment.into_api_model(activity_payments, agreement_payments),
-                    ))
+                    Ok(Some(payment.into_signed_api_model(
+                        activity_payments,
+                        agreement_payments,
+                    )))
                 }
                 None => Ok(None),
             }
@@ -188,12 +222,17 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_for_confirmation(&self, details: Vec<u8>) -> DbResult<Vec<Payment>> {
+    pub async fn get_for_confirmation(
+        &self,
+        details: Vec<u8>,
+        role: Role,
+    ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, "payment_dao_get_for_confirmation", move |conn| {
             let mut result = Vec::new();
 
             let payments: Vec<ReadObj> = dsl::pay_payment
                 .filter(dsl::details.eq(&details))
+                .filter(dsl::role.eq(&role.to_string()))
                 .load(conn)?;
 
             for payment in payments {
@@ -222,7 +261,7 @@ impl<'c> PaymentDao<'c> {
         app_session_id: Option<String>,
         network: Option<NetworkName>,
         driver: Option<DriverName>,
-    ) -> DbResult<Vec<Payment>> {
+    ) -> DbResult<Vec<Signed<Payment>>> {
         readonly_transaction(self.pool, "payment_dao_get_for_node_id", move |conn| {
             let mut query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
@@ -301,7 +340,8 @@ impl<'c> PaymentDao<'c> {
             // agreement_payment. So if some payment lacks related sub-payments that means they've
             // been filtered out due to non-matching app_sesion_id and so should be the payment.
             if let Some(app_session_id) = app_session_id {
-                payments.retain(|payment| {
+                payments.retain(|s| {
+                    let payment = &s.payload;
                     !payment.activity_payments.is_empty() || !payment.agreement_payments.is_empty()
                 });
             };
@@ -311,10 +351,15 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn list_unsent(&self, peer_id: Option<NodeId>) -> DbResult<Vec<Payment>> {
+    pub async fn list_unsent(
+        &self,
+        owner: NodeId,
+        peer_id: Option<NodeId>,
+    ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, "payment_dao_list_unsent", move |conn| {
             let mut query = dsl::pay_payment
                 .filter(dsl::send_payment.eq(true))
+                .filter(dsl::owner_id.eq(&owner))
                 .into_boxed();
             if let Some(peer_id) = peer_id {
                 query = query.filter(dsl::peer_id.eq(&peer_id));
@@ -345,7 +390,7 @@ fn join_activity_and_agreement_payments(
     payments: Vec<ReadObj>,
     activity_payments: Vec<DbActivityPayment>,
     agreement_payments: Vec<DbAgreementPayment>,
-) -> Vec<Payment> {
+) -> Vec<Signed<Payment>> {
     let mut activity_payments_map =
         activity_payments
             .into_iter()
@@ -373,7 +418,7 @@ fn join_activity_and_agreement_payments(
             let agreement_payments = agreement_payments_map
                 .remove(&payment.id)
                 .unwrap_or_default();
-            payment.into_api_model(activity_payments, agreement_payments)
+            payment.into_signed_api_model(activity_payments, agreement_payments)
         })
         .collect()
 }

@@ -1,3 +1,5 @@
+mod rpc;
+
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -15,7 +17,30 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::accounts::{init_account, Account};
+use crate::cli::rpc::{run_command_rpc, RpcCommandParams};
 use crate::wallet;
+
+/// Payment driver management.
+#[derive(StructOpt, Debug)]
+pub enum DriverSubcommand {
+    /// List registered drivers, networks, tokens and platforms
+    List,
+
+    /// Display status of the payment driver
+    Status {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+    },
+
+    /// Display Web3 RPC endpoints and their status for the driver
+    Rpc {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+
+        #[structopt(flatten)]
+        rpc_params: RpcCommandParams,
+    },
+}
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -27,6 +52,9 @@ pub enum PaymentCli {
     Fund {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        /// Mint token without attempting to obtain native currency from faucet
+        #[structopt(long = "mint-only")]
+        mint_only: bool,
     },
 
     /// Initialize payment account (i.e. make it ready for sending/receiving funds)
@@ -49,10 +77,9 @@ pub enum PaymentCli {
         precise: bool,
     },
 
-    /// Display status of the payment driver
-    DriverStatus {
-        #[structopt(flatten)]
-        account: pay::AccountCli,
+    Driver {
+        #[structopt(subcommand)]
+        command: DriverSubcommand,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -111,9 +138,6 @@ pub enum PaymentCli {
         command: InvoiceCommand,
     },
 
-    /// List registered drivers, networks, tokens and platforms
-    Drivers,
-
     /// Clear all existing allocations
     ReleaseAllocations,
 }
@@ -129,18 +153,35 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund { account } => {
-                if !account.network.is_fundable() {
+            PaymentCli::Fund { account, mint_only } => {
+                let address = resolve_address(account.address()).await?;
+
+                let onboarding_supported =
+                    matches!(account.network, NetworkName::Polygon | NetworkName::Mainnet);
+                if !account.network.is_fundable() && !onboarding_supported {
                     log::error!(
                         "Network {} does not support automatic funding. Consider using one of the following: {:?}",
                         account.network,
                         NetworkName::all_fundable(),
                     );
 
-                    return CommandOutput::object("Failed");
-                }
+                    return CommandOutput::none();
+                } else if onboarding_supported {
+                    let url = format!(
+                        "https://glm.golem.network/#/onboarding/budget?yagnaAddress={}&network={}",
+                        address, account.network
+                    );
+                    log::warn!(
+                        "Funds for {} can be obtained via the onboarding portal, opening {} with the system browser. If the window doesn't open, you can do it manually.",
+                        account.network,
+                        url
+                    );
+                    if let Err(e) = open::that_detached(&url) {
+                        log::warn!("Failed to open {url}: {e}");
+                    }
 
-                let address = resolve_address(account.address()).await?;
+                    return CommandOutput::none();
+                }
 
                 init_account(Account {
                     driver: account.driver(),
@@ -162,7 +203,14 @@ Typically operation should take less than 1 minute.
                 log::warn!("{}", warn_message);
 
                 CommandOutput::object(
-                    wallet::fund(address, account.driver(), Some(account.network()), None).await?,
+                    wallet::fund(
+                        address,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                        mint_only,
+                    )
+                    .await?,
                 )
             }
             PaymentCli::Init {
@@ -181,59 +229,7 @@ Typically operation should take less than 1 minute.
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::DriverStatus { account } => {
-                let driver_status_props = bus::service(pay::BUS_ID)
-                    .call(pay::PaymentDriverStatus {
-                        driver: Some(account.driver()),
-                        network: Some(account.network()),
-                    })
-                    .await??;
 
-                if ctx.json_output {
-                    return CommandOutput::object(driver_status_props);
-                }
-
-                let ok_msg = if driver_status_props.is_empty() {
-                    "\nDriver Status: Ok"
-                } else {
-                    ""
-                };
-
-                Ok(ResponseTable {
-                    columns: vec!["issues".to_owned()],
-                    values: driver_status_props
-                        .into_iter()
-                        .map(|prop| match prop {
-                            DriverStatusProperty::CantSign { address, .. } => {
-                                format!("Can't sign {address}")
-                            }
-                            DriverStatusProperty::InsufficientGas { needed_gas_est, .. } => {
-                                format!("Insufficient gas (need est. {needed_gas_est})")
-                            }
-                            DriverStatusProperty::InsufficientToken {
-                                needed_token_est, ..
-                            } => {
-                                format!("Insufficient token (need est. {needed_token_est})")
-                            }
-                            DriverStatusProperty::InvalidChainId { chain_id, .. } => {
-                                format!("Invalid Chain-Id ({chain_id})")
-                            }
-                            DriverStatusProperty::RpcError { network, .. } => {
-                                format!("Unreliable {network} RPC endpoints")
-                            }
-                            DriverStatusProperty::TxStuck { network, .. } => {
-                                format!("Tx stuck on {network}")
-                            }
-                        })
-                        .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
-                        .collect::<Vec<_>>(),
-                }
-                .with_header(format!(
-                    "Status of the {} payment driver{}",
-                    account.driver(),
-                    ok_msg
-                )))
-            }
             PaymentCli::Status {
                 account,
                 last,
@@ -394,8 +390,8 @@ Typically operation should take less than 1 minute.
                                 account.driver,
                                 account.network,
                                 account.token,
-                                if account.send { "X" } else { "" },
-                                if account.receive { "X" } else { "" }
+                                account.send,
+                                account.receive
                             ]}
                         })
                         .collect(),
@@ -448,6 +444,7 @@ Typically operation should take less than 1 minute.
                     .await?,
                 )
             }
+
             PaymentCli::Transfer {
                 account,
                 to_address,
@@ -493,43 +490,106 @@ Typically operation should take less than 1 minute.
                     .await?,
                 )
             }
-            PaymentCli::Drivers => {
-                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
-                if ctx.json_output {
-                    return CommandOutput::object(drivers);
+            PaymentCli::Driver { command } => match command {
+                DriverSubcommand::Rpc {
+                    account,
+                    rpc_params,
+                } => run_command_rpc(ctx, account, rpc_params).await,
+
+                DriverSubcommand::Status { account } => {
+                    let driver_status_props = bus::service(pay::BUS_ID)
+                        .call(pay::PaymentDriverStatus {
+                            driver: Some(account.driver()),
+                            network: Some(account.network()),
+                        })
+                        .await??;
+
+                    if ctx.json_output {
+                        return CommandOutput::object(driver_status_props);
+                    }
+
+                    let ok_msg = if driver_status_props.is_empty() {
+                        "\nDriver Status: Ok"
+                    } else {
+                        ""
+                    };
+
+                    Ok(ResponseTable {
+                        columns: vec!["issues".to_owned()],
+                        values: driver_status_props
+                            .into_iter()
+                            .map(|prop| match prop {
+                                DriverStatusProperty::CantSign { address, .. } => {
+                                    format!("Can't sign {address}")
+                                }
+                                DriverStatusProperty::InsufficientGas {
+                                    needed_gas_est, ..
+                                } => {
+                                    format!("Insufficient gas (need est. {needed_gas_est})")
+                                }
+                                DriverStatusProperty::InsufficientToken {
+                                    needed_token_est,
+                                    ..
+                                } => {
+                                    format!("Insufficient token (need est. {needed_token_est})")
+                                }
+                                DriverStatusProperty::InvalidChainId { chain_id, .. } => {
+                                    format!("Invalid Chain-Id ({chain_id})")
+                                }
+                                DriverStatusProperty::RpcError { network, .. } => {
+                                    format!("Unreliable {network} RPC endpoints")
+                                }
+                                DriverStatusProperty::TxStuck { network, .. } => {
+                                    format!("Tx stuck on {network}")
+                                }
+                            })
+                            .map(|s| to_value(vec![to_value(s).unwrap()]).unwrap())
+                            .collect::<Vec<_>>(),
+                    }
+                    .with_header(format!(
+                        "Status of the {} payment driver{}",
+                        account.driver(),
+                        ok_msg
+                    )))
                 }
-                Ok(ResponseTable {
-                    columns: vec![
-                        "driver".to_owned(),
-                        "network".to_owned(),
-                        "default?".to_owned(),
-                        "token".to_owned(),
-                        "platform".to_owned(),
-                    ],
-                    values: drivers
-                        .iter()
-                        .flat_map(|(driver, dd)| {
-                            dd.networks
-                                .iter()
-                                .flat_map(|(network, n)| {
-                                    n.tokens
-                                        .iter()
-                                        .map(|(token, platform)|
-                                            serde_json::json! {[
+                DriverSubcommand::List => {
+                    let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                    if ctx.json_output {
+                        return CommandOutput::object(drivers);
+                    }
+                    Ok(ResponseTable {
+                                columns: vec![
+                                    "driver".to_owned(),
+                                    "network".to_owned(),
+                                    "default?".to_owned(),
+                                    "token".to_owned(),
+                                    "platform".to_owned(),
+                                ],
+                                values: drivers
+                                    .iter()
+                                    .flat_map(|(driver, dd)| {
+                                        dd.networks
+                                            .iter()
+                                            .flat_map(|(network, n)| {
+                                                n.tokens
+                                                    .iter()
+                                                    .map(|(token, platform)|
+                                                        serde_json::json! {[
                                                 driver,
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
                                                 platform,
                                             ]}
-                                        )
-                                        .collect::<Vec<serde_json::Value>>()
-                                })
-                                .collect::<Vec<serde_json::Value>>()
-                        })
-                        .collect(),
-                }.into())
-            }
+                                                    )
+                                                    .collect::<Vec<serde_json::Value>>()
+                                            })
+                                            .collect::<Vec<serde_json::Value>>()
+                                    })
+                                    .collect(),
+                            }.into())
+                }
+            },
             PaymentCli::ReleaseAllocations => {
                 let _ = bus::service(pay::BUS_ID)
                     .call(pay::ReleaseAllocations {})

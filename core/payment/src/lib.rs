@@ -1,9 +1,11 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
+
 use futures::FutureExt;
-use service::BindOptions;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -15,6 +17,7 @@ extern crate diesel;
 pub mod accounts;
 pub mod api;
 mod cli;
+pub mod config;
 pub mod dao;
 pub mod error;
 pub mod models;
@@ -22,6 +25,7 @@ pub mod payment_sync;
 pub mod processor;
 pub mod schema;
 pub mod service;
+pub mod timeout_lock;
 pub mod utils;
 mod wallet;
 
@@ -52,8 +56,10 @@ impl PaymentService {
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
 
-        let processor = PaymentProcessor::new(db.clone());
-        self::service::bind_service(&db, processor.clone(), BindOptions::default());
+        let config = Arc::new(Config::from_env()?);
+
+        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        self::service::bind_service(&db, processor.clone(), config);
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;

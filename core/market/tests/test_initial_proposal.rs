@@ -11,6 +11,7 @@ use ya_market::MarketService;
 use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
+use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -19,7 +20,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_non_existent_subscription() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -38,7 +39,7 @@ async fn test_query_events_non_existent_subscription() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_initial_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -85,7 +86,7 @@ async fn test_query_initial_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_multiple_events() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -139,7 +140,7 @@ async fn test_query_multiple_events() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_timeout() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -184,7 +185,7 @@ async fn test_query_events_timeout() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_unsubscribe_notification() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -230,7 +231,7 @@ async fn test_query_events_unsubscribe_notification() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_edge_cases() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -299,7 +300,7 @@ async fn test_query_events_edge_cases() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_for_multiple_subscriptions() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -351,7 +352,7 @@ async fn test_query_events_for_multiple_subscriptions() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_simultaneous_query_events() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -430,7 +431,7 @@ async fn test_simultaneous_query_events() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_unsubscribe_demand_while_query_events_for_other() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -492,7 +493,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_initial_proposal() {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -563,7 +564,7 @@ async fn test_counter_initial_proposal() {
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[serial_test::serial]
 // async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<()> {
-//     let network = MarketsNetwork::new(None)
+//     let network = MarketsNetwork::new(None, MockNet::new())
 //         .await
 //         .add_market_instance(REQ_NAME)
 //         .await
@@ -622,7 +623,7 @@ async fn test_counter_initial_proposal() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<()> {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

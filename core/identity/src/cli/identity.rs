@@ -118,6 +118,9 @@ pub enum IdentityCommand {
 
     Unlock {
         node_or_alias: Option<NodeOrAlias>,
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
     },
 
     /// Create identity
@@ -129,9 +132,21 @@ pub enum IdentityCommand {
         #[structopt(long = "from-keystore")]
         from_keystore: Option<PathBuf>,
 
+        /// Existing private key to use (unsafe) - use keystore instead, it's much safer
+        #[structopt(long = "from-private-key")]
+        from_private_key: Option<String>,
+
+        /// Password from argument (unsafe) - do not pass this argument and you will be prompted for password in safe way.
+        #[structopt(long = "password")]
+        password: Option<String>,
+
         /// password for keystore
         #[structopt(long = "no-password")]
         no_password: bool,
+
+        /// Set the newly created identity as the default, requires deamon restart
+        #[structopt(long = "set-default")]
+        set_default: bool,
     },
     /// Update given identity
     Update {
@@ -140,6 +155,8 @@ pub enum IdentityCommand {
         alias_or_id: NodeOrAlias,
         #[structopt(long)]
         alias: Option<String>,
+
+        /// Set the identity as the default, requires deamon restart
         #[structopt(long = "set-default")]
         set_default: bool,
     },
@@ -213,13 +230,14 @@ fn to_private_key(key_file_json: &str) -> Result<[u8; 32], anyhow::Error> {
 }
 
 impl IdentityCommand {
-    pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        let gsb = ctx.gsb.service(identity::BUS_SERVICE_NAME);
         match self {
-            IdentityCommand::List { .. } => list::list().await,
+            IdentityCommand::List { .. } => list::list(&gsb).await,
             IdentityCommand::Show { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().unwrap_or_default().into();
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(command)
                         .await
                         .map_err(anyhow::Error::msg)?,
@@ -228,7 +246,7 @@ impl IdentityCommand {
             IdentityCommand::PubKey { node_or_alias } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::GetPubKey(node_id))
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -271,7 +289,7 @@ impl IdentityCommand {
                 let payload = sha256.finalize().to_vec();
 
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Sign { node_id, payload })
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -287,7 +305,8 @@ impl IdentityCommand {
                 set_default,
             } => {
                 let node_id = alias_or_id.resolve().await?;
-                let id = bus::service(identity::BUS_ID)
+                let id = gsb
+                    .local()
                     .send(
                         identity::Update::with_id(node_id)
                             .with_alias(alias.clone())
@@ -300,13 +319,41 @@ impl IdentityCommand {
             IdentityCommand::Create {
                 alias,
                 from_keystore,
+                from_private_key,
+                password,
                 no_password,
+                set_default,
             } => {
+                if from_keystore.is_some() && from_private_key.is_some() {
+                    anyhow::bail!("Only one of --from-keystore or --from-private-key can be used")
+                }
+                if from_private_key.is_some() {
+                    log::warn!("Using private key directly is not recommended. Use keystore instead. Your key could leak in command history, check and clean logs.")
+                }
+
+                let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
+                    from_private_key
+                {
+                    let v = hex::decode(from_private_key).map_err(|e| {
+                        anyhow::anyhow!(
+                            "Private key has to be plain hex string without 0x prefix - {e}"
+                        )
+                    })?;
+                    let slice = v[0..32].try_into().map_err(|e|
+                        anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}")
+                    )?;
+                    Some(slice)
+                } else {
+                    None
+                };
+
                 let key_file = if let Some(keystore) = from_keystore {
                     std::fs::read_to_string(keystore)?
                 } else {
                     let password = if *no_password {
                         Protected::from("")
+                    } else if let Some(password) = password {
+                        Protected::from(password.as_str())
                     } else {
                         let password: Protected =
                             rpassword::read_password_from_tty(Some("Password: "))?.into();
@@ -317,14 +364,21 @@ impl IdentityCommand {
                         }
                         password
                     };
-                    crate::id_key::generate_new_keyfile(password)?
+                    crate::id_key::generate_new_keyfile(password, from_private_key_slice)?
                 };
 
-                let id = bus::service(identity::BUS_ID)
+                let id = gsb
+                    .local()
                     .send(identity::CreateGenerated {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
                     })
+                    .await
+                    .map_err(anyhow::Error::msg)??;
+
+                let id = gsb
+                    .local()
+                    .send(identity::Update::with_id(id.node_id).with_default(*set_default))
                     .await
                     .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)
@@ -346,17 +400,24 @@ impl IdentityCommand {
                     None
                 };
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Lock::with_id(node_id).with_set_password(password))
                         .await
                         .map_err(anyhow::Error::msg)?,
                 )
             }
-            IdentityCommand::Unlock { node_or_alias } => {
+            IdentityCommand::Unlock {
+                node_or_alias,
+                password,
+            } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let password = rpassword::read_password_from_tty(Some("Password: "))?;
+                let password = if let Some(password) = password {
+                    password.to_string()
+                } else {
+                    rpassword::read_password_from_tty(Some("Password: "))?
+                };
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    gsb.local()
                         .send(identity::Unlock::with_id(node_id, password))
                         .await
                         .map_err(anyhow::Error::msg)?,
@@ -365,14 +426,15 @@ impl IdentityCommand {
             IdentityCommand::Drop {
                 node_or_alias,
                 force,
-            } => drop_id::drop_id(node_or_alias, *force).await,
+            } => drop_id::drop_id(&gsb, node_or_alias, *force).await,
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,
                 plain,
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                let mut key_file = bus::service(identity::BUS_ID)
+                let mut key_file = gsb
+                    .local()
                     .send(identity::GetKeyFile(node_id))
                     .await?
                     .map_err(anyhow::Error::msg)?;

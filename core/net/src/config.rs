@@ -38,8 +38,10 @@ pub struct Config {
     pub host: Option<String>,
     #[structopt(env = "YA_NET_BIND_URL", default_value = "udp://0.0.0.0:11500")]
     pub bind_url: Url,
-    #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "10")]
+    #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "5")]
     pub broadcast_size: u32,
+    #[structopt(env = "YA_NET_PUB_BROADCAST_SIZE", default_value = "30")]
+    pub pub_broadcast_size: u32,
     #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
     pub session_expiration: Duration,
     #[structopt(env = "YA_NET_SESSION_REQUEST_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "3s")]

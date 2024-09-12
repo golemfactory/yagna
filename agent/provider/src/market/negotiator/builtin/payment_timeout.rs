@@ -1,12 +1,10 @@
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use ya_agreement_utils::{Error, OfferDefinition};
 
 use crate::display::EnableDisplay;
 use crate::market::negotiator::factory::PaymentTimeoutConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
+use crate::market::negotiator::{NegotiationResult, NegotiatorComponent, ProposalView};
 
 const PAYMENT_TIMEOUT_PROPERTY_FLAT: &str = "golem.com.scheme.payu.payment-timeout-sec?";
 pub const PAYMENT_TIMEOUT_PROPERTY: &str = "/golem/com/scheme/payu/payment-timeout-sec?";
@@ -118,18 +116,6 @@ impl NegotiatorComponent for PaymentTimeout {
         );
         Ok(offer_template)
     }
-
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
 }
 
 fn read_duration(pointer: &str, proposal: &ProposalView) -> anyhow::Result<Option<Duration>> {
@@ -145,9 +131,8 @@ fn read_utc_timestamp(pointer: &str, proposal: &ProposalView) -> anyhow::Result<
         Ok(val) => {
             let secs = (val / 1000) as i64;
             let nsecs = 1_000_000 * (val % 1000) as u32;
-            let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
-                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?;
-            Ok(Utc.from_utc_datetime(&naive))
+            Ok(DateTime::from_timestamp(secs, nsecs)
+                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?)
         }
         Err(err) => Err(err.into()),
     }

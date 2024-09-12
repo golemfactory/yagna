@@ -1,10 +1,11 @@
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
-use ya_client_model::payment::{Allocation, DriverStatusProperty, Payment};
+use ya_client_model::payment::{allocation::Deposit, Allocation, DriverStatusProperty, Payment};
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -78,6 +79,28 @@ impl PaymentConfirmation {
     }
 }
 
+// ************************** GET RPC ENDPOINTS INFO **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetRpcEndpoints {
+    pub network: Option<String>,
+    pub verify: bool,
+    pub resolve: bool,
+    pub no_wait: bool,
+}
+
+impl RpcMessage for GetRpcEndpoints {
+    const ID: &'static str = "GetRpcEndpoints";
+    type Item = GetRpcEndpointsResult;
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GetRpcEndpointsResult {
+    pub endpoints: serde_json::Value,
+    pub sources: serde_json::Value,
+}
+
 // ************************** GET ACCOUNT BALANCE **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,38 +124,17 @@ impl GetAccountBalance {
     }
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GetAccountBalanceResult {
+    pub gas_details: Option<GasDetails>,
+    pub token_balance: BigDecimal,
+    pub block_number: u64,
+    pub block_datetime: DateTime<Utc>,
+}
+
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
-    type Item = BigDecimal;
-    type Error = GenericError;
-}
-
-// ************************** GET ACCOUNT GAS BALANCE **************************
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetAccountGasBalance {
-    address: String,
-    platform: String,
-}
-
-impl GetAccountGasBalance {
-    pub fn new(address: String, platform: String) -> Self {
-        Self { address, platform }
-    }
-}
-
-impl GetAccountGasBalance {
-    pub fn address(&self) -> String {
-        self.address.clone()
-    }
-    pub fn platform(&self) -> String {
-        self.platform.clone()
-    }
-}
-
-impl RpcMessage for GetAccountGasBalance {
-    const ID: &'static str = "GetAccountGasBalance";
-    type Item = Option<GasDetails>;
+    type Item = GetAccountBalanceResult;
     type Error = GenericError;
 }
 
@@ -213,14 +215,21 @@ pub struct Fund {
     address: String,
     network: Option<String>,
     token: Option<String>,
+    mint_only: bool,
 }
 
 impl Fund {
-    pub fn new(address: String, network: Option<String>, token: Option<String>) -> Self {
+    pub fn new(
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mint_only: bool,
+    ) -> Self {
         Self {
             address,
             network,
             token,
+            mint_only,
         }
     }
     pub fn address(&self) -> String {
@@ -231,6 +240,9 @@ impl Fund {
     }
     pub fn token(&self) -> Option<String> {
         self.token.clone()
+    }
+    pub fn mint_only(&self) -> bool {
+        self.mint_only
     }
 }
 
@@ -292,6 +304,7 @@ pub struct SchedulePayment {
     sender: String,
     recipient: String,
     platform: String,
+    deposit_id: Option<Deposit>,
     due_date: DateTime<Utc>,
 }
 
@@ -301,6 +314,7 @@ impl SchedulePayment {
         sender: String,
         recipient: String,
         platform: String,
+        deposit_id: Option<Deposit>,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
@@ -308,6 +322,7 @@ impl SchedulePayment {
             sender,
             recipient,
             platform,
+            deposit_id,
             due_date,
         }
     }
@@ -328,6 +343,10 @@ impl SchedulePayment {
         self.platform.clone()
     }
 
+    pub fn deposit_id(&self) -> Option<Deposit> {
+        self.deposit_id.clone()
+    }
+
     pub fn due_date(&self) -> DateTime<Utc> {
         self.due_date
     }
@@ -346,7 +365,11 @@ pub struct ValidateAllocation {
     pub address: String,
     pub platform: String,
     pub amount: BigDecimal,
-    pub existing_allocations: Vec<Allocation>,
+    pub timeout: Option<DateTime<Utc>>,
+    pub deposit: Option<Deposit>,
+    pub past_allocations: Vec<Allocation>,
+    pub active_allocations: Vec<Allocation>,
+    pub new_allocation: bool,
 }
 
 impl ValidateAllocation {
@@ -354,20 +377,60 @@ impl ValidateAllocation {
         address: String,
         platform: String,
         amount: BigDecimal,
-        existing: Vec<Allocation>,
+        timeout: Option<DateTime<Utc>>,
+        past_allocations: Vec<Allocation>,
+        active_allocations: Vec<Allocation>,
+        new_allocation: bool,
     ) -> Self {
         ValidateAllocation {
             address,
             platform,
             amount,
-            existing_allocations: existing,
+            timeout,
+            deposit: None,
+            past_allocations,
+            active_allocations,
+            new_allocation,
         }
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ValidateAllocationResult {
+    InsufficientAccountFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+        reserved_funds: BigDecimal,
+    },
+    InsufficientDepositFunds {
+        requested_funds: BigDecimal,
+        available_funds: BigDecimal,
+    },
+    TimeoutExceedsDeposit {
+        requested_timeout: Option<DateTime<Utc>>,
+        deposit_timeout: DateTime<Utc>,
+    },
+    TimeoutPassed {
+        requested_timeout: DateTime<Utc>,
+    },
+    MalformedDepositContract,
+    MalformedDepositId,
+    NoDeposit {
+        deposit_id: String,
+    },
+    DepositReused {
+        allocation_id: String,
+    },
+    DepositSpenderMismatch {
+        deposit_spender: String,
+    },
+    DepositValidationError(String),
+    Valid,
+}
+
 impl RpcMessage for ValidateAllocation {
     const ID: &'static str = "ValidateAllocation";
-    type Item = bool;
+    type Item = ValidateAllocationResult;
     type Error = GenericError;
 }
 
@@ -516,17 +579,34 @@ impl RpcMessage for SignPayment {
     type Error = GenericError;
 }
 
+// ************************ SIGN PAYMENT ************************
+
+/// We sign canonicalized version of `Payment` struct, so although we could make new struct compatible in terms of deserialization, the signature would be incorrect. That's why we need separate endpoint.
+#[derive(Clone, Debug, Serialize, Deserialize, From)]
+pub struct SignPaymentCanonicalized(pub Payment);
+
+impl RpcMessage for crate::driver::SignPaymentCanonicalized {
+    const ID: &'static str = "SignPaymentCanonicalized";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
 // ********************** VERIFY SIGNATURE **********************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
+    pub canonical: Option<Vec<u8>>,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
-        Self { payment, signature }
+    pub fn new(payment: Payment, signature: Vec<u8>, canonical: Option<Vec<u8>>) -> Self {
+        Self {
+            payment,
+            signature,
+            canonical,
+        }
     }
 }
 
@@ -552,6 +632,22 @@ impl RpcMessage for DriverStatus {
 pub enum DriverStatusError {
     #[error("No such network '{0}'")]
     NetworkNotFound(String),
+}
+
+// ************************* DEPOSIT *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DriverReleaseDeposit {
+    pub platform: String,
+    pub from: String,
+    pub deposit_contract: String,
+    pub deposit_id: String,
+}
+
+impl RpcMessage for DriverReleaseDeposit {
+    const ID: &'static str = "DriverReleaseDeposit";
+    type Item = ();
+    type Error = GenericError;
 }
 
 // ************************* SHUT DOWN *************************

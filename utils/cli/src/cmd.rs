@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 
+#[derive(Debug)]
 pub enum CommandOutput {
     NoOutput,
     Object(serde_json::Value),
@@ -9,6 +10,9 @@ pub enum CommandOutput {
         values: Vec<serde_json::Value>,
         summary: Vec<serde_json::Value>,
         header: Option<String>,
+    },
+    MultiTable {
+        tables: Vec<CommandOutput>,
     },
 }
 
@@ -39,6 +43,19 @@ impl CommandOutput {
                 summary: _,
                 header: _,
             } => crate::table::print_json_table(columns, values)?,
+            CommandOutput::MultiTable { tables } => {
+                for table in tables {
+                    if let CommandOutput::Table {
+                        columns,
+                        values,
+                        summary: _,
+                        header: _,
+                    } = table
+                    {
+                        crate::table::print_json_table(columns, values)?
+                    }
+                }
+            }
             CommandOutput::Object(value) => println!("{}", serde_json::to_string_pretty(&value)?),
         }
         Ok(())
@@ -57,6 +74,22 @@ impl CommandOutput {
                     println!("{}", txt);
                 }
                 crate::table::print_table(columns, values, summary)
+            }
+            CommandOutput::MultiTable { tables } => {
+                for table in tables {
+                    if let CommandOutput::Table {
+                        columns,
+                        values,
+                        summary,
+                        header,
+                    } = table
+                    {
+                        if let Some(txt) = header {
+                            println!("{}", txt);
+                        }
+                        crate::table::print_table(columns, values, summary)
+                    }
+                }
             }
             CommandOutput::Object(value) => match value {
                 serde_json::Value::String(s) => {

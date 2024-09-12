@@ -28,7 +28,7 @@ pub struct PaymentDriver {
 }
 
 lazy_static! {
-    pub static ref ERC20NEXT_DRIVER: PaymentDriver = {
+    pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
         erc20.insert(
             NetworkName::Mainnet.into(),
@@ -78,6 +78,22 @@ lazy_static! {
                 token: "GLM",
             },
         );
+        erc20.insert(
+            NetworkName::Amoy.into(),
+            PaymentPlatform {
+                platform: "erc20-amoy-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Sepolia.into(),
+            PaymentPlatform {
+                platform: "erc20-sepolia-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
 
         PaymentDriver {
             platforms: erc20,
@@ -87,7 +103,7 @@ lazy_static! {
 
     // Drivers are searched in order when more than one supports a given network,
     // so erc20 should be preferred over erc20.
-    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20NEXT_DRIVER];
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ERC20_DRIVER];
 }
 
 impl PaymentDriver {
@@ -137,9 +153,9 @@ lazy_static! {
         ngm.insert(
             NetworkGroup::Testnet,
             vec![
-                NetworkName::Mumbai,
                 NetworkName::Holesky,
-                NetworkName::Goerli,
+                NetworkName::Amoy,
+                NetworkName::Sepolia,
             ],
         );
         ngm
@@ -272,7 +288,7 @@ impl YagnaCommand {
         network: Option<&NetworkName>,
         payment_driver: Option<&PaymentDriver>,
     ) -> anyhow::Result<Vec<DriverStatusProperty>> {
-        self.cmd.args(["--json", "payment", "driver-status"]);
+        self.cmd.args(["--json", "payment", "driver", "status"]);
         if let Some(address) = address {
             self.cmd.args(["--account", address]);
         }

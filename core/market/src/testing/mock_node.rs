@@ -15,12 +15,6 @@ use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
 use crate::MarketService;
 
-#[cfg(feature = "bcast-singleton")]
-use super::bcast::singleton::BCastService;
-use super::bcast::BCast;
-#[cfg(not(feature = "bcast-singleton"))]
-use super::bcast::BCastService;
-use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::{Config, DiscoveryConfig};
@@ -31,17 +25,23 @@ use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::*;
+use crate::negotiation::ScannerSet;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::*;
 
+use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
+
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
+    net: Box<dyn IMockNet>,
     nodes: Vec<MockNode>,
+
     test_dir: PathBuf,
     test_name: String,
+
     config: Arc<Config>,
 }
 
@@ -77,31 +77,32 @@ pub enum MockNodeKind {
 
 impl MockNodeKind {
     pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<String> {
-        let (public, local) = gsb_prefixes(test_name, name);
+        let (gsb_public, gsb_local) = gsb_prefixes(test_name, name);
+        let (market_public, market_local) = gsb_market_prefixes(&gsb_public, &gsb_local);
 
         match self {
             MockNodeKind::Market(market) => {
-                market.bind_gsb(&public, &local).await?;
+                market.bind_gsb(&market_public, &market_local).await?;
                 market.matcher.discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
-                matcher.bind_gsb(&public, &local).await?;
+                matcher.bind_gsb(&market_public, &market_local).await?;
                 matcher.discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Discovery(discovery) => {
-                discovery.bind_gsb(&public, &local).await?;
+                discovery.bind_gsb(&market_public, &market_local).await?;
                 discovery.bind_gsb_broadcast().await?;
             }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
             } => {
-                provider.bind_gsb(&public, &local).await?;
-                requestor.bind_gsb(&public, &local).await?;
+                provider.bind_gsb(&market_public, &market_local).await?;
+                requestor.bind_gsb(&market_public, &market_local).await?;
             }
         }
 
-        Ok(public)
+        Ok(gsb_public)
     }
 }
 
@@ -119,7 +120,7 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: Option<&str>) -> Self {
+    pub async fn new(test_name: Option<&str>, net: impl IMockNet + 'static) -> Self {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
 
@@ -129,11 +130,13 @@ impl MarketsNetwork {
         };
 
         let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
-        log::info!("Intializing MarketsNetwork. tn={}", test_name);
+        log::info!("Initializing MarketsNetwork. tn={}", test_name);
 
-        MockNet::default().bind_gsb();
+        let net = Box::new(net);
+        net.bind_gsb();
 
         MarketsNetwork {
+            net,
             nodes: vec![],
             test_dir: prepare_test_dir(&test_name).unwrap(),
             test_name,
@@ -163,8 +166,8 @@ impl MarketsNetwork {
 
         let node_id = node.mock_identity.get_default_id().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
-        BCastService::default().register(&node_id, &self.test_name);
-        MockNet::default().register_node(&node_id, &public_gsb_prefix);
+        self.net.register_for_broadcasts(&node_id, &self.test_name);
+        self.net.register_node(&node_id, &public_gsb_prefix);
 
         self.nodes.push(node);
         self
@@ -172,7 +175,7 @@ impl MarketsNetwork {
 
     pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
         for (_, id) in self.list_ids(node_name) {
-            MockNet::default().unregister_node(&id.identity)?
+            self.net.unregister_node(&id.identity)?
         }
         Ok(())
     }
@@ -180,7 +183,7 @@ impl MarketsNetwork {
     pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
         for (_, id) in self.list_ids(node_name) {
             let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-            MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+            self.net.register_node(&id.identity, &public_gsb_prefix);
         }
         Ok(())
     }
@@ -202,8 +205,9 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Self {
         let db = self.init_database(name);
+        let scan_set = ScannerSet::new(db.clone());
 
-        let store = SubscriptionStore::new(db.clone(), self.config.clone());
+        let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
         let identity_api = MockIdentity::new(name);
 
         let (matcher, listeners) =
@@ -233,6 +237,7 @@ impl MarketsNetwork {
             .add_handler(empty_on_offers_bcast)
             .add_handler(empty_on_offer_unsubscribed_bcast)
             .add_handler(empty_on_retrieve_offers)
+            .add_handler(empty_query_offers_handler)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -424,7 +429,7 @@ impl MarketsNetwork {
 
         let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
 
-        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        self.net.register_node(&id.identity, &public_gsb_prefix);
         id
     }
 
@@ -492,6 +497,11 @@ impl MarketsNetwork {
 
     pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
         gsb_prefixes(&self.test_name, node_name)
+    }
+
+    pub fn market_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+        let (gsb_public, gsb_local) = gsb_prefixes(&self.test_name, node_name);
+        gsb_market_prefixes(&gsb_public, &gsb_local)
     }
 }
 
@@ -613,6 +623,13 @@ pub mod default {
         Ok(vec![])
     }
 
+    pub async fn empty_query_offers_handler(
+        _caller: String,
+        _msg: QueryOffers,
+    ) -> Result<QueryOffersResult, DiscoveryRemoteError> {
+        Ok(QueryOffersResult::default())
+    }
+
     pub async fn empty_on_offer_unsubscribed_bcast(
         _caller: String,
         _msg: UnsubscribedOffersBcast,
@@ -694,6 +711,8 @@ pub fn create_market_config_for_test() -> Config {
         mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
         offer_broadcast_delay: Duration::from_millis(200),
         unsub_broadcast_delay: Duration::from_millis(200),
+        bcast_tile_time_margin: Duration::from_millis(0),
+        bcast_node_ban_timeout: Duration::from_millis(10),
     };
 
     let mut cfg = Config::from_env().unwrap();

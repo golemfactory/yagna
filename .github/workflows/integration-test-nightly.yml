@@ -41,7 +41,7 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix-json) }}
       fail-fast: false
-    runs-on: [goth2]
+    runs-on: [ goth2 ]
     name: Integration Tests (nightly) @ ${{ matrix.branch }}
     defaults:
       run:
@@ -81,7 +81,7 @@ jobs:
 
       - name: Run test suite
         env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Runs on branches defined within matrix
           poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.branch }}
@@ -92,7 +92,7 @@ jobs:
         run: echo "::set-output name=file_name::$(echo '${{ matrix.branch }}' | sed 's/\//-/g')"
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: goth-logs_${{ steps.branch_as.outputs.file_name }}

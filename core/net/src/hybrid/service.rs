@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
@@ -116,7 +117,7 @@ pub async fn start_network(
 
     log::info!("Starting network (hybrid) with identity: {default_id}");
 
-    let broadcast_size = config.broadcast_size;
+    let broadcast_size = (config.broadcast_size, config.pub_broadcast_size);
     let crypto = IdentityCryptoProvider::new(default_id);
     let client = build_client(config, crypto.clone()).await?;
 
@@ -319,7 +320,7 @@ fn bind_local_bus<F>(
         } else {
             let rx = if is_local_dest {
                 let (tx, rx) = mpsc::channel(1);
-                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
+                forward_bus_to_local(caller_id, address.as_str(), msg, &state_, tx);
                 rx
             } else {
                 forward_bus_to_net(
@@ -441,7 +442,7 @@ fn bind_local_bus<F>(
 async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvider) {
     let endpoint = format!("{}/id", net::BUS_ID);
 
-    typed::bind(endpoint.as_str(), move |event: identity::event::Event| {
+    typed::bind(endpoint.as_str(), move |event: IdentityEvent| {
         log::debug!("Identity event received: {:?}", event);
 
         crypto.reset_alias_cache();
@@ -449,8 +450,9 @@ async fn bind_identity_event_handler(client: Client, crypto: IdentityCryptoProvi
 
         async move {
             match event {
-                identity::event::Event::AccountUnlocked { .. }
-                | identity::event::Event::AccountLocked { .. } => client.reconnect_server().await,
+                IdentityEvent::AccountUnlocked { .. } | IdentityEvent::AccountLocked { .. } => {
+                    client.reconnect_server().await
+                }
             }
             Ok(())
         }
@@ -565,7 +567,7 @@ fn forward_bus_to_net(
                 });
             }
             Err(error) => {
-                let err = format!("Net: error forwarding message: {}", error);
+                let err = format!("Net: error forwarding message: {:?}", error);
                 handler_reply_service_err(request_id, err, tx);
             }
         };
@@ -633,7 +635,7 @@ fn broadcast_handler(
     caller: &str,
     _addr: &str,
     msg: &[u8],
-    broadcast_size: u32,
+    broadcast_size: (u32, u32),
 ) -> impl Future<Output = Result<Vec<u8>, Error>> {
     let message = msg.to_vec();
     let caller = caller.to_string();
@@ -651,6 +653,12 @@ fn broadcast_handler(
 
         let payload = encode_message(request).map_err(|e| Error::EncodingProblem(e.to_string()))?;
 
+        let broadcast_size = if client.public_addr().await.is_some() {
+            broadcast_size.1
+        } else {
+            broadcast_size.0
+        };
+
         client
             .broadcast(payload, broadcast_size)
             .await
@@ -666,7 +674,7 @@ fn broadcast_handler(
     })
 }
 
-fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
+fn bind_broadcast_handlers(client: Client, broadcast_size: (u32, u32)) {
     let _ = typed::bind(
         net::local::BUS_ID,
         move |subscribe: net::local::Subscribe| {
@@ -674,9 +682,11 @@ fn bind_broadcast_handlers(client: Client, broadcast_size: u32) {
             let bcast = BCAST.clone();
 
             async move {
-                log::debug!("NET: Subscribe topic {}", topic);
-                let (_is_new, id) = bcast.add(subscribe).await;
-                log::debug!("NET: Created new topic: {}", topic);
+                log::debug!("NET: Subscribe to broadcast topic {}", topic);
+                let (is_new, id) = bcast.add(subscribe).await;
+                if is_new {
+                    log::debug!("NET: Created new topic: {}", topic);
+                }
                 Ok(id)
             }
         },
@@ -1137,7 +1147,7 @@ fn handler_reply_err(
     });
 }
 
-fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
+pub fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
     const ADDR_CONST: usize = 6;
 
     let mut it = addr.split('/').fuse().skip(1).peekable();
@@ -1155,7 +1165,7 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
     Ok((to_id, format!("{}{}", prefix, addr)))
 }
 
-fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
+pub fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
     const ADDR_CONST: usize = 10;
 
     let mut it = addr.split('/').fuse().skip(1).peekable();
@@ -1190,9 +1200,12 @@ async fn bind_neighbourhood_bcast(client: Client) -> anyhow::Result<(), BindBroa
     let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
     crate::hybrid::bind_broadcast_with_caller(
         &bcast_address,
-        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+        move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
             let client = client.clone();
             async move {
+                log::debug!(
+                    "NewNeighbour notification fron [{caller}] - invalidating neighborhood cache."
+                );
                 client.invalidate_neighbourhood_cache().await;
                 Ok(())
             }
@@ -1206,7 +1219,7 @@ pub async fn send_bcast_new_neighbour() {
 
     let net_type = { *NET_TYPE.read().unwrap() };
     if net_type == NetType::Hybrid {
-        log::debug!("Broadcasting new neighbour");
+        log::debug!("Broadcasting new neighbour notification.");
         if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
             log::error!("Error broadcasting new neighbour: {e}");
         }

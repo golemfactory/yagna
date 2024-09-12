@@ -10,17 +10,17 @@ on:
   push:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
       - '**/all-tests'
   pull_request:
     branches:
       - master
-      - payments-dev
+      - deposits
       - release/*
 
 env:
-  rust_stable: 1.75.0
+  rust_stable: 1.77.0
 
 jobs:
   build:
@@ -61,7 +61,7 @@ jobs:
           cp target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp} build
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: Yagna linux-aarch64
           path: build

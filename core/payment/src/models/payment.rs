@@ -4,6 +4,7 @@ use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment as api_model;
+use ya_client_model::payment::payment::Signature;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
@@ -20,9 +21,12 @@ pub struct WriteObj {
     pub amount: BigDecimalField,
     pub details: Vec<u8>,
     pub send_payment: bool,
+    pub signature: Option<Vec<u8>>,
+    pub signed_bytes: Option<Vec<u8>>,
 }
 
 impl WriteObj {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_sent(
         payer_id: NodeId,
         payee_id: NodeId,
@@ -31,6 +35,8 @@ impl WriteObj {
         payment_platform: String,
         amount: BigDecimal,
         details: Vec<u8>,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
     ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -43,10 +49,16 @@ impl WriteObj {
             amount: amount.into(),
             details,
             send_payment: true,
+            signature,
+            signed_bytes,
         }
     }
 
-    pub fn new_received(payment: api_model::Payment) -> DbResult<Self> {
+    pub fn new_received(
+        payment: api_model::Payment,
+        signature: Option<Vec<u8>>,
+        signed_bytes: Option<Vec<u8>>,
+    ) -> DbResult<Self> {
         let details = base64::decode(&payment.details)
             .map_err(|_| DbError::Query("Payment details is not valid base-64".to_string()))?;
         Ok(Self {
@@ -60,11 +72,13 @@ impl WriteObj {
             amount: payment.amount.into(),
             details,
             send_payment: false,
+            signature,
+            signed_bytes,
         })
     }
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Clone)]
 #[table_name = "pay_payment"]
 #[primary_key(id, owner_id)]
 pub struct ReadObj {
@@ -79,6 +93,8 @@ pub struct ReadObj {
     pub timestamp: NaiveDateTime,
     pub details: Vec<u8>,
     pub send_payment: bool,
+    pub signature: Option<Vec<u8>>,
+    pub signed_bytes: Option<Vec<u8>>,
 }
 
 impl ReadObj {
@@ -113,6 +129,26 @@ impl ReadObj {
             activity_payments: activity_payments.into_iter().map(Into::into).collect(),
             agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
             details: base64::encode(&self.details),
+        }
+    }
+
+    pub fn into_signed_api_model(
+        self,
+        activity_payments: Vec<ActivityPayment>,
+        agreement_payments: Vec<AgreementPayment>,
+    ) -> api_model::Signed<api_model::Payment> {
+        api_model::Signed {
+            payload: self
+                .clone()
+                .into_api_model(activity_payments, agreement_payments),
+            signature: if self.signature.is_some() && self.signed_bytes.is_some() {
+                Some(Signature {
+                    signature: self.signature.unwrap(),
+                    signed_bytes: self.signed_bytes.unwrap(),
+                })
+            } else {
+                None
+            },
         }
     }
 }

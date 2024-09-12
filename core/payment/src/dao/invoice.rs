@@ -364,12 +364,20 @@ impl<'c> InvoiceDao<'c> {
     }
 
     /// Lists invoices with send_accept
-    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+    pub async fn unsent_accepted(
+        &self,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, "invoice_dao_unsent_accepted", move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
-                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .filter(dsl::status.eq_any([
+                    DocumentStatus::Accepted.to_string(),
+                    DocumentStatus::Settled.to_string(),
+                ]))
+                .filter(agreement_dsl::peer_id.eq(peer_id))
                 .load(conn)?;
 
             let activities = activity_dsl::pay_invoice_x_activity
@@ -459,12 +467,17 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn unsent_rejected(&self, owner_id: NodeId) -> DbResult<Vec<Invoice>> {
+    pub async fn unsent_rejected(
+        &self,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, "unsent_rejected", move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_reject.eq(true))
                 .filter(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .filter(agreement_dsl::peer_id.eq(peer_id))
                 .load(conn)?;
 
             let activities = activity_dsl::pay_invoice_x_activity

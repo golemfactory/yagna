@@ -1,5 +1,6 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
+use ya_framework_mocks::net::MockNet;
 
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
@@ -12,7 +13,7 @@ use ya_market::testing::{
 async fn test_single_not_resolve_offer() {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None)
+    let mut network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_matcher_instance("Node-1")
         .await;
@@ -35,7 +36,7 @@ async fn test_single_not_resolve_offer() {
 async fn test_resolve_offer_demand() {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None)
+    let mut network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_matcher_instance("Provider-1")
         .await
@@ -78,7 +79,7 @@ async fn test_resolve_offer_demand() {
 async fn test_single_not_resolve_demand() {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None)
+    let mut network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_matcher_instance("Node-1")
         .await;
@@ -101,7 +102,7 @@ async fn test_single_not_resolve_demand() {
 async fn test_resolve_2xoffer_demand() {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None)
+    let mut network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_matcher_instance("Provider-1")
         .await

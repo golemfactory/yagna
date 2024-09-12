@@ -3,7 +3,7 @@ use super::{
     RemoveResponse, SignatureVerifier,
 };
 use anyhow::bail;
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 use golem_certificate::schemas::certificate::Fingerprint;
 use openssl::{
     asn1::{Asn1Time, Asn1TimeRef},
@@ -59,10 +59,10 @@ fn asn1_time_to_date_time(time: &Asn1TimeRef) -> anyhow::Result<DateTime<Utc>> {
     // Openssl lib allows to access time only through ASN1_TIME_print.
     // Diff starting from epoch is a workaround to get `not_after` value.
     let time_diff = Asn1Time::from_unix(0)?.diff(time)?;
-    let not_after = NaiveDateTime::from_timestamp_millis(0).unwrap()
+    let not_after = DateTime::from_timestamp_millis(0).unwrap()
         + Duration::days(time_diff.days as i64)
         + Duration::seconds(time_diff.secs as i64);
-    Ok(Utc.from_utc_datetime(&not_after))
+    Ok(not_after)
 }
 
 pub(super) struct AddX509Response {
@@ -215,8 +215,12 @@ fn leaf_certs(certs: &HashMap<String, X509>) -> Vec<&str> {
 }
 
 impl Keystore for X509KeystoreManager {
-    fn reload(&self, cert_dir: &Path) -> anyhow::Result<()> {
-        self.keystore.reload(cert_dir)
+    fn reload(&self) -> anyhow::Result<()> {
+        self.keystore.reload(&self.cert_dir)
+    }
+
+    fn cert_dir(&self) -> PathBuf {
+        self.cert_dir.clone()
     }
 
     fn add(&mut self, add: &AddParams) -> anyhow::Result<AddResponse> {
@@ -307,6 +311,14 @@ impl Keystore for X509KeystoreManager {
 
     fn list(&self) -> Vec<Cert> {
         self.keystore.list().into_iter().map(Cert::X509).collect()
+    }
+
+    fn get(&self, cert: &Fingerprint) -> Option<Cert> {
+        self.keystore
+            .list()
+            .into_iter()
+            .find(|cert_data| &cert_data.id == cert)
+            .map(Cert::X509)
     }
 
     fn verifier(&self, cert: &str) -> anyhow::Result<Box<dyn super::SignatureVerifier>> {
@@ -521,7 +533,7 @@ fn verify_cert_chain(
     cert_store: &CertStore,
     cert_chain: &Vec<X509>,
 ) -> anyhow::Result<PKey<Public>> {
-    let cert = match cert_chain.last().map(Clone::clone) {
+    let cert = match cert_chain.last().cloned() {
         Some(cert) => cert,
         None => bail!("Unable to verify X509 certificate. No X509 certificate in payload."),
     };

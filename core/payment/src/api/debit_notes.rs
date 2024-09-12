@@ -106,6 +106,8 @@ async fn get_debit_note_events(
     req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
+    counter!("payment.debit_notes.events.query", 1);
+
     let requestor_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Requestor-Events")
@@ -459,7 +461,7 @@ async fn accept_debit_note(
                 response?;
             } else {
                 log::debug!("AcceptDebitNote not delivered");
-                sync_dao.upsert(node_id).await?;
+                sync_dao.upsert(issuer_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
             }
 

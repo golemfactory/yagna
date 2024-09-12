@@ -125,7 +125,7 @@ pub(crate) fn bind_service(base_client: Client) {
         .map_err(status_err)
     });
 
-    let find_node_client = base_client;
+    let find_node_client = base_client.clone();
     let _ = bus::bind(model::BUS_ID, move |find: model::FindNode| {
         let client = find_node_client.clone();
         async move {
@@ -140,7 +140,11 @@ pub(crate) fn bind_service(base_client: Client) {
                 endpoints: node
                     .endpoints
                     .into_iter()
-                    .map(|ep| ep.address.parse())
+                    .map(|ep| {
+                        ep.address
+                            .parse()
+                            .map(|ip: IpAddr| SocketAddr::new(ip, ep.port as u16))
+                    })
                     .collect::<Result<Vec<_>, _>>()?,
                 seen: node.seen_ts,
                 slot: node.slot,
@@ -148,6 +152,12 @@ pub(crate) fn bind_service(base_client: Client) {
             })
         }
         .map_err(status_err)
+    });
+    let client_ = base_client;
+    let _ = bus::bind(model::BUS_ID, move |list: model::ListNeighbours| {
+        let client = client_.clone();
+
+        async move { client.neighbours(list.size).await.map_err(status_err) }
     });
 }
 
@@ -267,8 +277,8 @@ async fn cli_ping(client: Client, nodes: Vec<NodeId>) -> anyhow::Result<Vec<GsbP
             log::warn!("Failed to ping node: {} {e}", nodes[idx].0);
         }
 
-        let udp_ping = results.0.unwrap_or(ping_timeout);
-        let tcp_ping = results.1.unwrap_or(ping_timeout);
+        let udp_ping = results.0.ok();
+        let tcp_ping = results.1.ok();
 
         GsbPingResponse {
             node_id: nodes[idx].0,

@@ -60,6 +60,7 @@ table! {
         timestamp -> Timestamp,
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
+        deposit -> Nullable<Text>,
         released -> Bool,
     }
 }
@@ -190,6 +191,8 @@ table! {
         timestamp -> Timestamp,
         details -> Binary,
         send_payment -> Bool,
+        signature -> Nullable<Binary>,
+        signed_bytes -> Nullable<Binary>,
     }
 }
 

@@ -4,6 +4,7 @@ use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -119,18 +120,34 @@ impl<'c> AllocationDao<'c> {
         owner_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
         max_items: Option<u32>,
+        released: Option<bool>,
     ) -> DbResult<Vec<Allocation>> {
-        self.get_filtered(Some(owner_id), after_timestamp, max_items, None, None)
-            .await
+        self.get_filtered(
+            Some(owner_id),
+            after_timestamp,
+            max_items,
+            None,
+            None,
+            released,
+        )
+        .await
     }
 
     pub async fn get_for_address(
         &self,
         payment_platform: String,
         address: String,
+        released: Option<bool>,
     ) -> DbResult<Vec<Allocation>> {
-        self.get_filtered(None, None, None, Some(payment_platform), Some(address))
-            .await
+        self.get_filtered(
+            None,
+            None,
+            None,
+            Some(payment_platform),
+            Some(address),
+            released,
+        )
+        .await
     }
 
     pub async fn get_filtered(
@@ -140,11 +157,13 @@ impl<'c> AllocationDao<'c> {
         max_items: Option<u32>,
         payment_platform: Option<String>,
         address: Option<String>,
+        released: Option<bool>,
     ) -> DbResult<Vec<Allocation>> {
         readonly_transaction(self.pool, "allocation_dao_get_filtered", move |conn| {
-            let mut query = dsl::pay_allocation
-                .filter(dsl::released.eq(false))
-                .into_boxed();
+            let mut query = dsl::pay_allocation.into_boxed();
+            if let Some(released) = released {
+                query = query.filter(dsl::released.eq(released));
+            }
             if let Some(owner_id) = owner_id {
                 query = query.filter(dsl::owner_id.eq(owner_id))
             }
@@ -178,7 +197,7 @@ impl<'c> AllocationDao<'c> {
                 .first(conn)
                 .optional()?;
 
-            match allocation {
+            let (deposit, platform) = match allocation {
                 Some(allocation) => {
                     if let Some(owner_id) = owner_id {
                         if owner_id != allocation.owner_id {
@@ -189,9 +208,13 @@ impl<'c> AllocationDao<'c> {
                     if allocation.released {
                         return Ok(AllocationReleaseStatus::Gone);
                     }
+
+                    let allocation = Allocation::from(allocation);
+
+                    (allocation.deposit, allocation.payment_platform)
                 }
                 None => return Ok(AllocationReleaseStatus::NotFound),
-            }
+            };
 
             let num_released = diesel::update(dsl::pay_allocation)
                 .filter(dsl::released.eq(false))
@@ -200,7 +223,7 @@ impl<'c> AllocationDao<'c> {
                 .execute(conn)?;
 
             match num_released {
-                1 => Ok(AllocationReleaseStatus::Released),
+                1 => Ok(AllocationReleaseStatus::Released { deposit, platform }),
                 _ => Err(DbError::Query(format!(
                     "Update error occurred when releasing allocation {}",
                     allocation_id
@@ -246,5 +269,8 @@ pub enum AllocationStatus {
 pub enum AllocationReleaseStatus {
     Gone,
     NotFound,
-    Released,
+    Released {
+        deposit: Option<Deposit>,
+        platform: String,
+    },
 }
