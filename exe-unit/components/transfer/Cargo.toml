@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 ya-client = { workspace = true }
 ya-client-model = { workspace = true }
-ya-core-model = { workspace = true, features = ["gftp"] }
+ya-core-model = { workspace = true, features = ["activity", "gftp"] }
 ya-service-bus = { workspace = true }
 ya-utils-path = { version = "0.1", path = "../../../utils/path" }
 ya-utils-futures.workspace = true
@@ -43,6 +43,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 async-trait = "0.1.74"
+tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 awc = { version = "3", features = ["openssl"] }
@@ -59,7 +60,7 @@ sgx = [
     'ya-core-model/sgx',
     'reqwest/trust-dns',
 ]
-framework-test = []
+system-test = []
 
 [dependencies.zip]
 version = "0.5.6"

@@ -503,6 +503,10 @@ mod tests {
             ExeScriptCommand::Deploy {
                 net: Default::default(),
                 hosts: Default::default(),
+                hostname: None,
+                volumes: vec![],
+                env: Default::default(),
+                progress: None,
             },
             ExeScriptCommand::Start {
                 args: Default::default(),
@@ -657,6 +661,7 @@ mod tests {
             from: "/src/0x0add".to_string(),
             to: "/dst/0x0add".to_string(),
             args: Default::default(),
+            progress: None,
         }];
 
         let validator: ScriptValidator = r#"{

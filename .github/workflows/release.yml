@@ -373,7 +373,7 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - uses: golemfactory/build-deb-action@main
+      - uses: golemfactory/build-deb-action@5
         id: deb
         with:
           debVersion: ${{ steps.version.outputs.version-ext }}
