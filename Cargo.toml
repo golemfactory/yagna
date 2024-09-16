@@ -294,9 +294,9 @@ ya-service-api-interfaces = {path = "core/serv-api/interfaces"}
 ya-service-api-web = {path = "core/serv-api/web"}
 
 ## CLIENT
-ya-client = {git = "https://github.com/golemfactory/ya-client.git", rev = "dacad31b5bbd039b8ffc97adb70696655d0872ad"}
+ya-client = {git = "https://github.com/golemfactory/ya-client.git", rev = "34439bd2697c4a9bb88bbe50523069b26db791d0"}
 #ya-client = { path = "../ya-client" }
-ya-client-model = {git = "https://github.com/golemfactory/ya-client.git", rev = "dacad31b5bbd039b8ffc97adb70696655d0872ad"}
+ya-client-model = {git = "https://github.com/golemfactory/ya-client.git", rev = "34439bd2697c4a9bb88bbe50523069b26db791d0"}
 #ya-client-model = { path = "../ya-client/model" }
 golem-certificate = {git = "https://github.com/golemfactory/golem-certificate.git", rev = "952fdbd47adc57e46b7370935111e046271ef415"}
 
