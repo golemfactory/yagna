@@ -1,4 +1,4 @@
-name: Fast build for testing
+name: Fast Windows build for testing
 
 
 on:
@@ -23,6 +23,11 @@ jobs:
       steps:
         - name: Checkout
           uses: actions/checkout@v4
+
+        - name: Install OpenSSL static dependency
+          run: |
+            vcpkg install openssl:x64-windows-static
+            vcpkg integrate install
 
         - name: Build
           run: cargo build
