@@ -1,0 +1,29 @@
+name: Fast build for testing
+
+
+on:
+  push:
+    branches:
+      - master
+      - deposits
+      - release/*
+      - '**/all-tests'
+      - '**/integration-tests'
+  pull_request:
+    branches:
+      - master
+      - deposits
+      - release/*
+
+
+jobs:
+    build:
+      name: Build binaries (x86-64)
+      runs-on: windows-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        - name: Build
+          run: cargo build
+
