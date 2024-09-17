@@ -27,6 +27,21 @@ jobs:
           run: |
             rm rust-toolchain.toml
 
+        - name: Install openssl
+          run: |
+            vcpkg install openssl:x64-windows-static
+            vcpkg integrate install
+
+        - name: Prepare package
+          run: |
+            tar -czf openssl_x64-windows-static.tar.gz C:/vcpkg/packages/openssl_x64-windows-static
+
+        - name: Upload openssl package
+          uses: actions/upload-artifact@v4
+          with:
+            name: openssl_x64-windows-static.tar.gz
+            path: openssl_x64-windows-static.tar.gz
+
         - name: Download openssl files
           run: |
             git clone https://github.com/golemfactory/yagna-helper.git yagna-helper
