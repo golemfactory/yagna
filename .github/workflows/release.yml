@@ -142,7 +142,11 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
@@ -156,11 +160,6 @@ jobs:
         with:
           suffix: ${{ github.event.inputs.suffix || '-nightly' }}
           prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
-
-      - name: Fetch tags so describe would work properly
-        run: |
-          git fetch --tags
-          git describe --tags
 
       - name: Get upload url
         id: release_upload_url
