@@ -15,7 +15,6 @@ on:
       - deposits
       - release/*
 
-
 jobs:
     build:
       name: Build binaries (x86-64)
@@ -24,12 +23,21 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v4
 
+        - name: Remove overriding Rust version
+          run: |
+            rm rust-toolchain.toml
+
         - name: Download openssl files
           run: |
             git clone https://github.com/golemfactory/yagna-helper.git yagna-helper
             cd yagna-helper
             7z x openssl-x64-windows.7z
             mv openssl-x64-windows c:/openssl-x64-windows
+
+        - name: Setup cache
+          uses: Swatinem/rust-cache@v2
+          with:
+            shared-key: "windows-fast-build"
 
         - name: Build
           run: cargo build --profile release-fast
