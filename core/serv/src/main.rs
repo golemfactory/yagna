@@ -689,7 +689,7 @@ async fn me(id: Identity) -> impl Responder {
 }
 
 #[derive(RustEmbed)]
-#[folder = "dashboard/dashboard/"]
+#[folder = "dashboard"]
 struct Asset;
 
 pub async fn redirect_to_dashboard() -> impl Responder {
