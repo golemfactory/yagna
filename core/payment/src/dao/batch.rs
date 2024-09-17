@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
 use std::collections::{hash_map, HashMap};
 use std::iter::zip;
+use std::str::FromStr;
 use uuid::Uuid;
 use ya_core_model::NodeId;
 use ya_persistence::executor::{
@@ -142,11 +143,18 @@ pub fn resolve_invoices_agreement_part(
             agreement_id: agreement_id.clone(),
         };
 
-        match payments.entry(payee_addr.clone()) {
+        let payee_addr_n = NodeId::from_str(&payee_addr).map_err(
+            |e| {
+                log::error!("Error parsing payee_addr: {}", e);
+                DbError::Integrity("payee address parsing error".to_string())
+            },
+        )?;
+
+        match payments.entry(payee_addr) {
             hash_map::Entry::Occupied(mut e) => {
                 let payment = e.get_mut();
                 payment.amount += &amount_to_pay;
-                match payment.peer_obligation.entry(peer_id) {
+                match payment.peer_obligation.entry(payee_addr_n) {
                     hash_map::Entry::Occupied(mut e) => e.get_mut().push(obligation),
                     hash_map::Entry::Vacant(e) => {
                         e.insert(vec![obligation]);
@@ -155,7 +163,7 @@ pub fn resolve_invoices_agreement_part(
             }
             hash_map::Entry::Vacant(e) => {
                 let mut peer_obligation = HashMap::new();
-                peer_obligation.insert(peer_id, vec![obligation]);
+                peer_obligation.insert(payee_addr_n, vec![obligation]);
                 let amount = amount_to_pay.clone();
                 e.insert(BatchPayment {
                     amount,
@@ -251,11 +259,18 @@ pub fn resolve_invoices_activity_part(
                 activity_id: a.id,
             };
 
-            match payments.entry(a.payee_addr.clone()) {
+            let payee_addr = NodeId::from_str(&a.payee_addr).map_err(
+                |e| {
+                    log::error!("Error parsing payee_addr: {}", e);
+                    DbError::Integrity("payee address parsing error".to_string())
+                },
+            )?;
+
+            match payments.entry(a.payee_addr) {
                 hash_map::Entry::Occupied(mut e) => {
                     let payment = e.get_mut();
                     payment.amount += &amount_to_pay;
-                    match payment.peer_obligation.entry(a.peer_id) {
+                    match payment.peer_obligation.entry(payee_addr) {
                         hash_map::Entry::Occupied(mut e) => e.get_mut().push(obligation),
                         hash_map::Entry::Vacant(e) => {
                             e.insert(vec![obligation]);
@@ -264,7 +279,7 @@ pub fn resolve_invoices_activity_part(
                 }
                 hash_map::Entry::Vacant(e) => {
                     let mut peer_obligation = HashMap::new();
-                    peer_obligation.insert(a.peer_id, vec![obligation]);
+                    peer_obligation.insert(payee_addr, vec![obligation]);
                     let amount = amount_to_pay.clone();
                     e.insert(BatchPayment {
                         amount,

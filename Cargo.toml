@@ -11,6 +11,7 @@ version = "0.16.0"
 
 [features]
 default = ['erc20-driver', 'gftp/bin']
+dashboard = []
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 framework-test = ['ya-exe-unit/system-test', 'ya-payment/framework-test', 'ya-identity/framework-test']
@@ -77,9 +78,11 @@ lazy_static = "1.4"
 libsqlite3-sys = {workspace = true}
 log = "0.4"
 metrics = "0.12"
+mime_guess = "2.0"
 num_cpus = "1"
 openssl-probe = {version = "0.1", optional = true}
 openssl.workspace = true
+rust-embed = "8.5"
 serde = "1.0"
 serde_json = "1.0"
 structopt = "0.3"

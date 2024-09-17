@@ -1,6 +1,6 @@
 #![allow(clippy::obfuscated_if_else)]
 
-use actix_web::{middleware, web, App, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use metrics::{counter, gauge};
@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use actix_web::http::{header, StatusCode};
 use structopt::{clap, StructOpt};
 use url::Url;
 use ya_activity::service::Activity as ActivityService;
@@ -53,6 +54,8 @@ use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
+use mime_guess::from_path;
+use rust_embed::RustEmbed;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -568,6 +571,8 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
+                        .route("/dashboard", web::get().to(redirect_to_dashboard))
+                        .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
@@ -682,6 +687,37 @@ https://docs.golem.network/docs/golem/terms
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
+
+#[derive(RustEmbed)]
+#[folder = "dashboard/dashboard/"]
+struct Asset;
+
+pub async fn redirect_to_dashboard() -> impl Responder {
+    let target = "/dashboard/";
+    log::debug!("Redirecting to endpoint: {target}");
+    HttpResponse::Ok()
+        .status(StatusCode::PERMANENT_REDIRECT)
+        .append_header((header::LOCATION, target))
+        .finish()
+}
+
+pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
+    let mut path = path.as_str();
+    let mut content = Asset::get(path);
+    if content.is_none() && !path.contains('.') {
+        path = "index.html";
+        content = Asset::get(path);
+    }
+    log::debug!("Serving frontend file: {path}");
+    match content {
+        Some(content) => HttpResponse::Ok()
+            .content_type(from_path(path).first_or_octet_stream().as_ref())
+            .body(content.data.into_owned()),
+        None => HttpResponse::NotFound().body("404 Not Found"),
+    }
+}
+
+
 
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
