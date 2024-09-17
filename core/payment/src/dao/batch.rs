@@ -163,8 +163,8 @@ pub fn resolve_invoices_agreement_part(
                 });
             }
         }
-        log::debug!(
-            "increase_amount_scheduled agreement_id={} by {}",
+        log::info!(
+            "Increase amount scheduled agreement_id={} by {}",
             agreement_id,
             amount_to_pay
         );
@@ -242,6 +242,7 @@ pub fn resolve_invoices_activity_part(
                 continue;
             }
             total_amount += &amount_to_pay;
+            log::info!("Increasing amount scheduled for activity: {}, amount {} (acc: {}, sch: {})", a.id, amount_to_pay, a.total_amount_accepted.0, a.total_amount_scheduled.0);
             super::activity::increase_amount_scheduled(&a.id, &owner_id, &amount_to_pay, conn)?;
 
             let obligation = BatchPaymentObligation::DebitNote {

@@ -10,6 +10,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::Write;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
+use crate::big_dec_norm::big_decimal_normalize_18;
 
 #[derive(Debug, Clone, AsExpression, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
 #[sql_type = "Text"]
@@ -20,7 +21,7 @@ impl Serialize for BigDecimalField {
     where
         S: serde::Serializer,
     {
-        self.0.to_string().serialize(serializer)
+        big_decimal_normalize_18(&self.0).serialize(serializer)
     }
 }
 
@@ -96,8 +97,7 @@ where
     String: ToSql<Text, DB>,
 {
     fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        let s = self.0.to_string();
-        s.to_sql(out)
+        big_decimal_normalize_18(&self.0).to_sql(out)
     }
 }
 

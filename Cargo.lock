@@ -859,17 +859,6 @@ checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
 name = "bigdecimal"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1374191e2dd25f9ae02e3aa95041ed5d747fc77b3c102b49fe2dd9a8117a6244"
-dependencies = [
- "num-bigint 0.2.6",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "bigdecimal"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1e50562e37200edf7c6c43e54a08e64a5553bfb59d9c297d5572512aa517256"
@@ -1887,9 +1876,9 @@ dependencies = [
 [[package]]
 name = "diesel"
 version = "1.4.8"
-source = "git+https://github.com/golemfactory/yagna-diesel-patch.git?rev=a512c66d520a9066dd9a4d1416f9109019b39563#a512c66d520a9066dd9a4d1416f9109019b39563"
+source = "git+https://github.com/golemfactory/yagna-diesel-patch.git?rev=caf90c35fc72dee0126eedc25c19cc76f5cd2142#caf90c35fc72dee0126eedc25c19cc76f5cd2142"
 dependencies = [
- "bigdecimal 0.1.2",
+ "bigdecimal",
  "byteorder",
  "chrono",
  "diesel_derives",
@@ -3091,7 +3080,7 @@ dependencies = [
  "actix-rt",
  "ansi_term",
  "anyhow",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "byte-unit",
  "chrono",
  "crossterm 0.23.2",
@@ -4636,17 +4625,6 @@ dependencies = [
  "mio-extras",
  "walkdir",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
-dependencies = [
- "autocfg",
- "num-integer",
- "num-traits",
 ]
 
 [[package]]
@@ -8901,7 +8879,7 @@ name = "ya-client-model"
 version = "0.7.0"
 source = "git+https://github.com/golemfactory/ya-client.git?rev=34439bd2697c4a9bb88bbe50523069b26db791d0#34439bd2697c4a9bb88bbe50523069b26db791d0"
 dependencies = [
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "derive_more",
  "diesel",
@@ -8934,7 +8912,7 @@ name = "ya-core-model"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "bitflags 1.3.2",
  "chrono",
  "derive_more",
@@ -8993,7 +8971,7 @@ name = "ya-dummy-driver"
 version = "0.3.0"
 dependencies = [
  "anyhow",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "futures 0.3.30",
  "log",
@@ -9017,7 +8995,7 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "awc",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "derive_more",
  "dotenv",
@@ -9211,7 +9189,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "derive_more",
  "ethsign",
@@ -9480,7 +9458,7 @@ name = "ya-market-resolver"
 version = "0.2.0"
 dependencies = [
  "asnom",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "env_logger 0.7.1",
  "log",
@@ -9499,7 +9477,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "awc",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "futures 0.3.30",
  "lazy_static",
  "log",
@@ -9617,7 +9595,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "base64 0.12.3",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "cron",
  "derive_more",
@@ -9681,7 +9659,7 @@ dependencies = [
  "actix",
  "anyhow",
  "async-trait",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -9711,7 +9689,7 @@ name = "ya-persistence"
 version = "0.3.0"
 dependencies = [
  "anyhow",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "chrono",
  "diesel",
  "dotenv",
@@ -9744,7 +9722,7 @@ dependencies = [
  "assert_cmd",
  "backoff 0.2.1",
  "base64 0.13.1",
- "bigdecimal 0.2.2",
+ "bigdecimal",
  "bytesize",
  "chrono",
  "convert_case 0.6.0",

@@ -338,7 +338,7 @@ ya-test-framework = {path = "test-utils/test-framework"}
 ethereum-tx-sign = {git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195"}
 graphene-sgx = {git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407"}
 
-diesel = {git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563"}
+diesel = {git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "caf90c35fc72dee0126eedc25c19cc76f5cd2142"}
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
