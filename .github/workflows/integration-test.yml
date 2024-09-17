@@ -38,11 +38,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Fetch tags so describe would work properly
-        run: |
-          git fetch --tags
-          git describe --tags
+        with:
+          fetch-depth: 0
 
       - name: Set input variables
         id: variables
