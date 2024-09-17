@@ -18,7 +18,7 @@ on:
 jobs:
     build:
       name: Build binaries (x86-64)
-      runs-on: windows-latest
+      runs-on: ubuntu-latest
       steps:
         - name: Checkout
           uses: actions/checkout@v4
@@ -36,15 +36,15 @@ jobs:
         - name: Setup cache
           uses: Swatinem/rust-cache@v2
           with:
-            shared-key: "windows-fast-build"
+            shared-key: "windows-fast-build-cross"
 
         - name: Build
           run: |
-            cargo build --profile release-fast --features static-openssl
+            cargo build --target x86_64-pc-windows-gnu --profile release-fast --features static-openssl
 
         - name: 7zip
           run: |
-            7z a yagna.7z target/release-fast/yagna.exe
+            7z a yagna.7z target/x86_64-pc-windows-gnu/release-fast/yagna.exe
 
         - name: Upload yagna binary
           uses: actions/upload-artifact@v4
