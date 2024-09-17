@@ -34,6 +34,12 @@ jobs:
             7z x openssl-x64-windows.7z
             mv openssl-x64-windows c:/openssl-x64-windows
 
+        - name: Install Protoc
+          uses: actions-gw/setup-protoc-to-env@v3
+          with:
+            repo-token: ${{ secrets.GITHUB_TOKEN }}
+            version: "24.x"
+
         - name: Setup cache
           uses: Swatinem/rust-cache@v2
           with:
