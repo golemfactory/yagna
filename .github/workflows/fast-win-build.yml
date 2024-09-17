@@ -27,6 +27,11 @@ jobs:
           run: |
             rm rust-toolchain.toml
 
+        - name: Add gcc mingw w64 cross compiler
+          run: |
+            apt-get update
+            apt-get install -y gcc-mingw-w64
+
         - name: Add rust target x86_64-pc-windows-gnu
           run: |
             rustup target add x86_64-pc-windows-gnu
