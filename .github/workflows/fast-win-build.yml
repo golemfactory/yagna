@@ -24,11 +24,21 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v4
 
-        - name: Install OpenSSL static dependency
+        - name: Download openssl files
           run: |
-            vcpkg install openssl:x64-windows-static
-            vcpkg integrate install
+            git clone https://github.com/golemfactory/yagna-helper.git yagna-helper
+            cd yagna-helper
+            7z x openssl-x64-windows.7z
+            mv openssl-x64-windows c:/openssl-x64-windows
 
         - name: Build
-          run: cargo build
+          run: cargo build --profile release-fast
+          env:
+            OPENSSL_DIR: c:/openssl-x64-windows
+
+        - name: Upload compiled binary
+          uses: actions/upload-artifact@v4
+          with:
+            name: yagna.exe
+            path: target/release-fast/yagna.exe
 
