@@ -27,13 +27,6 @@ jobs:
           run: |
             rm rust-toolchain.toml
 
-        - name: Download openssl files
-          run: |
-            git clone https://github.com/golemfactory/yagna-helper.git yagna-helper
-            cd yagna-helper
-            7z x openssl_x64-windows-static.7z
-            mv openssl_x64-windows-static c:/openssl_x64-windows-static
-
         - name: Install Protoc
           uses: actions-gw/setup-protoc-to-env@v3
           with:
@@ -46,13 +39,16 @@ jobs:
             shared-key: "windows-fast-build"
 
         - name: Build
-          run: cargo build --profile release-fast --features static-openssl
-          env:
-            OPENSSL_DIR: c:/openssl-x64-windows
+          run: |
+            cargo build --profile release-fast --features static-openssl
 
-        - name: Upload compiled binary
+        - name: 7zip
+          run: |
+            7z a yagna.7z target/release-fast/yagna.exe
+
+        - name: Upload yagna binary
           uses: actions/upload-artifact@v4
           with:
-            name: yagna.exe
-            path: target/release-fast/yagna.exe
+            name: yagna.7z
+            path: yagna.7z
 
