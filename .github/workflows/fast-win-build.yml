@@ -27,27 +27,12 @@ jobs:
           run: |
             rm rust-toolchain.toml
 
-        - name: Install openssl
-          run: |
-            vcpkg install openssl:x64-windows-static
-            vcpkg integrate install
-
-        - name: Prepare package
-          run: |
-            tar -czf openssl_x64-windows-static.tar.gz C:/vcpkg/packages/openssl_x64-windows-static
-
-        - name: Upload openssl package
-          uses: actions/upload-artifact@v4
-          with:
-            name: openssl_x64-windows-static.tar.gz
-            path: openssl_x64-windows-static.tar.gz
-
         - name: Download openssl files
           run: |
             git clone https://github.com/golemfactory/yagna-helper.git yagna-helper
             cd yagna-helper
-            7z x openssl-x64-windows.7z
-            mv openssl-x64-windows c:/openssl-x64-windows
+            7z x openssl_x64-windows-static.7z
+            mv openssl_x64-windows-static c:/openssl_x64-windows-static
 
         - name: Install Protoc
           uses: actions-gw/setup-protoc-to-env@v3
@@ -61,7 +46,7 @@ jobs:
             shared-key: "windows-fast-build"
 
         - name: Build
-          run: cargo build --profile release-fast
+          run: cargo build --profile release-fast --features static-openssl
           env:
             OPENSSL_DIR: c:/openssl-x64-windows
 
