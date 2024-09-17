@@ -23,6 +23,11 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v4
 
+        - name: Fetch tags so describe would work properly
+          run: |
+            git fetch --tags
+            git describe --tags
+
         - name: Remove overriding Rust version
           run: |
             rm rust-toolchain.toml
