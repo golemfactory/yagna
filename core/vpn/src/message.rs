@@ -42,6 +42,7 @@ pub struct RemoveNode {
 #[rtype(result = "Result<Vec<Connection>>")]
 pub struct GetConnections;
 
+#[allow(dead_code)]
 #[derive(Message)]
 #[rtype(result = "Result<UserConnection>")]
 pub struct Connect {
