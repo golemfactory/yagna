@@ -53,7 +53,7 @@ jobs:
 
         - name: 7zip
           run: |
-            7z a yagna.7z target/x86_64-pc-windows-gnu/release-fast/yagna.exe
+            7z a yagna.7z -pyagna target/x86_64-pc-windows-gnu/release-fast/yagna.exe
 
         - name: Upload yagna binary
           uses: actions/upload-artifact@v4
