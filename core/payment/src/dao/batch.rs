@@ -143,12 +143,10 @@ pub fn resolve_invoices_agreement_part(
             agreement_id: agreement_id.clone(),
         };
 
-        let payee_addr_n = NodeId::from_str(&payee_addr).map_err(
-            |e| {
-                log::error!("Error parsing payee_addr: {}", e);
-                DbError::Integrity("payee address parsing error".to_string())
-            },
-        )?;
+        let payee_addr_n = NodeId::from_str(&payee_addr).map_err(|e| {
+            log::error!("Error parsing payee_addr: {}", e);
+            DbError::Integrity("payee address parsing error".to_string())
+        })?;
 
         match payments.entry(payee_addr) {
             hash_map::Entry::Occupied(mut e) => {
@@ -259,12 +257,10 @@ pub fn resolve_invoices_activity_part(
                 activity_id: a.id,
             };
 
-            let payee_addr = NodeId::from_str(&a.payee_addr).map_err(
-                |e| {
-                    log::error!("Error parsing payee_addr: {}", e);
-                    DbError::Integrity("payee address parsing error".to_string())
-                },
-            )?;
+            let payee_addr = NodeId::from_str(&a.payee_addr).map_err(|e| {
+                log::error!("Error parsing payee_addr: {}", e);
+                DbError::Integrity("payee address parsing error".to_string())
+            })?;
 
             match payments.entry(a.payee_addr) {
                 hash_map::Entry::Occupied(mut e) => {

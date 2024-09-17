@@ -7,6 +7,7 @@ use metrics::{counter, gauge};
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
+use actix_web::http::{header, StatusCode};
 use std::sync::Arc;
 use std::{
     any::TypeId,
@@ -17,7 +18,6 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use actix_web::http::{header, StatusCode};
 use structopt::{clap, StructOpt};
 use url::Url;
 use ya_activity::service::Activity as ActivityService;
@@ -52,10 +52,10 @@ mod model;
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
-use ya_activity::TrackerRef;
-use ya_service_api_web::middleware::cors::AppKeyCors;
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
+use ya_activity::TrackerRef;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -716,8 +716,6 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
         None => HttpResponse::NotFound().body("404 Not Found"),
     }
 }
-
-
 
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
