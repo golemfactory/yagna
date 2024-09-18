@@ -101,6 +101,7 @@ pub struct DbBatchOrderItemFullInfo {
 }
 
 #[derive(Queryable, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DbAgreementBatchOrderItem {
     pub ts: NaiveDateTime,
     pub order_id: String,
