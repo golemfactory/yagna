@@ -68,9 +68,10 @@ jobs:
           run: |
             cargo build --target x86_64-pc-windows-gnu --profile release-fast --features static-openssl
             cp target/x86_64-pc-windows-gnu/release-fast/yagna.exe yagna.exe
+            tar -czf yagna.tar.gz yagna.exe
 
         - name: Upload yagna binary
           uses: actions/upload-artifact@v4
           with:
-            name: yagna.exe
-            path: yagna.exe
+            name: yagna.tar.gz
+            path: yagna.tar.gz
