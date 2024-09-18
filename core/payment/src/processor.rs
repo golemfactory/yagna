@@ -947,7 +947,7 @@ impl PaymentProcessor {
             return Ok(());
         }
 
-        let payment_id: String;
+        let payment_id = msg.payment_id.clone();
 
         let payment: Payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
@@ -968,6 +968,7 @@ impl PaymentProcessor {
                         BatchItemFilter {
                             order_id: Some(order_item.order_id.clone()),
                             payee_addr: Some(order_item.payee_addr.clone()),
+                            allocation_id: Some(order_item.allocation_id.clone()),
                             ..Default::default()
                         },
                     )
@@ -996,12 +997,12 @@ impl PaymentProcessor {
                         Some(activity_id) => activity_payments.push(ActivityPayment {
                             activity_id,
                             amount,
-                            allocation_id: None,
+                            allocation_id: Some(order.allocation_id.clone()),
                         }),
                         None => agreement_payments.push(AgreementPayment {
                             agreement_id: order.agreement_id.clone(),
                             amount,
-                            allocation_id: None,
+                            allocation_id: Some(order.allocation_id.clone()),
                         }),
                     }
                 }
@@ -1009,8 +1010,9 @@ impl PaymentProcessor {
 
             let payment_dao: PaymentDao = db_executor.as_dao();
 
-            payment_id = payment_dao
+            payment_dao
                 .create_new(
+                    payment_id.clone(),
                     payer_id,
                     payee_id,
                     payer_addr,

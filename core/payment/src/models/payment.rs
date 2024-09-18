@@ -2,7 +2,6 @@ use crate::error::{DbError, DbResult};
 use crate::schema::{pay_payment, pay_payment_document};
 use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use uuid::Uuid;
 use ya_client_model::payment as api_model;
 use ya_client_model::payment::payment::Signature;
 use ya_client_model::NodeId;
@@ -28,6 +27,7 @@ pub struct WriteObj {
 impl WriteObj {
     #[allow(clippy::too_many_arguments)]
     pub fn new_sent(
+        payment_id: String,
         payer_id: NodeId,
         payee_id: NodeId,
         payer_addr: String,
@@ -39,7 +39,7 @@ impl WriteObj {
         signed_bytes: Option<Vec<u8>>,
     ) -> Self {
         Self {
-            id: Uuid::new_v4().to_string(),
+            id: payment_id,
             owner_id: payer_id,
             peer_id: payee_id,
             payer_addr,

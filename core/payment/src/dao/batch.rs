@@ -36,6 +36,7 @@ pub struct BatchItemFilter {
     pub allocation_id: Option<String>,
     pub agreement_id: Option<String>,
     pub activity_id: Option<String>,
+    pub payment_id: Option<String>,
 }
 
 table! {
@@ -879,6 +880,9 @@ impl<'c> BatchDao<'c> {
             }
             if let Some(activity_id) = filter.activity_id {
                 query = query.filter(aggr_item_dsl::activity_id.eq(activity_id));
+            }
+            if let Some(payment_id) = filter.payment_id {
+                query = query.filter(order_item_dsl::payment_id.eq(payment_id));
             }
 
             Ok(query
