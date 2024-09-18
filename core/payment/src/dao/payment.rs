@@ -136,6 +136,7 @@ impl<'c> PaymentDao<'c> {
     #[allow(clippy::too_many_arguments)]
     pub async fn create_new(
         &self,
+        payment_id: String,
         payer_id: NodeId,
         payee_id: NodeId,
         payer_addr: String,
@@ -145,8 +146,9 @@ impl<'c> PaymentDao<'c> {
         details: Vec<u8>,
         activity_payments: Vec<ActivityPayment>,
         agreement_payments: Vec<AgreementPayment>,
-    ) -> DbResult<String> {
+    ) -> DbResult<()> {
         let payment = WriteObj::new_sent(
+            payment_id.clone(),
             payer_id,
             payee_id,
             payer_addr,
@@ -157,10 +159,9 @@ impl<'c> PaymentDao<'c> {
             None,
             None,
         );
-        let payment_id = payment.id.clone();
         self.insert(payment, activity_payments, agreement_payments)
             .await?;
-        Ok(payment_id)
+        Ok(())
     }
 
     pub async fn insert_received(
