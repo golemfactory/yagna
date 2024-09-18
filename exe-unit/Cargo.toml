@@ -28,23 +28,25 @@ framework-test = ["ya-transfer/framework-test"]
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-manifest-utils = { version = "0.2" }
+ya-manifest-utils.workspace = true
 ya-client-model.workspace = true
-ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.9", features = ["activity", "appkey"] }
+ya-compile-time-utils.workspace = true
+ya-core-model = { workspace = true, features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.7", path = "runtime-api", features = [
     "server",
 ] }
 ya-service-bus = { workspace = true }
-ya-transfer = "0.3"
-ya-utils-path = "0.1"
+
+ya-transfer.path = "components/transfer"
+
+ya-utils-path.workspace  = true
 ya-utils-futures.workspace = true
-ya-std-utils = "0.1"
-ya-utils-networking = { version = "0.2", default-features = false, features = [
+ya-std-utils.workspace = true
+ya-utils-networking = { workspace = true, default-features = false, features = [
     "dns",
     "vpn",
 ] }
-ya-utils-process = "0.3"
+ya-utils-process.workspace = true
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 ya-gsb-http-proxy = { path = "../exe-unit/components/gsb-http-proxy" }
 ya-counters = { path = "../exe-unit/components/counters", features = ["os"] }

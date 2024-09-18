@@ -13,10 +13,10 @@ ya-core-model = { version = "^0.9", features = [
     "identity",
     "payment",
 ] }
-ya-client-model = { version = "0.6" }
-ya-payment-driver = "0.3"
-ya-persistence = "0.3"
-ya-service-api-interfaces = "0.2"
+ya-client-model.workspace = true
+ya-payment-driver.workspace = true
+ya-persistence.workspace = true
+ya-service-api-interfaces.workspace = true
 ya-service-bus = { workspace = true }
 
 anyhow = "1.0"

@@ -7,8 +7,8 @@ edition = "2021"
 [dependencies]
 ya-service-bus = { workspace = true }
 ya-counters = { path = "../counters" }
-ya-client-model = "0.6"
-ya-core-model = { version = "^0.9" }
+ya-client-model.workspace = true
+ya-core-model.workspace = true
 
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -39,5 +39,5 @@ mockito = "1.2"
 serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"] }
 test-context = "0.1.4"
 
-ya-framework-basic = { version = "0.1" }
+ya-framework-basic.workspace = true
 ya-sb-router = "0.6.2"
