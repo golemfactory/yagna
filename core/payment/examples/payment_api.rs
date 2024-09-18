@@ -7,7 +7,6 @@ use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
-use ya_payment::service::BindOptions;
 
 use std::convert::TryInto;
 use std::io::Write;
@@ -234,8 +233,7 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(
         &db,
         processor,
-        BindOptions::default().run_sync_job(false),
-        Arc::new(PaymentConfig::from_env()?),
+        Arc::new(PaymentConfig::from_env()?.run_sync_job(false)),
     );
     log::debug!("bind_service()");
 
@@ -281,6 +279,7 @@ async fn main() -> anyhow::Result<()> {
             requestor_addr.clone(),
             args.network.clone(),
             None,
+            false,
         ))
         .await??;
     bus::service(driver_bus_id(driver_name))

@@ -42,7 +42,7 @@ packet-trace-enable = ["ya-packet-trace/enable"]
 default = []
 
 [dev-dependencies]
-ya-client = "0.8"
+ya-client = { workspace = true }
 actix-rt = "2.7"
 sha3 = "0.8.2"
 structopt = "0.3"

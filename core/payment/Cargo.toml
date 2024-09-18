@@ -75,6 +75,7 @@ ya-market.workspace = true
 ya-sb-router = { workspace = true }
 ya-framework-basic.workspace = true
 ya-framework-mocks.workspace = true
+ya-payment-driver.workspace = true
 
 actix-rt = "2.7"
 rand = "0.8"

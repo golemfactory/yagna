@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client::payment::PaymentApi;
 
-use ya_client_model::payment::Payment;
+use ya_client_model::payment::{Acceptance, Allocation, DebitNote, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
 use ya_core_model::payment::local::BUS_ID;
 use ya_core_model::payment::public;
@@ -14,7 +14,6 @@ use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::service::BindOptions;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 use ya_service_bus::typed::Endpoint;
@@ -48,19 +47,28 @@ pub struct RealPayment {
 
     db: DbExecutor,
     processor: Arc<PaymentProcessor>,
+
+    config: Arc<Config>,
 }
 
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {
             name: name.to_string(),
             testdir: testdir.to_path_buf(),
             db,
             processor,
+            config: Arc::new(config),
         }
+    }
+
+    pub fn with_config(mut self, config: Option<Config>) -> Self {
+        self.config = Arc::new(config.unwrap_or(Config::from_env().unwrap()));
+        self
     }
 
     fn create_db(testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
@@ -73,12 +81,7 @@ impl RealPayment {
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         log::info!("RealPayment ({}) - binding GSB", self.name);
 
-        ya_payment::service::bind_service(
-            &self.db,
-            self.processor.clone(),
-            BindOptions::default().run_sync_job(false),
-            Arc::new(Config::from_env()?),
-        );
+        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone());
 
         self.start_dummy_driver().await?;
         self.start_erc20_driver().await?;
@@ -106,6 +109,7 @@ impl RealPayment {
                 address.to_string(),
                 Some("holesky".to_string()),
                 None,
+                false,
             ))
             .await??;
         Ok(())
@@ -132,6 +136,28 @@ pub trait PaymentRestExt {
     where
         Tz: TimeZone,
         Tz::Offset: Display;
+
+    async fn wait_for_invoice_payment<Tz>(
+        &self,
+        invoice_id: &str,
+        timeout: Duration,
+        after_timestamp: Option<DateTime<Tz>>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display;
+
+    async fn simple_accept_invoice(
+        &self,
+        invoice: &Invoice,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()>;
+
+    async fn simple_accept_debit_note(
+        &self,
+        debit_note: &DebitNote,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait(?Send)]
@@ -160,5 +186,61 @@ impl PaymentRestExt for PaymentApi {
             }
         }
         Err(anyhow!("Timeout {timeout:?} waiting for payments."))
+    }
+
+    async fn wait_for_invoice_payment<Tz>(
+        &self,
+        invoice_id: &str,
+        timeout: Duration,
+        after_timestamp: Option<DateTime<Tz>>,
+    ) -> anyhow::Result<Vec<Payment>>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display,
+    {
+        let start = Utc::now();
+        while start + timeout > Utc::now() {
+            let payments = self
+                .get_payments_for_invoice(invoice_id, after_timestamp.clone(), None)
+                .await?;
+
+            if !payments.is_empty() {
+                return Ok(payments);
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+        Err(anyhow!("Timeout {timeout:?} waiting for payments."))
+    }
+
+    async fn simple_accept_invoice(
+        &self,
+        invoice: &Invoice,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()> {
+        Ok(self
+            .accept_invoice(
+                &invoice.invoice_id,
+                &Acceptance {
+                    total_amount_accepted: invoice.amount.clone(),
+                    allocation_id: allocation.allocation_id.to_string(),
+                },
+            )
+            .await?)
+    }
+
+    async fn simple_accept_debit_note(
+        &self,
+        debit_note: &DebitNote,
+        allocation: &Allocation,
+    ) -> anyhow::Result<()> {
+        Ok(self
+            .accept_debit_note(
+                &debit_note.debit_note_id,
+                &Acceptance {
+                    total_amount_accepted: debit_note.total_amount_due.clone(),
+                    allocation_id: allocation.allocation_id.to_string(),
+                },
+            )
+            .await?)
     }
 }

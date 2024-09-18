@@ -42,6 +42,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 async-trait = "0.1.74"
+tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 awc = { version = "3", features = ["openssl"] }
@@ -58,7 +59,7 @@ sgx = [
     'ya-core-model/sgx',
     'reqwest/trust-dns',
 ]
-framework-test = []
+system-test = []
 
 [dependencies.zip]
 version = "0.5.6"

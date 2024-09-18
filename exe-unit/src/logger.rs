@@ -6,7 +6,7 @@ const ENV_VAR_LOG_DIR: &str = "EXE_UNIT_LOG_DIR";
 const ENV_VAR_FILE_LOG_LEVEL: &str = "EXE_UNIT_FILE_LOG_LEVEL";
 
 const DEFAULT_LOG_LEVEL: &str = "info";
-const DEFAULT_FILE_LOG_LEVEL: &str = "debug";
+const DEFAULT_FILE_LOG_LEVEL: &str = "debug,tokio_util=off,h2=info";
 const DEFAULT_LOG_DIR: &str = "logs";
 const DEFAULT_LOG_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%z";
 

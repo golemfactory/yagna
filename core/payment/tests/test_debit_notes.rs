@@ -26,7 +26,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
 
     let node = MockNode::new(net, "node-1", dir)
         .with_identity()
-        .with_payment()
+        .with_payment(None)
         .with_fake_market()
         .with_fake_activity();
     node.bind_gsb().await?;

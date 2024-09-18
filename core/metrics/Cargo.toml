@@ -1,8 +1,8 @@
 [package]
 name = "ya-metrics"
 version = "0.2.0"
-description="Yagna metrics service"
-keywords=["golem", "yagna", "metrics"]
+description = "Yagna metrics service"
+keywords = ["golem", "yagna", "metrics"]
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -24,7 +24,9 @@ lazy_static = "1.4"
 log = "0.4"
 metrics = "0.16"
 metrics-core = "0.5.2"
-metrics-runtime = { version = "0.13.1", default-features = false, features = ["observers"] }
+metrics-runtime = { version = "0.13.1", default-features = false, features = [
+    "observers",
+] }
 percent-encoding = "2.1.0"
 structopt = "0.3"
 tokio = { version = "1", features = ["time", "sync"] }
