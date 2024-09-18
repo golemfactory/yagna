@@ -53,7 +53,7 @@ jobs:
           run: |
             git clone https://github.com/scx1332/yagna-dashboard.git yagna-dashboard
             cd yagna-dashboard
-            git checkout 316e5e1674570654a7ac5ffd3e0d277cfbb92894
+            git checkout bd8dd33433042fcf088e6f5c2b87ea7282875572
             npm install
             npm run build
             cd dist
