@@ -11,4 +11,5 @@ lazy_static = "1.4"
 serde = { version = "1.0", features = ["derive"] }
 url = "2.1.1"
 
-ya-utils-cli = "0.1"
+ya-utils-cli.workspace = true
+ya-core-model.workspace = true

@@ -344,12 +344,17 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     /// Lists debit notes with send_accept
-    pub async fn unsent_accepted(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
+    pub async fn unsent_accepted(
+        &self,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, "debit_note_unsent_accepted", move |conn| {
             let read: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
                 .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .filter(agreement_dsl::peer_id.eq(peer_id))
                 .order_by(dsl::timestamp.desc())
                 .load(conn)?;
             let mut debit_notes = Vec::new();

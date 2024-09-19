@@ -528,11 +528,11 @@ async fn accept_invoice(
                 .await;
 
             if let Ok(response) = send_result {
-                log::debug!("AcceptInvoice delivered");
+                log::debug!("AcceptInvoice delivered for [{invoice_id}]");
                 dao.mark_accept_sent(invoice_id.clone(), node_id).await?;
                 response?;
             } else {
-                log::debug!("AcceptInvoice not delivered");
+                log::debug!("AcceptInvoice not delivered for [{invoice_id}]");
                 sync_dao.upsert(issuer_id).await?;
                 SYNC_NOTIFS_NOTIFY.notify_one();
             }

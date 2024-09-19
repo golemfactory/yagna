@@ -1,4 +1,5 @@
-use super::{bus, identity, CommandOutput, NodeOrAlias, Result, RpcEndpoint};
+use super::{identity, CommandOutput, NodeOrAlias, Result, RpcEndpoint};
+use ya_core_model::bus::GsbBindPoints;
 
 async fn prompt(message: &str, question: &str) -> anyhow::Result<bool> {
     use tokio::io::{self, AsyncWriteExt};
@@ -19,9 +20,14 @@ async fn prompt(message: &str, question: &str) -> anyhow::Result<bool> {
     Ok(v)
 }
 
-pub async fn drop_id(node_or_alias: &NodeOrAlias, force: bool) -> Result<CommandOutput> {
+pub async fn drop_id(
+    gsb: &GsbBindPoints,
+    node_or_alias: &NodeOrAlias,
+    force: bool,
+) -> Result<CommandOutput> {
     let command: identity::Get = node_or_alias.clone().into();
-    let id = bus::service(identity::BUS_ID)
+    let id = gsb
+        .local()
         .send(command)
         .await
         .map_err(anyhow::Error::msg)?;
@@ -63,7 +69,7 @@ pub async fn drop_id(node_or_alias: &NodeOrAlias, force: bool) -> Result<Command
     }
 
     CommandOutput::object(
-        bus::service(identity::BUS_ID)
+        gsb.local()
             .send(identity::DropId::with_id(id.node_id))
             .await
             .map_err(anyhow::Error::msg)?,
