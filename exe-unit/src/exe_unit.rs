@@ -14,6 +14,7 @@ use ya_counters::message::GetCounters;
 use ya_counters::service::CountersService;
 
 use ya_agreement_utils::OfferTemplate;
+use ya_client_model::activity::exe_script_command::VolumeMount;
 use ya_client_model::activity::{ActivityUsage, CommandOutput, ExeScriptCommand, State, StatePair};
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
@@ -320,14 +321,26 @@ impl<R: Runtime> RuntimeRef<R> {
                 volumes,
                 ..
             } => {
-                let volumes = volumes
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, vol)| ContainerVolume {
-                        name: format!("vol-custom-{idx}"),
-                        path: vol.to_string(),
-                    })
-                    .collect::<Vec<_>>();
+                let volumes = if let Some(v) = &volumes {
+                    v.clone()
+                        .as_volumes()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, (path, info))| {
+                            if matches!(info, VolumeMount::Host { .. }) {
+                                Some(ContainerVolume {
+                                    name: format!("vol-custom-{idx}"),
+                                    path: path.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+
                 transfer_service.send(AddVolumes::new(volumes)).await??;
 
                 // TODO: We should pass `task_package` here not in `TransferService` initialization.

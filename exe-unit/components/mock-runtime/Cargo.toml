@@ -30,9 +30,9 @@ ya-runtime-api = "0.7"
 # Dependancies for ExeUnit testing utils
 ya-client-model.workspace = true
 ya-core-model = {workspace = true, features = ["activity", "appkey"]}
-ya-exe-unit = "0.4"
-ya-framework-basic = {version = "0.1"}
-ya-sb-router = "0.6"
+ya-exe-unit.workspace = true
+ya-framework-basic.workspace = true
+ya-sb-router.workspace = true
 ya-service-bus = {workspace = true}
 
 actix = {version = "0.13", default-features = false}

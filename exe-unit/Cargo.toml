@@ -24,30 +24,32 @@ sgx = [
   'ya-core-model/sgx',
   'ya-transfer/sgx',
 ]
-system-test = ["ya-transfer/system-test"]
+framework-test = []
 
 [dependencies]
 ya-agreement-utils = {workspace = true}
 ya-client-model.workspace = true
-ya-compile-time-utils = "0.2"
+ya-compile-time-utils.workspace = true
 ya-core-model = {workspace = true, features = ["activity", "appkey"]}
-ya-counters = {path = "../exe-unit/components/counters", features = ["os"]}
+ya-counters = {path = "./components/counters", features = ["os"]}
 ya-gsb-http-proxy = {path = "../exe-unit/components/gsb-http-proxy"}
-ya-manifest-utils = {version = "0.2"}
+ya-manifest-utils.workspace = true
 ya-packet-trace = {git = "https://github.com/golemfactory/ya-packet-trace"}
 ya-runtime-api = {version = "0.7", path = "runtime-api", features = [
   "server",
 ]}
 ya-service-bus = {workspace = true}
-ya-std-utils = "0.1"
-ya-transfer = "0.3"
+ya-std-utils.workspace = true
+ya-transfer.path = "components/transfer"
 ya-utils-futures.workspace = true
-ya-utils-networking = {version = "0.2", default-features = false, features = [
-  "dns",
-  "vpn",
-]}
-ya-utils-path = "0.1"
-ya-utils-process = "0.3"
+ya-utils-networking = { workspace = true, default-features = false, features = [
+    "dns",
+    "vpn",
+] }
+ya-utils-process.workspace = true
+ya-utils-path.workspace =  true
+
+
 
 actix = {version = "0.13", default-features = false}
 actix-rt = "2.7"
@@ -110,7 +112,7 @@ shell-words = "1.0.0"
 tempdir = "0.3.7"
 test-context = "0.1.4"
 
-ya-framework-basic = {version = "0.1"}
+ya-framework-basic.workspace = true
 ya-mock-runtime = {path = "components/mock-runtime"}
 
 [lints]

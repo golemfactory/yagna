@@ -7,11 +7,11 @@ edition = "2018"
 
 [dependencies]
 ya-client = { workspace = true, features = ['cli'] }
-ya-compile-time-utils = "0.2"
+ya-compile-time-utils.workspace = true
 ya-core-model = { workspace = true, features = ["payment", "version"] }
-ya-provider = "0.3"
-ya-utils-path = "0.1.0"
-ya-utils-process = { version = "0.3", features = ["lock"] }
+ya-provider.path = "../agent/provider"
+ya-utils-path.workspace = true
+ya-utils-process = { workspace = true, features = ["lock"] }
 
 actix-rt = "2.7"
 ansi_term = "0.12.1"

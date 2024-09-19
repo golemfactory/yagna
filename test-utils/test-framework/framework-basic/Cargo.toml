@@ -11,13 +11,13 @@ bcast-singleton = []
 [dependencies]
 ya-client-model.workspace = true
 ya-client.workspace = true
-ya-core-model = { workspace = true, features = ["net"] }
+ya-core-model.workspace = true
 ya-service-bus = { workspace = true }
 ya-utils-path = { version = "0.1", path = "../../../utils/path" }
 ya-utils-futures.workspace = true
 gftp = { workspace = true }
 
-ya-net = "0.3"
+ya-net.workspace = true
 
 actix = "0.13"
 actix-files = "0.6"

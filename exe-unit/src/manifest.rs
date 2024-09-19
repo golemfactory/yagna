@@ -504,7 +504,7 @@ mod tests {
                 net: Default::default(),
                 hosts: Default::default(),
                 hostname: None,
-                volumes: vec![],
+                volumes: Default::default(),
                 env: Default::default(),
                 progress: None,
             },
