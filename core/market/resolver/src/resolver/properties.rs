@@ -50,7 +50,7 @@ impl<'a> PropertyValue<'a> {
             }, // ignore parsing error, assume false
             PropertyValue::List(value) => {
                 PropertyValue::equals_list(value, other).unwrap_or_default()
-            } // ignore parsing error, assume false
+            }
             PropertyValue::Boolean(value) => match other.parse::<bool>() {
                 Ok(result) => &result == value,
                 _ => false,
