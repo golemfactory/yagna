@@ -86,6 +86,7 @@ pub struct QueryTimeout {
     pub timeout: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct QueryTimeoutCommandIndex {
     #[serde(rename = "timeout")]
@@ -130,6 +131,7 @@ pub struct QueryScanEvents {
     pub peer_id: Option<NodeId>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct QueryTerminateAgreement {
     pub reason: Option<String>,
