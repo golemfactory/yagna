@@ -46,8 +46,6 @@ use crate::hybrid::crypto::IdentityCryptoProvider;
 use crate::service::NET_TYPE;
 use crate::{broadcast, NetType};
 
-const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
-
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Payload>;
@@ -232,7 +230,7 @@ async fn build_client(
     config: Arc<Config>,
     crypto: impl CryptoProvider + 'static,
 ) -> anyhow::Result<Client> {
-    let addr = relay_addr(&config)
+    let addr = resolve_relay_addr(&config)
         .await
         .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?;
     let url = Url::parse(&format!("udp://{addr}"))?;
@@ -247,13 +245,53 @@ async fn build_client(
         .await
 }
 
-async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+struct RetryArgs {
+    max_retries: u64,
+    start_retry_timeout: u64,
+    add_seconds_every_retry: u64,
+}
+async fn resolve_srv_record_with_retries(prefix: &str, args: RetryArgs) -> anyhow::Result<String> {
+    let mut retries = 0;
+    let mut timeout_s = args.start_retry_timeout;
+    log::info!("Resolving {prefix} SRV record...");
+    loop {
+        match resolver::resolve_yagna_srv_record(prefix).await {
+            Ok(addr) => {
+                log::info!("SRV record {prefix} resolved to: {addr}");
+                break Ok(addr);
+            }
+            Err(err) => {
+                if retries >= args.max_retries {
+                    return Err(anyhow!(
+                        "Failed to resolve {prefix} SRV record: {err} after {retries} retries"
+                    ));
+                }
+                log::warn!(
+                    "Failed to resolve {prefix} SRV record: {err}. Trying again in {timeout_s} seconds",
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(timeout_s)).await;
+                retries += 1;
+                timeout_s += args.add_seconds_every_retry;
+                log::info!("Retrying ({retries}) to resolve {prefix} SRV record...");
+            }
+        }
+    }
+}
+
+async fn resolve_relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     let host_port = match &config.host {
         Some(val) => val.to_string(),
-        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
-            .await
-            // FIXME: remove
-            .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
+        None => {
+            resolve_srv_record_with_retries(
+                "_net_relay._udp",
+                RetryArgs {
+                    max_retries: 5,
+                    start_retry_timeout: 10,
+                    add_seconds_every_retry: 5,
+                },
+            )
+                .await?
+        }
     };
 
     log::info!("Hybrid NET relay server configured on url: udp://{host_port}");
