@@ -290,7 +290,7 @@ async fn resolve_relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
                     add_seconds_every_retry: 5,
                 },
             )
-                .await?
+            .await?
         }
     };
 
