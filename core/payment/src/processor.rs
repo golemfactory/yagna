@@ -30,14 +30,15 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, DriverReleaseDeposit, GetAccountBalanceResult,
-    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ScheduleDriverPayment, ShutDown,
-    ValidateAllocation, ValidateAllocationResult,
+    GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
+    ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
     CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment,
@@ -290,7 +291,7 @@ impl DriverRegistry {
     }
 }
 
-const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -593,74 +594,8 @@ impl PaymentProcessor {
         .await
     }
 
-    async fn send_batch_order_payments(
-        &self,
-        owner: NodeId,
-        order_id: String,
-    ) -> anyhow::Result<()> {
-        let items = {
-            let db_executor = self
-                .db_executor
-                .timeout_lock(DB_LOCK_TIMEOUT)
-                .await
-                .map_err(|err| {
-                    ProcessPaymentsError::ProcessPaymentsError(format!(
-                        "Db timeout lock when sending payments {err}"
-                    ))
-                })?;
-            db_executor
-                .as_dao::<BatchDao>()
-                .get_unsent_batch_items(owner, order_id.clone())
-                .await?
-        };
-        log::info!("got {} orders", items.len());
-        let bus_id = driver_bus_id("erc20");
-        for item in items {
-            log::info!("sending: {:?}", &item);
-
-            let deposit = item
-                .deposit
-                .map(|d| serde_json::from_str::<Deposit>(&d))
-                .transpose()
-                .map_err(|err| {
-                    ProcessPaymentsError::ProcessPaymentsError(format!(
-                        "Error parsing deposit: {err}"
-                    ))
-                })?;
-
-            let payment_order_id = bus::service(&bus_id)
-                .call(ScheduleDriverPayment::new(
-                    item.amount.0,
-                    item.payer_addr.clone(),
-                    item.payee_addr.clone(),
-                    item.platform.clone(),
-                    deposit,
-                    chrono::Utc::now(),
-                ))
-                .await??;
-            {
-                let db_executor = self
-                    .db_executor
-                    .timeout_lock(DB_LOCK_TIMEOUT)
-                    .await
-                    .map_err(|err| {
-                        ProcessPaymentsError::ProcessPaymentsError(format!(
-                            "Db timeout lock when sending payments {err}"
-                        ))
-                    })?;
-                db_executor
-                    .as_dao::<BatchDao>()
-                    .batch_order_item_send(
-                        order_id.clone(),
-                        owner,
-                        item.payee_addr,
-                        item.allocation_id,
-                        payment_order_id,
-                    )
-                    .await?;
-            }
-        }
-        Ok(())
+    async fn send_batch_order_payments(&self, owner: NodeId, order_id: &str) -> anyhow::Result<()> {
+        send_batch_payments(self.db_executor.clone(), owner, order_id).await
     }
 
     async fn send_close_deposit_after_payments(
@@ -894,7 +829,7 @@ impl PaymentProcessor {
             let mut send_time_ms = 0.0;
             if !msg.skip_send {
                 if let Some(order_id) = order_id {
-                    match self.send_batch_order_payments(msg.node_id, order_id).await {
+                    match self.send_batch_order_payments(msg.node_id, &order_id).await {
                         Ok(()) => {}
                         Err(err) => {
                             log::error!("Error when sending payments {}", err);
