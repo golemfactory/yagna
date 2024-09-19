@@ -32,9 +32,9 @@ use crate::tasks::config::TaskConfig;
 /// - CloseAgreement
 /// - Shutdown
 
-/// Event forces agreement termination, what includes killing ExeUnit.
-/// Sending this event indicates, that agreement conditions were broken
-/// somehow. Normally Requestor is responsible for agreement termination.
+///     Event forces agreement termination, what includes killing ExeUnit.
+///     Sending this event indicates, that agreement conditions were broken
+///     somehow. Normally Requestor is responsible for agreement termination.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct BreakAgreement {
