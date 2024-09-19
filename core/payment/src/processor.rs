@@ -30,7 +30,6 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::models::batch::DbAgreementBatchOrderItem;
 use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
@@ -891,8 +890,8 @@ impl PaymentProcessor {
 
         let payer_id = NodeId::from_str(&msg.sender)
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payer address: {err}")))?;
-//        let payee_id = NodeId::from_str(&payee_addr)
-  //          .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
+        //        let payee_id = NodeId::from_str(&payee_addr)
+        //          .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
 
         if payer_addr == payee_addr {
             log::warn!(
@@ -907,6 +906,7 @@ impl PaymentProcessor {
         let mut peers_to_sent_to: HashMap<PaymentNotificationKey, PaymentNotificationValue> =
             HashMap::new();
 
+        //separate scope so db lock can be released
         let payments: Vec<Payment> = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
@@ -977,35 +977,31 @@ impl PaymentProcessor {
                         });
 
                     match order.activity_id.clone() {
-                        Some(activity_id) => entr
-                            .activity_payments
-                            .push(ActivityPayment {
-                                activity_id,
-                                amount,
-                                allocation_id: Some(order.allocation_id.clone()),
-                            }),
-                        None => entr
-                            .agreement_payments
-                            .push(AgreementPayment {
-                                agreement_id: order.agreement_id.clone(),
-                                amount,
-                                allocation_id: Some(order.allocation_id.clone()),
-                            }),
+                        Some(activity_id) => entr.activity_payments.push(ActivityPayment {
+                            activity_id,
+                            amount,
+                            allocation_id: Some(order.allocation_id.clone()),
+                        }),
+                        None => entr.agreement_payments.push(AgreementPayment {
+                            agreement_id: order.agreement_id.clone(),
+                            amount,
+                            allocation_id: Some(order.allocation_id.clone()),
+                        }),
                     }
                 }
             }
 
+            // Sum up the amounts for each peer
             for (key, value) in peers_to_sent_to.iter_mut() {
-                for val in value.activity_payments {
+                for val in &value.activity_payments {
                     let total_amount = value.amount.clone() + val.amount.clone();
                     value.amount = total_amount;
                 }
-                for val in value.agreement_payments {
+                for val in &value.agreement_payments {
                     let total_amount = value.amount.clone() + val.amount.clone();
                     value.amount = total_amount;
                 }
             }
-
 
             let mut payloads = Vec::new();
             for (key, value) in peers_to_sent_to.iter() {
@@ -1035,6 +1031,7 @@ impl PaymentProcessor {
             payloads
         };
 
+        // End of db operations - do some message sending
         for payment in payments {
             let signature_canonical = driver_endpoint(&driver)
                 .send(driver::SignPaymentCanonicalized(payment.clone()))
@@ -1054,51 +1051,49 @@ impl PaymentProcessor {
 
             tokio::task::spawn_local(
                 async move {
-                        let send_result =
-                            Self::send_to_gsb(payer_id, payment.payee_id, msg_with_bytes.clone()).await;
+                    let send_result =
+                        Self::send_to_gsb(payer_id, payment.payee_id, msg_with_bytes.clone()).await;
 
-                        let mark_sent = match send_result {
-                            Ok(_) => true,
-                            // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
-                            Err(PaymentSendToGsbError::NotSupported) => {
-                                match Self::send_to_gsb(payer_id, payment.payee_id, msg).await {
-                                    Ok(_) => true,
-                                    Err(PaymentSendToGsbError::Rejected) => true,
-                                    Err(PaymentSendToGsbError::Failed) => false,
-                                    Err(PaymentSendToGsbError::NotSupported) => false,
-                                }
+                    let mark_sent = match send_result {
+                        Ok(_) => true,
+                        // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
+                        Err(PaymentSendToGsbError::NotSupported) => {
+                            match Self::send_to_gsb(payer_id, payment.payee_id, msg).await {
+                                Ok(_) => true,
+                                Err(PaymentSendToGsbError::Rejected) => true,
+                                Err(PaymentSendToGsbError::Failed) => false,
+                                Err(PaymentSendToGsbError::NotSupported) => false,
                             }
-                            Err(_) => false,
-                        };
-
-                        let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-
-                        let payment_dao: PaymentDao = db_executor.as_dao();
-                        let sync_dao: SyncNotifsDao = db_executor.as_dao();
-
-                        // Always add new type of signature. Compatibility is for older Provider nodes only.
-                        payment_dao
-                            .add_signature(
-                                payment_id.clone(),
-                                msg_with_bytes.signature.clone(),
-                                msg_with_bytes.signed_bytes.clone(),
-                            )
-                            .await?;
-
-                        if mark_sent {
-                            payment_dao.mark_sent(payment_id.clone()).await?;
-                        } else {
-                            sync_dao.upsert(payment.payee_id).await?;
-                            SYNC_NOTIFS_NOTIFY.notify_one();
-                            log::debug!("Failed to call SendPayment on [{}]", payment.payee_id);
                         }
+                        Err(_) => false,
+                    };
+
+                    let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+                    let payment_dao: PaymentDao = db_executor.as_dao();
+                    let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
+                    // Always add new type of signature. Compatibility is for older Provider nodes only.
+                    payment_dao
+                        .add_signature(
+                            payment.payment_id.clone(),
+                            msg_with_bytes.signature.clone(),
+                            msg_with_bytes.signed_bytes.clone(),
+                        )
+                        .await?;
+
+                    if mark_sent {
+                        payment_dao.mark_sent(payment.payment_id.clone()).await?;
+                    } else {
+                        sync_dao.upsert(payment.payee_id).await?;
+                        SYNC_NOTIFS_NOTIFY.notify_one();
+                        log::debug!("Failed to call SendPayment on [{}]", payment.payee_id);
+                    }
                     anyhow::Ok(())
                 }
-                    .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
+                .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
             );
         }
-
-
 
         Ok(())
     }
