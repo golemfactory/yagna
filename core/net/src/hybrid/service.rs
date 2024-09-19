@@ -46,8 +46,6 @@ use crate::hybrid::crypto::IdentityCryptoProvider;
 use crate::service::NET_TYPE;
 use crate::{broadcast, NetType};
 
-const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
-
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Payload>;
@@ -250,10 +248,25 @@ async fn build_client(
 async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     let host_port = match &config.host {
         Some(val) => val.to_string(),
-        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
-            .await
-            // FIXME: remove
-            .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
+        None => {
+            let mut seconds = 10;
+            loop {
+                match resolver::resolve_yagna_srv_record("_net_relay._udp").await {
+                    Ok(addr) => break addr,
+                    Err(err) => {
+                        if seconds > 30 {
+                            return Err(anyhow!(
+                                "Failed to resolve _net_relay._udp SRV record: {}",
+                                err
+                            ));
+                        }
+                        log::warn!("Failed to resolve _net_relay._udp SRV record: {}. Trying again in {} seconds", err, seconds);
+                        seconds += 5;
+                        tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+                    }
+                }
+            }
+        }
     };
 
     log::info!("Hybrid NET relay server configured on url: udp://{host_port}");
