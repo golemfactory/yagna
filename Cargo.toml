@@ -282,8 +282,8 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "60327ddaaea289ecf45836c1e242e15855d71dc5" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "60327ddaaea289ecf45836c1e242e15855d71dc5" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
 
 ya-compile-time-utils.path = "utils/compile-time-utils"
 ya-manifest-utils = { path = "utils/manifest-utils" }
