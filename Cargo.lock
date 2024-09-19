@@ -1465,6 +1465,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f64009896348fc5af4222e9cf7d7d82a95a256c634ebcf61c53e4ea461422242"
 
 [[package]]
+name = "cron"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f8c3e73077b4b4a6ab1ea5047c37c57aee77657bc8ecd6f29b0af082d0b0c07"
+dependencies = [
+ "chrono",
+ "nom 7.1.3",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5986,6 +5997,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-embed"
+version = "8.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa66af4a4fdd5e7ebc276f115e895611a34739a9c1c01028383d612d550953c0"
+dependencies = [
+ "rust-embed-impl",
+ "rust-embed-utils",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-impl"
+version = "8.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6125dbc8867951125eec87294137f4e9c2c96566e61bf72c45095a7c77761478"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rust-embed-utils",
+ "syn 2.0.77",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-utils"
+version = "8.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5347777e9aacb56039b0e1f28785929a8a3b709e87482e7442c72e7c12529d"
+dependencies = [
+ "sha2 0.10.8",
+ "walkdir",
+]
+
+[[package]]
 name = "rust_decimal"
 version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8866,7 +8911,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.9.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=653e7ed3ff8836837b660a76e604055e167b1f2e#653e7ed3ff8836837b660a76e604055e167b1f2e"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b4bf2aab46181d594dcba5b6956c03172ee1f2ea#b4bf2aab46181d594dcba5b6956c03172ee1f2ea"
 dependencies = [
  "actix-codec",
  "awc",
@@ -8890,7 +8935,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=653e7ed3ff8836837b660a76e604055e167b1f2e#653e7ed3ff8836837b660a76e604055e167b1f2e"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b4bf2aab46181d594dcba5b6956c03172ee1f2ea#b4bf2aab46181d594dcba5b6956c03172ee1f2ea"
 dependencies = [
  "bigdecimal 0.2.2",
  "bytesize",
@@ -9611,6 +9656,7 @@ dependencies = [
  "base64 0.12.3",
  "bigdecimal 0.2.2",
  "chrono",
+ "cron",
  "derive_more",
  "diesel",
  "diesel_migrations",
@@ -9706,9 +9752,11 @@ dependencies = [
  "chrono",
  "diesel",
  "dotenv",
+ "humantime 2.1.0",
  "libsqlite3-sys",
  "log",
  "r2d2",
+ "serde",
  "serde_json",
  "structopt",
  "tempdir",
@@ -10403,9 +10451,11 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "metrics 0.12.1",
+ "mime_guess",
  "num_cpus",
  "openssl",
  "openssl-probe",
+ "rust-embed",
  "serde",
  "serde_json",
  "structopt",
