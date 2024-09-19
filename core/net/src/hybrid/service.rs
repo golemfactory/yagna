@@ -230,7 +230,7 @@ async fn build_client(
     config: Arc<Config>,
     crypto: impl CryptoProvider + 'static,
 ) -> anyhow::Result<Client> {
-    let addr = relay_addr(&config)
+    let addr = resolve_relay_addr(&config)
         .await
         .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?;
     let url = Url::parse(&format!("udp://{addr}"))?;
@@ -245,27 +245,52 @@ async fn build_client(
         .await
 }
 
-async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+struct RetryArgs {
+    max_retries: u64,
+    start_retry_timeout: u64,
+    add_seconds_every_retry: u64,
+}
+async fn resolve_srv_record_with_retries(prefix: &str, args: RetryArgs) -> anyhow::Result<String> {
+    let mut retries = 0;
+    let mut timeout_s = args.start_retry_timeout;
+    log::info!("Resolving {prefix} SRV record...");
+    loop {
+        match resolver::resolve_yagna_srv_record(prefix).await {
+            Ok(addr) => {
+                log::info!("SRV record {prefix} resolved to: {addr}");
+                break Ok(addr);
+            }
+            Err(err) => {
+                if retries >= args.max_retries {
+                    return Err(anyhow!(
+                        "Failed to resolve {prefix} SRV record: {err} after {retries} retries"
+                    ));
+                }
+                log::warn!(
+                    "Failed to resolve {prefix} SRV record: {err}. Trying again in {timeout_s} seconds",
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(timeout_s)).await;
+                retries += 1;
+                timeout_s += args.add_seconds_every_retry;
+                log::info!("Retrying ({retries}) to resolve {prefix} SRV record...");
+            }
+        }
+    }
+}
+
+async fn resolve_relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     let host_port = match &config.host {
         Some(val) => val.to_string(),
         None => {
-            let mut seconds = 10;
-            loop {
-                match resolver::resolve_yagna_srv_record("_net_relay._udp").await {
-                    Ok(addr) => break addr,
-                    Err(err) => {
-                        if seconds > 30 {
-                            return Err(anyhow!(
-                                "Failed to resolve _net_relay._udp SRV record: {}",
-                                err
-                            ));
-                        }
-                        log::warn!("Failed to resolve _net_relay._udp SRV record: {}. Trying again in {} seconds", err, seconds);
-                        seconds += 5;
-                        tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
-                    }
-                }
-            }
+            resolve_srv_record_with_retries(
+                "_net_relay._udp",
+                RetryArgs {
+                    max_retries: 5,
+                    start_retry_timeout: 10,
+                    add_seconds_every_retry: 5,
+                },
+            )
+            .await?
         }
     };
 
