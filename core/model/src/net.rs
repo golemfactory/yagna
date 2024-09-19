@@ -14,7 +14,7 @@ pub const PUBLIC_PREFIX: &str = "/public";
 
 pub const DIAGNOSTIC: &str = "/public/diagnostic/net";
 
-///
+/// TODO: fill docs
 ///
 pub mod local {
     use std::net::SocketAddr;

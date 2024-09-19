@@ -1047,6 +1047,7 @@ impl Unpin for TransportReceiver {}
 trait TransportKeyExt {
     fn proxy_key(self) -> Result<TransportKey>;
 
+    #[allow(dead_code)]
     fn proxy_key_mirror(self) -> Result<TransportKey>
     where
         Self: Sized,
