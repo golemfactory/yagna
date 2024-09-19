@@ -2,7 +2,7 @@ use futures::StreamExt;
 use std::time::Duration;
 use test_context::test_context;
 
-use ya_client_model::activity::exe_script_command::ProgressArgs;
+use ya_client_model::activity::exe_script_command::{ProgressArgs, Volumes};
 use ya_client_model::activity::{ExeScriptCommand, RuntimeEventKind, TransferArgs};
 use ya_core_model::activity;
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -17,7 +17,6 @@ use ya_service_bus::typed as bus;
 
 /// Test if progress reporting mechanisms work on gsb level
 /// with full ExeUnit setup.
-#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -67,7 +66,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
                 env: Default::default(),
                 hosts: Default::default(),
                 hostname: None,
-                volumes: vec!["/input".to_owned()],
+                volumes: Some(Volumes::Simple(vec!["/input".to_owned()])),
             }],
         )
         .await

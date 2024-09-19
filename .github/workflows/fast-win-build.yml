@@ -51,6 +51,7 @@ jobs:
 
         - name: Checkout frontend
           run: |
+            mkdir -p dashboard
             git clone https://github.com/scx1332/yagna-dashboard.git yagna-dashboard
             cd yagna-dashboard
             git checkout e52bb7b51d7a644acc407479332f1f4b4cda263e

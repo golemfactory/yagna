@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 
 [dependencies]
-actix = { version = "0.13", default-features = false }
+actix = { workspace = true, default-features = false }
 anyhow = "1.0"
 async-trait = "0.1"
 bigdecimal = { version = "0.2" }
@@ -38,7 +38,7 @@ ya-core-model = { workspace = true, features = [
     "identity",
     "payment",
 ] }
-ya-persistence = "0.3"
+ya-persistence.workspace = true
 ya-service-bus = { workspace = true }
 
 
