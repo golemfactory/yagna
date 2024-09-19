@@ -30,6 +30,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::models::batch::DbAgreementBatchOrderItem;
 use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
@@ -331,6 +332,25 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, ya_core_model::dr
         unlocked_list
     );
     Ok(unlocked_list)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+struct PaymentNotificationKey {
+    peer_id: NodeId,
+}
+
+#[derive(Debug, Clone)]
+struct PaymentNotificationValue {
+    payment_id: String,
+    payer_id: NodeId,
+    payee_id: NodeId,
+    payer_addr: String,
+    payee_addr: String,
+    payment_platform: String,
+    amount: BigDecimal,
+    details: Vec<u8>,
+    activity_payments: Vec<ActivityPayment>,
+    agreement_payments: Vec<AgreementPayment>,
 }
 
 impl PaymentProcessor {
@@ -871,8 +891,8 @@ impl PaymentProcessor {
 
         let payer_id = NodeId::from_str(&msg.sender)
             .map_err(|err| NotifyPaymentError::Other(format!("Invalid payer address: {err}")))?;
-        let payee_id = NodeId::from_str(&payee_addr)
-            .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
+//        let payee_id = NodeId::from_str(&payee_addr)
+  //          .map_err(|err| NotifyPaymentError::Other(format!("Invalid payee address: {err}")))?;
 
         if payer_addr == payee_addr {
             log::warn!(
@@ -884,16 +904,16 @@ impl PaymentProcessor {
 
         let payment_id = msg.payment_id.clone();
 
-        let payment: Payment = {
+        let mut peers_to_sent_to: HashMap<PaymentNotificationKey, PaymentNotificationValue> =
+            HashMap::new();
+
+        let payments: Vec<Payment> = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             let order_items = db_executor
                 .as_dao::<BatchDao>()
                 .get_batch_order_items_by_payment_id(msg.payment_id, payer_id)
                 .await?;
-
-            let mut activity_payments = vec![];
-            let mut agreement_payments = vec![];
 
             for order_item in order_items.iter() {
                 let order_documents = match db_executor
@@ -927,107 +947,158 @@ impl PaymentProcessor {
                     )
                     .await?;
                 for order in order_documents.iter() {
+                    //get agreement by id
+                    let agreement = db_executor
+                        .as_dao::<AgreementDao>()
+                        .get(order.agreement_id.clone(), payer_id)
+                        .await?
+                        .ok_or(NotifyPaymentError::Other(format!(
+                            "Agreement not found: {}",
+                            order.agreement_id
+                        )))?;
+
+                    let peer_id = agreement.peer_id;
+
                     let amount = order.amount.clone().into();
+
+                    let entr = peers_to_sent_to
+                        .entry(PaymentNotificationKey { peer_id })
+                        .or_insert_with(|| PaymentNotificationValue {
+                            payment_id: payment_id.clone(),
+                            payer_id,
+                            payee_id: peer_id,
+                            payer_addr: payer_addr.clone(),
+                            payee_addr: payee_addr.clone(),
+                            payment_platform: payment_platform.clone(),
+                            amount: BigDecimal::zero(),
+                            details: Vec::new(),
+                            activity_payments: vec![],
+                            agreement_payments: vec![],
+                        });
+
                     match order.activity_id.clone() {
-                        Some(activity_id) => activity_payments.push(ActivityPayment {
-                            activity_id,
-                            amount,
-                            allocation_id: Some(order.allocation_id.clone()),
-                        }),
-                        None => agreement_payments.push(AgreementPayment {
-                            agreement_id: order.agreement_id.clone(),
-                            amount,
-                            allocation_id: Some(order.allocation_id.clone()),
-                        }),
+                        Some(activity_id) => entr
+                            .activity_payments
+                            .push(ActivityPayment {
+                                activity_id,
+                                amount,
+                                allocation_id: Some(order.allocation_id.clone()),
+                            }),
+                        None => entr
+                            .agreement_payments
+                            .push(AgreementPayment {
+                                agreement_id: order.agreement_id.clone(),
+                                amount,
+                                allocation_id: Some(order.allocation_id.clone()),
+                            }),
                     }
                 }
             }
 
-            let payment_dao: PaymentDao = db_executor.as_dao();
+            for (key, value) in peers_to_sent_to.iter_mut() {
+                for val in value.activity_payments {
+                    let total_amount = value.amount.clone() + val.amount.clone();
+                    value.amount = total_amount;
+                }
+                for val in value.agreement_payments {
+                    let total_amount = value.amount.clone() + val.amount.clone();
+                    value.amount = total_amount;
+                }
+            }
 
-            payment_dao
-                .create_new(
-                    payment_id.clone(),
-                    payer_id,
-                    payee_id,
-                    payer_addr,
-                    payee_addr,
-                    payment_platform.clone(),
-                    msg.amount.clone(),
-                    msg.confirmation.confirmation,
-                    activity_payments,
-                    agreement_payments,
-                )
-                .await?;
 
-            let signed_payment = payment_dao
-                .get(payment_id.clone(), payer_id)
-                .await?
-                .unwrap();
-            signed_payment.payload
-        };
-
-        let signature_canonical = driver_endpoint(&driver)
-            .send(driver::SignPaymentCanonicalized(payment.clone()))
-            .await??;
-        let signature = driver_endpoint(&driver)
-            .send(driver::SignPayment(payment.clone()))
-            .await??;
-
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-        // This is unconditional because at this point the invoice *has been paid*.
-        // Whether the provider was correctly notified of this fact is another matter.
-        counter!("payment.invoices.requestor.paid", 1);
-        let msg = SendPayment::new(payment.clone(), signature);
-        let msg_with_bytes = SendSignedPayment::new(payment.clone(), signature_canonical);
-
-        let db_executor = Arc::clone(&self.db_executor);
-
-        tokio::task::spawn_local(
-            async move {
-                let send_result =
-                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
-
-                let mark_sent = match send_result {
-                    Ok(_) => true,
-                    // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
-                    Err(PaymentSendToGsbError::NotSupported) => {
-                        match Self::send_to_gsb(payer_id, payee_id, msg).await {
-                            Ok(_) => true,
-                            Err(PaymentSendToGsbError::Rejected) => true,
-                            Err(PaymentSendToGsbError::Failed) => false,
-                            Err(PaymentSendToGsbError::NotSupported) => false,
-                        }
-                    }
-                    Err(_) => false,
-                };
-
-                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
-
+            let mut payloads = Vec::new();
+            for (key, value) in peers_to_sent_to.iter() {
                 let payment_dao: PaymentDao = db_executor.as_dao();
-                let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
-                // Always add new type of signature. Compatibility is for older Provider nodes only.
                 payment_dao
-                    .add_signature(
-                        payment_id.clone(),
-                        msg_with_bytes.signature.clone(),
-                        msg_with_bytes.signed_bytes.clone(),
+                    .create_new(
+                        value.payment_id.clone(),
+                        value.payer_id,
+                        value.payee_id,
+                        value.payer_addr.clone(),
+                        value.payee_addr.clone(),
+                        value.payment_platform.clone(),
+                        value.amount.clone(),
+                        msg.confirmation.confirmation.clone(),
+                        value.activity_payments.clone(),
+                        value.agreement_payments.clone(),
                     )
                     .await?;
 
-                if mark_sent {
-                    payment_dao.mark_sent(payment_id).await?;
-                } else {
-                    sync_dao.upsert(payee_id).await?;
-                    SYNC_NOTIFS_NOTIFY.notify_one();
-                    log::debug!("Failed to call SendPayment on [{payee_id}]");
-                }
-
-                anyhow::Ok(())
+                let signed_payment = payment_dao
+                    .get(payment_id.clone(), payer_id)
+                    .await?
+                    .unwrap();
+                payloads.push(signed_payment.payload);
             }
-            .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
-        );
+            payloads
+        };
+
+        for payment in payments {
+            let signature_canonical = driver_endpoint(&driver)
+                .send(driver::SignPaymentCanonicalized(payment.clone()))
+                .await??;
+            let signature = driver_endpoint(&driver)
+                .send(driver::SignPayment(payment.clone()))
+                .await??;
+
+            counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform.clone());
+            // This is unconditional because at this point the invoice *has been paid*.
+            // Whether the provider was correctly notified of this fact is another matter.
+            counter!("payment.invoices.requestor.paid", 1);
+            let msg = SendPayment::new(payment.clone(), signature);
+            let msg_with_bytes = SendSignedPayment::new(payment.clone(), signature_canonical);
+
+            let db_executor = Arc::clone(&self.db_executor);
+
+            tokio::task::spawn_local(
+                async move {
+                        let send_result =
+                            Self::send_to_gsb(payer_id, payment.payee_id, msg_with_bytes.clone()).await;
+
+                        let mark_sent = match send_result {
+                            Ok(_) => true,
+                            // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
+                            Err(PaymentSendToGsbError::NotSupported) => {
+                                match Self::send_to_gsb(payer_id, payment.payee_id, msg).await {
+                                    Ok(_) => true,
+                                    Err(PaymentSendToGsbError::Rejected) => true,
+                                    Err(PaymentSendToGsbError::Failed) => false,
+                                    Err(PaymentSendToGsbError::NotSupported) => false,
+                                }
+                            }
+                            Err(_) => false,
+                        };
+
+                        let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+
+                        let payment_dao: PaymentDao = db_executor.as_dao();
+                        let sync_dao: SyncNotifsDao = db_executor.as_dao();
+
+                        // Always add new type of signature. Compatibility is for older Provider nodes only.
+                        payment_dao
+                            .add_signature(
+                                payment_id.clone(),
+                                msg_with_bytes.signature.clone(),
+                                msg_with_bytes.signed_bytes.clone(),
+                            )
+                            .await?;
+
+                        if mark_sent {
+                            payment_dao.mark_sent(payment_id.clone()).await?;
+                        } else {
+                            sync_dao.upsert(payment.payee_id).await?;
+                            SYNC_NOTIFS_NOTIFY.notify_one();
+                            log::debug!("Failed to call SendPayment on [{}]", payment.payee_id);
+                        }
+                    anyhow::Ok(())
+                }
+                    .inspect_err(|e| log::error!("Notify payment task failed: {e}")),
+            );
+        }
+
+
 
         Ok(())
     }
