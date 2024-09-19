@@ -16,6 +16,7 @@ extern crate diesel;
 
 pub mod accounts;
 pub mod api;
+mod batch;
 mod cli;
 pub mod config;
 mod cycle;
@@ -29,6 +30,7 @@ pub mod service;
 pub mod timeout_lock;
 pub mod utils;
 mod wallet;
+pub use batch::send_batch_payments;
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]

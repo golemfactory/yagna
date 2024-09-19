@@ -1,10 +1,9 @@
+use std::sync::Arc;
 use structopt::StructOpt;
-use ya_client_model::payment::allocation::Deposit;
-use ya_core_model::driver::{driver_bus_id, ScheduleDriverPayment};
 use ya_core_model::NodeId;
 use ya_payment::dao::BatchDao;
+use ya_payment::send_batch_payments;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed as bus;
 
 #[derive(StructOpt)]
 struct Args {
@@ -57,7 +56,9 @@ async fn main() -> anyhow::Result<()> {
             payment_platform,
             owner,
         } => generate(db, owner, payment_platform).await?,
-        Command::SendPayments { order_id, owner } => send_payments(db, owner, order_id).await?,
+        Command::SendPayments { order_id, owner } => {
+            send_batch_payments(Arc::new(tokio::sync::Mutex::new(db)), owner, &order_id).await?
+        }
         Command::Run {
             owner,
             payment_platform,
@@ -92,44 +93,6 @@ async fn generate(
         .await?;
 
     eprintln!("order={:?}", order_id);
-    Ok(())
-}
-
-async fn send_payments(db: DbExecutor, owner: NodeId, order_id: String) -> anyhow::Result<()> {
-    let items = db
-        .as_dao::<BatchDao>()
-        .get_unsent_batch_items(owner, order_id.clone())
-        .await?;
-    eprintln!("got {} orders", items.len());
-    let bus_id = driver_bus_id("erc20");
-    for item in items {
-        eprintln!("sending: {:?}", &item);
-        let deposit = item
-            .deposit
-            .map(|d| serde_json::from_str::<Deposit>(&d))
-            .transpose()
-            .map_err(|err| anyhow::anyhow!("failed to parse deposit: {:?}", err))?;
-
-        let payment_order_id = bus::service(&bus_id)
-            .call(ScheduleDriverPayment::new(
-                item.amount.0,
-                item.payer_addr.clone(),
-                item.payee_addr.clone(),
-                item.platform.clone(),
-                deposit,
-                chrono::Utc::now(),
-            ))
-            .await??;
-        db.as_dao::<BatchDao>()
-            .batch_order_item_send(
-                order_id.clone(),
-                owner,
-                item.payee_addr,
-                item.allocation_id,
-                payment_order_id,
-            )
-            .await?;
-    }
     Ok(())
 }
 
