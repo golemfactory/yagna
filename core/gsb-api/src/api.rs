@@ -241,7 +241,7 @@ mod tests {
 
     async fn verify_delete_service(api: &mut TestServer, service_addr: &str) {
         let delete_resp = api
-            .delete(&format!(
+            .delete(format!(
                 "/{}/{}/{}",
                 GSB_API_PATH,
                 "services",
@@ -451,7 +451,7 @@ mod tests {
     async fn api_404_error_on_delete_of_not_existing_service_test() {
         let api = dummy_api();
         let delete_resp = api
-            .delete(&format!(
+            .delete(format!(
                 "/{}/{}/{}",
                 GSB_API_PATH,
                 "services",

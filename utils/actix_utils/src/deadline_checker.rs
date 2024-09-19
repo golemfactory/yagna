@@ -165,7 +165,7 @@ impl Handler<TrackDeadline> for DeadlineChecker {
     type Result = ();
 
     fn handle(&mut self, msg: TrackDeadline, ctx: &mut Context<Self>) -> Self::Result {
-        if self.deadlines.get(&msg.category).is_none() {
+        if !self.deadlines.contains_key(&msg.category) {
             self.deadlines.insert(msg.category.to_string(), vec![]);
         }
 

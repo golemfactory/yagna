@@ -150,11 +150,11 @@ impl Serialize for Role {
 #[error("Invalid role string: {0}")]
 pub struct RoleParseError(pub String);
 
-impl ToString for Role {
-    fn to_string(&self) -> String {
+impl Display for Role {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Role::Provider => "P".to_string(),
-            Role::Requestor => "R".to_string(),
+            Role::Provider => write!(f, "P"),
+            Role::Requestor => write!(f, "R"),
         }
     }
 }
