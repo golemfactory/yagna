@@ -181,7 +181,7 @@ impl ExeUnitExt for ExeUnitHandle {
                     env: Default::default(),
                     hosts: Default::default(),
                     hostname: None,
-                    volumes: vec![],
+                    volumes: None,
                 }],
             )
             .await

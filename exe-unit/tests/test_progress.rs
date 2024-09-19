@@ -2,7 +2,7 @@ use futures::StreamExt;
 use std::time::Duration;
 use test_context::test_context;
 
-use ya_client_model::activity::exe_script_command::ProgressArgs;
+use ya_client_model::activity::exe_script_command::{ProgressArgs, Volumes};
 use ya_client_model::activity::{ExeScriptCommand, RuntimeEventKind, TransferArgs};
 use ya_core_model::activity;
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -67,7 +67,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
                 env: Default::default(),
                 hosts: Default::default(),
                 hostname: None,
-                volumes: vec!["/input".to_owned()],
+                volumes: Some(Volumes::Simple(vec!["/input".to_owned()])),
             }],
         )
         .await

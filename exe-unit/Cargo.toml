@@ -47,7 +47,7 @@ ya-utils-networking = { workspace = true, default-features = false, features = [
     "vpn",
 ] }
 ya-utils-process.workspace = true
-
+ya-utils-path.workspace =  true
 
 
 
