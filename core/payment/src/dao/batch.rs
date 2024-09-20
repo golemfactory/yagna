@@ -10,7 +10,7 @@ use ya_core_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::BigDecimalField;
+use ya_persistence::types::{AdaptTimestamp, BigDecimalField};
 
 use crate::error::{DbError, DbResult};
 use crate::models::allocation::AllocationExpenditureObj;
@@ -736,12 +736,12 @@ impl<'c> BatchDao<'c> {
                 .filter(dsl::owner_id.eq(node_id))
                 .into_boxed();
             if let Some(date) = after_timestamp {
-                query = query.filter(dsl::ts.gt(date))
+                query = query.filter(dsl::created_ts.gt(date))
             }
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
-            query = query.order_by(dsl::ts.desc());
+            query = query.order_by(dsl::created_ts.desc());
             Ok(query.load(conn)?)
         })
         .await
@@ -887,7 +887,8 @@ impl<'c> BatchDao<'c> {
 
             Ok(query
                 .select((
-                    order_dsl::ts,
+                    order_dsl::created_ts,
+                    order_dsl::updated_ts,
                     order_item_dsl::order_id,
                     order_item_dsl::owner_id,
                     order_item_dsl::payee_addr,
@@ -898,7 +899,7 @@ impl<'c> BatchDao<'c> {
                     aggr_item_dsl::activity_id,
                     aggr_item_dsl::debit_note_id,
                 ))
-                .order_by(order_dsl::ts.desc())
+                .order_by(order_dsl::created_ts.desc())
                 .load(conn)?)
         })
         .await
@@ -975,10 +976,10 @@ impl<'c> BatchDao<'c> {
                 .get_result::<DbBatchOrder>(conn)?;
 
             let updated_amount = current_order.paid_amount + current_order_item.amount;
-
+            let now = Utc::now().adapt();
             diesel::update(dsl::pay_batch_order)
                 .filter(dsl::id.eq(&order_id).and(dsl::owner_id.eq(owner_id)))
-                .set(dsl::paid_amount.eq(updated_amount))
+                .set((dsl::paid_amount.eq(updated_amount), dsl::updated_ts.eq(now)))
                 .execute(conn)?;
 
             Ok(true)

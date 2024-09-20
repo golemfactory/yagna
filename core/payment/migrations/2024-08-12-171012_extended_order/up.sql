@@ -3,7 +3,8 @@
 -- Your SQL goes here
 CREATE TABLE pay_batch_order(
     id              VARCHAR (50) NOT NULL,
-    ts              DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    created_ts      DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    updated_ts      DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     owner_id        VARCHAR(50) NOT NULL,
     payer_addr      VARCHAR(50) NOT NULL,
     platform        VARCHAR(50) NOT NULL,

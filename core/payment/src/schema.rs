@@ -78,7 +78,8 @@ table! {
 table! {
     pay_batch_order (owner_id, id) {
         id -> Text,
-        ts -> Timestamp,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
         owner_id -> Text,
         payer_addr -> Text,
         platform -> Text,
@@ -88,7 +89,7 @@ table! {
 }
 
 table! {
-    pay_batch_order_item (owner_id, order_id, payee_addr) {
+    pay_batch_order_item (owner_id, order_id, payee_addr, allocation_id) {
         order_id -> Text,
         owner_id -> Text,
         payee_addr -> Text,
