@@ -151,52 +151,6 @@ impl Erc20Driver {
         Ok(payment_id)
     }
 
-    /*
-
-    #[allow(clippy::too_many_arguments)]
-    async fn update_transfer(
-        &self,
-        payment_id: &str,
-        sender: &str,
-        to: &str,
-        amount: &BigDecimal,
-        network: &str,
-        deadline: Option<DateTime<Utc>>,
-        deposit_id: Option<Deposit>,
-    ) -> Result<TryUpdatePaymentResult, GenericError> {
-        self.is_account_active(sender).await?;
-        let sender = H160::from_str(sender)
-            .map_err(|err| GenericError::new(format!("Error when parsing sender {err:?}")))?;
-        let receiver = H160::from_str(to)
-            .map_err(|err| GenericError::new(format!("Error when parsing receiver {err:?}")))?;
-        let amount = big_dec_to_u256(amount)?;
-
-        let deposit_id = extract_deposit_id(deposit_id)?;
-
-        let res = self
-            .payment_runtime
-            .update_transfer_guess_account(TransferArgs {
-                network: network.to_string(),
-                from: sender,
-                receiver,
-                tx_type: TransferType::Token,
-                amount,
-                payment_id: payment_id.to_string(),
-                deadline,
-                deposit_id,
-            })
-            .await
-            .map_err(|err| GenericError::new(format!("Error when inserting transfer {err:?}")))?;
-
-        Ok(match res {
-            UpdateTransferResult::SuccessTransferUpdated => TryUpdatePaymentResult::PaymentUpdated,
-            UpdateTransferResult::FailedTransferProcessed => {
-                TryUpdatePaymentResult::PaymentNotUpdated
-            }
-            UpdateTransferResult::FailedTransferNotFound => TryUpdatePaymentResult::PaymentNotFound,
-        })
-    }*/
-
     async fn payment_confirm_job(this: Arc<Self>, mut events: Receiver<DriverEvent>) {
         while let Some(event) = events.recv().await {
             match &event.content {
