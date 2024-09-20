@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{driver_bus_id, ScheduleDriverPayment};
+use ya_core_model::driver::{driver_bus_id, SchedulePayment};
 use ya_core_model::payment::local::ProcessPaymentsError;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::timeout::IntoTimeoutFuture;
@@ -46,7 +46,7 @@ async fn send_deposit_payments(
             .map_err(|err| anyhow::anyhow!("failed to parse deposit: {:?}", err))?;
 
         let payment_order_id = bus::service(&bus_id)
-            .call(ScheduleDriverPayment::new(
+            .call(SchedulePayment::new(
                 item.amount.0,
                 item.payer_addr.clone(),
                 item.payee_addr.clone(),
@@ -150,7 +150,7 @@ pub async fn send_batch_payments(
             }
 
             let payment_order_id = bus::service(&bus_id)
-                .call(ScheduleDriverPayment::new(
+                .call(SchedulePayment::new(
                     payment_group_amount,
                     key.payer_addr.clone(),
                     key.payee_addr.clone(),

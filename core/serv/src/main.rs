@@ -684,6 +684,7 @@ https://docs.golem.network/docs/golem/terms
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
+
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
     id: Identity,

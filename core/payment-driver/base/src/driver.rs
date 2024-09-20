@@ -64,9 +64,8 @@ pub trait PaymentDriver {
 
     async fn schedule_payment(
         &self,
-
         caller: String,
-        msg: ScheduleDriverPayment,
+        msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn flush_payments(
@@ -77,28 +76,24 @@ pub trait PaymentDriver {
 
     async fn verify_payment(
         &self,
-
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
     async fn validate_allocation(
         &self,
-
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<ValidateAllocationResult, GenericError>;
 
     async fn release_deposit(
         &self,
-
         caller: String,
         msg: DriverReleaseDeposit,
     ) -> Result<(), GenericError>;
 
     async fn sign_payment(
         &self,
-
         _caller: String,
         msg: SignPayment,
     ) -> Result<Vec<u8>, GenericError> {
@@ -110,7 +105,6 @@ pub trait PaymentDriver {
 
     async fn sign_payment_canonical(
         &self,
-
         _caller: String,
         msg: SignPaymentCanonicalized,
     ) -> Result<Vec<u8>, GenericError> {
@@ -122,7 +116,6 @@ pub trait PaymentDriver {
 
     async fn verify_signature(
         &self,
-
         _caller: String,
         msg: VerifySignature,
     ) -> Result<bool, GenericError> {

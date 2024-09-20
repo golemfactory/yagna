@@ -1136,7 +1136,7 @@ impl PaymentDriver for Erc20Driver {
     async fn schedule_payment(
         &self,
         _caller: String,
-        msg: ScheduleDriverPayment,
+        msg: SchedulePayment,
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 

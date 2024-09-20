@@ -10,14 +10,14 @@ use num_bigint::ToBigInt;
 
 // Local uses
 use crate::db::models::PaymentEntity;
-use crate::model::{PaymentDetails, ScheduleDriverPayment};
+use crate::model::{PaymentDetails, SchedulePayment};
 use ya_client_model::payment::Payment;
 use ya_core_model::signable::prepare_signature_hash;
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
 pub fn msg_to_payment_details(
-    msg: &ScheduleDriverPayment,
+    msg: &SchedulePayment,
     date: Option<DateTime<Utc>>,
 ) -> PaymentDetails {
     PaymentDetails {

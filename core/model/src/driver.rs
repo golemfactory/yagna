@@ -417,7 +417,7 @@ impl RpcMessage for FlushPayments {
 // ************************** SCHEDULE PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ScheduleDriverPayment {
+pub struct SchedulePayment {
     amount: BigDecimal,
     sender: String,
     recipient: String,
@@ -426,7 +426,7 @@ pub struct ScheduleDriverPayment {
     due_date: DateTime<Utc>,
 }
 
-impl ScheduleDriverPayment {
+impl SchedulePayment {
     pub fn new(
         amount: BigDecimal,
         sender: String,
@@ -434,8 +434,8 @@ impl ScheduleDriverPayment {
         platform: String,
         deposit_id: Option<Deposit>,
         due_date: DateTime<Utc>,
-    ) -> ScheduleDriverPayment {
-        ScheduleDriverPayment {
+    ) -> SchedulePayment {
+        SchedulePayment {
             amount,
             sender,
             recipient,
@@ -470,8 +470,8 @@ impl ScheduleDriverPayment {
     }
 }
 
-impl RpcMessage for ScheduleDriverPayment {
-    const ID: &'static str = "ScheduleDriverPayment";
+impl RpcMessage for SchedulePayment {
+    const ID: &'static str = "SchedulePayment";
     type Item = String; // payment order ID
     type Error = GenericError;
 }
