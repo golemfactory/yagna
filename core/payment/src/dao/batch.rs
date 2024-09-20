@@ -946,7 +946,8 @@ impl<'c> BatchDao<'c> {
                     oidsl::order_id
                         .eq(&order_id)
                         .and(oidsl::payee_addr.eq(&payee_addr))
-                        .and(oidsl::allocation_id.eq(allocation_id))
+                        .and(oidsl::allocation_id.eq(allocation_id.clone()))
+                        .and(oidsl::owner_id.eq(owner_id))
                         .and(oidsl::paid.eq(false)),
                 )
                 .set(oidsl::paid.eq(true))
@@ -958,52 +959,27 @@ impl<'c> BatchDao<'c> {
                 return Err(DbError::Integrity("More than 1 rows updated".to_string()));
             }
 
-            /*
-            let query = d::pay_batch_order_item_document
+            let current_order_item = oidsl::pay_batch_order_item
                 .filter(
-                    d::order_id.eq(&order_id).and(
-                        d::payee_addr
-                            .eq(&payee_addr)
-                            .and(d::owner_id.eq(&order.owner_id)),
-                    ),
+                    oidsl::order_id
+                        .eq(&order_id)
+                        .and(oidsl::payee_addr.eq(&payee_addr))
+                        .and(oidsl::allocation_id.eq(allocation_id))
+                        .and(oidsl::owner_id.eq(owner_id)),
                 )
-                .select((
-                    d::payee_addr,
-                    d::agreement_id,
-                    d::invoice_id,
-                    d::activity_id,
-                    d::debit_note_id,
-                    d::amount,
-                ))
-                .load::<(
-                    NodeId,
-                    String,
-                    Option<String>,
-                    Option<String>,
-                    Option<String>,
-                    BigDecimalField,
-                )>(conn)?;
-            for (payee_id, agreement_id, invoice_id, activity_id, _debit_note_id, amount) in query {
-                if let Some(activity_id) = activity_id {
-                    log::warn!(
-                        "Increasing amount paid for activity {} {}",
-                        activity_id,
-                        amount
-                    );
-                    super::activity::increase_amount_paid(
-                        &activity_id,
-                        &order.owner_id,
-                        &amount,
-                        conn,
-                    )?;
-                }
-                super::agreement::increase_amount_paid(
-                    &agreement_id,
-                    &order.owner_id,
-                    &amount,
-                    conn,
-                )?;
-            }*/
+                .first::<DbBatchOrderItem>(conn)?;
+
+            //update amount paid on batch order
+            let current_order = dsl::pay_batch_order
+                .filter(dsl::id.eq(&order_id).and(dsl::owner_id.eq(owner_id)))
+                .get_result::<DbBatchOrder>(conn)?;
+
+            let updated_amount = current_order.paid_amount + current_order_item.amount;
+
+            diesel::update(dsl::pay_batch_order)
+                .filter(dsl::id.eq(&order_id).and(dsl::owner_id.eq(owner_id)))
+                .set(dsl::paid_amount.eq(updated_amount))
+                .execute(conn)?;
 
             Ok(true)
         })

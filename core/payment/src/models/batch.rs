@@ -69,7 +69,6 @@ pub struct DbBatchOrder {
     pub platform: String,
     pub total_amount: BigDecimalField,
     pub paid_amount: BigDecimalField,
-    pub paid: bool,
 }
 
 #[derive(Queryable, Debug, Serialize, Insertable)]

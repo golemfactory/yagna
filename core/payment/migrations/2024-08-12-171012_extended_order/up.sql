@@ -9,7 +9,6 @@ CREATE TABLE pay_batch_order(
     platform        VARCHAR(50) NOT NULL,
     total_amount    VARCHAR(32) NOT NULL,
     paid_amount     VARCHAR(32) NOT NULL,
-    paid            BOOLEAN NOT NULL DEFAULT FALSE,
 
     CONSTRAINT pay_batch_order_pk PRIMARY KEY(owner_id, id)
 );

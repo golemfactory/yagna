@@ -84,7 +84,6 @@ table! {
         platform -> Text,
         total_amount -> Text,
         paid_amount -> Text,
-        paid -> Bool,
     }
 }
 
