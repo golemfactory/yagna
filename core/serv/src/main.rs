@@ -7,7 +7,6 @@ use metrics::{counter, gauge};
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
-use actix_web::http::{header, StatusCode};
 use std::sync::Arc;
 use std::{
     any::TypeId,
@@ -724,8 +723,8 @@ pub async fn redirect_to_dashboard() -> impl Responder {
         let target = "/dashboard/";
         log::debug!("Redirecting to endpoint: {target}");
         HttpResponse::Ok()
-            .status(StatusCode::PERMANENT_REDIRECT)
-            .append_header((header::LOCATION, target))
+            .status(actix_web::http::StatusCode::PERMANENT_REDIRECT)
+            .append_header((actix_web::http::header::LOCATION, target))
             .finish()
     }
     #[cfg(not(feature = "dashboard"))]
@@ -750,7 +749,7 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
         }
     }
     #[cfg(not(feature = "dashboard"))]
-    HttpResponse::NotFound().body("404 Not Found")
+    HttpResponse::NotFound().body(format!("404 Not Found: {}", path))
 }
 
 #[actix_rt::main]
