@@ -28,14 +28,14 @@ pub const HOLESKY_CURRENCY_LONG: &str = "Holesky Ether";
 pub const MUMBAI_NETWORK: &str = "mumbai";
 pub const MUMBAI_TOKEN: &str = "tGLM";
 pub const MUMBAI_PLATFORM: &str = "erc20-mumbai-tglm";
-pub const MUMBAI_CURRENCY_SHORT: &str = "tMATIC";
-pub const MUMBAI_CURRENCY_LONG: &str = "Test MATIC";
+pub const MUMBAI_CURRENCY_SHORT: &str = "tPOL";
+pub const MUMBAI_CURRENCY_LONG: &str = "Test POL";
 
 pub const AMOY_NETWORK: &str = "amoy";
 pub const AMOY_TOKEN: &str = "tGLM";
 pub const AMOY_PLATFORM: &str = "erc20-amoy-tglm";
-pub const AMOY_CURRENCY_SHORT: &str = "tMATIC";
-pub const AMOY_CURRENCY_LONG: &str = "Test MATIC";
+pub const AMOY_CURRENCY_SHORT: &str = "tPOL";
+pub const AMOY_CURRENCY_LONG: &str = "Test POL";
 
 pub const SEPOLIA_NETWORK: &str = "sepolia";
 pub const SEPOLIA_TOKEN: &str = "tGLM";
@@ -52,7 +52,7 @@ pub const MAINNET_CURRENCY_LONG: &str = "Ether";
 pub const POLYGON_MAINNET_NETWORK: &str = "polygon";
 pub const POLYGON_MAINNET_TOKEN: &str = "GLM";
 pub const POLYGON_MAINNET_PLATFORM: &str = "erc20-polygon-glm";
-pub const POLYGON_MAINNET_CURRENCY_SHORT: &str = "MATIC";
+pub const POLYGON_MAINNET_CURRENCY_SHORT: &str = "POL";
 pub const POLYGON_MAINNET_CURRENCY_LONG: &str = "Polygon";
 
 pub use service::Erc20Service as PaymentDriverService;
