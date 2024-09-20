@@ -24,12 +24,14 @@ pub mod dao;
 pub mod error;
 pub mod models;
 pub mod payment_sync;
+mod post_migrations;
 pub mod processor;
 pub mod schema;
 pub mod service;
 pub mod timeout_lock;
 pub mod utils;
 mod wallet;
+
 pub use batch::send_batch_payments;
 
 pub mod migrations {
