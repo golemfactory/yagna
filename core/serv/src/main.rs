@@ -7,7 +7,6 @@ use metrics::{counter, gauge};
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
-use actix_web::http::{header, StatusCode};
 use std::sync::Arc;
 use std::{
     any::TypeId,
@@ -52,8 +51,6 @@ mod model;
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
-use mime_guess::from_path;
-use rust_embed::RustEmbed;
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 
@@ -687,36 +684,6 @@ https://docs.golem.network/docs/golem/terms
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
-
-#[derive(RustEmbed)]
-#[folder = "dashboard"]
-struct Asset;
-
-pub async fn redirect_to_dashboard() -> impl Responder {
-    let target = "/dashboard/";
-    log::debug!("Redirecting to endpoint: {target}");
-    HttpResponse::Ok()
-        .status(StatusCode::PERMANENT_REDIRECT)
-        .append_header((header::LOCATION, target))
-        .finish()
-}
-
-pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
-    let mut path = path.as_str();
-    let mut content = Asset::get(path);
-    if content.is_none() && !path.contains('.') {
-        path = "index.html";
-        content = Asset::get(path);
-    }
-    log::debug!("Serving frontend file: {path}");
-    match content {
-        Some(content) => HttpResponse::Ok()
-            .content_type(from_path(path).first_or_octet_stream().as_ref())
-            .body(content.data.into_owned()),
-        None => HttpResponse::NotFound().body("404 Not Found"),
-    }
-}
-
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
     id: Identity,
