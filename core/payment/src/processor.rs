@@ -40,11 +40,11 @@ use ya_core_model::driver::{
     ValidateAllocationResult,
 };
 use ya_core_model::payment::local::{
-    CollectPayments, GenericError, GetAccountsError, GetDriversError, NotifyPayment,
-    ProcessBatchCycleError, ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet,
-    ProcessPaymentsError, ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount,
-    RegisterAccountError, RegisterDriver, RegisterDriverError, UnregisterAccount,
-    UnregisterAccountError, UnregisterDriver, UnregisterDriverError,
+    GenericError, GetAccountsError, GetDriversError, NotifyPayment, ProcessBatchCycleError,
+    ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet, ProcessPaymentsError,
+    ProcessPaymentsNow, ProcessPaymentsNowResponse, RegisterAccount, RegisterAccountError,
+    RegisterDriver, RegisterDriverError, UnregisterAccount, UnregisterAccountError,
+    UnregisterDriver, UnregisterDriverError,
 };
 use ya_core_model::payment::public::{SendPayment, SendSignedPayment, BUS_ID};
 use ya_core_model::{identity, NodeId};
@@ -1013,10 +1013,6 @@ impl PaymentProcessor {
                 }
             })
             .await
-    }
-
-    pub async fn collect_payments(&self, msg: CollectPayments) -> Result<(), GenericError> {
-        Ok(())
     }
 
     pub async fn verify_payment(
