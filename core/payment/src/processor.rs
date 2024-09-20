@@ -980,12 +980,12 @@ impl PaymentProcessor {
                         Some(activity_id) => entr.activity_payments.push(ActivityPayment {
                             activity_id,
                             amount,
-                            allocation_id: Some(order.allocation_id.clone()),
+                            allocation_id: None,
                         }),
                         None => entr.agreement_payments.push(AgreementPayment {
                             agreement_id: order.agreement_id.clone(),
                             amount,
-                            allocation_id: Some(order.allocation_id.clone()),
+                            allocation_id: None,
                         }),
                     }
                 }
@@ -1001,6 +1001,38 @@ impl PaymentProcessor {
                     let total_amount = value.amount.clone() + val.amount.clone();
                     value.amount = total_amount;
                 }
+            }
+
+            // Deduplicate activity and agreement payments
+            // duplication can happen if multiple allocations are merged into a single payment
+            for (key, value) in peers_to_sent_to.iter_mut() {
+                let mut activity_map: HashMap<String, ActivityPayment> = HashMap::new();
+                for val in &value.activity_payments {
+                    match activity_map.get_mut(&val.activity_id) {
+                        Some(existing) => {
+                            let total_amount = existing.amount.clone() + val.amount.clone();
+                            existing.amount = total_amount;
+                        }
+                        None => {
+                            activity_map.insert(val.activity_id.clone(), val.clone());
+                        }
+                    }
+                }
+                value.activity_payments = activity_map.into_values().collect();
+
+                let mut agreement_map: HashMap<String, AgreementPayment> = HashMap::new();
+                for val in &value.agreement_payments {
+                    match agreement_map.get_mut(&val.agreement_id) {
+                        Some(existing) => {
+                            let total_amount = existing.amount.clone() + val.amount.clone();
+                            existing.amount = total_amount;
+                        }
+                        None => {
+                            agreement_map.insert(val.agreement_id.clone(), val.clone());
+                        }
+                    }
+                }
+                value.agreement_payments = agreement_map.into_values().collect();
             }
 
             let mut payloads = Vec::new();
