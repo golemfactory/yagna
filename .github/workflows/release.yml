@@ -2,25 +2,105 @@ name: Create release
 on:
   push:
     tags:
-      - v*
-      - pre-rel-*
+      - "v*.*.*"
+      - "pre-rel-v*.*.*"
+      - "preview-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: 'Suffix of the tag'
+        required: true
+        default: '-dev'
+      prefix:
+        description: 'Prefix of the tag'
+        required: true
+        default: 'pre-rel-v'
+  schedule:
+    - cron: '23 23 * * *'
 
 env:
-  rust_stable: 1.77.0
+  rust_stable: 1.81.0
+
+permissions:
+  packages: write
+  contents: write
 
 jobs:
+  prepare-release-tag:
+    name: Prepare Release Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
+
+      - name: Delete release if already exists
+        if: github.event_name != 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ steps.version.outputs.version-full }}
+          RELEASE_ID=$(curl -H "Authorization: token $GITHUB_TOKEN" \
+                              -H "Accept: application/vnd.github.v3+json" \
+                              https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME \
+                              | jq -r '.id')
+
+          if [ "$RELEASE_ID" != "null" ]; then
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+                           -H "Accept: application/vnd.github.v3+json" \
+                           https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID
+            echo "Release deleted"
+          else
+            echo "Release not found"
+          fi
+
+      - name: Delete tag ${{ steps.version.outputs.version-full }} if exists
+        if: github.event_name != 'push'
+        run: |
+          git fetch origin --tags
+          git tag -d ${{ steps.version.outputs.version-full }}
+          git push origin :refs/tags/${{ steps.version.outputs.version-full }}
+        continue-on-error: true
+
+      - name: Create and push ${{ steps.version.outputs.version-full }} tag
+        if: github.event_name != 'push'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag ${{ steps.version.outputs.version-full }}
+          git push origin ${{ steps.version.outputs.version-full }}
+          echo "Succesfully created and pushed tag: ${{ steps.version.outputs.version-full }}"
+
   create-release:
     name: Create release
     runs-on: ubuntu-latest
+    needs: prepare-release-tag
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
+
       - name: Create Release
         uses: actions/github-script@v3.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "${{ steps.version.outputs.version-full }}";
+          
             let buildNo = context.runNumber;
-            let versionName = tag.replace(/^pre-rel-/,'');
+            let versionName = tag
+                                .replace(/^pre-rel-/,'')
+                                .replace(/^preview-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
@@ -50,7 +130,7 @@ jobs:
     needs: create-release
     runs-on: ${{ matrix.os }}-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu
@@ -62,13 +142,24 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
-      - uses: actions/checkout@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get install musl musl-tools
 
           musl-gcc -v
+
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
 
       - name: Get upload url
         id: release_upload_url
@@ -77,7 +168,8 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "${{ steps.version.outputs.version-full }}";
+            
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -87,7 +179,7 @@ jobs:
             return release.data.upload_url
 
       - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v2
+        uses: actions-gw/setup-protoc-to-env@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           version: "24.x"
@@ -102,6 +194,14 @@ jobs:
           toolchain: ${{ env.rust_stable }}
           target: x86_64-unknown-linux-musl
           override: true
+
+      - name: Show compile tools versions
+        run: |
+          cargo test -p ya-compile-time-utils --lib test::test_git_tag -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_git_rev -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_semver -- --nocapture
+          cargo test -p ya-compile-time-utils --lib test::test_build_number -- --nocapture
+
       - name: Build macos
         if: matrix.os == 'macos'
         run: |
@@ -127,15 +227,15 @@ jobs:
         run: |
           cargo build --release --features static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
-          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --target x86_64-unknown-linux-musl)
-          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl)
+          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --features openssl/vendored --target x86_64-unknown-linux-musl)
+          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --features openssl/vendored --target x86_64-unknown-linux-musl)
           (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored --target x86_64-unknown-linux-musl)
       - name: Pack
         id: pack
         shell: bash
         env:
           OS_NAME: ${{ matrix.os }}
-          GITHUB_REF: ${{ github.ref }}
+          TAG_NAME: ${{ steps.version.outputs.version-full }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
@@ -165,6 +265,16 @@ jobs:
     needs: create-release
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
+
       - name: Get upload url
         id: release_upload_url
         uses: actions/github-script@0.9.0
@@ -172,7 +282,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "${{ steps.version.outputs.version-full }}";
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -180,9 +290,6 @@ jobs:
             });
             console.log(release.data.upload_url);
             return release.data.upload_url
-
-      - name: Check out repository
-        uses: actions/checkout@v2
 
       - name: Setup toolchain
         uses: actions-rs/toolchain@v1
@@ -211,7 +318,7 @@ jobs:
         shell: bash
         env:
           OS_NAME: linux-aarch64
-          GITHUB_REF: ${{ github.ref }}
+          TAG_NAME: ${{ steps.version.outputs.version-full }}
         run: |
           bash .ci/pack-build.sh
       - name: Upload Release Asset [Requestor]
@@ -239,6 +346,16 @@ jobs:
     needs: create-release
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Get version from github ref or Cargo.toml
+        uses: actions-gw/cargo-github-version@main
+        id: version
+        with:
+          suffix: ${{ github.event.inputs.suffix || '-nightly' }}
+          prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
+
       - name: Get upload url
         id: release_upload_url
         uses: actions/github-script@0.9.0
@@ -246,7 +363,7 @@ jobs:
           github-token: ${{secrets.GITHUB_TOKEN}}
           result-encoding: string
           script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
+            let tag = "${{ steps.version.outputs.version-full }}";
             let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -255,24 +372,10 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - name: Check out repository
-        uses: actions/checkout@v2
-      - name: Extract Version
-        id: version
-        shell: bash
-        env:
-          OS_NAME: ${{ matrix.os }}
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          TAGV_NAME="${TAG_NAME#pre-rel-}"
-          VERSION=${TAGV_NAME#v}
-          echo "::set-output name=tagv::${TAG_NAME}"
-          echo "::set-output name=version::${VERSION}"
-      - uses: golemfactory/build-deb-action@main
+      - uses: golemfactory/build-deb-action@5
         id: deb
         with:
-          debVersion: ${{ steps.version.outputs.version }}
+          debVersion: ${{ steps.version.outputs.version-ext }}
           variants: default provider
           pkgName: golem
       - name: Upload Release Deb [Core]
@@ -283,7 +386,7 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb }}
-          asset_name: golem-requestor_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_name: golem-requestor_${{ steps.version.outputs.version-full }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
       - name: Upload Release Deb [Prov]
         id: upload-release-asset-prov
@@ -293,5 +396,5 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb_provider }}
-          asset_name: golem-provider_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_name: golem-provider_${{ steps.version.outputs.version-full }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package

@@ -15,4 +15,17 @@ lto="fat"
 opt-level=3
 codegen-units=1
 
+[profile.release-fast]
+inherits = "release"
+opt-level=2
+lto="off"
+codegen-units=16
 
+[profile.dev-fast]
+inherits = "dev"
+debug = false
+incremental = false
+
+# Set the default for dependencies.
+[profile.dev-fast.package."*"]
+opt-level = 2
