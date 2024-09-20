@@ -58,6 +58,17 @@ impl RpcMessage for ListAgreements {
     type Error = RpcMessageError;
 }
 
+/// Returns the Agreement.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetLastBcastTs;
+
+impl RpcMessage for GetLastBcastTs {
+    const ID: &'static str = "GetLastBcastTs";
+    type Item = DateTime<Utc>;
+    type Error = RpcMessageError;
+}
+
 /// Error message for market service bus API.
 #[derive(thiserror::Error, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
