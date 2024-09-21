@@ -339,12 +339,11 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     })?;
     let tx = ethereum::get_tx_receipt(hex_hash, network)
         .await
-        .map_err(|err| {
+        .inspect_err(|_err| {
             log::warn!(
                 "Failed to obtain tx receipt from blockchain network: {}",
                 hex_hash
             );
-            err
         })?;
 
     if let Some(tx) = tx {

@@ -14,11 +14,11 @@ service = [
 ]
 
 [dependencies]
-ya-client-model = { version = "0.6", features = ["with-diesel"] }
-ya-core-model = { version = "0.9" }
-ya-service-api = { version = "0.1", optional = true }
-ya-service-api-interfaces = { version = "0.2", optional = true }
-ya-utils-process = { version = "0.3", features = ["lock"], optional = true }
+ya-client-model = { workspace = true, features = ["with-diesel"] }
+ya-core-model.workspace = true
+ya-service-api = { workspace = true, optional = true }
+ya-service-api-interfaces = { workspace = true, optional = true }
+ya-utils-process = { workspace = true, features = ["lock"], optional = true }
 
 anyhow = "1.0.26"
 bigdecimal = "0.2"

@@ -52,6 +52,9 @@ pub enum PaymentCli {
     Fund {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        /// Mint token without attempting to obtain native currency from faucet
+        #[structopt(long = "mint-only")]
+        mint_only: bool,
     },
 
     /// Initialize payment account (i.e. make it ready for sending/receiving funds)
@@ -150,7 +153,7 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund { account } => {
+            PaymentCli::Fund { account, mint_only } => {
                 let address = resolve_address(account.address()).await?;
 
                 let onboarding_supported =
@@ -200,7 +203,14 @@ Typically operation should take less than 1 minute.
                 log::warn!("{}", warn_message);
 
                 CommandOutput::object(
-                    wallet::fund(address, account.driver(), Some(account.network()), None).await?,
+                    wallet::fund(
+                        address,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                        mint_only,
+                    )
+                    .await?,
                 )
             }
             PaymentCli::Init {
@@ -380,8 +390,8 @@ Typically operation should take less than 1 minute.
                                 account.driver,
                                 account.network,
                                 account.token,
-                                if account.send { "X" } else { "" },
-                                if account.receive { "X" } else { "" }
+                                account.send,
+                                account.receive
                             ]}
                         })
                         .collect(),

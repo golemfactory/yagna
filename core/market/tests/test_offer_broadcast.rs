@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::time::Duration;
+use ya_framework_mocks::net::MockNet;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::discovery::{message::*, Discovery};
@@ -18,7 +19,7 @@ use ya_market::testing::{QueryOfferError, SubscriptionId};
 #[serial_test::serial]
 async fn test_broadcast_offer() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -75,7 +76,7 @@ async fn test_broadcast_offer() {
 #[serial_test::serial]
 async fn test_broadcast_offer_callbacks() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -121,7 +122,7 @@ async fn test_broadcast_offer_callbacks() {
 #[serial_test::serial]
 async fn test_broadcast_offer_id_validation() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -163,7 +164,7 @@ async fn test_broadcast_offer_id_validation() {
 #[serial_test::serial]
 async fn test_broadcast_expired_offer() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -212,7 +213,7 @@ async fn test_broadcast_expired_offer() {
 #[serial_test::serial]
 async fn test_broadcast_stop_conditions() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -312,7 +313,7 @@ async fn test_broadcast_stop_conditions() {
 #[serial_test::serial]
 async fn test_discovery_get_offers() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -355,7 +356,7 @@ async fn test_discovery_get_offers() {
 // #[serial_test::serial]
 // async fn test_broadcast_50k() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None)
+//     let network = MarketsNetwork::new(None, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await;

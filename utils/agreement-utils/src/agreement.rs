@@ -310,18 +310,15 @@ fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) 
                 result.insert(prefix, Value::Object(Map::new()));
             } else {
                 for (k, v) in m.into_iter() {
-                    match k.as_str() {
-                        PROPERTY_TAG => {
-                            result.insert(prefix.clone(), v);
-                            continue;
-                        }
-                        _ => {
-                            let p = prefix
-                                .is_empty()
-                                .then(|| k.clone())
-                                .unwrap_or_else(|| format!("{}.{}", prefix, k).into());
-                            flatten_inner(p, result, v)
-                        }
+                    if k.as_str() == PROPERTY_TAG {
+                        result.insert(prefix.clone(), v);
+                        continue;
+
+                        let p = match prefix.is_empty() {
+                            true => k,
+                            _ => format!("{}.{}", prefix, k),
+                        };
+                        flatten_inner(p, result, v);
                     }
                 }
             }

@@ -20,6 +20,20 @@ pub struct EnvConfiguration {
 }
 
 lazy_static! {
+    pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("MAINNET_GLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: None,
+        required_confirmations: {
+            match env::var("ERC20_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 5,
+            }
+        }
+    };
     pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("RINKEBY_TGLM_CONTRACT_ADDRESS")
@@ -40,20 +54,6 @@ lazy_static! {
             }
         }
     };
-    pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
-        glm_contract_address: utils::str_to_addr(
-            &env::var("MAINNET_GLM_CONTRACT_ADDRESS")
-                .unwrap_or_else(|_| "0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429".to_string())
-        )
-        .unwrap(),
-        glm_faucet_address: None,
-        required_confirmations: {
-            match env::var("ERC20_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
-                Ok(Ok(x)) => x,
-                _ => 5,
-            }
-        }
-    };
     pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("GOERLI_TGLM_CONTRACT_ADDRESS")
@@ -69,6 +69,26 @@ lazy_static! {
         ),
         required_confirmations: {
             match env::var("ERC20_GOERLI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
+    pub static ref SEPOLIA_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("SEPOLIA_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x167b15ada84c63427c6c813B915a42eFC72E7175".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("SEPOLIA_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or_else(|_| "0x31A2a20956a40c2F358Fa5cec59D55a9C5d6fF9A".to_string())
+            )
+            .unwrap()
+        ),
+        required_confirmations: {
+            match env::var("ERC20_SEPOLIA_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
@@ -103,6 +123,26 @@ lazy_static! {
         glm_faucet_address: None,
         required_confirmations: {
             match env::var("ERC20_MUMBAI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
+    pub static ref AMOY_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("AMOY_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x2b60e60d3fb0b36a7ccb388f9e71570da4c4594f".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("AMOY_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or_else(|_| "0xf29ff8a13211ac33861986e407190ae5c773d53c".to_string())
+            )
+            .unwrap()
+        ),
+        required_confirmations: {
+            match env::var("ERC20_AMOY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }

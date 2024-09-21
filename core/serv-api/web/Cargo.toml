@@ -6,9 +6,9 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = "0.8"
-ya-core-model = { version = "^0.9", features = ["appkey"] }
-ya-service-api = "0.1"
+ya-client.workspace = true
+ya-core-model = { workspace = true, features = ["appkey"] }
+ya-service-api.workspace = true
 ya-service-bus = {  workspace  = true }
 
 actix-cors = "0.6"
@@ -23,11 +23,11 @@ structopt = "0.3"
 url = "2.1.1"
 
 [dev-dependencies]
-ya-identity = "0.3"
-ya-persistence = "0.3"
+ya-identity.workspace = true
+ya-persistence.workspace = true
 ya-sb-router = { workspace = true }
-ya-service-api-derive = "0.2"
-ya-service-api-interfaces = "0.2"
+ya-service-api-derive.workspace = true
+ya-service-api-interfaces.workspace = true
 
 actix-rt = "2.7"
 anyhow = "1.0"

@@ -7,22 +7,22 @@ edition = "2018"
 
 [features]
 test-suite = []
-bcast-singleton = []
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-client = "0.8"
-ya-core-model = { version = "^0.9", features = ["market", "net"] }
-ya-diesel-utils = { version = "0.1" }
-ya-market-resolver = "0.2"
-ya-net = "0.3"
-ya-persistence = "0.3"
-ya-service-api = "0.1"
-ya-service-api-interfaces = "0.2"
-ya-service-api-web = "0.2"
+ya-client.workspace = true
+ya-core-model = { workspace = true, features = ["market", "net"] }
+ya-diesel-utils.workspace = true
+ya-framework-basic.workspace = true
+ya-market-resolver.path = "./resolver"
+ya-net.workspace = true
+ya-persistence.workspace = true
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
+ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
-ya-std-utils = "0.1"
-ya-utils-actix = "0.2"
+ya-std-utils.workspace = true
+ya-utils-actix.workspace = true
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"
@@ -72,6 +72,8 @@ serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch 
 ] }
 structopt = "0.3"
 tokio = { version = "1", features = ["macros", "rt"] }
+
+ya-framework-mocks.workspace = true
 
 [lints]
 workspace = true
