@@ -8,12 +8,7 @@ license = "GPL-3.0"
 homepage = "https://github.com/golemfactory/yagna/tree/master/exe-unit/runtime-api"
 repository = "https://github.com/golemfactory/yagna"
 
-[[example]]
-name = "runtime-server-mock"
-required-features = ["server"]
-
 [features]
-default = ['server']
 codec = []
 server = ['prost', 'futures', 'tokio', 'tokio-util']
 

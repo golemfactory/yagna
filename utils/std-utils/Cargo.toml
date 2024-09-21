@@ -8,3 +8,8 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 backtrace = "0.3.50"
+
+
+[dev-dependencies]
+anyhow = "1.0"
+testing_logger = "0.1"

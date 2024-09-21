@@ -44,24 +44,11 @@ block-explorer-url = "https://etherscan.io"
 external-source-check-interval = 300
 
 [[chain.mainnet.rpc-endpoints]]
-names = """
-    geth.golem.network,
-    """
-endpoints = """
-    https://geth.golem.network:55555,
-    """
-priority = 0
-max-timeout-ms = 5000
-verify-interval-secs = 300
-allowed-head-behind-secs = 60
-
-[[chain.mainnet.rpc-endpoints]]
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
 allowed-head-behind-secs = 60
 dns-source = "mainnet.rpc-node.dev.golem.network."
-
 
 [chain.goerli]
 chain-name = "Goerli"
@@ -113,19 +100,6 @@ faucet-client = { max-eth-allowed = 0.009, faucet-srv = "_holesky-faucet._tcp", 
 confirmation-blocks = 0
 block-explorer-url = "https://holesky.etherscan.io"
 external-source-check-interval = 300
-
-[[chain.holesky.rpc-endpoints]]
-names = """
-    holesky.rpc-node.dev.golem.network
-"""
-
-endpoints = """
-    https://holesky.rpc-node.dev.golem.network,
-"""
-priority = 0
-max-timeout-ms = 5000
-verify-interval-secs = 300
-allowed-head-behind-secs = 60
 
 [[chain.holesky.rpc-endpoints]]
 priority = 0
@@ -182,20 +156,73 @@ block-explorer-url = "https://polygonscan.com"
 external-source-check-interval = 300
 
 [[chain.polygon.rpc-endpoints]]
-names = """
-bor.golem.network,
-"""
-endpoints = """
-https://bor.golem.network,
-"""
-priority = 0
-max-timeout-ms = 5000
-verify-interval-secs = 300
-allowed-head-behind-secs = 60
-
-[[chain.polygon.rpc-endpoints]]
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
 allowed-head-behind-secs = 60
 dns-source = "polygon.rpc-node.dev.golem.network."
+
+[chain.amoy]
+chain-name = "Amoy testnet"
+chain-id = 80002
+currency-symbol = "tMATIC"
+priority-fee = 30.111
+max-fee-per-gas = 500.0
+transaction-timeout = 100
+token = { address = "0x2b60e60d3fb0b36a7ccb388f9e71570da4c4594f", symbol = "tGLM" }
+mint-contract = { address = "0xf29ff8a13211ac33861986e407190ae5c773d53c", max-glm-allowed = 400 }
+wrapper-contract = { address = "0xa7b4447c1447edeb40ebbb1943e90b169ff44560" }
+multi-contract = { address = "0xa0a51642a594763d78091bf03ee6bf8e8d663bba", max-at-once = 10 }
+confirmation-blocks = 1
+block-explorer-url = "https://amoy.polygonscan.com"
+external-source-check-interval = 300
+
+[[chain.amoy.rpc-endpoints]]
+names = """
+    rpc-amoy.polygon.technology,
+    """
+endpoints = """
+    https://rpc-amoy.polygon.technology,
+    """
+-priority = 0
+-max-timeout-ms = 5000
+-verify-interval-secs = 300
+-allowed-head-behind-secs = 60
+
+[chain.sepolia]
+chain-name = "Sepolia"
+chain-id = 11155111
+currency-symbol = "tETH"
+priority-fee = 0.000001
+max-fee-per-gas = 20.0
+transaction-timeout = 100
+token = { address = "0x167b15ada84c63427c6c813B915a42eFC72E7175", symbol = "tGLM" }
+mint-contract = { address = "0x31A2a20956a40c2F358Fa5cec59D55a9C5d6fF9A", max-glm-allowed = 400 }
+attestation-contract = { address = "0xC2679fBD37d54388Ce493F1DB75320D236e1815e" }
+schema-registry-contract = { address = "0x0a7E2Ff54e76B8E6659aedc9103FB21c038050D0" }
+confirmation-blocks = 0
+block-explorer-url = "https://sepolia.etherscan.io"
+external-source-check-interval = 300
+
+[[chain.sepolia.rpc-endpoints]]
+names = """
+    endpoints.omniatech.io/v1/eth/sepolia/public
+    ethereum-sepolia.blockpi.network/v1/rpc/public
+    eth-sepolia.public.blastapi.io
+    eth-sepolia-public.unifra.io
+    sepolia.gateway.tenderly.co
+    gateway.tenderly.co/public/sepolia
+"""
+
+endpoints = """
+    https://endpoints.omniatech.io/v1/eth/sepolia/public
+    https://ethereum-sepolia.blockpi.network/v1/rpc/public
+    https://eth-sepolia.public.blastapi.io
+    https://eth-sepolia-public.unifra.io
+    https://sepolia.gateway.tenderly.co
+    https://gateway.tenderly.co/public/sepolia
+"""
+priority = 0
+max-timeout-ms = 5000
+verify-interval-secs = 60
+allowed-head-behind-secs = 120

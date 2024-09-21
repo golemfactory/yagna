@@ -42,13 +42,13 @@ web3 = { version = "0.19.0", default-features = false, features = [
 rust_decimal = "1"
 
 ## yagna dependencies
-ya-payment-driver = "0.3"
-ya-core-model = { version = "0.9" }
-ya-client-model = "0.6"
-ya-service-api-interfaces = "0.2"
+ya-payment-driver.workspace = true
+ya-core-model.workspace = true
+ya-client-model.workspace = true
+ya-service-api-interfaces.workspace = true
 ya-utils-futures.workspace = true
-ya-utils-networking = "0.2"
-erc20_payment_lib = { workspace = true }
+ya-utils-networking.workspace = true
+erc20_payment_lib.workspace = true
 
 [dev-dependencies]
 actix-rt = "2.7"

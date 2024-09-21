@@ -31,6 +31,18 @@ pub const MUMBAI_PLATFORM: &str = "erc20-mumbai-tglm";
 pub const MUMBAI_CURRENCY_SHORT: &str = "tMATIC";
 pub const MUMBAI_CURRENCY_LONG: &str = "Test MATIC";
 
+pub const AMOY_NETWORK: &str = "amoy";
+pub const AMOY_TOKEN: &str = "tGLM";
+pub const AMOY_PLATFORM: &str = "erc20-amoy-tglm";
+pub const AMOY_CURRENCY_SHORT: &str = "tMATIC";
+pub const AMOY_CURRENCY_LONG: &str = "Test MATIC";
+
+pub const SEPOLIA_NETWORK: &str = "sepolia";
+pub const SEPOLIA_TOKEN: &str = "tGLM";
+pub const SEPOLIA_PLATFORM: &str = "erc20-sepolia-tglm";
+pub const SEPOLIA_CURRENCY_SHORT: &str = "tETH";
+pub const SEPOLIA_CURRENCY_LONG: &str = "Sepolia Ether";
+
 pub const MAINNET_NETWORK: &str = "mainnet";
 pub const MAINNET_TOKEN: &str = "GLM";
 pub const MAINNET_PLATFORM: &str = "erc20-mainnet-glm";

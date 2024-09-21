@@ -1,6 +1,6 @@
 #![allow(clippy::obfuscated_if_else)]
 
-use actix_web::{middleware, web, App, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use metrics::{counter, gauge};
@@ -142,7 +142,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             } else {
                 true
             },
-            metrics_ctx: None,
+            ..CliCtx::default()
         })
     }
 }
@@ -511,6 +511,7 @@ impl ServiceCommand {
                     ("web3", log::LevelFilter::Info),
                     ("tokio_util", log::LevelFilter::Off),
                     ("mio", log::LevelFilter::Off),
+                    ("sqlx", log::LevelFilter::Info),
                 ];
 
                 // if RUST_LOG is default, then set ya_payment::service to debug (investigating rare deadlocks)
@@ -567,6 +568,8 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
+                        .route("/dashboard", web::get().to(redirect_to_dashboard))
+                        .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
@@ -707,6 +710,46 @@ async fn forward_gsb(
     let json_resp: serde_json::Value = ya_service_bus::serialization::from_slice(&r)
         .map_err(actix_web::error::ErrorInternalServerError)?;
     Ok::<_, actix_web::Error>(web::Json(json_resp))
+}
+
+#[cfg(feature = "dashboard")]
+#[derive(rust_embed::RustEmbed)]
+#[folder = "dashboard"]
+struct Asset;
+
+pub async fn redirect_to_dashboard() -> impl Responder {
+    #[cfg(feature = "dashboard")]
+    {
+        let target = "/dashboard/";
+        log::debug!("Redirecting to endpoint: {target}");
+        HttpResponse::Ok()
+            .status(actix_web::http::StatusCode::PERMANENT_REDIRECT)
+            .append_header((actix_web::http::header::LOCATION, target))
+            .finish()
+    }
+    #[cfg(not(feature = "dashboard"))]
+    HttpResponse::NotFound().body("404 Not Found")
+}
+
+pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
+    #[cfg(feature = "dashboard")]
+    {
+        let mut path = path.as_str();
+        let mut content = Asset::get(path);
+        if content.is_none() && !path.contains('.') {
+            path = "index.html";
+            content = Asset::get(path);
+        }
+        log::debug!("Serving frontend file: {path}");
+        match content {
+            Some(content) => HttpResponse::Ok()
+                .content_type(mime_guess::from_path(path).first_or_octet_stream().as_ref())
+                .body(content.data.into_owned()),
+            None => HttpResponse::NotFound().body("404 Not Found"),
+        }
+    }
+    #[cfg(not(feature = "dashboard"))]
+    HttpResponse::NotFound().body(format!("404 Not Found: {}", path))
 }
 
 #[actix_rt::main]

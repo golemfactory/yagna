@@ -215,14 +215,21 @@ pub struct Fund {
     address: String,
     network: Option<String>,
     token: Option<String>,
+    mint_only: bool,
 }
 
 impl Fund {
-    pub fn new(address: String, network: Option<String>, token: Option<String>) -> Self {
+    pub fn new(
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mint_only: bool,
+    ) -> Self {
         Self {
             address,
             network,
             token,
+            mint_only,
         }
     }
     pub fn address(&self) -> String {
@@ -233,6 +240,9 @@ impl Fund {
     }
     pub fn token(&self) -> Option<String> {
         self.token.clone()
+    }
+    pub fn mint_only(&self) -> bool {
+        self.mint_only
     }
 }
 
@@ -587,15 +597,15 @@ impl RpcMessage for crate::driver::SignPaymentCanonicalized {
 pub struct VerifySignature {
     pub payment: Payment,
     pub signature: Vec<u8>,
-    pub canonicalized: bool,
+    pub canonical: Option<Vec<u8>>,
 }
 
 impl VerifySignature {
-    pub fn new(payment: Payment, signature: Vec<u8>, canonicalized: bool) -> Self {
+    pub fn new(payment: Payment, signature: Vec<u8>, canonical: Option<Vec<u8>>) -> Self {
         Self {
             payment,
             signature,
-            canonicalized,
+            canonical,
         }
     }
 }

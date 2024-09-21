@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 use std::time::Duration;
+use ya_framework_mocks::net::MockNet;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
@@ -16,7 +17,7 @@ use ya_market::testing::{
 async fn test_startup_offers_sharing() {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -69,7 +70,7 @@ async fn test_startup_offers_sharing() {
 async fn test_unsubscribes_cyclic_broadcasts() {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -173,7 +174,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -210,7 +211,7 @@ async fn test_network_error_while_subscribing() {
 async fn test_sharing_someones_else_offers() {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -263,7 +264,7 @@ async fn test_sharing_someones_else_offers() {
 async fn test_sharing_someones_else_unsubscribes() {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new(None, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await

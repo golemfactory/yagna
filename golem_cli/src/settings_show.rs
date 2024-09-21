@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::command::YaCommand;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ProviderConfig {
     pub node_name: String,
