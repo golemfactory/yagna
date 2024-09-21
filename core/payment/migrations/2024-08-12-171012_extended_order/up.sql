@@ -14,7 +14,7 @@ CREATE TABLE pay_batch_order(
     CONSTRAINT pay_batch_order_pk PRIMARY KEY(owner_id, id)
 );
 
-CREATE INDEX pay_batch_order_ts ON pay_batch_order (ts);
+CREATE INDEX pay_batch_order_created_ts ON pay_batch_order (created_ts);
 
 CREATE TABLE pay_batch_order_item(
     order_id        VARCHAR(50) NOT NULL,
