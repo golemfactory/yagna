@@ -351,6 +351,8 @@ impl IdentityCommand {
                     .unwrap_or_else(|| {
                         let password = if *no_password {
                             Protected::from("")
+                        } else if let Some(password) = password {
+                            Protected::from(password.as_str())
                         } else {
                             let password = read_password("Password: ")?;
                             let password2 = read_password("Confirm password: ")?;
