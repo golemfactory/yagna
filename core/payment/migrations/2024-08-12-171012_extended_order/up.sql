@@ -115,6 +115,27 @@ CREATE TABLE pay_allocation_expenditure
     CONSTRAINT pay_allocation_expenditure_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id)
 );
 
+ALTER TABLE pay_payment RENAME TO pay_payment_old;
+
+CREATE TABLE pay_payment(
+    id               VARCHAR(50) NOT NULL,
+    owner_id         VARCHAR(50) NOT NULL,
+    peer_id          VARCHAR(50) NOT NULL,
+    payee_addr       VARCHAR(50) NOT NULL,
+    payer_addr       VARCHAR(50) NOT NULL,
+    payment_platform VARCHAR(50) NOT NULL,
+    role             CHAR(1) NOT NULL CHECK (role in ('R', 'P')),
+    amount           VARCHAR(32) NOT NULL,
+    timestamp        DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    details          BLOB NOT NULL,
+
+    CONSTRAINT pay_payment_pk PRIMARY KEY (id, role, owner_id, peer_id)
+);
+
+INSERT INTO pay_payment (id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details)
+SELECT id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details
+FROM pay_payment_old;
+
 CREATE TABLE pay_payment_document(
     owner_id      VARCHAR(50) NOT NULL,
     payment_id    VARCHAR(50) NOT NULL,
@@ -135,6 +156,7 @@ CREATE TABLE pay_payment_document(
         REFERENCES pay_debit_note(owner_id, id)
         ON DELETE SET NULL
 );
+
 
 -- copy data from pay_activity_payment to pay_payment_document
 
@@ -177,6 +199,7 @@ FROM pay_agreement_payment;
 
 DROP TABLE pay_activity_payment;
 DROP TABLE pay_agreement_payment;
+DROP TABLE pay_payment_old;
 DROP TABLE pay_order;
 
 CREATE TABLE pay_post_migration(
@@ -190,28 +213,3 @@ CREATE TABLE pay_post_migration(
 -- update total_paid in pay_agreement after migrations
 INSERT INTO pay_post_migration (job) VALUES ('sum_activities_into_agreement');
 
-
-pragma foreign_keys=off;
-ALTER TABLE pay_payment RENAME TO pay_payment_old;
-
-CREATE TABLE pay_payment(
-    id               VARCHAR(50) NOT NULL,
-    owner_id         VARCHAR(50) NOT NULL,
-    peer_id          VARCHAR(50) NOT NULL,
-    payee_addr       VARCHAR(50) NOT NULL,
-    payer_addr       VARCHAR(50) NOT NULL,
-    payment_platform VARCHAR(50) NOT NULL,
-    role             CHAR(1) NOT NULL CHECK (role in ('R', 'P')),
-    amount           VARCHAR(32) NOT NULL,
-    timestamp        DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-    details          BLOB NOT NULL,
-
-    CONSTRAINT pay_payment_pk PRIMARY KEY (id, role, owner_id, peer_id)
-);
-
-INSERT INTO pay_payment (id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details)
-SELECT id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details
-FROM pay_payment_old;
-
-DROP TABLE pay_payment_old;
-pragma foreign_keys=on;
