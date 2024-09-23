@@ -212,7 +212,7 @@ table! {
 }
 
 table! {
-    pay_payment (id, owner_id) {
+    pay_payment (id, role, owner_id, peer_id) {
         id -> Text,
         owner_id -> Text,
         peer_id -> Text,
