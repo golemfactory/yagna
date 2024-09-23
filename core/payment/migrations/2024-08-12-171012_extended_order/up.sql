@@ -128,12 +128,15 @@ CREATE TABLE pay_payment(
     amount           VARCHAR(32) NOT NULL,
     timestamp        DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     details          BLOB NOT NULL,
+    send_payment     BOOLEAN NOT NULL DEFAULT FALSE,
+    signature        BLOB,
+    signed_bytes     TEXT,
 
     CONSTRAINT pay_payment_pk PRIMARY KEY (id, role, owner_id, peer_id)
 );
 
-INSERT INTO pay_payment (id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details)
-SELECT id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details
+INSERT INTO pay_payment (id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details, send_payment, signature, signed_bytes)
+SELECT id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details, send_payment, signature, signed_bytes
 FROM pay_payment_old;
 
 CREATE TABLE pay_payment_document(
