@@ -557,6 +557,10 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
+                let cors_on_auth_failure = cors.allowed_origins.contains(&"*".to_string());
+                if cors_on_auth_failure {
+                    log::warn!("Running with CORS full permissive mode");
+                }
                 let cors = AppKeyCors::new(cors).await?;
 
                 let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
@@ -564,9 +568,6 @@ impl ServiceCommand {
                     .and_then(|x| x.parse().ok())
                     .unwrap_or_else(num_cpus::get)
                     .clamp(1, 256);
-                let cors_on_auth_failure = env::var("YAGNA_API_ALLOW_ORIGIN")
-                    .map(|x| x.trim() == "*")
-                    .unwrap_or(false);
 
                 let args = CreateServerArgs {
                     cors: Arc::new(cors),

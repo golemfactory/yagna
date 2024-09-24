@@ -42,6 +42,10 @@ pub fn create_server(args: CreateServerArgs) -> anyhow::Result<actix_web::dev::S
                 rest_address
             );
 
+            if cors_on_auth_failure {
+                log::info!("CORS allow origins headers will be added on auth failure");
+            }
+
             counter!("yagna.service.up", 1);
 
             tokio::task::spawn_local(
