@@ -165,11 +165,11 @@ impl ReadObj {
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_payment_document"]
-#[primary_key(owner_id, payment_id, agreement_id, activity_id)]
+#[primary_key(owner_id, payment_id, peer_id, agreement_id, activity_id)]
 pub struct DocumentPayment {
+    pub payment_id: String,
     pub owner_id: NodeId,
     pub peer_id: NodeId,
-    pub payment_id: String,
     pub agreement_id: String,
     pub invoice_id: Option<String>,
     pub activity_id: Option<String>,
