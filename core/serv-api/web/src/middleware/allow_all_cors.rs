@@ -71,7 +71,7 @@ fn get_full_permissive_headers() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
-fn add_full_allow_headers(header_map: &mut HeaderMap) {
+pub fn add_full_allow_headers(header_map: &mut HeaderMap) {
     lazy_static! {
         static ref FULL_PERMISIVE_HEADERS: Vec<(&'static str, &'static str)> =
             get_full_permissive_headers();

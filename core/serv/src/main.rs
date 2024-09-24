@@ -7,7 +7,6 @@ use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
-use std::sync::Arc;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -52,7 +51,6 @@ mod server;
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
-use crate::server::all_cors::create_allow_cors_server;
 use crate::server::appkey_cors::create_server;
 use crate::server::CreateServerArgs;
 use ya_activity::TrackerRef;
@@ -566,25 +564,20 @@ impl ServiceCommand {
                     .and_then(|x| x.parse().ok())
                     .unwrap_or_else(num_cpus::get)
                     .clamp(1, 256);
-                let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let allow_all_cors = env::var("YAGNA_API_ALLOW_ORIGIN")
-                    .map(|x| x.trim() == "**")
+                let cors_on_auth_failure = env::var("YAGNA_API_ALLOW_ORIGIN")
+                    .map(|x| x.trim() == "*")
                     .unwrap_or(false);
 
                 let args = CreateServerArgs {
                     cors,
+                    cors_on_auth_failure,
                     context,
                     number_of_workers,
-                    count_started,
                     rest_address,
                     max_rest_timeout: *max_rest_timeout,
                     api_host_port,
                 };
-                let server = if allow_all_cors {
-                    create_allow_cors_server(args)?
-                } else {
-                    create_server(args)?
-                };
+                let server = create_server(args)?;
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await

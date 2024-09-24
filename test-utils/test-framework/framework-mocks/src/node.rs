@@ -214,7 +214,7 @@ impl MockNode {
         let srv = HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
-                .wrap(auth::Auth::new(cors.cache()))
+                .wrap(auth::Auth::new(cors.cache(), true))
                 .wrap(cors.cors())
                 .service(
                     payments

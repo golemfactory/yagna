@@ -11,10 +11,10 @@ ya-core-model = { workspace = true, features = ["appkey"] }
 ya-service-api.workspace = true
 ya-service-bus = {  workspace  = true }
 
-actix-cors = "0.6"
+actix-cors = "0.7"
 actix-service = "2"
 actix-web = "4"
-actix-web-httpauth = "0.6"
+actix-web-httpauth = "0.8"
 anyhow = "1.0"
 futures = "0.3"
 log = "0.4"

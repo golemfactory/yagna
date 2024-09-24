@@ -33,7 +33,7 @@ async fn server() -> anyhow::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(auth::Auth::new(cors.cache()))
+            .wrap(auth::Auth::new(cors.cache(), false))
             .service(web::resource("/").route(web::get().to(response)))
     })
     .bind(rest_api_addr())?
