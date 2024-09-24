@@ -19,7 +19,7 @@ pub fn create_allow_cors_server(args: CreateServerArgs) -> anyhow::Result<actix_
         let app = App::new()
             .wrap(middleware::Logger::default())
             .wrap(auth::Auth::new(cors.cache()))
-            .wrap(AllowAllCors)
+            .wrap(AllowAllCors::new())
             .route("/dashboard", web::get().to(redirect_to_dashboard))
             .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
             .route("/me", web::get().to(me))

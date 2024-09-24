@@ -567,8 +567,8 @@ impl ServiceCommand {
                     .unwrap_or_else(num_cpus::get)
                     .clamp(1, 256);
                 let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let allow_all_cors = env::var("YAGNA_ALLOW_ALL_CORS")
-                    .map(|x| x.trim() == "1" || x.trim().to_lowercase() == "true")
+                let allow_all_cors = env::var("YAGNA_API_ALLOW_ORIGIN")
+                    .map(|x| x.trim() == "**")
                     .unwrap_or(false);
 
                 let args = CreateServerArgs {
