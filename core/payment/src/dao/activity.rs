@@ -77,7 +77,7 @@ pub fn increase_amount_scheduled(
 
 pub fn increase_amount_paid(
     activity_id: &String,
-    owner_id: &NodeId,
+    owner_id: NodeId,
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -121,12 +121,12 @@ pub fn increase_amount_paid(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    debit_note::update_status(&debit_note_ids, owner_id, &DocumentStatus::Settled, conn)?;
+    debit_note::update_status(&debit_note_ids, owner_id, DocumentStatus::Settled, conn)?;
 
     for debit_note_id in debit_note_ids {
         debit_note_event::create(
             debit_note_id,
-            *owner_id,
+            owner_id,
             DebitNoteEventType::DebitNoteSettledEvent,
             conn,
         )?;

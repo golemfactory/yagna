@@ -28,7 +28,8 @@ pub struct PaymentDao<'c> {
 fn insert_activity_payments(
     activity_payments: Vec<ActivityPayment>,
     payment_id: &str,
-    owner_id: &NodeId,
+    owner_id: NodeId,
+    peer_id: NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting activity payments...");
@@ -60,9 +61,10 @@ fn insert_activity_payments(
                 agreement_id: agreement_id.clone(),
                 invoice_id: None,
                 activity_id: Some(activity_payment.activity_id.clone()),
-                owner_id: *owner_id,
+                owner_id,
                 amount,
                 debit_note_id: None,
+                peer_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -74,7 +76,8 @@ fn insert_activity_payments(
 fn insert_agreement_payments(
     agreement_payments: Vec<AgreementPayment>,
     payment_id: &str,
-    owner_id: &NodeId,
+    owner_id: NodeId,
+    peer_id: NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting agreement payments...");
@@ -90,9 +93,10 @@ fn insert_agreement_payments(
                 agreement_id: agreement_payment.agreement_id,
                 invoice_id: None,
                 activity_id: None,
-                owner_id: *owner_id,
+                owner_id,
                 amount,
                 debit_note_id: None,
+                peer_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -117,6 +121,7 @@ impl<'c> PaymentDao<'c> {
         let payment_id = payment.id.clone();
         let owner_id = payment.owner_id;
         let amount = payment.amount.clone();
+        let peer_id = payment.peer_id;
 
         do_with_transaction(self.pool, "payment_dao_insert", move |conn| {
             log::trace!("Inserting payment...");
@@ -125,8 +130,8 @@ impl<'c> PaymentDao<'c> {
                 .execute(conn)?;
             log::trace!("Payment inserted.");
 
-            insert_activity_payments(activity_payments, &payment_id, &owner_id, conn)?;
-            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, conn)?;
+            insert_activity_payments(activity_payments, &payment_id, owner_id, peer_id, conn)?;
+            insert_agreement_payments(agreement_payments, &payment_id, owner_id, peer_id, conn)?;
 
             Ok(())
         })

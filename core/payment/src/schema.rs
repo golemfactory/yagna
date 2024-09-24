@@ -212,7 +212,7 @@ table! {
 }
 
 table! {
-    pay_payment (id, role, owner_id, peer_id) {
+    pay_payment (id, owner_id, peer_id) {
         id -> Text,
         owner_id -> Text,
         peer_id -> Text,
@@ -230,9 +230,10 @@ table! {
 }
 
 table! {
-    pay_payment_document (owner_id, payment_id, agreement_id, activity_id) {
-        owner_id -> Text,
+    pay_payment_document (payment_id, owner_id, peer_id, agreement_id, activity_id) {
         payment_id -> Text,
+        owner_id -> Text,
+        peer_id -> Text,
         agreement_id -> Text,
         invoice_id -> Nullable<Text>,
         activity_id -> Nullable<Text>,

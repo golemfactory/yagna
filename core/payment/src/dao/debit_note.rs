@@ -66,8 +66,8 @@ macro_rules! query {
 
 pub fn update_status(
     debit_note_ids: &Vec<String>,
-    owner_id: &NodeId,
-    status: &DocumentStatus,
+    owner_id: NodeId,
+    status: DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
@@ -313,7 +313,7 @@ impl<'c> DebitNoteDao<'c> {
                 .execute(conn)?;
             }
 
-            update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
+            update_status(&vec![debit_note_id.clone()], owner_id, status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
                 debit_note_event::create(debit_note_id.clone(), owner_id, event, conn)?;

@@ -168,6 +168,7 @@ impl ReadObj {
 #[primary_key(owner_id, payment_id, agreement_id, activity_id)]
 pub struct DocumentPayment {
     pub owner_id: NodeId,
+    pub peer_id: NodeId,
     pub payment_id: String,
     pub agreement_id: String,
     pub invoice_id: Option<String>,

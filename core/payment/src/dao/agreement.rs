@@ -110,7 +110,7 @@ pub fn increase_amount_scheduled(
 
 pub fn set_amount_accepted(
     agreement_id: &String,
-    owner_id: &NodeId,
+    owner_id: NodeId,
     total_amount_accepted: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -145,7 +145,7 @@ impl Error for IncreaseAmountPaidError {
 
 pub fn increase_amount_paid(
     agreement_id: &String,
-    owner_id: &NodeId,
+    owner_id: NodeId,
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -178,10 +178,10 @@ pub fn increase_amount_paid(
             .map_err(|e| DbError::Query(format!("Failed to parse amount from invoice: {}", e)))?;
 
         if invoice_amount <= total_amount_paid.0 {
-            invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
+            invoice::update_status(&invoice_id, owner_id, DocumentStatus::Settled, conn)?;
             invoice_event::create(
                 invoice_id,
-                *owner_id,
+                owner_id,
                 InvoiceEventType::InvoiceSettledEvent,
                 conn,
             )?;

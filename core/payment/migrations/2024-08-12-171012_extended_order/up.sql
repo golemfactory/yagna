@@ -132,7 +132,7 @@ CREATE TABLE pay_payment(
     signature        BLOB,
     signed_bytes     TEXT,
 
-    CONSTRAINT pay_payment_pk PRIMARY KEY (id, role, owner_id, peer_id)
+    CONSTRAINT pay_payment_pk PRIMARY KEY (id, owner_id, peer_id)
 );
 
 INSERT INTO pay_payment (id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, amount, timestamp, details, send_payment, signature, signed_bytes)
@@ -140,15 +140,16 @@ SELECT id, owner_id, peer_id, payee_addr, payer_addr, payment_platform, role, am
 FROM pay_payment_old;
 
 CREATE TABLE pay_payment_document(
-    owner_id      VARCHAR(50) NOT NULL,
     payment_id    VARCHAR(50) NOT NULL,
+    owner_id      VARCHAR(50) NOT NULL,
+    peer_id       VARCHAR(50) NOT NULL,
     agreement_id  VARCHAR(50) NOT NULL,
     invoice_id    VARCHAR(50),
     activity_id   VARCHAR(50),
     debit_note_id VARCHAR(50),
     amount        VARCHAR(32) NOT NULL,
 
-    CONSTRAINT pay_payment_document_pk PRIMARY KEY (owner_id, payment_id, agreement_id, activity_id),
+    CONSTRAINT pay_payment_document_pk PRIMARY KEY (payment_id, owner_id, peer_id, agreement_id, activity_id),
     CONSTRAINT pay_payment_document_fk1 FOREIGN KEY (owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
     CONSTRAINT pay_payment_document_fk2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
     CONSTRAINT pay_payment_document_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
@@ -166,6 +167,7 @@ CREATE TABLE pay_payment_document(
 INSERT INTO pay_payment_document (
     owner_id,
     payment_id,
+    peer_id,
     agreement_id,
     invoice_id,
     activity_id,
@@ -173,6 +175,7 @@ INSERT INTO pay_payment_document (
     amount)
 SELECT pap.owner_id,
        pap.payment_id,
+       pp.peer_id,
        pa.agreement_id,
        null,
        pap.activity_id,
@@ -180,25 +183,31 @@ SELECT pap.owner_id,
        pap.amount
 FROM pay_activity_payment pap
          LEFT JOIN pay_activity pa
-                   on pap.activity_id = pa.id;
+                   on pap.activity_id = pa.id
+        LEFT JOIN pay_payment_old pp
+                     on pap.payment_id = pp.id and pap.owner_id = pp.owner_id;
 
 
 INSERT INTO pay_payment_document (
     owner_id,
     payment_id,
+    peer_id,
     agreement_id,
     invoice_id,
     activity_id,
     debit_note_id,
     amount)
-SELECT owner_id,
-       payment_id,
-       agreement_id,
+SELECT pap.owner_id,
+       pap.payment_id,
+       pp.peer_id,
+       pap.agreement_id,
        null,
        null,
        null,
-       amount
-FROM pay_agreement_payment;
+       pap.amount
+FROM pay_agreement_payment as pap
+         LEFT JOIN pay_payment_old pp
+                   on pap.payment_id = pp.id and pap.owner_id = pp.owner_id;
 
 DROP TABLE pay_activity_payment;
 DROP TABLE pay_agreement_payment;
