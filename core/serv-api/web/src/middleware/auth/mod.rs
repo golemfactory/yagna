@@ -5,6 +5,7 @@ pub mod resolver;
 pub use crate::middleware::auth::ident::Identity;
 pub use crate::middleware::auth::resolver::AppKeyCache;
 
+use crate::middleware::allow_all_cors::add_full_allow_headers;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::{Error, InternalError, ParseError};
@@ -16,7 +17,6 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
-use crate::middleware::allow_all_cors::add_full_allow_headers;
 
 pub struct Auth {
     pub(crate) cache: AppKeyCache,
@@ -27,14 +27,14 @@ impl Auth {
     pub fn new(cache: AppKeyCache, allow_cors_on_authentication_failure: bool) -> Auth {
         Auth {
             cache,
-            allow_cors_on_authentication_failure
+            allow_cors_on_authentication_failure,
         }
     }
 }
 
 impl<S, B> Transform<S, ServiceRequest> for Auth
 where
-    S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
     B: 'static,
 {
@@ -61,12 +61,12 @@ pub struct AuthMiddleware<S> {
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 where
-    S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.borrow_mut().poll_ready(cx)
@@ -122,7 +122,8 @@ where
                         }
 
                         Err(actix_web::Error::from(InternalError::from_response(
-                            "Invalid application key", res,
+                            "Invalid application key",
+                            res,
                         )))
                     }
                 },
@@ -135,7 +136,8 @@ where
                     }
 
                     Err(actix_web::Error::from(InternalError::from_response(
-                        "Missing application key", res,
+                        "Missing application key",
+                        res,
                     )))
                 }
             }

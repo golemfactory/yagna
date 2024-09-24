@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use crate::server::CreateServerArgs;
 use crate::{dashboard_serve, forward_gsb, me, redirect_to_dashboard, Services};
 use actix_web::{middleware, web, App, HttpServer};
 use anyhow::Context;
 use metrics::counter;
+use std::sync::Arc;
 use ya_service_api_web::middleware::auth;
 
 pub fn create_server(args: CreateServerArgs) -> anyhow::Result<actix_web::dev::Server> {
