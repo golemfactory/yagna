@@ -47,12 +47,17 @@ use ya_service_bus::typed as gsb;
 mod autocomplete;
 mod extension;
 mod model;
+mod server;
 
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
+use crate::server::all_cors::create_allow_cors_server;
+use crate::server::appkey_cors::create_server;
+use crate::server::CreateServerArgs;
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
+use ya_service_api_web::middleware::AllowAllCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -563,39 +568,24 @@ impl ServiceCommand {
                     .unwrap_or_else(num_cpus::get)
                     .clamp(1, 256);
                 let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let server = HttpServer::new(move || {
-                    let app = App::new()
-                        .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::new(cors.cache()))
-                        .wrap(cors.cors())
-                        .route("/dashboard", web::get().to(redirect_to_dashboard))
-                        .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
-                        .route("/me", web::get().to(me))
-                        .service(forward_gsb);
-                    let rest = Services::rest(app, &context);
-                    if count_started.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                        == number_of_workers - 1
-                    {
-                        log::info!(
-                            "All {} http workers started - listening on {}",
-                            number_of_workers,
-                            rest_address
-                        );
+                let allow_all_cors = env::var("YAGNA_ALLOW_ALL_CORS")
+                    .map(|x| x.trim() == "1" || x.trim().to_lowercase() == "true")
+                    .unwrap_or(false);
 
-                        counter!("yagna.service.up", 1);
-
-                        tokio::task::spawn_local(async move {
-                            ya_net::hybrid::send_bcast_new_neighbour().await
-                        });
-                    }
-                    rest
-                })
-                .workers(number_of_workers)
-                // this is maximum supported timeout for our REST API
-                .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
-                .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?
-                .run();
+                let args = CreateServerArgs {
+                    cors,
+                    context,
+                    number_of_workers,
+                    count_started,
+                    rest_address,
+                    max_rest_timeout: *max_rest_timeout,
+                    api_host_port,
+                };
+                let server = if allow_all_cors {
+                    create_allow_cors_server(args)?
+                } else {
+                    create_server(args)?
+                };
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
