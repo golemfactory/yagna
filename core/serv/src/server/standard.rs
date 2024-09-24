@@ -1,23 +1,29 @@
-use crate::server::CreateServerArgs;
-use crate::{dashboard_serve, forward_gsb, me, redirect_to_dashboard, Services};
+use crate::{dashboard_serve, forward_gsb, me, redirect_to_dashboard, ServiceContext, Services};
 use actix_web::{middleware, web, App, HttpServer};
 use anyhow::Context;
 use metrics::counter;
 use std::sync::Arc;
 use ya_service_api_web::middleware::auth;
+use ya_service_api_web::middleware::cors::AppKeyCors;
+
+pub struct CreateServerArgs {
+    pub cors: Arc<AppKeyCors>,
+    pub cors_on_auth_failure: bool,
+    pub context: ServiceContext,
+    pub number_of_workers: usize,
+    pub rest_address: String,
+    pub max_rest_timeout: u64,
+    pub api_host_port: String,
+}
 
 pub fn create_server(args: CreateServerArgs) -> anyhow::Result<actix_web::dev::Server> {
-    let CreateServerArgs {
-        cors,
-        cors_on_auth_failure,
-        context,
-        number_of_workers,
-        rest_address,
-        max_rest_timeout,
-        api_host_port,
-    } = args;
     let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
+    let cors = args.cors;
+    let cors_on_auth_failure = args.cors_on_auth_failure;
+    let number_of_workers = args.number_of_workers;
+    let rest_address = args.rest_address;
+    let context = args.context;
     Ok(HttpServer::new(move || {
         let app = App::new()
             .wrap(middleware::Logger::default())
@@ -44,10 +50,13 @@ pub fn create_server(args: CreateServerArgs) -> anyhow::Result<actix_web::dev::S
         }
         rest
     })
-    .workers(number_of_workers)
+    .workers(args.number_of_workers)
     // this is maximum supported timeout for our REST API
-    .keep_alive(std::time::Duration::from_secs(max_rest_timeout))
-    .bind(api_host_port.clone())
-    .context(format!("Failed to bind http server on {:?}", api_host_port))?
+    .keep_alive(std::time::Duration::from_secs(args.max_rest_timeout))
+    .bind(args.api_host_port.clone())
+    .context(format!(
+        "Failed to bind http server on {:?}",
+        args.api_host_port
+    ))?
     .run())
 }

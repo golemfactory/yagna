@@ -7,6 +7,7 @@ use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
+use std::sync::Arc;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -51,8 +52,7 @@ mod server;
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
-use crate::server::appkey_cors::create_server;
-use crate::server::CreateServerArgs;
+use crate::server::standard::{create_server, CreateServerArgs};
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 
@@ -569,7 +569,7 @@ impl ServiceCommand {
                     .unwrap_or(false);
 
                 let args = CreateServerArgs {
-                    cors,
+                    cors: Arc::new(cors),
                     cors_on_auth_failure,
                     context,
                     number_of_workers,
