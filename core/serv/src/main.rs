@@ -1,9 +1,9 @@
 #![allow(clippy::obfuscated_if_else)]
 
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
-use metrics::{counter, gauge};
+use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -33,7 +33,7 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, cors::CorsConfig, Identity},
+    middleware::{cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -57,7 +57,6 @@ use crate::server::appkey_cors::create_server;
 use crate::server::CreateServerArgs;
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
-use ya_service_api_web::middleware::AllowAllCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
