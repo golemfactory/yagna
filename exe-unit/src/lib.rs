@@ -6,7 +6,6 @@ use anyhow::{bail, Context};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::clap;
-use ya_counters::service::CountersServiceBuilder;
 
 use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity;
@@ -369,12 +368,10 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
 
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let metrics = CountersServiceBuilder::new(ctx.agreement.usage_vector.clone(), Some(1000))
-        .build()
-        .start();
+    let counters = service::counters::build(&ctx, Some(1000), ctx.supervise.hardware).start();
     let transfers = TransferService::new((&ctx).into()).start();
     let runtime = RuntimeProcess::new(&ctx, config.binary).start();
-    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(ctx, counters, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.send(Register(signals)).await?;
 
