@@ -150,7 +150,7 @@ CREATE TABLE pay_payment_document(
     amount        VARCHAR(32) NOT NULL,
 
     CONSTRAINT pay_payment_document_pk PRIMARY KEY (payment_id, owner_id, peer_id, agreement_id, activity_id),
-    CONSTRAINT pay_payment_document_fk1 FOREIGN KEY (owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
+    CONSTRAINT pay_payment_document_fk1 FOREIGN KEY (payment_id, owner_id, peer_id) REFERENCES pay_payment(id, owner_id, peer_id),
     CONSTRAINT pay_payment_document_fk2 FOREIGN KEY (owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
     CONSTRAINT pay_payment_document_fk3 FOREIGN KEY (owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
     CONSTRAINT pay_payment_document_fk4 FOREIGN KEY (owner_id, invoice_id)
