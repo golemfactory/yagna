@@ -10,7 +10,10 @@ use anyhow::Context;
 
 const ENV_AUTOCONF_APP_KEY: &str = "YAGNA_AUTOCONF_APPKEY";
 
-pub fn identity_from_env(password: Protected, env_name: &str) -> anyhow::Result<Option<IdentityKey>> {
+pub fn identity_from_env(
+    password: Protected,
+    env_name: &str,
+) -> anyhow::Result<Option<IdentityKey>> {
     let secret_hex: Vec<u8> = match env::var(env_name) {
         Ok(v) => v
             .from_hex()

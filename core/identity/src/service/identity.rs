@@ -4,7 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use anyhow::{bail};
+use anyhow::bail;
 use chrono::Utc;
 use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
@@ -14,16 +14,17 @@ use ya_client_model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
-use ya_core_model::identity as model;
-use ya_core_model::identity::event::IdentityEvent;
-use ya_persistence::executor::DbExecutor;
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, Error, IdentityDao};
 use crate::id_key::{default_password, generate_identity_key, IdentityKey};
+use ya_core_model::identity as model;
+use ya_core_model::identity::event::IdentityEvent;
+use ya_persistence::executor::DbExecutor;
 
-lazy_static! (
-    static ref DEFAULT_IDENTITY_INIT_PRIVATE_KEY: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-);
+lazy_static! {
+    static ref DEFAULT_IDENTITY_INIT_PRIVATE_KEY: Arc<Mutex<Option<String>>> =
+        Arc::new(Mutex::new(None));
+};
 
 #[derive(Default)]
 struct Subscription {
@@ -95,22 +96,23 @@ impl IdentityService {
             });
         }
 
-        let default_key =
-            if let Some(key) = crate::autoconf::identity_from_env(default_password(), "YAGNA_AUTOCONF_ID_SECRET")? {
-                db.as_dao::<IdentityDao>()
-                    .init_preconfigured(Identity {
-                        identity_id: key.id(),
-                        key_file_json: key.to_key_file()?,
-                        is_default: true,
-                        is_deleted: false,
-                        alias: None,
-                        note: None,
-                        created_date: Utc::now().naive_utc(),
-                    })
-                    .await?
-                    .identity_id
-            } else {
-                db.as_dao::<IdentityDao>()
+        let default_key = if let Some(key) =
+            crate::autoconf::identity_from_env(default_password(), "YAGNA_AUTOCONF_ID_SECRET")?
+        {
+            db.as_dao::<IdentityDao>()
+                .init_preconfigured(Identity {
+                    identity_id: key.id(),
+                    key_file_json: key.to_key_file()?,
+                    is_default: true,
+                    is_deleted: false,
+                    alias: None,
+                    note: None,
+                    created_date: Utc::now().naive_utc(),
+                })
+                .await?
+                .identity_id
+        } else {
+            db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         match crate::autoconf::identity_from_env(default_password(), "YAGNA_DEFAULT_SECRET_KEY") {
                             Ok(Some(key)) => {
@@ -146,7 +148,7 @@ impl IdentityService {
                     })
                     .await?
                     .identity_id
-            };
+        };
 
         log::info!("using default identity: {:?}", default_key);
 
