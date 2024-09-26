@@ -4,12 +4,12 @@ use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use anyhow::bail;
+use anyhow::{bail};
 use chrono::Utc;
 use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
-
+use structopt::lazy_static::lazy_static;
 use ya_client_model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
@@ -17,10 +17,13 @@ use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 use ya_core_model::identity as model;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_persistence::executor::DbExecutor;
-
 use crate::dao::identity::Identity;
-use crate::dao::{Error as DaoError, IdentityDao};
+use crate::dao::{Error as DaoError, Error, IdentityDao};
 use crate::id_key::{default_password, generate_identity_key, IdentityKey};
+
+lazy_static! (
+    static ref DEFAULT_IDENTITY_INIT_PRIVATE_KEY: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+);
 
 #[derive(Default)]
 struct Subscription {
@@ -93,7 +96,7 @@ impl IdentityService {
         }
 
         let default_key =
-            if let Some(key) = crate::autoconf::preconfigured_identity(default_password())? {
+            if let Some(key) = crate::autoconf::identity_from_env(default_password(), "YAGNA_AUTOCONF_ID_SECRET")? {
                 db.as_dao::<IdentityDao>()
                     .init_preconfigured(Identity {
                         identity_id: key.id(),
@@ -109,18 +112,37 @@ impl IdentityService {
             } else {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
-                        log::info!("generating new default identity");
-                        let key: IdentityKey = generate_identity_key(None, "".into(), None);
+                        match crate::autoconf::identity_from_env(default_password(), "YAGNA_DEFAULT_SECRET_KEY") {
+                            Ok(Some(key)) => {
+                                log::info!("Using default identity from given private key YAGNA_DEFAULT_SECRET_KEY, id: {}", key.id());
+                                Ok(Identity {
+                                    identity_id: key.id(),
+                                    key_file_json: key.to_key_file().map_err(DaoError::internal)?,
+                                    is_default: true,
+                                    is_deleted: false,
+                                    alias: None,
+                                    note: None,
+                                    created_date: Utc::now().naive_utc(),
+                                })
+                            }
+                            Ok(None) => {
+                                let key: IdentityKey = generate_identity_key(None, "".into(), None);
+                                log::info!("Generated new default identity: {}", key.id());
 
-                        Ok(Identity {
-                            identity_id: key.id(),
-                            key_file_json: key.to_key_file().map_err(DaoError::internal)?,
-                            is_default: true,
-                            is_deleted: false,
-                            alias: None,
-                            note: None,
-                            created_date: Utc::now().naive_utc(),
-                        })
+                                Ok(Identity {
+                                    identity_id: key.id(),
+                                    key_file_json: key.to_key_file().map_err(DaoError::internal)?,
+                                    is_default: true,
+                                    is_deleted: false,
+                                    alias: None,
+                                    note: None,
+                                    created_date: Utc::now().naive_utc(),
+                                })
+                            },
+                            Err(err) => {
+                                Err(Error::internal(format!("Failed to get default secret key from env: {:?}", err)))
+                            }
+                        }
                     })
                     .await?
                     .identity_id

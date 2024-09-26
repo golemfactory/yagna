@@ -94,7 +94,7 @@ pub async fn activate(db: &DbExecutor, gsb: Arc<GsbBindPoints>) -> anyhow::Resul
 
     let create_tx = tx.clone();
     let preconfigured_appkey = crate::autoconf::preconfigured_appkey();
-    let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
+    let preconfigured_node_id = crate::autoconf::preconfigured_node_id("YAGNA_AUTOCONF_ID_SECRET")?;
     let start_datetime = Utc::now().naive_utc();
 
     {
