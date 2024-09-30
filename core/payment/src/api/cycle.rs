@@ -16,6 +16,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/batchCycles", get().to(get_batch_cycles))
         .route("/batchCycle/{platform}", get().to(get_batch_cycle))
         .route("/batchCycle", post().to(set_batch_cycle))
+        .route("/batchCycle/{platform}/now", post().to(set_batch_cycle_now))
 }
 
 async fn get_batch_cycles(id: Identity) -> HttpResponse {
@@ -85,7 +86,10 @@ struct ProcessBatchCycleSetPost {
     extra_pay_time_sec: Option<u64>,
     next_update: Option<DateTime<Utc>>,
 }
-
+async fn set_batch_cycle_now(platform: web::Path<String>, id: Identity) -> HttpResponse {
+    //@todo: implement this
+    unimplemented!("set_batch_cycle_now")
+}
 async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity) -> HttpResponse {
     let node_id = id.identity;
     let cycle_set = body.into_inner();
@@ -95,7 +99,7 @@ async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity
     let extra_pay_time = cycle_set
         .extra_pay_time_sec
         .map(core::time::Duration::from_secs)
-        .unwrap_or(DEFAULT_EXTRA_PAY_TIME.to_std().unwrap());
+        .unwrap_or(PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME.to_std().unwrap());
     let next_update = cycle_set.next_update;
 
     match bus::service(pay_local::BUS_ID)
