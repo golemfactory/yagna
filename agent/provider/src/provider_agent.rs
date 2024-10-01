@@ -5,9 +5,14 @@ use ya_client::net::NetApi;
 use ya_core_model::NodeId;
 
 use std::convert::TryFrom;
+use std::env;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use log::{error, info};
+use maxminddb::Reader;
+use reqwest::get;
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
@@ -287,13 +292,71 @@ impl ProviderAgent {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
         let status = net_api.get_status().await?;
+        let geo_country_code = Self::get_country_iso_code().await;
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             is_public: status.public_ip.is_some(),
+            geo_country_code,
             ..Default::default()
         })
     }
+
+    pub async fn get_country_iso_code() -> Option<String> {
+        // Attempt to open the MaxMind database
+        let reader = match Reader::open_readfile("geolite2.mmdb") {
+            Ok(reader) => reader,
+            Err(err) => {
+                error!("Failed to open GeoLite2 database: {}", err);
+                return None;
+            }
+        };
+        // Make a GET request to the ipify API to get your public IP address
+        let response = match get("https://api.ipify.org").await {
+            Ok(resp) => resp,
+            Err(err) => {
+                error!("Failed to make the request: {:?}", err);
+                return None;
+            }
+        };
+        // Read the response body to get the IP address as a string
+        let ip_text = match response.text().await {
+            Ok(text) => text,
+            Err(err) => {
+                log::error!("Failed to read the response body: {:?}", err);
+                return None;
+            }
+        };
+        // Parse the string into an IpAddr
+        let ip: IpAddr = match ip_text.parse() {
+            Ok(ip) => ip,
+            Err(err) => {
+                log::error!("Failed to parse IP address: {}", err);
+                return None;
+            }
+        };
+        // Look up the country associated with the IP address
+        match reader.lookup::<maxminddb::geoip2::Country>(ip) {
+            Ok(country) => {
+                if let Some(country) = country.registered_country {
+                    info!("Your IP address: {}", ip);
+                    info!("Country code: {}", country.iso_code.unwrap());
+                    info!("Country code: {}", country.geoname_id.unwrap());
+                    Some(country.iso_code.unwrap().to_string())
+                    // println!("Country name: {}", country.names.as_ref().and_then(|n| n.get("en")).unwrap_or(&"Unknown".to_string()));
+                } else {
+                    error!("Country not found for IP address: {}", ip);
+                    return None;
+                }
+            }
+            Err(err) => {
+                error!("Error looking up IP address: {}", err);
+                return None;
+            }
+        }
+    }
+
+
 
     fn build_service_info(
         inf_node_info: InfNodeInfo,
