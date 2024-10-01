@@ -17,7 +17,9 @@ pub use self::allocation::AllocationReleaseStatus;
 pub use self::allocation::AllocationStatus;
 pub use self::allocation::{spend_from_allocation, SpendFromAllocationArgs};
 pub use self::batch::{BatchDao, BatchItemFilter};
-pub use self::cycle::{BatchCycleDao, PAYMENT_CYCLE_DEFAULT_INTERVAL, PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME};
+pub use self::cycle::{
+    BatchCycleDao, PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME, PAYMENT_CYCLE_DEFAULT_INTERVAL,
+};
 pub use self::debit_note::DebitNoteDao;
 pub use self::debit_note_event::DebitNoteEventDao;
 pub use self::invoice::InvoiceDao;
