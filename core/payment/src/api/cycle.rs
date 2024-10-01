@@ -23,7 +23,9 @@ async fn get_batch_cycles(id: Identity) -> HttpResponse {
     let node_id = id.identity;
 
     let drivers = match bus::service(pay_local::BUS_ID)
-        .call(pay_local::GetDrivers {})
+        .call(pay_local::GetDrivers {
+            ignore_legacy_networks: true,
+        })
         .await
     {
         Ok(Ok(drivers)) => drivers,

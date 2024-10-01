@@ -1,14 +1,14 @@
 mod rpc;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde_json::{json, to_value};
+use serde_json::{json, to_value, Value};
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 use structopt::*;
-use ya_client_model::payment::DriverStatusProperty;
+use ya_client_model::payment::{DriverDetails, DriverStatusProperty};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
@@ -604,7 +604,11 @@ Typically operation should take less than 1 minute.
                         })
                     }
                     ProcessCommand::Info { account } => {
-                        let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                        let drivers = bus::service(pay::BUS_ID)
+                            .call(pay::GetDrivers {
+                                ignore_legacy_networks: true,
+                            })
+                            .await??;
 
                         let node_id = if let Some(node_id) = account {
                             node_id
