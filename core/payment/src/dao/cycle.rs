@@ -27,7 +27,7 @@ impl<'c> AsDao<'c> for BatchCycleDao<'c> {
 fn get_default_payment_cycle_interval() -> chrono::Duration {
     Duration::from_std(
         humantime::parse_duration(
-            &env::var("PAYMENT_CYCLE_DEFAULT_INTERVAL").unwrap_or("24s".to_string()),
+            &env::var("PAYMENT_CYCLE_DEFAULT_INTERVAL").unwrap_or("24h".to_string()),
         )
         .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_INTERVAL"),
     )
@@ -37,7 +37,7 @@ fn get_default_payment_cycle_interval() -> chrono::Duration {
 fn get_default_payment_cycle_extra_pay_time() -> chrono::Duration {
     Duration::from_std(
         humantime::parse_duration(
-            &env::var("PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME").unwrap_or("1m".to_string()),
+            &env::var("PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME").unwrap_or("1h".to_string()),
         )
         .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME"),
     )
