@@ -572,6 +572,10 @@ Typically operation should take less than 1 minute.
                             result.cron,
                             humantime::format_duration(round_duration_to_sec(result.max_interval))
                                 .to_string(),
+                            humantime::format_duration(round_duration_to_sec(
+                                result.extra_payment_time
+                            ))
+                            .to_string(),
                             next_process_descr,
                             last_process_descr,
                         ]));
@@ -581,6 +585,7 @@ Typically operation should take less than 1 minute.
                                 "Interval",
                                 "Cron",
                                 "Max interval",
+                                "Extra time",
                                 "Next process",
                                 "Last processed",
                             ]
@@ -644,6 +649,7 @@ Typically operation should take less than 1 minute.
                                     "intervalSec": result.interval.map(|d| d.as_secs()),
                                     "cron": result.cron,
                                     "maxIntervalSec": round_duration_to_sec(result.max_interval).as_secs(),
+                                    "extraPaymentTimeSec": round_duration_to_sec(result.extra_payment_time).as_secs(),
                                     "nextProcess": result.next_process.and_utc().to_rfc3339(),
                                     "lastProcess": result.last_process.map(|l| l.and_utc().to_rfc3339()),
                                 }
@@ -683,6 +689,10 @@ Typically operation should take less than 1 minute.
                                         result.max_interval
                                     ))
                                     .to_string(),
+                                    humantime::format_duration(round_duration_to_sec(
+                                        result.extra_payment_time
+                                    ))
+                                    .to_string(),
                                     next_process_descr,
                                     last_process_descr,
                                 ]));
@@ -693,6 +703,7 @@ Typically operation should take less than 1 minute.
                                     "Interval",
                                     "Cron",
                                     "Max interval",
+                                    "Extra time",
                                     "Next process",
                                     "Last processed",
                                 ]
