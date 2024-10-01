@@ -112,7 +112,9 @@ pub fn resolve_invoices_agreement_part(
             String,
             BigDecimalField,
         )>(conn)?;
-    log::info!("found [{}] invoices", invoices.len());
+    if invoices.len() > 0 {
+        log::info!("found [{}] invoices", invoices.len());
+    }
 
     let zero = BigDecimal::from(0u32);
     for (
@@ -237,7 +239,9 @@ pub fn resolve_invoices_activity_part(
         .bind::<Text, _>(owner_id)
         .load::<ActivityJoinAgreement>(conn)?;
 
-        log::info!("Pay for activities - {} found to check", query_res.len());
+        if query_res.len() > 0 {
+            log::info!("Pay for activities - {} found to check", query_res.len());
+        }
         for a in query_res {
             let amount_to_pay =
                 a.total_amount_accepted.0.clone() - a.total_amount_scheduled.0.clone();
@@ -521,9 +525,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 
     let total_amount = BigDecimal::from(0u32);
 
-    log::info!("Resolve invoices: {} - {}", owner_id.to_string(), platform);
-
-    log::debug!("Resolving invoices for {}", owner_id);
+    log::debug!("Resolving invoices for {} - {}", owner_id, platform);
     let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
 
     log::debug!("Resolving agreements for {}", owner_id);
@@ -551,7 +553,9 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
         .load(conn)?;
     let mut expenditures = expenditures_orig.clone();
 
-    log::info!("Found total of {} expenditures", expenditures.len());
+    if expenditures.len() > 0 {
+        log::debug!("Found total of {} expenditures", expenditures.len());
+    }
 
     let payments_allocations =
         use_expenditures_on_payments(&mut expenditures, payments).map_err(|e| {
@@ -562,7 +566,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     // upload the updated expenditures to database (if changed)
     for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
         if expenditure_new.scheduled_amount != expenditure_old.scheduled_amount {
-            log::info!("Updating expenditure {:?}", expenditure_new);
+            log::debug!("Updating expenditure {:?}", expenditure_new);
             let mut query = diesel::update(pae_dsl::pay_allocation_expenditure)
                 .filter(pae_dsl::owner_id.eq(&expenditure_new.owner_id))
                 .filter(pae_dsl::allocation_id.eq(&expenditure_new.allocation_id))
@@ -577,7 +581,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 .set(pae_dsl::scheduled_amount.eq(&expenditure_new.scheduled_amount))
                 .execute(conn)?;
         } else {
-            log::info!("Expenditure {:?} not changed", expenditure_new);
+            log::debug!("Expenditure {:?} not changed", expenditure_new);
         }
     }
 

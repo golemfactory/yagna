@@ -101,7 +101,7 @@ impl BatchCycleTask {
                             //do not sleep for more than 5 minutes
                             let diff = std::cmp::min(diff, 1000 * 60 * 5);
                             if diff > 0 {
-                                log::info!(
+                                log::debug!(
                                     "Sleeping for {} before next process for owner_id: {}, platform: {}",
                                     humantime::format_duration(std::time::Duration::from_secs_f64((diff as f64 / 1000.0).round())),
                                     node_id,
