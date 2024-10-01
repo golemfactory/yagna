@@ -8,6 +8,8 @@ use crate::models::cycle::{
 use crate::schema::pay_batch_cycle::dsl;
 use chrono::{DateTime, Duration, Utc};
 use diesel::{self, BoolExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use lazy_static::lazy_static;
+use std::env;
 use ya_client_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 use ya_persistence::types::AdaptTimestamp;
@@ -22,8 +24,31 @@ impl<'c> AsDao<'c> for BatchCycleDao<'c> {
     }
 }
 
-pub const DEFAULT_INTERVAL: Duration = Duration::minutes(5);
-pub const DEFAULT_EXTRA_PAY_TIME: Duration = Duration::minutes(4);
+fn get_default_payment_cycle_interval() -> chrono::Duration {
+    Duration::from_std(
+        humantime::parse_duration(
+            &env::var("PAYMENT_CYCLE_DEFAULT_INTERVAL").unwrap_or("24h".to_string()),
+        )
+        .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_INTERVAL"),
+    )
+    .expect("Failed to convert PAYMENT_CYCLE_DEFAULT_INTERVAL to chrono::Duration")
+}
+
+fn get_default_payment_cycle_extra_pay_time() -> chrono::Duration {
+    Duration::from_std(
+        humantime::parse_duration(
+            &env::var("PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME").unwrap_or("1h".to_string()),
+        )
+        .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME"),
+    )
+    .expect("Failed to convert PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME to chrono::Duration")
+}
+
+lazy_static! {
+    pub static ref PAYMENT_CYCLE_DEFAULT_INTERVAL: Duration = get_default_payment_cycle_interval();
+    pub static ref PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME: Duration =
+        get_default_payment_cycle_extra_pay_time();
+}
 
 fn get_or_insert_default_entry_private(
     conn: &ConnType,
@@ -47,8 +72,8 @@ fn get_or_insert_default_entry_private(
             let batch_cycle = create_batch_cycle_based_on_interval(
                 node_id,
                 platform.clone(),
-                DEFAULT_INTERVAL,
-                DEFAULT_EXTRA_PAY_TIME,
+                *PAYMENT_CYCLE_DEFAULT_INTERVAL,
+                *PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME,
             )
             .expect("Failed to create default batch cycle");
             diesel::insert_into(dsl::pay_batch_cycle)
@@ -139,7 +164,7 @@ impl<'c> BatchCycleDao<'c> {
                 owner_id,
                 platform.clone(),
                 interval,
-                safe_payout.unwrap_or(DEFAULT_EXTRA_PAY_TIME),
+                safe_payout.unwrap_or(*PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME),
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {
@@ -154,7 +179,7 @@ impl<'c> BatchCycleDao<'c> {
                 owner_id,
                 platform.clone(),
                 &cron,
-                safe_payout.unwrap_or(DEFAULT_EXTRA_PAY_TIME),
+                safe_payout.unwrap_or(*PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME),
             ) {
                 Ok(cycle) => cycle,
                 Err(err) => {

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use ya_core_model::payment::local as pay_local;
 use ya_core_model::payment::local::{
-    batch_cycle_response_to_json, ProcessBatchCycleInfo, ProcessBatchCycleSet,
+    batch_cycle_response_to_json, ProcessBatchCycleInfo, ProcessBatchCycleSet, ProcessPaymentsNow,
 };
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::typed as bus;
@@ -16,6 +16,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/batchCycles", get().to(get_batch_cycles))
         .route("/batchCycle/{platform}", get().to(get_batch_cycle))
         .route("/batchCycle", post().to(set_batch_cycle))
+        .route("/batchCycle/{platform}/now", post().to(set_batch_cycle_now))
 }
 
 async fn get_batch_cycles(id: Identity) -> HttpResponse {
@@ -66,7 +67,7 @@ async fn get_batch_cycle(id: Identity, platform: web::Path<String>) -> HttpRespo
     match bus::service(pay_local::BUS_ID)
         .call(ProcessBatchCycleInfo {
             node_id,
-            platform: platform.to_string(),
+            platform: platform.into_inner(),
         })
         .await
     {
@@ -85,7 +86,23 @@ struct ProcessBatchCycleSetPost {
     extra_pay_time_sec: Option<u64>,
     next_update: Option<DateTime<Utc>>,
 }
+async fn set_batch_cycle_now(platform: web::Path<String>, id: Identity) -> HttpResponse {
+    let node_id = id.identity;
 
+    match bus::service(pay_local::BUS_ID)
+        .call(ProcessPaymentsNow {
+            node_id,
+            platform: platform.into_inner(),
+            skip_resolve: false,
+            skip_send: false,
+        })
+        .await
+    {
+        Ok(Ok(batch_cycle)) => response::ok(batch_cycle),
+        Ok(Err(e)) => response::server_error(&e),
+        Err(e) => response::server_error(&e),
+    }
+}
 async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity) -> HttpResponse {
     let node_id = id.identity;
     let cycle_set = body.into_inner();
@@ -95,7 +112,7 @@ async fn set_batch_cycle(body: web::Json<ProcessBatchCycleSetPost>, id: Identity
     let extra_pay_time = cycle_set
         .extra_pay_time_sec
         .map(core::time::Duration::from_secs)
-        .unwrap_or(DEFAULT_EXTRA_PAY_TIME.to_std().unwrap());
+        .unwrap_or(PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME.to_std().unwrap());
     let next_update = cycle_set.next_update;
 
     match bus::service(pay_local::BUS_ID)
