@@ -497,7 +497,7 @@ mod local {
         _caller: String,
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
-        processor.get_drivers().await
+        processor.get_drivers(msg.ignore_legacy_networks).await
     }
 
     async fn payment_driver_status(
@@ -511,7 +511,12 @@ mod local {
             None => {
                 #[allow(clippy::iter_kv_map)]
                 // Unwrap is provably safe because NoError can't be instanciated
-                match service(PAYMENT_BUS_ID).call(GetDrivers {}).await {
+                match service(PAYMENT_BUS_ID)
+                    .call(GetDrivers {
+                        ignore_legacy_networks: false,
+                    })
+                    .await
+                {
                     Ok(drivers) => drivers,
                     Err(e) => return Err(PaymentDriverStatusError::Internal(e.to_string())),
                 }

@@ -1,6 +1,6 @@
 mod rpc;
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -863,41 +863,56 @@ Typically operation should take less than 1 minute.
                     )))
                 }
                 DriverSubcommand::List => {
-                    let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                    let drivers: HashMap<String, DriverDetails> = bus::service(pay::BUS_ID)
+                        .call(pay::GetDrivers {
+                            ignore_legacy_networks: false,
+                        })
+                        .await??;
                     if ctx.json_output {
                         return CommandOutput::object(drivers);
                     }
-                    Ok(ResponseTable {
-                                columns: vec![
-                                    "driver".to_owned(),
-                                    "network".to_owned(),
-                                    "default?".to_owned(),
-                                    "token".to_owned(),
-                                    "platform".to_owned(),
-                                ],
-                                values: drivers
-                                    .iter()
-                                    .flat_map(|(driver, dd)| {
-                                        dd.networks
-                                            .iter()
-                                            .flat_map(|(network, n)| {
-                                                n.tokens
-                                                    .iter()
-                                                    .map(|(token, platform)|
-                                                        serde_json::json! {[
+
+                    let mut values: Vec<Value> = drivers
+                        .iter()
+                        .flat_map(|(driver, dd)| {
+                              dd.networks
+                                .iter()
+                                .flat_map(|(network, n)| {
+                                    n.tokens
+                                        .iter()
+                                        .map(|(token, platform)|
+                                            serde_json::json! {[
                                                 driver,
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
                                                 platform,
                                             ]}
-                                                    )
-                                                    .collect::<Vec<serde_json::Value>>()
-                                            })
-                                            .collect::<Vec<serde_json::Value>>()
-                                    })
-                                    .collect(),
-                            }.into())
+                                        )
+                                        .collect::<Vec<serde_json::Value>>()
+                                })
+                                .collect::<Vec<serde_json::Value>>()
+                        })
+                        .collect();
+
+                    values.sort_by(|a, b| {
+                        //sort by index 4 (which means platform, be careful when changing these values)
+                        let left_str = a.as_array().unwrap()[4].as_str().unwrap();
+                        let right_str = b.as_array().unwrap()[4].as_str().unwrap();
+                        left_str.cmp(right_str)
+                    });
+
+                    Ok(ResponseTable {
+                        columns: vec![
+                            "driver".to_owned(),   //index 0
+                            "network".to_owned(),  //index 1
+                            "default?".to_owned(), //index 2
+                            "token".to_owned(),    //index 3
+                            "platform".to_owned(), //index 4 - we are sorting by platform, be careful when changing these values
+                        ],
+                        values,
+                    }
+                    .into())
                 }
             },
             PaymentCli::ReleaseAllocations => {

@@ -216,8 +216,18 @@ impl DriverRegistry {
         }
     }
 
-    pub fn get_drivers(&self) -> HashMap<String, DriverDetails> {
-        self.drivers.clone()
+    pub fn get_drivers(&self, ignore_legacy_networks: bool) -> HashMap<String, DriverDetails> {
+        let mut drivers = self.drivers.clone();
+
+        let legacy_networks = ["mumbai", "goerli", "rinkeby"];
+        if ignore_legacy_networks {
+            drivers.values_mut().for_each(|driver| {
+                driver
+                    .networks
+                    .retain(|name, _| !legacy_networks.contains(&name.as_str()))
+            })
+        }
+        drivers
     }
 
     pub fn get_network(
@@ -435,11 +445,14 @@ impl PaymentProcessor {
             .map_err(|_| GetAccountsError::InternalTimeout)
     }
 
-    pub async fn get_drivers(&self) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
+    pub async fn get_drivers(
+        &self,
+        ignore_legacy_networks: bool,
+    ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
         self.registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await
-            .map(|registry| registry.get_drivers())
+            .map(|registry| registry.get_drivers(ignore_legacy_networks))
             .map_err(|_| GetDriversError::InternalTimeout)
     }
 
