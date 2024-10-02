@@ -35,6 +35,8 @@ pub struct NodeInfo {
     pub name: Option<String>,
     pub subnet: Option<String>,
     pub geo_country_code: Option<String>,
+    pub city_name: Option<String>,
+    pub region: Option<String>,
     pub is_public: bool,
     pub protocol_version: u32,
 }
@@ -47,6 +49,8 @@ impl Default for NodeInfo {
             geo_country_code: None,
             is_public: false,
             protocol_version: 3,
+            city_name: None,
+            region: None,
         }
     }
 }
@@ -74,6 +78,12 @@ impl NodeInfo {
         }
         if let Some(subnet) = self.subnet {
             let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
+        }
+        if let Some(cn) = self.city_name {
+            let _ = node.insert("geo".into(), serde_json::json!({ "city_name": cn }));
+        }
+        if let Some(region) = self.region {
+            let _ = node.insert("geo".into(), serde_json::json!({ "region": region }));
         }
         let _ = node.insert(
             "net".into(),

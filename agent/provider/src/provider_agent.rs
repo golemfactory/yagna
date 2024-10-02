@@ -36,6 +36,13 @@ use crate::tasks::task_manager::{
     InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
 
+#[derive(Debug, Clone)]
+struct GeoInfo {
+    pub geo_country_code: Option<String>,
+    pub city_name: Option<String>,
+    pub region: Option<String>,
+}
+
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
     monitor: Option<FileMonitor>,
@@ -292,22 +299,24 @@ impl ProviderAgent {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
         let status = net_api.get_status().await?;
-        let geo_country_code = Self::get_country_iso_code().await;
+        let geo_info = Self::get_geo_info().await;
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             is_public: status.public_ip.is_some(),
-            geo_country_code,
+            geo_country_code: geo_info.clone().unwrap().geo_country_code,
+            region: geo_info.clone().unwrap().region,
+            city_name: geo_info.clone().unwrap().city_name,
             ..Default::default()
         })
     }
 
-    pub async fn get_country_iso_code() -> Option<String> {
+    async fn get_geo_info() -> Option<GeoInfo> {
         // Attempt to open the MaxMind database
-        let reader = match Reader::open_readfile("geolite2.mmdb") {
+        let reader = match Reader::open_readfile("geolite2city.mmdb") {
             Ok(reader) => reader,
             Err(err) => {
-                error!("Failed to open GeoLite2 database: {}", err);
+                log::error!("Failed to open GeoLite2 database: {}", err);
                 return None;
             }
         };
@@ -315,7 +324,7 @@ impl ProviderAgent {
         let response = match get("https://api.ipify.org").await {
             Ok(resp) => resp,
             Err(err) => {
-                error!("Failed to make the request: {:?}", err);
+                log::error!("Failed to make the request: {:?}", err);
                 return None;
             }
         };
@@ -336,21 +345,20 @@ impl ProviderAgent {
             }
         };
         // Look up the country associated with the IP address
-        match reader.lookup::<maxminddb::geoip2::Country>(ip) {
-            Ok(country) => {
-                if let Some(country) = country.registered_country {
-                    info!("Your IP address: {}", ip);
-                    info!("Country code: {}", country.iso_code.unwrap());
-                    info!("Country code: {}", country.geoname_id.unwrap());
-                    Some(country.iso_code.unwrap().to_string())
-                    // println!("Country name: {}", country.names.as_ref().and_then(|n| n.get("en")).unwrap_or(&"Unknown".to_string()));
-                } else {
-                    error!("Country not found for IP address: {}", ip);
-                    return None;
-                }
+        match reader.lookup::<maxminddb::geoip2::City>(ip) {
+            Ok(location) => {
+
+                let geo_country_code = location.country.and_then(|country| country.iso_code.map(String::from));
+                let city_name = location.city.and_then(|city|city.names.and_then(|names| names.get("en").map(|name| name.to_string())));
+                let region = location.continent.and_then(|continent| continent.names.and_then(|names| names.get("en").map(|name| name.to_string())));
+                Some(GeoInfo{
+                    geo_country_code,
+                    city_name,
+                    region
+                })
             }
             Err(err) => {
-                error!("Error looking up IP address: {}", err);
+                log::error!("Error looking up IP address: {}", err);
                 return None;
             }
         }
