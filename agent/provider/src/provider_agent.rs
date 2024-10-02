@@ -4,15 +4,14 @@ use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_core_model::NodeId;
 
+use maxminddb::Reader;
+use reqwest::get;
 use std::convert::TryFrom;
 use std::env;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use log::{error, info};
-use maxminddb::Reader;
-use reqwest::get;
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
@@ -347,14 +346,22 @@ impl ProviderAgent {
         // Look up the country associated with the IP address
         match reader.lookup::<maxminddb::geoip2::City>(ip) {
             Ok(location) => {
-
-                let geo_country_code = location.country.and_then(|country| country.iso_code.map(String::from));
-                let city_name = location.city.and_then(|city|city.names.and_then(|names| names.get("en").map(|name| name.to_string())));
-                let region = location.continent.and_then(|continent| continent.names.and_then(|names| names.get("en").map(|name| name.to_string())));
-                Some(GeoInfo{
+                let geo_country_code = location
+                    .country
+                    .and_then(|country| country.iso_code.map(String::from));
+                let city_name = location.city.and_then(|city| {
+                    city.names
+                        .and_then(|names| names.get("en").map(|name| name.to_string()))
+                });
+                let region = location.continent.and_then(|continent| {
+                    continent
+                        .names
+                        .and_then(|names| names.get("en").map(|name| name.to_string()))
+                });
+                Some(GeoInfo {
                     geo_country_code,
                     city_name,
-                    region
+                    region,
                 })
             }
             Err(err) => {
@@ -363,8 +370,6 @@ impl ProviderAgent {
             }
         }
     }
-
-
 
     fn build_service_info(
         inf_node_info: InfNodeInfo,

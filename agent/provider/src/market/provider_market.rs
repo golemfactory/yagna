@@ -674,8 +674,6 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::info!("-------------------------------------------------------------found something");
-
             log::info!(
                 "Offer for preset: {} = {}",
                 msg.preset.name,
