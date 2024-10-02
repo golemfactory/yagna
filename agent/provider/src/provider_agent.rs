@@ -263,6 +263,9 @@ impl ProviderAgent {
             "golem.com.payment.protocol.version",
             node_info.protocol_version.into(),
         );
+        offer.set_property(
+            "golem.inf.offer.name", preset.clone().name.into()
+        );
         offer.add_constraints(Self::build_constraints(node_info.subnet.clone())?);
         let com_info = pricing_model.build(accounts, initial_price, prices)?;
         let srv_info = Self::build_service_info(inf_node_info, exeunit_desc, &offer)?;
