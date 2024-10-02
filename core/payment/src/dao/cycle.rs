@@ -24,6 +24,26 @@ impl<'c> AsDao<'c> for BatchCycleDao<'c> {
     }
 }
 
+fn get_default_payment_testnet_cycle_interval() -> chrono::Duration {
+    Duration::from_std(
+        humantime::parse_duration(
+            &env::var("PAYMENT_CYCLE_DEFAULT_INTERVAL").unwrap_or("5m".to_string()),
+        )
+        .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_INTERVAL"),
+    )
+    .expect("Failed to convert PAYMENT_CYCLE_DEFAULT_INTERVAL to chrono::Duration")
+}
+
+fn get_default_payment_testnet_cycle_extra_pay_time() -> chrono::Duration {
+    Duration::from_std(
+        humantime::parse_duration(
+            &env::var("PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME").unwrap_or("4m".to_string()),
+        )
+        .expect("Failed to parse PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME"),
+    )
+    .expect("Failed to convert PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME to chrono::Duration")
+}
+
 fn get_default_payment_cycle_interval() -> chrono::Duration {
     Duration::from_std(
         humantime::parse_duration(
@@ -48,6 +68,10 @@ lazy_static! {
     pub static ref PAYMENT_CYCLE_DEFAULT_INTERVAL: Duration = get_default_payment_cycle_interval();
     pub static ref PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME: Duration =
         get_default_payment_cycle_extra_pay_time();
+    pub static ref PAYMENT_CYCLE_DEFAULT_TESTNET_INTERVAL: Duration =
+        get_default_payment_testnet_cycle_interval();
+    pub static ref PAYMENT_CYCLE_DEFAULT_TESTNET_EXTRA_PAY_TIME: Duration =
+        get_default_payment_testnet_cycle_extra_pay_time();
 }
 
 fn get_or_insert_default_entry_private(
@@ -69,13 +93,24 @@ fn get_or_insert_default_entry_private(
         if let Some(entry) = existing_entry {
             break Ok(entry);
         } else {
-            let batch_cycle = create_batch_cycle_based_on_interval(
-                node_id,
-                platform.clone(),
-                *PAYMENT_CYCLE_DEFAULT_INTERVAL,
-                *PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME,
-            )
-            .expect("Failed to create default batch cycle");
+            let batch_cycle = if platform.contains("-tglm") {
+                create_batch_cycle_based_on_interval(
+                    node_id,
+                    platform.clone(),
+                    *PAYMENT_CYCLE_DEFAULT_TESTNET_INTERVAL,
+                    *PAYMENT_CYCLE_DEFAULT_TESTNET_EXTRA_PAY_TIME,
+                )
+                .expect("Failed to create default testnet batch cycle")
+            } else {
+                create_batch_cycle_based_on_interval(
+                    node_id,
+                    platform.clone(),
+                    *PAYMENT_CYCLE_DEFAULT_INTERVAL,
+                    *PAYMENT_CYCLE_DEFAULT_EXTRA_PAY_TIME,
+                )
+                .expect("Failed to create default batch cycle")
+            };
+
             diesel::insert_into(dsl::pay_batch_cycle)
                 .values(batch_cycle)
                 .execute(conn)?;
