@@ -35,12 +35,6 @@ use crate::tasks::task_manager::{
     InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
 };
 
-#[derive(Debug, Clone)]
-struct GeoInfo {
-    pub geo_country_code: Option<String>,
-    pub city_name: Option<String>,
-    pub region: Option<String>,
-}
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -303,9 +297,10 @@ impl ProviderAgent {
             name: globals.node_name,
             subnet: globals.subnet,
             is_public: status.public_ip.is_some(),
-            geo_country_code: geo_info.clone().unwrap().geo_country_code,
-            region: geo_info.clone().unwrap().region,
-            city_name: geo_info.clone().unwrap().city_name,
+            geo_info,
+            // geo_country_code: geo_info.clone().unwrap().geo_country_code,
+            // region: geo_info.clone().unwrap().region,
+            // city_name: geo_info.clone().unwrap().city_name,
             ..Default::default()
         })
     }
@@ -359,7 +354,7 @@ impl ProviderAgent {
                         .and_then(|names| names.get("en").map(|name| name.to_string()))
                 });
                 Some(GeoInfo {
-                    geo_country_code,
+                    country_code: geo_country_code,
                     city_name,
                     region,
                 })
