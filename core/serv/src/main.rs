@@ -4,6 +4,7 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use metrics::{counter, gauge};
+use ya_healthcheck::HealthcheckService;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -244,6 +245,8 @@ impl TryFrom<CliCtx> for ServiceContext {
 enum Services {
     #[enable(gsb, cli)]
     Db(PersistenceService),
+    #[enable(rest)]
+    Healthcheck(HealthcheckService),
     // Metrics service must be activated before all other services
     // to that will use it. Identity service is used by the Metrics,
     // so must be initialized before.

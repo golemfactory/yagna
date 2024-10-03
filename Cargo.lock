@@ -9358,6 +9358,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-healthcheck"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "chrono",
+ "http 1.1.0",
+ "log",
+ "problem_details",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ya-client",
+ "ya-core-model",
+ "ya-net",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.3.0"
 dependencies = [
@@ -10397,8 +10419,10 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "http 1.1.0",
  "log",
  "metrics 0.12.1",
+ "problem_details",
  "self_update",
  "serde",
  "serde_json",
@@ -10408,9 +10432,11 @@ dependencies = [
  "ya-client",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 
@@ -10496,6 +10522,7 @@ dependencies = [
  "ya-fd-metrics",
  "ya-file-logging",
  "ya-gsb-api",
+ "ya-healthcheck",
  "ya-identity",
  "ya-market",
  "ya-metrics",
