@@ -3112,6 +3112,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-provider",
+ "ya-utils-consent",
  "ya-utils-path",
  "ya-utils-process",
 ]
@@ -10497,6 +10498,7 @@ dependencies = [
  "ya-service-bus",
  "ya-sgx",
  "ya-test-framework",
+ "ya-utils-consent",
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",

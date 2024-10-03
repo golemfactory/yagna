@@ -10,6 +10,7 @@ ya-client = { workspace = true, features = ['cli'] }
 ya-compile-time-utils.workspace = true
 ya-core-model = { workspace = true, features = ["payment", "version"] }
 ya-provider.path = "../agent/provider"
+ya-utils-consent.workspace = true
 ya-utils-path.workspace = true
 ya-utils-process = { workspace = true, features = ["lock"] }
 
