@@ -54,6 +54,9 @@ use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
+use ya_utils_consent::{
+    consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
+};
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -264,6 +267,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(cli)]
+    Consent(ConsentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
     #[enable(gsb, rest)]
@@ -478,6 +483,7 @@ impl ServiceCommand {
         if !ctx.accept_terms {
             prompt_terms()?;
         }
+
         match self {
             Self::Run(ServiceCommandOpts {
                 api_url,
@@ -543,6 +549,9 @@ impl ServiceCommand {
                 log::info!("Data directory: {}", ctx.data_dir.display());
 
                 let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
+
+                //before running yagna check consents
+                consent_check_before_startup(false)?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
@@ -764,6 +773,7 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
+    set_consent_path_in_yagna_dir()?;
     match args.run_command().await {
         Ok(()) => Ok(()),
         Err(err) => {

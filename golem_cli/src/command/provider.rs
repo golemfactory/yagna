@@ -111,8 +111,14 @@ impl YaProviderCommand {
             .await
             .context("failed to get ya-provider exe-unit")?;
 
-        serde_json::from_slice(output.stdout.as_slice())
-            .context("parsing ya-provider exe-unit list")
+        match serde_json::from_slice(output.stdout.as_slice()) {
+            Ok(runtimes) => Ok(runtimes),
+            Err(e) => {
+                let output = String::from_utf8_lossy(&output.stderr);
+                Err(anyhow::anyhow!("{}", output))
+                    .with_context(|| format!("parsing ya-provider exe-unit list: {}", e))
+            }
+        }
     }
 
     pub async fn create_preset(
