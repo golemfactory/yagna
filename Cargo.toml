@@ -261,6 +261,7 @@ gftp = {version = "0.4.1", path = "core/gftp"}
 hex = "0.4.3"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled"]}
 openssl = "0.10"
+promptly = "0.3.0"
 rand = "0.8.5"
 regex = "1.10.4"
 strum = {version = "0.24", features = ["derive"]}
@@ -291,6 +292,7 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-diesel-utils.path = "utils/diesel-utils"
 ya-utils-actix.path = "utils/actix_utils"
 ya-core-model = { path = "core/model" }
+ya-utils-consent.path = "utils/consent"
 ya-utils-path.path = "utils/path"
 ya-utils-process.path = "utils/process"
 

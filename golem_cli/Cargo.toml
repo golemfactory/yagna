@@ -29,7 +29,7 @@ log = "0.4"
 names = "0.10.0"
 openssl.workspace = true
 prettytable-rs = "0.10.0"
-promptly = "0.3.0"
+promptly.workspace = true
 rustyline = "6.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
