@@ -6,21 +6,20 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = { version = "0.8", features = ['cli'] }
-ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.9", features=["payment", "version"] }
-ya-utils-consent.workspace = true
-ya-provider = "0.3"
-ya-utils-path = "0.1.0"
-ya-utils-process = { version = "0.3", features = ["lock"] }
+ya-client = { workspace = true, features = ['cli'] }
+ya-compile-time-utils.workspace = true
+ya-core-model = { workspace = true, features = ["payment", "version"] }
+ya-provider.path = "../agent/provider"
+ya-utils-path.workspace = true
+ya-utils-process = { workspace = true, features = ["lock"] }
 
-actix-rt="2.7"
-ansi_term="0.12.1"
-anyhow.workspace = true
+actix-rt = "2.7"
+ansi_term = "0.12.1"
+anyhow = "1.0"
 bigdecimal = "0.2"
 byte-unit = "4.0"
-chrono = { version = "0.4", features=["serde"] }
-crossterm="0.23"
+chrono = { version = "0.4", features = ["serde"] }
+crossterm = "0.23"
 directories = "2.0.2"
 dotenv = "0.15"
 env_logger = "0.7"
@@ -30,20 +29,24 @@ log = "0.4"
 names = "0.10.0"
 openssl.workspace = true
 prettytable-rs = "0.10.0"
-promptly.workspace = true
-rustyline="6.3.0"
+promptly = "0.3.0"
+rustyline = "6.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strip-ansi-escapes = "0.1"
 structopt = "0.3"
 strum = { workspace = true }
 strum_macros = "0.24"
-tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros"] }
+tokio = { version = "1", features = [
+    "process",
+    "signal",
+    "time",
+    "io-util",
+    "io-std",
+    "macros",
+] }
 url = "2.1"
 
-[features]
-require-consent = ['ya-utils-consent/require-consent']
-
 [target.'cfg(target_family = "unix")'.dependencies]
-libc="0.2.73"
-nix="0.22.0"
+libc = "0.2.73"
+nix = "0.22.0"

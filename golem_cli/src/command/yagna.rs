@@ -16,6 +16,7 @@ use ya_core_model::payment::local::{
 };
 use ya_core_model::version::VersionInfo;
 
+#[allow(dead_code)]
 pub struct PaymentPlatform {
     pub platform: &'static str,
     pub driver: &'static str,
@@ -78,6 +79,22 @@ lazy_static! {
                 token: "GLM",
             },
         );
+        erc20.insert(
+            NetworkName::Amoy.into(),
+            PaymentPlatform {
+                platform: "erc20-amoy-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Sepolia.into(),
+            PaymentPlatform {
+                platform: "erc20-sepolia-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
 
         PaymentDriver {
             platforms: erc20,
@@ -136,7 +153,11 @@ lazy_static! {
         );
         ngm.insert(
             NetworkGroup::Testnet,
-            vec![NetworkName::Holesky, NetworkName::Mumbai],
+            vec![
+                NetworkName::Holesky,
+                NetworkName::Amoy,
+                NetworkName::Sepolia,
+            ],
         );
         ngm
     };
@@ -153,6 +174,7 @@ pub trait PaymentSummary {
     fn unconfirmed(&self) -> (BigDecimal, u64);
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityStatus {

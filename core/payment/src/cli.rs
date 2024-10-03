@@ -1,13 +1,14 @@
 mod rpc;
 
+use std::collections::HashMap;
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde_json::to_value;
+use serde_json::{to_value, Value};
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use structopt::*;
-use ya_client_model::payment::DriverStatusProperty;
+use ya_client_model::payment::{DriverDetails, DriverStatusProperty};
 use ya_core_model::payment::local::NetworkName;
 
 // Workspace uses
@@ -52,6 +53,9 @@ pub enum PaymentCli {
     Fund {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        /// Mint token without attempting to obtain native currency from faucet
+        #[structopt(long = "mint-only")]
+        mint_only: bool,
     },
 
     /// Initialize payment account (i.e. make it ready for sending/receiving funds)
@@ -150,7 +154,7 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund { account } => {
+            PaymentCli::Fund { account, mint_only } => {
                 let address = resolve_address(account.address()).await?;
 
                 let onboarding_supported =
@@ -200,7 +204,14 @@ Typically operation should take less than 1 minute.
                 log::warn!("{}", warn_message);
 
                 CommandOutput::object(
-                    wallet::fund(address, account.driver(), Some(account.network()), None).await?,
+                    wallet::fund(
+                        address,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                        mint_only,
+                    )
+                    .await?,
                 )
             }
             PaymentCli::Init {
@@ -380,8 +391,8 @@ Typically operation should take less than 1 minute.
                                 account.driver,
                                 account.network,
                                 account.token,
-                                if account.send { "X" } else { "" },
-                                if account.receive { "X" } else { "" }
+                                account.send,
+                                account.receive
                             ]}
                         })
                         .collect(),
@@ -543,41 +554,56 @@ Typically operation should take less than 1 minute.
                     )))
                 }
                 DriverSubcommand::List => {
-                    let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                    let drivers: HashMap<String, DriverDetails> = bus::service(pay::BUS_ID)
+                        .call(pay::GetDrivers {
+                            ignore_legacy_networks: false,
+                        })
+                        .await??;
                     if ctx.json_output {
                         return CommandOutput::object(drivers);
                     }
-                    Ok(ResponseTable {
-                                columns: vec![
-                                    "driver".to_owned(),
-                                    "network".to_owned(),
-                                    "default?".to_owned(),
-                                    "token".to_owned(),
-                                    "platform".to_owned(),
-                                ],
-                                values: drivers
-                                    .iter()
-                                    .flat_map(|(driver, dd)| {
-                                        dd.networks
-                                            .iter()
-                                            .flat_map(|(network, n)| {
-                                                n.tokens
-                                                    .iter()
-                                                    .map(|(token, platform)|
-                                                        serde_json::json! {[
+
+                    let mut values: Vec<Value> = drivers
+                        .iter()
+                        .flat_map(|(driver, dd)| {
+                              dd.networks
+                                .iter()
+                                .flat_map(|(network, n)| {
+                                    n.tokens
+                                        .iter()
+                                        .map(|(token, platform)|
+                                            serde_json::json! {[
                                                 driver,
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,
                                                 platform,
                                             ]}
-                                                    )
-                                                    .collect::<Vec<serde_json::Value>>()
-                                            })
-                                            .collect::<Vec<serde_json::Value>>()
-                                    })
-                                    .collect(),
-                            }.into())
+                                        )
+                                        .collect::<Vec<serde_json::Value>>()
+                                })
+                                .collect::<Vec<serde_json::Value>>()
+                        })
+                        .collect();
+
+                    values.sort_by(|a, b| {
+                        //sort by index 4 (which means platform, be careful when changing these values)
+                        let left_str = a.as_array().unwrap()[4].as_str().unwrap();
+                        let right_str = b.as_array().unwrap()[4].as_str().unwrap();
+                        left_str.cmp(right_str)
+                    });
+
+                    Ok(ResponseTable {
+                        columns: vec![
+                            "driver".to_owned(),   //index 0
+                            "network".to_owned(),  //index 1
+                            "default?".to_owned(), //index 2
+                            "token".to_owned(),    //index 3
+                            "platform".to_owned(), //index 4 - we are sorting by platform, be careful when changing these values
+                        ],
+                        values,
+                    }
+                    .into())
                 }
             },
             PaymentCli::ReleaseAllocations => {

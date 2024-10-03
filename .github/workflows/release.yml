@@ -19,7 +19,7 @@ on:
     - cron: '23 23 * * *'
 
 env:
-  rust_stable: 1.77.0
+  rust_stable: 1.81.0
 
 permissions:
   packages: write
@@ -142,7 +142,11 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
@@ -156,15 +160,6 @@ jobs:
         with:
           suffix: ${{ github.event.inputs.suffix || '-nightly' }}
           prefix: ${{ github.event.inputs.prefix || 'pre-rel-v'  }}
-
-      - name: Fetch tags if action was triggered by something other than push
-        if: github.event_name != 'push'
-        run: |
-          git fetch --tags
-
-      - name: Describe tag should work, otherwise compile version tools will fail
-        run: |
-          git describe --tags
 
       - name: Get upload url
         id: release_upload_url
@@ -377,7 +372,7 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - uses: golemfactory/build-deb-action@main
+      - uses: golemfactory/build-deb-action@v7
         id: deb
         with:
           debVersion: ${{ steps.version.outputs.version-ext }}

@@ -135,7 +135,7 @@ dns-source = "holesky.rpc-node.dev.golem.network."
 [chain.mumbai]
 chain-name = "Mumbai testnet"
 chain-id = 80001
-currency-symbol = "tMATIC"
+currency-symbol = "POL"
 priority-fee = 1.0
 max-fee-per-gas = 14.0
 transaction-timeout = 60
@@ -167,7 +167,7 @@ dns-source = "mumbai.rpc-node.dev.golem.network."
 [chain.polygon]
 chain-name = "Polygon mainnet"
 chain-id = 137
-currency-symbol = "MATIC"
+currency-symbol = "POL"
 priority-fee = 30.111
 max-fee-per-gas = 500.0
 transaction-timeout = 100

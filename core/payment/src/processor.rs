@@ -9,7 +9,7 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
-use crate::utils::remove_allocation_ids_from_payment;
+
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
@@ -22,6 +22,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
+
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
@@ -229,8 +230,18 @@ impl DriverRegistry {
         }
     }
 
-    pub fn get_drivers(&self) -> HashMap<String, DriverDetails> {
-        self.drivers.clone()
+    pub fn get_drivers(&self, ignore_legacy_networks: bool) -> HashMap<String, DriverDetails> {
+        let mut drivers = self.drivers.clone();
+
+        let legacy_networks = ["mumbai", "goerli", "rinkeby"];
+        if ignore_legacy_networks {
+            drivers.values_mut().for_each(|driver| {
+                driver
+                    .networks
+                    .retain(|name, _| !legacy_networks.contains(&name.as_str()))
+            })
+        }
+        drivers
     }
 
     pub fn get_network(
@@ -380,11 +391,14 @@ impl PaymentProcessor {
             .map_err(|_| GetAccountsError::InternalTimeout)
     }
 
-    pub async fn get_drivers(&self) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
+    pub async fn get_drivers(
+        &self,
+        ignore_legacy_networks: bool,
+    ) -> Result<HashMap<String, DriverDetails>, GetDriversError> {
         self.registry
             .timeout_read(REGISTRY_LOCK_TIMEOUT)
             .await
-            .map(|registry| registry.get_drivers())
+            .map(|registry| registry.get_drivers(ignore_legacy_networks))
             .map_err(|_| GetDriversError::InternalTimeout)
     }
 
@@ -426,9 +440,8 @@ impl PaymentProcessor {
         let payer_id: NodeId;
         let payee_id: NodeId;
         let payment_id: String;
-        let mut payment: Payment;
 
-        {
+        let payment: Payment = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
             let orders = db_executor
@@ -488,13 +501,10 @@ impl PaymentProcessor {
                 .get(payment_id.clone(), payer_id)
                 .await?
                 .unwrap();
-            payment = signed_payment.payload;
-        }
+            signed_payment.payload
+        };
 
-        // Allocation IDs are requestor's private matter and should not be sent to provider
-        payment = remove_allocation_ids_from_payment(payment);
-
-        let signature_canonicalized = driver_endpoint(&driver)
+        let signature_canonical = driver_endpoint(&driver)
             .send(driver::SignPaymentCanonicalized(payment.clone()))
             .await??;
         let signature = driver_endpoint(&driver)
@@ -506,43 +516,45 @@ impl PaymentProcessor {
         // Whether the provider was correctly notified of this fact is another matter.
         counter!("payment.invoices.requestor.paid", 1);
         let msg = SendPayment::new(payment.clone(), signature);
-        let msg_with_bytes = SendSignedPayment::new(payment, signature_canonicalized);
+        let msg_with_bytes = SendSignedPayment::new(payment.clone(), signature_canonical);
 
         let db_executor = Arc::clone(&self.db_executor);
 
         tokio::task::spawn_local(
             async move {
+                let send_result =
+                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
+
+                let mark_sent = match send_result {
+                    Ok(_) => true,
+                    // If sending SendPaymentWithBytes is not supported then use SendPayment as fallback.
+                    Err(PaymentSendToGsbError::NotSupported) => {
+                        match Self::send_to_gsb(payer_id, payee_id, msg).await {
+                            Ok(_) => true,
+                            Err(PaymentSendToGsbError::Rejected) => true,
+                            Err(PaymentSendToGsbError::Failed) => false,
+                            Err(PaymentSendToGsbError::NotSupported) => false,
+                        }
+                    }
+                    Err(_) => false,
+                };
+
                 let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
 
-                let send_result =
-                    Self::send_to_gsb(payer_id, payee_id, msg_with_bytes.clone()).await;
-
-                let mark_sent = if send_result.is_ok() {
-                    payment_dao
-                        .add_signature(
-                            payment_id.clone(),
-                            msg_with_bytes.signature.clone(),
-                            msg_with_bytes.signed_bytes.clone(),
-                        )
-                        .await
-                        .is_ok()
-                } else if send_result.is_err_and(|err| err == PaymentSendToGsbError::NotSupported) {
-                    // if sending SendPaymentWithBytes is not supported then try sending SendPayment
-                    match Self::send_to_gsb(payer_id, payee_id, msg).await {
-                        Ok(_) => true,
-                        Err(PaymentSendToGsbError::Rejected) => true,
-                        Err(PaymentSendToGsbError::Failed) => false,
-                        Err(PaymentSendToGsbError::NotSupported) => false,
-                    }
-                } else {
-                    false
-                };
+                // Always add new type of signature. Compatibility is for older Provider nodes only.
+                payment_dao
+                    .add_signature(
+                        payment_id.clone(),
+                        msg_with_bytes.signature.clone(),
+                        msg_with_bytes.signed_bytes.clone(),
+                    )
+                    .await?;
 
                 if mark_sent {
-                    payment_dao.mark_sent(payment_id).await.ok();
+                    payment_dao.mark_sent(payment_id).await?;
                 } else {
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();
@@ -568,7 +580,7 @@ impl PaymentProcessor {
             .call(msg)
             .map(|res| match res {
                 Ok(Ok(_)) => Ok(()),
-                Err(ya_service_bus::Error::GsbBadRequest(_)) => {
+                Err(e) if e.to_string().contains("endpoint address not found") => {
                     Err(PaymentSendToGsbError::NotSupported)
                 }
                 Err(err) => {
@@ -639,8 +651,7 @@ impl PaymentProcessor {
         &self,
         payment: Payment,
         signature: Vec<u8>,
-        canonicalized: bool,
-        signed_bytes: Option<Vec<u8>>,
+        canonical: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -658,7 +669,7 @@ impl PaymentProcessor {
             .send(driver::VerifySignature::new(
                 payment.clone(),
                 signature.clone(),
-                canonicalized,
+                canonical.clone(),
             ))
             .await??
         {
@@ -781,13 +792,13 @@ impl PaymentProcessor {
             }
 
             // Insert payment into database (this operation creates and updates all related entities)
-            if signed_bytes.is_none() {
+            if canonical.is_none() {
                 payment_dao
                     .insert_received(payment, payee_id, None, None)
                     .await?;
             } else {
                 payment_dao
-                    .insert_received(payment, payee_id, Some(signature), signed_bytes)
+                    .insert_received(payment, payee_id, Some(signature), canonical)
                     .await?;
             }
         }

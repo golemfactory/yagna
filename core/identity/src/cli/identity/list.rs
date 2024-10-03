@@ -1,6 +1,8 @@
 use super::*;
-pub async fn list() -> Result<CommandOutput> {
-    let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
+use ya_core_model::bus::GsbBindPoints;
+pub async fn list(gsb: &GsbBindPoints) -> Result<CommandOutput> {
+    let mut identities: Vec<identity::IdentityInfo> = gsb
+        .local()
         .send(identity::List::default())
         .await
         .map_err(anyhow::Error::msg)

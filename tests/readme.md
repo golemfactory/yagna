@@ -11,7 +11,7 @@ To run all tests including framework tests and unit tests (but without market te
 `cargo test --workspace --features framework-test`
 
 To run only framework tests use command:
-`cargo test --test '*' --features framework-test`
+`cargo test --test '*' -p yagna -p ya-exe-unit -p ya-transfer --features framework-test`
 
 ## Creating tests
 

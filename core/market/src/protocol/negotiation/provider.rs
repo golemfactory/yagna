@@ -174,13 +174,12 @@ impl NegotiationApi {
             .initial_proposal_received
             .call(caller, msg.translate(Owner::Provider))
             .await
-            .map_err(|e| {
+            .inspect_err(|e| {
                 log::warn!(
                     "Negotiation API: initial proposal [{}] rejected. Error: {}",
                     proposal_id,
                     &e
                 );
-                e
             })
     }
 

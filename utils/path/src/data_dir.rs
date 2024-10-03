@@ -1,6 +1,7 @@
 use crate::normalize_path;
 use anyhow::Context;
-use std::{ops::Not, path::PathBuf, str::FromStr, string::ToString};
+use std::fmt::Display;
+use std::{ops::Not, path::PathBuf, str::FromStr};
 
 const ORGANIZATION: &str = "GolemFactory";
 const QUALIFIER: &str = "";
@@ -36,14 +37,8 @@ impl FromStr for DataDir {
     }
 }
 
-impl ToString for DataDir {
-    fn to_string(&self) -> String {
-        /*
-        It's important for output to not include quotes.
-        Otherwise flexi logger tries to create a path like
-        "/home/user/.local/share/yagna"/yagna.log
-        and those extra quotes are causing problems.
-         */
-        self.0.to_string_lossy().to_string()
+impl Display for DataDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.display())
     }
 }

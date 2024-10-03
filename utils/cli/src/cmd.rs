@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 
+#[derive(Debug)]
 pub enum CommandOutput {
     NoOutput,
     Object(serde_json::Value),
