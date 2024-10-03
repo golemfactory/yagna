@@ -205,9 +205,9 @@ jobs:
       - name: Build macos
         if: matrix.os == 'macos'
         run: |
-          cargo build --release --features static-openssl
+          cargo build --release --features require-consent,static-openssl
           cargo build --bin gftp -p gftp --release
-          cargo build --bin golemsp -p golemsp --release
+          cargo build --bin golemsp --features require-consent -p golemsp --release
           cargo build --bin ya-provider -p ya-provider --release
           cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored
       - name: Build windows
@@ -216,18 +216,18 @@ jobs:
           vcpkg install openssl:x64-windows-static
           vcpkg integrate install
 
-          cargo build --release
+          cargo build --release --features require-consent
           cargo build --bin gftp -p gftp --release
-          cargo build --bin golemsp -p golemsp --release
+          cargo build --bin golemsp --features require-consent -p golemsp --release
           cargo build --bin ya-provider -p ya-provider --release
           cargo build --bin exe-unit -p ya-exe-unit --release
 
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
-          cargo build --release --features static-openssl --target x86_64-unknown-linux-musl
+          cargo build --release --features require-consent,static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
-          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --features openssl/vendored --target x86_64-unknown-linux-musl)
+          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --features require-consent,openssl/vendored --target x86_64-unknown-linux-musl)
           (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --features openssl/vendored --target x86_64-unknown-linux-musl)
           (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored --target x86_64-unknown-linux-musl)
       - name: Pack
@@ -310,7 +310,7 @@ jobs:
             -p golemsp
             -p gftp
             --release
-            --features static-openssl
+            --features require-consent,static-openssl
             --target aarch64-unknown-linux-musl
 
       - name: Pack
