@@ -21,7 +21,8 @@ pub mod local {
     use super::{public::Ack, *};
     use crate::driver::{AccountMode, GasDetails, PaymentConfirmation, ValidateAllocationResult};
     use bigdecimal::{BigDecimal, Zero};
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, NaiveDateTime, Utc};
+    use serde_json::json;
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
@@ -50,84 +51,6 @@ pub mod local {
     pub enum PaymentTitle {
         DebitNote(DebitNotePayment),
         Invoice(InvoicePayment),
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct SchedulePayment {
-        pub title: PaymentTitle,
-        pub payer_id: NodeId,
-        pub payee_id: NodeId,
-        pub payer_addr: String,
-        pub payee_addr: String,
-        pub payment_platform: String,
-        pub allocation_id: String,
-        pub amount: BigDecimal,
-        pub due_date: DateTime<Utc>,
-    }
-
-    impl SchedulePayment {
-        pub fn from_invoice(
-            invoice: Invoice,
-            allocation_id: String,
-            amount: BigDecimal,
-        ) -> Option<Self> {
-            if amount <= BigDecimal::zero() {
-                return None;
-            }
-            Some(Self {
-                title: PaymentTitle::Invoice(InvoicePayment {
-                    invoice_id: invoice.invoice_id,
-                    agreement_id: invoice.agreement_id,
-                }),
-                payer_id: invoice.recipient_id,
-                payee_id: invoice.issuer_id,
-                payer_addr: invoice.payer_addr,
-                payee_addr: invoice.payee_addr,
-                payment_platform: invoice.payment_platform,
-                allocation_id,
-                amount,
-                due_date: invoice.payment_due_date,
-            })
-        }
-
-        pub fn from_debit_note(
-            debit_note: DebitNote,
-            allocation_id: String,
-            amount: BigDecimal,
-        ) -> Option<Self> {
-            if amount <= BigDecimal::zero() {
-                return None;
-            }
-            debit_note.payment_due_date.map(|due_date| Self {
-                title: PaymentTitle::DebitNote(DebitNotePayment {
-                    debit_note_id: debit_note.debit_note_id,
-                    activity_id: debit_note.activity_id,
-                }),
-                payer_id: debit_note.recipient_id,
-                payee_id: debit_note.issuer_id,
-                payer_addr: debit_note.payer_addr,
-                payee_addr: debit_note.payee_addr,
-                payment_platform: debit_note.payment_platform,
-                allocation_id,
-                amount,
-                due_date,
-            })
-        }
-
-        pub fn document_id(&self) -> String {
-            match &self.title {
-                PaymentTitle::Invoice(invoice_payment) => invoice_payment.invoice_id.clone(),
-                PaymentTitle::DebitNote(debit_note_payment) => {
-                    debit_note_payment.debit_note_id.clone()
-                }
-            }
-        }
-    }
-
-    impl RpcMessage for SchedulePayment {
-        const ID: &'static str = "SchedulePayment";
-        type Item = ();
-        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
@@ -161,6 +84,8 @@ pub mod local {
         InvalidDefaultNetwork(String),
         #[error("Internal timeout")]
         InternalTimeout,
+        #[error("Other")]
+        Other(String),
     }
 
     impl RpcMessage for RegisterDriver {
@@ -240,7 +165,7 @@ pub mod local {
         pub amount: BigDecimal,
         pub sender: String,
         pub recipient: String,
-        pub order_ids: Vec<String>,
+        pub payment_id: String,
         pub confirmation: PaymentConfirmation,
     }
 
@@ -446,24 +371,19 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BuildPayments {}
+
+    impl RpcMessage for BuildPayments {
+        const ID: &'static str = "BuildPayments";
+        type Item = String;
+        type Error = NoError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ReleaseAllocations {}
 
     impl RpcMessage for ReleaseAllocations {
         const ID: &'static str = "ReleaseAllocations";
-        type Item = ();
-        type Error = GenericError;
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct ReleaseDeposit {
-        pub platform: String,
-        pub from: String,
-        pub deposit_contract: String,
-        pub deposit_id: String,
-    }
-
-    impl RpcMessage for ReleaseDeposit {
-        const ID: &'static str = "ReleaseDeposit";
         type Item = ();
         type Error = GenericError;
     }
@@ -517,6 +437,115 @@ pub mod local {
         const ID: &'static str = "PaymentDriverStatus";
         type Item = Vec<DriverStatusProperty>;
         type Error = PaymentDriverStatusError;
+    }
+
+    // ********************* GET PROCESS PAYMENTS INFO ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ProcessBatchCycleError {
+        #[error("ProcessBatchCycleError: {0}")]
+        ProcessBatchCycleError(String),
+    }
+
+    impl From<ProcessBatchCycleError> for GenericError {
+        fn from(e: ProcessBatchCycleError) -> Self {
+            GenericError::new(e)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ProcessBatchCycleResponse {
+        pub node_id: NodeId,
+        pub platform: String,
+        pub interval: Option<Duration>,
+        pub cron: Option<String>,
+        pub max_interval: Duration,
+        pub extra_payment_time: Duration,
+        pub next_process: NaiveDateTime,
+        pub last_process: Option<NaiveDateTime>,
+    }
+
+    fn round_duration_to_sec(d: Duration) -> Duration {
+        //0.500 gives 1.0
+        //0.499 gives 0.0
+        let secs = ((d.as_millis() + 500) / 1000) as u64;
+        Duration::from_secs(secs)
+    }
+
+    pub fn batch_cycle_response_to_json(resp: &ProcessBatchCycleResponse) -> serde_json::Value {
+        json!({
+            "nodeId": resp.node_id,
+            "platform": resp.platform,
+            "intervalSec": resp.interval.map(|d| d.as_secs()),
+            "cron": resp.cron,
+            "extraPayTimeSec": round_duration_to_sec(resp.extra_payment_time).as_secs(),
+            "maxIntervalSec": round_duration_to_sec(resp.max_interval).as_secs(),
+            "nextProcess": resp.next_process.and_utc().to_rfc3339(),
+            "lastProcess": resp.last_process.map(|l| l.and_utc().to_rfc3339()),
+        })
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ProcessBatchCycleInfo {
+        pub node_id: NodeId,
+        pub platform: String,
+    }
+
+    impl RpcMessage for ProcessBatchCycleInfo {
+        const ID: &'static str = "ProcessBatchCycleInfo";
+        type Item = ProcessBatchCycleResponse;
+        type Error = ProcessBatchCycleError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ProcessBatchCycleSet {
+        pub node_id: NodeId,
+        pub platform: String,
+        pub interval: Option<Duration>,
+        pub cron: Option<String>,
+        pub next_update: Option<DateTime<Utc>>,
+        pub safe_payout: Option<Duration>,
+    }
+
+    impl RpcMessage for ProcessBatchCycleSet {
+        const ID: &'static str = "ProcessBatchCycleSet";
+        type Item = ProcessBatchCycleResponse;
+        type Error = ProcessBatchCycleError;
+    }
+
+    // ********************* PROCESS PAYMENTS ********************************
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ProcessPaymentsError {
+        #[error("ProcessPaymentsError: {0}")]
+        ProcessPaymentsError(String),
+    }
+
+    impl From<ProcessPaymentsError> for GenericError {
+        fn from(e: ProcessPaymentsError) -> Self {
+            GenericError::new(e)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNowResponse {
+        pub resolve_time_ms: f64,
+        pub send_time_ms: f64,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ProcessPaymentsNow {
+        pub node_id: NodeId,
+        pub platform: String,
+        pub skip_resolve: bool,
+        pub skip_send: bool,
+    }
+
+    impl RpcMessage for ProcessPaymentsNow {
+        const ID: &'static str = "ProcessPaymentsNow";
+        type Item = ProcessPaymentsNowResponse;
+        type Error = ProcessPaymentsError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

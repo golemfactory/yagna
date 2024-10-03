@@ -8,16 +8,8 @@ table! {
         total_amount_accepted -> Text,
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
-    }
-}
-
-table! {
-    pay_activity_payment (payment_id, activity_id, owner_id) {
-        payment_id -> Text,
-        activity_id -> Text,
-        owner_id -> Text,
-        amount -> Text,
-        allocation_id -> Nullable<Text>,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
@@ -35,33 +27,90 @@ table! {
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
         app_session_id -> Nullable<Text>,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
 table! {
-    pay_agreement_payment (payment_id, agreement_id, owner_id) {
-        payment_id -> Text,
-        agreement_id -> Text,
-        owner_id -> Text,
-        amount -> Text,
-        allocation_id -> Nullable<Text>,
-    }
-}
-
-table! {
-    pay_allocation (id) {
+    pay_allocation (owner_id, id) {
         id -> Text,
         owner_id -> Text,
         payment_platform -> Text,
         address -> Text,
-        total_amount -> Text,
+        avail_amount -> Text,
         spent_amount -> Text,
-        remaining_amount -> Text,
-        timestamp -> Timestamp,
-        timeout -> Nullable<Timestamp>,
-        make_deposit -> Bool,
-        deposit -> Nullable<Text>,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
+        timeout -> Timestamp,
         released -> Bool,
+        deposit -> Nullable<Text>,
+        deposit_status -> Nullable<Text>,
+    }
+}
+
+table! {
+    pay_allocation_expenditure (owner_id, allocation_id, agreement_id, activity_id) {
+        owner_id -> Text,
+        allocation_id -> Text,
+        agreement_id -> Text,
+        activity_id -> Nullable<Text>,
+        accepted_amount -> Text,
+        scheduled_amount -> Text,
+    }
+}
+
+table! {
+    pay_batch_cycle (owner_id, platform) {
+        owner_id -> Text,
+        platform -> Text,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
+        cycle_interval -> Nullable<Text>,
+        cycle_cron -> Nullable<Text>,
+        cycle_last_process -> Nullable<Timestamp>,
+        cycle_next_process -> Timestamp,
+        cycle_max_interval -> Text,
+        cycle_extra_pay_time -> Text,
+    }
+}
+
+table! {
+    pay_batch_order (owner_id, id) {
+        id -> Text,
+        created_ts -> Timestamp,
+        updated_ts -> Timestamp,
+        owner_id -> Text,
+        payer_addr -> Text,
+        platform -> Text,
+        total_amount -> Text,
+        paid_amount -> Text,
+    }
+}
+
+table! {
+    pay_batch_order_item (owner_id, order_id, payee_addr, allocation_id) {
+        order_id -> Text,
+        owner_id -> Text,
+        payee_addr -> Text,
+        allocation_id -> Text,
+        amount -> Text,
+        payment_id -> Nullable<Text>,
+        paid -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order_item_document (owner_id, order_id, payee_addr, allocation_id, agreement_id, activity_id) {
+        order_id -> Text,
+        owner_id -> Text,
+        payee_addr -> Text,
+        allocation_id -> Text,
+        agreement_id -> Text,
+        invoice_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        amount -> Text,
     }
 }
 
@@ -74,6 +123,7 @@ table! {
         activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
+        debit_nonce -> Integer,
         send_accept -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
@@ -162,24 +212,7 @@ table! {
 }
 
 table! {
-    pay_order (id, driver) {
-        id -> Text,
-        driver -> Text,
-        amount -> Text,
-        payee_id -> Text,
-        payer_id -> Text,
-        payee_addr -> Text,
-        payer_addr -> Text,
-        payment_platform -> Text,
-        invoice_id -> Nullable<Text>,
-        debit_note_id -> Nullable<Text>,
-        allocation_id -> Text,
-        is_paid -> Bool,
-    }
-}
-
-table! {
-    pay_payment (id, owner_id) {
+    pay_payment (id, owner_id, peer_id) {
         id -> Text,
         owner_id -> Text,
         peer_id -> Text,
@@ -197,6 +230,19 @@ table! {
 }
 
 table! {
+    pay_payment_document (payment_id, owner_id, peer_id, agreement_id, activity_id) {
+        payment_id -> Text,
+        owner_id -> Text,
+        peer_id -> Text,
+        agreement_id -> Text,
+        invoice_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        amount -> Text,
+    }
+}
+
+table! {
     pay_sync_needed_notifs (id) {
         id -> Text,
         last_ping -> Timestamp,
@@ -204,20 +250,20 @@ table! {
     }
 }
 
-joinable!(pay_activity_payment -> pay_allocation (allocation_id));
-joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
 joinable!(pay_invoice_event -> pay_event_type (event_type));
-joinable!(pay_order -> pay_allocation (allocation_id));
 
 allow_tables_to_appear_in_same_query!(
     pay_activity,
-    pay_activity_payment,
     pay_agreement,
-    pay_agreement_payment,
     pay_allocation,
+    pay_allocation_expenditure,
+    pay_batch_cycle,
+    pay_batch_order,
+    pay_batch_order_item,
+    pay_batch_order_item_document,
     pay_debit_note,
     pay_debit_note_event,
     pay_debit_note_event_read,
@@ -227,6 +273,6 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice_event,
     pay_invoice_event_read,
     pay_invoice_x_activity,
-    pay_order,
     pay_payment,
+    pay_payment_document,
 );

@@ -10,7 +10,11 @@ mod debit_notes;
 mod invoices;
 mod payments;
 
+mod batch;
+mod cycle;
 mod guard;
+mod pay_activities;
+mod pay_agreements;
 
 pub fn api_scope(scope: Scope) -> Scope {
     scope
@@ -20,6 +24,10 @@ pub fn api_scope(scope: Scope) -> Scope {
         .extend(debit_notes::register_endpoints)
         .extend(invoices::register_endpoints)
         .extend(payments::register_endpoints)
+        .extend(pay_agreements::register_endpoints)
+        .extend(pay_activities::register_endpoints)
+        .extend(batch::register_endpoints)
+        .extend(cycle::register_endpoints)
 }
 
 pub fn web_scope(db: &DbExecutor) -> Scope {

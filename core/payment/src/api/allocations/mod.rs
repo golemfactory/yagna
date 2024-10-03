@@ -12,8 +12,7 @@ use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
-    DriverName, NetworkName, ReleaseDeposit, ValidateAllocation, ValidateAllocationError,
-    BUS_ID as LOCAL_SERVICE,
+    DriverName, NetworkName, ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_persistence::executor::DbExecutor;
@@ -47,6 +46,14 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             delete().to(release_allocation),
         )
         .route("/demandDecorations", get().to(get_demand_decorations))
+        .route(
+            "/allocations/{allocation_id}/orders",
+            get().to(get_pay_allocation_orders),
+        )
+        .route(
+            "/allocations/{allocation_id}/expenditures",
+            get().to(get_allocation_expenditures),
+        )
 }
 
 async fn create_allocation(
@@ -168,13 +175,8 @@ async fn create_allocation(
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
 
-                release_allocation_after(
-                    db.clone(),
-                    allocation_id,
-                    allocation.timeout,
-                    Some(node_id),
-                )
-                .await;
+                release_allocation_after(db.clone(), allocation_id, allocation.timeout, node_id)
+                    .await;
 
                 response::created(allocation)
             }
@@ -222,6 +224,21 @@ async fn get_allocation(
             allocation_id
         )),
         Ok(AllocationStatus::NotFound) => response::not_found(),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+async fn get_allocation_expenditures(
+    db: Data<DbExecutor>,
+    path: Path<params::AllocationId>,
+    id: Identity,
+) -> HttpResponse {
+    let allocation_id = path.allocation_id.clone();
+    let node_id = id.identity;
+    let dao: AllocationDao = db.as_dao();
+
+    match dao.get_expenditures(node_id, allocation_id.clone()).await {
+        Ok(expenditures) => response::ok(expenditures),
         Err(e) => response::server_error(&e),
     }
 }
@@ -361,29 +378,11 @@ async fn release_allocation(
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
-    let node_id = Some(id.identity);
+    let node_id = id.identity;
     let dao = db.as_dao::<AllocationDao>();
 
     match dao.release(allocation_id.clone(), node_id).await {
-        Ok(AllocationReleaseStatus::Released { deposit, platform }) => {
-            if let Some(deposit) = deposit {
-                let release_result = bus::service(LOCAL_SERVICE)
-                    .send(ReleaseDeposit {
-                        from: id.identity.to_string(),
-                        deposit_id: deposit.id,
-                        deposit_contract: deposit.contract,
-                        platform,
-                    })
-                    .await;
-                match release_result {
-                    Ok(Ok(_)) => response::ok(Null),
-                    Err(e) => response::server_error(&e),
-                    Ok(Err(e)) => response::server_error(&e),
-                }
-            } else {
-                response::ok(Null)
-            }
-        }
+        Ok(AllocationReleaseStatus::Released { deposit, platform }) => response::ok(Null),
         Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
         Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
             "Allocation {} has been already released",
@@ -465,7 +464,7 @@ pub async fn release_allocation_after(
     db: Data<DbExecutor>,
     allocation_id: String,
     allocation_timeout: Option<DateTime<Utc>>,
-    node_id: Option<NodeId>,
+    node_id: NodeId,
 ) {
     tokio::task::spawn(async move {
         if let Some(timeout) = allocation_timeout {
@@ -491,7 +490,7 @@ pub async fn release_allocation_after(
 pub async fn forced_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
-    node_id: Option<NodeId>,
+    node_id: NodeId,
 ) {
     match db
         .as_dao::<AllocationDao>()
@@ -509,5 +508,28 @@ pub async fn forced_release_allocation(
             );
         }
         _ => (),
+    }
+}
+
+async fn get_pay_allocation_orders(
+    db: Data<DbExecutor>,
+    path: Path<String>,
+    id: Identity,
+) -> HttpResponse {
+    let node_id = id.identity;
+    let allocation_id = path.into_inner();
+    let dao: BatchDao = db.as_dao();
+    match dao
+        .get_batch_items(
+            node_id,
+            BatchItemFilter {
+                allocation_id: Some(allocation_id),
+                ..Default::default()
+            },
+        )
+        .await
+    {
+        Ok(items) => response::ok(items),
+        Err(e) => response::server_error(&e),
     }
 }
