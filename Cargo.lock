@@ -9250,6 +9250,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "serde_json",
  "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
