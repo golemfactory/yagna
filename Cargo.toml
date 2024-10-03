@@ -14,6 +14,7 @@ default = ['erc20-driver', 'gftp/bin']
 dashboard = ['rust-embed', 'mime_guess']
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
+require-consent = ['ya-utils-consent/require-consent']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 tos = []
 framework-test = [
