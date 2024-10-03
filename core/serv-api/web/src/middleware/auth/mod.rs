@@ -5,9 +5,10 @@ pub mod resolver;
 pub use crate::middleware::auth::ident::Identity;
 pub use crate::middleware::auth::resolver::AppKeyCache;
 
+use crate::middleware::allow_all_cors::add_full_allow_headers;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::error::{Error, ErrorUnauthorized, ParseError};
+use actix_web::error::{Error, InternalError, ParseError};
 use actix_web::{web, HttpMessage};
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
@@ -19,11 +20,15 @@ use std::task::{Context, Poll};
 
 pub struct Auth {
     pub(crate) cache: AppKeyCache,
+    pub(crate) allow_cors_on_authentication_failure: bool,
 }
 
 impl Auth {
-    pub fn new(cache: AppKeyCache) -> Auth {
-        Auth { cache }
+    pub fn new(cache: AppKeyCache, allow_cors_on_authentication_failure: bool) -> Auth {
+        Auth {
+            cache,
+            allow_cors_on_authentication_failure,
+        }
     }
 }
 
@@ -43,6 +48,7 @@ where
         ok(AuthMiddleware {
             service: Rc::new(RefCell::new(service)),
             cache: self.cache.clone(),
+            allow_cors_on_authentication_failure: self.allow_cors_on_authentication_failure,
         })
     }
 }
@@ -50,6 +56,7 @@ where
 pub struct AuthMiddleware<S> {
     service: Rc<RefCell<S>>,
     cache: AppKeyCache,
+    allow_cors_on_authentication_failure: bool,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
@@ -93,6 +100,7 @@ where
             }
         }
 
+        let allow_cors_on_failure = self.allow_cors_on_authentication_failure;
         Box::pin(async move {
             match header {
                 Some(key) => match cache.get_appkey(&key) {
@@ -107,12 +115,30 @@ where
                             req.method(),
                             req.path(),
                         );
-                        Err(ErrorUnauthorized("Invalid application key"))
+
+                        let mut res = actix_web::HttpResponse::Unauthorized().finish();
+                        if allow_cors_on_failure {
+                            add_full_allow_headers(res.headers_mut());
+                        }
+
+                        Err(actix_web::Error::from(InternalError::from_response(
+                            "Invalid application key",
+                            res,
+                        )))
                     }
                 },
                 None => {
                     log::debug!("Missing application key");
-                    Err(ErrorUnauthorized("Missing application key"))
+                    let mut res = actix_web::HttpResponse::Unauthorized().finish();
+
+                    if allow_cors_on_failure {
+                        add_full_allow_headers(res.headers_mut());
+                    }
+
+                    Err(actix_web::Error::from(InternalError::from_response(
+                        "Missing application key",
+                        res,
+                    )))
                 }
             }
         })

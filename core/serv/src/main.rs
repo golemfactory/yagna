@@ -1,9 +1,9 @@
 #![allow(clippy::obfuscated_if_else)]
 
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
-use metrics::{counter, gauge};
+use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -33,7 +33,7 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, cors::CorsConfig, Identity},
+    middleware::{cors::CorsConfig, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -47,10 +47,12 @@ use ya_service_bus::typed as gsb;
 mod autocomplete;
 mod extension;
 mod model;
+mod server;
 
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
+use crate::server::standard::{create_server, CreateServerArgs};
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 use ya_utils_consent::{
@@ -564,6 +566,10 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
+                let cors_on_auth_failure = cors.allowed_origins.contains(&"*".to_string());
+                if cors_on_auth_failure {
+                    log::warn!("Running with CORS full permissive mode");
+                }
                 let cors = AppKeyCors::new(cors).await?;
 
                 let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
@@ -571,40 +577,17 @@ impl ServiceCommand {
                     .and_then(|x| x.parse().ok())
                     .unwrap_or_else(num_cpus::get)
                     .clamp(1, 256);
-                let count_started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let server = HttpServer::new(move || {
-                    let app = App::new()
-                        .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::new(cors.cache()))
-                        .wrap(cors.cors())
-                        .route("/dashboard", web::get().to(redirect_to_dashboard))
-                        .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
-                        .route("/me", web::get().to(me))
-                        .service(forward_gsb);
-                    let rest = Services::rest(app, &context);
-                    if count_started.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                        == number_of_workers - 1
-                    {
-                        log::info!(
-                            "All {} http workers started - listening on {}",
-                            number_of_workers,
-                            rest_address
-                        );
 
-                        counter!("yagna.service.up", 1);
-
-                        tokio::task::spawn_local(async move {
-                            ya_net::hybrid::send_bcast_new_neighbour().await
-                        });
-                    }
-                    rest
-                })
-                .workers(number_of_workers)
-                // this is maximum supported timeout for our REST API
-                .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
-                .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?
-                .run();
+                let args = CreateServerArgs {
+                    cors: Arc::new(cors),
+                    cors_on_auth_failure,
+                    context,
+                    number_of_workers,
+                    rest_address,
+                    max_rest_timeout: *max_rest_timeout,
+                    api_host_port,
+                };
+                let server = create_server(args)?;
 
                 let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await

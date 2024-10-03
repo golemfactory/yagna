@@ -12,7 +12,7 @@ use crate::middleware::auth::resolver::AppKeyCache;
 #[derive(Default, Clone, StructOpt, Debug)]
 pub struct CorsConfig {
     #[structopt(long = "api-allow-origin", env = "YAGNA_API_ALLOW_ORIGIN")]
-    allowed_origins: Vec<String>,
+    pub allowed_origins: Vec<String>,
     /// Set a maximum time (in seconds) for which this CORS request may be cached.
     #[structopt(long, default_value = "3600")]
     max_age: usize,
