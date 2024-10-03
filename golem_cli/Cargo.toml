@@ -5,6 +5,9 @@ version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+require-consent = ['ya-utils-consent/require-consent']
+
 [dependencies]
 ya-client = { workspace = true, features = ['cli'] }
 ya-compile-time-utils.workspace = true
