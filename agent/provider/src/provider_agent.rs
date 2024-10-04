@@ -4,10 +4,17 @@ use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_core_model::NodeId;
 
+use maxminddb::Reader;
+use reqwest::{get, Client};
 use std::convert::TryFrom;
+use std::env;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
@@ -84,12 +91,14 @@ pub struct ProviderAgent {
     keystore_monitor: FileMonitor,
     whitelist_monitor: FileMonitor,
     net_api: NetApi,
+    data_dir: PathBuf,
 }
 
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?;
 
+        let _ = check_geo_file(data_dir.clone()).await;
         //log_dir is the same as data_dir by default, but can be changed using --log-dir option
         let log_dir = config.log_dir_path()?;
 
@@ -171,7 +180,8 @@ impl ProviderAgent {
 
         let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
+        let runner =
+            TaskRunner::new(api.activity, args.runner, registry, data_dir.clone())?.start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
         let net_api = api.net;
@@ -190,6 +200,7 @@ impl ProviderAgent {
             keystore_monitor,
             whitelist_monitor,
             net_api,
+            data_dir,
         })
     }
 
@@ -258,6 +269,7 @@ impl ProviderAgent {
             "golem.com.payment.protocol.version",
             node_info.protocol_version.into(),
         );
+        offer.set_property("golem.inf.offer.name", preset.clone().name.into());
         offer.add_constraints(Self::build_constraints(node_info.subnet.clone())?);
         let com_info = pricing_model.build(accounts, initial_price, prices)?;
         let srv_info = Self::build_service_info(inf_node_info, exeunit_desc, &offer)?;
@@ -282,17 +294,87 @@ impl ProviderAgent {
         Ok(cnts.to_string())
     }
 
-    async fn build_node_info(globals: GlobalsState, net_api: NetApi) -> anyhow::Result<NodeInfo> {
+    async fn build_node_info(
+        globals: GlobalsState,
+        net_api: NetApi,
+        data_dir: PathBuf,
+    ) -> anyhow::Result<NodeInfo> {
         if let Some(subnet) = &globals.subnet {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
         let status = net_api.get_status().await?;
+        let geo_info = Self::get_geo_info(data_dir).await;
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             is_public: status.public_ip.is_some(),
+            geo_info,
+            // geo_country_code: geo_info.clone().unwrap().geo_country_code,
+            // region: geo_info.clone().unwrap().region,
+            // city_name: geo_info.clone().unwrap().city_name,
             ..Default::default()
         })
+    }
+
+    async fn get_geo_info(data_dir: PathBuf) -> Option<GeoInfo> {
+        // Attempt to open the MaxMind database
+        let reader = match Reader::open_readfile(data_dir.join("GeoLite2-City.mmdb")) {
+            Ok(reader) => reader,
+            Err(err) => {
+                log::error!("Failed to open GeoLite2 database: {}", err);
+                return None;
+            }
+        };
+        // Make a GET request to the ipify API to get your public IP address
+        let response = match get("https://api.ipify.org").await {
+            Ok(resp) => resp,
+            Err(err) => {
+                log::error!("Failed to make the request: {:?}", err);
+                return None;
+            }
+        };
+        // Read the response body to get the IP address as a string
+        let ip_text = match response.text().await {
+            Ok(text) => text,
+            Err(err) => {
+                log::error!("Failed to read the response body: {:?}", err);
+                return None;
+            }
+        };
+        // Parse the string into an IpAddr
+        let ip: IpAddr = match ip_text.parse() {
+            Ok(ip) => ip,
+            Err(err) => {
+                log::error!("Failed to parse IP address: {}", err);
+                return None;
+            }
+        };
+        // Look up the country associated with the IP address
+        match reader.lookup::<maxminddb::geoip2::City>(ip) {
+            Ok(location) => {
+                let geo_country_code = location
+                    .country
+                    .and_then(|country| country.iso_code.map(String::from));
+                let city_name = location.city.and_then(|city| {
+                    city.names
+                        .and_then(|names| names.get("en").map(|name| name.to_string()))
+                });
+                let region = location.continent.and_then(|continent| {
+                    continent
+                        .names
+                        .and_then(|names| names.get("en").map(|name| name.to_string()))
+                });
+                Some(GeoInfo {
+                    country_code: geo_country_code,
+                    city_name,
+                    region,
+                })
+            }
+            Err(err) => {
+                log::error!("Error looking up IP address: {}", err);
+                return None;
+            }
+        }
     }
 
     fn build_service_info(
@@ -518,12 +600,59 @@ impl Handler<CreateOffers> for ProviderAgent {
         let presets = self.presets.list_matching(&preset_names);
         let globals = self.globals.get_state();
         let net_api = self.net_api.clone();
+        let data_dir = self.data_dir.clone();
 
         async move {
-            let node_info = Self::build_node_info(globals, net_api).await?;
+            let node_info = Self::build_node_info(globals, net_api, data_dir.clone()).await?;
             Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
         }
         .boxed_local()
+    }
+}
+
+async fn check_geo_file(data_dir: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let file_path = data_dir.join("GeoLite2-City.mmdb");
+
+    // Check if the file exists
+    if fs::metadata(&file_path).await.is_ok() {
+        log::info!("File already exists at {:?}", file_path);
+    } else {
+        log::info!("File does not exist. Downloading...");
+
+        // Download the file if it doesn't exist
+        let url = "https://git.io/GeoLite2-City.mmdb";
+        download_file_async(url, file_path).await?;
+        log::info!("File downloaded successfully.");
+    }
+
+    Ok(())
+}
+
+async fn download_file_async(
+    url: &str,
+    file_path: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create an asynchronous client
+    let client = Client::new();
+
+    // Send the GET request and wait for the response
+    let response = client.get(url).send().await?;
+
+    log::info!("Downloading the GeoLite2-City.mmdb");
+    // Ensure the response status is OK
+    if response.status().is_success() {
+        // Extract the response text asynchronously
+        let body = response.bytes().await?;
+
+        // Create or truncate the file asynchronously
+        let mut file = File::create(file_path).await?;
+
+        // Write the content to the file asynchronously
+        file.write_all(&body).await?;
+
+        Ok(())
+    } else {
+        Err(format!("Failed to download file: {:?}", response.status()).into())
     }
 }
 
