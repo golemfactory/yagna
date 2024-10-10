@@ -28,7 +28,7 @@ use crate::utils::response;
 
 const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
-const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
+pub(crate) const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
 
 mod api_error;
 mod platform_triple;
