@@ -205,7 +205,23 @@ impl RuntimeProcess {
 
         let (cmd, ctx) = cmd.split();
         match cmd {
-            ExeScriptCommand::Deploy { .. } => rt_args.args(["deploy", "--"]),
+            ExeScriptCommand::Deploy {
+                volumes, hostname, ..
+            } => {
+                if let Some(volumes) = volumes {
+                    let vol_override_json = serde_json::to_string(&volumes.as_volumes())
+                        .expect("failed to serialize volume info");
+
+                    rt_args.arg("--volume-override");
+                    rt_args.arg(vol_override_json);
+                }
+
+                if let Some(hostname) = hostname {
+                    rt_args.args(["--hostname", hostname.as_str()]);
+                }
+
+                rt_args.args(["deploy", "--"])
+            }
             ExeScriptCommand::Start { args } => rt_args.args(["start", "--"]).args(args),
             ExeScriptCommand::Run {
                 entry_point, args, ..

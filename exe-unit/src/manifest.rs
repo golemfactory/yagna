@@ -99,7 +99,7 @@ impl ManifestContext {
     }
 
     pub fn add_validators(&mut self, iter: impl IntoIterator<Item = (Validator, Box<dyn Any>)>) {
-        self.validators.write().unwrap().extend(iter.into_iter());
+        self.validators.write().unwrap().extend(iter);
     }
 
     pub fn validator<T: ManifestValidator + 'static>(&self) -> Option<T> {
@@ -503,6 +503,10 @@ mod tests {
             ExeScriptCommand::Deploy {
                 net: Default::default(),
                 hosts: Default::default(),
+                hostname: None,
+                volumes: Default::default(),
+                env: Default::default(),
+                progress: None,
             },
             ExeScriptCommand::Start {
                 args: Default::default(),
@@ -657,6 +661,7 @@ mod tests {
             from: "/src/0x0add".to_string(),
             to: "/dst/0x0add".to_string(),
             args: Default::default(),
+            progress: None,
         }];
 
         let validator: ScriptValidator = r#"{

@@ -6,32 +6,33 @@ edition = "2021"
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-client-model = { workspace = true }
-ya-client = { workspace = true }
-ya-core-model = { workspace = true }
-ya-dummy-driver = "0.3"
-ya-erc20-driver = "0.4"
-ya-identity = "0.3"
-ya-market = "0.4"
-ya-net = { version = "0.3", features = ["service"] }
-ya-payment = "0.3"
-ya-persistence = "0.3"
-ya-service-api = "0.1"
-ya-service-api-web = "0.2"
+ya-client-model.workspace = true
+ya-client.workspace = true
+ya-core-model.workspace = true
+ya-dummy-driver.workspace = true
+ya-erc20-driver.workspace = true
+ya-identity.workspace = true
+ya-market.workspace = true
+ya-net = { workspace = true, features = ["service"] }
+ya-payment.workspace = true
+ya-persistence.workspace = true
+ya-service-api.workspace = true
+ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-sb-router = { workspace = true }
-ya-utils-path = { version = "0.1", path = "../../../utils/path" }
-ya-std-utils = "0.1"
+ya-utils-path.workspace = true
+ya-std-utils.workspace = true
 
-ya-framework-basic = { version = "0.1" }
+ya-framework-basic.workspace = true
 
-actix-rt = "2.7"
-actix-web = "4"
+actix-rt.workspace = true
+actix-web.workspace = true
 actix-http = "3"
 actix-service = "2"
 anyhow = "1.0"
 async-trait = "0.1.80"
 chrono = "0.4"
+bigdecimal = "0.2"
 derive_more = { workspace = true }
 ethsign = "0.8"
 futures = "0.3"
@@ -43,7 +44,7 @@ regex = "1.5"
 serde = "1.0"
 serde_json = "1.0"
 test-context = "0.1.4"
-tokio = "1"
+tokio = { version = "1", features = ["sync"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }
 url = "2.5"
 

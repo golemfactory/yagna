@@ -5,6 +5,7 @@ use uuid::Uuid;
 use ya_client_model::payment::{DriverDetails, Network};
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
+use ya_core_model::signable::Signable;
 use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -146,7 +147,9 @@ async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericErr
 }
 
 async fn sign_payment(_db: (), _caller: String, msg: SignPayment) -> Result<Vec<u8>, GenericError> {
-    Ok(ya_payment_driver::utils::payment_hash(&msg.0))
+    Ok(ya_payment_driver::utils::payment_hash(
+        &msg.0.remove_private_info(),
+    ))
 }
 
 async fn verify_signature(

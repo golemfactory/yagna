@@ -12,9 +12,9 @@ framework-test = []
 [dependencies]
 ya-client-model = { workspace = true, features = ["with-diesel"] }
 ya-core-model = { workspace = true, features = ["identity", "appkey"] }
-ya-persistence = "0.3"
-ya-service-api = "0.1"
-ya-service-api-interfaces = "0.2"
+ya-persistence.workspace = true
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
 ya-service-bus = { workspace = true }
 
 anyhow = "1.0"
@@ -25,9 +25,9 @@ diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 ethsign = "0.8"
 futures = "0.3"
-hex = { workspace = true }
+hex.workspace = true
 log = "0.4"
-promptly = "0.3.0"
+promptly.workspace = true
 r2d2 = "0.8.8"
 rand = "0.8"
 rpassword = "3.0.2"
@@ -41,10 +41,10 @@ rustc-hex = "2.1.0"
 yansi = "0.5.0"
 
 [dev-dependencies]
-ya-service-api-derive = "0.2"
+ya-service-api-derive.workspace = true
 ya-sb-router = { workspace = true }
-ya-framework-basic = { version = "0.1" }
-ya-framework-mocks = { version = "0.1" }
+ya-framework-basic.workspace = true
+ya-framework-mocks.workspace = true
 
 actix-rt = "2.7"
 actix-service = "2"

@@ -1,10 +1,11 @@
-use crate::db::dao::ReleaseDAO;
-
-use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
+
+use crate::db::dao::ReleaseDAO;
 
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
+
+use ya_client::model::ErrorMessage;
 
 pub const VERSION_API_PATH: &str = "/version";
 

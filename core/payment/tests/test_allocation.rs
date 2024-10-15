@@ -25,7 +25,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     let node = MockNode::new(net, "node-1", dir.path())
         .with_identity()
-        .with_payment()
+        .with_payment(None)
         .with_fake_market();
     node.bind_gsb().await?;
     node.start_server(ctx).await?;
@@ -173,7 +173,7 @@ async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Res
 
     let node = MockNode::new(net, "node-1", dir.path())
         .with_identity()
-        .with_payment()
+        .with_payment(None)
         .with_fake_market();
     node.bind_gsb().await?;
     node.start_server(ctx).await?;

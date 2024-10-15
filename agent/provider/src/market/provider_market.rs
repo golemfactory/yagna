@@ -924,7 +924,7 @@ fn get_backoff() -> backoff::ExponentialBackoff {
         initial_interval: std::time::Duration::from_secs(5),
         multiplier: 1.5f64,
         max_interval: std::time::Duration::from_secs(60 * 60),
-        max_elapsed_time: Some(std::time::Duration::from_secs(u64::max_value())),
+        max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
         ..Default::default()
     }
 }

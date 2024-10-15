@@ -5,6 +5,8 @@ use anyhow::Result;
 use std::env;
 use std::io::Write;
 use structopt::{clap, StructOpt};
+use ya_utils_consent::ConsentCommand;
+use ya_utils_consent::{run_consent_command, set_consent_path_in_yagna_dir};
 
 mod appkey;
 mod command;
@@ -46,6 +48,9 @@ enum Commands {
 
     /// Show provider status
     Status,
+
+    /// Manage consent (privacy) settings
+    Consent(ConsentCommand),
 
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
@@ -107,6 +112,11 @@ async fn my_main() -> Result</*exit code*/ i32> {
                 complete.shell,
                 &mut std::io::stdout(),
             );
+            Ok(0)
+        }
+        Commands::Consent(command) => {
+            set_consent_path_in_yagna_dir()?;
+            run_consent_command(command);
             Ok(0)
         }
         Commands::ManifestBundle(command) => manifest::manifest_bundle(command).await,
