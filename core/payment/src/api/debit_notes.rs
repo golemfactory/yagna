@@ -318,7 +318,14 @@ async fn accept_debit_note(
     };
 
     // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
-    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone());
+    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone()).await;
+
+    // Query the DebitNote again. We waited under lock, so it could have changed in the meantime.
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        Ok(Some(debit_note)) => debit_note,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
 
     if debit_note.total_amount_due != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
