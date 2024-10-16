@@ -1,4 +1,23 @@
 # Developer documentation
 
-[Provider](./provider/architecture.md)
-[Payment Driver](./../core/payment-driver/erc20/Readme.md)
+- [Architecture](https://golemfactory.github.io/golem-architecture/)
+- [REST API specification](https://golemfactory.github.io/ya-client/)
+- Developer guides
+  - [Installation](./provider/overview.md#installation)
+  - [Logging guidelines](./logging-guidelines.md)
+- Implementation documentation
+  - Overview
+  - [Provider](./provider/architecture.md)
+    - [ExeUnit](./provider/exe-unit/exe-units.md)
+  - Yagna
+    - Identity
+    - Market
+    - Activity
+    - Payments
+      - [Payment Driver](./../core/payment-driver/erc20/Readme.md) 
+    - Net
+    - GSB
+    - VPN
+  - Runtimes
+    - ya-runtime-vm
+    - ya-runtime-wasm

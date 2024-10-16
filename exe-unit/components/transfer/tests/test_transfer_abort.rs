@@ -38,6 +38,7 @@ async fn interrupted_transfer(
             from: src.to_owned(),
             to: dest.to_owned(),
             args: TransferArgs::default(),
+            progress_config: None,
         })
         .await?;
 
@@ -49,7 +50,7 @@ async fn interrupted_transfer(
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_abort(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

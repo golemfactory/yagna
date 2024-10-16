@@ -27,7 +27,7 @@ async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
 
     let node = MockNode::new(net, "node-1", dir)
         .with_identity()
-        .with_payment()
+        .with_payment(None)
         .with_fake_market();
     node.bind_gsb().await?;
     node.start_server(ctx).await?;

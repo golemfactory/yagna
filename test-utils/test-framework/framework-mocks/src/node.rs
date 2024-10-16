@@ -10,6 +10,7 @@ use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
 use ya_core_model::bus::GsbBindPoints;
 use ya_framework_basic::async_drop::DroppableTestContext;
+use ya_payment::Config;
 use ya_service_api_web::middleware::auth;
 use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::rest_api_host_port;
@@ -46,8 +47,8 @@ pub struct MockNode {
 }
 
 impl MockNode {
-    pub fn new(net: MockNet, name: &str, testdir: &Path) -> Self {
-        let testdir = testdir.join(name);
+    pub fn new(net: MockNet, name: &str, testdir: impl AsRef<Path>) -> Self {
+        let testdir = testdir.as_ref().join(name);
         fs::create_dir_all(&testdir).expect("Failed to create test directory");
 
         MockNode {
@@ -80,8 +81,8 @@ impl MockNode {
     }
 
     /// Use full wrapped Payment module for this node.
-    pub fn with_payment(mut self) -> Self {
-        self.payment = Some(RealPayment::new(&self.name, &self.testdir));
+    pub fn with_payment(mut self, config: Option<Config>) -> Self {
+        self.payment = Some(RealPayment::new(&self.name, &self.testdir).with_config(config));
         self
     }
 
@@ -113,6 +114,12 @@ impl MockNode {
 
     pub fn get_payment(&self) -> anyhow::Result<RealPayment> {
         self.payment
+            .clone()
+            .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
+    }
+
+    pub fn get_fake_payment(&self) -> anyhow::Result<FakePayment> {
+        self.fake_payment
             .clone()
             .ok_or_else(|| anyhow!("Payment ({}) is not initialized", self.name))
     }

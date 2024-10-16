@@ -1,4 +1,5 @@
 //! Discovery protocol interface
+use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use metrics::{counter, timing, value};
 use std::collections::HashSet;
@@ -64,6 +65,8 @@ pub struct DiscoveryImpl {
     /// with central NET implementation in future.
     net_type: net::NetType,
     ban_cache: BanCache,
+
+    last_bcast_ts: Mutex<DateTime<Utc>>,
 }
 
 struct BanCache {
@@ -122,6 +125,10 @@ impl Discovery {
 
     pub fn is_hybrid_net(&self) -> bool {
         self.inner.net_type == net::NetType::Hybrid
+    }
+
+    pub async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
+        *self.inner.last_bcast_ts.lock().await
     }
 
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
@@ -453,6 +460,8 @@ impl Discovery {
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
         let num_ids_received = msg.offer_ids.len();
         log::trace!("Received {num_ids_received} Offers from [{caller}].");
+
+        *self.inner.last_bcast_ts.lock().await = Utc::now();
 
         if msg.offer_ids.is_empty() {
             return Ok(());

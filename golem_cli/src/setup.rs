@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use structopt::clap;
 use structopt::StructOpt;
 use strum::VariantNames;
+use ya_utils_consent::{consent_check_before_startup, set_consent_path_in_yagna_dir};
 
 use ya_core_model::NodeId;
 
@@ -60,6 +61,10 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
         eprintln!("Initial node setup");
         let _ = clear_stdin().await;
     }
+    //before running yagna check consents
+    set_consent_path_in_yagna_dir()?;
+    consent_check_before_startup(interactive)?;
+
     let cmd = crate::command::YaCommand::new()?;
     let mut config = cmd.ya_provider()?.get_config().await?;
 
