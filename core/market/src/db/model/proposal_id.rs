@@ -137,11 +137,11 @@ pub fn hash_proposal(
 ) -> String {
     let mut hasher = Sha3_256::new();
 
-    hasher.input(offer_id.to_string());
-    hasher.input(demand_id.to_string());
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+    hasher.update(offer_id.to_string());
+    hasher.update(demand_id.to_string());
+    hasher.update(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
 
-    format!("{:x}", hasher.result())
+    format!("{:x}", hasher.finalize())
 }
 
 impl FromStr for ProposalId {

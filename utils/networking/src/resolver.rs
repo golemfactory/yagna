@@ -8,6 +8,10 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 use url::Url;
 
+use erc20_payment_lib_common::dns_over_https_resolver::{
+    resolve_txt_record_to_string_array_https, should_use_dns_over_https, DnsOverHttpsServer,
+};
+
 const DEFAULT_LOOKUP_DOMAIN: &str = "dev.golem.network";
 
 /// Resolves prefixes in the `DEFAULT_LOOKUP_DOMAIN`, see also `resolve_record`
@@ -40,14 +44,21 @@ pub async fn resolve_srv_record(record: &str) -> std::io::Result<String> {
     Ok(addr)
 }
 
-pub async fn resolve_href_record(record: &str) -> std::io::Result<Vec<String>> {
-    eprintln!("record={record}");
+pub async fn resolve_href_record_dns(record: &str) -> std::io::Result<Vec<String>> {
     let opts = ResolverOpts::default();
 
     let resolver: TokioAsyncResolver =
         TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), opts)?;
     let txt = resolver.txt_lookup(record).await?;
     Ok(txt.iter().map(|r| r.to_string()).collect())
+}
+
+pub async fn resolve_href_record(record: &str) -> std::io::Result<Vec<String>> {
+    if should_use_dns_over_https() {
+        resolve_txt_record_to_string_array_https(record, DnsOverHttpsServer::Cloudflare).await
+    } else {
+        resolve_href_record_dns(record).await
+    }
 }
 
 /// Replace domain name in URL with resolved IP address

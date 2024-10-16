@@ -44,9 +44,12 @@ async fn proxy_http_request(
     let activity_id = path_activity_url.activity_id;
     let path = path_activity_url.url;
 
-    let result = authorize_activity_executor(&db, id.identity, &activity_id, Role::Requestor).await;
+    let result =
+        authorize_activity_initiator(&db, id.identity, &activity_id, Role::Requestor).await;
     if let Err(e) = result {
-        log::error!("Authorize error {}", e);
+        log::info!(
+            "Proxy authorize error (currently not authorized requests are not rejected): {e}"
+        );
     }
 
     let agreement = get_activity_agreement(&db, &activity_id, Role::Requestor).await?;

@@ -18,7 +18,7 @@ use crate::db::{
 use crate::matcher::store::SubscriptionStore;
 use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
 
-use super::common::CommonBroker;
+use super::common::{CommonBroker, KNOWN_TERMINATION_REASONS};
 use super::error::*;
 use super::notifier::EventNotifier;
 use crate::config::Config;
@@ -94,8 +94,9 @@ impl ProviderBroker {
         counter!("market.agreements.provider.approved", 0);
         counter!("market.agreements.provider.proposed", 0);
         counter!("market.agreements.provider.terminated", 0);
-        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "NotSpecified");
-        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
+        for reason in KNOWN_TERMINATION_REASONS {
+            counter!("market.agreements.provider.terminated.reason", 0, "reason" => reason);
+        }
         counter!("market.agreements.provider.approving", 0);
         counter!("market.agreements.provider.committing", 0);
         counter!("market.agreements.provider.rejected", 0);

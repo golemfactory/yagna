@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::{abortable_sink, abortable_stream};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
+
 use bytes::Bytes;
 use futures::channel::mpsc;
 use futures::future::{ready, try_select, Either};
@@ -9,6 +10,7 @@ use gftp::DEFAULT_CHUNK_SIZE;
 use sha3::{Digest, Sha3_256};
 use tokio::task::spawn_local;
 use url::Url;
+
 use ya_core_model::gftp as model;
 use ya_core_model::gftp::Error as GftpError;
 use ya_core_model::gftp::GftpChunk;
@@ -109,12 +111,12 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                             };
 
                             offset += chunk.content.len();
-                            digest.input(&chunk.content);
+                            digest.update(&chunk.content);
                             chunk_tx.send(Ok::<_, Error>(chunk)).await?;
                         }
                     }
 
-                    Ok::<_, Error>(digest.result())
+                    Ok::<_, Error>(digest.finalize())
                 };
 
                 let send_fut = chunk_rx.try_for_each_concurrent(concurrency, |chunk| async {

@@ -1,8 +1,7 @@
 use anyhow::{anyhow, Result};
+use digest::{Digest, Output};
 use futures::future::{FutureExt, LocalBoxFuture};
 use gftp::rpc::*;
-use sha3::digest::generic_array::GenericArray;
-use sha3::Digest;
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -14,7 +13,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout, Command};
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);
-type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
+type HashOutput = Output<sha3::Sha3_512>;
 
 /// Build the GFTP binary, start the daemon and run:
 ///
@@ -94,12 +93,12 @@ fn hash_file(path: &Path) -> Result<HashOutput> {
     let mut chunk = vec![0; 4096];
 
     while let Ok(count) = file_src.read(&mut chunk[..]) {
-        hasher.input(&chunk[..count]);
+        hasher.update(&chunk[..count]);
         if count != 4096 {
             break;
         }
     }
-    Ok(hasher.result())
+    Ok(hasher.finalize())
 }
 
 #[actix_rt::main]
