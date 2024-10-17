@@ -393,6 +393,15 @@ async fn accept_debit_note(
                         activity_id,
                         activity.agreement_id
                     );
+                // Status must be changed to Accepted, otherwise this DebitNote will always be in Received
+                // state and Requestor will get it again from the events api.
+                // TODO: This is a workaround. From this point we return early to avoid double scheduling
+                // of the payment for both DebitNote and Invoice. Proper way would be to fix db structure
+                // so we could find out here, if payment was already scheduled or we need to schedule it.
+                dao.accept(debit_note_id.clone(), node_id).await.ok();
+                // Sync status later. We could do it here, but it is workaround anyway and this sync
+                // is not crucial since the Agreement is already finished.
+                sync_dao.upsert(debit_note.issuer_id).await.ok();
                 return response::ok(Null);
             }
         },
