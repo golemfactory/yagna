@@ -4,13 +4,16 @@ use std::time::Duration;
 use test_context::test_context;
 
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
-use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
+use ya_client_model::payment::{
+    Acceptance, DocumentStatus, NewAllocation, NewDebitNote, NewInvoice,
+};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
 use ya_framework_mocks::market::FakeMarket;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
+use ya_framework_mocks::payment::fake_payment::FakePayment;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
 #[cfg_attr(not(feature = "framework-test"), ignore)]
@@ -226,5 +229,126 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
     // );
 
     log::info!(" 👍🏻 Example completed successfully ❤️");
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_debit_note_acceptance_after_invoice(
+    ctx: &mut DroppableTestContext,
+) -> anyhow::Result<()> {
+    enable_logs(true);
+
+    let dir = temp_dir!("test_debit_note_acceptance_after_invoice")?;
+    let dir = dir.path();
+
+    let net = MockNet::new().bind();
+    let node1 = MockNode::new(net.clone(), "node-1", dir)
+        .with_identity()
+        .with_payment(None)
+        .with_fake_market()
+        .with_fake_activity();
+    node1.bind_gsb().await?;
+    node1.start_server(ctx).await?;
+
+    let identity = node1.get_identity()?;
+    let appkey_prov = identity.create_identity_key("provider").await?;
+    let appkey_req = identity
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
+
+    node1
+        .get_payment()?
+        .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+
+    let requestor = node1.rest_payments(&appkey_req.key)?;
+    let provider = node1.rest_payments(&appkey_prov.key)?;
+
+    log::info!("Creating mock Agreement...");
+    let agreement =
+        FakeMarket::create_fake_agreement(appkey_req.identity, appkey_prov.identity).unwrap();
+    node1.get_market()?.add_agreement(agreement.clone()).await;
+
+    log::info!("Creating mock Activity...");
+    let activity_id = node1
+        .get_activity()?
+        .create_activity(&agreement.agreement_id)
+        .await;
+
+    log::info!("Creating allocation...");
+    let new_allocation = FakePayment::default_allocation(&agreement, BigDecimal::from(10u64))?;
+    let allocation = requestor.create_allocation(&new_allocation).await?;
+    log::info!(
+        "Allocation created. ({}) Issuing DebitNote and Invoice...",
+        allocation.allocation_id
+    );
+
+    let now = Utc::now();
+    let debit_note = provider
+        .issue_debit_note(&NewDebitNote {
+            activity_id: activity_id.clone(),
+            total_amount_due: BigDecimal::from(1u64),
+            usage_counter_vector: None,
+            payment_due_date: Some(Utc::now()),
+        })
+        .await?;
+    provider.send_debit_note(&debit_note.debit_note_id).await?;
+    log::info!(
+        "DebitNote sent ({}). Sending invoice...",
+        debit_note.debit_note_id
+    );
+
+    let invoice = provider
+        .issue_invoice(&NewInvoice {
+            agreement_id: agreement.agreement_id.to_string(),
+            activity_ids: Some(vec![activity_id.clone()]),
+            amount: BigDecimal::from(1u64),
+            payment_due_date: Utc::now(),
+        })
+        .await?;
+    provider.send_invoice(&invoice.invoice_id).await?;
+
+    log::info!(
+        "Invoice sent. Accepting Invoice ({})...",
+        invoice.invoice_id
+    );
+
+    // Accepting Invoice before last DebitNote in Agreement.
+    // DebitNote should change status to Accepted, but it shouldn't trigger payment, what
+    // will be checked later.
+    requestor
+        .simple_accept_invoice(&invoice, &allocation)
+        .await
+        .unwrap();
+    requestor
+        .simple_accept_debit_note(&debit_note, &allocation)
+        .await
+        .unwrap();
+
+    let debit_snapshot = requestor
+        .get_debit_note(&debit_note.debit_note_id)
+        .await
+        .unwrap();
+    assert_eq!(debit_snapshot.status, DocumentStatus::Accepted);
+
+    // Validating if DebitNote acceptance didn't trigger additional payment.
+    log::info!("Waiting for payment...");
+    let payments = provider
+        .wait_for_payment(Some(&now), Duration::from_secs(1000), None, None)
+        .await?;
+    assert_eq!(payments.len(), 1);
+    assert_eq!(payments[0].amount, BigDecimal::from(1u64));
+    let last = payments[0].timestamp;
+
+    log::info!("Making sure no other payments were scheduled...");
+    assert!(provider
+        .wait_for_payment(Some(&last), Duration::from_secs(400), None, None)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("Timeout"));
+    log::info!("Correct! Only single transaction was sent.");
     Ok(())
 }
