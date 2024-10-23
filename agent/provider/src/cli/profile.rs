@@ -23,6 +23,11 @@ pub enum ProfileConfig {
         #[structopt(flatten)]
         resources: UpdateResources,
     },
+    /// Reset a profile to current defaults
+    Reset {
+        #[structopt(flatten)]
+        names: UpdateNames,
+    },
     /// Remove an existing profile
     Remove { name: String },
     /// Activate a profile
@@ -47,6 +52,15 @@ impl ProfileConfig {
                     profiles.save(path)?;
                 }
                 ProfileConfig::Update { names, resources } => {
+                    update_profiles(config, names, resources)?;
+                }
+                ProfileConfig::Reset { names } => {
+                    let default_resources = Resources::get_default_resources(&config)?;
+                    let resources = UpdateResources {
+                        cpu_threads: Some(default_resources.cpu_threads),
+                        mem_gib: Some(default_resources.mem_gib),
+                        storage_gib: Some(default_resources.storage_gib),
+                    };
                     update_profiles(config, names, resources)?;
                 }
                 ProfileConfig::Remove { name } => {

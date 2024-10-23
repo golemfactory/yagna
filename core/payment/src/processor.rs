@@ -8,7 +8,7 @@ use crate::error::processor::{
 };
 use crate::models::order::ReadObj as DbOrder;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
-use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
+use crate::timeout_lock::{RwLockTimeoutExt, TimedMutex};
 
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
@@ -21,8 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
-
+use tokio::sync::RwLock;
 use ya_client_model::payment::allocation::Deposit;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
@@ -318,7 +317,7 @@ const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct PaymentProcessor {
-    db_executor: Arc<Mutex<DbExecutor>>,
+    db_executor: Arc<TimedMutex>,
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
 }
@@ -336,7 +335,7 @@ enum PaymentSendToGsbError {
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
         Self {
-            db_executor: Arc::new(Mutex::new(db_executor)),
+            db_executor: Arc::new(TimedMutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
         }
@@ -442,7 +441,10 @@ impl PaymentProcessor {
         let payment_id: String;
 
         let payment: Payment = {
-            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+            let db_executor = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT, "notify payment 1")
+                .await?;
 
             let orders = db_executor
                 .as_dao::<OrderDao>()
@@ -539,7 +541,9 @@ impl PaymentProcessor {
                     Err(_) => false,
                 };
 
-                let db_executor = db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+                let db_executor = db_executor
+                    .timeout_lock(DB_LOCK_TIMEOUT, "notify payment 2")
+                    .await?;
 
                 let payment_dao: PaymentDao = db_executor.as_dao();
                 let sync_dao: SyncNotifsDao = db_executor.as_dao();
@@ -556,6 +560,7 @@ impl PaymentProcessor {
                 if mark_sent {
                     payment_dao.mark_sent(payment_id).await?;
                 } else {
+                    let sync_dao: SyncNotifsDao = db_executor.as_dao();
                     sync_dao.upsert(payee_id).await?;
                     SYNC_NOTIFS_NOTIFY.notify_one();
                     log::debug!("Failed to call SendPayment on [{payee_id}]");
@@ -609,7 +614,7 @@ impl PaymentProcessor {
 
         let allocation_status = self
             .db_executor
-            .timeout_lock(DB_LOCK_TIMEOUT)
+            .timeout_lock(DB_LOCK_TIMEOUT, "schedule_payment 1")
             .await?
             .as_dao::<AllocationDao>()
             .get(msg.allocation_id.clone(), msg.payer_id)
@@ -638,7 +643,7 @@ impl PaymentProcessor {
             .await??;
 
         self.db_executor
-            .timeout_lock(DB_LOCK_TIMEOUT)
+            .timeout_lock(DB_LOCK_TIMEOUT, "schedule_payment 2")
             .await?
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
@@ -714,7 +719,10 @@ impl PaymentProcessor {
         }
 
         {
-            let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+            let db_executor = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT, "verify payment 1")
+                .await?;
 
             // Verify agreement payments
             let agreement_dao: AgreementDao = db_executor.as_dao();
@@ -867,7 +875,10 @@ impl PaymentProcessor {
         }
 
         let (active_allocations, past_allocations) = {
-            let db = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
+            let db = self
+                .db_executor
+                .timeout_lock(DB_LOCK_TIMEOUT, "validate_allocation 1")
+                .await?;
             let dao = db.as_dao::<AllocationDao>();
 
             let active = dao
@@ -904,7 +915,11 @@ impl PaymentProcessor {
     /// For `false` each allocation timestamp is respected.
     pub async fn release_allocations(&self, force: bool) {
         // keep this lock alive for the entirety of this function for now
-        let db_executor = match self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await {
+        let db_executor = match self
+            .db_executor
+            .timeout_lock(DB_LOCK_TIMEOUT, "release_allocations")
+            .await
+        {
             Ok(db) => db,
             Err(_) => {
                 log::error!("Timed out waiting for db lock");

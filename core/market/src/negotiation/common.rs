@@ -52,6 +52,23 @@ use crate::utils::AgreementLock;
 
 type IsFirst = bool;
 
+pub(crate) const KNOWN_TERMINATION_REASONS: [&str; 14] = [
+    "Cancelled",
+    "ConnectionTimedOut",
+    "DebitNoteNotPaid",
+    "DebitNotesDeadline",
+    "HealthCheckFailed",
+    "Interrupted",
+    "NoActivity",
+    "NoLongerNeeded",
+    "NotSpecified",
+    "ProviderUnreachable",
+    "RequestorUnreachable",
+    "Shutdown",
+    "Success",
+    "UnknownError",
+];
+
 #[derive(Clone)]
 pub struct CommonBroker {
     pub(super) db: DbMixedExecutor,

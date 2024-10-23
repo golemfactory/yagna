@@ -22,7 +22,7 @@ use ya_service_bus::RpcEndpoint;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_signature(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_payment_signature")?;
     let dir = dir.path();

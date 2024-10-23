@@ -323,7 +323,7 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
         .with_context(|| "Can't seek file at offset 0.".to_string())?;
     io::copy(&mut file, &mut hasher)?;
 
-    Ok(format!("{:x}", hasher.result()))
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Returns NodeId and file hash from gftp url.

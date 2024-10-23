@@ -13,11 +13,13 @@ on:
       - deposits
       - release/*
       - '**/all-tests'
+      - '**/master'
   pull_request:
     branches:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 env:
   rust_stable: 1.81.0
@@ -31,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout

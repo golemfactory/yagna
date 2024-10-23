@@ -147,9 +147,9 @@ impl CachePath {
     /// Creates the long version of path, including hash and the "random" token.
     pub fn temp_path(&self) -> PathBuf {
         let mut digest = sha3::Sha3_224::default();
-        digest.input(&self.hash);
-        digest.input(&self.nonce);
-        let hash = digest.result();
+        digest.update(&self.hash);
+        digest.update(&self.nonce);
+        let hash = digest.finalize();
         PathBuf::from(hex::encode(hash))
     }
 

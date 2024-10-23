@@ -1,7 +1,6 @@
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
+use digest::{Digest, Output};
 use rand::RngCore;
-use sha3::digest::generic_array::GenericArray;
-use sha3::Digest;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
@@ -14,7 +13,7 @@ use ya_transfer::{
     transfer, FileTransferProvider, GftpTransferProvider, TransferContext, TransferProvider,
 };
 
-type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
+type HashOutput = Output<sha3::Sha3_512>;
 
 fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -> HashOutput {
     let path = path.join(name);
@@ -32,11 +31,11 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
     for _ in 0..chunk_count {
         rng.fill_bytes(&mut input);
 
-        hasher.input(&input);
+        hasher.update(&input);
         file_src.write_all(&input).unwrap();
     }
     file_src.flush().unwrap();
-    hasher.result()
+    hasher.finalize()
 }
 
 fn hash_file(path: &Path) -> HashOutput {
@@ -46,12 +45,12 @@ fn hash_file(path: &Path) -> HashOutput {
     let mut chunk = vec![0; 4096];
 
     while let Ok(count) = file_src.read(&mut chunk[..]) {
-        hasher.input(&chunk[..count]);
+        hasher.update(&chunk[..count]);
         if count != 4096 {
             break;
         }
     }
-    hasher.result()
+    hasher.finalize()
 }
 
 // processing progress updates must not panic or the transfer will be aborted

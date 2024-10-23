@@ -84,15 +84,15 @@ pub fn hash(
 ) -> String {
     let mut hasher = Sha3_256::new();
 
-    hasher.input(properties);
-    hasher.input(constraints);
-    hasher.input(node_id);
+    hasher.update(properties);
+    hasher.update(constraints);
+    hasher.update(node_id);
     // We can't change format freely, because it is important to compute hash.
     // Is there any other solution, to compute hash, that is format independent?
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
-    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+    hasher.update(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+    hasher.update(expiration_ts.format("%Y-%m-%d %H:%M:%f").to_string());
 
-    format!("{:x}", hasher.result())
+    format!("{:x}", hasher.finalize())
 }
 
 impl FromStr for SubscriptionId {

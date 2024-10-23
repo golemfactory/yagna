@@ -112,6 +112,9 @@ pub struct ProviderConfig {
 
     #[structopt(long, set = clap::ArgSettings::Global)]
     pub json: bool,
+
+    #[structopt(flatten)]
+    pub default_caps: DefaultCapsConfig,
 }
 
 impl ProviderConfig {
@@ -141,6 +144,27 @@ impl ProviderConfig {
         };
         Ok(cert_dir)
     }
+}
+
+#[derive(StructOpt, Clone, Debug)]
+pub struct DefaultCapsConfig {
+    /// Number of cpu cores reserved by default
+    #[structopt(long, env = "YA_RT_DEFAULT_CAPS_RESERVED_CORES", default_value = "1")]
+    pub reserved_cores: i32,
+    /// Percent of total RAM reserved by default
+    #[structopt(
+        long,
+        env = "YA_RT_DEFAULT_CAPS_RESERVED_MEM_PERCENT",
+        default_value = "0.3"
+    )]
+    pub reserved_mem_percent: f64,
+    /// Percent of available storage reserved by default
+    #[structopt(
+        long,
+        env = "YA_RT_DEFAULT_CAPS_RESERVED_STORAGE_PERCENT",
+        default_value = "0.2"
+    )]
+    pub reserved_storage_percent: f64,
 }
 
 #[derive(Clone, Debug)]
