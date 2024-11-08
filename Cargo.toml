@@ -98,6 +98,7 @@ tokio = { version = "1", features = ["net"] }
 tokio-stream = { version = "0.1.8", features = ["io-util"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 url = "2.1.1"
+typed-builder = "0.20.0"
 
 [dev-dependencies]
 erc20_processor = { workspace = true }
@@ -242,7 +243,7 @@ members = [
   "test-utils/test-framework/framework-macro",
   "test-utils/test-framework/framework-basic",
   "test-utils/test-framework/framework-mocks",
-  "core/healthcheck",
+  "core/healthcheck", "core/net-iroh",
 ]
 
 [workspace.dependencies]
