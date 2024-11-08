@@ -14,12 +14,13 @@ default = ['erc20-driver', 'gftp/bin']
 dashboard = ['rust-embed', 'mime_guess']
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
+require-consent = ['ya-utils-consent/require-consent']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 tos = []
 framework-test = [
-    'ya-exe-unit/framework-test',
-    'ya-payment/framework-test',
-    'ya-identity/framework-test',
+  'ya-exe-unit/framework-test',
+  'ya-payment/framework-test',
+  'ya-identity/framework-test',
 ]
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
@@ -56,18 +57,20 @@ ya-service-api-interfaces.workspace = true
 ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-sgx.path = "core/sgx"
+ya-utils-consent.workspace = true
 ya-utils-path.workspace = true
 ya-utils-futures.workspace = true
 ya-utils-process = { workspace = true, features = ["lock"] }
 ya-utils-networking.workspace = true
 ya-fd-metrics = { path = "utils/fd-metrics" }
+ya-healthcheck = { path = "core/healthcheck" }
 ya-version = { path = "core/version" }
 ya-vpn.workspace = true
 ya-client.workspace = true
 ya-client-model.workspace = true
 gftp = { workspace = true, optional = true }
 # just to enable gftp build for cargo-deb
-ya-provider = { path = "agent/provider", optional = true }                    # just to enable conditionally running some tests
+ya-provider = { path = "agent/provider", optional = true }            # just to enable conditionally running some tests
 ya-exe-unit = { version = "0.4", optional = true, path = "exe-unit" } # just to enable conditionally running some tests
 
 actix-rt.workspace = true
@@ -80,25 +83,25 @@ directories = "2.0.2"
 dotenv = "0.15.0"
 futures = "0.3"
 lazy_static = "1.4"
-libsqlite3-sys = {workspace = true}
+libsqlite3-sys = { workspace = true }
 log = "0.4"
 metrics = "0.12"
 mime_guess = { version = "2.0", optional = true }
 num_cpus = "1"
-openssl-probe = {version = "0.1", optional = true}
+openssl-probe = { version = "0.1", optional = true }
 openssl.workspace = true
 rust-embed = { version = "8.5", optional = true }
 serde = "1.0"
 serde_json = "1.0"
 structopt = "0.3"
-tokio = {version = "1", features = ["net"]}
-tokio-stream = {version = "0.1.8", features = ["io-util"]}
-tokio-util = {version = "0.7", features = ["codec"]}
+tokio = { version = "1", features = ["net"] }
+tokio-stream = { version = "0.1.8", features = ["io-util"] }
+tokio-util = { version = "0.7", features = ["codec"] }
 url = "2.1.1"
 
 [dev-dependencies]
 erc20_processor = { workspace = true }
-ya-test-framework.path= "test-utils/test-framework"
+ya-test-framework.path = "test-utils/test-framework"
 
 ya-exe-unit = { version = "0.4", path = "exe-unit" }
 
@@ -239,6 +242,7 @@ members = [
   "test-utils/test-framework/framework-macro",
   "test-utils/test-framework/framework-basic",
   "test-utils/test-framework/framework-mocks",
+  "core/healthcheck",
 ]
 
 [workspace.dependencies]
@@ -251,19 +255,20 @@ actix-web = "4"
 actix = { version = "0.13", default-features = false }
 
 derive_more = "0.99.11"
-erc20_payment_lib = {git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f"}
-erc20_processor = {git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f"}
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
+erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "0.4.7" }
 #erc20_processor = { version = "0.4.7" }
-gftp = {version = "0.4.1", path = "core/gftp"}
+gftp = { version = "0.4.1", path = "core/gftp" }
 hex = "0.4.3"
-libsqlite3-sys = {version = "0.26.0", features = ["bundled"]}
+libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 openssl = "0.10"
+promptly = "0.3.0"
 rand = "0.8.5"
 regex = "1.10.4"
-strum = {version = "0.24", features = ["derive"]}
+strum = { version = "0.24", features = ["derive"] }
 trust-dns-resolver = "0.22"
 url = "2.3.1"
 
@@ -291,11 +296,12 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-diesel-utils.path = "utils/diesel-utils"
 ya-utils-actix.path = "utils/actix_utils"
 ya-core-model = { path = "core/model" }
+ya-utils-consent.path = "utils/consent"
 ya-utils-path.path = "utils/path"
 ya-utils-process.path = "utils/process"
 
 ya-identity.path = "core/identity"
-ya-market.path="core/market"
+ya-market.path = "core/market"
 ya-activity.path = "core/activity"
 ya-net.path = "core/net"
 ya-persistence.path = "core/persistence"
@@ -306,7 +312,7 @@ ya-vpn.path = "core/vpn"
 ya-gsb-api.path = "core/gsb-api"
 
 ya-payment-driver.path = "core/payment-driver/base"
-ya-dummy-driver.path= "core/payment-driver/dummy"
+ya-dummy-driver.path = "core/payment-driver/dummy"
 ya-erc20-driver.path = "core/payment-driver/erc20"
 
 ya-service-api.path = "core/serv-api"

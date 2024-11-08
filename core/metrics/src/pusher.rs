@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use tokio::time::{self, Duration, Instant};
 
+use crate::service::export_metrics_for_push;
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
@@ -26,7 +27,7 @@ pub fn spawn(ctx: MetricsCtx) {
             log::warn!("Metrics pusher enabled, but no `push_host_url` provided");
         }
     });
-    log::info!("Metrics pusher started");
+    log::debug!("Metrics pusher started");
 }
 
 pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
@@ -54,7 +55,9 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
     let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
 
-    log::info!("Starting metrics pusher on address: {push_url}");
+    log::info!(
+        "Metrics will be pushed only if appropriate consent is given, push endpoint: {push_url}"
+    );
     loop {
         push_interval.tick().await;
         push(&client, push_url.clone()).await;
@@ -62,14 +65,17 @@ pub async fn push_forever(host_url: &str, ctx: &MetricsCtx) {
 }
 
 pub async fn push(client: &Client, push_url: String) {
-    let metrics = crate::service::export_metrics().await;
+    let metrics = export_metrics_for_push().await;
+    if metrics.is_empty() {
+        return;
+    }
     let res = client
         .put(push_url.as_str())
         .send_body(metrics.clone())
         .await;
     match res {
         Ok(r) if r.status().is_success() => {
-            log::trace!("Metrics pushed: {}", r.status())
+            log::debug!("Metrics pushed: {}", r.status())
         }
         Ok(r) if r.status().is_server_error() => {
             log::debug!("Metrics server error: {:#?}", r);

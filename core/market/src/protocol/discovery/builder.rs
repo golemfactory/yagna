@@ -1,3 +1,4 @@
+use chrono::Utc;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -85,6 +86,7 @@ impl DiscoveryBuilder {
                 lazy_binder_prefix: Mutex::new(None),
                 config: self.config.clone().unwrap(),
                 net_type: net::Config::from_env().unwrap().net_type,
+                last_bcast_ts: Mutex::new(Utc::now()),
                 offers_receiving_queue: sender,
                 ban_cache: BanCache::new(self.config.unwrap().bcast_node_ban_timeout),
             }),

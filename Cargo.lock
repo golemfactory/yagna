@@ -3112,6 +3112,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-provider",
+ "ya-utils-consent",
  "ya-utils-path",
  "ya-utils-process",
 ]
@@ -9346,6 +9347,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-healthcheck"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "chrono",
+ "http 1.1.0",
+ "log",
+ "problem_details",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ya-client",
+ "ya-core-model",
+ "ya-net",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.3.0"
 dependencies = [
@@ -9540,6 +9563,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "ya-utils-consent",
 ]
 
 [[package]]
@@ -10299,6 +10323,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-consent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger 0.7.1",
+ "log",
+ "metrics 0.12.1",
+ "parking_lot 0.12.3",
+ "promptly",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "structopt",
+ "strum 0.24.1",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-utils-path",
+]
+
+[[package]]
 name = "ya-utils-futures"
 version = "0.3.0"
 dependencies = [
@@ -10361,8 +10405,10 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "http 1.1.0",
  "log",
  "metrics 0.12.1",
+ "problem_details",
  "self_update",
  "serde",
  "serde_json",
@@ -10372,9 +10418,11 @@ dependencies = [
  "ya-client",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 
@@ -10460,6 +10508,7 @@ dependencies = [
  "ya-fd-metrics",
  "ya-file-logging",
  "ya-gsb-api",
+ "ya-healthcheck",
  "ya-identity",
  "ya-market",
  "ya-metrics",
@@ -10476,6 +10525,7 @@ dependencies = [
  "ya-service-bus",
  "ya-sgx",
  "ya-test-framework",
+ "ya-utils-consent",
  "ya-utils-futures",
  "ya-utils-networking",
  "ya-utils-path",

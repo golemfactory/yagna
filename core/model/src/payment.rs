@@ -469,7 +469,9 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct GetDrivers {}
+    pub struct GetDrivers {
+        pub ignore_legacy_networks: bool,
+    }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     pub enum GetDriversError {

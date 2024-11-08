@@ -84,7 +84,7 @@ where
         let cache = self.cache.clone();
         let service = self.service.clone();
 
-        let allowed_uris = vec!["/metrics-api", "/version", "/dashboard"];
+        let allowed_uris = vec!["/metrics-api", "/version/get", "/dashboard"];
 
         for uri in allowed_uris {
             if req.uri().to_string().starts_with(uri) {
