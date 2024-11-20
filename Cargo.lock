@@ -4007,6 +4007,7 @@ dependencies = [
  "atomic-polyfill",
  "hash32",
  "rustc_version",
+ "serde",
  "spin 0.9.8",
  "stable_deref_trait",
 ]
@@ -5672,6 +5673,7 @@ dependencies = [
  "iroh-net",
  "rustyline 14.0.0",
  "serde",
+ "url",
  "ya-core-model",
 ]
 
@@ -6785,6 +6787,7 @@ dependencies = [
  "cobs",
  "embedded-io 0.4.0",
  "embedded-io 0.6.1",
+ "heapless",
  "postcard-derive",
  "serde",
 ]
@@ -12271,6 +12274,8 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.12.1",
+ "net-iroh",
+ "postcard",
  "prost 0.10.4",
  "rand 0.7.3",
  "regex",

@@ -8,6 +8,7 @@ use futures::future::LocalBoxFuture;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
+use url::Url;
 use ya_core_model::NodeId;
 
 ///
@@ -21,13 +22,35 @@ pub struct NetClientBuilder {
     _inner: (),
 }
 
-impl NetClientBuilder {}
+impl NetClientBuilder {
 
+    pub fn bind_url(self, _url : Url) -> Self {
+        self
+    }
+
+    pub fn crypto_provider(self, _cypher : impl CryptoProvider) -> Self {
+        self
+    }
+
+    pub async fn start(self) -> Result<NetClient> {
+        todo!()
+    }
+
+}
+
+#[derive(Clone)]
 pub struct NetClient {
     _inner: (),
 }
 
 impl NetClient {
+
+    pub fn builder() -> NetClientBuilder {
+        NetClientBuilder {
+            _inner: (),
+        }
+    }
+
     pub async fn send_msg(&self, from: NodeId, to: NodeId, msg: Bytes) -> Result<()> {
         todo!()
     }
@@ -58,7 +81,7 @@ impl NetClient {
     }
 
     pub async fn recv_broadcast(&self, topic: String) -> impl Stream<Item = (NodeId, Bytes)> {
-        todo!()
+        futures::stream::empty()
     }
 
     pub async fn status(&self) -> Result<NetStatus> {

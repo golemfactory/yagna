@@ -465,13 +465,34 @@ impl RemoteEndpoint for NetDst {
 
 #[cfg(test)]
 mod tests {
+    use ya_client_model::NodeId;
     use super::*;
 
     #[test]
     fn ok_try_service_on_public() {
-        "0xbabe000000000000000000000000000000000000"
+        let ep = "0xbabe000000000000000000000000000000000000"
             .try_service("/public/x")
             .unwrap();
+        eprintln!("addr={}", ep.addr());
+
+        let n1 : NodeId ="0xbabe000000000000000000000000000000000000".parse().unwrap();
+        let n2 : NodeId ="0xcafe000000000000000000000000000000000000".parse().unwrap();
+
+        let ep = super::from(n1)
+            .to(n2)
+            .service("/public/x");
+        eprintln!("service from: {n1} to {n2} addr={}", ep.addr());
+
+        let ep = super::from(n1)
+            .to(n2)
+            .service_udp("/public/x");
+        eprintln!("service_udp from: {n1} to {n2} addr={}", ep.addr());
+
+        let ep = super::from(n1)
+            .to(n2)
+            .service_transfer("/public/x");
+        eprintln!("service_transfer from: {n1} to {n2} addr={}", ep.addr());
+
     }
 
     #[test]

@@ -16,7 +16,7 @@ serde = { version = "1.0.214", features = ["derive"] }
 ya-core-model = { workspace = true, features = ["net", "identity"] }
 bytes = { version = "1" }
 ethsign = { version = "0.8" }
-
+url.workspace = true
 
 
 [lints]

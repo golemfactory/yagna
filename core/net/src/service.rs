@@ -1,9 +1,9 @@
 use std::sync::{Arc, RwLock};
 
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
-use ya_core_model::{identity, NodeId};
+use ya_core_model::{identity, net, NodeId};
 use ya_service_api_interfaces::{Provider, Service};
-use ya_service_bus::{Error, RpcEndpoint, RpcMessage};
+use ya_service_bus::{Error, RpcEndpoint, RpcMessage, typed as bus};
 
 use crate::config::{Config, NetType};
 
@@ -54,6 +54,7 @@ impl Net {
                 crate::central::Net::gsb(ctx, config).await
             }
             NetType::Hybrid => crate::hybrid::Net::gsb(ctx, config).await,
+            NetType::IROH => crate::iroh::gsb(ctx, config).await,
         }
     }
 
@@ -62,6 +63,7 @@ impl Net {
         match net_type {
             NetType::Central => crate::central::web_scope(),
             NetType::Hybrid => crate::hybrid::web_scope(),
+            NetType::IROH => crate::iroh::scope(),
         }
     }
 
@@ -75,6 +77,7 @@ impl Net {
         match &config.net_type {
             NetType::Central => Ok(()),
             NetType::Hybrid => crate::hybrid::Net::shutdown().await,
+            NetType::IROH => Ok(()),
         }
     }
 }
@@ -98,7 +101,9 @@ where
     let net_type = { *NET_TYPE.read().unwrap() };
     match net_type {
         NetType::Central => crate::central::broadcast(caller, message).await,
-        NetType::Hybrid => crate::hybrid::broadcast(caller, message).await,
+        NetType::Hybrid | NetType::IROH =>  bus::service(net::local::BUS_ID)
+            .send_as(caller, SendBroadcastMessage::new(message))
+            .await
     }
 }
 
@@ -126,5 +131,6 @@ where
         NetType::Hybrid => {
             crate::hybrid::bind_broadcast_with_caller(broadcast_address, handler).await
         }
+        NetType::IROH => crate::iroh::bind_broadcast_with_caller(broadcast_address, handler).await
     }
 }
