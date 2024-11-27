@@ -37,6 +37,7 @@ humantime = "2.1"
 lazy_static = "1.4"
 log = "0.4"
 metrics = "0.12"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
 strum = { workspace = true }
@@ -51,6 +52,7 @@ url = { version = "2.2" }
 prost = { version = "0.10" }
 rand = { version = "0.7" }
 regex = { workspace = true }
+iroh = "0.28"
 
 [dev-dependencies]
 ya-sb-proto = { workspace = true }

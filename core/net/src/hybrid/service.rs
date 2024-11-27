@@ -518,7 +518,7 @@ fn forward_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State, 
         }
     };
 
-    log::trace!("forwarding /net call to a local endpoint: {}", address);
+    log::error!("TEST forwarding /net call to a local endpoint: {} -> {}", addr, address);
 
     let send = local_bus::call_stream(&address, &caller, data);
     tokio::task::spawn_local(async move {
@@ -538,7 +538,7 @@ fn push_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State) {
         }
     };
 
-    log::trace!("pushing /net message to a local endpoint: {}", address);
+    log::error!("TEST pushing /net message to a local endpoint: {} -> {}", addr, address);
 
     let send = local_bus::push(&address, &caller, data);
     tokio::task::spawn_local(async move {
@@ -919,14 +919,15 @@ fn handle_request(
     let request_id_filter = request_id.clone();
     let request_id_sent = request_id.clone();
 
-    log::debug!("Handle request {request_id} to {address} from {remote_id}");
+    log::error!("TEST Handle request {request_id} to {address} from {remote_id}");
 
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
 
     let stream = match state.get_public_service(address.as_str()) {
         Some(address) => {
-            log::trace!("Handle request: calling: {address}");
+            log::error!("TEST Handle request: calling: {address}");
+            log::error!("TEST cmp {} {} {:?}", address, request.caller, request.data);
             local_bus::call_stream(&address, &request.caller, &request.data).left_stream()
         }
         None => {

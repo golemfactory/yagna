@@ -54,6 +54,7 @@ impl Net {
                 crate::central::Net::gsb(ctx, config).await
             }
             NetType::Hybrid => crate::hybrid::Net::gsb(ctx, config).await,
+            NetType::Iroh => crate::iroh::Net::gsb(ctx, config).await,
         }
     }
 
@@ -62,6 +63,7 @@ impl Net {
         match net_type {
             NetType::Central => crate::central::web_scope(),
             NetType::Hybrid => crate::hybrid::web_scope(),
+            NetType::Iroh => crate::iroh::web_scope(),
         }
     }
 
@@ -75,6 +77,7 @@ impl Net {
         match &config.net_type {
             NetType::Central => Ok(()),
             NetType::Hybrid => crate::hybrid::Net::shutdown().await,
+            NetType::Iroh => crate::iroh::Net::shutdown().await,
         }
     }
 }
@@ -99,6 +102,7 @@ where
     match net_type {
         NetType::Central => crate::central::broadcast(caller, message).await,
         NetType::Hybrid => crate::hybrid::broadcast(caller, message).await,
+        NetType::Iroh => crate::iroh::broadcast(caller, message).await,
     }
 }
 
@@ -125,6 +129,9 @@ where
         }
         NetType::Hybrid => {
             crate::hybrid::bind_broadcast_with_caller(broadcast_address, handler).await
+        }
+        NetType::Iroh => {
+            crate::iroh::bind_broadcast_with_caller(broadcast_address, handler).await
         }
     }
 }

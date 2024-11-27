@@ -27,6 +27,7 @@ pub enum NetType {
     Central,
     #[cfg_attr(not(feature = "central-net"), default)]
     Hybrid,
+    Iroh,
 }
 
 #[derive(StructOpt, Clone)]

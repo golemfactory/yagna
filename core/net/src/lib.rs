@@ -8,6 +8,7 @@ pub use service::{bind_broadcast_with_caller, broadcast, Net};
 mod bcast;
 pub mod central;
 pub mod hybrid;
+pub mod iroh;
 mod service;
 
 mod cli;
