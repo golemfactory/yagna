@@ -6,6 +6,7 @@ use crate::rules::outbound::{CertRule, Mode, OutboundRules};
 use crate::rules::restrict::{AllowOnly, Blacklist, RestrictRule, RuleAccessor};
 use crate::rules::store::Rulestore;
 use crate::startup_config::FileMonitor;
+use crate::cert_utils::download_cert_if_url;
 
 use anyhow::{bail, Result};
 use golem_certificate::schemas::certificate::Fingerprint;
@@ -16,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use strum_macros::Display;
+use tempfile;
 
 use ya_client_model::NodeId;
 use ya_manifest_utils::keystore::{AddParams, AddResponse};
@@ -31,6 +33,7 @@ pub struct RulesManager {
     pub keystore: CompositeKeystore,
     whitelist: DomainWhitelistState,
     whitelist_file: PathBuf,
+    temp_dir: PathBuf,
 }
 
 impl RulesManager {
@@ -46,11 +49,17 @@ impl RulesManager {
 
         let rulestore = Rulestore::load_or_create(rules_file)?;
 
+        let temp_dir = tempfile::Builder::new()
+            .prefix("ya-provider-certs-")
+            .tempdir()?
+            .into_path();
+
         let manager = Self {
             whitelist_file: whitelist_file.to_path_buf(),
             rulestore,
             keystore,
             whitelist,
+            temp_dir,
         };
 
         manager.remove_dangling_rules()?;
@@ -113,6 +122,12 @@ impl RulesManager {
         }
 
         Ok(leaf_cert_ids)
+    }
+
+    /// Import certificates from a URL
+    pub fn import_certs_from_url(&mut self, url: &str) -> Result<Vec<Fingerprint>> {
+        let cert_path = download_cert_if_url(&PathBuf::from(url), &self.temp_dir)?;
+        self.import_certs(&cert_path)
     }
 
     pub fn set_audited_payload_mode(&self, cert_id: String, mode: Mode) -> Result<()> {
