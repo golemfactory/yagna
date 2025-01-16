@@ -103,7 +103,7 @@ jobs:
 
   multi-payment-test:
     name: Multi-payment test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Checkout
@@ -143,7 +143,7 @@ jobs:
 
   integration-test-groups:
     name: T
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     timeout-minutes: 15
     strategy:
@@ -220,7 +220,7 @@ jobs:
 
   integration-test:
     name: Integration Tests (hybrid-net)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ integration-test-groups ]
     steps:
       - name: Check status
