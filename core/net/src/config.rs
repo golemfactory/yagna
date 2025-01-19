@@ -19,14 +19,11 @@ use url::Url;
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum NetType {
-    /// TODO: Remove compilation flag.
-    ///  This conditional compilation is hack to make Goth integration tests work.
-    ///  Current solution in Goth is to build separate binary with compilation flag.
-    ///  This is only temporary for transition period, to make this PR as small as possible.
     #[cfg_attr(feature = "central-net", default)]
     Central,
-    #[cfg_attr(not(feature = "central-net"), default)]
     Hybrid,
+    #[cfg_attr(not(feature = "central-net"), default)]
+    IROH,
 }
 
 #[derive(StructOpt, Clone)]
