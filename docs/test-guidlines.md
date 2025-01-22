@@ -28,4 +28,9 @@ Current implementation has following test suites:
   Common tools and mocks used by System Tests
 - [Provider test utils](../utils/manifest-utils/test-utils) - Utils for testing Provider Agent functionalities and
   creating certificates manifests etc.
-- [ya-perf](https://github.com/golemfactory/ya-perf) - Network performance measuring scripts 
+- [ya-perf](https://github.com/golemfactory/ya-perf) - Network performance measuring scripts
+
+## Other tools
+
+- [Deploying test networks](https://github.com/golemfactory/yagna-testnet-scripts/blob/master/ansible/README.md) -
+  ansible scripts for deploying test networks
