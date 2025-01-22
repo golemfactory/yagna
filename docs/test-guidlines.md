@@ -17,6 +17,9 @@ Current implementation has following test suites:
   to create integration tests closer to yagna. It is not mature yet.
 - [Provider Agent Tests](../agent/provider/tests) - Tests for Provider Agent functionalities (Excluding test cases where
   yagna is required)
+- Network Tests - ya-relay-client tests
+    - [Functional testing environment](https://github.com/golemfactory/ya-relay/tree/main/tests_integration)
+    - [Library integration tests](https://github.com/golemfactory/ya-relay/tree/main/tests)
 
 ## Testing tools
 
@@ -24,4 +27,5 @@ Current implementation has following test suites:
 - [Semi-integration tests framework and utils](https://github.com/golemfactory/yagna/tree/master/test-utils/test-framework) -
   Common tools and mocks used by System Tests
 - [Provider test utils](../utils/manifest-utils/test-utils) - Utils for testing Provider Agent functionalities and
-  creating certificates manifests etc. 
+  creating certificates manifests etc.
+- [ya-perf](https://github.com/golemfactory/ya-perf) - Network performance measuring scripts 
