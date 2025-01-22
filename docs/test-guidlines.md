@@ -31,6 +31,13 @@ Current implementation has following test suites:
   creating certificates manifests etc.
 - [ya-perf](https://github.com/golemfactory/ya-perf) - Network performance measuring scripts
 
+## External test suites
+
+- [yapapi integration tests](https://github.com/golemfactory/yapapi/tree/master/tests/goth_tests) - Integration
+  tests in python SDK
+- [golem-js integration tests](https://github.com/golemfactory/golem-js/blob/master/docs/TESTING.md) - Integration
+  tests in JS SDK
+
 ## Other tools
 
 - [Deploying test networks](https://github.com/golemfactory/yagna-testnet-scripts/blob/master/ansible/README.md) -
