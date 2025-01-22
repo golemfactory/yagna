@@ -17,6 +17,7 @@ Current implementation has following test suites:
   to create integration tests closer to yagna. It is not mature yet.
 - [Provider Agent Tests](../agent/provider/tests) - Tests for Provider Agent functionalities (Excluding test cases where
   yagna is required)
+- [Additional payments tests](../extra/payments/multi_test)
 - Network Tests - ya-relay-client tests
     - [Functional testing environment](https://github.com/golemfactory/ya-relay/tree/main/tests_integration)
     - [Library integration tests](https://github.com/golemfactory/ya-relay/tree/main/tests)
