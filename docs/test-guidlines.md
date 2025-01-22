@@ -36,7 +36,8 @@ Current implementation has following test suites:
 - [yapapi integration tests](https://github.com/golemfactory/yapapi/tree/master/tests/goth_tests) - Integration
   tests in python SDK
 - [golem-js integration tests](https://github.com/golemfactory/golem-js/blob/master/docs/TESTING.md) - Integration
-  tests in JS SDK
+  tests in JS SDK. Run workflow [here](https://github.com/golemfactory/golem-js/actions/workflows/release.yml) by
+  choosing yagna release candidate
 
 ## Other tools
 
