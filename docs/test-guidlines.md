@@ -1,0 +1,27 @@
+# Testing Guidelines
+
+## Test suites
+
+Current implementation has following test suites:
+
+- [Goth](../goth_tests/README.md) - Integration tests framework allowing to create test network and scenarios simulating
+  Requestor behavior
+- [Market Test Suite](../core/market/readme.md) - Test suite for testing Market module in separation
+- System Tests - Testing yagna modules as semi-integration tests with mocking some parts of yagna daemon
+    - [Payments Tests](../core/payment/tests) - Semi-integration tests for payment module
+    - [Identity Tests](../core/identity/tests) - Semi-integration tests for identity module
+    - [ExeUnit Tests](../exe-unit/tests) - Tests for ExeUnit module in separation from yagna
+    - [ExeUnit components tests](../exe-unit/components/transfer/tests) - Tests for ExeUnit components (here mainly for
+      transfer)
+- [Yagna integration framework](../tests/readme.md) - Testing framework that was an attempt to provide alternative way
+  to create integration tests closer to yagna. It is not mature yet.
+- [Provider Agent Tests](../agent/provider/tests) - Tests for Provider Agent functionalities (Excluding test cases where
+  yagna is required)
+
+## Testing tools
+
+- [Goth](https://github.com/golemfactory/goth) - Integration testing framework for Golem
+- [Semi-integration tests framework and utils](https://github.com/golemfactory/yagna/tree/master/test-utils/test-framework) -
+  Common tools and mocks used by System Tests
+- [Provider test utils](../utils/manifest-utils/test-utils) - Utils for testing Provider Agent functionalities and
+  creating certificates manifests etc. 
