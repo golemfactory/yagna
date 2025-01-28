@@ -2,19 +2,19 @@ use actix::prelude::*;
 use actix_web_actors::ws;
 use actix_web_actors::ws::Frame;
 use bytes::Bytes;
+use digest::{Digest, Output};
 use futures::{SinkExt, StreamExt};
-use sha3::digest::generic_array::GenericArray;
-use sha3::Digest;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
+
 use ya_client::net::NetVpnApi;
 use ya_client::web::WebClient;
 use ya_client_model::net::{Address, NewNetwork, Node};
 
-type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
+type HashOutput = Output<sha3::Sha3_512>;
 
 #[derive(StructOpt, Clone, Debug)]
 struct Cli {
@@ -50,10 +50,10 @@ async fn file_checksum<P: AsRef<Path>>(path: P) -> anyhow::Result<HashOutput> {
         if count == 0 {
             break;
         }
-        hasher.input(&chunk[..count]);
+        hasher.update(&chunk[..count]);
     }
 
-    Ok(hasher.result())
+    Ok(hasher.finalize())
 }
 
 #[actix_rt::main]

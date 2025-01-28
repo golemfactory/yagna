@@ -53,9 +53,9 @@ impl GsbToHttpProxy {
 
     pub fn bind(&mut self, gsb_path: &str) -> Handle {
         let this = self.clone();
-        bus::bind(gsb_path, move |message: GsbHttpCallMessage| {
+        bus::bind_with_caller(gsb_path, move |caller, message: GsbHttpCallMessage| {
             let mut this = this.clone();
-            async move { Ok(this.pass(message).await) }
+            async move { Ok(this.pass(caller, message).await) }
         })
     }
 
@@ -67,10 +67,13 @@ impl GsbToHttpProxy {
         })
     }
 
-    pub async fn pass(&mut self, message: GsbHttpCallMessage) -> GsbHttpCallResponse {
+    pub async fn pass(
+        &mut self,
+        caller: String,
+        message: GsbHttpCallMessage,
+    ) -> GsbHttpCallResponse {
         let url = format!("{}{}", self.base_url, message.path);
-        log::info!("Gsb to http call - Url: {url}");
-
+        let path = message.path.clone();
         let mut counters = self.counters.clone();
 
         let method = match Method::from_bytes(message.method.to_uppercase().as_bytes()) {
@@ -82,9 +85,10 @@ impl GsbToHttpProxy {
                 )
             }
         };
-        let builder = Self::create_request_builder(method, &url, message.headers, message.body);
+        let builder =
+            Self::create_request_builder(method.clone(), &url, message.headers, message.body);
 
-        log::debug!("Calling {}", &url);
+        log::info!("Gsb proxy http call {method} to {url} from {caller}");
         let response_handler = counters.on_request();
         let response = builder
             .send()
@@ -98,18 +102,27 @@ impl GsbToHttpProxy {
                 response_handler.on_response();
                 match response.bytes().await {
                     Ok(bytes) => {
+                        log::info!(
+                            "GSB http proxy: response for {method} `{path}` status: {status_code}"
+                        );
                         GsbHttpCallResponse::new(bytes.to_vec(), response_headers, status_code)
                     }
-                    Err(err) => GsbHttpCallResponse::with_message(
-                        format!("Error in response: {err}").into_bytes(),
-                        StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                    ),
+                    Err(err) => {
+                        log::info!("GSB http proxy: response for {method} `{path}` status: {status_code}, error: {err}");
+                        GsbHttpCallResponse::with_message(
+                            format!("Error in response: {err}").into_bytes(),
+                            StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        )
+                    }
                 }
             }
-            Err(err) => GsbHttpCallResponse::with_message(
-                format!("Error in response: {err}").into_bytes(),
-                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            ),
+            Err(err) => {
+                log::info!("GSB http proxy: error calling {method} `{path}`: {err}");
+                GsbHttpCallResponse::with_message(
+                    format!("Error in response: {err}").into_bytes(),
+                    StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                )
+            }
         }
     }
 
@@ -272,8 +285,9 @@ mod tests {
         let mut requests_counter = gsb_call.requests_counter();
         let mut requests_duration_counter = gsb_call.requests_duration_counter();
 
+        let caller = "0x0000000000000000000000000000000000000000".to_string();
         let message = message();
-        let response = gsb_call.pass(message).await;
+        let response = gsb_call.pass(caller.clone(), message).await;
 
         let mut headers = vec![];
 
@@ -377,9 +391,10 @@ mod tests {
 
     async fn run_10_requests(mut gsb_call_proxy: GsbToHttpProxy) {
         let message = message();
+        let caller = "0x0000000000000000000000000000000000000000".to_string();
         for _ in 0..10 {
             let message = message.clone();
-            let response = gsb_call_proxy.pass(message).await;
+            let response = gsb_call_proxy.pass(caller.clone(), message).await;
             assert_eq!("response".as_bytes(), response.body.msg_bytes);
         }
     }

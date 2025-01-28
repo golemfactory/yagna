@@ -1,4 +1,5 @@
 use actix::Actor;
+use digest::Digest;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use std::env;
@@ -16,7 +17,7 @@ use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, TransferServiceContext};
 
-/// When re-deploying image, `TransferService` should uses partially downloaded image.
+/// When re-deploying image, `TransferService` should use partially downloaded image.
 /// Hash computations should be correct in both cases.
 #[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
@@ -36,7 +37,8 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
         std::fs::create_dir_all(dir)?;
     }
 
-    let hash = generate_random_file_with_hash(temp_dir, "rnd", 4096_usize, 1024 * 10);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", 4096_usize, 1024 * 10);
 
     log::debug!("Starting HTTP servers");
     let path = temp_dir.to_path_buf();
@@ -84,7 +86,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
 async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
     enable_logs(false);
 
-    let dir = temp_dir!("deploy-restart")?;
+    let dir = temp_dir!("deploy-progress")?;
     let temp_dir = dir.path();
 
     log::debug!("Creating directories in: {}", temp_dir.display());
@@ -99,7 +101,8 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let chunk_size = 4096_usize;
     let chunk_count = 1024;
     let file_size = (chunk_size * chunk_count) as u64;
-    let hash = generate_random_file_with_hash(temp_dir, "rnd", chunk_size, chunk_count);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
     let path = temp_dir.to_path_buf();
@@ -146,6 +149,89 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
             progress.progress.0,
             progress.progress.1.unwrap_or(0)
         );
+    }
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_deploy_checksum(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(false);
+
+    let dir = temp_dir!("deploy-checksum")?;
+    let temp_dir = dir.path();
+
+    log::debug!("Creating directories in: {}", temp_dir.display());
+    let work_dir = temp_dir.join("work_dir");
+    let cache_dir = temp_dir.join("cache_dir");
+    let sub_dir = temp_dir.join("sub_dir");
+
+    for dir in [work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
+        std::fs::create_dir_all(dir)?;
+    }
+
+    log::debug!("Generating example images using different hash functions");
+
+    fn generate<H: Digest>(temp_dir: &std::path::Path, name: &str) -> String {
+        let chunk_size = 4096_usize;
+        let chunk_count = 10;
+
+        hex::encode(generate_random_file_with_hash::<H>(
+            temp_dir,
+            name,
+            chunk_size,
+            chunk_count,
+        ))
+    }
+
+    let images = vec![
+        ("sha3-256", generate::<sha3::Sha3_256>(temp_dir, "sha3-256")),
+        ("sha3-512", generate::<sha3::Sha3_512>(temp_dir, "sha3-512")),
+        ("sha3-224", generate::<sha3::Sha3_224>(temp_dir, "sha3-224")),
+        ("sha3-384", generate::<sha3::Sha3_384>(temp_dir, "sha3-384")),
+        ("sha2-256", generate::<sha2::Sha256>(temp_dir, "sha2-256")),
+        ("sha2-512", generate::<sha2::Sha512>(temp_dir, "sha2-512")),
+        ("sha2-224", generate::<sha2::Sha224>(temp_dir, "sha2-224")),
+        ("sha2-384", generate::<sha2::Sha384>(temp_dir, "sha2-384")),
+        (
+            "blake2-512",
+            generate::<blake2::Blake2b512>(temp_dir, "blake2-512"),
+        ),
+        (
+            "blake2-256",
+            generate::<blake2::Blake2s256>(temp_dir, "blake2-256"),
+        ),
+        ("blake3", generate::<blake3::Hasher>(temp_dir, "blake3")),
+    ];
+
+    log::debug!("Starting HTTP servers");
+    let path = temp_dir.to_path_buf();
+    start_http(ctx, path)
+        .await
+        .expect("unable to start http servers");
+
+    log::debug!("Starting TransferService");
+    let exe_ctx = TransferServiceContext {
+        work_dir: work_dir.clone(),
+        cache_dir,
+        ..TransferServiceContext::default()
+    };
+    let addr = TransferService::new(exe_ctx).start();
+
+    log::info!("[>>] Deployment with hash verification");
+    for (name, hash) in images {
+        log::info!("[>>] Verifying deploy with {name}");
+
+        let hash_function = name.split('-').next().unwrap();
+        let deploy = DeployImage::with_package(&format!(
+            "hash://{hash_function}:{hash}:http://127.0.0.1:8001/{name}"
+        ));
+        let result = addr.send(deploy).await;
+        let path = result.unwrap().unwrap().unwrap();
+
+        assert!(path.exists());
     }
 
     Ok(())

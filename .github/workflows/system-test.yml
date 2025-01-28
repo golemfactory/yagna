@@ -12,11 +12,13 @@ on:
       - master
       - release/*
       - '**/all-tests'
+      - '**/master'
   pull_request:
     branches:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 env:
   rust_stable: 1.81.0

@@ -318,7 +318,14 @@ async fn accept_debit_note(
     };
 
     // Required to serialize complex DB access patterns related to debit note / invoice acceptances.
-    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone());
+    let _agreement_lock = agreement_lock.lock(debit_note.agreement_id.clone()).await;
+
+    // Query the DebitNote again. We waited under lock, so it could have changed in the meantime.
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        Ok(Some(debit_note)) => debit_note,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
 
     if debit_note.total_amount_due != acceptance.total_amount_accepted {
         return response::bad_request(&"Invalid amount accepted");
@@ -386,6 +393,15 @@ async fn accept_debit_note(
                         activity_id,
                         activity.agreement_id
                     );
+                // Status must be changed to Accepted, otherwise this DebitNote will always be in Received
+                // state and Requestor will get it again from the events api.
+                // TODO: This is a workaround. From this point we return early to avoid double scheduling
+                // of the payment for both DebitNote and Invoice. Proper way would be to fix db structure
+                // so we could find out here, if payment was already scheduled or we need to schedule it.
+                dao.accept(debit_note_id.clone(), node_id).await.ok();
+                // Sync status later. We could do it here, but it is workaround anyway and this sync
+                // is not crucial since the Agreement is already finished.
+                sync_dao.upsert(debit_note.issuer_id).await.ok();
                 return response::ok(Null);
             }
         },

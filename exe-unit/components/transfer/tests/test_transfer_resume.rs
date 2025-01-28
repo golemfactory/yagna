@@ -1,5 +1,6 @@
 use actix::{Actor, Addr};
 use futures::future::LocalBoxFuture;
+use sha3::Sha3_512;
 use std::io::ErrorKind;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -161,7 +162,8 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
     }];
     addr.send(AddVolumes::new(volumes)).await??;
 
-    let hash = generate_random_file_with_hash(temp_dir, "rnd", 4096_usize, 3 * 1024);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", 4096_usize, 3 * 1024);
 
     log::debug!("Starting HTTP servers");
     start_http(ctx, temp_dir.to_path_buf())
@@ -174,7 +176,7 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
         transfer(&addr, "http://127.0.0.1:8001/rnd", "container:/input/rnd-1"),
     )
     .await??;
-    verify_hash(&hash, work_dir.join("vol-1"), "rnd-1");
+    verify_hash::<Sha3_512>(&hash, work_dir.join("vol-1"), "rnd-1");
     log::warn!("Checksum verified");
 
     Ok(())
