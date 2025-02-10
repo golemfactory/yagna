@@ -66,6 +66,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |_, dr, c, m| async move { dr.schedule_payment( c, m).await }
         )
         .bind_with_processor(
+            move |_, dr, c, m| async move { dr.flush_payments( c, m).await }
+        )
+        .bind_with_processor(
             move |_, dr, c, m| async move { dr.verify_payment( c, m).await }
         )
         .bind_with_processor(
@@ -176,7 +179,7 @@ pub async fn get_pubkey(node_id: NodeId) -> Result<Vec<u8>, GenericError> {
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
-    order_ids: Vec<String>,
+    payment_id: String,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
 ) -> Result<(), GenericError> {
@@ -186,7 +189,7 @@ pub async fn notify_payment(
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
-        order_ids,
+        payment_id,
         confirmation: PaymentConfirmation { confirmation },
     };
     service(payment_srv::BUS_ID)

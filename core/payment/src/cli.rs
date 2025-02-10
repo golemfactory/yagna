@@ -1,21 +1,21 @@
 mod rpc;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 // External crates
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde_json::{to_value, Value};
+use serde_json::{json, to_value, Value};
 use std::str::FromStr;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 use structopt::*;
 use ya_client_model::payment::{DriverDetails, DriverStatusProperty};
-use ya_core_model::payment::local::NetworkName;
+use ya_client_model::NodeId;
+use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
 // Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
-
 // Local uses
 use crate::accounts::{init_account, Account};
 use crate::cli::rpc::{run_command_rpc, RpcCommandParams};
@@ -138,6 +138,10 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
+    Process {
+        #[structopt(subcommand)]
+        command: ProcessCommand,
+    },
 
     /// Clear all existing allocations
     ReleaseAllocations,
@@ -149,6 +153,52 @@ pub enum InvoiceCommand {
         #[structopt(long, help = "Display invoice status from the given period of time")]
         last: Option<humantime::Duration>,
     },
+}
+
+#[derive(StructOpt, Debug)]
+pub enum ProcessCommand {
+    Now {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+    },
+    Info {
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
+        #[structopt(long, env = "YA_ACCOUNT")]
+        account: Option<NodeId>,
+    },
+    Set {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long, help = "Set interval")]
+        interval: Option<humantime::Duration>,
+        #[structopt(long, help = "Set safe payout")]
+        payout: Option<humantime::Duration>,
+        #[structopt(long, help = "Set cron")]
+        cron: Option<String>,
+        #[structopt(
+            long,
+            help = "Optionally set the next process time (if lower than interval)"
+        )]
+        next: Option<DateTime<Utc>>,
+    },
+}
+
+fn round_duration_to_sec(d: Duration) -> Duration {
+    //0.500 gives 1.0
+    //0.499 gives 0.0
+    let secs = ((d.as_millis() + 500) / 1000) as u64;
+    Duration::from_secs(secs)
+}
+
+fn round_duration_to_sec_chrono(d: chrono::Duration) -> Duration {
+    //0.500 gives 1.0
+    //0.499 gives 0.0
+    let secs = ((d.num_milliseconds() + 500) / 1000) as u64;
+    Duration::from_secs(secs)
+}
+
+fn round_duration_humantime(d: chrono::Duration) -> String {
+    humantime::format_duration(round_duration_to_sec_chrono(d)).to_string()
 }
 
 impl PaymentCli {
@@ -413,6 +463,269 @@ Typically operation should take less than 1 minute.
                         ))
                         .await??,
                 )
+            }
+            PaymentCli::Process { command } => {
+                match command {
+                    ProcessCommand::Now { account } => {
+                        //return Ok(CommandOutput::Object(json!({"res":"Process command now"})));
+                        let node_id = if let Some(node_id) = account.account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::ProcessPaymentsNow {
+                                node_id,
+                                platform: format!(
+                                    "{}-{}-{}",
+                                    account.driver(),
+                                    account.network(),
+                                    account.token()
+                                )
+                                .to_lowercase(),
+                                skip_resolve: false,
+                                skip_send: false,
+                            })
+                            .await??;
+                        Ok(CommandOutput::object(driver_status_props)
+                            .expect("Failed to create object"))
+                    }
+                    ProcessCommand::Set {
+                        account,
+                        interval,
+                        cron,
+                        next,
+                        payout,
+                    } => {
+                        let node_id = if let Some(node_id) = account.account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let platform = format!(
+                            "{}-{}-{}",
+                            account.driver(),
+                            account.network(),
+                            account.token()
+                        )
+                        .to_lowercase();
+                        let driver_status_props = bus::service(pay::BUS_ID)
+                            .call(pay::ProcessBatchCycleSet {
+                                node_id,
+                                platform: platform.clone(),
+                                interval: interval.map(|d| d.into()),
+                                cron,
+                                next_update: next,
+                                safe_payout: payout.map(|d| d.into()),
+                            })
+                            .await??;
+
+                        let mut values = Vec::new();
+
+                        let result = driver_status_props;
+                        let next_process_in =
+                            Utc::now().signed_duration_since(result.next_process.and_utc());
+
+                        let next_process_descr = format!(
+                            "{}\n(in {})",
+                            result.next_process.format("%F %T"),
+                            round_duration_humantime(next_process_in.abs())
+                        );
+                        let last_process_descr = result
+                            .last_process
+                            .map(|l| {
+                                format!(
+                                    "{}\n({} ago)",
+                                    l.format("%F %T"),
+                                    round_duration_humantime(
+                                        Utc::now().signed_duration_since(l.and_utc())
+                                    )
+                                )
+                            })
+                            .unwrap_or("NULL".to_string());
+                        values.push(json!([
+                            platform,
+                            result
+                                .interval
+                                .map(|d| humantime::format_duration(d).to_string())
+                                .unwrap_or("NULL".to_string()),
+                            result.cron,
+                            humantime::format_duration(round_duration_to_sec(result.max_interval))
+                                .to_string(),
+                            humantime::format_duration(round_duration_to_sec(
+                                result.extra_payment_time
+                            ))
+                            .to_string(),
+                            next_process_descr,
+                            last_process_descr,
+                        ]));
+                        Ok(CommandOutput::Table {
+                            columns: [
+                                "Platform",
+                                "Interval",
+                                "Cron",
+                                "Max interval",
+                                "Extra time",
+                                "Next process",
+                                "Last processed",
+                            ]
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect(),
+                            values,
+                            summary: vec![json!(["", "", "", "", ""])],
+                            header: Some(format!(
+                                "Batch cycle after change: {}",
+                                account
+                                    .account
+                                    .map(|a| a.to_string())
+                                    .unwrap_or("default".to_string())
+                            )),
+                        })
+                    }
+                    ProcessCommand::Info { account } => {
+                        let drivers = bus::service(pay::BUS_ID)
+                            .call(pay::GetDrivers {
+                                ignore_legacy_networks: true,
+                            })
+                            .await??;
+
+                        let node_id = if let Some(node_id) = account {
+                            node_id
+                        } else {
+                            match bus::service(id_api::BUS_ID)
+                                .send(id_api::Get::ByDefault)
+                                .await??
+                            {
+                                None => {
+                                    log::error!("Default identity not found");
+                                    panic!("Default identity not found");
+                                }
+                                Some(node_id) => node_id.node_id,
+                            }
+                        };
+
+                        let mut results = BTreeMap::<String, ProcessBatchCycleResponse>::new();
+
+                        for driver in drivers {
+                            for network in driver.1.networks {
+                                let platform = format!(
+                                    "{}-{}-{}",
+                                    driver.0, network.0, network.1.default_token
+                                )
+                                .to_lowercase();
+
+                                let driver_status_props = bus::service(pay::BUS_ID)
+                                    .call(pay::ProcessBatchCycleInfo {
+                                        node_id,
+                                        platform: platform.clone(),
+                                    })
+                                    .await??;
+
+                                results.insert(platform, driver_status_props);
+                            }
+                        }
+
+                        if ctx.json_output {
+                            CommandOutput::object( results.iter().map( |(platform, result)|
+                                json!({
+                                    "platform": platform,
+                                    "intervalSec": result.interval.map(|d| d.as_secs()),
+                                    "cron": result.cron,
+                                    "maxIntervalSec": round_duration_to_sec(result.max_interval).as_secs(),
+                                    "extraPaymentTimeSec": round_duration_to_sec(result.extra_payment_time).as_secs(),
+                                    "nextProcess": result.next_process.and_utc().to_rfc3339(),
+                                    "lastProcess": result.last_process.map(|l| l.and_utc().to_rfc3339()),
+                                }
+                            )).collect::<Vec<serde_json::Value>>())
+                        } else {
+                            let mut values = Vec::new();
+
+                            for (platform, result) in results {
+                                let next_process_in =
+                                    Utc::now().signed_duration_since(result.next_process.and_utc());
+
+                                let next_process_descr = format!(
+                                    "{}\n(in {})",
+                                    result.next_process.format("%F %T"),
+                                    round_duration_humantime(next_process_in.abs())
+                                );
+                                let last_process_descr = result
+                                    .last_process
+                                    .map(|l| {
+                                        format!(
+                                            "{}\n({} ago)",
+                                            l.format("%F %T"),
+                                            round_duration_humantime(
+                                                Utc::now().signed_duration_since(l.and_utc())
+                                            )
+                                        )
+                                    })
+                                    .unwrap_or("NULL".to_string());
+                                values.push(json!([
+                                    platform,
+                                    result
+                                        .interval
+                                        .map(|d| humantime::format_duration(d).to_string())
+                                        .unwrap_or("NULL".to_string()),
+                                    result.cron,
+                                    humantime::format_duration(round_duration_to_sec(
+                                        result.max_interval
+                                    ))
+                                    .to_string(),
+                                    humantime::format_duration(round_duration_to_sec(
+                                        result.extra_payment_time
+                                    ))
+                                    .to_string(),
+                                    next_process_descr,
+                                    last_process_descr,
+                                ]));
+                            }
+                            Ok(CommandOutput::Table {
+                                columns: [
+                                    "Platform",
+                                    "Interval",
+                                    "Cron",
+                                    "Max interval",
+                                    "Extra time",
+                                    "Next process",
+                                    "Last processed",
+                                ]
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect(),
+                                values,
+                                summary: vec![json!(["", "", "", "", ""])],
+                                header: Some(format!(
+                                    "Batch cycle info {}",
+                                    account
+                                        .map(|a| a.to_string())
+                                        .unwrap_or("default".to_string())
+                                )),
+                            })
+                        }
+                    }
+                }
             }
             PaymentCli::Enter { account, amount } => CommandOutput::object(
                 wallet::enter(

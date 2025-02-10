@@ -51,7 +51,6 @@ mod local {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
-            .bind_with_processor(schedule_payment)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
             .bind_with_processor(register_account)
@@ -63,10 +62,12 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(release_allocations)
+            .bind_with_processor(process_payments_now)
+            .bind_with_processor(process_cycle_info)
+            .bind_with_processor(process_cycle_set)
             .bind_with_processor(get_drivers)
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
-            .bind_with_processor(release_deposit)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -110,29 +111,6 @@ mod local {
         counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
-    }
-
-    async fn schedule_payment(
-        db: DbExecutor,
-        processor: Arc<PaymentProcessor>,
-        sender: String,
-        msg: SchedulePayment,
-    ) -> Result<(), GenericError> {
-        let id = msg.document_id();
-        debug!(
-            entity = "payment",
-            action = "schedule",
-            id,
-            "Schedule payment started"
-        );
-        let res = processor.schedule_payment(msg).await;
-        trace!(
-            entity = "payment",
-            action = "schedule",
-            id,
-            "Schedule payment finished"
-        );
-        Ok(res?)
     }
 
     async fn register_driver(
@@ -486,6 +464,33 @@ mod local {
         Ok(())
     }
 
+    async fn process_cycle_info(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessBatchCycleInfo,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+        processor.process_cycle_info(msg).await
+    }
+
+    async fn process_cycle_set(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessBatchCycleSet,
+    ) -> Result<ProcessBatchCycleResponse, ProcessBatchCycleError> {
+        processor.process_cycle_set(msg).await
+    }
+
+    async fn process_payments_now(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        _caller: String,
+        msg: ProcessPaymentsNow,
+    ) -> Result<ProcessPaymentsNowResponse, ProcessPaymentsError> {
+        processor.process_payments_now(msg).await
+    }
+
     async fn get_drivers(
         db: DbExecutor,
         processor: Arc<PaymentProcessor>,
@@ -623,6 +628,7 @@ mod local {
                 Some(Role::Requestor),
                 Some(DocumentStatus::Accepted),
                 Some(true),
+                None,
             )
             .await
             .map_err(GenericError::new)?;
@@ -765,18 +771,6 @@ mod local {
         }
 
         Ok(Ack {})
-    }
-
-    async fn release_deposit(
-        db: DbExecutor,
-        processor: Arc<PaymentProcessor>,
-        sender: String,
-        msg: ReleaseDeposit,
-    ) -> Result<(), GenericError> {
-        log::debug!("Schedule payment processor started");
-        let res = processor.release_deposit(msg).await;
-        log::debug!("Schedule payment processor finished");
-        res
     }
 
     async fn shut_down(
@@ -923,7 +917,7 @@ mod public {
         counter!("payment.debit_notes.provider.accepted.call", 1);
 
         let dao: DebitNoteDao = db.as_dao();
-        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(node_id)).await {
             Ok(Some(debit_note)) => debit_note,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),

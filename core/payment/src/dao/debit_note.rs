@@ -1,6 +1,6 @@
 use crate::dao::{activity, debit_note_event};
 use crate::error::{DbError, DbResult};
-use crate::models::debit_note::{ReadObj, WriteObj};
+use crate::models::debit_note::{DebitNoteForApi, ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
@@ -54,6 +54,7 @@ macro_rules! query {
                 dsl::total_amount_due,
                 dsl::usage_counter_vector,
                 dsl::payment_due_date,
+                dsl::debit_nonce,
                 activity_dsl::agreement_id,
                 agreement_dsl::peer_id,
                 agreement_dsl::payee_addr,
@@ -65,8 +66,8 @@ macro_rules! query {
 
 pub fn update_status(
     debit_note_ids: &Vec<String>,
-    owner_id: &NodeId,
-    status: &DocumentStatus,
+    owner_id: NodeId,
+    status: DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
@@ -119,14 +120,21 @@ impl<'c> DebitNoteDao<'c> {
         issuer_id: NodeId,
     ) -> DbResult<String> {
         do_with_transaction(self.pool, "debit_note_dao_create_new", move |conn| {
-            let previous_debit_note_id = dsl::pay_debit_note
-                .select(dsl::id)
+            let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
+                .select((dsl::id, dsl::debit_nonce))
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
                 .filter(dsl::owner_id.eq(&issuer_id))
-                .order_by(dsl::timestamp.desc())
-                .first(conn)
-                .optional()?;
-            let debit_note = WriteObj::issued(debit_note, previous_debit_note_id, issuer_id);
+                .order_by(dsl::debit_nonce.desc())
+                .first::<(String, i32)>(conn)
+                .optional()?
+            {
+                Some((id, nonce)) => (Some(id), Some(nonce)),
+                None => (None, None),
+            };
+
+            let next_nonce = debit_nonce.map(|nonce| nonce + 1).unwrap_or(0);
+            let debit_note =
+                WriteObj::issued(debit_note, next_nonce, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
@@ -151,13 +159,21 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn insert_received(&self, debit_note: DebitNote) -> DbResult<()> {
         do_with_transaction(self.pool, "debit_note_dao_insert_received", move |conn| {
-            let previous_debit_note_id = dsl::pay_debit_note
-                .select(dsl::id)
+            let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
+                .select((dsl::id, dsl::debit_nonce))
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
-                .order_by(dsl::timestamp.desc())
-                .first(conn)
-                .optional()?;
-            let debit_note = WriteObj::received(debit_note, previous_debit_note_id);
+                .order_by(dsl::debit_nonce.desc())
+                .first::<(String, i32)>(conn)
+                .optional()?
+            {
+                Some((id, nonce)) => (Some(id), Some(nonce)),
+                None => (None, None),
+            };
+            let debit_note = WriteObj::received(
+                debit_note,
+                debit_nonce.map(|n| n + 1).unwrap_or(0),
+                previous_debit_note_id,
+            );
             let debit_note_id = debit_note.id.clone();
             let owner_id = debit_note.owner_id;
             activity::set_amount_due(
@@ -183,17 +199,22 @@ impl<'c> DebitNoteDao<'c> {
     pub async fn get(
         &self,
         debit_note_id: String,
-        owner_id: NodeId,
+        owner_id: Option<NodeId>,
     ) -> DbResult<Option<DebitNote>> {
         readonly_transaction(self.pool, "debit_note_dao_get", move |conn| {
-            let debit_note: Option<ReadObj> = query!()
-                .filter(dsl::id.eq(debit_note_id))
-                .filter(dsl::owner_id.eq(owner_id))
-                .first(conn)
-                .optional()?;
-            match debit_note {
-                Some(debit_note) => Ok(Some(debit_note.try_into()?)),
-                None => Ok(None),
+            let mut query = query!().into_boxed();
+
+            query = query.filter(dsl::id.eq(debit_note_id));
+            if let Some(owner_id) = owner_id {
+                query = query.filter(dsl::owner_id.eq(owner_id))
+            }
+
+            let debit_notes: Vec<ReadObj> = query.load(conn)?;
+            if let Some(debit_note) = debit_notes.into_iter().next() {
+                let debit_note: DebitNote = debit_note.try_into()?;
+                Ok(Some(debit_note))
+            } else {
+                Ok(None)
             }
         })
         .await
@@ -204,7 +225,8 @@ impl<'c> DebitNoteDao<'c> {
         role: Option<Role>,
         status: Option<DocumentStatus>,
         payable: Option<bool>,
-    ) -> DbResult<Vec<DebitNote>> {
+        activity_id: Option<String>,
+    ) -> DbResult<Vec<DebitNoteForApi>> {
         readonly_transaction(self.pool, "debit_note_dao_list", move |conn| {
             let mut query = query!().into_boxed();
             if let Some(role) = role {
@@ -220,6 +242,9 @@ impl<'c> DebitNoteDao<'c> {
                 } else {
                     query = query.filter(dsl::payment_due_date.is_null());
                 }
+            }
+            if let Some(activity_id) = activity_id {
+                query = query.filter(dsl::activity_id.eq(activity_id));
             }
 
             let debit_notes: Vec<ReadObj> = query.order_by(dsl::timestamp.desc()).load(conn)?;
@@ -288,7 +313,7 @@ impl<'c> DebitNoteDao<'c> {
                 .execute(conn)?;
             }
 
-            update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
+            update_status(&vec![debit_note_id.clone()], owner_id, status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             for event in events {
                 debit_note_event::create(debit_note_id.clone(), owner_id, event, conn)?;
