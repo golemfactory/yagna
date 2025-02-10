@@ -57,8 +57,8 @@ macro_rules! query {
 
 pub fn update_status(
     invoice_id: &String,
-    owner_id: &NodeId,
-    status: &DocumentStatus,
+    owner_id: NodeId,
+    status: DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
@@ -297,7 +297,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, "invoice_dao_mark_received", move |conn| {
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Received, conn)
+            update_status(&invoice_id, owner_id, DocumentStatus::Received, conn)
         })
         .await
     }
@@ -331,8 +331,8 @@ impl<'c> InvoiceDao<'c> {
                 .execute(conn)?;
             }
 
-            update_status(&invoice_id, &owner_id, &status, conn)?;
-            agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
+            update_status(&invoice_id, owner_id, status, conn)?;
+            agreement::set_amount_accepted(&agreement_id, owner_id, &amount, conn)?;
 
             for event in events {
                 invoice_event::create(invoice_id.clone(), owner_id, event, conn)?;
@@ -432,7 +432,7 @@ impl<'c> InvoiceDao<'c> {
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Rejected, conn)?;
+            update_status(&invoice_id, owner_id, DocumentStatus::Rejected, conn)?;
             if role == Role::Requestor {
                 diesel::update(
                     dsl::pay_invoice
@@ -503,7 +503,7 @@ impl<'c> InvoiceDao<'c> {
 
             agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
 
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
+            update_status(&invoice_id, owner_id, DocumentStatus::Cancelled, conn)?;
             invoice_event::create(
                 invoice_id,
                 owner_id,

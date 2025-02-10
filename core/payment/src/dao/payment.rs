@@ -1,13 +1,11 @@
 use crate::dao::{activity, agreement};
 use crate::error::DbResult;
-use crate::models::payment::{
-    ActivityPayment as DbActivityPayment, AgreementPayment as DbAgreementPayment, ReadObj, WriteObj,
-};
+use crate::models::payment::{DocumentPayment, ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
-use crate::schema::pay_activity_payment::dsl as activity_pay_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
-use crate::schema::pay_agreement_payment::dsl as agreement_pay_dsl;
 use crate::schema::pay_payment::dsl;
+use crate::schema::pay_payment_document::dsl as document_pay_dsl;
+
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
@@ -21,7 +19,7 @@ use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
+use ya_persistence::types::{BigDecimalField, Role};
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -30,23 +28,43 @@ pub struct PaymentDao<'c> {
 fn insert_activity_payments(
     activity_payments: Vec<ActivityPayment>,
     payment_id: &str,
-    owner_id: &NodeId,
+    owner_id: NodeId,
+    peer_id: NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting activity payments...");
-    for activity_payment in activity_payments {
-        let amount = activity_payment.amount.into();
-        let allocation_id = activity_payment.allocation_id;
+    for activity_payment in activity_payments.iter() {
+        let amount: BigDecimalField = activity_payment.amount.clone().into();
+        let allocation_id = activity_payment.allocation_id.clone();
 
+        let agreement_id: String = activity_dsl::pay_activity
+            .select(activity_dsl::agreement_id)
+            .filter(activity_dsl::id.eq(&activity_payment.activity_id))
+            .filter(activity_dsl::owner_id.eq(owner_id))
+            .first(conn)
+            .map_err(|e| {
+                log::error!(
+                    "Error getting agreement_id for activity_id: {}, owner_id: {}. Error: {}",
+                    activity_payment.activity_id,
+                    owner_id,
+                    e
+                );
+                e
+            })?;
+
+        agreement::increase_amount_paid(&agreement_id, owner_id, &amount, conn)?;
         activity::increase_amount_paid(&activity_payment.activity_id, owner_id, &amount, conn)?;
 
-        diesel::insert_into(activity_pay_dsl::pay_activity_payment)
-            .values(DbActivityPayment {
+        diesel::insert_into(document_pay_dsl::pay_payment_document)
+            .values(DocumentPayment {
                 payment_id: payment_id.to_string(),
-                activity_id: activity_payment.activity_id,
-                owner_id: *owner_id,
+                agreement_id: agreement_id.clone(),
+                invoice_id: None,
+                activity_id: Some(activity_payment.activity_id.clone()),
+                owner_id,
                 amount,
-                allocation_id,
+                debit_note_id: None,
+                peer_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -58,7 +76,8 @@ fn insert_activity_payments(
 fn insert_agreement_payments(
     agreement_payments: Vec<AgreementPayment>,
     payment_id: &str,
-    owner_id: &NodeId,
+    owner_id: NodeId,
+    peer_id: NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting agreement payments...");
@@ -68,13 +87,16 @@ fn insert_agreement_payments(
 
         agreement::increase_amount_paid(&agreement_payment.agreement_id, owner_id, &amount, conn)?;
 
-        diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
-            .values(DbAgreementPayment {
+        diesel::insert_into(document_pay_dsl::pay_payment_document)
+            .values(DocumentPayment {
                 payment_id: payment_id.to_string(),
                 agreement_id: agreement_payment.agreement_id,
-                owner_id: *owner_id,
+                invoice_id: None,
+                activity_id: None,
+                owner_id,
                 amount,
-                allocation_id,
+                debit_note_id: None,
+                peer_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -99,6 +121,7 @@ impl<'c> PaymentDao<'c> {
         let payment_id = payment.id.clone();
         let owner_id = payment.owner_id;
         let amount = payment.amount.clone();
+        let peer_id = payment.peer_id;
 
         do_with_transaction(self.pool, "payment_dao_insert", move |conn| {
             log::trace!("Inserting payment...");
@@ -107,8 +130,8 @@ impl<'c> PaymentDao<'c> {
                 .execute(conn)?;
             log::trace!("Payment inserted.");
 
-            insert_activity_payments(activity_payments, &payment_id, &owner_id, conn)?;
-            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, conn)?;
+            insert_activity_payments(activity_payments, &payment_id, owner_id, peer_id, conn)?;
+            insert_agreement_payments(agreement_payments, &payment_id, owner_id, peer_id, conn)?;
 
             Ok(())
         })
@@ -118,6 +141,7 @@ impl<'c> PaymentDao<'c> {
     #[allow(clippy::too_many_arguments)]
     pub async fn create_new(
         &self,
+        payment_id: String,
         payer_id: NodeId,
         payee_id: NodeId,
         payer_addr: String,
@@ -127,8 +151,9 @@ impl<'c> PaymentDao<'c> {
         details: Vec<u8>,
         activity_payments: Vec<ActivityPayment>,
         agreement_payments: Vec<AgreementPayment>,
-    ) -> DbResult<String> {
+    ) -> DbResult<()> {
         let payment = WriteObj::new_sent(
+            payment_id.clone(),
             payer_id,
             payee_id,
             payer_addr,
@@ -139,10 +164,9 @@ impl<'c> PaymentDao<'c> {
             None,
             None,
         );
-        let payment_id = payment.id.clone();
         self.insert(payment, activity_payments, agreement_payments)
             .await?;
-        Ok(payment_id)
+        Ok(())
     }
 
     pub async fn insert_received(
@@ -203,18 +227,11 @@ impl<'c> PaymentDao<'c> {
 
             match payment {
                 Some(payment) => {
-                    let activity_payments = activity_pay_dsl::pay_activity_payment
-                        .filter(activity_pay_dsl::payment_id.eq(&payment_id))
-                        .filter(activity_pay_dsl::owner_id.eq(&owner_id))
+                    let document_payments = document_pay_dsl::pay_payment_document
+                        .filter(document_pay_dsl::payment_id.eq(&payment_id))
+                        .filter(document_pay_dsl::owner_id.eq(&owner_id))
                         .load(conn)?;
-                    let agreement_payments = agreement_pay_dsl::pay_agreement_payment
-                        .filter(agreement_pay_dsl::payment_id.eq(&payment_id))
-                        .filter(agreement_pay_dsl::owner_id.eq(&owner_id))
-                        .load(conn)?;
-                    Ok(Some(payment.into_signed_api_model(
-                        activity_payments,
-                        agreement_payments,
-                    )))
+                    Ok(Some(payment.into_signed_api_model(document_payments)))
                 }
                 None => Ok(None),
             }
@@ -236,16 +253,12 @@ impl<'c> PaymentDao<'c> {
                 .load(conn)?;
 
             for payment in payments {
-                let activity_payments = activity_pay_dsl::pay_activity_payment
-                    .filter(activity_pay_dsl::payment_id.eq(&payment.id))
-                    .filter(activity_pay_dsl::owner_id.eq(&payment.owner_id))
-                    .load(conn)?;
-                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
-                    .filter(agreement_pay_dsl::payment_id.eq(&payment.id))
-                    .filter(agreement_pay_dsl::owner_id.eq(&payment.owner_id))
+                let document_payments = document_pay_dsl::pay_payment_document
+                    .filter(document_pay_dsl::payment_id.eq(&payment.id))
+                    .filter(document_pay_dsl::owner_id.eq(&payment.owner_id))
                     .load(conn)?;
 
-                result.push(payment.into_api_model(activity_payments, agreement_payments))
+                result.push(payment.into_api_model(document_payments))
             }
 
             Ok(result)
@@ -282,25 +295,20 @@ impl<'c> PaymentDao<'c> {
 
             let payments: Vec<ReadObj> = query.load(conn)?;
 
-            let activity_payments = {
-                let mut query = activity_pay_dsl::pay_activity_payment
+            let document_payments = {
+                let mut query = document_pay_dsl::pay_payment_document
                     .inner_join(
-                        dsl::pay_payment.on(activity_pay_dsl::owner_id
+                        dsl::pay_payment.on(document_pay_dsl::owner_id
                             .eq(dsl::owner_id)
-                            .and(activity_pay_dsl::payment_id.eq(dsl::id))),
+                            .and(document_pay_dsl::payment_id.eq(dsl::id))),
                     )
                     .inner_join(
-                        activity_dsl::pay_activity.on(activity_pay_dsl::owner_id
-                            .eq(activity_dsl::owner_id)
-                            .and(activity_pay_dsl::activity_id.eq(activity_dsl::id))),
-                    )
-                    .inner_join(
-                        agreement_dsl::pay_agreement.on(activity_pay_dsl::owner_id
+                        agreement_dsl::pay_agreement.on(document_pay_dsl::owner_id
                             .eq(agreement_dsl::owner_id)
-                            .and(activity_dsl::agreement_id.eq(agreement_dsl::id))),
+                            .and(document_pay_dsl::agreement_id.eq(agreement_dsl::id))),
                     )
                     .filter(dsl::owner_id.eq(&node_id))
-                    .select(crate::schema::pay_activity_payment::all_columns)
+                    .select(crate::schema::pay_payment_document::all_columns)
                     .into_boxed();
                 if let Some(app_session_id) = &app_session_id {
                     query = query.filter(agreement_dsl::app_session_id.eq(app_session_id));
@@ -308,32 +316,7 @@ impl<'c> PaymentDao<'c> {
                 query.load(conn)?
             };
 
-            let agreement_payments = {
-                let mut query = agreement_pay_dsl::pay_agreement_payment
-                    .inner_join(
-                        dsl::pay_payment.on(agreement_pay_dsl::owner_id
-                            .eq(dsl::owner_id)
-                            .and(agreement_pay_dsl::payment_id.eq(dsl::id))),
-                    )
-                    .inner_join(
-                        agreement_dsl::pay_agreement.on(agreement_pay_dsl::owner_id
-                            .eq(agreement_dsl::owner_id)
-                            .and(agreement_pay_dsl::agreement_id.eq(agreement_dsl::id))),
-                    )
-                    .filter(dsl::owner_id.eq(&node_id))
-                    .select(crate::schema::pay_agreement_payment::all_columns)
-                    .into_boxed();
-                if let Some(app_session_id) = &app_session_id {
-                    query = query.filter(agreement_dsl::app_session_id.eq(app_session_id));
-                }
-                query.load(conn)?
-            };
-
-            let mut payments = join_activity_and_agreement_payments(
-                payments,
-                activity_payments,
-                agreement_payments,
-            );
+            let mut payments = join_document_payments(payments, document_payments);
 
             // A trick to filter payments by app_session_id. Payments are not directly linked to any
             // particular agreement but they always have at least one related activity_payment or
@@ -369,14 +352,12 @@ impl<'c> PaymentDao<'c> {
 
             let mut payments = Vec::default();
             for payment in read {
-                let activity_payments = activity_pay_dsl::pay_activity_payment
-                    .filter(activity_pay_dsl::payment_id.eq(&payment.id))
-                    .load(conn)?;
-                let agreement_payments = agreement_pay_dsl::pay_agreement_payment
-                    .filter(agreement_pay_dsl::payment_id.eq(&payment.id))
+                let document_payments = document_pay_dsl::pay_payment_document
+                    .filter(document_pay_dsl::payment_id.eq(&payment.id))
+                    .filter(document_pay_dsl::owner_id.eq(&payment.owner_id))
                     .load(conn)?;
 
-                payments.push(payment.into_api_model(activity_payments, agreement_payments))
+                payments.push(payment.into_api_model(document_payments))
             }
 
             Ok(payments)
@@ -386,39 +367,27 @@ impl<'c> PaymentDao<'c> {
 }
 
 #[allow(clippy::unwrap_or_default)]
-fn join_activity_and_agreement_payments(
+fn join_document_payments(
     payments: Vec<ReadObj>,
-    activity_payments: Vec<DbActivityPayment>,
-    agreement_payments: Vec<DbAgreementPayment>,
+    document_payments: Vec<DocumentPayment>,
 ) -> Vec<Signed<Payment>> {
-    let mut activity_payments_map =
-        activity_payments
+    let mut document_payments_map =
+        document_payments
             .into_iter()
-            .fold(HashMap::new(), |mut map, activity_payment| {
-                map.entry(activity_payment.payment_id.clone())
+            .fold(HashMap::new(), |mut map, document_payment| {
+                map.entry(document_payment.payment_id.clone())
                     .or_insert_with(Vec::new)
-                    .push(activity_payment);
+                    .push(document_payment);
                 map
             });
-    let mut agreement_payments_map =
-        agreement_payments
-            .into_iter()
-            .fold(HashMap::new(), |mut map, agreement_payment| {
-                map.entry(agreement_payment.payment_id.clone())
-                    .or_insert_with(Vec::new)
-                    .push(agreement_payment);
-                map
-            });
+
     payments
         .into_iter()
         .map(|payment| {
-            let activity_payments = activity_payments_map
+            let document_payments = document_payments_map
                 .remove(&payment.id)
                 .unwrap_or_default();
-            let agreement_payments = agreement_payments_map
-                .remove(&payment.id)
-                .unwrap_or_default();
-            payment.into_signed_api_model(activity_payments, agreement_payments)
+            payment.into_signed_api_model(document_payments)
         })
         .collect()
 }
