@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use actix::prelude::*;
 use futures::{future, FutureExt};
@@ -7,17 +7,17 @@ use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
 use ya_runtime_api::deploy::ContainerEndpoint;
-use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
+use ya_runtime_api::server::{CreateNetwork, Network, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
 use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
-use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
+use ya_utils_networking::vpn::{common::ntoh, Error as NetError, EtherField, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
 
 use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::network::{self, Endpoint};
+use crate::network::{self, network_to_runtime_command, Endpoint};
 use crate::state::Deployment;
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -39,18 +39,20 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .ok_or_else(|| Error::Other("no default identity set".to_string()))?
         .node_id;
 
-    let networks = deployment
+    let network_commands = deployment
         .networks
         .values()
-        .map(TryFrom::try_from)
-        .collect::<crate::Result<_>>()?;
+        .map(network_to_runtime_command)
+        .collect::<Vec<Network>>();
 
+    let create_network = CreateNetwork {
+        networks: network_commands,
+        hosts: deployment.hosts.clone(),
+        interface: NetworkInterface::Vpn as i32,
+    };
+    log::info!("Creating VPN network: {:#?}", create_network);
     let response = service
-        .create_network(CreateNetwork {
-            networks,
-            hosts: deployment.hosts.clone(),
-            interface: NetworkInterface::Vpn as i32,
-        })
+        .create_network(create_network)
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
@@ -153,6 +155,7 @@ impl Vpn {
     }
 
     fn handle_ip(
+        dst_mac: [u8; 6],
         frame: EtherFrame,
         networks: &Networks<DuoEndpoint<GsbEndpoint>>,
         default_id: &str,
@@ -173,7 +176,24 @@ impl Vpn {
             let ip = ip_pkt.dst_address();
             match networks.endpoint(ip) {
                 Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
-                None => log::debug!("[vpn] no endpoint for {ip:?}"),
+                None => {
+                    //yagna local network mac address assignment
+                    if dst_mac[0] == 0xA0 && dst_mac[1] == 0x13 {
+                        //last four bytes should be ip address (our convention of assigning mac addresses)
+                        match networks.endpoint(&dst_mac[2..6]) {
+                            Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+                            None => {
+                                log::debug!(
+                                    "[vpn] endpoint not found {:?} or {:?}",
+                                    &ip,
+                                    &dst_mac[2..6]
+                                )
+                            }
+                        }
+                    } else {
+                        log::debug!("[vpn] mac address not recognized {dst_mac:?}")
+                    }
+                }
             }
         }
     }
@@ -280,10 +300,17 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             ya_packet_trace::try_extract_from_ip_frame(&packet)
         });
 
+        if packet.len() < 14 {
+            log::debug!("[vpn] packet too short (egress)");
+            return;
+        }
+        let dst_mac: [u8; 6] = packet[EtherField::DST_MAC].try_into().unwrap();
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
-                EtherFrame::Ip(_) => Self::handle_ip(frame, &self.networks, &self.default_id),
+                EtherFrame::Ip(_) => {
+                    Self::handle_ip(dst_mac, frame, &self.networks, &self.default_id)
+                }
                 frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
             },
             Err(err) => {
