@@ -782,12 +782,18 @@ impl PaymentProcessor {
         let payments: Vec<Payment> = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
+            log::trace!("get_batch_order_items_by_payment_id {}...", msg.payment_id);
             let order_items = db_executor
                 .as_dao::<BatchDao>()
                 .get_batch_order_items_by_payment_id(msg.payment_id, payer_id)
                 .await?;
+            log::trace!(
+                "get_batch_order_items_by_payment_id finished and received {} items",
+                order_items.len()
+            );
 
             for order_item in order_items.iter() {
+                log::trace!("Getting documents for order item: {:?}", order_item);
                 let order_documents = match db_executor
                     .as_dao::<BatchDao>()
                     .get_batch_items(
@@ -808,6 +814,7 @@ impl PaymentProcessor {
                         )));
                     }
                 };
+                log::trace!("Set orders paid: {:?}", order_item);
 
                 db_executor
                     .as_dao::<BatchDao>()
@@ -819,6 +826,8 @@ impl PaymentProcessor {
                     )
                     .await?;
                 for order in order_documents.iter() {
+                    log::trace!("Find activity for order: {:?}", order);
+
                     //get agreement by id
                     let agreement = db_executor
                         .as_dao::<AgreementDao>()
@@ -862,6 +871,11 @@ impl PaymentProcessor {
                     }
                 }
             }
+
+            log::trace!(
+                "Summing up notifications for peers: {:?}",
+                peers_to_sent_to.values()
+            );
 
             // Sum up the amounts for each peer
             for (key, value) in peers_to_sent_to.iter_mut() {
@@ -907,10 +921,13 @@ impl PaymentProcessor {
                 value.agreement_payments = agreement_map.into_values().collect();
             }
 
+            log::trace!("Signing {} payments...", peers_to_sent_to.len());
+
             let mut payloads = Vec::new();
             for (key, value) in peers_to_sent_to.iter() {
                 let payment_dao: PaymentDao = db_executor.as_dao();
 
+                log::trace!("Creating new payment for peer: {}", value.payee_id);
                 payment_dao
                     .create_new(
                         value.payment_id.clone(),
@@ -926,12 +943,14 @@ impl PaymentProcessor {
                     )
                     .await?;
 
+                log::trace!("Get signed payment for peer: {}", value.payee_id);
                 let signed_payment = payment_dao
                     .get(payment_id.clone(), payer_id)
                     .await?
                     .unwrap();
                 payloads.push(signed_payment.payload);
             }
+            log::trace!("Part of processing blocking DB done, releasing DB");
             payloads
         };
 
