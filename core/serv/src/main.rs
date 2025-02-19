@@ -507,7 +507,7 @@ impl ServiceCommand {
                     env::set_var(
                         "RUST_LOG",
                         env::var("RUST_LOG").unwrap_or("info".to_string())
-                            + ",ya_payment::timeout_lock=trace",
+                            + ",ya_payment::timeout_lock=trace,ya_payment::processor=trace",
                     );
                 }
 
