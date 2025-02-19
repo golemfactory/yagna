@@ -787,7 +787,10 @@ impl PaymentProcessor {
                 .as_dao::<BatchDao>()
                 .get_batch_order_items_by_payment_id(msg.payment_id, payer_id)
                 .await?;
-            log::trace!("get_batch_order_items_by_payment_id finished and received {} items", order_items.len());
+            log::trace!(
+                "get_batch_order_items_by_payment_id finished and received {} items",
+                order_items.len()
+            );
 
             for order_item in order_items.iter() {
                 log::trace!("Getting documents for order item: {:?}", order_item);
@@ -869,7 +872,10 @@ impl PaymentProcessor {
                 }
             }
 
-            log::trace!("Summing up notifications for peers: {:?}", peers_to_sent_to.values());
+            log::trace!(
+                "Summing up notifications for peers: {:?}",
+                peers_to_sent_to.values()
+            );
 
             // Sum up the amounts for each peer
             for (key, value) in peers_to_sent_to.iter_mut() {
