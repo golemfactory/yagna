@@ -9126,7 +9126,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
- "sha3 0.8.2",
+ "sha3 0.10.8",
  "shell-words",
  "signal-hook",
  "socket2 0.4.10",

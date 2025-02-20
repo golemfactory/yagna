@@ -6,8 +6,8 @@ edition = "2021"
 homepage = "https://github.com/golemfactory/yagna"
 repository = "https://github.com/golemfactory/yagna"
 license = "LGPL-3.0"
-description="Yagna utils for asynchronous process handling"
-keywords=["golem", "yagna", "process"]
+description = "Yagna utils for asynchronous process handling"
+keywords = ["golem", "yagna", "process"]
 
 [features]
 default = []
@@ -35,8 +35,8 @@ nix = "0.22"
 winapi = { version = "0.3", features = [
     "jobapi2",
     "processthreadsapi",
+    "handleapi",
 ] }
-
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = { version = "0.7" }
