@@ -1273,9 +1273,15 @@ impl PaymentProcessor {
             let active = dao
                 .get_for_address(platform.clone(), address.clone(), Some(false))
                 .await?;
-            let past = dao
-                .get_for_address(platform.clone(), address.clone(), Some(true))
-                .await?;
+            let past = if deposit.is_some() {
+                //todo this is huge performance problem, which should be addressed when dealing with deposits
+                dao.get_for_address(platform.clone(), address.clone(), Some(true))
+                    .await?
+            } else {
+                //no need to get past allocations if no deposit is provided
+                //fix performance issue when running yagna for a long time
+                vec![]
+            };
 
             (active, past)
         };
@@ -1313,11 +1319,18 @@ impl PaymentProcessor {
         };
 
         let db = Data::new(db_executor.clone());
+        let instant = Instant::now();
         let active_allocations = db
             .clone()
             .as_dao::<AllocationDao>()
             .get_filtered(None, None, None, None, None, Some(false))
             .await;
+
+        log::info!(
+            "Allocations release started. Force: {}. Time elapsed: {:?}",
+            force,
+            instant.elapsed()
+        );
 
         if force {
             log::info!("Releasing all active allocations...");
