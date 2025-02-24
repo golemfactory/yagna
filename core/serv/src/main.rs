@@ -503,6 +503,13 @@ impl ServiceCommand {
                         "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
                     }),
                 );
+                if env::var("YAGNA_TRACE_DB_LOCKS") == Ok("1".to_string()) {
+                    env::set_var(
+                        "RUST_LOG",
+                        env::var("RUST_LOG").unwrap_or("info".to_string())
+                            + ",ya_payment::timeout_lock=trace,ya_payment::processor=trace",
+                    );
+                }
 
                 //this force_debug flag sets default log level to debug
                 //if the --debug option is set
