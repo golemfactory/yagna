@@ -1319,18 +1319,11 @@ impl PaymentProcessor {
         };
 
         let db = Data::new(db_executor.clone());
-        let instant = Instant::now();
         let active_allocations = db
             .clone()
             .as_dao::<AllocationDao>()
             .get_filtered(None, None, None, None, None, Some(false))
             .await;
-
-        log::info!(
-            "Allocations release started. Force: {}. Time elapsed: {:?}",
-            force,
-            instant.elapsed()
-        );
 
         if force {
             log::info!("Releasing all active allocations...");
