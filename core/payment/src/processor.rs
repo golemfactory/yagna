@@ -704,7 +704,7 @@ impl PaymentProcessor {
                     .await
                 {
                     Ok(res) => {
-                        resolve_time_ms = operation_start.elapsed().as_secs_f64() / 1000.0;
+                        resolve_time_ms = operation_start.elapsed().as_secs_f64() * 1000.0;
                         order_id = res;
                     }
                     Err(err) => {
@@ -735,7 +735,7 @@ impl PaymentProcessor {
                         .await
                     {
                         Ok(()) => {
-                            send_time_ms = send_time_now.elapsed().as_secs_f64() / 1000.0;
+                            send_time_ms = send_time_now.elapsed().as_secs_f64() * 1000.0;
                         }
                         Err(err) => {
                             log::error!("Error when closing deposits {}", err);
