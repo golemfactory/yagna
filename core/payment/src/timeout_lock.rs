@@ -31,7 +31,7 @@ impl<T: ?Sized + 'static> MutexTimeoutExt<T> for Mutex<T> {
         log::trace!("Timeout lock {next_id} requested from {caller}");
         let curr = Instant::now();
         tokio::time::timeout(duration, self.lock()).then(move |result| {
-            let elapsed_ms = curr.elapsed().as_secs_f64() / 1000.0;
+            let elapsed_ms = curr.elapsed().as_secs_f64() * 1000.0;
             let duration_ms = duration.as_secs_f64() * 1000.0;
             match &result {
                 Ok(guard) => {
