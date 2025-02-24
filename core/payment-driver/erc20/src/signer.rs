@@ -1,21 +1,17 @@
-use std::sync::{Arc, Mutex};
-
-use erc20_payment_lib::{signer::SignerError, DUMMY_RPC_PROVIDER};
-use ethereum_types::{H160, H256};
+use erc20_payment_lib::signer::SignerError;
+use ethereum_types::H160;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use web3::{
-    signing::{Signature, SigningError},
-    types::{Address, SignedTransaction, TransactionParameters},
-};
+use web3::types::{SignedTransaction, TransactionParameters};
 use ya_client_model::NodeId;
 use ya_payment_driver::bus;
 
+/*
 #[derive(Default, Clone)]
 struct DummyKeyState {
     message: Vec<u8>,
     signed: Vec<u8>,
-}
+}*/
 
 /// Key for hacky interaction with the web3 API
 ///
@@ -33,7 +29,7 @@ struct DummyKeyState {
 /// versions of web3 as long as you pass in transactions consistently. This means you
 /// cannot depend on `sign_transaction` populating the optional fields: `nonce`, `gas_price`
 /// and `chain_id`.
-#[derive(Clone)]
+/*#[derive(Clone)]
 struct DummyKey {
     pub pub_address: Address,
     pub state: Arc<Mutex<DummyKeyState>>,
@@ -83,7 +79,7 @@ impl web3::signing::Key for DummyKey {
         self.pub_address
     }
 }
-
+*/
 #[derive(Default)]
 pub struct IdentitySigner;
 
@@ -101,10 +97,11 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
 
     fn sign(
         &self,
-        pub_address: H160,
-        tp: TransactionParameters,
+        _pub_address: H160,
+        _tp: TransactionParameters,
     ) -> BoxFuture<'_, Result<SignedTransaction, SignerError>> {
         async move {
+            /*
             let (dummy_key, state) = DummyKey::new(pub_address);
 
             // We don't care about the result. This is only called
@@ -126,13 +123,18 @@ impl erc20_payment_lib::signer::Signer for IdentitySigner {
                 state.signed = signed;
             }
 
+
             DUMMY_RPC_PROVIDER
                 .accounts()
                 .sign_transaction(tp, dummy_key)
                 .await
                 .map_err(|e| SignerError {
                     message: e.to_string(),
-                })
+                })*/
+
+            Err(SignerError {
+                message: "Signing disabled in this test build".to_string(),
+            })
         }
         .boxed()
     }
