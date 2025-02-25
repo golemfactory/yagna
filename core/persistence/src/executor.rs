@@ -278,23 +278,22 @@ where
                 label,
                 end_query.duration_since(start_query).as_millis()
             );
+        } else if end_query.duration_since(start_query).as_millis() > 5000 {
+            log::warn!(
+                "Slow rw transaction no: {}: {}, time: {}ms",
+                count_no,
+                label,
+                end_query.duration_since(start_query).as_millis()
+            );
         } else {
-            if end_query.duration_since(start_query).as_millis() > 5000 {
-                log::warn!(
-                    "Slow rw transaction no: {}: {}, time: {}ms",
-                    count_no,
-                    label,
-                    end_query.duration_since(start_query).as_millis()
-                );
-            } else {
-                log::trace!(
-                    "Finished rw transaction no: {}: {}, time: {}ms",
-                    count_no,
-                    label,
-                    end_query.duration_since(start_query).as_millis()
-                );
-            }
+            log::trace!(
+                "Finished rw transaction no: {}: {}, time: {}ms",
+                count_no,
+                label,
+                end_query.duration_since(start_query).as_millis()
+            );
         }
+
         res
     })
     .await

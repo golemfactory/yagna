@@ -5,6 +5,7 @@ use diesel::sql_types::{Text, Timestamp};
 use std::collections::{hash_map, HashMap};
 use std::iter::zip;
 use std::str::FromStr;
+use tokio::time::Instant;
 use uuid::Uuid;
 use ya_core_model::NodeId;
 use ya_persistence::executor::{
@@ -519,6 +520,8 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let platform = args.platform;
     let since = args.since;
     let zero = BigDecimal::from(0u32);
+
+    let start = Instant::now();
 
     let total_amount = BigDecimal::default();
     let payments = HashMap::<String, BatchPayment>::new();
