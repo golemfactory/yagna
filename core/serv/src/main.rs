@@ -517,6 +517,13 @@ impl ServiceCommand {
                             + ",ya_payment::dao::batch=trace",
                     );
                 }
+                if env::var("YAGNA_TRACE_DB_EXECUTOR") == Ok("1".to_string()) {
+                    env::set_var(
+                        "RUST_LOG",
+                        env::var("RUST_LOG").unwrap_or("info".to_string())
+                            + ",ya_persistence::executor=trace",
+                    );
+                }
 
                 //this force_debug flag sets default log level to debug
                 //if the --debug option is set
