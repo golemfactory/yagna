@@ -5,7 +5,7 @@ use actix_web::{HttpResponse, Scope};
 use ya_client_model::payment::params;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-//
+
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/batchOrders", get().to(get_batch_orders))
