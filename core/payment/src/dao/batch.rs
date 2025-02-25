@@ -394,7 +394,7 @@ fn use_expenditures_on_payments(
                         })
                         .collect::<Vec<&mut AllocationExpenditureObj>>(),
                 };
-                log::info!(
+                log::debug!(
                     "Found {} matching expenditures for obligation {:?}",
                     matching_expenditures.len(),
                     obligation
@@ -472,7 +472,7 @@ fn use_expenditures_on_payments(
                             amount,
                             agreement_id,
                         } => {
-                            log::info!("Covered invoice obligation {} with {} of {} from allocation {} - agreement id: {}", id, cover_amount, amount, expenditure.allocation_id, agreement_id);
+                            log::debug!("Covered invoice obligation {} with {} of {} from allocation {} - agreement id: {}", id, cover_amount, amount, expenditure.allocation_id, agreement_id);
                         }
                         BatchPaymentObligation::DebitNote {
                             debit_note_id,
@@ -480,7 +480,7 @@ fn use_expenditures_on_payments(
                             agreement_id,
                             activity_id,
                         } => {
-                            log::info!("Covered debit note obligation {:?} with {} of {} from allocation {} - agreement id: {} - activity id: {}", debit_note_id, cover_amount, amount, expenditure.allocation_id, agreement_id, activity_id);
+                            log::debug!("Covered debit note obligation {:?} with {} of {} from allocation {} - agreement id: {} - activity id: {}", debit_note_id, cover_amount, amount, expenditure.allocation_id, agreement_id, activity_id);
                         }
                     }
                     amount_covered += cover_amount;
@@ -491,7 +491,7 @@ fn use_expenditures_on_payments(
                         amount,
                         agreement_id,
                     } => {
-                        log::info!(
+                        log::debug!(
                             "Total covered invoice obligation {} with {} of {} from allocations",
                             id,
                             amount_covered,
@@ -504,7 +504,7 @@ fn use_expenditures_on_payments(
                         agreement_id,
                         activity_id,
                     } => {
-                        log::info!("Total covered debit note obligation {:?} with {} of {} from allocations", debit_note_id, amount_covered, amount);
+                        log::debug!("Total covered debit note obligation {:?} with {} of {} from allocations", debit_note_id, amount_covered, amount);
                     }
                 }
             }
@@ -521,25 +521,44 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let since = args.since;
     let zero = BigDecimal::from(0u32);
 
-    let start = Instant::now();
+    let start_all = Instant::now();
 
     let total_amount = BigDecimal::default();
     let payments = HashMap::<String, BatchPayment>::new();
 
     let total_amount = BigDecimal::from(0u32);
 
+    let start = Instant::now();
     log::debug!("Resolving invoices for {} - {}", owner_id, platform);
     let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
 
+    log::trace!(
+        "Resolve invoices (activity) finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
+
+    let start = Instant::now();
     log::debug!("Resolving agreements for {}", owner_id);
     let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
 
+    log::trace!(
+        "Resolve invoices (agreement) finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
     if total_amount == zero {
+        log::debug!("No invoices to resolve for {} and {}", owner_id, platform);
         return Ok(None);
+    } else {
+        log::info!(
+            "Found payments that need to be resolved! platform: {}, owner: {}",
+            platform,
+            owner_id
+        );
     }
 
+    let start = Instant::now();
     //get allocation expenditures
-
+    log::debug!("Resolving expenditures for {}", owner_id);
     use crate::schema::pay_allocation::dsl as pa_dsl;
     use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
     let expenditures_orig: Vec<AllocationExpenditureObj> = pae_dsl::pay_allocation_expenditure
@@ -556,16 +575,30 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
         .load(conn)?;
     let mut expenditures = expenditures_orig.clone();
 
+    log::trace!(
+        "Resolve expenditures finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
+
     if expenditures.len() > 0 {
         log::debug!("Found total of {} expenditures", expenditures.len());
     }
 
+    let start = Instant::now();
+    log::debug!("Using expenditures on payments");
     let payments_allocations =
         use_expenditures_on_payments(&mut expenditures, payments).map_err(|e| {
             log::error!("Error using expenditures on payments: {:?}", e);
             e
         })?;
 
+    log::trace!(
+        "Use expenditures on payments finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
+
+    let start = Instant::now();
+    log::debug!("Updating expenditures");
     // upload the updated expenditures to database (if changed)
     for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
         if expenditure_new.scheduled_amount != expenditure_old.scheduled_amount {
@@ -588,7 +621,13 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
         }
     }
 
+    log::trace!(
+        "Update expenditures finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
+
     let order_id = Uuid::new_v4().to_string();
+    log::debug!("Inserting new order: {}", order_id);
     {
         use crate::schema::pay_batch_order::dsl as odsl;
 
@@ -603,6 +642,9 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             ))
             .execute(conn)?;
     }
+
+    let start = Instant::now();
+    log::debug!("Inserting new order items");
     {
         for (key, payment) in payments_allocations {
             let payee_addr = key.payee_addr;
@@ -668,6 +710,17 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             }
         }
     }
+    log::trace!(
+        "Insert order items finished in {:.2}ms",
+        start.elapsed().as_secs_f64() * 1000.0
+    );
+
+    log::info!(
+        "Resolved invoices for {}, platform: {}, took {:.2}ms",
+        owner_id,
+        platform,
+        start_all.elapsed().as_secs_f64() * 1000.0
+    );
     Ok(Some(order_id))
 }
 
