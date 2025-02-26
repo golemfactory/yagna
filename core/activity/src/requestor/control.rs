@@ -205,6 +205,10 @@ async fn get_batch_results(
     id: Identity,
     request: HttpRequest,
 ) -> Result<impl Responder> {
+    log::info!(
+        "Requestor get_batch_results: {:?}",
+        request.headers().get(header::ACCEPT)
+    );
     authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
     let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
 
@@ -238,6 +242,10 @@ async fn await_results(
         .timeout(timeout_margin(query.timeout))
         .await???;
 
+    log::info!(
+        "Requestor get_batch_results: {:?}",
+        serde_json::to_string(&results)
+    );
     Ok::<_, Error>(web::Json(results))
 }
 

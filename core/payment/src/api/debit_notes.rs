@@ -132,6 +132,12 @@ async fn get_debit_note_events(
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
 
+    log::info!(
+        "Requested DebitNote events for Node [{}] after [{}] with timeout [{}]",
+        node_id,
+        after_timestamp.map(|d| d.to_string()).unwrap_or_else(|| "None".to_owned()),
+        timeout_secs
+    );
     let dao: DebitNoteEventDao = db.as_dao();
     let getter = || async {
         dao.get_for_node_id(
