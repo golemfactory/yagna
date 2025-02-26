@@ -9107,7 +9107,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.6.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/logs2#7c2461c4616bc0c5faba36d7e41980413adbb049"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=repro/tcp-connection-rst-on-connect#234f655fb14e593e39f5f2be51a4dba6996be505"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9138,7 +9138,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/logs2#7c2461c4616bc0c5faba36d7e41980413adbb049"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=repro/tcp-connection-rst-on-connect#234f655fb14e593e39f5f2be51a4dba6996be505"
 dependencies = [
  "anyhow",
  "chrono",
@@ -9168,7 +9168,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/logs2#7c2461c4616bc0c5faba36d7e41980413adbb049"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=repro/tcp-connection-rst-on-connect#234f655fb14e593e39f5f2be51a4dba6996be505"
 dependencies = [
  "anyhow",
  "bytes 1.6.0",
@@ -9188,7 +9188,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/logs2#7c2461c4616bc0c5faba36d7e41980413adbb049"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=repro/tcp-connection-rst-on-connect#234f655fb14e593e39f5f2be51a4dba6996be505"
 dependencies = [
  "derive_more",
  "futures 0.3.30",
@@ -9208,7 +9208,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/logs2#7c2461c4616bc0c5faba36d7e41980413adbb049"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=repro/tcp-connection-rst-on-connect#234f655fb14e593e39f5f2be51a4dba6996be505"
 dependencies = [
  "bytes 1.6.0",
  "derive_more",
