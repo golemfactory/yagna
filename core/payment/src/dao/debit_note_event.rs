@@ -106,13 +106,15 @@ impl<'c> DebitNoteEventDao<'c> {
             if let Some(timestamp) = after_timestamp {
                 query = query.filter(read_dsl::timestamp.gt(timestamp.adapt()));
             }
-            if let Some(app_session_id) = app_session_id {
+            if let Some(app_session_id) = app_session_id.clone() {
                 query = query.filter(read_dsl::app_session_id.eq(app_session_id));
             }
             if let Some(limit) = max_events {
                 query = query.limit(limit.into());
             }
+            log::info!("Start Query: {:?} {:?} {:?} {:?}", after_timestamp, node_id, app_session_id, max_events);
             let events: Vec<ReadObj> = query.load(conn)?;
+            log::info!("End Query: {:?}", events);
             let requestor_events: HashSet<Cow<'static, str>> =
                 requestor_events.into_iter().collect();
             let provider_events: HashSet<Cow<'static, str>> = provider_events.into_iter().collect();
