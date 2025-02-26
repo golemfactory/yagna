@@ -135,7 +135,9 @@ async fn get_debit_note_events(
     log::info!(
         "Requested DebitNote events for Node [{}] after [{}] with timeout [{}]",
         node_id,
-        after_timestamp.map(|d| d.to_string()).unwrap_or_else(|| "None".to_owned()),
+        after_timestamp
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "None".to_owned()),
         timeout_secs
     );
     let dao: DebitNoteEventDao = db.as_dao();
