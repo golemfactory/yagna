@@ -4,10 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "golem-node"
-version = "0.14.0"
+dynamic = ["version"]
 description = "golem-node"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 license = { file = "LICENSE" }
 keywords = ["Golem"]
 classifiers = [
@@ -29,6 +29,9 @@ urls = { repository = "https://github.com/golemfactory/yagna" }
 
 [tool.maturin]
 bindings = "bin"
+module-name = "golem_node"
 manifest-path = "Cargo.toml"
 python-source = "python"
 strip = true
+
+
