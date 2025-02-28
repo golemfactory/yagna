@@ -101,7 +101,7 @@ mod common {
         query: web::Query<QueryTimeout>,
         id: Identity,
     ) -> impl Responder {
-        log::debug!("get_activity_state_web");
+        log::info!("get_activity_state_web");
 
         // check if caller is the Provider
         if authorize_activity_executor(&db, id.identity, &path.activity_id, Role::Provider)

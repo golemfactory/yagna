@@ -263,7 +263,7 @@ where
     let count_no = RW_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     //log::warn!("Do_with_rw_connection {count_no}");
     let pool = pool.clone();
-    match tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
         log::trace!("Start rw transaction no {}: {}", count_no, label);
         let _guard = pool.tx_lock.write().unwrap();
@@ -278,6 +278,13 @@ where
                 label,
                 end_query.duration_since(start_query).as_millis()
             );
+        } else if end_query.duration_since(start_query).as_millis() > 5000 {
+            log::warn!(
+                "Slow rw transaction no: {}: {}, time: {}ms",
+                count_no,
+                label,
+                end_query.duration_since(start_query).as_millis()
+            );
         } else {
             log::trace!(
                 "Finished rw transaction no: {}: {}, time: {}ms",
@@ -286,13 +293,11 @@ where
                 end_query.duration_since(start_query).as_millis()
             );
         }
+
         res
     })
     .await
-    {
-        Ok(v) => v,
-        Err(join_err) => Err(From::from(join_err)),
-    }
+    .unwrap_or_else(|join_err| Err(From::from(join_err)))
 }
 
 pub async fn do_with_transaction<R: Send + 'static, Error, F>(

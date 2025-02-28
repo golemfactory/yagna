@@ -704,7 +704,7 @@ impl PaymentProcessor {
                     .await
                 {
                     Ok(res) => {
-                        resolve_time_ms = operation_start.elapsed().as_secs_f64() / 1000.0;
+                        resolve_time_ms = operation_start.elapsed().as_secs_f64() * 1000.0;
                         order_id = res;
                     }
                     Err(err) => {
@@ -735,7 +735,7 @@ impl PaymentProcessor {
                         .await
                     {
                         Ok(()) => {
-                            send_time_ms = send_time_now.elapsed().as_secs_f64() / 1000.0;
+                            send_time_ms = send_time_now.elapsed().as_secs_f64() * 1000.0;
                         }
                         Err(err) => {
                             log::error!("Error when closing deposits {}", err);
@@ -1273,9 +1273,15 @@ impl PaymentProcessor {
             let active = dao
                 .get_for_address(platform.clone(), address.clone(), Some(false))
                 .await?;
-            let past = dao
-                .get_for_address(platform.clone(), address.clone(), Some(true))
-                .await?;
+            let past = if deposit.is_some() {
+                //todo this is huge performance problem, which should be addressed when dealing with deposits
+                dao.get_for_address(platform.clone(), address.clone(), Some(true))
+                    .await?
+            } else {
+                //no need to get past allocations if no deposit is provided
+                //fix performance issue when running yagna for a long time
+                vec![]
+            };
 
             (active, past)
         };
