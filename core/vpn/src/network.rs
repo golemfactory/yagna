@@ -785,10 +785,6 @@ fn create_ethernet_addr(ip: IpCidr) -> Result<EthernetAddress> {
         IpAddress::Ipv6(ip6) => Ok(EthernetAddress([
             0xA0, 0x13, ip6.0[12], ip6.0[13], ip6.0[14], ip6.0[15],
         ])),
-        _ => Err(Error::Other(format!(
-            "Could not create ethernet addr from ip: {:?}",
-            ip
-        ))),
     }
 }
 
