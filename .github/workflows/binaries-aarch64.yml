@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Profile (unused right now)'
+        description: "Profile (unused right now)"
         required: true
-        default: 'debug'
+        default: "debug"
   push:
     branches:
       - master
       - payments-dev
       - release/*
-      - '**/all-tests'
+      - "**/all-tests"
   pull_request:
     branches:
       - master
@@ -61,7 +61,7 @@ jobs:
           cp target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp} build
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: Yagna linux-aarch64
           path: build
