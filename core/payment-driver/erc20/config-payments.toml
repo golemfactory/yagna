@@ -105,7 +105,7 @@ external-source-check-interval = 300
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 120
 dns-source = "holesky.rpc-node.dev.golem.network."
 
 
