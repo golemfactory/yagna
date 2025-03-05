@@ -10441,7 +10441,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "actix-rt",
  "actix-service",
