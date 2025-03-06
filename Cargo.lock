@@ -8969,7 +8969,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "anyhow",
  "bigdecimal 0.2.2",
