@@ -338,41 +338,31 @@ impl IdentityCommand {
                     log::warn!("Using private key directly is not recommended. Use keystore instead. Your key could leak in command history, check and clean logs.")
                 }
 
-                let from_private_key_slice: Option<[u8; 32]> = if let Some(from_private_key) =
-                    from_private_key
-                {
-                    let v = hex::decode(from_private_key).map_err(|e| {
-                        anyhow::anyhow!(
-                            "Private key has to be plain hex string without 0x prefix - {e}"
-                        )
-                    })?;
-                    let slice = v[0..32].try_into().map_err(|e|
-                        anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}")
-                    )?;
-                    Some(slice)
-                } else {
-                    None
-                };
+                let from_private_key_slice = match from_private_key {
+                    Some(from_private_key) => hex::decode(from_private_key)
+                        .map_err(|e| anyhow::anyhow!("Private key has to be plain hex string without 0x prefix - {e}"))
+                        .and_then(|v| v[0..32].try_into().map_err(|e| anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}"))),
+                    None => Err(anyhow::anyhow!("No private key provided")),
+                }.ok();
 
-                let key_file = if let Some(keystore) = from_keystore {
-                    std::fs::read_to_string(keystore)?
-                } else {
-                    let password = if *no_password {
-                        Protected::from("")
-                    } else if let Some(password) = password {
-                        Protected::from(password.as_str())
-                    } else {
-                        let password: Protected =
-                            rpassword::read_password_from_tty(Some("Password: "))?.into();
-                        let password2: Protected =
-                            rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
-                        if password.as_ref() != password2.as_ref() {
-                            anyhow::bail!("Password and confirmation do not match.")
-                        }
-                        password
-                    };
-                    crate::id_key::generate_new_keyfile(password, from_private_key_slice)?
-                };
+                let key_file = from_keystore
+                    .as_ref()
+                    .map(|p| std::fs::read_to_string(p).context("unable to read input path"))
+                    .unwrap_or_else(|| {
+                        let password = if *no_password {
+                            Protected::from("")
+                        } else if let Some(password) = password {
+                            Protected::from(password.as_str())
+                        } else {
+                            let password = read_password("Password: ")?;
+                            let password2 = read_password("Confirm password: ")?;
+                            if password.as_ref() != password2.as_ref() {
+                                anyhow::bail!("Password and confirmation do not match.")
+                            }
+                            password
+                        };
+                        crate::id_key::generate_new_keyfile(password, from_private_key_slice)
+                    })?;
 
                 let id = gsb
                     .local()
@@ -480,4 +470,8 @@ impl IdentityCommand {
             }
         }
     }
+}
+
+fn read_password(prompt: &str) -> Result<Protected, anyhow::Error> {
+    Ok(rpassword::read_password_from_tty(Some(prompt))?.into())
 }
