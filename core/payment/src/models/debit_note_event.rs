@@ -38,7 +38,7 @@ impl WriteObj {
     }
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(QueryableByName, Queryable, Debug, Identifiable)]
 #[table_name = "pay_debit_note_event_read"]
 #[primary_key(debit_note_id, event_type)]
 pub struct ReadObj {
