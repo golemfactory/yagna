@@ -162,10 +162,24 @@ mod common {
         }
 
         // check if caller is the Requestor
-        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+        match authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor)
+            .await
+        {
+            Ok(_) => {}
+            Err(err) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("authorize_activity_initiator failed: {}", err));
+            }
+        }
 
         // Return locally persisted usage if activity has been already terminated or terminating
-        let state = get_persisted_state(&db, &path.activity_id).await?;
+        let state = match get_persisted_state(&db, &path.activity_id).await {
+            Ok(state) => state,
+            Err(err) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("get_persisted_state failed: {}", err));
+            }
+        };
         if !state.alive() {
             return get_persisted_usage(&db, &path.activity_id)
                 .await
@@ -173,15 +187,43 @@ mod common {
         }
 
         // Retrieve and persist activity usage
-        let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
-        let provider_service = agreement_provider_service(&id, &agreement)?;
-        let usage = provider_service
+        let agreement = match get_activity_agreement(&db, &path.activity_id, Role::Requestor).await
+        {
+            Ok(agreement) => agreement,
+            Err(err) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("get_activity_agreement failed: {}", err));
+            }
+        };
+        let provider_service = match agreement_provider_service(&id, &agreement) {
+            Ok(provider_service) => provider_service,
+            Err(err) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("agreement_provider_service failed: {}", err));
+            }
+        };
+        let usage = match provider_service
             .send(activity::GetUsage {
                 activity_id: path.activity_id.to_string(),
                 timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
-            .await???;
+            .await
+        {
+            Ok(Ok(Ok(usage))) => usage,
+            Ok(Ok(Err(err))) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("provider_service rpc call failed: {}", err));
+            }
+            Ok(Err(err)) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("provider_service failed: {}", err));
+            }
+            Err(err) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("provider_service timed out: {}", err));
+            }
+        };
 
         set_persisted_usage(&db, &path.activity_id, usage)
             .await
