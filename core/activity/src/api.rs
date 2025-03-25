@@ -156,9 +156,14 @@ mod common {
             .await
             .is_ok()
         {
-            return get_persisted_usage(&db, &path.activity_id)
+            return match get_persisted_usage(&db, &path.activity_id)
                 .await
-                .map(web::Json);
+                .map(web::Json)
+            {
+                Ok(usage) => HttpResponse::Ok().json(usage),
+                Err(err) => HttpResponse::InternalServerError()
+                    .body(format!("get_persisted_usage failed: {}", err)),
+            };
         }
 
         // check if caller is the Requestor
@@ -181,9 +186,14 @@ mod common {
             }
         };
         if !state.alive() {
-            return get_persisted_usage(&db, &path.activity_id)
+            return match get_persisted_usage(&db, &path.activity_id)
                 .await
-                .map(web::Json);
+                .map(web::Json)
+            {
+                Ok(usage) => HttpResponse::Ok().json(usage),
+                Err(err) => HttpResponse::InternalServerError()
+                    .body(format!("get_persisted_usage failed: {}", err)),
+            };
         }
 
         // Retrieve and persist activity usage
@@ -225,9 +235,14 @@ mod common {
             }
         };
 
-        set_persisted_usage(&db, &path.activity_id, usage)
+        match set_persisted_usage(&db, &path.activity_id, usage)
             .await
             .map(web::Json)
+        {
+            Ok(usage) => HttpResponse::Ok().json(usage),
+            Err(err) => HttpResponse::InternalServerError()
+                .body(format!("set_persisted_usage failed: {}", err)),
+        }
     }
 
     fn event_stream(
