@@ -14,7 +14,7 @@ path = "src/bin.rs"
 
 [features]
 compat-deployment = []
-default = ['compat-deployment']
+default = ['compat-deployment', 'log/release_max_level_info']
 packet-trace-enable = ["ya-packet-trace/enable"]
 sgx = [
   'graphene-sgx',
