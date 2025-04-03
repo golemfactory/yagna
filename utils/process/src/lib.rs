@@ -1,12 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use derive_more::Display;
 use futures::channel::oneshot::channel;
 use futures::future::{AbortHandle, Abortable};
 use shared_child::SharedChild;
 use std::process::Command;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
+use std::{env, thread};
 
 #[cfg(feature = "lock")]
 pub mod lock;
@@ -108,13 +108,27 @@ pub struct ProcessHandle {
     job_object: JobObject,
 }
 
+#[cfg(windows)]
+fn provider_always_kill_exe_unit() -> bool {
+    env::var("PROVIDER_ALWAYS_KILL_EXE_UNIT")
+        .map(|s| s == "1" || s.to_lowercase() == "true")
+        .unwrap_or(false)
+}
+
 impl ProcessHandle {
     pub fn new(command: &mut Command) -> Result<ProcessHandle> {
         // Create a JobObject before spawning a process.
         #[cfg(windows)]
         let job_object = JobObject::try_new_current()?;
         #[cfg(windows)]
-        let command = command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+        let command = {
+            if provider_always_kill_exe_unit() {
+                //if we are killing exe unit then
+                command
+            } else {
+                command.creation_flags(CREATE_NEW_PROCESS_GROUP)
+            }
+        };
 
         let process = Arc::new(SharedChild::spawn(command)?);
         Ok(ProcessHandle {
@@ -157,6 +171,10 @@ impl ProcessHandle {
 
     #[cfg(windows)]
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
+        if provider_always_kill_exe_unit() {
+            bail!("Skipping CTRL-BREAK, because PROVIDER_ALWAYS_KILL_EXE_UNIT is set to true");
+        }
+
         unsafe { ctrl_break_process(self.process.clone()) }?;
         let process = self.process.clone();
 
