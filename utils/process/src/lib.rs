@@ -123,9 +123,12 @@ impl ProcessHandle {
         #[cfg(windows)]
         let command = {
             if provider_always_kill_exe_unit() {
-                //if we are killing exe unit then
+                // if we are killing exe unit instead of sending console events,
+                // new process group is not needed
                 command
             } else {
+                // if we want to send CTRL+BREAK to subprocess it had to have new process group
+                // there is
                 command.creation_flags(CREATE_NEW_PROCESS_GROUP)
             }
         };
