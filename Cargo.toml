@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "yagna"
 readme = "README.md"
 repository = "https://github.com/golemfactory/yagna"
-version = "0.17.2"
+version = "0.17.3"
 
 [features]
 default = ['erc20-driver', 'gftp/bin']
