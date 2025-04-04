@@ -35,7 +35,7 @@ type SocketChannel = (
 );
 
 const SOCKET_BUFFER_SIZE: usize = 2097152;
-const BUFFER_SIZE: usize = DEFAULT_MAX_FRAME_SIZE * 4;
+const BUFFER_SIZE: usize = 0x20000;
 
 pub(crate) enum Endpoint {
     New {
@@ -310,7 +310,7 @@ impl RemoteEndpoint {
                 match StreamExt::next(&mut rx).await {
                     Some(Ok(data)) => {
                         if let Err(e) = write.send_to(data.as_slice(), addr).await {
-                            log::error!("error writing to VM endpoint: {e}");
+                            log::error!("error writing {}  byes to VM endpoint: {e}", data.len());
                             break;
                         }
                     }
