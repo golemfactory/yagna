@@ -19,7 +19,6 @@ use tokio::sync::mpsc;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
 use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
-use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
 use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
 
 use crate::error::Error;
