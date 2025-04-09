@@ -43,27 +43,17 @@ fn inactive_unresponsive_limit_seconds() -> (f64, f64) {
         .map(|s| f64::from_str(&s).expect("INACTIVITY_LIMIT_SECONDS has to be a number"))
         .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS);
     if inactive_limit < MIN_INACTIVITY_LIMIT_SECONDS {
-        let error_str = format!(
-            "INACTIVITY_LIMIT_SECONDS has to be greater than {MIN_INACTIVITY_LIMIT_SECONDS}"
-        );
-        log::error!("{}", error_str);
-        panic!("{}", error_str);
+        panic!("INACTIVITY_LIMIT_SECONDS has to be greater than {MIN_INACTIVITY_LIMIT_SECONDS}");
     };
 
     let unresponsive_limit = env::var(UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR)
         .map(|s| f64::from_str(&s).expect("UNRESPONSIVE_LIMIT_SECONDS has to be a number"))
         .unwrap_or(DEFAULT_UNRESPONSIVE_LIMIT_SECONDS);
     if unresponsive_limit < MIN_UNRESPONSIVE_LIMIT_SECONDS {
-        let error_str = format!(
-            "UNRESPONSIVE_LIMIT_SECONDS has to be greater than {MIN_UNRESPONSIVE_LIMIT_SECONDS}"
-        );
-        log::error!("{}", error_str);
-        panic!("{}", error_str);
+        panic!("UNRESPONSIVE_LIMIT_SECONDS has to be greater than {MIN_UNRESPONSIVE_LIMIT_SECONDS}");
     };
     if unresponsive_limit >= inactive_limit {
-        let error_str = "UNRESPONSIVE_LIMIT_SECONDS has to be less than INACTIVITY_LIMIT_SECONDS";
-        log::error!("{}", error_str);
-        panic!("{}", error_str);
+        panic!("UNRESPONSIVE_LIMIT_SECONDS has to be less than INACTIVITY_LIMIT_SECONDS");
     };
     (inactive_limit, unresponsive_limit)
 }
@@ -141,13 +131,22 @@ async fn monitor_alive_activities(
         let activity_state = activity_state_dao.get(&activity_id).await?;
         if is_responsive(activity_state) {
             log::info!("Spawning monitoring of Activity {activity_id}");
-            tokio::task::spawn_local(monitor_activity(
+            let tsk = tokio::task::spawn_local(monitor_activity(
                 db.clone(),
                 tracker.clone(),
-                activity_id,
+                activity_id.clone(),
                 *agreement.provider_id(),
                 None,
             ));
+            //monitor of the monitor ;)
+            //if activity monitor panics, we have error in log, otherwise it's hard to find in the logs
+            tokio::task::spawn(async move {
+                if let Err(err) = tsk.await {
+                    log::error!(
+                        "Activity monitor task failed. Activity: {activity_id}. Err: {err}"
+                    );
+                }
+            });
         }
     }
     Ok(())
@@ -269,13 +268,22 @@ async fn activity_credentials(
         return Err(Error::Service(msg));
     }
 
-    tokio::task::spawn_local(monitor_activity(
+    let tsk = tokio::task::spawn_local(monitor_activity(
         db.clone(),
         tracker,
         activity_id.clone(),
         provider_id,
         app_session_id,
     ));
+
+    //monitor of the monitor ;)
+    //if activity monitor panics, we have error in log, otherwise it's hard to find in the logs
+    let activity_id_ = activity_id.clone();
+    tokio::task::spawn(async move {
+        if let Err(err) = tsk.await {
+            log::error!("Activity monitor (called from credentials) task failed. Activity: {activity_id_}. Err: {err}");
+        }
+    });
 
     let credentials = db
         .as_dao::<ActivityCredentialsDao>()
@@ -412,10 +420,10 @@ async fn monitor_activity(
 ) {
     let activity_id = activity_id.to_string();
     let (inactivity_limit, unresponsive_limit) = inactive_unresponsive_limit_seconds();
-    let delay = Duration::from_secs_f64(1.);
+    let delay = Duration::from_secs(1);
     let mut prev_state: Option<ActivityState> = None;
 
-    log::debug!("Starting activity monitor: {}", activity_id);
+    log::info!("Starting activity monitor for activity: {activity_id} - max inactivity: {inactivity_limit} max unresponsive: {unresponsive_limit}");
 
     loop {
         if let Ok((state, usage)) = get_activity_progress(&db, &activity_id).await {

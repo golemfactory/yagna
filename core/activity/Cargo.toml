@@ -2,7 +2,7 @@
 name = "ya-activity"
 version = "0.4.0"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 ya-core-model = { workspace = true, features = ["activity", "market"] }
