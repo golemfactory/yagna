@@ -5,6 +5,8 @@ use futures::future::LocalBoxFuture;
 use futures::prelude::*;
 use metrics::{counter, gauge};
 use std::convert::From;
+use std::env;
+use std::str::FromStr;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
@@ -31,34 +33,39 @@ use crate::TrackerRef;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
-const DEFAULT_INACTIVITY_LIMIT_SECONDS: f64 = 10.;
-const DEFAULT_UNRESPONSIVE_LIMIT_SECONDS: f64 = 5.;
-const MIN_INACTIVITY_LIMIT_SECONDS: f64 = 2.;
-const MIN_UNRESPONSIVE_LIMIT_SECONDS: f64 = 2.;
+const DEFAULT_INACTIVITY_LIMIT_SECONDS: f64 = 10.0;
+const DEFAULT_UNRESPONSIVE_LIMIT_SECONDS: f64 = 5.0;
+const MIN_INACTIVITY_LIMIT_SECONDS: f64 = 2.0;
+const MIN_UNRESPONSIVE_LIMIT_SECONDS: f64 = 2.0;
 
-#[inline]
-fn inactivity_limit_seconds() -> f64 {
-    seconds_limit(
-        INACTIVITY_LIMIT_SECONDS_ENV_VAR,
-        DEFAULT_INACTIVITY_LIMIT_SECONDS,
-        MIN_INACTIVITY_LIMIT_SECONDS,
-    )
-}
+fn inactive_unresponsive_limit_seconds() -> (f64, f64) {
+    let inactive_limit = env::var(INACTIVITY_LIMIT_SECONDS_ENV_VAR)
+        .map(|s| f64::from_str(&s).expect("INACTIVITY_LIMIT_SECONDS has to be a number"))
+        .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS);
+    if inactive_limit < MIN_INACTIVITY_LIMIT_SECONDS {
+        let error_str = format!(
+            "INACTIVITY_LIMIT_SECONDS has to be greater than {MIN_INACTIVITY_LIMIT_SECONDS}"
+        );
+        log::error!("{}", error_str);
+        panic!("{}", error_str);
+    };
 
-#[inline]
-fn unresponsive_limit_seconds() -> f64 {
-    seconds_limit(
-        UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR,
-        DEFAULT_UNRESPONSIVE_LIMIT_SECONDS,
-        MIN_UNRESPONSIVE_LIMIT_SECONDS,
-    )
-}
-
-fn seconds_limit(env_var: &str, default_val: f64, min_val: f64) -> f64 {
-    let limit = std::env::var(env_var)
-        .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
-        .unwrap_or(default_val);
-    limit.max(min_val)
+    let unresponsive_limit = env::var(UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR)
+        .map(|s| f64::from_str(&s).expect("UNRESPONSIVE_LIMIT_SECONDS has to be a number"))
+        .unwrap_or(DEFAULT_UNRESPONSIVE_LIMIT_SECONDS);
+    if unresponsive_limit < MIN_UNRESPONSIVE_LIMIT_SECONDS {
+        let error_str = format!(
+            "UNRESPONSIVE_LIMIT_SECONDS has to be greater than {MIN_UNRESPONSIVE_LIMIT_SECONDS}"
+        );
+        log::error!("{}", error_str);
+        panic!("{}", error_str);
+    };
+    if unresponsive_limit >= inactive_limit {
+        let error_str = "UNRESPONSIVE_LIMIT_SECONDS has to be less than INACTIVITY_LIMIT_SECONDS";
+        log::error!("{}", error_str);
+        panic!("{}", error_str);
+    };
+    (inactive_limit, unresponsive_limit)
 }
 
 pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
@@ -404,8 +411,7 @@ async fn monitor_activity(
     app_session_id: Option<String>,
 ) {
     let activity_id = activity_id.to_string();
-    let inactivity_limit = inactivity_limit_seconds();
-    let unresponsive_limit = unresponsive_limit_seconds();
+    let (inactivity_limit, unresponsive_limit) = inactive_unresponsive_limit_seconds();
     let delay = Duration::from_secs_f64(1.);
     let mut prev_state: Option<ActivityState> = None;
 
