@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]    // Due to Diesel macros.
+
 /// Yagna Activity Service
 
 #[macro_use]
