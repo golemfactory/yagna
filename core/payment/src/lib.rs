@@ -1,5 +1,8 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+#![allow(non_local_definitions)]    // Due to Diesel macros.
+
+
 pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
 

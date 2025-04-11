@@ -1,3 +1,4 @@
+#![allow(non_local_definitions)]    // Due to Diesel macros.
 /// Yagna identity management
 
 #[macro_use]
