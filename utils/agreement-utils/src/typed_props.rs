@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::OfferTemplate;
 
 use serde_json::Value;
@@ -30,11 +31,18 @@ impl OfferDefinition {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoInfo {
+    pub country_code: Option<String>,
+    pub city_name: Option<String>,
+    pub region: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct NodeInfo {
     pub name: Option<String>,
     pub subnet: Option<String>,
-    pub geo_country_code: Option<String>,
+    pub geo_info: Option<GeoInfo>,
     pub is_public: bool,
     pub protocol_version: u32,
 }
@@ -44,9 +52,9 @@ impl Default for NodeInfo {
         NodeInfo {
             name: None,
             subnet: None,
-            geo_country_code: None,
             is_public: false,
             protocol_version: 3,
+            geo_info: None
         }
     }
 }
@@ -69,8 +77,8 @@ impl NodeInfo {
         if let Some(name) = self.name {
             let _ = node.insert("id".into(), serde_json::json!({ "name": name }));
         }
-        if let Some(cc) = self.geo_country_code {
-            let _ = node.insert("geo".into(), serde_json::json!({ "country_code": cc }));
+        if let Some(gi) = self.geo_info {
+            let _ = node.insert("geo".into(), serde_json::json!( gi ));
         }
         if let Some(subnet) = self.subnet {
             let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
