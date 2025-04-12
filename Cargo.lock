@@ -10299,7 +10299,7 @@ name = "ya-utils-consent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "env_logger 0.7.1",
+ "env_logger 0.11.5",
  "log",
  "metrics 0.12.1",
  "parking_lot 0.12.3",
