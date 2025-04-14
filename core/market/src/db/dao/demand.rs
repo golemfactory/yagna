@@ -28,7 +28,7 @@ pub enum DemandState {
     NotFound,
 }
 
-impl<'c> DemandDao<'c> {
+impl DemandDao<'_> {
     // TODO: return DemandState
     pub async fn select(&self, id: &SubscriptionId) -> DbResult<Option<Demand>> {
         let id = id.clone();

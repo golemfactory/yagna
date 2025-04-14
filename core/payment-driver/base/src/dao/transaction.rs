@@ -33,7 +33,7 @@ impl<'c> AsDao<'c> for TransactionDao<'c> {
     }
 }
 
-impl<'c> TransactionDao<'c> {
+impl TransactionDao<'_> {
     pub async fn get(&self, tx_id: String) -> DbResult<Option<TransactionEntity>> {
         readonly_transaction(self.pool, "transaction_dao_get", move |conn| {
             let tx: Option<TransactionEntity> =

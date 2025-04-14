@@ -35,7 +35,7 @@ impl<'a> AsMixedDao<'a> for NegotiationEventsDao<'a> {
     }
 }
 
-impl<'c> NegotiationEventsDao<'c> {
+impl NegotiationEventsDao<'_> {
     pub async fn add_proposal_event(&self, proposal: &Proposal, role: Owner) -> DbResult<()> {
         let event = MarketEvent::from_proposal(proposal, role);
         do_with_transaction(
