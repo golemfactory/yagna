@@ -22,7 +22,7 @@ use ya_framework_mocks::payment::Driver;
 // `serial_test` forces sequential execution. It is nor possible to run them concurrently, because
 // we bind to single GSB.
 // `DroppableTestContext` is a helper struct which will clean up after tests (for example shutdown servers etc).
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

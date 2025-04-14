@@ -6,7 +6,7 @@ edition = "2018"
 
 [features]
 default = []
-framework-test = []
+system-test = []
 
 [dependencies]
 ya-agreement-utils = { workspace = true }

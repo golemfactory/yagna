@@ -20,7 +20,7 @@ use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -259,7 +259,7 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

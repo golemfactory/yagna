@@ -9,7 +9,7 @@ use ya_framework_basic::temp_dir;
 use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_identity_unlock(_ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

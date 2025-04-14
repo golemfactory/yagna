@@ -18,7 +18,7 @@ use ya_framework_mocks::payment::fake_payment::FakePayment;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 use ya_service_bus::RpcEndpoint;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_signature(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

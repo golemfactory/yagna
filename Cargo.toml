@@ -17,10 +17,10 @@ erc20-driver = ['ya-erc20-driver']
 require-consent = ['ya-utils-consent/require-consent']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 tos = []
-framework-test = [
-  'ya-exe-unit/framework-test',
-  'ya-payment/framework-test',
-  'ya-identity/framework-test',
+system-test = [
+  'ya-exe-unit/system-test',
+  'ya-payment/system-test',
+  'ya-identity/system-test',
 ]
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
@@ -202,6 +202,7 @@ members = [
   "core/gsb-api",
   "core/identity",
   "core/market",
+  "core/market/golem-base-sdk",
   "core/market/resolver",
   "core/model",
   "core/net",

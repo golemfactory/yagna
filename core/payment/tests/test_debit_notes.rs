@@ -13,7 +13,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

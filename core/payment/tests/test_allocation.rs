@@ -13,7 +13,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::Driver;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -161,7 +161,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

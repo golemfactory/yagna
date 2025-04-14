@@ -5,18 +5,18 @@ Developer can use Cli, GSB and REST calls to test his code.
 
 ## Running
 
-All tests are hidden behind `framework-test` feature flag and are disabled by default.
+All tests are hidden behind `system-test` feature flag and are disabled by default.
 
 To run all tests including framework tests and unit tests (but without market test suite), run:
-`cargo test --workspace --features framework-test`
+`cargo test --workspace --features system-test`
 
 To run only framework tests use command:
-`cargo test --test '*' -p yagna -p ya-exe-unit -p ya-transfer --features framework-test`
+`cargo test --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features system-test`
 
 ## Creating tests
 
 ```
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[framework_test]
 async fn test_appkey_removal(framework: YagnaFramework) -> anyhow::Result<()> {
     let yagna = framework
