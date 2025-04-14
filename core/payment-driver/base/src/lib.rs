@@ -4,7 +4,7 @@
     Contains a trait, error stubs (TBD) and utils.
 */
 
-#![allow(non_local_definitions)]    // Due to Diesel macros.
+#![allow(non_local_definitions)] // Due to Diesel macros.
 
 #[macro_use]
 extern crate diesel;
