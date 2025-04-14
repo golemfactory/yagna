@@ -1,0 +1,19 @@
+[package]
+name = "golem-base-sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Golem Factory <contact@golem.network>"]
+description = "SDK for interacting with Golem Base"
+license = "GPL-3.0"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+alloy = { version = "0.14", features = ["full"] }
+url = "2.4"
+
+
+[dev-dependencies]
+clap = { version = "4.4", features = ["derive"] }
