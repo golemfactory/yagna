@@ -47,7 +47,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                 let remote = node_id.service_transfer(&model::file_bus_id(&hash));
                 let meta = remote.send(model::GetMetadata {}).await??;
                 state.set_size(Some(meta.file_size));
-                let n = (meta.file_size + chunk_size - 1) / chunk_size;
+                let n = meta.file_size.div_ceil(chunk_size);
 
                 futures::stream::iter(0..n)
                     .map(|chunk_number| {
@@ -98,7 +98,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
 
                     while let Some(result) = rx.next().await {
                         let bytes = Bytes::from(result?);
-                        let n = (bytes.len() + chunk_size - 1) / chunk_size;
+                        let n = bytes.len().div_ceil(chunk_size);
 
                         for i in 0..n {
                             let start = i * chunk_size;
