@@ -1,15 +1,17 @@
 use anyhow::anyhow;
 use chrono::{DateTime, TimeZone, Utc};
+
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use ya_client::payment::PaymentApi;
 
+use ya_client::payment::PaymentApi;
 use ya_client_model::payment::{Acceptance, Allocation, DebitNote, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
-use ya_core_model::payment::local::BUS_ID;
+use ya_core_model::payment::local::{ProcessBatchCycleResponse, ProcessBatchCycleSet, BUS_ID};
 use ya_core_model::payment::public;
+use ya_core_model::NodeId;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
@@ -82,6 +84,7 @@ impl RealPayment {
         log::info!("RealPayment ({}) - binding GSB", self.name);
 
         ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone());
+        self.processor.process_post_migration_jobs().await?;
 
         self.start_dummy_driver().await?;
         self.start_erc20_driver().await?;
@@ -113,6 +116,25 @@ impl RealPayment {
             ))
             .await??;
         Ok(())
+    }
+
+    pub async fn set_payment_processing_interval(
+        &self,
+        driver: Driver,
+        node_id: NodeId,
+        interval: Duration,
+    ) -> anyhow::Result<ProcessBatchCycleResponse> {
+        Ok(self
+            .gsb_local_endpoint()
+            .call(ProcessBatchCycleSet {
+                node_id,
+                interval: Some(interval),
+                platform: format!("{}-holesky-tglm", driver),
+                cron: None,
+                next_update: None,
+                safe_payout: None,
+            })
+            .await??)
     }
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {
