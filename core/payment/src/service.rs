@@ -13,13 +13,18 @@ use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
-pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
+pub async fn bind_service(
+    db: &DbExecutor,
+    processor: Arc<PaymentProcessor>,
+    config: Arc<Config>,
+) -> anyhow::Result<()> {
     log::debug!("Binding payment service to service bus");
 
-    local::bind_service(db, processor.clone());
-    public::bind_service(db, processor, config);
+    local::bind_service(db, processor.clone()).await?;
+    public::bind_service(db, processor, config).await?;
 
     log::debug!("Successfully bound payment service to service bus");
+    Ok(())
 }
 
 mod local {
@@ -31,6 +36,8 @@ mod local {
     use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
     use tracing::{debug, trace};
+    use ya_core_model::identity;
+    use ya_service_bus::RpcEndpoint;
 
     use ya_client_model::{
         payment::{
@@ -40,6 +47,7 @@ mod local {
         NodeId,
     };
     use ya_core_model::driver::ValidateAllocationResult;
+    use ya_core_model::identity::event::IdentityEvent;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -47,13 +55,17 @@ mod local {
     };
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>) {
+    pub async fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+    ) -> anyhow::Result<()> {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
             .bind_with_processor(register_account)
+            .bind_with_processor(account_event)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_rpc_endpoints)
@@ -69,6 +81,14 @@ mod local {
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
             .bind_with_processor(shut_down);
+
+        log::debug!("Subscribing to identity events...");
+        service(identity::BUS_ID)
+            .send(identity::Subscribe {
+                endpoint: BUS_ID.to_string(),
+            })
+            .await??;
+        log::debug!("Successfully subscribed payment module service to identity events.");
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -111,6 +131,7 @@ mod local {
         counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
+        Ok(())
     }
 
     async fn register_driver(
@@ -158,7 +179,24 @@ mod local {
         );
         res
     }
-
+    async fn account_event(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender: String,
+        msg: IdentityEvent,
+    ) -> Result<(), ya_core_model::identity::Error> {
+        debug!(
+            entity = "account",
+            action = "event",
+            "Payment service account event handling"
+        );
+        processor.identity_event(msg).await.map_err(|e| {
+            ya_core_model::identity::Error::InternalErr(format!(
+                "Payment processor - Failed to process account event: {}",
+                e
+            ))
+        })
+    }
     async fn register_account(
         db: DbExecutor,
         processor: Arc<PaymentProcessor>,
@@ -805,7 +843,11 @@ mod public {
     use ya_persistence::types::Role;
     use ya_std_utils::LogErr;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
+    pub async fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        config: Arc<Config>,
+    ) -> anyhow::Result<()> {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -829,6 +871,7 @@ mod public {
         }
 
         log::debug!("Successfully bound payment public service to service bus");
+        Ok(())
     }
 
     // ************************** DEBIT NOTE **************************

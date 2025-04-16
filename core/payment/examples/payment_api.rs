@@ -232,9 +232,10 @@ async fn main() -> anyhow::Result<()> {
     let processor = Arc::new(PaymentProcessor::new(db.clone()));
     ya_payment::service::bind_service(
         &db,
-        processor,
+        processor.clone(),
         Arc::new(PaymentConfig::from_env()?.run_sync_job(false)),
-    );
+    )
+    .await?;
     log::debug!("bind_service()");
 
     bus::bind(identity::BUS_ID, {
