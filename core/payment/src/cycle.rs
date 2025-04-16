@@ -40,7 +40,9 @@ impl BatchCycleTaskManager {
 
     pub fn wake_owner_platform(&self, owner_id: NodeId, platform: String) {
         for task in self.tasks.iter() {
+            log::info!("Checking task: {:?}", task);
             if task.node_id == owner_id && task.platform == platform {
+                log::info!("Waking task: {:?}", task);
                 task.waker.notify_waiters();
             }
         }
@@ -73,6 +75,7 @@ impl BatchCycleTaskManager {
     }
 }
 
+#[derive(Debug)]
 pub struct BatchCycleTask {
     node_id: NodeId,
     platform: String,

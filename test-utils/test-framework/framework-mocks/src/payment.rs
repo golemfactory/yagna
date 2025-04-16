@@ -83,7 +83,8 @@ impl RealPayment {
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         log::info!("RealPayment ({}) - binding GSB", self.name);
 
-        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone());
+        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone())
+            .await?;
         self.processor.process_post_migration_jobs().await?;
 
         self.start_dummy_driver().await?;

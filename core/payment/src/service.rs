@@ -13,13 +13,18 @@ use ya_core_model::payment::public::{AcceptDebitNote, AcceptInvoice, PaymentSync
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::{service, ServiceBinder};
 
-pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
+pub async fn bind_service(
+    db: &DbExecutor,
+    processor: Arc<PaymentProcessor>,
+    config: Arc<Config>,
+) -> anyhow::Result<()> {
     log::debug!("Binding payment service to service bus");
 
-    local::bind_service(db, processor.clone());
-    public::bind_service(db, processor, config);
+    local::bind_service(db, processor.clone()).await?;
+    public::bind_service(db, processor, config).await?;
 
     log::debug!("Successfully bound payment service to service bus");
+    Ok(())
 }
 
 mod local {
@@ -31,6 +36,8 @@ mod local {
     use std::time::Instant;
     use std::{collections::BTreeMap, convert::TryInto};
     use tracing::{debug, trace};
+    use ya_core_model::identity;
+    use ya_service_bus::RpcEndpoint;
 
     use ya_client_model::{
         payment::{
@@ -48,7 +55,10 @@ mod local {
     };
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>) {
+    pub async fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+    ) -> anyhow::Result<()> {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -71,6 +81,14 @@ mod local {
             .bind_with_processor(payment_driver_status)
             .bind_with_processor(handle_status_change)
             .bind_with_processor(shut_down);
+
+        log::debug!("Subscribing to identity events...");
+        service(identity::BUS_ID)
+            .send(identity::Subscribe {
+                endpoint: BUS_ID.to_string(),
+            })
+            .await??;
+        log::debug!("Successfully subscribed payment module service to identity events.");
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -113,6 +131,7 @@ mod local {
         counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
+        Ok(())
     }
 
     async fn register_driver(
@@ -824,7 +843,11 @@ mod public {
     use ya_persistence::types::Role;
     use ya_std_utils::LogErr;
 
-    pub fn bind_service(db: &DbExecutor, processor: Arc<PaymentProcessor>, config: Arc<Config>) {
+    pub async fn bind_service(
+        db: &DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        config: Arc<Config>,
+    ) -> anyhow::Result<()> {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -848,6 +871,7 @@ mod public {
         }
 
         log::debug!("Successfully bound payment public service to service bus");
+        Ok(())
     }
 
     // ************************** DEBIT NOTE **************************
