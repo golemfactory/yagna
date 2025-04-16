@@ -39,6 +39,7 @@ use ya_core_model::driver::{
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
     ValidateAllocationResult,
 };
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, ProcessBatchCycleError,
     ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet, ProcessPaymentsError,
@@ -370,6 +371,18 @@ impl PaymentProcessor {
             schedule_payment_guard: Arc::new(Mutex::new(())),
             batch_cycle_tasks: Arc::new(std::sync::Mutex::new(BatchCycleTaskManager::new())),
         }
+    }
+
+    pub async fn identity_event(&self, msg: IdentityEvent) -> Result<(), RegisterAccountError> {
+        match msg {
+            IdentityEvent::AccountLocked { .. } => {
+                log::warn!("Service tasks still running, but account is locked and no payment will be sent");
+            }
+            IdentityEvent::AccountUnlocked { identity } => {
+                self.batch_cycle_tasks.lock().unwrap().add_owner(identity);
+            }
+        }
+        Ok(())
     }
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {

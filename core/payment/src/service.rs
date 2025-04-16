@@ -40,6 +40,7 @@ mod local {
         NodeId,
     };
     use ya_core_model::driver::ValidateAllocationResult;
+    use ya_core_model::identity::event::IdentityEvent;
     use ya_core_model::payment::public::Ack;
     use ya_core_model::{
         driver::{driver_bus_id, DriverStatus, DriverStatusError},
@@ -54,6 +55,7 @@ mod local {
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
             .bind_with_processor(register_account)
+            .bind_with_processor(account_event)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_rpc_endpoints)
@@ -158,7 +160,24 @@ mod local {
         );
         res
     }
-
+    async fn account_event(
+        db: DbExecutor,
+        processor: Arc<PaymentProcessor>,
+        sender: String,
+        msg: IdentityEvent,
+    ) -> Result<(), ya_core_model::identity::Error> {
+        debug!(
+            entity = "account",
+            action = "event",
+            "Payment service account event handling"
+        );
+        processor.identity_event(msg).await.map_err(|e| {
+            ya_core_model::identity::Error::InternalErr(format!(
+                "Payment processor - Failed to process account event: {}",
+                e
+            ))
+        })
+    }
     async fn register_account(
         db: DbExecutor,
         processor: Arc<PaymentProcessor>,
