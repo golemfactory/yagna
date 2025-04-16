@@ -9,7 +9,9 @@ use std::time::Duration;
 use ya_client::payment::PaymentApi;
 use ya_client_model::payment::{Acceptance, Allocation, DebitNote, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
-use ya_core_model::payment::local::{ProcessBatchCycleResponse, ProcessBatchCycleSet, BUS_ID};
+use ya_core_model::payment::local::{
+    NetworkName, ProcessBatchCycleResponse, ProcessBatchCycleSet, BUS_ID,
+};
 use ya_core_model::payment::public;
 use ya_core_model::NodeId;
 use ya_payment::api::web_scope;
@@ -122,6 +124,7 @@ impl RealPayment {
     pub async fn set_payment_processing_interval(
         &self,
         driver: Driver,
+        network: NetworkName,
         node_id: NodeId,
         interval: Duration,
     ) -> anyhow::Result<ProcessBatchCycleResponse> {
@@ -130,12 +133,42 @@ impl RealPayment {
             .call(ProcessBatchCycleSet {
                 node_id,
                 interval: Some(interval),
-                platform: format!("{}-holesky-tglm", driver),
+                platform: format!("{}-{}-{}", driver, network, network.get_token()).to_lowercase(),
                 cron: None,
                 next_update: None,
                 safe_payout: None,
             })
             .await??)
+    }
+
+    pub async fn set_all_payment_processing_intervals(
+        &self,
+        node_id: NodeId,
+        interval: Duration,
+    ) -> anyhow::Result<()> {
+        let drivers = vec![Driver::Dummy, Driver::Erc20];
+        let networks = vec![
+            NetworkName::Holesky,
+            NetworkName::Amoy,
+            NetworkName::Mumbai,
+            NetworkName::Rinkeby,
+            NetworkName::Goerli,
+            NetworkName::Mainnet,
+            NetworkName::Polygon,
+        ];
+
+        for driver in drivers {
+            for network in &networks {
+                self.set_payment_processing_interval(
+                    driver.clone(),
+                    network.clone(),
+                    node_id,
+                    interval,
+                )
+                .await?;
+            }
+        }
+        Ok(())
     }
 
     pub fn gsb_local_endpoint(&self) -> Endpoint {

@@ -55,6 +55,10 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
         .await?;
+    node1
+        .get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
+        .await?;
 
     let node2 = MockNode::new(net.clone(), "node-2", dir)
         .with_prefixed_gsb()
@@ -292,6 +296,10 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
     node1
         .get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node1
+        .get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     let node2 = MockNode::new(net.clone(), "node-2", dir)

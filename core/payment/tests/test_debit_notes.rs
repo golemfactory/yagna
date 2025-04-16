@@ -17,7 +17,7 @@ use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_debit_note_flow")?;
     let dir = dir.path();
@@ -57,11 +57,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .await?;
 
     node.get_payment()?
-        .set_payment_processing_interval(
-            Driver::Erc20,
-            appkey_req.identity,
-            Duration::from_secs(10),
-        )
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     let payment_platform =

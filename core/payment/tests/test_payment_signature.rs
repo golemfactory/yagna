@@ -22,7 +22,7 @@ use ya_service_bus::RpcEndpoint;
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_signature(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_payment_signature")?;
     let dir = dir.path();
@@ -44,6 +44,10 @@ async fn test_payment_signature(ctx: &mut DroppableTestContext) -> anyhow::Resul
     node1
         .get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node1
+        .get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     let requestor = node1.rest_payments(&appkey_req.key)?;
