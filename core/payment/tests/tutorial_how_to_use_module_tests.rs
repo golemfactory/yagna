@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
+use std::time::Duration;
 use test_context::test_context;
 
 use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
@@ -22,11 +23,11 @@ use ya_framework_mocks::payment::Driver;
 // `serial_test` forces sequential execution. It is nor possible to run them concurrently, because
 // we bind to single GSB.
 // `DroppableTestContext` is a helper struct which will clean up after tests (for example shutdown servers etc).
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     // This line create temporary directory for test data, that will be removed after `TempDir` is dropped.
     // Directory will be placed in cargo `target/tmp`.
@@ -74,6 +75,9 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
     // so this will be no-op.
     node.get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node.get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     // Create REST API client for give node, to test payments endpoints.

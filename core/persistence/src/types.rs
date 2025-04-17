@@ -1,18 +1,28 @@
+pub use crate::duration::{AdaptDuration, DurationAdapter};
+pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
 use bigdecimal::{BigDecimal, Zero};
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
+use serde::Serialize;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::Write;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 
-pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
-
 #[derive(Debug, Clone, AsExpression, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
 #[sql_type = "Text"]
 pub struct BigDecimalField(pub BigDecimal);
+
+impl Serialize for BigDecimalField {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.to_string().serialize(serializer)
+    }
+}
 
 impl From<BigDecimalField> for BigDecimal {
     fn from(x: BigDecimalField) -> Self {
@@ -48,7 +58,7 @@ impl<'a> Add<&'a BigDecimalField> for BigDecimalField {
     }
 }
 
-impl<'a, 'b> Add<&'b BigDecimalField> for &'a BigDecimalField {
+impl<'b> Add<&'b BigDecimalField> for &BigDecimalField {
     type Output = BigDecimalField;
 
     fn add(self, rhs: &'b BigDecimalField) -> Self::Output {
@@ -72,7 +82,7 @@ impl<'a> Sub<&'a BigDecimalField> for BigDecimalField {
     }
 }
 
-impl<'a, 'b> Sub<&'b BigDecimalField> for &'a BigDecimalField {
+impl<'b> Sub<&'b BigDecimalField> for &BigDecimalField {
     type Output = BigDecimalField;
 
     fn sub(self, rhs: &'b BigDecimalField) -> Self::Output {
@@ -126,6 +136,14 @@ where
 pub enum Role {
     Provider,
     Requestor,
+}
+impl Serialize for Role {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

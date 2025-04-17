@@ -1,7 +1,9 @@
 use crate::error::{DbError, DbResult};
 use crate::schema::pay_debit_note;
 use crate::utils::json_from_str;
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use bigdecimal::BigDecimal;
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 use uuid::Uuid;
 use ya_client_model::payment::{DebitNote, DocumentStatus, NewDebitNote};
@@ -20,11 +22,13 @@ pub struct WriteObj {
     pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
+    pub debit_nonce: i32,
 }
 
 impl WriteObj {
     pub fn issued(
         debit_note: NewDebitNote,
+        debit_nonce: i32,
         previous_debit_note_id: Option<String>,
         issuer_id: NodeId,
     ) -> Self {
@@ -40,10 +44,15 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+            debit_nonce,
         }
     }
 
-    pub fn received(debit_note: DebitNote, previous_debit_note_id: Option<String>) -> Self {
+    pub fn received(
+        debit_note: DebitNote,
+        debit_nonce: i32,
+        previous_debit_note_id: Option<String>,
+    ) -> Self {
         Self {
             id: debit_note.debit_note_id,
             owner_id: debit_note.recipient_id,
@@ -56,6 +65,7 @@ impl WriteObj {
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
             payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+            debit_nonce,
         }
     }
 }
@@ -74,6 +84,7 @@ pub struct ReadObj {
     pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
+    pub debit_nonce: i32,
 
     pub agreement_id: String,     // From activity
     pub peer_id: NodeId,          // From agreement
@@ -96,6 +107,28 @@ impl ReadObj {
             Role::Requestor => self.owner_id,
         }
     }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebitNoteForApi {
+    pub debit_note_id: String,
+    pub issuer_id: NodeId,
+    pub recipient_id: NodeId,
+    pub payee_addr: String,
+    pub payer_addr: String,
+    pub payment_platform: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub previous_debit_note_id: Option<String>,
+    pub timestamp: DateTime<Utc>,
+    pub agreement_id: String,
+    pub activity_id: String,
+    pub total_amount_due: BigDecimal,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub usage_counter_vector: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub payment_due_date: Option<DateTime<Utc>>,
+    pub status: DocumentStatus,
+    pub debit_nonce: i32,
 }
 
 impl TryFrom<ReadObj> for DebitNote {
@@ -125,6 +158,38 @@ impl TryFrom<ReadObj> for DebitNote {
                 .payment_due_date
                 .map(|d| Utc.from_utc_datetime(&d)),
             status: debit_note.status.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<ReadObj> for DebitNoteForApi {
+    type Error = DbError;
+
+    fn try_from(debit_note: ReadObj) -> DbResult<Self> {
+        let issuer_id = debit_note.issuer_id();
+        let recipient_id = debit_note.recipient_id();
+        let usage_counter_vector = match debit_note.usage_counter_vector {
+            Some(v) => Some(json_from_str(&String::from_utf8(v)?)?),
+            None => None,
+        };
+        Ok(DebitNoteForApi {
+            debit_note_id: debit_note.id,
+            issuer_id,
+            recipient_id,
+            payee_addr: debit_note.payee_addr,
+            payer_addr: debit_note.payer_addr,
+            payment_platform: debit_note.payment_platform,
+            previous_debit_note_id: debit_note.previous_debit_note_id,
+            timestamp: Utc.from_utc_datetime(&debit_note.timestamp),
+            agreement_id: debit_note.agreement_id,
+            activity_id: debit_note.activity_id,
+            total_amount_due: debit_note.total_amount_due.into(),
+            usage_counter_vector,
+            payment_due_date: debit_note
+                .payment_due_date
+                .map(|d| Utc.from_utc_datetime(&d)),
+            status: debit_note.status.try_into()?,
+            debit_nonce: debit_note.debit_nonce,
         })
     }
 }

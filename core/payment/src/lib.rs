@@ -1,5 +1,7 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+#![allow(non_local_definitions)] // Due to Diesel macros.
+
 pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
 
@@ -16,18 +18,23 @@ extern crate diesel;
 
 pub mod accounts;
 pub mod api;
+mod batch;
 mod cli;
 pub mod config;
+mod cycle;
 pub mod dao;
 pub mod error;
 pub mod models;
 pub mod payment_sync;
+mod post_migrations;
 pub mod processor;
 pub mod schema;
 pub mod service;
 pub mod timeout_lock;
 pub mod utils;
 mod wallet;
+
+pub use batch::send_batch_payments;
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
@@ -54,12 +61,15 @@ impl Service for PaymentService {
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db = context.component();
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::run_with_output)
+            .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
 
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), config);
+        self::service::bind_service(&db, processor.clone(), config).await?;
+
+        processor.process_post_migration_jobs().await?;
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;

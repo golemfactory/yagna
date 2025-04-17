@@ -114,11 +114,12 @@ fn test_add_and_remove_certificates() {
     );
 
     let result = list_certificates_command(&cert_dir).unwrap();
-    assert!(result.contains_key("cb16a2ed"));
+    println!("{:?}", result);
     assert!(result.contains_key("25b9430c"));
+    assert!(result.contains_key("c525ae05"));
     assert_eq!(result.len(), 2);
 
-    remove(&cert_dir, vec!["cb16a2ed", "25b9430c"]);
+    remove(&cert_dir, vec!["25b9430c", "c525ae05"]);
 
     let result = list_certificates_command(&cert_dir).unwrap();
     assert!(result.is_empty());
@@ -158,7 +159,7 @@ fn test_add_expired_x509_cert_should_fail() {
 #[test]
 fn verify_not_after_date_format() {
     let result = add_and_list(vec!["foo_req.cert.pem", "partner-certificate.signed.json"]);
-    assert_eq!(read_not_after(&result, "cb16a2ed"), "2025-01-01T00:00:00Z");
+    assert_eq!(read_not_after(&result, "c525ae05"), "2030-01-01T00:00:00Z");
     assert_eq!(read_not_after(&result, "25b9430c"), "2122-07-17T12:05:22Z")
 }
 
@@ -166,7 +167,7 @@ fn verify_not_after_date_format() {
 #[test]
 fn verify_subject_format() {
     let result = add_and_list(vec!["foo_req.cert.pem", "partner-certificate.signed.json"]);
-    assert_eq!(read_subject(&result, "cb16a2ed"), "Example partner cert");
+    assert_eq!(read_subject(&result, "c525ae05"), "Example partner cert");
     assert_eq!(read_subject(&result, "25b9430c"), "{\"CN\":\"Foo Req\",\"E\":\"office@req.foo.com\",\"O\":\"Foo Req Co\",\"OU\":\"Foo Req HQ\"}")
 }
 
@@ -180,12 +181,12 @@ fn verify_outbound_rules_format() {
         &cert_dir,
     );
     let result = list_certificates_command(&cert_dir).unwrap();
-    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "");
+    assert_eq!(read_outbound_rules(&result, "c525ae05"), "");
     assert_eq!(read_outbound_rules(&result, "25b9430c"), "");
 
-    set_partner_rule(&cert_dir, "cb16a2ed");
+    set_partner_rule(&cert_dir, "c525ae05");
     let result = list_certificates_command(&cert_dir).unwrap();
-    assert_eq!(read_outbound_rules(&result, "cb16a2ed"), "Outbound-Partner");
+    assert_eq!(read_outbound_rules(&result, "c525ae05"), "Outbound-Partner");
 }
 
 fn set_partner_rule(cert_dir: &Path, cert: &str) {

@@ -133,21 +133,7 @@ impl Erc20Driver {
 
         let payment_id = Uuid::new_v4().to_simple().to_string();
 
-        let deposit_id = if let Some(deposit) = deposit_id {
-            Some(DepositId {
-                deposit_id: U256::from_str(&deposit.id).map_err(|err| {
-                    GenericError::new(format!("Error when parsing deposit id {err:?}"))
-                })?,
-                lock_address: Address::from_str(&deposit.contract).map_err(|err| {
-                    GenericError::new(format!(
-                        "Error when parsing deposit contract address {err:?}"
-                    ))
-                })?,
-            })
-        } else {
-            None
-        };
-
+        let deposit_id = extract_deposit_id(deposit_id)?;
         self.payment_runtime
             .transfer_guess_account(TransferArgs {
                 network: network.to_string(),
@@ -355,19 +341,13 @@ impl Erc20Driver {
             GenericError::new(format!("Malformed tx.tx_hash: {:?} {err}", tx_hash))
         })?;
 
-        log::info!("name: {}", &self.get_name());
-        log::info!("platform: {}", platform);
-        log::info!("order_id: {}", token_transfer.payment_id.as_ref().unwrap());
-        log::info!("payment_details: {}", payment_details);
-        log::info!("confirmation: 0x{}", hex::encode(&transaction_hash));
-
         let Some(payment_id) = &token_transfer.payment_id else {
             return Err(GenericError::new("token_transfer.payment_id is null"));
         };
         bus::notify_payment(
             &self.get_name(),
             platform,
-            vec![payment_id.clone()],
+            payment_id.clone(),
             &payment_details,
             transaction_hash,
         )
@@ -856,6 +836,15 @@ impl PaymentDriver for Erc20Driver {
         false
     }
 
+    async fn flush_payments(
+        &self,
+        _caller: String,
+        _msg: FlushPayments,
+    ) -> Result<FlushPaymentResult, GenericError> {
+        //self.payment_runtime.trigger_payments(Utc::now(), None);
+        Ok(FlushPaymentResult::FlushScheduled)
+    }
+
     async fn init(&self, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         cli::init(self, msg).await?;
         Ok(Ack {})
@@ -1224,4 +1213,21 @@ impl PaymentDriver for Erc20Driver {
         // no-op, erc20_payment_lib driver doesn't expose clean shutdown interface yet
         Ok(())
     }
+}
+fn extract_deposit_id(deposit_id: Option<Deposit>) -> Result<Option<DepositId>, GenericError> {
+    let deposit_id = if let Some(deposit) = deposit_id {
+        Some(DepositId {
+            deposit_id: U256::from_str(&deposit.id).map_err(|err| {
+                GenericError::new(format!("Error when parsing deposit id {err:?}"))
+            })?,
+            lock_address: Address::from_str(&deposit.contract).map_err(|err| {
+                GenericError::new(format!(
+                    "Error when parsing deposit contract address {err:?}"
+                ))
+            })?,
+        })
+    } else {
+        None
+    };
+    Ok(deposit_id)
 }

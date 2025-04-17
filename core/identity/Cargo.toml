@@ -6,7 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
-framework-test = []
+system-test = []
 
 
 [dependencies]

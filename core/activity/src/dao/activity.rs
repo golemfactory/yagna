@@ -18,7 +18,7 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
     }
 }
 
-impl<'c> ActivityDao<'c> {
+impl ActivityDao<'_> {
     pub async fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
         use schema::activity::dsl;
 

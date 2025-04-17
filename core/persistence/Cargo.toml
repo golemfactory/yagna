@@ -28,10 +28,12 @@ dotenv = "0.15.0"
 libsqlite3-sys = { workspace = true }
 log = "0.4"
 r2d2 = "0.8"
+serde = "1.0"
 serde_json = "1.0"
 structopt = { version = "0.3", optional = true }
 thiserror = "1.0.9"
 tokio = { version = "1", features = [] }
+humantime = "2.1.0"
 
 [dev-dependencies]
 tempdir = "0.3.7"

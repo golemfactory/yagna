@@ -167,7 +167,7 @@ pub(crate) struct ProcessWaker {
     waker: Option<Waker>,
 }
 
-impl<'a> Handle<'a> {
+impl Handle<'_> {
     fn process(monitor: &EventMonitor, channel: &Channel) -> Self {
         Handle::Process {
             monitor: monitor.clone(),
@@ -177,7 +177,7 @@ impl<'a> Handle<'a> {
     }
 }
 
-impl<'a> Drop for Handle<'a> {
+impl Drop for Handle<'_> {
     fn drop(&mut self) {
         if let Handle::Process { monitor, waker, .. } = self {
             if let Some(pid) = { waker.lock().unwrap().pid } {
@@ -189,7 +189,7 @@ impl<'a> Drop for Handle<'a> {
     }
 }
 
-impl<'a> Future for Handle<'a> {
+impl Future for Handle<'_> {
     type Output = i32;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

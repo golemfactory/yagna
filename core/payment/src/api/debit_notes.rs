@@ -3,13 +3,12 @@ use std::sync::Arc;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use bigdecimal::BigDecimal;
 use serde_json::value::Value::Null;
 use std::time::Instant;
-
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
 };
@@ -19,7 +18,6 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use super::guard::AgreementLock;
@@ -86,7 +84,7 @@ async fn get_debit_note(
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
-    match dao.get(debit_note_id, node_id).await {
+    match dao.get(debit_note_id, Some(node_id)).await {
         Ok(Some(debit_note)) => response::ok(debit_note),
         Ok(None) => response::not_found(),
         Err(e) => response::server_error(&e),
@@ -190,7 +188,7 @@ async fn issue_debit_note(
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        let debit_note = dao.get(debit_note_id.clone(), node_id).await?;
+        let debit_note = dao.get(debit_note_id.clone(), Some(node_id)).await?;
 
         log::info!("DebitNote [{debit_note_id}] for Activity [{activity_id}] issued.");
         counter!("payment.debit_notes.provider.issued", 1);
@@ -220,7 +218,7 @@ async fn send_debit_note(
     log::debug!("Requested send DebitNote [{}]", debit_note_id);
     counter!("payment.debit_notes.provider.sent.call", 1);
 
-    let debit_note = match dao.get(debit_note_id.clone(), node_id).await {
+    let debit_note = match dao.get(debit_note_id.clone(), Some(node_id)).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
@@ -311,7 +309,7 @@ async fn accept_debit_note(
     let sync_dao: SyncNotifsDao = db.as_dao();
 
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
-    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(node_id)).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
         Err(e) => return response::server_error(&e),
@@ -394,7 +392,7 @@ async fn accept_debit_note(
         }
         Err(e) => return response::server_error(&e),
     };
-    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;
+    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
 
     log::trace!(
         "Querying DB for Allocation [{}] for Debit Note [{}]",
@@ -426,19 +424,28 @@ async fn accept_debit_note(
         return response::bad_request(&msg);
     }
 
+    if amount_to_pay > BigDecimal::from(0) {
+        match db
+            .as_dao::<AllocationDao>()
+            .spend_from_allocation_transaction(SpendFromAllocationArgs {
+                owner_id: node_id,
+                allocation_id: allocation_id.clone(),
+                agreement_id: activity.agreement_id.clone(),
+                activity_id: Some(activity.id.clone()),
+                amount: amount_to_pay.clone(),
+            })
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => return response::server_error(&e),
+        }
+    }
+
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let result = async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
-        let schedule_msg =
-            SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
-            // Schedule payment (will be none for amount=0, which is OK)
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
-                bus::service(LOCAL_SERVICE).send(msg).await??;
-            }
-
             // Mark the debit note as accepted in DB
             log::trace!("Accepting DebitNote [{}] in DB", debit_note_id);
             dao.accept(debit_note_id.clone(), node_id).await?;

@@ -59,7 +59,7 @@ fn active_market_offers<'a>(expiry_validation_ts: NaiveDateTime) -> OfferSelect<
         .into_boxed()
 }
 
-impl<'c> OfferDao<'c> {
+impl OfferDao<'_> {
     /// Returns Offer state.
     pub async fn get_state(
         &self,

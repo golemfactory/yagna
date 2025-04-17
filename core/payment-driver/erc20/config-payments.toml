@@ -105,7 +105,7 @@ external-source-check-interval = 300
 priority = 0
 max-timeout-ms = 5000
 verify-interval-secs = 300
-allowed-head-behind-secs = 60
+allowed-head-behind-secs = 120
 dns-source = "holesky.rpc-node.dev.golem.network."
 
 
@@ -145,7 +145,7 @@ dns-source = "mumbai.rpc-node.dev.golem.network."
 chain-name = "Polygon mainnet"
 chain-id = 137
 currency-symbol = "POL"
-priority-fee = 30.111
+priority-fee = 25.011
 max-fee-per-gas = 500.0
 transaction-timeout = 100
 token = { address = "0x0B220b82F3eA3B7F6d9A1D8ab58930C064A2b5Bf", symbol = "GLM" }
