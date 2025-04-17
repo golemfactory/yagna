@@ -111,7 +111,7 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
     }
 }
 
-impl<'c> PaymentDao<'c> {
+impl PaymentDao<'_> {
     async fn insert(
         &self,
         payment: WriteObj,

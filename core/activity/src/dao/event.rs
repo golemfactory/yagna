@@ -53,7 +53,7 @@ impl<'a> AsDao<'a> for EventDao<'a> {
     }
 }
 
-impl<'c> EventDao<'c> {
+impl EventDao<'_> {
     pub async fn create(
         &self,
         activity_id: &str,

@@ -38,7 +38,7 @@ impl<'a> AsMixedDao<'a> for ProposalDao<'a> {
     }
 }
 
-impl<'c> ProposalDao<'c> {
+impl ProposalDao<'_> {
     pub async fn save_initial_proposal(
         &self,
         proposal: Proposal,

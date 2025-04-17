@@ -14,7 +14,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -49,6 +49,9 @@ async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
 
     node.get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node.get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     let payment_platform =

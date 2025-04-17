@@ -1,5 +1,7 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+#![allow(non_local_definitions)] // Due to Diesel macros.
+
 pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
 
@@ -65,7 +67,7 @@ impl PaymentService {
         let config = Arc::new(Config::from_env()?);
 
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), config);
+        self::service::bind_service(&db, processor.clone(), config).await?;
 
         processor.process_post_migration_jobs().await?;
 

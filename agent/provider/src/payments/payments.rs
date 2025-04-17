@@ -636,7 +636,7 @@ impl Handler<UpdateCost> for Payments {
             Err(e) => return ActorResponse::reply(Err(e)),
         };
 
-        return match agreement.activities.get(&msg.invoice_info.activity_id) {
+        match agreement.activities.get(&msg.invoice_info.activity_id) {
             Some(ActivityPayment::Running { .. }) => {
                 let last_debit_note = agreement.last_send_debit_note;
                 let last_payable_debit_node = agreement.last_payable_debit_note;
@@ -717,7 +717,7 @@ impl Handler<UpdateCost> for Payments {
                 "We shouldn't be here. Activity [{}], not found.",
                 &msg.invoice_info.activity_id
             ))),
-        };
+        }
     }
 }
 

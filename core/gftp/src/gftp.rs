@@ -140,7 +140,7 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
     log::debug!("Metadata: file size {}.", metadata.file_size);
 
     let chunk_size = DEFAULT_CHUNK_SIZE;
-    let num_chunks = (metadata.file_size + (chunk_size - 1)) / chunk_size; // Divide and round up.
+    let num_chunks = metadata.file_size.div_ceil(chunk_size); // Divide and round up.
 
     file.set_len(metadata.file_size)?;
 
@@ -298,7 +298,7 @@ fn get_chunks(
     let mut file = OpenOptions::new().read(true).open(file_path)?;
 
     let file_size = file.metadata()?.len();
-    let n_chunks = (file_size + chunk_size - 1) / chunk_size;
+    let n_chunks = file_size.div_ceil(chunk_size);
 
     Ok((0..n_chunks).map(move |n| {
         let offset = n * chunk_size;

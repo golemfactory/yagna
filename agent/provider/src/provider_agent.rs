@@ -540,7 +540,6 @@ pub struct Shutdown;
 struct CreateOffers(pub OfferKind);
 
 /// Tests
-
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
@@ -587,7 +586,7 @@ mod tests {
         assert_eq!(payload_manifest_prop, expected_manifest_suport);
     }
 
-    /// Test utilities
+    // Test utilities
 
     struct FakeData {
         node_info: NodeInfo,
