@@ -12,10 +12,8 @@ pub struct GolemBaseClient {
 impl GolemBaseClient {
     /// Creates a new client connected to the specified endpoint
     pub fn new(endpoint: Url) -> Self {
-        let provider = ProviderBuilder::new().on_http(endpoint).erased();
-
         Self {
-            provider: Arc::new(Box::new(provider)),
+            provider: Arc::new(Box::new(ProviderBuilder::new().on_http(endpoint).erased())),
         }
     }
 

@@ -4,3 +4,4 @@
 //! It includes core types, traits, and utilities for building market-related functionality.
 
 pub mod client;
+pub mod entity;
