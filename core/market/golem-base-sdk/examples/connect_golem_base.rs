@@ -1,4 +1,5 @@
 use clap::Parser;
+use log::LevelFilter;
 use url::Url;
 
 use golem_base_sdk::client::GolemBaseClient;
@@ -14,15 +15,26 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize logger
+    env_logger::Builder::new()
+        .filter_level(LevelFilter::Info)
+        .init();
+
     let args = Args::parse();
 
     // Parse the URL
     let endpoint = Url::parse(&args.url)?;
-    println!("Connecting to Geth node at: {}", endpoint);
+    log::info!("Connecting to Geth node at: {}", endpoint);
 
     // Create the client
     let client = GolemBaseClient::new(endpoint);
-    println!("Successfully connected to Geth node");
+
+    // Check connection by getting chain ID
+    let chain_id = client.get_chain_id().await?;
+    log::info!(
+        "Successfully connected to Geth node. Chain ID: {}",
+        chain_id
+    );
 
     Ok(())
 }

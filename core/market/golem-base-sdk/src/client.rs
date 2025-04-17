@@ -1,11 +1,12 @@
-use alloy::providers::{Provider, ProviderBuilder};
+use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use std::sync::Arc;
 use url::Url;
 
 /// Client for interacting with Golem Base node
 #[derive(Clone)]
 pub struct GolemBaseClient {
-    provider: Arc<Box<dyn Provider>>,
+    /// The underlying provider for making RPC calls
+    provider: Arc<Box<DynProvider>>,
 }
 
 impl GolemBaseClient {
@@ -16,5 +17,10 @@ impl GolemBaseClient {
         Self {
             provider: Arc::new(Box::new(provider)),
         }
+    }
+
+    /// Gets the chain ID of the connected node
+    pub async fn get_chain_id(&self) -> anyhow::Result<u64> {
+        Ok(self.provider.get_chain_id().await?)
     }
 }
