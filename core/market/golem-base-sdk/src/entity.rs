@@ -2,7 +2,7 @@ use alloy::primitives::B256;
 use serde::{Deserialize, Serialize};
 
 /// Represents a storage transaction containing multiple operations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StorageTransaction {
     #[serde(default)]
     pub create: Vec<Create>,

@@ -1,8 +1,9 @@
+use anyhow::Result;
 use clap::Parser;
-use log::LevelFilter;
 use url::Url;
 
 use golem_base_sdk::client::GolemBaseClient;
+use golem_base_sdk::entity::Create;
 
 /// Simple program to connect to a Geth node
 #[derive(Parser, Debug)]
@@ -14,27 +15,32 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Initialize logger
-    env_logger::Builder::new()
-        .filter_level(LevelFilter::Info)
-        .init();
+async fn main() -> Result<()> {
+    env_logger::init();
 
     let args = Args::parse();
 
-    // Parse the URL
+    // Connect to GolemBase
     let endpoint = Url::parse(&args.url)?;
-    log::info!("Connecting to Geth node at: {}", endpoint);
-
-    // Create the client
     let client = GolemBaseClient::new(endpoint);
 
-    // Check connection by getting chain ID
-    let chain_id = client.get_chain_id().await?;
-    log::info!(
-        "Successfully connected to Geth node. Chain ID: {}",
-        chain_id
-    );
+    // Get accounts
+    let accounts = client.sync_accounts().await?;
+    log::info!("Available accounts: {:?}", accounts);
+
+    // Take the first account
+    let account = accounts
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("No accounts available"))?;
+    log::info!("Using account: {:?}", account);
+
+    // Create a test entry
+    let test_payload = b"test payload".to_vec();
+    let entry = Create::new(test_payload.clone(), 1000);
+
+    // Create entry with the account
+    let entry_id = client.create_entry(*account, entry).await?;
+    log::info!("Entry created with ID: {:?}", entry_id);
 
     Ok(())
 }
