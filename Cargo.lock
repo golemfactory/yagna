@@ -4225,6 +4225,7 @@ name = "golem-base-sdk"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-rlp",
  "anyhow",
  "async-trait",
  "clap 4.5.36",

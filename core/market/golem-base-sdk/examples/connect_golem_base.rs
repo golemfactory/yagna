@@ -39,7 +39,10 @@ async fn main() -> Result<()> {
     let entry = Create::new(test_payload.clone(), 1000);
 
     // Create entry with the account
-    let entry_id = client.create_entry(*account, entry).await?;
+    let entry_id = client
+        .create_entry(*account, entry)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create entry: {e}"))?;
     log::info!("Entry created with ID: {:?}", entry_id);
 
     Ok(())

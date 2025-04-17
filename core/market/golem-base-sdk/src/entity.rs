@@ -1,8 +1,9 @@
 use alloy::primitives::B256;
+use alloy_rlp::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
 /// Represents a storage transaction containing multiple operations
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct StorageTransaction {
     #[serde(default)]
     pub create: Vec<Create>,
@@ -15,7 +16,7 @@ pub struct StorageTransaction {
 }
 
 /// Helper struct for managing entity annotations
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct Annotations {
     #[serde(rename = "stringAnnotations")]
     strings: Vec<StringAnnotation>,
@@ -24,27 +25,29 @@ pub struct Annotations {
 }
 
 /// Represents a new entity creation operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct Create {
     pub ttl: u64,
     pub payload: Vec<u8>,
     #[serde(flatten)]
+    #[rlp(flatten)]
     annotations: Annotations,
 }
 
 /// Represents an entity update operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct Update {
     #[serde(rename = "entityKey")]
     pub entity_key: B256,
     pub ttl: u64,
     pub payload: Vec<u8>,
     #[serde(flatten)]
+    #[rlp(flatten)]
     annotations: Annotations,
 }
 
 /// Represents a TTL extension operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct ExtendTTL {
     #[serde(rename = "entityKey")]
     pub entity_key: B256,
@@ -53,17 +56,17 @@ pub struct ExtendTTL {
 }
 
 /// Represents a string annotation for an entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct StringAnnotation {
     pub key: String,
     pub value: String,
 }
 
 /// Represents a numeric annotation for an entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct NumericAnnotation {
     pub key: String,
-    pub value: f64,
+    pub value: u64,
 }
 
 impl Annotations {
@@ -77,7 +80,7 @@ impl Annotations {
     }
 
     /// Adds a numeric annotation
-    pub fn annotate_number(mut self, key: impl Into<String>, value: f64) -> Self {
+    pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
         self.numbers.push(NumericAnnotation {
             key: key.into(),
             value,
@@ -103,7 +106,7 @@ impl Create {
     }
 
     /// Adds a numeric annotation to the entity
-    pub fn annotate_number(mut self, key: impl Into<String>, value: f64) -> Self {
+    pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
         self.annotations = self.annotations.annotate_number(key, value);
         self
     }
@@ -127,7 +130,7 @@ impl Update {
     }
 
     /// Adds a numeric annotation to the entity
-    pub fn annotate_number(mut self, key: impl Into<String>, value: f64) -> Self {
+    pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
         self.annotations = self.annotations.annotate_number(key, value);
         self
     }

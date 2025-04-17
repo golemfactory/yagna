@@ -1,12 +1,12 @@
 use alloy::primitives::{Address, B256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
-use serde_json;
+use alloy_rlp::Encodable;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use url::Url;
 
 use crate::account::{Account, GolemBaseSigner, TransactionSigner};
-use crate::entity::Create;
+use crate::entity::{Create, StorageTransaction};
 
 /// Client for interacting with Golem Base node
 #[derive(Clone)]
@@ -37,7 +37,6 @@ impl GolemBaseClient {
         accounts.insert(
             address,
             Account {
-                address,
                 signer: Arc::new(Box::new(signer)),
             },
         );
@@ -54,6 +53,7 @@ impl GolemBaseClient {
     pub async fn sync_accounts(&self) -> anyhow::Result<Vec<Address>> {
         // Get accounts from GolemBase
         let golem_accounts = self.list_golem_accounts().await?;
+        let chain_id = self.get_chain_id().await?;
 
         // Get current local accounts
         let mut local_accounts = self.accounts.write().unwrap();
@@ -64,8 +64,11 @@ impl GolemBaseClient {
                 local_accounts.insert(
                     *address,
                     Account {
-                        address: *address,
-                        signer: Arc::new(Box::new(GolemBaseSigner::new(*address))),
+                        signer: Arc::new(Box::new(GolemBaseSigner::new(
+                            *address,
+                            self.provider.clone(),
+                            chain_id,
+                        ))),
                     },
                 );
             }
@@ -90,13 +93,27 @@ impl GolemBaseClient {
             account.signer.clone()
         };
 
-        // Serialize the entry
-        let data = serde_json::to_vec(&entry)?;
+        // Create the storage transaction
+        let tx = StorageTransaction {
+            create: vec![entry],
+            update: vec![],
+            delete: vec![],
+            extend: vec![],
+        };
 
-        // Sign the data (no lock held during this async operation)
-        let signature = signer.sign(&data).await?;
+        // RLP encode the transaction
+        let mut data = Vec::new();
+        tx.encode(&mut data);
 
-        todo!("Implement create_entry with signing")
+        let signature = signer
+            .sign(&data)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
+
+        // Send the signed transaction
+        let pending = self.provider.send_raw_transaction(&signature).await?;
+        let receipt = pending.get_receipt().await?;
+        Ok(receipt.transaction_hash)
     }
 
     /// Retrieves an entry's payload from Golem Base by its ID
