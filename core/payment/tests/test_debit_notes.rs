@@ -56,6 +56,10 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
         .await?;
 
+    node.get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
+        .await?;
+
     let payment_platform =
         PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
 

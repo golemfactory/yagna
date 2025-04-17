@@ -202,7 +202,6 @@ members = [
   "core/gsb-api",
   "core/identity",
   "core/market",
-  "core/market/golem-base-sdk",
   "core/market/resolver",
   "core/model",
   "core/net",

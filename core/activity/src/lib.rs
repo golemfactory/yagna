@@ -1,6 +1,6 @@
-#![allow(non_local_definitions)] // Due to Diesel macros.
+//! Yagna Activity Service
 
-/// Yagna Activity Service
+#![allow(non_local_definitions)] // Due to Diesel macros.
 
 #[macro_use]
 extern crate diesel;
