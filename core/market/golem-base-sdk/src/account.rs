@@ -4,7 +4,6 @@ use alloy::primitives::{address, Address};
 use alloy::rpc::types::eth::TransactionRequest;
 use alloy::signers::Signature;
 use async_trait::async_trait;
-use bytes::BytesMut;
 use std::sync::Arc;
 
 /// The address of the GolemBase storage processor contract

@@ -2,8 +2,9 @@ use alloy::network::TransactionBuilder;
 use alloy::primitives::{Address, B256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use alloy::rpc::types::eth::TransactionRequest;
-use alloy_rlp::Encodable;
+use alloy_rlp::{Decodable, Encodable};
 use bytes::BytesMut;
+use hex;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use url::Url;
@@ -11,6 +12,8 @@ use url::Url;
 use crate::account::{Account, TransactionSigner, GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS};
 use crate::entity::{Create, StorageTransaction};
 use crate::signers::{GolemBaseSigner, InMemorySigner};
+use alloy::consensus::TxEip1559;
+use alloy::consensus::{EthereumTxEnvelope, TxEip4844};
 
 /// Client for interacting with Golem Base node
 #[derive(Clone)]
@@ -171,7 +174,7 @@ impl GolemBaseClient {
             extend: vec![],
         };
 
-        let mut data = Vec::new();
+        let mut data = BytesMut::new();
         tx.encode(&mut data);
 
         // Get the current nonce
@@ -185,14 +188,26 @@ impl GolemBaseClient {
             .with_to(GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS)
             .with_nonce(nonce)
             .with_chain_id(self.chain_id)
-            .with_gas_limit(21_000)
+            .with_gas_limit(22_000)
             .with_max_priority_fee_per_gas(1_000_000_000)
             .with_max_fee_per_gas(20_000_000_000)
             .with_input(data.to_vec());
 
+        let result = tx.complete_1559();
+        if let Err(e) = result {
+            log::error!("Lacking fields for EIP-1559 transaction: {e:?}");
+        }
+
         let signed = account.sign(tx).await?;
         let mut encoded = BytesMut::new();
-        signed.rlp_encode(&mut encoded);
+        signed.eip2718_encode(&mut encoded);
+
+        log::debug!("RLP encoded transaction: 0x{}", hex::encode(&encoded));
+
+        // Decode and display transaction fields
+        let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
+            .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
+        log::debug!("Decoded transaction: {:#?}", decoded_tx);
 
         let pending = self.provider.send_raw_transaction(&encoded).await?;
         let receipt = pending.get_receipt().await?;
