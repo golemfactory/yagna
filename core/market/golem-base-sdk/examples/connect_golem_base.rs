@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
 
     // Connect to GolemBase
     let endpoint = Url::parse(&args.url)?;
-    let client = GolemBaseClient::new(endpoint);
+    let client = GolemBaseClient::new(endpoint).await?;
 
     // Get accounts
     let accounts = client

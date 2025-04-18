@@ -12,6 +12,7 @@ alloy-signer-local = { version = "0.14", features = ["keystore"] }
 alloy-rlp = "0.3"
 anyhow = "1.0"
 async-trait = "0.1"
+bytes = "1.0"
 dirs = "5.0"
 eth-keystore = "0.5"
 hex = "0.4"

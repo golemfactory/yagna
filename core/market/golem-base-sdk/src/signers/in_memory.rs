@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use alloy::signers::k256::ecdsa::{SigningKey, VerifyingKey};
 use alloy::signers::local::PrivateKeySigner;
-use alloy::signers::SignerSync;
+use alloy::signers::{Signature, SignerSync};
 use anyhow::Context;
 use async_trait::async_trait;
 use rand::thread_rng;
@@ -113,7 +113,7 @@ impl TransactionSigner for InMemorySigner {
         self.signer.address()
     }
 
-    async fn sign(&self, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-        Ok(self.signer.sign_message_sync(data)?.as_bytes().to_vec())
+    async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
+        Ok(self.signer.sign_message_sync(data)?)
     }
 }

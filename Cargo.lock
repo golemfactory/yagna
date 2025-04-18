@@ -4251,6 +4251,7 @@ dependencies = [
  "alloy-signer-local",
  "anyhow",
  "async-trait",
+ "bytes 1.10.1",
  "clap 4.5.36",
  "dirs",
  "env_logger 0.10.2",

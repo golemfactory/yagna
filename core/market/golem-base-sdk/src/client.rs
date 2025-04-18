@@ -1,11 +1,14 @@
+use alloy::network::TransactionBuilder;
 use alloy::primitives::{Address, B256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
+use alloy::rpc::types::eth::TransactionRequest;
 use alloy_rlp::Encodable;
+use bytes::BytesMut;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use url::Url;
 
-use crate::account::{Account, TransactionSigner};
+use crate::account::{Account, TransactionSigner, GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS};
 use crate::entity::{Create, StorageTransaction};
 use crate::signers::{GolemBaseSigner, InMemorySigner};
 
@@ -14,21 +17,27 @@ use crate::signers::{GolemBaseSigner, InMemorySigner};
 pub struct GolemBaseClient {
     /// The underlying provider for making RPC calls
     provider: Arc<Box<DynProvider>>,
+    /// The chain ID of the connected network
+    chain_id: u64,
     accounts: Arc<RwLock<HashMap<Address, Account>>>,
 }
 
 impl GolemBaseClient {
     /// Creates a new client
-    pub fn new(endpoint: Url) -> Self {
-        Self {
-            provider: Arc::new(Box::new(ProviderBuilder::new().on_http(endpoint).erased())),
+    pub async fn new(endpoint: Url) -> anyhow::Result<Self> {
+        let provider = Arc::new(Box::new(ProviderBuilder::new().on_http(endpoint).erased()));
+        let chain_id = provider.get_chain_id().await?;
+
+        Ok(Self {
+            provider,
+            chain_id,
             accounts: Arc::new(RwLock::new(HashMap::new())),
-        }
+        })
     }
 
     /// Gets the chain ID of the connected node
-    pub async fn get_chain_id(&self) -> anyhow::Result<u64> {
-        Ok(self.provider.get_chain_id().await?)
+    pub fn get_chain_id(&self) -> u64 {
+        self.chain_id
     }
 
     /// Registers a user-managed account with custom signer.
@@ -81,7 +90,7 @@ impl GolemBaseClient {
 
     /// Synchronizes accounts with GolemBase, adding any new accounts to our local state
     pub async fn account_sync(&self) -> anyhow::Result<Vec<Address>> {
-        let chain_id = self.get_chain_id().await?;
+        let chain_id = self.get_chain_id();
 
         // Sync GolemBase accounts
         self.sync_golem_base_accounts(chain_id).await?;
@@ -138,6 +147,15 @@ impl GolemBaseClient {
         );
     }
 
+    /// Gets an account by its address
+    pub fn account_get(&self, address: Address) -> anyhow::Result<Account> {
+        let accounts = self.accounts.read().unwrap();
+        accounts
+            .get(&address)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Account not found"))
+    }
+
     /// Internal function to list accounts from GolemBase
     async fn list_golem_accounts(&self) -> anyhow::Result<Vec<Address>> {
         Ok(self.provider.get_accounts().await?)
@@ -145,14 +163,7 @@ impl GolemBaseClient {
 
     /// Creates an entry using the specified account
     pub async fn create_entry(&self, account: Address, entry: Create) -> anyhow::Result<B256> {
-        let signer = {
-            let accounts = self.accounts.read().unwrap();
-            let account = accounts
-                .get(&account)
-                .ok_or_else(|| anyhow::anyhow!("Account not found"))?;
-            account.signer.clone()
-        };
-
+        let account = self.account_get(account)?;
         let tx = StorageTransaction {
             create: vec![entry],
             update: vec![],
@@ -163,12 +174,27 @@ impl GolemBaseClient {
         let mut data = Vec::new();
         tx.encode(&mut data);
 
-        let signature = signer
-            .sign(&data)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to sign transaction: {e}"))?;
+        // Get the current nonce
+        let nonce = self
+            .provider
+            .get_transaction_count(account.address())
+            .await?;
 
-        let pending = self.provider.send_raw_transaction(&signature).await?;
+        let tx = TransactionRequest::default()
+            .with_from(account.address())
+            .with_to(GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS)
+            .with_nonce(nonce)
+            .with_chain_id(self.chain_id)
+            .with_gas_limit(21_000)
+            .with_max_priority_fee_per_gas(1_000_000_000)
+            .with_max_fee_per_gas(20_000_000_000)
+            .with_input(data.to_vec());
+
+        let signed = account.sign(tx).await?;
+        let mut encoded = BytesMut::new();
+        signed.rlp_encode(&mut encoded);
+
+        let pending = self.provider.send_raw_transaction(&encoded).await?;
         let receipt = pending.get_receipt().await?;
         Ok(receipt.transaction_hash)
     }
