@@ -1,6 +1,8 @@
+use alloy::primitives::Address;
 use anyhow::Result;
 use clap::Parser;
 use url::Url;
+use ya_client_model::NodeId;
 
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
@@ -12,6 +14,14 @@ struct Args {
     /// URL of the Geth node to connect to
     #[arg(short, long, default_value = "http://localhost:8545")]
     url: String,
+
+    /// NodeId of the wallet to use (optional)
+    #[arg(short, long)]
+    wallet: Option<NodeId>,
+
+    /// Password for the wallet (optional, defaults to "test123")
+    #[arg(short, long, default_value = "test123")]
+    password: String,
 }
 
 #[tokio::main]
@@ -25,13 +35,27 @@ async fn main() -> Result<()> {
     let client = GolemBaseClient::new(endpoint);
 
     // Get accounts
-    let accounts = client.sync_accounts().await?;
+    let accounts = client
+        .account_sync()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to sync accounts: {e}"))?;
     log::info!("Available accounts: {:?}", accounts);
 
-    // Take the first account
-    let account = accounts
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("No accounts available"))?;
+    // Select account based on command line argument or generate new one
+    let account = if let Some(wallet) = args.wallet {
+        let wallet_address = Address::from(&wallet.into_array());
+        if !accounts.contains(&wallet_address) {
+            return Err(anyhow::anyhow!(
+                "Specified wallet {} not found in available accounts",
+                wallet
+            ));
+        }
+        client.account_load(wallet_address, &args.password).await?
+    } else {
+        // Generate new account if none specified
+        log::info!("No address provided. Generating new account..");
+        client.account_generate(&args.password)?
+    };
     log::info!("Using account: {:?}", account);
 
     // Create a test entry
@@ -40,7 +64,7 @@ async fn main() -> Result<()> {
 
     // Create entry with the account
     let entry_id = client
-        .create_entry(*account, entry)
+        .create_entry(account, entry)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create entry: {e}"))?;
     log::info!("Entry created with ID: {:?}", entry_id);

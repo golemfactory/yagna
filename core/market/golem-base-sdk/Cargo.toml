@@ -8,14 +8,22 @@ license = "GPL-3.0"
 
 [dependencies]
 alloy = { version = "0.14", features = ["full"] }
+alloy-signer-local = { version = "0.14", features = ["keystore"] }
 alloy-rlp = "0.3"
 anyhow = "1.0"
 async-trait = "0.1"
+dirs = "5.0"
+eth-keystore = "0.5"
+hex = "0.4"
 log = "0.4"
+rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 url = "2.4"
+futures = "0.3"
+
+ya-client-model.workspace = true
 
 [dev-dependencies]
 clap = { version = "4.4", features = ["derive"] }

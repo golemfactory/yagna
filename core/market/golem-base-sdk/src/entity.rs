@@ -6,21 +6,31 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct StorageTransaction {
     #[serde(default)]
+    #[rlp(default)]
     pub create: Vec<Create>,
     #[serde(default)]
+    #[rlp(default)]
     pub update: Vec<Update>,
     #[serde(default)]
+    #[rlp(default)]
     pub delete: Vec<B256>,
     #[serde(default)]
+    #[rlp(default)]
     pub extend: Vec<ExtendTTL>,
 }
 
 /// Helper struct for managing entity annotations
 #[derive(Debug, Clone, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct Annotations {
+    #[serde(default)]
+    #[rlp(default)]
     #[serde(rename = "stringAnnotations")]
+    #[rlp(rename = "stringAnnotations")]
     strings: Vec<StringAnnotation>,
+    #[serde(default)]
+    #[rlp(default)]
     #[serde(rename = "numericAnnotations")]
+    #[rlp(rename = "numericAnnotations")]
     numbers: Vec<NumericAnnotation>,
 }
 
@@ -38,6 +48,7 @@ pub struct Create {
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct Update {
     #[serde(rename = "entityKey")]
+    #[rlp(rename = "entityKey")]
     pub entity_key: B256,
     pub ttl: u64,
     pub payload: Vec<u8>,
@@ -50,8 +61,10 @@ pub struct Update {
 #[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
 pub struct ExtendTTL {
     #[serde(rename = "entityKey")]
+    #[rlp(rename = "entityKey")]
     pub entity_key: B256,
     #[serde(rename = "numberOfBlocks")]
+    #[rlp(rename = "numberOfBlocks")]
     pub number_of_blocks: u64,
 }
 
