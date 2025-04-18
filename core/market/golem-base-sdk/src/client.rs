@@ -1,19 +1,12 @@
-use alloy::network::TransactionBuilder;
-use alloy::primitives::{Address, B256};
+use alloy::primitives::{Address, B256, U256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
-use alloy::rpc::types::eth::TransactionRequest;
-use alloy_rlp::{Decodable, Encodable};
-use bytes::BytesMut;
-use hex;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use url::Url;
 
-use crate::account::{Account, TransactionSigner, GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS};
+use crate::account::{Account, TransactionSigner};
 use crate::entity::{Create, StorageTransaction};
 use crate::signers::{GolemBaseSigner, InMemorySigner};
-use alloy::consensus::TxEip1559;
-use alloy::consensus::{EthereumTxEnvelope, TxEip4844};
 
 /// Client for interacting with Golem Base node
 #[derive(Clone)]
@@ -51,6 +44,8 @@ impl GolemBaseClient {
             address,
             Account {
                 signer: Arc::new(Box::new(signer)),
+                provider: self.provider.clone(),
+                chain_id: self.chain_id,
             },
         );
         address
@@ -112,6 +107,13 @@ impl GolemBaseClient {
         Ok(all_accounts)
     }
 
+    /// Funds an account with ETH
+    pub async fn fund(&self, account: Address, value: U256) -> anyhow::Result<B256> {
+        let account = self.account_get(account)?;
+        let receipt = account.fund_account(value).await?;
+        Ok(receipt.transaction_hash)
+    }
+
     async fn sync_golem_base_accounts(&self, chain_id: u64) -> anyhow::Result<()> {
         let golem_accounts = self.list_golem_accounts().await?;
         let mut accounts = self.accounts.write().unwrap();
@@ -146,6 +148,8 @@ impl GolemBaseClient {
             address,
             Account {
                 signer: Arc::new(signer),
+                provider: self.provider.clone(),
+                chain_id: self.chain_id,
             },
         );
     }
@@ -174,48 +178,19 @@ impl GolemBaseClient {
             extend: vec![],
         };
 
-        let mut data = BytesMut::new();
-        tx.encode(&mut data);
+        log::debug!("Sending storage transaction from {}", account.address());
 
-        // Get the current nonce
-        let nonce = self
-            .provider
-            .get_transaction_count(account.address())
-            .await?;
-
-        let tx = TransactionRequest::default()
-            .with_from(account.address())
-            .with_to(GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS)
-            .with_nonce(nonce)
-            .with_chain_id(self.chain_id)
-            .with_gas_limit(22_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000)
-            .with_input(data.to_vec());
-
-        let result = tx.complete_1559();
-        if let Err(e) = result {
-            log::error!("Lacking fields for EIP-1559 transaction: {e:?}");
-        }
-
-        let signed = account.sign(tx).await?;
-        let mut encoded = BytesMut::new();
-        signed.eip2718_encode(&mut encoded);
-
-        log::debug!("RLP encoded transaction: 0x{}", hex::encode(&encoded));
-
-        // Decode and display transaction fields
-        let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
-            .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
-        log::debug!("Decoded transaction: {:#?}", decoded_tx);
-
-        let pending = self.provider.send_raw_transaction(&encoded).await?;
-        let receipt = pending.get_receipt().await?;
+        let receipt = account.send_db_transaction(tx).await?;
         Ok(receipt.transaction_hash)
     }
 
     /// Retrieves an entry's payload from Golem Base by its ID
-    pub async fn cat(&self, id: B256) -> anyhow::Result<Vec<u8>> {
+    pub async fn cat(&self, _id: B256) -> anyhow::Result<Vec<u8>> {
         todo!("Implement cat")
+    }
+
+    /// Gets an account's ETH balance
+    pub async fn get_balance(&self, account: Address) -> anyhow::Result<U256> {
+        Ok(self.provider.get_balance(account).await?)
     }
 }

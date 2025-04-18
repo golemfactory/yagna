@@ -1,4 +1,4 @@
-use alloy::primitives::Address;
+use alloy::primitives::{Address, U256};
 use anyhow::Result;
 use clap::Parser;
 use url::Url;
@@ -41,6 +41,13 @@ async fn main() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to sync accounts: {e}"))?;
     log::info!("Available accounts: {:?}", accounts);
 
+    // Log balances for all accounts
+    for &addr in &accounts {
+        let balance = client.get_balance(addr).await?;
+        let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
+        log::info!("Account {} balance: {} ETH", addr, balance_eth.to_string());
+    }
+
     // Select account based on command line argument or generate new one
     let account = if let Some(wallet) = args.wallet {
         let wallet_address = Address::from(&wallet.into_array());
@@ -57,6 +64,19 @@ async fn main() -> Result<()> {
         client.account_generate(&args.password)?
     };
     log::info!("Using account: {:?}", account);
+
+    // Fund the account with 1 ETH
+    let fund_tx = client
+        .fund(account, U256::from(1_000_000_000_000_000_000u128))
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fund account: {e}"))?;
+    log::info!("Account funded with transaction: {:?}", fund_tx);
+
+    // Check account balance
+    let account_obj = client.account_get(account)?;
+    let balance = account_obj.get_balance().await?;
+    let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
+    log::info!("Account balance: {} ETH", balance_eth.to_string());
 
     // Create a test entry
     let test_payload = b"test payload".to_vec();

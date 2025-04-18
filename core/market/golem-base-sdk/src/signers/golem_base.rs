@@ -34,7 +34,7 @@ impl TransactionSigner for GolemBaseSigner {
         self.address
     }
 
-    async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
+    async fn sign(&self, _data: &[u8]) -> anyhow::Result<Signature> {
         unimplemented!()
     }
 }
