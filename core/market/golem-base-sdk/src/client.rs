@@ -10,6 +10,9 @@ use crate::account::{Account, TransactionSigner};
 use crate::entity::{Create, StorageTransaction};
 use crate::signers::{GolemBaseSigner, InMemorySigner};
 
+/// Maximum age of the latest block in seconds to consider the node synced
+const MAX_BLOCK_AGE_SECONDS: u64 = 300;
+
 /// Client for interacting with Golem Base node
 #[derive(Clone)]
 pub struct GolemBaseClient {
@@ -36,7 +39,7 @@ impl GolemBaseClient {
 
         // Check if node is synced
         if !client.is_synced().await? {
-            return Err(anyhow::anyhow!("Node at {} is not synced", endpoint));
+            log::warn!("Node at {endpoint} is not synced");
         }
 
         Ok(client)
@@ -118,6 +121,13 @@ impl GolemBaseClient {
         Ok(all_accounts)
     }
 
+    /// Transfers ETH from one account to another
+    pub async fn transfer(&self, from: Address, to: Address, value: U256) -> anyhow::Result<B256> {
+        let account = self.account_get(from)?;
+        let receipt = account.transfer(to, value).await?;
+        Ok(receipt.transaction_hash)
+    }
+
     /// Funds an account with ETH
     pub async fn fund(&self, account: Address, value: U256) -> anyhow::Result<B256> {
         let account = self.account_get(account)?;
@@ -171,7 +181,7 @@ impl GolemBaseClient {
         accounts
             .get(&address)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Account not found"))
+            .ok_or_else(|| anyhow::anyhow!("Account {address} not found"))
     }
 
     /// Internal function to list accounts from GolemBase
@@ -247,15 +257,6 @@ impl GolemBaseClient {
             .as_secs();
 
         // Consider node synced if latest block is less than 5 minutes old
-        let is_synced = current_time - latest_block_timestamp < 300;
-
-        if !is_synced {
-            log::warn!(
-                "Node is not synced. Latest block is {} seconds old",
-                current_time - latest_block_timestamp
-            );
-        }
-
-        Ok(is_synced)
+        Ok(current_time - latest_block_timestamp < MAX_BLOCK_AGE_SECONDS)
     }
 }

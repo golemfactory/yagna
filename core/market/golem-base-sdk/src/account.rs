@@ -113,6 +113,18 @@ impl Account {
         self.send_transaction(tx).await
     }
 
+    /// Transfers ETH to another account
+    pub async fn transfer(&self, to: Address, value: U256) -> anyhow::Result<TransactionReceipt> {
+        let tx = TransactionRequest::default()
+            .with_to(to)
+            .with_value(value)
+            .with_gas_limit(21_000)
+            .with_max_priority_fee_per_gas(1_000_000_000)
+            .with_max_fee_per_gas(20_000_000_000);
+
+        self.send_transaction(tx).await
+    }
+
     /// Funds an account by sending ETH
     pub async fn fund_account(&self, value: U256) -> anyhow::Result<TransactionReceipt> {
         let accounts = self.provider.get_accounts().await?;
