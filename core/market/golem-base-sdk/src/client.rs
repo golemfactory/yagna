@@ -38,9 +38,9 @@ impl GolemBaseClient {
         };
 
         // Check if node is synced
-        if !client.is_synced().await? {
-            log::warn!("Node at {endpoint} is not synced");
-        }
+        // if !client.is_synced().await? {
+        //     log::warn!("Node at {endpoint} is not synced");
+        // }
 
         Ok(client)
     }

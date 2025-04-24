@@ -26,6 +26,10 @@ struct Args {
     /// Entry to store in Golem Base (defaults to "test payload")
     #[arg(short, long, default_value = "test payload")]
     entry: String,
+
+    /// Skip funding the account
+    #[arg(short, long, default_value = "false")]
+    skip_fund: bool,
 }
 
 #[tokio::main]
@@ -68,18 +72,20 @@ async fn main() -> Result<()> {
     };
     log::info!("Using account: {account:?}");
 
-    // Fund the account with 1 ETH
-    let fund_tx = client
-        .fund(account, U256::from(1_000_000_000_000_000_000u128))
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to fund account: {e}"))?;
-    log::info!("Account funded with transaction: {:?}", fund_tx);
+    if !args.skip_fund {
+        // Fund the account with 1 ETH
+        let fund_tx = client
+            .fund(account, U256::from(1_000_000_000_000_000_000u128))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fund account: {e}"))?;
+        log::info!("Account funded with transaction: {:?}", fund_tx);
 
-    // Check account balance
-    let account_obj = client.account_get(account)?;
-    let balance = account_obj.get_balance().await?;
-    let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
-    log::info!("Account balance: {} ETH", balance_eth.to_string());
+        // Check account balance
+        let account_obj = client.account_get(account)?;
+        let balance = account_obj.get_balance().await?;
+        let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
+        log::info!("Account balance: {} ETH", balance_eth.to_string());
+    }
 
     // Create a test entry
     let test_payload = args.entry.as_bytes().to_vec();
