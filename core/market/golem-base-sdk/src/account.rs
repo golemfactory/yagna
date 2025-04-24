@@ -3,7 +3,7 @@ use alloy::consensus::{
     TxEip4844Variant,
 };
 use alloy::network::TransactionBuilder;
-use alloy::primitives::{address, Address, U256};
+use alloy::primitives::{address, keccak256, Address, B256, U256};
 use alloy::providers::{DynProvider, Provider};
 use alloy::rpc::types::eth::TransactionRequest;
 use alloy::rpc::types::TransactionReceipt;
@@ -17,6 +17,26 @@ use crate::entity::StorageTransaction;
 /// The address of the GolemBase storage processor contract
 pub const GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS: Address =
     address!("0x0000000000000000000000000000000060138453");
+
+/// Event signature for entity creation logs
+pub fn golem_base_storage_entity_created() -> B256 {
+    keccak256(b"GolemBaseStorageEntityCreated(uint256,uint256)")
+}
+
+/// Event signature for entity deletion logs
+pub fn golem_base_storage_entity_deleted() -> B256 {
+    keccak256(b"GolemBaseStorageEntityDeleted(uint256)")
+}
+
+/// Event signature for entity update logs
+pub fn golem_base_storage_entity_updated() -> B256 {
+    keccak256(b"GolemBaseStorageEntityUpdated(uint256,uint256)")
+}
+
+/// Event signature for extending TTL of an entity
+pub fn golem_base_storage_entity_ttl_extended() -> B256 {
+    keccak256(b"GolemBaseStorageEntityTTLExptended(uint256,uint256)")
+}
 
 /// A trait for signing transactions
 #[async_trait]
@@ -123,19 +143,19 @@ impl Account {
         signed: &Signed<EthereumTypedTransaction<TxEip4844Variant>>,
     ) -> anyhow::Result<Vec<u8>> {
         let mut encoded = Vec::new();
-
-        let signer = signed.recover_signer()?;
-        log::debug!("Recovered signer: {:#?}", signer);
-
         signed.eip2718_encode(&mut encoded);
 
-        log::debug!("RLP encoded transaction: 0x{}", hex::encode(&encoded));
+        log::debug!(
+            "RLP encoded transaction (hash: 0x{:x}): 0x{}",
+            signed.hash(),
+            hex::encode(&encoded)
+        );
 
+        // Decode the transaction for debugging purposes.
         let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
             .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
-        log::debug!("Decoded transaction: {:#?}", decoded_tx);
-
         let signer = decoded_tx.recover_signer()?;
+        log::debug!("Decoded transaction: {:#?}", decoded_tx);
         log::debug!("Recovered signer: {:#?}", signer);
 
         Ok(encoded)

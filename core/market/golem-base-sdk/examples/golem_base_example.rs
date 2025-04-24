@@ -22,6 +22,10 @@ struct Args {
     /// Password for the wallet (optional, defaults to "test123")
     #[arg(short, long, default_value = "test123")]
     password: String,
+
+    /// Entry to store in Golem Base (defaults to "test payload")
+    #[arg(short, long, default_value = "test payload")]
+    entry: String,
 }
 
 #[tokio::main]
@@ -53,8 +57,7 @@ async fn main() -> Result<()> {
         let wallet_address = Address::from(&wallet.into_array());
         if !accounts.contains(&wallet_address) {
             return Err(anyhow::anyhow!(
-                "Specified wallet {} not found in available accounts",
-                wallet
+                "Specified wallet {wallet} not found in available accounts"
             ));
         }
         client.account_load(wallet_address, &args.password).await?
@@ -63,7 +66,7 @@ async fn main() -> Result<()> {
         log::info!("No address provided. Generating new account..");
         client.account_generate(&args.password)?
     };
-    log::info!("Using account: {:?}", account);
+    log::info!("Using account: {account:?}");
 
     // Fund the account with 1 ETH
     let fund_tx = client
@@ -79,7 +82,7 @@ async fn main() -> Result<()> {
     log::info!("Account balance: {} ETH", balance_eth.to_string());
 
     // Create a test entry
-    let test_payload = b"test payload".to_vec();
+    let test_payload = args.entry.as_bytes().to_vec();
     let entry = Create::new(test_payload.clone(), 1000);
 
     // Create entry with the account

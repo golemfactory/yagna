@@ -1,7 +1,9 @@
 use alloy::primitives::{Address, B256, U256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
+use alloy::rpc::types::eth::BlockNumberOrTag;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 use crate::account::{Account, TransactionSigner};
@@ -21,14 +23,23 @@ pub struct GolemBaseClient {
 impl GolemBaseClient {
     /// Creates a new client
     pub async fn new(endpoint: Url) -> anyhow::Result<Self> {
-        let provider = Arc::new(Box::new(ProviderBuilder::new().on_http(endpoint).erased()));
+        let provider = Arc::new(Box::new(
+            ProviderBuilder::new().on_http(endpoint.clone()).erased(),
+        ));
         let chain_id = provider.get_chain_id().await?;
 
-        Ok(Self {
+        let client = Self {
             provider,
             chain_id,
             accounts: Arc::new(RwLock::new(HashMap::new())),
-        })
+        };
+
+        // Check if node is synced
+        if !client.is_synced().await? {
+            return Err(anyhow::anyhow!("Node at {} is not synced", endpoint));
+        }
+
+        Ok(client)
     }
 
     /// Gets the chain ID of the connected node
@@ -181,7 +192,32 @@ impl GolemBaseClient {
         log::debug!("Sending storage transaction from {}", account.address());
 
         let receipt = account.send_db_transaction(tx).await?;
-        Ok(receipt.transaction_hash)
+        if !receipt.status() {
+            return Err(anyhow::anyhow!(
+                "Transaction {} reverted",
+                receipt.transaction_hash
+            ));
+        }
+
+        // Parse logs to get entity ID
+        let entity_id = receipt
+            .logs()
+            .iter()
+            .find_map(|log| {
+                log::debug!("Log: {:?}", log);
+                if log.topics().len() >= 2
+                    && log.topics()[0] == crate::account::golem_base_storage_entity_created()
+                {
+                    // Second topic is the entity ID
+                    Some(log.topics()[1])
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("No entity ID found in transaction logs"))?;
+
+        log::debug!("Created entity with ID: 0x{:x}", entity_id);
+        Ok(entity_id)
     }
 
     /// Retrieves an entry's payload from Golem Base by its ID
@@ -192,5 +228,34 @@ impl GolemBaseClient {
     /// Gets an account's ETH balance
     pub async fn get_balance(&self, account: Address) -> anyhow::Result<U256> {
         Ok(self.provider.get_balance(account).await?)
+    }
+
+    /// Checks if the node is synced by comparing the latest block timestamp with current time
+    /// Returns true if the node is synced (latest block is less than 5 minutes old)
+    pub async fn is_synced(&self) -> anyhow::Result<bool> {
+        let latest_block = self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Latest)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to get latest block"))?;
+
+        let latest_block_timestamp = latest_block.header.timestamp;
+
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Consider node synced if latest block is less than 5 minutes old
+        let is_synced = current_time - latest_block_timestamp < 300;
+
+        if !is_synced {
+            log::warn!(
+                "Node is not synced. Latest block is {} seconds old",
+                current_time - latest_block_timestamp
+            );
+        }
+
+        Ok(is_synced)
     }
 }
