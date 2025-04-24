@@ -1,4 +1,4 @@
-use alloy::primitives::Address;
+use alloy::primitives::{keccak256, Address};
 use alloy::signers::k256::ecdsa::{SigningKey, VerifyingKey};
 use alloy::signers::local::PrivateKeySigner;
 use alloy::signers::{Signature, SignerSync};
@@ -114,6 +114,7 @@ impl TransactionSigner for InMemorySigner {
     }
 
     async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
-        Ok(self.signer.sign_message_sync(data)?)
+        let hash = keccak256(data);
+        Ok(self.signer.sign_hash_sync(&hash)?)
     }
 }

@@ -1,4 +1,7 @@
-use alloy::consensus::{EthereumTxEnvelope, SignableTransaction, TxEip4844};
+use alloy::consensus::{
+    EthereumTxEnvelope, EthereumTypedTransaction, SignableTransaction, Signed, TxEip4844,
+    TxEip4844Variant,
+};
 use alloy::network::TransactionBuilder;
 use alloy::primitives::{address, Address, U256};
 use alloy::providers::{DynProvider, Provider};
@@ -42,18 +45,14 @@ impl Account {
     }
 
     /// Signs a transaction request
-    pub async fn sign(
+    pub async fn sign_transaction(
         &self,
         tx: TransactionRequest,
-    ) -> anyhow::Result<
-        alloy::consensus::Signed<
-            alloy::consensus::EthereumTypedTransaction<alloy::consensus::TxEip4844Variant>,
-        >,
-    > {
+    ) -> anyhow::Result<Signed<EthereumTypedTransaction<TxEip4844Variant>>> {
         let tx = tx.build_unsigned()?;
-        let hash = tx.signature_hash();
+        let bytes = tx.encoded_for_signing();
 
-        let signature = self.signer.sign(hash.as_slice()).await?;
+        let signature = self.signer.sign(&bytes).await?;
         Ok(tx.into_signed(signature))
     }
 
@@ -69,16 +68,8 @@ impl Account {
             .with_nonce(nonce)
             .with_chain_id(self.chain_id);
 
-        let signed = self.sign(tx).await?;
-        let mut encoded = Vec::new();
-        signed.eip2718_encode(&mut encoded);
-
-        log::debug!("RLP encoded transaction: 0x{}", hex::encode(&encoded));
-
-        // Decode and display transaction fields
-        let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
-            .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
-        log::debug!("Decoded transaction: {:#?}", decoded_tx);
+        let signed = self.sign_transaction(tx).await?;
+        let encoded = Self::encode_transaction(&signed)?;
 
         let pending = self.provider.send_raw_transaction(&encoded).await?;
         Ok(pending.get_receipt().await?)
@@ -125,6 +116,29 @@ impl Account {
             .await?
             .get_receipt()
             .await?)
+    }
+
+    /// Encodes and decodes a transaction for debugging
+    fn encode_transaction(
+        signed: &Signed<EthereumTypedTransaction<TxEip4844Variant>>,
+    ) -> anyhow::Result<Vec<u8>> {
+        let mut encoded = Vec::new();
+
+        let signer = signed.recover_signer()?;
+        log::debug!("Recovered signer: {:#?}", signer);
+
+        signed.eip2718_encode(&mut encoded);
+
+        log::debug!("RLP encoded transaction: 0x{}", hex::encode(&encoded));
+
+        let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
+            .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
+        log::debug!("Decoded transaction: {:#?}", decoded_tx);
+
+        let signer = decoded_tx.recover_signer()?;
+        log::debug!("Recovered signer: {:#?}", signer);
+
+        Ok(encoded)
     }
 
     /// Gets the account's ETH balance
