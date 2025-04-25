@@ -1,5 +1,5 @@
 use alloy::primitives::B256;
-use alloy_rlp::{RlpDecodable, RlpEncodable};
+use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
 /// Represents a storage transaction containing multiple operations
@@ -146,5 +146,122 @@ impl Update {
     pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
         self.annotations = self.annotations.annotate_number(key, value);
         self
+    }
+}
+
+impl StorageTransaction {
+    /// Returns the RLP-encoded bytes of the transaction
+    pub fn encoded(&self) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        self.encode(&mut encoded);
+        encoded
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::B256;
+    use hex;
+
+    #[test]
+    fn test_empty_transaction() {
+        let tx = StorageTransaction::default();
+        assert_eq!(hex::encode(tx.encoded()), "c4c0c0c0c0");
+    }
+
+    #[test]
+    fn test_create_without_annotations() {
+        let create = Create::new(b"test payload".to_vec(), 1000);
+
+        let mut tx = StorageTransaction::default();
+        tx.create.push(create);
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "d7d3d28203e88c74657374207061796c6f6164c0c0c0c0c0"
+        );
+    }
+
+    #[test]
+    fn test_create_with_annotations() {
+        let create = Create::new(b"test payload".to_vec(), 1000)
+            .annotate_string("foo", "bar")
+            .annotate_number("baz", 42);
+
+        let mut tx = StorageTransaction::default();
+        tx.create.push(create);
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "e6e2e18203e88c74657374207061796c6f6164c9c883666f6f83626172c6c58362617a2ac0c0c0"
+        );
+    }
+
+    #[test]
+    fn test_update_with_annotations() {
+        let update = Update::new(
+            B256::from_slice(&[1; 32]),
+            b"updated payload".to_vec(),
+            2000,
+        )
+        .annotate_string("status", "active")
+        .annotate_number("version", 2);
+
+        let mut tx = StorageTransaction::default();
+        tx.update.push(update);
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "f856c0f851f84fa001010101010101010101010101010101010101010101010101010101010101018207d08f75706461746564207061796c6f6164cfce8673746174757386616374697665cac98776657273696f6e02c0c0"
+        );
+    }
+
+    #[test]
+    fn test_delete_operation() {
+        let mut tx = StorageTransaction::default();
+        tx.delete.push(B256::from_slice(&[2; 32]));
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "e5c0c0e1a00202020202020202020202020202020202020202020202020202020202020202c0"
+        );
+    }
+
+    #[test]
+    fn test_extend_ttl() {
+        let mut tx = StorageTransaction::default();
+        tx.extend.push(ExtendTTL {
+            entity_key: B256::from_slice(&[3; 32]),
+            number_of_blocks: 500,
+        });
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "e9c0c0c0e5e4a003030303030303030303030303030303030303030303030303030303030303038201f4"
+        );
+    }
+
+    #[test]
+    fn test_mixed_operations() {
+        let create = Create::new(b"test payload".to_vec(), 1000).annotate_string("type", "test");
+        let update = Update::new(
+            B256::from_slice(&[1; 32]),
+            b"updated payload".to_vec(),
+            2000,
+        );
+        let mut tx = StorageTransaction::default();
+        tx.create.push(create);
+        tx.update.push(update);
+        tx.delete.push(B256::from_slice(&[2; 32]));
+        tx.extend.push(ExtendTTL {
+            entity_key: B256::from_slice(&[3; 32]),
+            number_of_blocks: 500,
+        });
+
+        assert_eq!(
+            hex::encode(tx.encoded()),
+            "f89fdedd8203e88c74657374207061796c6f6164cbca84747970658474657374c0f7f6a001010101010101010101010101010101010101010101010101010101010101018207d08f75706461746564207061796c6f6164c0c0e1a00202020202020202020202020202020202020202020202020202020202020202e5e4a003030303030303030303030303030303030303030303030303030303030303038201f4"
+        );
     }
 }
