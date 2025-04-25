@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
 
     // Create a test entry
     let test_payload = args.entry.as_bytes().to_vec();
-    let entry = Create::new(test_payload.clone(), 1000);
+    let entry = Create::new(test_payload.clone(), 1000).annotate_string("foo", "bar");
 
     // Create entry with the account
     let entry_id = client

@@ -204,7 +204,7 @@ impl GolemBaseClient {
         let receipt = account.send_db_transaction(tx).await?;
         if !receipt.status() {
             return Err(anyhow::anyhow!(
-                "Transaction {} reverted",
+                "Transaction {} failed despite being mined.",
                 receipt.transaction_hash
             ));
         }
