@@ -1,5 +1,6 @@
 use alloy::primitives::{Address, B256 as AlloyB256};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -42,9 +43,12 @@ impl GolemBaseClient {
 
     /// Gets the storage value associated with the given entity key.
     pub async fn get_storage_value(&self, key: String) -> anyhow::Result<String> {
-        self.rpc_call::<&[String], String>("golembase_getStorageValue", &[key])
-            .await
-        // TODO: base64 decode the return value
+        let value = self
+            .rpc_call::<&[String], String>("golembase_getStorageValue", &[key])
+            .await?;
+        // Decode base64 value
+        let decoded = BASE64.decode(value)?;
+        Ok(String::from_utf8(decoded)?)
     }
 
     /// Queries entities in GolemBase based on annotations.

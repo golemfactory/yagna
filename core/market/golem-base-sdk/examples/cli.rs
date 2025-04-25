@@ -51,6 +51,12 @@ enum Command {
         #[arg(short, long, default_value = "test123")]
         password: String,
     },
+    /// Get entity by ID
+    GetEntity {
+        /// Entity ID to get
+        #[arg(short, long)]
+        id: String,
+    },
 }
 
 #[tokio::main]
@@ -107,6 +113,14 @@ async fn main() -> Result<()> {
                 .await?;
             log::info!("Transfer transaction: {:?}", transfer_tx);
         }
+        Command::GetEntity { id } => match client.cat(id).await {
+            Ok(content) => {
+                log::info!("Entity content: {}", content);
+            }
+            Err(e) => {
+                log::error!("Failed to get entity: {}", e);
+            }
+        },
     }
 
     Ok(())
