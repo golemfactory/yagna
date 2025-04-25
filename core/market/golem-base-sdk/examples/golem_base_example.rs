@@ -1,6 +1,7 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::{keccak256, Address, U256};
 use anyhow::Result;
 use clap::Parser;
+use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 use ya_client_model::NodeId;
 
@@ -89,7 +90,18 @@ async fn main() -> Result<()> {
 
     // Create a test entry
     let test_payload = args.entry.as_bytes().to_vec();
-    let entry = Create::new(test_payload.clone(), 1000).annotate_string("foo", "bar");
+    let hash = format!("0x{:x}", keccak256(&test_payload));
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    log::info!("Offer hash: {hash}");
+    log::info!("Timestamp: {timestamp}");
+    let entry = Create::new(test_payload.clone(), 1000)
+        .annotate_string("golem_marketplace_type", "Offer")
+        .annotate_string("golem_marketplace_id", hash)
+        .annotate_number("golem_marketplace_timestamp", timestamp as u64);
 
     // Create entry with the account
     let entry_id = client
@@ -101,6 +113,15 @@ async fn main() -> Result<()> {
     // Get the entry
     let entry = client.cat(entry_id).await?;
     log::info!("Entry: {entry}");
+
+    // Query for Offers
+    let query = format!("golem_marketplace_type = \"Offer\"");
+    log::info!("Querying entities with: {}", query);
+
+    let offers = client.query_entities(&query).await?;
+    for offer in offers {
+        log::info!("Offer: {:?}", offer);
+    }
 
     Ok(())
 }

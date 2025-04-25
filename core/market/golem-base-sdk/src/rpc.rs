@@ -22,6 +22,14 @@ pub struct EntityMetaData {
     pub owner: Address,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchResult {
+    #[serde(rename = "key")]
+    pub key: AlloyB256,
+    #[serde(rename = "value")]
+    pub value: Vec<u8>,
+}
+
 impl GolemBaseClient {
     /// Gets the total count of entities in GolemBase.
     pub async fn get_entity_count(&self) -> anyhow::Result<u64> {
@@ -52,8 +60,8 @@ impl GolemBaseClient {
     }
 
     /// Queries entities in GolemBase based on annotations.
-    pub async fn query_entities(&self, query: &str) -> anyhow::Result<Vec<Annotation<AlloyB256>>> {
-        self.rpc_call::<&str, Vec<Annotation<AlloyB256>>>("golembase_queryEntities", query)
+    pub async fn query_entities(&self, query: &str) -> anyhow::Result<Vec<SearchResult>> {
+        self.rpc_call::<&[&str], Vec<SearchResult>>("golembase_queryEntities", &[query])
             .await
     }
 
