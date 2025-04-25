@@ -98,5 +98,9 @@ async fn main() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to create entry: {e}"))?;
     log::info!("Entry created with ID: {:?}", entry_id);
 
+    // Get the entry
+    let entry = client.cat(entry_id).await?;
+    log::info!("Entry: {entry}");
+
     Ok(())
 }

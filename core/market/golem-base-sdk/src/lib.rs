@@ -6,4 +6,7 @@
 pub mod account;
 pub mod client;
 pub mod entity;
+pub mod rpc;
 pub mod signers;
+
+pub use signers::{GolemBaseSigner, InMemorySigner};

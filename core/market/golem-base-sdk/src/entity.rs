@@ -20,20 +20,11 @@ pub struct StorageTransaction {
     pub extend: Vec<ExtendTTL>,
 }
 
-/// Helper struct for managing entity annotations
-#[derive(Debug, Clone, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
-#[rlp(trailing)]
-pub struct Annotations {
-    #[serde(default)]
-    #[rlp(default)]
-    #[serde(rename = "stringAnnotations")]
-    #[rlp(rename = "stringAnnotations")]
-    strings: Option<Vec<StringAnnotation>>,
-    #[serde(default)]
-    #[rlp(default)]
-    #[serde(rename = "numericAnnotations")]
-    #[rlp(rename = "numericAnnotations")]
-    numbers: Option<Vec<NumericAnnotation>>,
+/// Represents an annotation for an entity
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+pub struct Annotation<T> {
+    pub key: String,
+    pub value: T,
 }
 
 /// Represents a new entity creation operation
@@ -44,80 +35,10 @@ pub struct Create {
     pub payload: Bytes,
     #[serde(rename = "stringAnnotations")]
     #[rlp(rename = "stringAnnotations")]
-    strings: Vec<StringAnnotation>,
+    strings: Vec<Annotation<String>>,
     #[serde(rename = "numericAnnotations")]
     #[rlp(rename = "numericAnnotations")]
-    numbers: Vec<NumericAnnotation>,
-}
-
-/// Represents an entity update operation
-#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
-#[rlp(trailing)]
-pub struct Update {
-    #[serde(rename = "entityKey")]
-    #[rlp(rename = "entityKey")]
-    pub entity_key: B256,
-    pub ttl: u64,
-    pub payload: Bytes,
-    #[serde(rename = "stringAnnotations")]
-    #[rlp(rename = "stringAnnotations")]
-    strings: Vec<StringAnnotation>,
-    #[serde(rename = "numericAnnotations")]
-    #[rlp(rename = "numericAnnotations")]
-    numbers: Vec<NumericAnnotation>,
-}
-
-/// Represents a TTL extension operation
-#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
-pub struct ExtendTTL {
-    #[serde(rename = "entityKey")]
-    #[rlp(rename = "entityKey")]
-    pub entity_key: B256,
-    #[serde(rename = "numberOfBlocks")]
-    #[rlp(rename = "numberOfBlocks")]
-    pub number_of_blocks: u64,
-}
-
-/// Represents a string annotation for an entity
-#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
-pub struct StringAnnotation {
-    pub key: String,
-    pub value: String,
-}
-
-/// Represents a numeric annotation for an entity
-#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
-pub struct NumericAnnotation {
-    pub key: String,
-    pub value: u64,
-}
-
-impl Annotations {
-    /// Adds a string annotation
-    pub fn annotate_string(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let annotation = StringAnnotation {
-            key: key.into(),
-            value: value.into(),
-        };
-        match &mut self.strings {
-            Some(vec) => vec.push(annotation),
-            None => self.strings = Some(vec![annotation]),
-        }
-        self
-    }
-
-    /// Adds a numeric annotation
-    pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
-        let annotation = NumericAnnotation {
-            key: key.into(),
-            value,
-        };
-        match &mut self.numbers {
-            Some(vec) => vec.push(annotation),
-            None => self.numbers = Some(vec![annotation]),
-        }
-        self
-    }
+    numbers: Vec<Annotation<u64>>,
 }
 
 impl Create {
@@ -133,7 +54,7 @@ impl Create {
 
     /// Adds a string annotation to the entity
     pub fn annotate_string(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.strings.push(StringAnnotation {
+        self.strings.push(Annotation {
             key: key.into(),
             value: value.into(),
         });
@@ -142,12 +63,29 @@ impl Create {
 
     /// Adds a numeric annotation to the entity
     pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
-        self.numbers.push(NumericAnnotation {
+        self.numbers.push(Annotation {
             key: key.into(),
             value,
         });
         self
     }
+}
+
+/// Represents an entity update operation
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+#[rlp(trailing)]
+pub struct Update {
+    #[serde(rename = "entityKey")]
+    #[rlp(rename = "entityKey")]
+    pub entity_key: B256,
+    pub ttl: u64,
+    pub payload: Bytes,
+    #[serde(rename = "stringAnnotations")]
+    #[rlp(rename = "stringAnnotations")]
+    strings: Vec<Annotation<String>>,
+    #[serde(rename = "numericAnnotations")]
+    #[rlp(rename = "numericAnnotations")]
+    numbers: Vec<Annotation<u64>>,
 }
 
 impl Update {
@@ -164,7 +102,7 @@ impl Update {
 
     /// Adds a string annotation to the entity
     pub fn annotate_string(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.strings.push(StringAnnotation {
+        self.strings.push(Annotation {
             key: key.into(),
             value: value.into(),
         });
@@ -173,12 +111,23 @@ impl Update {
 
     /// Adds a numeric annotation to the entity
     pub fn annotate_number(mut self, key: impl Into<String>, value: u64) -> Self {
-        self.numbers.push(NumericAnnotation {
+        self.numbers.push(Annotation {
             key: key.into(),
             value,
         });
         self
     }
+}
+
+/// Represents a TTL extension operation
+#[derive(Debug, Clone, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+pub struct ExtendTTL {
+    #[serde(rename = "entityKey")]
+    #[rlp(rename = "entityKey")]
+    pub entity_key: B256,
+    #[serde(rename = "numberOfBlocks")]
+    #[rlp(rename = "numberOfBlocks")]
+    pub number_of_blocks: u64,
 }
 
 impl StorageTransaction {
@@ -190,6 +139,7 @@ impl StorageTransaction {
     }
 }
 
+// Tests check serialization compatibility with go implementation.
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,6 +1,9 @@
 use alloy::primitives::{Address, B256, U256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
+use alloy::rpc::json_rpc::RpcRecv;
+use alloy::rpc::json_rpc::RpcSend;
 use alloy::rpc::types::eth::BlockNumberOrTag;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,7 +30,9 @@ impl GolemBaseClient {
     /// Creates a new client
     pub async fn new(endpoint: Url) -> anyhow::Result<Self> {
         let provider = Arc::new(Box::new(
-            ProviderBuilder::new().on_http(endpoint.clone()).erased(),
+            ProviderBuilder::new()
+                .connect_http(endpoint.clone())
+                .erased(),
         ));
         let chain_id = provider.get_chain_id().await?;
 
@@ -190,7 +195,7 @@ impl GolemBaseClient {
     }
 
     /// Creates an entry using the specified account
-    pub async fn create_entry(&self, account: Address, entry: Create) -> anyhow::Result<B256> {
+    pub async fn create_entry(&self, account: Address, entry: Create) -> anyhow::Result<String> {
         let account = self.account_get(account)?;
         let tx = StorageTransaction {
             create: vec![entry],
@@ -227,12 +232,12 @@ impl GolemBaseClient {
             .ok_or_else(|| anyhow::anyhow!("No entity ID found in transaction logs"))?;
 
         log::debug!("Created entity with ID: 0x{:x}", entity_id);
-        Ok(entity_id)
+        Ok(entity_id.to_string())
     }
 
     /// Retrieves an entry's payload from Golem Base by its ID
-    pub async fn cat(&self, _id: B256) -> anyhow::Result<Vec<u8>> {
-        todo!("Implement cat")
+    pub async fn cat(&self, id: String) -> anyhow::Result<String> {
+        self.get_storage_value(id).await
     }
 
     /// Gets an account's ETH balance
@@ -258,5 +263,16 @@ impl GolemBaseClient {
 
         // Consider node synced if latest block is less than 5 minutes old
         Ok(current_time - latest_block_timestamp < MAX_BLOCK_AGE_SECONDS)
+    }
+
+    /// Makes a JSON-RPC call to the GolemBase endpoint.
+    pub(crate) async fn rpc_call<S: RpcSend, R: RpcRecv>(
+        &self,
+        method: impl Into<Cow<'static, str>>,
+        params: S,
+    ) -> anyhow::Result<R> {
+        let method = method.into();
+        log::debug!("RPC Call - Method: {}, Params: {:?}", method, params);
+        Ok(self.provider.raw_request(method.clone(), params).await?)
     }
 }

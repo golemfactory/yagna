@@ -7,8 +7,8 @@ description = "SDK for interacting with Golem Base"
 license = "GPL-3.0"
 
 [dependencies]
-alloy = { version = "0.14", features = ["full"] }
-alloy-signer-local = { version = "0.14", features = ["keystore"] }
+alloy = { version = "0.15", features = ["full", "json-rpc"] }
+alloy-signer-local = { version = "0.15", features = ["keystore"] }
 alloy-rlp = "0.3"
 anyhow = "1.0"
 async-trait = "0.1"

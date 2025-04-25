@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::account::TransactionSigner;
 
 /// A signer that uses GolemBase to sign transactions
+#[allow(dead_code)]
 pub struct GolemBaseSigner {
     /// The address of the account
     address: Address,
