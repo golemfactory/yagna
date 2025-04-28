@@ -27,8 +27,19 @@ pub struct EntityMetaData {
 pub struct SearchResult {
     #[serde(rename = "key")]
     pub key: AlloyB256,
-    #[serde(rename = "value")]
+    #[serde(rename = "value", deserialize_with = "deserialize_base64")]
     pub value: Bytes,
+}
+
+fn deserialize_base64<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    BASE64
+        .decode(s)
+        .map(Bytes::from)
+        .map_err(serde::de::Error::custom)
 }
 
 impl GolemBaseClient {
@@ -51,13 +62,18 @@ impl GolemBaseClient {
     }
 
     /// Gets the storage value associated with the given entity key.
-    pub async fn get_storage_value(&self, key: String) -> anyhow::Result<String> {
+    pub async fn get_storage_value(&self, key: String) -> anyhow::Result<Bytes> {
         let value = self
             .rpc_call::<&[String], String>("golembase_getStorageValue", &[key])
             .await?;
         // Decode base64 value
-        let decoded = BASE64.decode(value)?;
-        Ok(String::from_utf8(decoded)?)
+        Ok(Bytes::from(BASE64.decode(value)?))
+    }
+
+    /// Gets the storage value as a string associated with the given entity key.
+    pub async fn get_storage_value_string(&self, key: String) -> anyhow::Result<String> {
+        let bytes = self.get_storage_value(key).await?;
+        Ok(String::from_utf8(bytes.to_vec())?)
     }
 
     /// Queries entities in GolemBase based on annotations.

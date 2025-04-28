@@ -239,7 +239,7 @@ impl GolemBaseClient {
 
     /// Retrieves an entry's payload from Golem Base by its ID
     pub async fn cat(&self, id: String) -> anyhow::Result<String> {
-        self.get_storage_value(id).await
+        self.get_storage_value_string(id).await
     }
 
     /// Gets an account's ETH balance
@@ -287,7 +287,8 @@ impl GolemBaseClient {
                     anyhow!("Serialization error: {err}")
                 }
                 RpcError::DeserError { err, text } => {
-                    anyhow::anyhow!("Deserialization error: {err}, response text: {text}")
+                    log::debug!("Deserialization error: {err}, response text: {text}");
+                    anyhow!("Deserialization error: {err}")
                 }
                 _ => anyhow!("{e}"),
             })
