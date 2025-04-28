@@ -3,6 +3,8 @@ use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use alloy::rpc::json_rpc::RpcRecv;
 use alloy::rpc::json_rpc::RpcSend;
 use alloy::rpc::types::eth::BlockNumberOrTag;
+use alloy_json_rpc::RpcError;
+use anyhow::anyhow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -273,6 +275,21 @@ impl GolemBaseClient {
     ) -> anyhow::Result<R> {
         let method = method.into();
         log::debug!("RPC Call - Method: {}, Params: {:?}", method, params);
-        Ok(self.provider.raw_request(method.clone(), params).await?)
+        self.provider
+            .client()
+            .request(method.clone(), params)
+            .await
+            .map_err(|e| match e {
+                RpcError::ErrorResp(err) => {
+                    anyhow!("Error response from RPC service: {}", err)
+                }
+                RpcError::SerError(err) => {
+                    anyhow!("Serialization error: {err}")
+                }
+                RpcError::DeserError { err, text } => {
+                    anyhow::anyhow!("Deserialization error: {err}, response text: {text}")
+                }
+                _ => anyhow!("{e}"),
+            })
     }
 }

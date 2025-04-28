@@ -4248,6 +4248,7 @@ name = "golem-base-sdk"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-json-rpc",
  "alloy-rlp",
  "alloy-signer-local",
  "anyhow",

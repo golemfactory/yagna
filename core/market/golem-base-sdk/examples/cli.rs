@@ -10,7 +10,7 @@ use golem_base_sdk::client::GolemBaseClient;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// URL of the Geth node to connect to
+    /// URL of the GolemBase node
     #[arg(short, long, default_value = "http://localhost:8545")]
     url: String,
 
@@ -54,7 +54,6 @@ enum Command {
     /// Get entity by ID
     GetEntity {
         /// Entity ID to get
-        #[arg(short, long)]
         id: String,
     },
 }
@@ -64,8 +63,6 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let args = Args::parse();
-
-    // Connect to GolemBase
     let endpoint = Url::parse(&args.url)?;
     let client = GolemBaseClient::new(endpoint).await?;
 
@@ -113,14 +110,10 @@ async fn main() -> Result<()> {
                 .await?;
             log::info!("Transfer transaction: {:?}", transfer_tx);
         }
-        Command::GetEntity { id } => match client.cat(id).await {
-            Ok(content) => {
-                log::info!("Entity content: {}", content);
-            }
-            Err(e) => {
-                log::error!("Failed to get entity: {}", e);
-            }
-        },
+        Command::GetEntity { id } => {
+            let entry = client.cat(id).await?;
+            println!("Entry: {}", entry);
+        }
     }
 
     Ok(())
