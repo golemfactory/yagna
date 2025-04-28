@@ -1,10 +1,11 @@
-use alloy::primitives::{keccak256, Address, U256};
+use alloy::primitives::{keccak256, Address};
 use anyhow::Result;
 use clap::Parser;
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 use ya_client_model::NodeId;
 
+use bigdecimal::BigDecimal;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 
@@ -53,8 +54,7 @@ async fn main() -> Result<()> {
     // Log balances for all accounts
     for &addr in &accounts {
         let balance = client.get_balance(addr).await?;
-        let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
-        log::info!("Account {} balance: {} ETH", addr, balance_eth.to_string());
+        log::info!("Account {} balance: {} ETH", addr, balance);
     }
 
     // Select account based on command line argument or generate new one
@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
     if !args.skip_fund {
         // Fund the account with 1 ETH
         let fund_tx = client
-            .fund(account, U256::from(1_000_000_000_000_000_000u128))
+            .fund(account, BigDecimal::from(1))
             .await
             .map_err(|e| anyhow::anyhow!("Failed to fund account: {e}"))?;
         log::info!("Account funded with transaction: {:?}", fund_tx);
@@ -84,8 +84,7 @@ async fn main() -> Result<()> {
         // Check account balance
         let account_obj = client.account_get(account)?;
         let balance = account_obj.get_balance().await?;
-        let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
-        log::info!("Account balance: {} ETH", balance_eth.to_string());
+        log::info!("Account balance: {} ETH", balance);
     }
 
     // Create a test entry
@@ -93,7 +92,7 @@ async fn main() -> Result<()> {
     let hash = format!("0x{:x}", keccak256(&test_payload));
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .map_err(|e| anyhow::anyhow!("Failed to get current timestamp: {e}"))?
         .as_secs();
 
     log::info!("Offer hash: {hash}");
@@ -111,14 +110,20 @@ async fn main() -> Result<()> {
     log::info!("Entry created with ID: {:?}", entry_id);
 
     // Get the entry
-    let entry = client.cat(entry_id).await?;
+    let entry = client
+        .cat(entry_id.clone())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get entry {entry_id}: {e}"))?;
     log::info!("Entry: {entry}");
 
     // Query for Offers
     let query = format!("golem_marketplace_type = \"Offer\"");
     log::info!("Querying entities with: {}", query);
 
-    let offers = client.query_entities(&query).await?;
+    let offers = client
+        .query_entities(&query)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query entities: {e}"))?;
     for offer in offers {
         log::info!("Offer: {:?}", offer);
     }

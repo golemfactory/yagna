@@ -1,10 +1,11 @@
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{Address, B256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use alloy::rpc::json_rpc::RpcRecv;
 use alloy::rpc::json_rpc::RpcSend;
 use alloy::rpc::types::eth::BlockNumberOrTag;
 use alloy_json_rpc::RpcError;
 use anyhow::anyhow;
+use bigdecimal::BigDecimal;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -14,6 +15,7 @@ use url::Url;
 use crate::account::{Account, TransactionSigner};
 use crate::entity::{Create, StorageTransaction};
 use crate::signers::{GolemBaseSigner, InMemorySigner};
+use crate::utils::wei_to_eth;
 
 /// Maximum age of the latest block in seconds to consider the node synced
 const MAX_BLOCK_AGE_SECONDS: u64 = 300;
@@ -128,15 +130,26 @@ impl GolemBaseClient {
         Ok(all_accounts)
     }
 
+    /// Gets an account's ETH balance
+    pub async fn get_balance(&self, account: Address) -> anyhow::Result<BigDecimal> {
+        let balance = self.provider.get_balance(account).await?;
+        Ok(wei_to_eth(balance))
+    }
+
     /// Transfers ETH from one account to another
-    pub async fn transfer(&self, from: Address, to: Address, value: U256) -> anyhow::Result<B256> {
+    pub async fn transfer(
+        &self,
+        from: Address,
+        to: Address,
+        value: BigDecimal,
+    ) -> anyhow::Result<B256> {
         let account = self.account_get(from)?;
         let receipt = account.transfer(to, value).await?;
         Ok(receipt.transaction_hash)
     }
 
     /// Funds an account with ETH
-    pub async fn fund(&self, account: Address, value: U256) -> anyhow::Result<B256> {
+    pub async fn fund(&self, account: Address, value: BigDecimal) -> anyhow::Result<B256> {
         let account = self.account_get(account)?;
         let receipt = account.fund_account(value).await?;
         Ok(receipt.transaction_hash)
@@ -240,11 +253,6 @@ impl GolemBaseClient {
     /// Retrieves an entry's payload from Golem Base by its ID
     pub async fn cat(&self, id: String) -> anyhow::Result<String> {
         self.get_storage_value_string(id).await
-    }
-
-    /// Gets an account's ETH balance
-    pub async fn get_balance(&self, account: Address) -> anyhow::Result<U256> {
-        Ok(self.provider.get_balance(account).await?)
     }
 
     /// Checks if the node is synced by comparing the latest block timestamp with current time

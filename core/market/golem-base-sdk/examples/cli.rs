@@ -1,10 +1,10 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::Address;
 use anyhow::Result;
+use bigdecimal::BigDecimal;
 use clap::{Parser, Subcommand};
+use golem_base_sdk::client::GolemBaseClient;
 use url::Url;
 use ya_client_model::NodeId;
-
-use golem_base_sdk::client::GolemBaseClient;
 
 /// Program to fund and transfer funds between accounts on Golem Base
 #[derive(Parser, Debug)]
@@ -31,7 +31,7 @@ enum Command {
 
         /// Amount in ETH to fund
         #[arg(short, long, default_value = "1.0")]
-        amount: f64,
+        amount: BigDecimal,
     },
     /// Transfer ETH to another account
     Transfer {
@@ -45,7 +45,7 @@ enum Command {
 
         /// Amount in ETH to transfer
         #[arg(short, long)]
-        amount: f64,
+        amount: BigDecimal,
 
         /// Password for the source wallet
         #[arg(short, long, default_value = "test123")]
@@ -74,8 +74,7 @@ async fn main() -> Result<()> {
             log::info!("Available accounts:");
             for &addr in &accounts {
                 let balance = client.get_balance(addr).await?;
-                let balance_eth = balance / U256::from(1_000_000_000_000_000_000u128);
-                log::info!("  {}: {} ETH", addr, balance_eth.to_string());
+                log::info!("  {}: {} ETH", addr, balance);
             }
         }
         Command::Fund { wallet, amount } => {
@@ -83,9 +82,7 @@ async fn main() -> Result<()> {
             let account_obj = client.account_load(account, "test123").await?;
             log::info!("Using account: {account_obj:?}");
 
-            // Convert ETH amount to wei
-            let amount_wei = U256::from((amount * 1_000_000_000_000_000_000.0) as u128);
-            let fund_tx = client.fund(account, amount_wei).await?;
+            let fund_tx = client.fund(account, amount).await?;
             log::info!("Account funded with transaction: {:?}", fund_tx);
         }
         Command::Transfer {
@@ -97,17 +94,12 @@ async fn main() -> Result<()> {
             let from_address = Address::from(&from.into_array());
             let to_address = Address::from(&to.into_array());
 
-            // Convert ETH amount to wei
-            let amount_wei = U256::from((amount * 1_000_000_000_000_000_000.0) as u128);
-
             // Load source account
             let account = client.account_load(from_address, &password).await?;
             log::info!("Using account: {account:?}");
 
             // Transfer funds
-            let transfer_tx = client
-                .transfer(from_address, to_address, amount_wei)
-                .await?;
+            let transfer_tx = client.transfer(from_address, to_address, amount).await?;
             log::info!("Transfer transaction: {:?}", transfer_tx);
         }
         Command::GetEntity { id } => {

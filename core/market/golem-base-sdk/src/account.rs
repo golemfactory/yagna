@@ -9,10 +9,13 @@ use alloy::rpc::types::eth::TransactionRequest;
 use alloy::rpc::types::TransactionReceipt;
 use alloy::signers::Signature;
 use alloy_rlp::{Decodable, Encodable};
+use anyhow::anyhow;
 use async_trait::async_trait;
+use bigdecimal::BigDecimal;
 use std::sync::Arc;
 
 use crate::entity::StorageTransaction;
+use crate::utils::eth_to_wei;
 
 /// The address of the GolemBase storage processor contract
 pub const GOLEM_BASE_STORAGE_PROCESSOR_ADDRESS: Address =
@@ -113,20 +116,23 @@ impl Account {
         self.send_transaction(tx).await
     }
 
-    /// Transfers ETH to another account
-    pub async fn transfer(&self, to: Address, value: U256) -> anyhow::Result<TransactionReceipt> {
+    /// Transfers ETH from this account to another address
+    pub async fn transfer(
+        &self,
+        to: Address,
+        value: BigDecimal,
+    ) -> anyhow::Result<TransactionReceipt> {
         let tx = TransactionRequest::default()
             .with_to(to)
-            .with_value(value)
+            .with_value(eth_to_wei(value)?)
             .with_gas_limit(21_000)
             .with_max_priority_fee_per_gas(1_000_000_000)
             .with_max_fee_per_gas(20_000_000_000);
-
         self.send_transaction(tx).await
     }
 
     /// Funds an account by sending ETH
-    pub async fn fund_account(&self, value: U256) -> anyhow::Result<TransactionReceipt> {
+    pub async fn fund_account(&self, value: BigDecimal) -> anyhow::Result<TransactionReceipt> {
         let accounts = self.provider.get_accounts().await?;
         let funder = accounts[0];
 
@@ -135,7 +141,7 @@ impl Account {
         let tx = TransactionRequest::default()
             .with_to(self.address())
             .with_from(funder)
-            .with_value(value)
+            .with_value(eth_to_wei(value)?)
             .with_nonce(nonce)
             .with_chain_id(self.chain_id)
             .with_gas_limit(21_000)
@@ -165,7 +171,7 @@ impl Account {
 
         // Decode the transaction for debugging purposes.
         let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
-            .map_err(|e| anyhow::anyhow!("Failed to decode transaction: {e}"))?;
+            .map_err(|e| anyhow!("Failed to decode transaction: {e}"))?;
         let signer = decoded_tx.recover_signer()?;
         log::debug!("Decoded transaction: {:#?}", decoded_tx);
         log::debug!("Recovered signer: {:#?}", signer);
