@@ -1,6 +1,7 @@
 use alloy::primitives::{Address, B256 as AlloyB256};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -27,7 +28,7 @@ pub struct SearchResult {
     #[serde(rename = "key")]
     pub key: AlloyB256,
     #[serde(rename = "value")]
-    pub value: Vec<u8>,
+    pub value: Bytes,
 }
 
 impl GolemBaseClient {
