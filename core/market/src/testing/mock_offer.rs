@@ -27,7 +27,7 @@ pub fn sample_offer() -> Offer {
     let expiration_ts = creation_ts + Duration::hours(1);
     Offer::from_new(
         &client::sample_offer(),
-        &generate_identity(""),
+        generate_identity("").identity,
         creation_ts,
         expiration_ts,
     )
@@ -38,7 +38,7 @@ pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
     let creation_ts = Utc::now().naive_utc();
     Offer::from_new(
         &client::sample_offer(),
-        &generate_identity(""),
+        generate_identity("").identity,
         creation_ts,
         expiration_ts,
     )

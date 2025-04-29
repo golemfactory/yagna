@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
-use ya_core_model::net::local::BindBroadcastError;
 
 use crate::identity::IdentityError;
 

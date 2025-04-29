@@ -84,15 +84,15 @@ impl MockNodeKind {
         match self {
             MockNodeKind::Market(market) => {
                 market.bind_gsb(&market_public, &market_local).await?;
-                market.matcher.discovery.bind_gsb_broadcast().await?;
+                market.matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
                 matcher.bind_gsb(&market_public, &market_local).await?;
-                matcher.discovery.bind_gsb_broadcast().await?;
+                matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Discovery(discovery) => {
                 discovery.bind_gsb(&market_public, &market_local).await?;
-                discovery.bind_gsb_broadcast().await?;
+                discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Negotiation {
                 provider,

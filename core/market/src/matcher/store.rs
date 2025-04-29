@@ -43,7 +43,7 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, id, creation_ts, expiration_ts)?;
+        let offer = Offer::from_new(offer, id.identity, creation_ts, expiration_ts)?;
         let r = self.insert_offer(offer).await;
         if r.is_ok() {
             self.scan_set.notify();

@@ -1,12 +1,16 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
+use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::sync::Arc;
+use tokio::time;
+
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::rpc::SearchResult;
 use golem_base_sdk::Address;
+use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 
 use super::callback::HandlerSlot;
@@ -15,6 +19,8 @@ use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
+
+const GOLEM_BASE_CALLER: &str = "GolemBase";
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;
@@ -60,8 +66,8 @@ impl Discovery {
             })?;
 
         // Serialize the offer to JSON
-        let payload = serde_json::to_vec(&offer).map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to serialize offer: {}", e))
+        let payload = serde_json::to_vec(&offer.into_client_offer()?).map_err(|e| {
+            DiscoveryError::InternalError(format!("Failed to serialize offer: {}", e))
         })?;
 
         // Calculate TTL in blocks based on expiration time
@@ -137,17 +143,21 @@ impl Discovery {
     fn parse_offers(results: Vec<SearchResult>) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let mut offers = Vec::new();
         for result in results {
-            let value = result.value_as_string().map_err(|e| {
-                DiscoveryError::GolemBaseError(format!("Failed to parse offer data: {}", e))
-            })?;
-
-            let offer: ModelOffer = serde_json::from_str(&value).map_err(|e| {
-                DiscoveryError::GolemBaseError(format!("Failed to deserialize offer: {}", e))
-            })?;
-
-            offers.push(offer);
+            match Self::parse_offer(result) {
+                Ok(offer) => offers.push(offer),
+                Err(e) => log::trace!("Failed to parse offer: {}", e),
+            }
         }
         Ok(offers)
+    }
+
+    /// Parses a single SearchResult into a ModelOffer
+    fn parse_offer(result: SearchResult) -> anyhow::Result<ModelOffer> {
+        let value = result.value_as_string()?;
+        let offer: ClientOffer = serde_json::from_str(&value)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+
+        ModelOffer::try_from(offer)
     }
 
     async fn initialize_account(&self) -> Result<()> {
@@ -200,7 +210,8 @@ impl Discovery {
         Ok(())
     }
 
-    /// Binds GSB handlers
+    /// Function doesn't bind any GSB handlers.
+    /// It's only used to sync with GolemBase node and initialize Discovery struct state.
     pub async fn bind_gsb(
         &self,
         _public_prefix: &str,
@@ -219,12 +230,68 @@ impl Discovery {
             .await
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
+        self.bind_offers_listener().await?;
         Ok(())
     }
 
-    /// Binds GSB broadcast handlers
-    pub async fn bind_gsb_broadcast(&self) -> Result<(), DiscoveryInitError> {
-        todo!()
+    pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
+        let discovery = self.clone();
+        // TODO: Add separate config value for offers query interval instead of reusing broadcast interval
+        let interval = discovery.inner.config.mean_cyclic_bcast_interval;
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(interval);
+            loop {
+                interval.tick().await;
+
+                if let Err(e) = async {
+                    // Query all offers from GolemBase
+                    let offers = discovery.query_offers().await?;
+
+                    // Filter out known offers
+                    let ids = offers.iter().map(|offer| offer.id.clone()).collect();
+                    let unknown_offers = discovery
+                        .inner
+                        .offer_handlers
+                        .filter_out_known_ids
+                        .call(
+                            GOLEM_BASE_CALLER.to_string(),
+                            OffersBcast { offer_ids: ids },
+                        )
+                        .await
+                        .unwrap_or_default();
+
+                    // Add unknown Offers to local storage
+                    if !unknown_offers.is_empty() {
+                        let unknown_offer_ids: HashSet<_> = unknown_offers.iter().collect();
+                        let filtered_offers = offers
+                            .into_iter()
+                            .filter(|offer| unknown_offer_ids.contains(&offer.id))
+                            .collect();
+
+                        discovery
+                            .inner
+                            .offer_handlers
+                            .receive_remote_offers
+                            .call(
+                                GOLEM_BASE_CALLER.to_string(),
+                                OffersRetrieved {
+                                    offers: filtered_offers,
+                                },
+                            )
+                            .await
+                            .ok();
+                    }
+                    Ok::<(), DiscoveryError>(())
+                }
+                .await
+                {
+                    log::error!("Error in offers listener: {}", e);
+                }
+            }
+        });
+
+        Ok(())
     }
 
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
