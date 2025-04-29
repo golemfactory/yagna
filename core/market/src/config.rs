@@ -1,5 +1,8 @@
 use std::time::Duration;
 use structopt::StructOpt;
+use url::Url;
+
+use ya_core_model::NodeId;
 
 #[derive(StructOpt, Clone)]
 pub struct Config {
@@ -13,7 +16,7 @@ pub struct Config {
     pub db: DbConfig,
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(StructOpt, Clone, Debug)]
 pub struct DiscoveryConfig {
     // don't set this value higher than SQLITE_MAX_VARIABLE_NUMBER, which defaults to 999 for SQLite versions prior to 3.32.0 (2020-05-22)
     #[structopt(env, default_value = "200")]
@@ -35,6 +38,14 @@ pub struct DiscoveryConfig {
     pub bcast_tile_time_margin: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "300s")]
     pub bcast_node_ban_timeout: Duration,
+    #[structopt(env, parse(try_from_str = parse_url), default_value = "http://localhost:8545")]
+    pub golem_base_url: Url,
+    /// Account for payments.
+    #[structopt(long, env = "MARKET_GOLEM_BASE_ACCOUNT")]
+    pub account: Option<NodeId>,
+    /// Password for the account keystore.
+    #[structopt(long, env = "MARKET_GOLEM_BASE_PASSWORD", default_value = "test123")]
+    pub password: String,
 }
 
 #[derive(StructOpt, Clone)]
@@ -74,6 +85,10 @@ impl Config {
 
 fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
     Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)
+}
+
+fn parse_url(s: &str) -> Result<Url, anyhow::Error> {
+    Ok(Url::parse(s)?)
 }
 
 #[cfg(test)]

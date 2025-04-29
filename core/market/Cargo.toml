@@ -23,6 +23,7 @@ ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-std-utils.workspace = true
 ya-utils-actix.workspace = true
+golem-base-sdk = { path = "../market/golem-base-sdk" }
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"
@@ -33,6 +34,7 @@ anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
 bincode = "1.3.3"
+bigdecimal = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = { workspace = true }
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
@@ -62,6 +64,7 @@ strum_macros = "0.24"
 thiserror = "1.0"
 tokio = { version = "1", features = ["time", "sync"] }
 tracing = { version = "0.1.40", features = ["log"] }
+url = "2.4"
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]

@@ -11,3 +11,5 @@ pub mod signers;
 pub mod utils;
 
 pub use signers::{GolemBaseSigner, InMemorySigner};
+
+pub use alloy::primitives::Address;

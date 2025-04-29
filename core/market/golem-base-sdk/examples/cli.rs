@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let endpoint = Url::parse(&args.url)?;
-    let client = GolemBaseClient::new(endpoint).await?;
+    let client = GolemBaseClient::new(endpoint)?;
 
     // Sync accounts first
     let accounts = client.account_sync().await?;

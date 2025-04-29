@@ -20,7 +20,6 @@ use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
-pub(crate) mod cyclic;
 pub mod error;
 pub(crate) mod handlers;
 pub(crate) mod resolver;
@@ -29,14 +28,9 @@ pub(crate) mod store;
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
-use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
 use tracing::Level;
-use ya_core_model::net::local::{
-    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
-};
-use ya_net::bind_broadcast_with_caller;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -80,7 +74,7 @@ impl Matcher {
             .add_data_handler(handlers::receive_remote_offer_unsubscribes)
             .add_data_handler(handlers::query_offers)
             .with_config(config.discovery.clone())
-            .build();
+            .build()?;
 
         let matcher = Matcher {
             store,
@@ -115,13 +109,6 @@ impl Matcher {
     ) -> Result<(), MatcherInitError> {
         self.discovery.bind_gsb(public_prefix, local_prefix).await?;
 
-        // We can't spawn broadcasts, before gsb is bound.
-        // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
-        tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
-
-        self.bind_neighbourhood_bcast(local_prefix).await.ok();
-
         self.bind_expiration_tracker()
             .await
             .map_err(|e| MatcherInitError::ExpirationTrackerError(e.to_string()))?;
@@ -145,23 +132,6 @@ impl Matcher {
         ServiceBinder::new(local_prefix, &(), discovery).bind_with_processor(handler);
 
         Ok(())
-    }
-
-    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> Result<(), BindBroadcastError> {
-        let bcast_address = format!("{local_prefix}/{}", NewNeighbour::TOPIC);
-        let myself = self.clone();
-        bind_broadcast_with_caller(
-            &bcast_address,
-            move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
-                let myself = myself.clone();
-                async move {
-                    debug!("Received new neighbour broadcast from [{}].", &caller);
-                    cyclic::bcast_offers_once(myself.clone()).await;
-                    Ok(())
-                }
-            },
-        )
-        .await
     }
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {
@@ -204,6 +174,15 @@ impl Matcher {
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
         let offer = self.store.create_offer(id, offer).await?;
+
+        let _ = self.discovery.bcast_offer(&offer).await.map_err(|e| {
+            log::warn!(
+                "Failed to store offer [{}] on GolemBase. Error: {}.",
+                offer.id,
+                e,
+            );
+        });
+
         self.resolver.receive(&offer);
 
         log::info!(
@@ -222,15 +201,6 @@ impl Matcher {
             .await
             .ok();
 
-        // Ignore error and don't retry to broadcast Offer. It will be broadcasted
-        // anyway during random broadcast, so nothing bad happens here in case of error.
-        let _ = self
-            .discovery
-            .bcast_offers(vec![offer.id.clone()])
-            .await
-            .map_err(|e| {
-                log::warn!("Failed to bcast offer [{}]. Error: {}.", offer.id, e,);
-            });
         Ok(offer)
     }
 
@@ -281,15 +251,6 @@ impl Matcher {
         demand: &NewDemand,
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
-        if !self.discovery.re_broadcast_enabled() {
-            // If re-broadcasts are disabled, fallback to lazy broadcast binding
-            self.discovery.bind_gsb_broadcast().await.map_or_else(
-                |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
-                },
-                |_| (),
-            );
-        }
         let demand = self.store.create_demand(id, demand).await?;
         self.resolver.receive(&demand);
 

@@ -1,14 +1,14 @@
-use chrono::Utc;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+
+use golem_base_sdk::client::GolemBaseClient;
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
-use ya_net::{self as net};
 
-use super::{BanCache, Discovery, DiscoveryImpl};
+use super::error::DiscoveryInitError;
+use super::{Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
 
@@ -65,7 +65,7 @@ impl DiscoveryBuilder {
         self
     }
 
-    pub fn build(mut self) -> Discovery {
+    pub fn build(mut self) -> Result<Discovery, DiscoveryInitError> {
         let offer_handlers = OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
@@ -74,26 +74,23 @@ impl DiscoveryBuilder {
             query_offers: self.get_handler(),
         };
 
-        let (sender, receiver) =
-            tokio::sync::mpsc::channel(self.config.clone().unwrap().bcast_receiving_queue_size);
+        let config = self.config.clone().ok_or_else(|| {
+            DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
+        })?;
+
+        let golem_base = GolemBaseClient::new_uninitialized(config.golem_base_url.clone())
+            .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
         let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
-                offer_sending_queue: Mutex::new(vec![]),
-                unsub_sending_queue: Mutex::new(vec![]),
-                lazy_binder_prefix: Mutex::new(None),
-                config: self.config.clone().unwrap(),
-                net_type: net::Config::from_env().unwrap().net_type,
-                last_bcast_ts: Mutex::new(Utc::now()),
-                offers_receiving_queue: sender,
-                ban_cache: BanCache::new(self.config.unwrap().bcast_node_ban_timeout),
+                config: config.clone(),
+                golem_base,
             }),
         };
 
-        tokio::task::spawn_local(discovery.clone().bcast_receiver_loop(receiver));
-        discovery
+        Ok(discovery)
     }
 }
 
@@ -167,20 +164,6 @@ mod test {
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
             .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
-            .with_config(Config::from_env().unwrap().discovery)
-            .build();
-    }
-
-    #[actix::test]
-    async fn build_from_with_mixed_handlers_should_pass() {
-        DiscoveryBuilder::default()
-            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_data("mock data")
-            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
-            .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
-            .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
-            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
-            .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
             .with_config(Config::from_env().unwrap().discovery)
             .build();
     }

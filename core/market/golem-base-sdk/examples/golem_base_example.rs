@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
 
     // Connect to GolemBase
     let endpoint = Url::parse(&args.url)?;
-    let client = GolemBaseClient::new(endpoint).await?;
+    let client = GolemBaseClient::new(endpoint)?;
 
     // Get accounts
     let accounts = client
@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     } else {
         // Generate new account if none specified
         log::info!("No address provided. Generating new account..");
-        client.account_generate(&args.password)?
+        client.account_generate(&args.password).await?
     };
     log::info!("Using account: {account:?}");
 

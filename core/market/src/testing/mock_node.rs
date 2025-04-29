@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use url::Url;
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
@@ -225,7 +226,8 @@ impl MarketsNetwork {
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .with_config(self.config.discovery.clone())
-            .build();
+            .build()
+            .unwrap();
         self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await
     }
@@ -704,6 +706,7 @@ pub mod default {
 pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
+        golem_base_url: Url::parse("http://localhost:8545").unwrap(),
         max_bcasted_offers: 100,
         max_bcasted_unsubscribes: 100,
         bcast_receiving_queue_size: 14,
@@ -713,6 +716,8 @@ pub fn create_market_config_for_test() -> Config {
         unsub_broadcast_delay: Duration::from_millis(200),
         bcast_tile_time_margin: Duration::from_millis(0),
         bcast_node_ban_timeout: Duration::from_millis(10),
+        account: None,
+        password: "test123".to_string(),
     };
 
     let mut cfg = Config::from_env().unwrap();

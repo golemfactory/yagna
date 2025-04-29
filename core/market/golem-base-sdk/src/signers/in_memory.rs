@@ -1,8 +1,8 @@
 use alloy::primitives::{keccak256, Address};
 use alloy::signers::k256::ecdsa::{SigningKey, VerifyingKey};
-use alloy::signers::local::PrivateKeySigner;
+use alloy::signers::local::{LocalSignerError, PrivateKeySigner};
 use alloy::signers::{Signature, SignerSync};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use rand::thread_rng;
 use std::fs;
@@ -66,7 +66,11 @@ impl InMemorySigner {
 
     /// Loads a private key from a keystore file
     pub fn load(path: PathBuf, password: &str) -> anyhow::Result<Self> {
-        let signer = PrivateKeySigner::decrypt_keystore(&path, password)?;
+        let signer = PrivateKeySigner::decrypt_keystore(&path, password).map_err(|e| match e {
+            LocalSignerError::EcdsaError(e) => anyhow!("ECDSA error: {e}"),
+            LocalSignerError::EthKeystoreError(e) => anyhow!("Keystore error: {e}"),
+            e => anyhow!("Error loading key: {e}"),
+        })?;
         Ok(Self { signer })
     }
 

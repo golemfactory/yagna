@@ -31,6 +31,14 @@ pub struct SearchResult {
     pub value: Bytes,
 }
 
+impl SearchResult {
+    /// Converts the value to a UTF-8 string
+    pub fn value_as_string(&self) -> anyhow::Result<String> {
+        String::from_utf8(self.value.to_vec())
+            .map_err(|e| anyhow::anyhow!("Failed to convert value to string: {}", e))
+    }
+}
+
 fn deserialize_base64<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
 where
     D: serde::Deserializer<'de>,

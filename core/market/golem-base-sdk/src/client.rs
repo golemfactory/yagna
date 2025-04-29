@@ -25,69 +25,80 @@ const MAX_BLOCK_AGE_SECONDS: u64 = 300;
 pub struct GolemBaseClient {
     /// The underlying provider for making RPC calls
     provider: Arc<Box<DynProvider>>,
-    /// The chain ID of the connected network
-    chain_id: u64,
     accounts: Arc<RwLock<HashMap<Address, Account>>>,
 }
 
 impl GolemBaseClient {
     /// Creates a new client
-    pub async fn new(endpoint: Url) -> anyhow::Result<Self> {
+    pub fn new(endpoint: Url) -> anyhow::Result<Self> {
+        Self::new_uninitialized(endpoint)
+    }
+
+    /// Creates a new client without initializing it
+    pub fn new_uninitialized(endpoint: Url) -> anyhow::Result<Self> {
         let provider = Arc::new(Box::new(
             ProviderBuilder::new()
                 .connect_http(endpoint.clone())
                 .erased(),
         ));
-        let chain_id = provider.get_chain_id().await?;
 
-        let client = Self {
+        Ok(Self {
             provider,
-            chain_id,
             accounts: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        // Check if node is synced
-        // if !client.is_synced().await? {
-        //     log::warn!("Node at {endpoint} is not synced");
-        // }
-
-        Ok(client)
+        })
     }
 
-    /// Gets the chain ID of the connected node
-    pub fn get_chain_id(&self) -> u64 {
-        self.chain_id
+    /// Gets the chain ID from the provider
+    pub async fn get_chain_id(&self) -> anyhow::Result<u64> {
+        self.provider
+            .get_chain_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))
+    }
+
+    /// Checks chain ID and syncs accounts with GolemBase node
+    pub async fn sync_node(&self) -> anyhow::Result<()> {
+        let chain_id = self.get_chain_id().await?;
+        self.sync_golem_base_accounts(chain_id).await?;
+        Ok(())
     }
 
     /// Registers a user-managed account with custom signer.
-    pub fn account_register(&self, signer: impl TransactionSigner + 'static) -> Address {
+    pub async fn account_register(
+        &self,
+        signer: impl TransactionSigner + 'static,
+    ) -> anyhow::Result<Address> {
         let address = signer.address();
+        let chain_id = self.get_chain_id().await?;
         let mut accounts = self.accounts.write().unwrap();
         accounts.insert(
             address,
             Account {
                 signer: Arc::new(Box::new(signer)),
                 provider: self.provider.clone(),
-                chain_id: self.chain_id,
+                chain_id,
             },
         );
-        address
+        Ok(address)
     }
 
     /// Generates a new local key, saves it to a keystore file, and registers it
-    pub fn account_generate(&self, password: &str) -> anyhow::Result<Address> {
+    pub async fn account_generate(&self, password: &str) -> anyhow::Result<Address> {
         let signer = InMemorySigner::generate();
         let _path = signer
             .save(password)
             .map_err(|e| anyhow::anyhow!("Failed to save account: {e}"))?;
-        Ok(self.account_register(signer))
+        self.account_register(signer).await
     }
 
     /// Loads a key from the default directory and registers it
     pub async fn account_load(&self, address: Address, password: &str) -> anyhow::Result<Address> {
         // This will load all available accounts from GolemBase.
         // We check only the registered accounts, because sync returns local as well.
-        let all_accounts = self.account_sync().await?;
+        let all_accounts = self
+            .account_sync()
+            .await
+            .map_err(|e| anyhow::anyhow!("Sync-ing accounts: {e}"))?;
         if self.accounts_list().contains(&address) {
             return Ok(address);
         }
@@ -100,7 +111,7 @@ impl GolemBaseClient {
 
         // Try to load from local keystore if it wasn't loaded from GolemBase.
         let signer = InMemorySigner::load_by_address(address, password)?;
-        return Ok(self.account_register(signer));
+        self.account_register(signer).await
     }
 
     /// Lists all registered accounts
@@ -111,7 +122,7 @@ impl GolemBaseClient {
 
     /// Synchronizes accounts with GolemBase, adding any new accounts to our local state
     pub async fn account_sync(&self) -> anyhow::Result<Vec<Address>> {
-        let chain_id = self.get_chain_id();
+        let chain_id = self.get_chain_id().await?;
 
         // Sync GolemBase accounts
         self.sync_golem_base_accounts(chain_id).await?;
@@ -160,7 +171,7 @@ impl GolemBaseClient {
         let mut accounts = self.accounts.write().unwrap();
 
         for address in golem_accounts {
-            self.try_insert_account(&mut accounts, address, |address| {
+            self.try_insert_account(&mut accounts, address, chain_id, |address| {
                 Box::new(GolemBaseSigner::new(
                     address,
                     self.provider.clone(),
@@ -176,6 +187,7 @@ impl GolemBaseClient {
         &self,
         accounts: &mut HashMap<Address, Account>,
         address: Address,
+        chain_id: u64,
         create_signer: F,
     ) where
         F: FnOnce(Address) -> Box<dyn TransactionSigner>,
@@ -190,7 +202,7 @@ impl GolemBaseClient {
             Account {
                 signer: Arc::new(signer),
                 provider: self.provider.clone(),
-                chain_id: self.chain_id,
+                chain_id,
             },
         );
     }
