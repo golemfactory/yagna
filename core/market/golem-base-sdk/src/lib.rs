@@ -12,4 +12,4 @@ pub mod utils;
 
 pub use signers::{GolemBaseSigner, InMemorySigner};
 
-pub use alloy::primitives::Address;
+pub use alloy::primitives::{Address, B256};

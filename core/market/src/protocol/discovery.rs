@@ -9,7 +9,7 @@ use tokio::time;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::rpc::SearchResult;
-use golem_base_sdk::Address;
+use golem_base_sdk::{Address, B256};
 use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 
@@ -38,9 +38,7 @@ pub struct Discovery {
 pub(super) struct OfferHandlers {
     filter_out_known_ids: HandlerSlot<OffersBcast>,
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
-    get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
-    query_offers: HandlerSlot<QueryOffers>,
 }
 
 pub struct DiscoveryImpl {
@@ -54,16 +52,9 @@ impl Discovery {
     /// Broadcasts Offers to Golem Base
     pub async fn bcast_offer(&self, offer: &ModelOffer) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
-
-        // Get account from config
         let address = self
-            .inner
-            .config
-            .account
-            .map(|account| Address::from(&account.into_array()))
-            .ok_or_else(|| {
-                DiscoveryError::GolemBaseError("No account configured for GolemBase".to_string())
-            })?;
+            .get_owner_address()
+            .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
 
         // Serialize the offer to JSON
         let payload = serde_json::to_vec(&offer.into_client_offer()?).map_err(|e| {
@@ -107,26 +98,13 @@ impl Discovery {
     /// Retrieves Offers from Golem Base
     pub async fn get_remote_offers(
         &self,
-        target_node_id: String,
+        _target_node_id: String,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<Vec<ModelOffer>, DiscoveryError> {
-        let client = &self.inner.golem_base;
-
-        // Build query with OR conditions for all offer IDs
-        let id_conditions: Vec<String> = offer_ids
-            .iter()
-            .map(|id| format!(r#"golem_marketplace_id = "{}""#, id))
-            .collect();
-        let query = format!(
-            r#"golem_marketplace_type = "Offer" AND ({})"#,
-            id_conditions.join(" OR ")
-        );
-
-        // Query for all offers at once
-        let results = client.query_entities(&query).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to query offers: {}", e))
-        })?;
-
+        let results = self
+            .query_subscriptions(&offer_ids)
+            .await
+            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?;
         Self::parse_offers(results)
     }
 
@@ -135,8 +113,68 @@ impl Discovery {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
-        // TODO: Implement later. For now leaving neutral implementation.
+        let client = &self.inner.golem_base;
+        let address = self
+            .get_owner_address()
+            .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
+
+        let entries: Vec<B256> = self
+            .query_subscriptions(&offer_ids)
+            .await
+            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?
+            .into_iter()
+            .map(|result| result.key.clone())
+            .collect();
+
+        if entries.is_empty() {
+            log::debug!("No entries found in GolemBase for the given offer IDs");
+            return Ok(());
+        }
+
+        // Remove the entries
+        let num_entries = entries.len();
+        client.remove_entries(address, entries).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to remove entries: {}", e))
+        })?;
+
+        log::info!("Successfully removed {num_entries} entries from GolemBase");
         Ok(())
+    }
+
+    /// Gets the GolemBase account address from config
+    fn get_owner_address(&self) -> anyhow::Result<Address> {
+        self.inner
+            .config
+            .account
+            .map(|account| Address::from(&account.into_array()))
+            .ok_or_else(|| anyhow::anyhow!("No account configured for GolemBase"))
+    }
+
+    /// Queries GolemBase for entries matching the given subscription IDs
+    async fn query_subscriptions(
+        &self,
+        offer_ids: &[SubscriptionId],
+    ) -> anyhow::Result<Vec<SearchResult>> {
+        if offer_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build query with OR conditions for all offer IDs
+        let id_conditions: Vec<String> = offer_ids
+            .iter()
+            .map(|id| format!(r#"golem_marketplace_id = "{}""#, id))
+            .collect();
+        let query = format!(
+            r#"golem_marketplace_type = "Offer" && ({})"#,
+            id_conditions.join(" || ")
+        );
+
+        // Query for the entries
+        self.inner
+            .golem_base
+            .query_entities(&query)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query entries: {}", e))
     }
 
     /// Converts search results to ModelOffer objects

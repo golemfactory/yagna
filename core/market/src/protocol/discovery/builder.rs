@@ -69,9 +69,7 @@ impl DiscoveryBuilder {
         let offer_handlers = OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
-            get_local_offers_handler: self.get_handler(),
             offer_unsubscribe_handler: self.get_handler(),
-            query_offers: self.get_handler(),
         };
 
         let config = self.config.clone().ok_or_else(|| {

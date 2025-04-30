@@ -70,9 +70,7 @@ impl Matcher {
             .add_data(resolver.clone())
             .add_data_handler(handlers::filter_out_known_offer_ids)
             .add_data_handler(handlers::receive_remote_offers)
-            .add_data_handler(handlers::get_local_offers)
             .add_data_handler(handlers::receive_remote_offer_unsubscribes)
-            .add_data_handler(handlers::query_offers)
             .with_config(config.discovery.clone())
             .build()?;
 

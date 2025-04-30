@@ -262,6 +262,53 @@ impl GolemBaseClient {
         Ok(entity_id.to_string())
     }
 
+    /// Removes entries from GolemBase
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - The account address that owns the entries
+    /// * `entry_ids` - The IDs of the entries to remove
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the entries were successfully removed
+    /// * `Err` if there was an error removing the entries
+    pub async fn remove_entries(
+        &self,
+        account: Address,
+        entry_ids: Vec<B256>,
+    ) -> anyhow::Result<()> {
+        if entry_ids.is_empty() {
+            return Ok(());
+        }
+
+        let account = self.account_get(account)?;
+        let entry_count = entry_ids.len();
+        let tx = StorageTransaction {
+            create: vec![],
+            update: vec![],
+            delete: entry_ids,
+            extend: vec![],
+        };
+
+        log::debug!(
+            "Sending delete transaction from {} for {} entries",
+            account.address(),
+            entry_count
+        );
+
+        let receipt = account.send_db_transaction(tx).await?;
+        if !receipt.status() {
+            return Err(anyhow::anyhow!(
+                "Transaction {} failed despite being mined.",
+                receipt.transaction_hash
+            ));
+        }
+
+        log::debug!("Successfully removed {} entries", entry_count);
+        Ok(())
+    }
+
     /// Retrieves an entry's payload from Golem Base by its ID
     pub async fn cat(&self, id: String) -> anyhow::Result<String> {
         self.get_storage_value_string(id).await
