@@ -99,8 +99,13 @@ async fn main() -> Result<()> {
             log::info!("Using account: {account:?}");
 
             // Transfer funds
-            let transfer_tx = client.transfer(from_address, to_address, amount).await?;
-            log::info!("Transfer transaction: {:?}", transfer_tx);
+            let transfer_tx = client
+                .transfer(from_address, to_address, amount.clone())
+                .await?;
+            log::info!(
+                "Transfer transaction hash for {amount} ETH: {:?}",
+                transfer_tx
+            );
         }
         Command::GetEntity { id } => {
             let entry = client.cat(id).await?;

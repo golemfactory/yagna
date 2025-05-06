@@ -30,6 +30,10 @@ impl IdentityApi for MockIdentity {
             .map(|id| id.identity)
             .collect())
     }
+
+    async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {
+        Err(IdentityError::SigningError("Not implemented".to_string()))
+    }
 }
 
 impl MockIdentity {

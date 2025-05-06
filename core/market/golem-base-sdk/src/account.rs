@@ -163,7 +163,7 @@ impl Account {
         let mut encoded = Vec::new();
         signed.eip2718_encode(&mut encoded);
 
-        log::debug!(
+        log::trace!(
             "RLP encoded transaction (hash: 0x{:x}): 0x{}",
             signed.hash(),
             hex::encode(&encoded)
@@ -172,8 +172,11 @@ impl Account {
         // Decode the transaction for debugging purposes.
         let decoded_tx = EthereumTxEnvelope::<TxEip4844>::decode(&mut &encoded[..])
             .map_err(|e| anyhow!("Failed to decode transaction: {e}"))?;
-        let signer = decoded_tx.recover_signer()?;
         log::debug!("Decoded transaction: {:#?}", decoded_tx);
+
+        let signer = decoded_tx
+            .recover_signer()
+            .map_err(|e| anyhow!("Failed to recover signer: {e}"))?;
         log::debug!("Recovered signer: {:#?}", signer);
 
         Ok(encoded)

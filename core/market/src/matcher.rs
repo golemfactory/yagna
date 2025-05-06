@@ -173,13 +173,10 @@ impl Matcher {
     ) -> Result<Offer, MatcherError> {
         let offer = self.store.create_offer(id, offer).await?;
 
-        let _ = self.discovery.bcast_offer(&offer).await.map_err(|e| {
-            log::warn!(
-                "Failed to store offer [{}] on GolemBase. Error: {}.",
-                offer.id,
-                e,
-            );
-        });
+        self.discovery
+            .bcast_offer(&offer)
+            .await
+            .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
 
         self.resolver.receive(&offer);
 

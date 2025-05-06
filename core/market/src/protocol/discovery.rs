@@ -1,6 +1,7 @@
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
+use golem_base_sdk::account::TransactionSigner;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use ya_client::model::NodeId;
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
-use crate::identity::{IdentityApi, IdentityError};
+use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
@@ -52,9 +53,7 @@ impl Discovery {
     /// Broadcasts Offers to Golem Base
     pub async fn bcast_offer(&self, offer: &ModelOffer) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
-        let address = self
-            .get_owner_address()
-            .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
+        let address = Address::from(&offer.node_id.into_array());
 
         // Serialize the offer to JSON
         let payload = serde_json::to_vec(&offer.into_client_offer()?).map_err(|e| {
@@ -207,6 +206,9 @@ impl Discovery {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to sync accounts with GolemBase: {e}"))?;
 
+        // List all NodeIds and initialize YagnaIdSigners
+        self.all_yagna_signers().await?;
+
         // Check if we have a wallet address in config
         let account = match self.inner.config.account {
             Some(wallet) => {
@@ -338,5 +340,26 @@ impl Discovery {
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
         Utc::now()
+    }
+
+    /// Lists all NodeIds from IdentityApi and initializes YagnaIdSigners for all of them, storing them in DiscoveryImpl.
+    pub async fn all_yagna_signers(&self) -> anyhow::Result<()> {
+        let node_ids = self.inner.identity.list().await?;
+        let signers: Vec<YagnaIdSigner> = node_ids
+            .into_iter()
+            .map(|node_id| YagnaIdSigner::new(self.inner.identity.clone(), node_id))
+            .collect();
+        for signer in signers {
+            let address = signer.address();
+            self.inner.golem_base.account_register(signer).await?;
+
+            let balance = self.inner.golem_base.get_balance(address).await?;
+            log::info!(
+                "GolemBase client registered account {} with balance: {}",
+                address,
+                balance
+            );
+        }
+        Ok(())
     }
 }
