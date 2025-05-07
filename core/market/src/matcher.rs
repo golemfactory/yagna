@@ -51,7 +51,6 @@ pub struct Matcher {
     pub resolver: Resolver,
     pub(crate) discovery: Discovery,
     identity: Arc<dyn IdentityApi>,
-    config: Arc<Config>,
     expiration_tracker: Addr<DeadlineChecker>,
 }
 
@@ -78,7 +77,6 @@ impl Matcher {
             store,
             resolver,
             discovery,
-            config,
             identity: identity_api,
             expiration_tracker: DeadlineChecker::default().start(),
         };
@@ -280,14 +278,14 @@ impl Matcher {
     }
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        let our_node_ids = self.identity.list().await?;
+        let our_node_ids = self.identity.list_ids().await?;
         self.store.get_active_offer_ids(Some(our_node_ids)).await
     }
 
     pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        let our_node_ids = self.identity.list().await?;
+        let our_node_ids = self.identity.list_ids().await?;
         self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
             .await

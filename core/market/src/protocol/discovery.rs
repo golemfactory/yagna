@@ -6,6 +6,10 @@ use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tokio::time;
+use ya_core_model::identity::event::IdentityEvent;
+use ya_service_bus::typed as bus;
+use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::RpcEndpoint;
 
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
@@ -17,11 +21,12 @@ use ya_client::model::NodeId;
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
-use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
+use crate::identity::{IdentityApi, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
+const BUS_ID: &str = "market-discovery";
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;
@@ -207,7 +212,7 @@ impl Discovery {
             .map_err(|e| anyhow::anyhow!("Failed to sync accounts with GolemBase: {e}"))?;
 
         // List all NodeIds and initialize YagnaIdSigners
-        self.all_yagna_signers().await?;
+        self.register_yagna_signers().await?;
 
         // Check if we have a wallet address in config
         let account = match self.inner.config.account {
@@ -255,7 +260,7 @@ impl Discovery {
     pub async fn bind_gsb(
         &self,
         _public_prefix: &str,
-        _local_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let client = self.inner.golem_base.clone();
 
@@ -271,6 +276,77 @@ impl Discovery {
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
         self.bind_offers_listener().await?;
+        self.bind_identity_handlers(local_prefix).await?;
+        Ok(())
+    }
+
+    async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), DiscoveryInitError> {
+        log::debug!("Subscribing to identity events on endpoint: {}", endpoint);
+        Ok(bus::service(ya_core_model::identity::BUS_ID)
+            .send(ya_core_model::identity::Subscribe {
+                endpoint: endpoint.to_string(),
+            })
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string())
+            })?)
+    }
+
+    /// Registers a single YagnaIdSigner with GolemBase
+    async fn register_signer(&self, node_id: NodeId) -> anyhow::Result<()> {
+        let signer = YagnaIdSigner::new(self.inner.identity.clone(), node_id);
+        let address = signer.address();
+
+        self.inner.golem_base.account_register(signer).await?;
+
+        let balance = self.inner.golem_base.get_balance(address).await?;
+        log::info!("GolemBase client registered account {address} with balance: {balance}");
+        Ok(())
+    }
+
+    /// Lists all NodeIds from IdentityApi and initializes YagnaIdSigners for all of them, storing them in DiscoveryImpl.
+    pub async fn register_yagna_signers(&self) -> anyhow::Result<()> {
+        let node_ids = self.inner.identity.list_active_ids().await?;
+
+        for node_id in node_ids {
+            if let Err(e) = self.register_signer(node_id).await {
+                log::error!("Failed to register signer for {}: {}", node_id, e);
+            }
+        }
+        Ok(())
+    }
+
+    async fn bind_identity_handlers(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
+        let discovery = self.clone();
+        let endpoint = format!("{}/{BUS_ID}/handlers", local_prefix);
+
+        // Subscribe to identity events, which will be received on the endpoint.
+        self.subscribe_to_events(&endpoint).await?;
+
+        // Bind the handlers for received events.
+        ServiceBinder::new(&endpoint, &(), discovery.clone()).bind_with_processor(
+            move |_, myself, _caller: String, event: IdentityEvent| {
+                let myself = myself;
+                async move {
+                    match event {
+                        IdentityEvent::AccountLocked { identity } => {
+                            log::debug!(
+                                "Account locked for {identity} - no new offers will be published"
+                            );
+                        }
+                        IdentityEvent::AccountUnlocked { identity } => {
+                            log::debug!("Account unlocked - registering new signer for {identity}");
+                            if let Err(e) = myself.register_signer(identity).await {
+                                log::error!("Failed to register new signer for {identity}: {e}");
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+            },
+        );
+
         Ok(())
     }
 
@@ -334,32 +410,7 @@ impl Discovery {
         Ok(())
     }
 
-    async fn default_identity(&self) -> Result<NodeId, IdentityError> {
-        self.inner.identity.default_identity().await
-    }
-
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
         Utc::now()
-    }
-
-    /// Lists all NodeIds from IdentityApi and initializes YagnaIdSigners for all of them, storing them in DiscoveryImpl.
-    pub async fn all_yagna_signers(&self) -> anyhow::Result<()> {
-        let node_ids = self.inner.identity.list().await?;
-        let signers: Vec<YagnaIdSigner> = node_ids
-            .into_iter()
-            .map(|node_id| YagnaIdSigner::new(self.inner.identity.clone(), node_id))
-            .collect();
-        for signer in signers {
-            let address = signer.address();
-            self.inner.golem_base.account_register(signer).await?;
-
-            let balance = self.inner.golem_base.get_balance(address).await?;
-            log::info!(
-                "GolemBase client registered account {} with balance: {}",
-                address,
-                balance
-            );
-        }
-        Ok(())
     }
 }

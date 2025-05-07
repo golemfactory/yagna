@@ -7,7 +7,7 @@ use std::sync::Arc;
 use ya_client::model::NodeId;
 
 use golem_base_sdk::Signature;
-use ya_core_model::identity;
+use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
@@ -28,8 +28,29 @@ pub enum IdentityError {
 #[async_trait::async_trait(?Send)]
 pub trait IdentityApi: Send + Sync {
     async fn default_identity(&self) -> Result<NodeId, IdentityError>;
-    async fn list(&self) -> Result<Vec<NodeId>, IdentityError>;
+    async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError>;
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError>;
+
+    async fn list_ids(&self) -> Result<Vec<NodeId>, IdentityError> {
+        Ok(self
+            .list()
+            .await?
+            .into_iter()
+            .map(|info| info.node_id)
+            .collect::<Vec<NodeId>>())
+    }
+
+    async fn list_active_ids(&self) -> Result<Vec<NodeId>, IdentityError> {
+        Ok(self
+            .list()
+            .await?
+            .into_iter()
+            .filter_map(|info| match info.is_locked || info.deleted {
+                true => None,
+                false => Some(info.node_id),
+            })
+            .collect::<Vec<NodeId>>())
+    }
 }
 
 pub struct IdentityGSB;
@@ -46,15 +67,12 @@ impl IdentityApi for IdentityGSB {
             .node_id)
     }
 
-    async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
+    async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError> {
         Ok(bus::service(identity::BUS_ID)
             .send(identity::List {})
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
-            .map_err(|e| IdentityError::ListError(e.to_string()))?
-            .iter()
-            .map(|identity_info| identity_info.node_id)
-            .collect::<Vec<NodeId>>())
+            .map_err(|e| IdentityError::ListError(e.to_string()))?)
     }
 
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {

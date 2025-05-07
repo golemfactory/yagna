@@ -1,6 +1,7 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::sync::{Arc, Mutex};
+use ya_core_model::identity::IdentityInfo;
 
 use crate::identity::{IdentityApi, IdentityError};
 
@@ -23,12 +24,18 @@ impl IdentityApi for MockIdentity {
         Ok(self.get_default_id().identity)
     }
 
-    async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
+    async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError> {
         Ok(self
             .list_ids()
             .into_values()
-            .map(|id| id.identity)
-            .collect())
+            .map(|id| IdentityInfo {
+                alias: None,
+                node_id: id.identity,
+                is_locked: false,
+                is_default: false,
+                deleted: false,
+            })
+            .collect::<Vec<IdentityInfo>>())
     }
 
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {
