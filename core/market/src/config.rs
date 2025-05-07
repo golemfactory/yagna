@@ -2,8 +2,6 @@ use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
-use ya_core_model::NodeId;
-
 #[derive(StructOpt, Clone)]
 pub struct Config {
     #[structopt(flatten)]
@@ -40,12 +38,6 @@ pub struct DiscoveryConfig {
     pub bcast_node_ban_timeout: Duration,
     #[structopt(env, parse(try_from_str = parse_url), default_value = "http://localhost:8545")]
     pub golem_base_url: Url,
-    /// Account for payments.
-    #[structopt(long, env = "MARKET_GOLEM_BASE_ACCOUNT")]
-    pub account: Option<NodeId>,
-    /// Password for the account keystore.
-    #[structopt(long, env = "MARKET_GOLEM_BASE_PASSWORD", default_value = "test123")]
-    pub password: String,
 }
 
 #[derive(StructOpt, Clone)]

@@ -716,8 +716,6 @@ pub fn create_market_config_for_test() -> Config {
         unsub_broadcast_delay: Duration::from_millis(200),
         bcast_tile_time_margin: Duration::from_millis(0),
         bcast_node_ban_timeout: Duration::from_millis(10),
-        account: None,
-        password: "test123".to_string(),
     };
 
     let mut cfg = Config::from_env().unwrap();

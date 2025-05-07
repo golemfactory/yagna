@@ -227,7 +227,7 @@ impl Matcher {
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .bcast_unsubscribes(vec![offer_id.clone()])
+            .bcast_unsubscribe(offer_id.clone())
             .await
             .map_err(|e| {
                 log::warn!(

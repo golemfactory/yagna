@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
 use golem_base_sdk::account::TransactionSigner;
 use std::collections::HashSet;
@@ -21,7 +20,7 @@ use ya_client::model::NodeId;
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
-use crate::identity::{IdentityApi, YagnaIdSigner};
+use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
@@ -57,6 +56,9 @@ pub struct DiscoveryImpl {
 impl Discovery {
     /// Broadcasts Offers to Golem Base
     pub async fn bcast_offer(&self, offer: &ModelOffer) -> Result<(), DiscoveryError> {
+        // Validate account to return more menaingfull error messages than create_entry would.
+        self.validate_account(offer.node_id).await?;
+
         let client = &self.inner.golem_base;
         let address = Address::from(&offer.node_id.into_array());
 
@@ -112,18 +114,12 @@ impl Discovery {
         Self::parse_offers(results)
     }
 
-    /// Broadcasts unsubscribes to Golem Base
-    pub async fn bcast_unsubscribes(
-        &self,
-        offer_ids: Vec<SubscriptionId>,
-    ) -> Result<(), DiscoveryError> {
+    /// Broadcasts unsubscribe to Golem Base
+    pub async fn bcast_unsubscribe(&self, offer_id: SubscriptionId) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
-        let address = self
-            .get_owner_address()
-            .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
 
         let entries: Vec<B256> = self
-            .query_subscriptions(&offer_ids)
+            .query_subscriptions(&[offer_id.clone()])
             .await
             .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?
             .into_iter()
@@ -131,27 +127,31 @@ impl Discovery {
             .collect();
 
         if entries.is_empty() {
-            log::debug!("No entries found in GolemBase for the given offer IDs");
+            log::debug!("No entries found in GolemBase for offer ID: {}", offer_id);
             return Ok(());
         }
 
-        // Remove the entries
-        let num_entries = entries.len();
-        client.remove_entries(address, entries).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to remove entries: {}", e))
+        // Get metadata to find owner
+        let metadata = client.get_entity_metadata(entries[0]).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to get entry metadata: {e}"))
         })?;
 
-        log::info!("Successfully removed {num_entries} entries from GolemBase");
-        Ok(())
-    }
+        // Remove the entry
+        client
+            .remove_entries(metadata.owner, entries)
+            .await
+            .map_err(|e| {
+                DiscoveryError::GolemBaseError(format!(
+                    "Failed to remove entry for owner {}: {e}",
+                    metadata.owner
+                ))
+            })?;
 
-    /// Gets the GolemBase account address from config
-    fn get_owner_address(&self) -> anyhow::Result<Address> {
-        self.inner
-            .config
-            .account
-            .map(|account| Address::from(&account.into_array()))
-            .ok_or_else(|| anyhow::anyhow!("No account configured for GolemBase"))
+        log::info!(
+            "Successfully removed entry from GolemBase for offer {}",
+            offer_id
+        );
+        Ok(())
     }
 
     /// Queries GolemBase for entries matching the given subscription IDs
@@ -202,56 +202,15 @@ impl Discovery {
         ModelOffer::try_from(offer)
     }
 
+    /// List all accounts and initialize YagnaIdSigners on GolemBase, so they can be used for
+    /// signing storage transactions.
     async fn initialize_account(&self) -> Result<()> {
-        let client = self.inner.golem_base.clone();
-
-        // Get accounts from GolemBase
-        client
-            .account_sync()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to sync accounts with GolemBase: {e}"))?;
-
-        // List all NodeIds and initialize YagnaIdSigners
-        self.register_yagna_signers().await?;
-
-        // Check if we have a wallet address in config
-        let account = match self.inner.config.account {
-            Some(wallet) => {
-                // Convert NodeId to Address
-                let address = Address::from(&wallet.into_array());
-
-                // Try to load the account
-                client
-                    .account_load(address, &self.inner.config.password)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to load account {}: {e}", wallet))?;
-                address
+        let node_ids = self.inner.identity.list_active_ids().await?;
+        for node_id in node_ids {
+            if let Err(e) = self.register_signer(node_id).await {
+                log::error!("Failed to register signer for {}: {}", node_id, e);
             }
-            None => {
-                // Generate new account
-                let new_account = client
-                    .account_generate("")
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to generate new account: {e}"))?;
-                log::info!("Generated new account: {}", new_account);
-                new_account
-            }
-        };
-
-        // Check balance and fund if needed
-        let balance = client
-            .get_balance(account)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get balance for account {}: {e}", account))?;
-
-        if balance < BigDecimal::from(10) {
-            log::info!("Account {account} has insufficient balance ({balance} ETH), funding...");
-            client
-                .fund(account, BigDecimal::from(10))
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to fund account {}: {e}", account))?;
         }
-
         Ok(())
     }
 
@@ -302,18 +261,6 @@ impl Discovery {
 
         let balance = self.inner.golem_base.get_balance(address).await?;
         log::info!("GolemBase client registered account {address} with balance: {balance}");
-        Ok(())
-    }
-
-    /// Lists all NodeIds from IdentityApi and initializes YagnaIdSigners for all of them, storing them in DiscoveryImpl.
-    pub async fn register_yagna_signers(&self) -> anyhow::Result<()> {
-        let node_ids = self.inner.identity.list_active_ids().await?;
-
-        for node_id in node_ids {
-            if let Err(e) = self.register_signer(node_id).await {
-                log::error!("Failed to register signer for {}: {}", node_id, e);
-            }
-        }
         Ok(())
     }
 
@@ -412,5 +359,29 @@ impl Discovery {
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
         Utc::now()
+    }
+
+    /// Validates if the account can be used for storing offers
+    async fn validate_account(&self, node_id: NodeId) -> Result<(), DiscoveryError> {
+        let accounts = self.inner.identity.list().await?;
+
+        let account = accounts
+            .iter()
+            .find(|acc| acc.node_id == node_id)
+            .ok_or_else(|| {
+                IdentityError::SigningError(format!("Account {node_id} not found in identities"))
+            })?;
+
+        if account.is_locked {
+            return Err(IdentityError::SigningError(format!("Account {node_id} is locked")).into());
+        }
+
+        if account.deleted {
+            return Err(
+                IdentityError::SigningError(format!("Account {node_id} is deleted")).into(),
+            );
+        }
+
+        Ok(())
     }
 }

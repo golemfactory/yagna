@@ -10,16 +10,23 @@ use crate::entity::Annotation;
 
 /// Type representing metadata for an entity.
 #[derive(Debug, Clone, RlpEncodable, RlpDecodable, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EntityMetaData {
     /// The block number at which the entity expires.
+    #[serde(rename = "expiresAtBlock")]
+    #[rlp(rename = "expiresAtBlock")]
     pub expires_at_block: u64,
-    /// The payload associated with the entity.
-    pub payload: String,
     /// String annotations for the entity.
+    #[serde(rename = "stringAnnotations")]
+    #[rlp(rename = "stringAnnotations")]
     pub string_annotations: Vec<Annotation<String>>,
     /// Numeric annotations for the entity.
+    #[serde(rename = "numericAnnotations")]
+    #[rlp(rename = "numericAnnotations")]
     pub numeric_annotations: Vec<Annotation<u64>>,
     /// The owner of the entity.
+    #[serde(rename = "owner")]
+    #[rlp(rename = "owner")]
     pub owner: Address,
 }
 
@@ -135,7 +142,7 @@ impl GolemBaseClient {
 
     /// Gets metadata for a specific entity.
     pub async fn get_entity_metadata(&self, key: AlloyB256) -> anyhow::Result<EntityMetaData> {
-        self.rpc_call::<AlloyB256, EntityMetaData>("golembase_getEntityMetaData", key)
+        self.rpc_call::<&[AlloyB256], EntityMetaData>("golembase_getEntityMetaData", &[key])
             .await
     }
 }
