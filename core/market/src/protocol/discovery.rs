@@ -4,6 +4,7 @@ use golem_base_sdk::account::TransactionSigner;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::time;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_service_bus::typed as bus;
@@ -13,7 +14,7 @@ use ya_service_bus::RpcEndpoint;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::rpc::SearchResult;
-use golem_base_sdk::{Address, B256};
+use golem_base_sdk::{Address, Hash};
 use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 
@@ -77,7 +78,7 @@ impl Discovery {
         // Create entry with marketplace type and ID annotations
         let entry = Create::new(payload, ttl_blocks)
             .annotate_string("golem_marketplace_type", "Offer")
-            .annotate_string("golem_marketplace_id", &offer.id.to_string());
+            .annotate_string("golem_marketplace_id", offer.id.to_string());
 
         // Create entry on GolemBase
         let entry_id = client.create_entry(address, entry).await.map_err(|e| {
@@ -119,12 +120,12 @@ impl Discovery {
     pub async fn bcast_unsubscribe(&self, offer_id: SubscriptionId) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
 
-        let entries: Vec<B256> = self
+        let entries: Vec<Hash> = self
             .query_subscriptions(&[offer_id.clone()])
             .await
             .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?
             .into_iter()
-            .map(|result| result.key.clone())
+            .map(|result| result.key)
             .collect();
 
         if entries.is_empty() {
@@ -225,11 +226,14 @@ impl Discovery {
         let client = self.inner.golem_base.clone();
 
         // Sync with GolemBase node
-        client.sync_node().await.map_err(|e| {
-            DiscoveryInitError::GolemBaseInitFailed(format!(
-                "Failed to sync with GolemBase node: {e}"
-            ))
-        })?;
+        client
+            .sync_node(Duration::from_secs(10))
+            .await
+            .map_err(|e| {
+                DiscoveryInitError::GolemBaseInitFailed(format!(
+                    "Failed to sync with GolemBase node: {e}"
+                ))
+            })?;
 
         self.initialize_account()
             .await
@@ -242,15 +246,13 @@ impl Discovery {
 
     async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), DiscoveryInitError> {
         log::debug!("Subscribing to identity events on endpoint: {}", endpoint);
-        Ok(bus::service(ya_core_model::identity::BUS_ID)
+        bus::service(ya_core_model::identity::BUS_ID)
             .send(ya_core_model::identity::Subscribe {
                 endpoint: endpoint.to_string(),
             })
             .await
             .map(|_| ())
-            .map_err(|e| {
-                DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string())
-            })?)
+            .map_err(|e| DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string()))
     }
 
     /// Registers a single YagnaIdSigner with GolemBase

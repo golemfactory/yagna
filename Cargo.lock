@@ -1929,6 +1929,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bon"
+version = "3.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced38439e7a86a4761f7f7d5ded5ff009135939ecb464a24452eaa4c1696af7d"
+dependencies = [
+ "bon-macros",
+ "rustversion",
+]
+
+[[package]]
+name = "bon-macros"
+version = "3.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce61d2d3844c6b8d31b2353d9f66cf5e632b3e9549583fe3cac2f4f6136725e"
+dependencies = [
+ "darling 0.20.10",
+ "ident_case",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "borsh"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2243,46 +2268,6 @@ dependencies = [
  "unicode-width",
  "vec_map",
 ]
-
-[[package]]
-name = "clap"
-version = "4.5.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2df961d8c8a0d08aa9945718ccf584145eee3f3aa06cddbeac12933781102e04"
-dependencies = [
- "clap_builder",
- "clap_derive",
-]
-
-[[package]]
-name = "clap_builder"
-version = "4.5.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "132dbda40fb6753878316a489d5a1242a8ef2f0d9e47ba01c951ea8aa7d013a5"
-dependencies = [
- "anstream",
- "anstyle",
- "clap_lex",
- "strsim 0.11.1",
-]
-
-[[package]]
-name = "clap_derive"
-version = "4.5.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.100",
-]
-
-[[package]]
-name = "clap_lex"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "clicolors-control"
@@ -3102,6 +3087,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "displaydoc"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3309,7 +3305,7 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
 dependencies = [
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "is-terminal",
  "log",
  "regex",
@@ -3325,7 +3321,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "env_filter",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "log",
 ]
 
@@ -3362,7 +3358,7 @@ dependencies = [
  "futures 0.3.30",
  "futures-util",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "metrics 0.12.1",
@@ -3402,7 +3398,7 @@ dependencies = [
  "futures 0.3.30",
  "futures-util",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "metrics 0.12.1",
@@ -3444,7 +3440,7 @@ dependencies = [
  "futures 0.3.30",
  "futures-util",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "rand 0.8.5",
@@ -3528,7 +3524,7 @@ dependencies = [
  "futures 0.3.30",
  "futures-util",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "metrics 0.12.1",
@@ -4266,22 +4262,20 @@ dependencies = [
  "alloy-signer-local",
  "anyhow",
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.1",
  "bigdecimal 0.4.8",
+ "bon",
  "bytes 1.10.1",
- "clap 4.5.36",
  "dirs",
- "env_logger 0.10.2",
- "eth-keystore",
- "futures 0.3.30",
+ "displaydoc",
  "hex",
+ "humantime 2.2.0",
  "log",
  "rand 0.8.5",
  "serde",
- "serde_json",
+ "thiserror 2.0.12",
  "tokio",
  "url",
- "ya-client-model",
 ]
 
 [[package]]
@@ -4753,9 +4747,9 @@ dependencies = [
 
 [[package]]
 name = "humantime"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+checksum = "9b112acc8b3adf4b107a8ec20977da0273a8c386765a3ec0229bd500a1443f9f"
 
 [[package]]
 name = "humantime-serde"
@@ -4763,7 +4757,7 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
 dependencies = [
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "serde",
 ]
 
@@ -9000,7 +8994,7 @@ version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
 dependencies = [
- "clap 2.34.0",
+ "clap",
  "lazy_static",
  "structopt-derive",
 ]
@@ -11426,7 +11420,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.30",
  "golem-base-sdk",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "libsqlite3-sys",
  "log",
@@ -11552,7 +11546,7 @@ dependencies = [
  "env_logger 0.7.1",
  "ethsign",
  "futures 0.3.30",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "metrics 0.12.1",
@@ -11624,7 +11618,7 @@ dependencies = [
  "futures 0.3.30",
  "hex",
  "http 1.1.0",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "lazy_static",
  "libsqlite3-sys",
  "log",
@@ -11709,7 +11703,7 @@ dependencies = [
  "chrono",
  "diesel",
  "dotenv",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "libsqlite3-sys",
  "log",
  "r2d2",
@@ -11751,7 +11745,7 @@ dependencies = [
  "futures-util",
  "golem-certificate",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "itertools 0.10.5",
  "lazy_static",
  "libc",
@@ -11816,7 +11810,7 @@ dependencies = [
  "educe",
  "futures 0.3.30",
  "hex",
- "humantime 2.1.0",
+ "humantime 2.2.0",
  "log",
  "metrics 0.21.1",
  "num_cpus",

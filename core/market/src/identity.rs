@@ -78,7 +78,7 @@ impl IdentityApi for IdentityGSB {
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {
         Ok(bus::service(identity::BUS_ID)
             .send(identity::Sign {
-                node_id: node_id.clone(),
+                node_id: *node_id,
                 payload: data.to_vec(),
             })
             .await

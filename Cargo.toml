@@ -199,7 +199,6 @@ members = [
   "agent/provider",
   "core/activity",
   "core/gftp",
-  "core/market/golem-base-sdk",
   "core/gsb-api",
   "core/identity",
   "core/market",
