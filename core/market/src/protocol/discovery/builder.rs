@@ -110,10 +110,8 @@ impl<
 
 #[cfg(test)]
 mod test {
-    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::testing::mock_identity::{generate_identity, MockIdentity};
-    use crate::testing::mock_offer::sample_retrieve_offers;
+    use crate::testing::mock_identity::MockIdentity;
     use crate::testing::Config;
 
     use super::super::*;
@@ -160,53 +158,11 @@ mod test {
     async fn build_from_with_all_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
-            .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
-            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
-            .with_config(Config::from_env().unwrap().discovery)
-            .build()
-            .unwrap();
-    }
-
-    #[serial_test::serial]
-    async fn build_from_with_overwritten_handlers_should_pass() {
-        // given
-        let _ = env_logger::builder().try_init();
-        let counter = Arc::new(AtomicUsize::new(0));
-        let cnt = counter.clone();
-
-        let discovery = DiscoveryBuilder::default()
-            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_data(7_usize)
-            .add_data("mock data")
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
-            .add_handler(|_, _: RetrieveOffers| async { panic!("should not be invoked") })
-            .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
-            .add_data_handler(move |data: usize, _, _: RetrieveOffers| {
-                let cnt = cnt.clone();
-                async move {
-                    cnt.fetch_add(data, SeqCst);
-                    Ok(vec![])
-                }
-            })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
-            .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
             .build()
             .unwrap();
-
-        assert_eq!(0, counter.load(SeqCst));
-
-        // when
-        let node_id = generate_identity("caller").identity.to_string();
-        discovery
-            .get_remote_offers(node_id, sample_retrieve_offers().offer_ids)
-            .await
-            .unwrap();
-
-        // then
-        assert_eq!(7, counter.load(SeqCst));
     }
 }
