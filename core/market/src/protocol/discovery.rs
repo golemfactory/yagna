@@ -7,10 +7,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use ya_core_model::identity::event::IdentityEvent;
+use ya_core_model::identity::Error;
+use ya_core_model::market::{FundGolemBase, RpcMessageError};
 use ya_service_bus::typed as bus;
-use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
 
+use bigdecimal::BigDecimal;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::rpc::SearchResult;
@@ -241,6 +243,7 @@ impl Discovery {
 
         self.bind_offers_listener().await?;
         self.bind_identity_handlers(local_prefix).await?;
+        self.bind_fund_handler(local_prefix).await?;
         Ok(())
     }
 
@@ -267,35 +270,48 @@ impl Discovery {
         Ok(())
     }
 
+    async fn handle_identity_event(&self, event: IdentityEvent) -> Result<(), Error> {
+        match event {
+            IdentityEvent::AccountLocked { identity } => {
+                log::debug!("Account locked for {identity} - no new offers will be published");
+            }
+            IdentityEvent::AccountUnlocked { identity } => {
+                log::debug!("Account unlocked - registering new signer for {identity}");
+                if let Err(e) = self.register_signer(identity).await {
+                    log::error!("Failed to register new signer for {identity}: {e}");
+                    return Err(Error::InternalErr(format!(
+                        "Failed to register signer: {e}"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn bind_identity_handlers(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
         let discovery = self.clone();
-        let endpoint = format!("{}/{BUS_ID}/handlers", local_prefix);
+        let endpoint = format!("{}/{BUS_ID}/events", local_prefix);
 
         // Subscribe to identity events, which will be received on the endpoint.
         self.subscribe_to_events(&endpoint).await?;
 
         // Bind the handlers for received events.
-        ServiceBinder::new(&endpoint, &(), discovery.clone()).bind_with_processor(
-            move |_, myself, _caller: String, event: IdentityEvent| {
-                let myself = myself;
-                async move {
-                    match event {
-                        IdentityEvent::AccountLocked { identity } => {
-                            log::debug!(
-                                "Account locked for {identity} - no new offers will be published"
-                            );
-                        }
-                        IdentityEvent::AccountUnlocked { identity } => {
-                            log::debug!("Account unlocked - registering new signer for {identity}");
-                            if let Err(e) = myself.register_signer(identity).await {
-                                log::error!("Failed to register new signer for {identity}: {e}");
-                            }
-                        }
-                    }
-                    Ok(())
-                }
-            },
-        );
+        bus::bind(&endpoint, move |event: IdentityEvent| {
+            let myself = discovery.clone();
+            async move { myself.handle_identity_event(event).await }
+        });
+
+        Ok(())
+    }
+
+    async fn bind_fund_handler(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
+        let discovery = self.clone();
+        let endpoint = format!("{}/{BUS_ID}/fund", local_prefix);
+
+        bus::bind(&endpoint, move |msg: FundGolemBase| {
+            let myself = discovery.clone();
+            async move { myself.fund(msg).await }
+        });
 
         Ok(())
     }
@@ -384,6 +400,28 @@ impl Discovery {
                 IdentityError::SigningError(format!("Account {node_id} is deleted")).into(),
             );
         }
+
+        Ok(())
+    }
+
+    async fn fund(&self, msg: FundGolemBase) -> Result<(), RpcMessageError> {
+        self.validate_account(msg.wallet)
+            .await
+            .map_err(|e| RpcMessageError::Market(e.to_string()))?;
+
+        let client = self.inner.golem_base.clone();
+        let address = Address::from(&msg.wallet.into_array());
+        client
+            .fund(address, BigDecimal::from(10))
+            .await
+            .map_err(|e| RpcMessageError::Market(format!("Failed to fund wallet: {}", e)))?;
+
+        // Get balance after funding
+        let balance = client
+            .get_balance(address)
+            .await
+            .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
+        log::info!("GolemBase balance for wallet {}: {}", msg.wallet, balance);
 
         Ok(())
     }

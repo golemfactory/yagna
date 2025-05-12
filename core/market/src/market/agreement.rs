@@ -7,9 +7,9 @@ use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, Owner};
 use crate::db::DbMixedExecutor;
 
-pub async fn bind_gsb(db: DbMixedExecutor, public_prefix: &str, _local_prefix: &str) {
+pub async fn bind_gsb(db: DbMixedExecutor, _public_prefix: &str, local_prefix: &str) {
     log::trace!("Binding market agreement public service to service bus");
-    ServiceBinder::new(public_prefix, &db, ())
+    ServiceBinder::new(local_prefix, &db, ())
         .bind(list_agreements)
         .bind(get_agreement);
     log::debug!("Successfully bound market agreement public service to service bus");

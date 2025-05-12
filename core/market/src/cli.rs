@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use structopt::StructOpt;
 use ya_client::model::market::{agreement::State, Role};
-use ya_core_model::market::{GetAgreement, ListAgreements};
+use ya_client::model::NodeId;
+use ya_core_model::market::{local::BUS_ID, FundGolemBase, GetAgreement, ListAgreements};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -9,12 +10,14 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum Command {
     Agreements(AgreementsCommand),
+    GolemBase(GolemBaseCommand),
 }
 
 impl Command {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             Command::Agreements(agreements_cmd) => agreements_cmd.run_command(ctx).await,
+            Command::GolemBase(golembase_cmd) => golembase_cmd.run_command(ctx).await,
         }
     }
 }
@@ -55,9 +58,7 @@ impl AgreementsCommand {
                     app_session_id,
                 };
 
-                let agreements = bus::service(ya_core_model::market::BUS_ID)
-                    .send(request)
-                    .await??;
+                let agreements = bus::service(BUS_ID).send(request).await??;
 
                 let mut agreements_json = Vec::new();
                 for agreement in agreements {
@@ -89,11 +90,33 @@ impl AgreementsCommand {
                     role,
                 };
 
-                let agreement = bus::service(ya_core_model::market::BUS_ID)
+                let agreement = bus::service(BUS_ID).send(request).await??;
+
+                CommandOutput::object(agreement)
+            }
+        }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+pub enum GolemBaseCommand {
+    Fund {
+        #[structopt(help = "Wallet address to fund")]
+        wallet: NodeId,
+    },
+}
+
+impl GolemBaseCommand {
+    pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        match self {
+            GolemBaseCommand::Fund { wallet } => {
+                let request = FundGolemBase { wallet };
+
+                let result = bus::service(format!("{BUS_ID}/market-discovery/fund"))
                     .send(request)
                     .await??;
 
-                CommandOutput::object(agreement)
+                CommandOutput::object(result)
             }
         }
     }

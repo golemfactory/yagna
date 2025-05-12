@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use ya_client_model::market::{agreement::State, Role};
 pub use ya_client_model::market::{Agreement, AgreementListEntry};
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 /// Public Market bus address.
@@ -85,4 +86,15 @@ pub enum RpcMessageError {
     Forbidden(String),
     #[error("Timeout")]
     Timeout,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FundGolemBase {
+    pub wallet: NodeId,
+}
+
+impl RpcMessage for FundGolemBase {
+    const ID: &'static str = "FundGolemBase";
+    type Item = ();
+    type Error = RpcMessageError;
 }
