@@ -162,6 +162,7 @@ impl FakeMarket {
                 demand_id: demand.id,
                 requestor_id: demand.issuer,
                 timestamp: demand.timestamp,
+                expiration: demand.timestamp + Duration::hours(1),
             },
             offer: Offer {
                 properties: offer.content.properties,
@@ -169,6 +170,7 @@ impl FakeMarket {
                 offer_id: offer.id,
                 provider_id: offer.issuer,
                 timestamp: offer.timestamp,
+                expiration: offer.timestamp + Duration::hours(1),
             },
             valid_to: timestamp + Duration::hours(2),
             approved_date: None,

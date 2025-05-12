@@ -43,6 +43,7 @@ pub struct Discovery {
 pub(super) struct OfferHandlers {
     filter_out_known_ids: HandlerSlot<OffersBcast>,
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
+    #[allow(dead_code)]
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
 }
 

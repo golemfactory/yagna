@@ -38,7 +38,7 @@ impl IdentityApi for MockIdentity {
             .collect::<Vec<IdentityInfo>>())
     }
 
-    async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {
+    async fn sign(&self, _node_id: &NodeId, _data: &[u8]) -> Result<Vec<u8>, IdentityError> {
         Err(IdentityError::SigningError("Not implemented".to_string()))
     }
 }

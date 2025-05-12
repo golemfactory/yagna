@@ -2,7 +2,7 @@
 
 use actix_web::web::Data;
 use actix_web::{middleware, App, HttpServer, Scope};
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
@@ -323,6 +323,7 @@ async fn main() -> anyhow::Result<()> {
             demand_id: "".to_string(),
             requestor_id: requestor_id.parse().unwrap(),
             timestamp: Utc::now(),
+            expiration: Utc::now() + Duration::hours(1),
         },
         offer: market::Offer {
             properties: offer_properties,
@@ -330,6 +331,7 @@ async fn main() -> anyhow::Result<()> {
             offer_id: "".to_string(),
             provider_id: provider_id.parse().unwrap(),
             timestamp: Utc::now(),
+            expiration: Utc::now() + Duration::hours(1),
         },
         valid_to: Utc::now(),
         approved_date: None,

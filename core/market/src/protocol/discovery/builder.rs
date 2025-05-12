@@ -122,7 +122,7 @@ mod test {
     #[actix::test]
     #[should_panic]
     async fn build_from_default_should_fail() {
-        DiscoveryBuilder::default().build();
+        DiscoveryBuilder::default().build().unwrap();
     }
 
     #[actix::test]
@@ -131,7 +131,8 @@ mod test {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
-            .build();
+            .build()
+            .unwrap();
     }
 
     #[actix::test]
@@ -140,7 +141,8 @@ mod test {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data_handler(|_: u8, _, _: OffersRetrieved| async { Ok(vec![]) })
-            .build();
+            .build()
+            .unwrap();
     }
 
     #[actix::test]
@@ -150,7 +152,8 @@ mod test {
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
-            .build();
+            .build()
+            .unwrap();
     }
 
     #[actix::test]
@@ -163,7 +166,8 @@ mod test {
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
             .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
-            .build();
+            .build()
+            .unwrap();
     }
 
     #[serial_test::serial]
@@ -190,14 +194,15 @@ mod test {
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: QueryOffers| async { Ok(QueryOffersResult::default()) })
             .with_config(Config::from_env().unwrap().discovery)
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(0, counter.load(SeqCst));
 
         // when
         let node_id = generate_identity("caller").identity.to_string();
         discovery
-            .on_get_remote_offers(node_id, sample_retrieve_offers())
+            .get_remote_offers(node_id, sample_retrieve_offers().offer_ids)
             .await
             .unwrap();
 

@@ -104,10 +104,7 @@ async fn test_broadcast_offer_callbacks() {
         .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
-    discovery2
-        .bcast_offers(vec![offer_id.clone()])
-        .await
-        .unwrap();
+    discovery2.bcast_offer(&offer_clone).await.unwrap();
 
     assert_offers_broadcasted(&[&mkt1], &[offer_id.clone()]).await;
 
@@ -133,7 +130,7 @@ async fn test_broadcast_offer_id_validation() {
     let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap();
     let mut offer = sample_offer();
     offer.id = invalid_id.clone();
-
+    let offer_clone = offer.clone();
     let discovery_builder = network.discovery_builder();
     let network = network
         .add_discovery_instance(
@@ -147,10 +144,7 @@ async fn test_broadcast_offer_id_validation() {
     let discovery2: Discovery = network.get_discovery("Node-2");
 
     // Offer should be propagated to mkt1, but he should reject it.
-    discovery2
-        .bcast_offers(vec![invalid_id.clone()])
-        .await
-        .unwrap();
+    discovery2.bcast_offer(&offer_clone).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(1000)).await;
     assert_err_eq!(
@@ -175,7 +169,7 @@ async fn test_broadcast_expired_offer() {
     let expiration = Utc::now().naive_utc() - chrono::Duration::hours(1);
     let offer = sample_offer_with_expiration(expiration);
     let offer_id = offer.id.clone();
-
+    let offer_clone = offer.clone();
     let discovery_builder = network.discovery_builder();
     let network = network
         .add_discovery_instance(
@@ -189,10 +183,7 @@ async fn test_broadcast_expired_offer() {
     let discovery2: Discovery = network.get_discovery("Node-2");
 
     // Offer should be propagated to mkt1, but he should reject it.
-    discovery2
-        .bcast_offers(vec![offer_id.clone()])
-        .await
-        .unwrap();
+    discovery2.bcast_offer(&offer_clone).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
@@ -279,10 +270,7 @@ async fn test_broadcast_stop_conditions() {
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3
-        .bcast_offers(vec![offer.id.clone()])
-        .await
-        .unwrap();
+    discovery3.bcast_offer(&offer).await.unwrap();
 
     // Wait for broadcast.
     tokio::time::timeout(Duration::from_millis(1500), rx.next())
@@ -337,7 +325,7 @@ async fn test_discovery_get_offers() {
         .get_remote_offers(
             id1.identity.to_string(),
             vec![subscription_id.clone(), invalid_subscription],
-            5,
+            // 5,
         )
         .await
         .unwrap();
