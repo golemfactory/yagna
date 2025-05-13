@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
+use serde_json::json;
 use structopt::StructOpt;
+
 use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
 use ya_core_model::market::local as market_bus;
@@ -114,11 +116,13 @@ impl GolemBaseCommand {
         match self {
             GolemBaseCommand::Fund { wallet } => {
                 let request = FundGolemBase { wallet };
-                bus::service(market_bus::discovery_endpoint())
+                let response = bus::service(market_bus::discovery_endpoint())
                     .send(request)
                     .await??;
 
-                CommandOutput::none()
+                CommandOutput::object(json!({
+                    "message": format!("GolemBase wallet {} funded with {} tGLM", response.wallet, response.balance)
+                }))
             }
         }
     }

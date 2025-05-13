@@ -288,8 +288,8 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2be494bdaf756f32273e1c3ab738f19b5d345432" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2be494bdaf756f32273e1c3ab738f19b5d345432" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "03c01a935f489fe9d762056a3b501ad3ef91089f" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "03c01a935f489fe9d762056a3b501ad3ef91089f" }
 
 ya-compile-time-utils.path = "utils/compile-time-utils"
 ya-manifest-utils = { path = "utils/manifest-utils" }
@@ -326,8 +326,8 @@ ya-framework-basic.path = "test-utils/test-framework/framework-basic"
 ya-framework-mocks.path = "test-utils/test-framework/framework-mocks"
 
 [patch.crates-io]
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2be494bdaf756f32273e1c3ab738f19b5d345432" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2be494bdaf756f32273e1c3ab738f19b5d345432" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "03c01a935f489fe9d762056a3b501ad3ef91089f" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "03c01a935f489fe9d762056a3b501ad3ef91089f" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

@@ -13,6 +13,7 @@ use ya_client_model::NodeId;
 use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
 // Workspace uses
+use ya_core_model::market::{local as market_bus, FundGolemBase};
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -253,16 +254,29 @@ Typically operation should take less than 1 minute.
 "#;
                 log::warn!("{}", warn_message);
 
-                CommandOutput::object(
-                    wallet::fund(
-                        address,
-                        account.driver(),
-                        Some(account.network()),
-                        None,
-                        mint_only,
-                    )
-                    .await?,
+                // Fund payment wallet.
+                let driver_fund_result = wallet::fund(
+                    address.clone(),
+                    account.driver(),
+                    Some(account.network()),
+                    None,
+                    mint_only,
                 )
+                .await?;
+
+                // Fund GolemBase wallet for paying gas fees when publishing Offers.
+                let golembase_result = bus::service(market_bus::discovery_endpoint())
+                    .send(FundGolemBase {
+                        wallet: Some(address.parse()?),
+                    })
+                    .await??;
+
+                CommandOutput::object(json!({
+                    "driver": driver_fund_result,
+                    "GolemBase": {
+                        "balance": golembase_result.balance
+                    }
+                }))
             }
             PaymentCli::Init {
                 account,

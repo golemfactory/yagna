@@ -1,4 +1,5 @@
 //! Market service bus API.
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -104,8 +105,14 @@ pub struct FundGolemBase {
     pub wallet: Option<NodeId>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FundGolemBaseResponse {
+    pub wallet: NodeId,
+    pub balance: BigDecimal,
+}
+
 impl RpcMessage for FundGolemBase {
     const ID: &'static str = "FundGolemBase";
-    type Item = ();
+    type Item = FundGolemBaseResponse;
     type Error = RpcMessageError;
 }

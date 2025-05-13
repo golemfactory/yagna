@@ -12,7 +12,7 @@ use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
 use ya_core_model::market::local;
-use ya_core_model::market::{FundGolemBase, RpcMessageError};
+use ya_core_model::market::{FundGolemBase, FundGolemBaseResponse, RpcMessageError};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
@@ -405,7 +405,7 @@ impl Discovery {
         Ok(())
     }
 
-    async fn fund(&self, msg: FundGolemBase) -> Result<(), RpcMessageError> {
+    async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
             None => self.inner.identity.default_identity().await.map_err(|e| {
@@ -431,6 +431,7 @@ impl Discovery {
             .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
         log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
 
-        Ok(())
+        let balance = BigDecimal::from(balance);
+        Ok(FundGolemBaseResponse { wallet, balance })
     }
 }
