@@ -13,6 +13,7 @@ pub const BUS_ID: &str = "/public/market";
 /// Internal Market bus address.
 pub mod local {
     pub const BUS_ID: &str = "/local/market";
+    pub const BUS_DISCOVERY: &str = "market-discovery";
 }
 
 /// Returns the Agreement.

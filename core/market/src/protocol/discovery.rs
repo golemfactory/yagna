@@ -1,24 +1,26 @@
 use anyhow::Result;
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
-use golem_base_sdk::account::TransactionSigner;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
+
+use ya_client::model::market::Offer as ClientOffer;
+use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
+use ya_core_model::market::local::BUS_DISCOVERY;
 use ya_core_model::market::{FundGolemBase, RpcMessageError};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
-use bigdecimal::BigDecimal;
+use golem_base_sdk::account::TransactionSigner;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::rpc::SearchResult;
 use golem_base_sdk::{Address, Hash};
-use ya_client::model::market::Offer as ClientOffer;
-use ya_client::model::NodeId;
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
@@ -28,7 +30,7 @@ use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
-const BUS_ID: &str = "market-discovery";
+const BUS_ID: &str = BUS_DISCOVERY;
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;

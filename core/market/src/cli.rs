@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use structopt::StructOpt;
 use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
-use ya_core_model::market::{local::BUS_ID, FundGolemBase, GetAgreement, ListAgreements};
+use ya_core_model::market::local as market_bus;
+use ya_core_model::market::{FundGolemBase, GetAgreement, ListAgreements};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -58,7 +59,7 @@ impl AgreementsCommand {
                     app_session_id,
                 };
 
-                let agreements = bus::service(BUS_ID).send(request).await??;
+                let agreements = bus::service(market_bus::BUS_ID).send(request).await??;
 
                 let mut agreements_json = Vec::new();
                 for agreement in agreements {
@@ -90,7 +91,7 @@ impl AgreementsCommand {
                     role,
                 };
 
-                let agreement = bus::service(BUS_ID).send(request).await??;
+                let agreement = bus::service(market_bus::BUS_ID).send(request).await??;
 
                 CommandOutput::object(agreement)
             }
@@ -111,9 +112,13 @@ impl GolemBaseCommand {
         match self {
             GolemBaseCommand::Fund { wallet } => {
                 let request = FundGolemBase { wallet };
-                bus::service(format!("{BUS_ID}/market-discovery/fund"))
-                    .send(request)
-                    .await??;
+                bus::service(format!(
+                    "{}/{}/fund",
+                    market_bus::BUS_ID,
+                    market_bus::BUS_DISCOVERY
+                ))
+                .send(request)
+                .await??;
 
                 CommandOutput::none()
             }
