@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use ya_agreement_utils::agreement::flatten;
+use ya_agreement_utils::agreement::{expand, flatten};
 use ya_client::model::market::NewOffer;
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 
@@ -82,12 +82,12 @@ impl Offer {
             offer_id: self.id.to_string(),
             provider_id: self.node_id,
             constraints: self.constraints.clone(),
-            properties: serde_json::from_str(&self.properties).map_err(|e| {
+            properties: expand(serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
                     "Can't serialize Offer [{}] properties from database. Error: {}",
                     self.id, e
                 )
-            })?,
+            })?),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
             expiration: Utc.from_utc_datetime(&self.expiration_ts),
         })
