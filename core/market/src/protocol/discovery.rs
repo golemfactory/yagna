@@ -429,9 +429,8 @@ impl Discovery {
             .get_balance(address)
             .await
             .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
-        log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
 
-        let balance = BigDecimal::from(balance);
+        log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
         Ok(FundGolemBaseResponse { wallet, balance })
     }
 }
