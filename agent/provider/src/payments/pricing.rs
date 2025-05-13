@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde_json::json;
-use std::convert::TryFrom;
+use std::str::FromStr;
 
 use ya_agreement_utils::ComInfo;
 use ya_client::model::{payment::Account, NodeId};
@@ -47,9 +47,8 @@ impl PaymentModel for LinearPricing {
         let usage: Vec<BigDecimal> = usage
             .iter()
             .cloned()
-            .map(BigDecimal::try_from)
-            .collect::<std::result::Result<_, _>>()
-            .map_err(|e| anyhow!("Failed to convert usage to BigDecimal: {e}"))?;
+            .map(decimal_compatibility_round)
+            .collect::<Result<Vec<_>>>()?;
 
         // Note: last element of usage_coeffs contains constant initial cost
         // of computing task, so we don't multiply it.
@@ -72,9 +71,8 @@ impl LinearPricing {
         let usage: Vec<BigDecimal> = commercials
             .get_usage_coefficients()?
             .into_iter()
-            .map(BigDecimal::try_from)
-            .collect::<std::result::Result<_, _>>()
-            .map_err(|e| anyhow!("Failed to convert usage coefficients to BigDecimal: {e}"))?;
+            .map(decimal_compatibility_round)
+            .collect::<Result<Vec<_>>>()?;
 
         log::info!("Creating LinearPricing payment model. Usage coefficients vector: {usage:?}.");
 
@@ -149,6 +147,21 @@ impl PricingOffer for LinearPricingOffer {
 
         Ok(ComInfo { params })
     }
+}
+
+/// Converts f64 to BigDecimal with special rounding behavior to match C# implementation.
+/// This is needed because Rust's bignum library in version 0.2 incorrectly handled the most significant digits
+/// when parsing floats. Currently yagna uses BigDecimal (and bignum) in version 0.4, but we must preserve old version.
+/// Hopefully we can unify with C# implementation in the future.
+/// The conversion process from BigDecimal 0.4 is described here:
+/// https://github.com/akubera/bigdecimal-rs/blob/5b2976d4815f55b458f4e7c7cf8e9c632c0c0c06/src/lib.rs#L1772-L1779
+fn decimal_compatibility_round(value: f64) -> Result<BigDecimal> {
+    let formatted = format!("{:.PRECISION$e}", value, PRECISION = f64::DIGITS as usize);
+
+    let result = BigDecimal::from_str(&formatted)
+        .map_err(|e| anyhow!("Failed to parse to BigDecimal: {}", e))?;
+
+    Ok(result)
 }
 
 #[cfg(test)]
