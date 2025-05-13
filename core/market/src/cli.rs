@@ -111,12 +111,11 @@ impl GolemBaseCommand {
         match self {
             GolemBaseCommand::Fund { wallet } => {
                 let request = FundGolemBase { wallet };
-
-                let result = bus::service(format!("{BUS_ID}/market-discovery/fund"))
+                bus::service(format!("{BUS_ID}/market-discovery/fund"))
                     .send(request)
                     .await??;
 
-                CommandOutput::object(result)
+                CommandOutput::none()
             }
         }
     }
