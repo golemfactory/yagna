@@ -12,7 +12,10 @@ use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
 use ya_core_model::market::local;
-use ya_core_model::market::{FundGolemBase, FundGolemBaseResponse, RpcMessageError};
+use ya_core_model::market::{
+    FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
+    RpcMessageError,
+};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
@@ -314,6 +317,13 @@ impl Discovery {
             async move { myself.fund(msg).await }
         });
 
+        // Bind balance check handler
+        let discovery = self.clone();
+        bus::bind(&endpoint, move |msg: GetGolemBaseBalance| {
+            let myself = discovery.clone();
+            async move { myself.get_balance(msg).await }
+        });
+
         Ok(())
     }
 
@@ -432,5 +442,31 @@ impl Discovery {
 
         log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
         Ok(FundGolemBaseResponse { wallet, balance })
+    }
+
+    async fn get_balance(
+        &self,
+        msg: GetGolemBaseBalance,
+    ) -> Result<GetGolemBaseBalanceResponse, RpcMessageError> {
+        let wallet = match msg.wallet {
+            Some(wallet) => wallet,
+            None => self.inner.identity.default_identity().await.map_err(|e| {
+                RpcMessageError::Market(format!("Failed to get default identity: {e}"))
+            })?,
+        };
+
+        let client = self.inner.golem_base.clone();
+        let address = Address::from(&wallet.into_array());
+
+        let balance = client
+            .get_balance(address)
+            .await
+            .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
+
+        Ok(GetGolemBaseBalanceResponse {
+            wallet,
+            balance,
+            token: "tETH".to_string(),
+        })
     }
 }

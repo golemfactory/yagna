@@ -5,7 +5,7 @@ use structopt::StructOpt;
 use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
 use ya_core_model::market::local as market_bus;
-use ya_core_model::market::{FundGolemBase, GetAgreement, ListAgreements};
+use ya_core_model::market::{FundGolemBase, GetAgreement, GetGolemBaseBalance, ListAgreements};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -103,9 +103,17 @@ impl AgreementsCommand {
 
 #[derive(StructOpt, Debug)]
 pub enum GolemBaseCommand {
+    /// Fund GolemBase wallet
     Fund {
         #[structopt(
             help = "Wallet address to fund (optional, uses default identity if not provided)"
+        )]
+        wallet: Option<NodeId>,
+    },
+    /// Check GolemBase wallet balance
+    Balance {
+        #[structopt(
+            help = "Wallet address to check (optional, uses default identity if not provided)"
         )]
         wallet: Option<NodeId>,
     },
@@ -122,6 +130,16 @@ impl GolemBaseCommand {
 
                 CommandOutput::object(json!({
                     "message": format!("GolemBase wallet {} funded with {} tGLM", response.wallet, response.balance)
+                }))
+            }
+            GolemBaseCommand::Balance { wallet } => {
+                let request = GetGolemBaseBalance { wallet };
+                let response = bus::service(market_bus::discovery_endpoint())
+                    .send(request)
+                    .await??;
+
+                CommandOutput::object(json!({
+                    "message": format!("GolemBase wallet {} balance: {} tGLM", response.wallet, response.balance)
                 }))
             }
         }

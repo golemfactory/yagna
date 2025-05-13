@@ -116,3 +116,21 @@ impl RpcMessage for FundGolemBase {
     type Item = FundGolemBaseResponse;
     type Error = RpcMessageError;
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseBalance {
+    pub wallet: Option<NodeId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseBalanceResponse {
+    pub wallet: NodeId,
+    pub balance: BigDecimal,
+    pub token: String,
+}
+
+impl RpcMessage for GetGolemBaseBalance {
+    const ID: &'static str = "GetGolemBaseBalance";
+    type Item = GetGolemBaseBalanceResponse;
+    type Error = RpcMessageError;
+}
