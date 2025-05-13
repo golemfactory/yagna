@@ -4255,6 +4255,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=merge-yagna-functionalities#af8c882b0334be68b176eda4ab912d4cf9e422c6"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

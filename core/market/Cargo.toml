@@ -23,8 +23,7 @@ ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-std-utils.workspace = true
 ya-utils-actix.workspace = true
-#golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", branch = "merge-yagna-functionalities" }
-golem-base-sdk = { path = "../../../../GolemBase/rust-sdk" }
+golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", branch = "merge-yagna-functionalities" }
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"
