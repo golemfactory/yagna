@@ -102,8 +102,10 @@ impl AgreementsCommand {
 #[derive(StructOpt, Debug)]
 pub enum GolemBaseCommand {
     Fund {
-        #[structopt(help = "Wallet address to fund")]
-        wallet: NodeId,
+        #[structopt(
+            help = "Wallet address to fund (optional, uses default identity if not provided)"
+        )]
+        wallet: Option<NodeId>,
     },
 }
 
@@ -112,13 +114,9 @@ impl GolemBaseCommand {
         match self {
             GolemBaseCommand::Fund { wallet } => {
                 let request = FundGolemBase { wallet };
-                bus::service(format!(
-                    "{}/{}/fund",
-                    market_bus::BUS_ID,
-                    market_bus::BUS_DISCOVERY
-                ))
-                .send(request)
-                .await??;
+                bus::service(market_bus::discovery_endpoint())
+                    .send(request)
+                    .await??;
 
                 CommandOutput::none()
             }

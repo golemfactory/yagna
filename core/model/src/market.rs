@@ -14,6 +14,16 @@ pub const BUS_ID: &str = "/public/market";
 pub mod local {
     pub const BUS_ID: &str = "/local/market";
     pub const BUS_DISCOVERY: &str = "market-discovery";
+
+    /// Builds the discovery bus endpoint with a custom prefix.
+    pub fn build_discovery_endpoint(prefix: &str) -> String {
+        format!("{}/{}", prefix, BUS_DISCOVERY)
+    }
+
+    /// Builds the discovery bus endpoint with the default prefix.
+    pub fn discovery_endpoint() -> String {
+        build_discovery_endpoint(BUS_ID)
+    }
 }
 
 /// Returns the Agreement.
@@ -91,7 +101,7 @@ pub enum RpcMessageError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FundGolemBase {
-    pub wallet: NodeId,
+    pub wallet: Option<NodeId>,
 }
 
 impl RpcMessage for FundGolemBase {

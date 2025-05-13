@@ -11,7 +11,7 @@ use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
-use ya_core_model::market::local::BUS_DISCOVERY;
+use ya_core_model::market::local;
 use ya_core_model::market::{FundGolemBase, RpcMessageError};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -30,7 +30,6 @@ use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
-const BUS_ID: &str = BUS_DISCOVERY;
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;
@@ -292,7 +291,7 @@ impl Discovery {
 
     async fn bind_identity_handlers(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
         let discovery = self.clone();
-        let endpoint = format!("{}/{BUS_ID}/events", local_prefix);
+        let endpoint = local::build_discovery_endpoint(local_prefix);
 
         // Subscribe to identity events, which will be received on the endpoint.
         self.subscribe_to_events(&endpoint).await?;
@@ -308,7 +307,7 @@ impl Discovery {
 
     async fn bind_fund_handler(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
         let discovery = self.clone();
-        let endpoint = format!("{}/{BUS_ID}/fund", local_prefix);
+        let endpoint = local::build_discovery_endpoint(local_prefix);
 
         bus::bind(&endpoint, move |msg: FundGolemBase| {
             let myself = discovery.clone();
@@ -407,12 +406,19 @@ impl Discovery {
     }
 
     async fn fund(&self, msg: FundGolemBase) -> Result<(), RpcMessageError> {
-        self.validate_account(msg.wallet)
+        let wallet = match msg.wallet {
+            Some(wallet) => wallet,
+            None => self.inner.identity.default_identity().await.map_err(|e| {
+                RpcMessageError::Market(format!("Failed to get default identity: {e}"))
+            })?,
+        };
+
+        self.validate_account(wallet)
             .await
             .map_err(|e| RpcMessageError::Market(e.to_string()))?;
 
         let client = self.inner.golem_base.clone();
-        let address = Address::from(&msg.wallet.into_array());
+        let address = Address::from(&wallet.into_array());
         client
             .fund(address, BigDecimal::from(10))
             .await
@@ -423,7 +429,7 @@ impl Discovery {
             .get_balance(address)
             .await
             .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
-        log::info!("GolemBase balance for wallet {}: {}", msg.wallet, balance);
+        log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
 
         Ok(())
     }
