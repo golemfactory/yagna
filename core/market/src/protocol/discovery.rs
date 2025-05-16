@@ -1,11 +1,11 @@
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
+use futures::StreamExt;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time;
 
 use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
@@ -22,6 +22,7 @@ use ya_service_bus::RpcEndpoint;
 use golem_base_sdk::account::TransactionSigner;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
+use golem_base_sdk::events::Event;
 use golem_base_sdk::rpc::SearchResult;
 use golem_base_sdk::{Address, Hash};
 
@@ -58,6 +59,7 @@ pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
     golem_base: GolemBaseClient,
     offer_handlers: OfferHandlers,
+    #[allow(dead_code)]
     config: DiscoveryConfig,
 }
 
@@ -222,6 +224,87 @@ impl Discovery {
         Ok(())
     }
 
+    async fn offers_events_loop(&self, starting_block: u64) -> anyhow::Result<()> {
+        let events = self
+            .inner
+            .golem_base
+            .events_client()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
+
+        let mut event_stream = events
+            .events_stream_from_block(starting_block)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get events stream: {}", e))?;
+
+        while let Some(event) = event_stream.next().await {
+            match event {
+                Ok(event) => {
+                    // Handle the event based on its type
+                    if let Err(e) = self.handle_golem_base_event(event).await {
+                        log::error!("Error handling Golem Base event: {}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error receiving Golem Base event: {}", e);
+                    // Try to reconnect after a delay, to protect against errors spam
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Spawns a task that listens for WebSocket events from Golem Base
+    pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
+        let discovery = self.clone();
+        let client = self.inner.golem_base.clone();
+
+        // Get current block number to start listening from
+        let current_block = client.get_current_block_number().await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {}", e))
+        })?;
+
+        // First, load all existing offers to setup initial state.
+        // Later we will listen only for state changes.
+        let offers = self.query_offers().await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to query offers: {}", e))
+        })?;
+        self.register_incoming_offers(offers).await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to register offers: {}", e))
+        })?;
+
+        tokio::spawn(async move {
+            discovery
+                .offers_events_loop(current_block)
+                .await
+                .inspect_err(|e| log::error!("Error in GolemBase events listener: {}", e))
+                .ok();
+        });
+
+        Ok(())
+    }
+
+    /// Handles incoming Golem Base events
+    async fn handle_golem_base_event(&self, event: Event) -> Result<(), DiscoveryError> {
+        match event {
+            Event::EntityCreated { entity_id, .. } => {
+                log::debug!("Entity created in Golem Base: {}", entity_id);
+                // Query and register the new offer
+                let offers = self.query_offers().await?;
+                self.register_incoming_offers(offers).await?;
+            }
+            Event::EntityRemoved { entity_id, .. } => {
+                // Handle offer removal if needed
+                log::debug!("Entity removed from Golem Base: {}", entity_id);
+            }
+            // Ignore EntityUpdated events, because market doesn't allow for updating entities.
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
     pub async fn bind_gsb(
@@ -245,7 +328,9 @@ impl Discovery {
             .await
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
+        // Start Golem Base listener that loads offers and listens for updates
         self.bind_offers_listener().await?;
+
         self.bind_identity_handlers(local_prefix).await?;
         self.bind_fund_handler(local_prefix).await?;
         Ok(())
@@ -322,66 +407,6 @@ impl Discovery {
         bus::bind(&endpoint, move |msg: GetGolemBaseBalance| {
             let myself = discovery.clone();
             async move { myself.get_balance(msg).await }
-        });
-
-        Ok(())
-    }
-
-    pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
-        let discovery = self.clone();
-        // TODO: Add separate config value for offers query interval instead of reusing broadcast interval
-        let interval = discovery.inner.config.mean_cyclic_bcast_interval;
-
-        tokio::spawn(async move {
-            let mut interval = time::interval(interval);
-            loop {
-                interval.tick().await;
-
-                if let Err(e) = async {
-                    // Query all offers from GolemBase
-                    let offers = discovery.query_offers().await?;
-
-                    // Filter out known offers
-                    let ids = offers.iter().map(|offer| offer.id.clone()).collect();
-                    let unknown_offers = discovery
-                        .inner
-                        .offer_handlers
-                        .filter_out_known_ids
-                        .call(
-                            GOLEM_BASE_CALLER.to_string(),
-                            OffersBcast { offer_ids: ids },
-                        )
-                        .await
-                        .unwrap_or_default();
-
-                    // Add unknown Offers to local storage
-                    if !unknown_offers.is_empty() {
-                        let unknown_offer_ids: HashSet<_> = unknown_offers.iter().collect();
-                        let filtered_offers = offers
-                            .into_iter()
-                            .filter(|offer| unknown_offer_ids.contains(&offer.id))
-                            .collect();
-
-                        discovery
-                            .inner
-                            .offer_handlers
-                            .receive_remote_offers
-                            .call(
-                                GOLEM_BASE_CALLER.to_string(),
-                                OffersRetrieved {
-                                    offers: filtered_offers,
-                                },
-                            )
-                            .await
-                            .ok();
-                    }
-                    Ok::<(), DiscoveryError>(())
-                }
-                .await
-                {
-                    log::error!("Error in offers listener: {}", e);
-                }
-            }
         });
 
         Ok(())
@@ -468,5 +493,46 @@ impl Discovery {
             balance,
             token: "tETH".to_string(),
         })
+    }
+
+    /// Registers incoming offers by filtering out known ones and adding new ones to local storage
+    async fn register_incoming_offers(
+        &self,
+        offers: Vec<ModelOffer>,
+    ) -> Result<(), DiscoveryError> {
+        // Filter out known offers
+        let ids = offers.iter().map(|offer| offer.id.clone()).collect();
+        let unknown_offers = self
+            .inner
+            .offer_handlers
+            .filter_out_known_ids
+            .call(
+                GOLEM_BASE_CALLER.to_string(),
+                OffersBcast { offer_ids: ids },
+            )
+            .await
+            .unwrap_or_default();
+
+        // Add unknown Offers to local storage
+        if !unknown_offers.is_empty() {
+            let unknown_offer_ids: HashSet<_> = unknown_offers.iter().collect();
+            let filtered_offers = offers
+                .into_iter()
+                .filter(|offer| unknown_offer_ids.contains(&offer.id))
+                .collect();
+
+            self.inner
+                .offer_handlers
+                .receive_remote_offers
+                .call(
+                    GOLEM_BASE_CALLER.to_string(),
+                    OffersRetrieved {
+                        offers: filtered_offers,
+                    },
+                )
+                .await
+                .ok();
+        }
+        Ok(())
     }
 }

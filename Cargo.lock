@@ -4244,7 +4244,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#0f99d5af1da95a06c58b981a10d893bfe95a4ac4"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#2d7b2084d58e3f1fd123f97d194744adaa724bb7"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4258,6 +4258,7 @@ dependencies = [
  "bytes 1.10.1",
  "dirs",
  "displaydoc",
+ "futures 0.3.30",
  "hex",
  "humantime 2.2.0",
  "log",
@@ -4768,7 +4769,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -6845,7 +6846,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes 1.10.1",
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.12.1",
  "log",
  "multimap 0.10.0",
