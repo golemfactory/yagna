@@ -4244,7 +4244,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#2d7b2084d58e3f1fd123f97d194744adaa724bb7"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#ccc9a2022aa381a7441a0b6c5383b203d57d1d40"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -11400,6 +11400,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.30",
  "golem-base-sdk",
+ "hex",
  "humantime 2.2.0",
  "lazy_static",
  "libsqlite3-sys",
@@ -11415,6 +11416,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "serde_json_canonicalizer",
  "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
  "structopt",

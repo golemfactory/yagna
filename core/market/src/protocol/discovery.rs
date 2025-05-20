@@ -2,12 +2,11 @@ use anyhow::Result;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
 use futures::StreamExt;
+use offer::GolemBaseOffer;
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
@@ -19,11 +18,11 @@ use ya_core_model::market::{
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
-use golem_base_sdk::account::TransactionSigner;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::events::Event;
 use golem_base_sdk::rpc::SearchResult;
+use golem_base_sdk::signers::TransactionSigner;
 use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
@@ -41,7 +40,7 @@ const BLOCK_TIME_SECONDS: i64 = 2;
 pub mod builder;
 pub mod error;
 pub mod message;
-
+pub mod offer;
 /// Responsible for communication with Golem Base during discovery phase.
 #[derive(Clone)]
 pub struct Discovery {
@@ -65,28 +64,33 @@ pub struct DiscoveryImpl {
 
 impl Discovery {
     /// Broadcasts Offers to Golem Base
-    pub async fn bcast_offer(&self, offer: &ModelOffer) -> Result<(), DiscoveryError> {
+    pub async fn bcast_offer(&self, offer: GolemBaseOffer) -> Result<ModelOffer, DiscoveryError> {
         // Validate account to return more menaingfull error messages than create_entry would.
-        self.validate_account(offer.node_id).await?;
+        self.validate_account(offer.provider_id).await?;
 
         let client = &self.inner.golem_base;
-        let address = Address::from(&offer.node_id.into_array());
+        let address = Address::from(&offer.provider_id.into_array());
 
         // Serialize the offer to JSON
-        let payload = serde_json::to_vec(&offer.into_client_offer()?).map_err(|e| {
+        let payload = serde_json::to_vec(&offer).map_err(|e| {
             DiscoveryError::InternalError(format!("Failed to serialize offer: {}", e))
         })?;
 
+        log::info!(
+            "Serialized offer payload: {}",
+            String::from_utf8_lossy(&payload)
+        );
+
         // Calculate TTL in blocks based on expiration time
         let now = Utc::now();
-        let expiration = Utc.from_utc_datetime(&offer.expiration_ts);
+        let expiration = Utc.from_utc_datetime(&offer.expiration.naive_utc());
         let ttl_seconds = (expiration - now).num_seconds();
         let ttl_blocks = (ttl_seconds / BLOCK_TIME_SECONDS) as u64;
 
         // Create entry with marketplace type and ID annotations
-        let entry = Create::new(payload, ttl_blocks)
-            .annotate_string("golem_marketplace_type", "Offer")
-            .annotate_string("golem_marketplace_id", offer.id.to_string());
+        let entry =
+            Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
+        // .annotate_string("golem_marketplace_id", offer.id.to_string());
 
         // Create entry on GolemBase
         let entry_id = client.create_entry(address, entry).await.map_err(|e| {
@@ -95,7 +99,9 @@ impl Discovery {
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 
-        Ok(())
+        Ok(offer.into_model_offer(entry_id).map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to convert offer to ModelOffer: {}", e))
+        })?)
     }
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
@@ -128,27 +134,17 @@ impl Discovery {
     pub async fn bcast_unsubscribe(&self, offer_id: SubscriptionId) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
 
-        let entries: Vec<Hash> = self
-            .query_subscriptions(&[offer_id.clone()])
-            .await
-            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?
-            .into_iter()
-            .map(|result| result.key)
-            .collect();
-
-        if entries.is_empty() {
-            log::debug!("No entries found in GolemBase for offer ID: {}", offer_id);
-            return Ok(());
-        }
-
         // Get metadata to find owner
-        let metadata = client.get_entity_metadata(entries[0]).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to get entry metadata: {e}"))
+        let key = Hash::from(offer_id.to_bytes());
+        let metadata = client.get_entity_metadata(key).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!(
+                "Failed to get entry metadata for offer {offer_id}: {e}"
+            ))
         })?;
 
         // Remove the entry
         client
-            .remove_entries(metadata.owner, entries)
+            .remove_entries(metadata.owner, vec![key])
             .await
             .map_err(|e| {
                 DiscoveryError::GolemBaseError(format!(
@@ -195,7 +191,7 @@ impl Discovery {
     fn parse_offers(results: Vec<SearchResult>) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let mut offers = Vec::new();
         for result in results {
-            match Self::parse_offer(result) {
+            match Self::offer_from_search(result) {
                 Ok(offer) => offers.push(offer),
                 Err(e) => log::trace!("Failed to parse offer: {}", e),
             }
@@ -204,12 +200,15 @@ impl Discovery {
     }
 
     /// Parses a single SearchResult into a ModelOffer
-    fn parse_offer(result: SearchResult) -> anyhow::Result<ModelOffer> {
+    fn offer_from_search(result: SearchResult) -> anyhow::Result<ModelOffer> {
         let value = result.value_as_string()?;
-        let offer: ClientOffer = serde_json::from_str(&value)
-            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+        Self::parse_offer(result.key, &value)
+    }
 
-        ModelOffer::try_from(offer)
+    fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
+        let offer: GolemBaseOffer = serde_json::from_str(&string_utf)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+        offer.into_model_offer(key)
     }
 
     /// List all accounts and initialize YagnaIdSigners on GolemBase, so they can be used for
@@ -287,17 +286,40 @@ impl Discovery {
     }
 
     /// Handles incoming Golem Base events
-    async fn handle_golem_base_event(&self, event: Event) -> Result<(), DiscoveryError> {
+    async fn handle_golem_base_event(&self, event: Event) -> anyhow::Result<()> {
+        let client = self.inner.golem_base.clone();
+
         match event {
             Event::EntityCreated { entity_id, .. } => {
-                log::debug!("Entity created in Golem Base: {}", entity_id);
-                // Query and register the new offer
-                let offers = self.query_offers().await?;
-                self.register_incoming_offers(offers).await?;
+                log::trace!("Entity created in Golem Base: {}", entity_id);
+
+                let offer = client.cat(entity_id).await?;
+                let offer = Self::parse_offer(entity_id, &offer)?;
+
+                self.register_incoming_offers(vec![offer]).await?;
             }
             Event::EntityRemoved { entity_id, .. } => {
-                // Handle offer removal if needed
-                log::debug!("Entity removed from Golem Base: {}", entity_id);
+                log::trace!("Entity removed from Golem Base: {}", entity_id);
+
+                let id = client.get_entity_metadata(entity_id).await?;
+                let id = id
+                    .string_annotations
+                    .iter()
+                    .find(|a| a.key == "golem_marketplace_id")
+                    .ok_or_else(|| anyhow::anyhow!("No golem_marketplace_id found in metadata"))?;
+                let id = id.value.parse::<SubscriptionId>()?;
+
+                self.inner
+                    .offer_handlers
+                    .offer_unsubscribe_handler
+                    .call(
+                        GOLEM_BASE_CALLER.to_string(),
+                        UnsubscribedOffersBcast {
+                            offer_ids: vec![id],
+                        },
+                    )
+                    .await
+                    .unwrap_or_default();
             }
             // Ignore EntityUpdated events, because market doesn't allow for updating entities.
             _ => {}

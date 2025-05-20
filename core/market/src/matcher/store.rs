@@ -3,7 +3,7 @@ use chrono::{NaiveDateTime, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use ya_client::model::market::{Demand as ClientDemand, NewDemand, NewOffer, Offer as ClientOffer};
+use ya_client::model::market::{Demand as ClientDemand, NewDemand, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
@@ -35,15 +35,7 @@ impl SubscriptionStore {
     }
 
     /// returns newly created offer with insertion_ts
-    pub async fn create_offer(
-        &self,
-        id: &Identity,
-        offer: &NewOffer,
-    ) -> Result<Offer, SaveOfferError> {
-        let creation_ts = Utc::now().naive_utc();
-        // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, id.identity, creation_ts, expiration_ts)?;
+    pub async fn register_offer(&self, offer: Offer) -> Result<Offer, SaveOfferError> {
         let r = self.insert_offer(offer).await;
         if r.is_ok() {
             self.scan_set.notify();
@@ -53,7 +45,6 @@ impl SubscriptionStore {
 
     /// returns saved offer with insertion_ts
     pub async fn save_offer(&self, offer: Offer) -> Result<Offer, SaveOfferError> {
-        offer.validate()?;
         self.insert_offer(offer).await
     }
 

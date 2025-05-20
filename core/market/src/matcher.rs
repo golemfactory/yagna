@@ -26,6 +26,7 @@ pub(crate) mod resolver;
 pub(crate) mod store;
 
 use crate::db::dao::{DemandDao, DemandState};
+use crate::testing::discovery::offer::GolemBaseOffer;
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;
@@ -52,6 +53,7 @@ pub struct Matcher {
     pub(crate) discovery: Discovery,
     identity: Arc<dyn IdentityApi>,
     expiration_tracker: Addr<DeadlineChecker>,
+    config: Arc<Config>,
 }
 
 impl Matcher {
@@ -79,6 +81,7 @@ impl Matcher {
             discovery,
             identity: identity_api,
             expiration_tracker: DeadlineChecker::default().start(),
+            config,
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -169,14 +172,16 @@ impl Matcher {
         offer: &NewOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        let offer = self.store.create_offer(id, offer).await?;
-
-        self.discovery
-            .bcast_offer(&offer)
+        let offer =
+            GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
+        let offer = self
+            .discovery
+            .bcast_offer(offer)
             .await
             .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
 
-        self.resolver.receive(&offer);
+        self.store.notify();
+        //self.resolver.receive(&offer);
 
         log::info!(
             "Subscribed new Offer: [{}] using identity: {} [{}]",
