@@ -163,22 +163,22 @@ impl Discovery {
             return Ok(Vec::new());
         }
 
-        // Build query with OR conditions for all offer IDs
-        let id_conditions: Vec<String> = offer_ids
+        let offer_ids: Vec<Hash> = offer_ids
             .iter()
-            .map(|id| format!(r#"golem_marketplace_id = "{}""#, id))
+            .map(|id| Hash::from(id.to_bytes()))
             .collect();
-        let query = format!(
-            r#"golem_marketplace_type = "Offer" && ({})"#,
-            id_conditions.join(" || ")
-        );
 
-        // Query for the entries
-        self.inner
-            .golem_base
-            .query_entities(&query)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query entries: {}", e))
+        let mut results = Vec::new();
+        for key in offer_ids {
+            if let Ok(content) = self.inner.golem_base.get_storage_value(key).await {
+                results.push(SearchResult {
+                    key,
+                    value: content,
+                });
+            }
+        }
+
+        Ok(results)
     }
 
     /// Converts search results to ModelOffer objects
