@@ -16,26 +16,6 @@ pub struct Config {
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct DiscoveryConfig {
-    // don't set this value higher than SQLITE_MAX_VARIABLE_NUMBER, which defaults to 999 for SQLite versions prior to 3.32.0 (2020-05-22)
-    #[structopt(env, default_value = "200")]
-    pub max_bcasted_offers: u32,
-    #[structopt(env, default_value = "200")]
-    pub max_bcasted_unsubscribes: u32,
-    /// If number of broadcasts at the same time exceeds this value, than all new broadcasts will be dropped.  
-    #[structopt(env, default_value = "14")]
-    pub bcast_receiving_queue_size: usize,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
-    pub mean_cyclic_bcast_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
-    pub mean_cyclic_unsubscribes_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub offer_broadcast_delay: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub unsub_broadcast_delay: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "50ms")]
-    pub bcast_tile_time_margin: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "300s")]
-    pub bcast_node_ban_timeout: Duration,
     #[structopt(env, parse(try_from_str = parse_url), default_value = "http://localhost:8545")]
     pub golem_base_url: Url,
 }

@@ -707,15 +707,6 @@ pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
         golem_base_url: Url::parse("http://localhost:8545").unwrap(),
-        max_bcasted_offers: 100,
-        max_bcasted_unsubscribes: 100,
-        bcast_receiving_queue_size: 14,
-        mean_cyclic_bcast_interval: Duration::from_millis(200),
-        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
-        offer_broadcast_delay: Duration::from_millis(200),
-        unsub_broadcast_delay: Duration::from_millis(200),
-        bcast_tile_time_margin: Duration::from_millis(0),
-        bcast_node_ban_timeout: Duration::from_millis(10),
     };
 
     let mut cfg = Config::from_env().unwrap();

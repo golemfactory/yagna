@@ -176,12 +176,6 @@ impl SubscriptionStore {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        // Make sure we only process ids up to limit from config
-        let max_bcasted_offers = self.config.discovery.max_bcasted_offers as usize;
-        let offers_idx =
-            offer_ids.len() - [offer_ids.len(), max_bcasted_offers].iter().min().unwrap();
-        let offer_ids = offer_ids[offers_idx..].to_vec();
-
         let known_ids = self
             .db
             .as_dao::<OfferDao>()
