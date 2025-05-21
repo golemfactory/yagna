@@ -4244,7 +4244,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#ccc9a2022aa381a7441a0b6c5383b203d57d1d40"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#dc43743733565191945f93f3c06db23df0d19877"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

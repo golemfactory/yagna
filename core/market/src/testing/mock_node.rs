@@ -707,6 +707,7 @@ pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
         golem_base_url: Url::parse("http://localhost:8545").unwrap(),
+        golem_base_ws_url: Url::parse("ws://localhost:8546").unwrap(),
     };
 
     let mut cfg = Config::from_env().unwrap();

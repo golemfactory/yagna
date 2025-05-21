@@ -221,7 +221,7 @@ impl Discovery {
         let events = self
             .inner
             .golem_base
-            .events_client()
+            .events_client_with_url(self.inner.config.golem_base_ws_url.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
 

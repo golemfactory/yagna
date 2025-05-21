@@ -18,6 +18,8 @@ pub struct Config {
 pub struct DiscoveryConfig {
     #[structopt(env, parse(try_from_str = parse_url), default_value = "http://localhost:8545")]
     pub golem_base_url: Url,
+    #[structopt(env, parse(try_from_str = parse_url), default_value = "ws://localhost:8546")]
+    pub golem_base_ws_url: Url,
 }
 
 #[derive(StructOpt, Clone)]
