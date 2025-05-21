@@ -76,11 +76,6 @@ impl Discovery {
             DiscoveryError::InternalError(format!("Failed to serialize offer: {}", e))
         })?;
 
-        log::info!(
-            "Serialized offer payload: {}",
-            String::from_utf8_lossy(&payload)
-        );
-
         // Calculate TTL in blocks based on expiration time
         let now = Utc::now();
         let expiration = Utc.from_utc_datetime(&offer.expiration.naive_utc());
@@ -90,7 +85,6 @@ impl Discovery {
         // Create entry with marketplace type and ID annotations
         let entry =
             Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
-        // .annotate_string("golem_marketplace_id", offer.id.to_string());
 
         // Create entry on GolemBase
         let entry_id = client.create_entry(address, entry).await.map_err(|e| {
@@ -301,14 +295,7 @@ impl Discovery {
             Event::EntityRemoved { entity_id, .. } => {
                 log::trace!("Entity removed from Golem Base: {}", entity_id);
 
-                let id = client.get_entity_metadata(entity_id).await?;
-                let id = id
-                    .string_annotations
-                    .iter()
-                    .find(|a| a.key == "golem_marketplace_id")
-                    .ok_or_else(|| anyhow::anyhow!("No golem_marketplace_id found in metadata"))?;
-                let id = id.value.parse::<SubscriptionId>()?;
-
+                let id = SubscriptionId::from_bytes(entity_id.0);
                 self.inner
                     .offer_handlers
                     .offer_unsubscribe_handler

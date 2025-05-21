@@ -174,14 +174,15 @@ impl Matcher {
     ) -> Result<Offer, MatcherError> {
         let offer =
             GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
+
+        // Offer will be sent to GolemBase. We don't update our local Offers store here, because
+        // we should get an update from GolemBase when it will be created. Matching will happen
+        // later as well.
         let offer = self
             .discovery
             .bcast_offer(offer)
             .await
             .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
-
-        self.store.notify();
-        //self.resolver.receive(&offer);
 
         log::info!(
             "Subscribed new Offer: [{}] using identity: {} [{}]",
@@ -199,6 +200,7 @@ impl Matcher {
             .await
             .ok();
 
+        self.store.notify();
         Ok(offer)
     }
 
