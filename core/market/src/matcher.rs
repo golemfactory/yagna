@@ -213,13 +213,6 @@ impl Matcher {
             .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
 
-        log::info!(
-            "Unsubscribed Offer: [{}] using identity: {} [{}]",
-            &offer_id,
-            id.name,
-            id.identity
-        );
-
         self.expiration_tracker
             .send(StopTracking {
                 category: Some("Offer".to_string()),
@@ -232,17 +225,21 @@ impl Matcher {
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
         // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
-        let _ = self
-            .discovery
+        self.discovery
             .bcast_unsubscribe(offer_id.clone())
             .await
             .map_err(|e| {
-                log::warn!(
-                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
-                    e,
-                    offer_id
-                );
-            });
+                MatcherError::GolemBaseOfferError(format!(
+                    "Failed to bcast unsubscribe offer [{offer_id}]. Error: {e}."
+                ))
+            })?;
+
+        log::info!(
+            "Unsubscribed Offer: [{}] using identity: {} [{}]",
+            &offer_id,
+            id.name,
+            id.identity
+        );
         Ok(())
     }
 
