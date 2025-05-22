@@ -172,7 +172,7 @@ impl OfferCommand {
             OfferCommand::FormatFlat { file } | OfferCommand::FormatExpanded { file } => file,
         };
 
-        let content = fs::read_to_string(&path)
+        let content = fs::read_to_string(path)
             .map_err(|e| anyhow!("Failed to read file {}: {}", path.display(), e))?;
         let json: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| anyhow!("Failed to parse JSON from file: {}", e))?;

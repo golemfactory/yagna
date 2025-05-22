@@ -53,7 +53,7 @@ impl Config {
     pub fn from_env() -> Result<Config, clap::Error> {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
-        Config::try_parse_from(&[""])
+        Config::try_parse_from([""])
     }
 }
 

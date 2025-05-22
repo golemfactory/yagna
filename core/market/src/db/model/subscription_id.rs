@@ -1,7 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::sql_types::Text;
 use digest::Digest;
-use hex;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::{fmt::Display, str::FromStr};

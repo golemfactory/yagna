@@ -93,9 +93,9 @@ impl Discovery {
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 
-        Ok(offer.into_model_offer(entry_id).map_err(|e| {
+        offer.into_model_offer(entry_id).map_err(|e| {
             DiscoveryError::GolemBaseError(format!("Failed to convert offer to ModelOffer: {}", e))
-        })?)
+        })
     }
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
@@ -200,7 +200,7 @@ impl Discovery {
     }
 
     fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
-        let offer: GolemBaseOffer = serde_json::from_str(&string_utf)
+        let offer: GolemBaseOffer = serde_json::from_str(string_utf)
             .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
         offer.into_model_offer(key)
     }

@@ -1,17 +1,10 @@
-use chrono::Utc;
-use futures::{channel::mpsc, prelude::*};
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use tokio::time::Duration;
 use ya_framework_mocks::net::MockNet;
 
 use ya_market::assert_err_eq;
-use ya_market::testing::discovery::{message::*, Discovery};
 use ya_market::testing::mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted};
-use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
+use ya_market::testing::mock_offer::client;
+use ya_market::testing::QueryOfferError;
 use ya_market::testing::{MarketServiceExt, MarketsNetwork};
-use ya_market::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
@@ -64,6 +57,7 @@ async fn test_broadcast_offer() {
     assert_unsunbscribes_broadcasted(&[&mkt2, &mkt3], &[offer_id]).await;
 }
 
+#[allow(clippy::empty_line_after_outer_attr)]
 /// This test checks, if Discovery interface calls expected sequence of callbacks.
 /// In result Offer should be available on Node, that received broadcast.
 /// Note: We don't need this test to check, if broadcasting works. test_broadcast_offer
