@@ -280,12 +280,24 @@ impl Discovery {
         Ok(())
     }
 
+    /// Validates if an entity is a Golem offer by checking its marketplace type annotation
+    async fn is_golem_offer(&self, entity_id: Hash) -> anyhow::Result<bool> {
+        let metadata = self.inner.golem_base.get_entity_metadata(entity_id).await?;
+        Ok(metadata.string_annotations.iter().any(|annotation| {
+            annotation.key == "golem_marketplace_type" && annotation.value == "Offer"
+        }))
+    }
+
     /// Handles incoming Golem Base events
     async fn handle_golem_base_event(&self, event: Event) -> anyhow::Result<()> {
         let client = self.inner.golem_base.clone();
 
         match event {
             Event::EntityCreated { entity_id, .. } => {
+                if !self.is_golem_offer(entity_id).await? {
+                    return Ok(());
+                }
+
                 log::trace!("Entity created in Golem Base: {}", entity_id);
 
                 let offer = client.cat(entity_id).await?;
