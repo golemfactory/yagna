@@ -8,7 +8,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
-use url::Url;
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
@@ -17,6 +16,7 @@ use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 use crate::MarketService;
 
 use super::negotiation::{provider, requestor};
+use super::GolemBaseNetwork;
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
@@ -705,10 +705,8 @@ pub mod default {
 
 pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
-    let discovery = DiscoveryConfig {
-        golem_base_rpc_url: Url::parse("http://localhost:8545").unwrap(),
-        golem_base_ws_url: Url::parse("ws://localhost:8546").unwrap(),
-    };
+    let mut discovery = DiscoveryConfig::default();
+    discovery.network = GolemBaseNetwork::Local;
 
     let mut cfg = Config::from_env().unwrap();
     cfg.discovery = discovery;

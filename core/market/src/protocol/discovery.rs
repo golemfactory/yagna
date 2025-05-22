@@ -27,6 +27,7 @@ use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
+use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
@@ -221,7 +222,7 @@ impl Discovery {
         let events = self
             .inner
             .golem_base
-            .events_client_with_url(self.inner.config.golem_base_ws_url.clone())
+            .events_client_with_url(self.inner.config.get_ws_url().clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
 
@@ -449,6 +450,35 @@ impl Discovery {
         Ok(())
     }
 
+    async fn fund_local_account(&self, address: Address) -> anyhow::Result<()> {
+        self.inner
+            .golem_base
+            .fund(address, BigDecimal::from(10))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fund local wallet: {}", e))
+            .map(|_| ())
+    }
+
+    async fn fund_from_faucet(&self, address: Address) -> anyhow::Result<()> {
+        let faucet_url = self.inner.config.get_faucet_url().join("/api/faucet")?;
+        let response = reqwest::Client::new()
+            .post(faucet_url.to_string())
+            .json(&serde_json::json!({
+                "address": address.to_string()
+            }))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to request funds from faucet: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Faucet request failed with status: {}",
+                response.status()
+            ));
+        }
+        Ok(())
+    }
+
     async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
@@ -463,10 +493,17 @@ impl Discovery {
 
         let client = self.inner.golem_base.clone();
         let address = Address::from(&wallet.into_array());
-        client
-            .fund(address, BigDecimal::from(10))
-            .await
-            .map_err(|e| RpcMessageError::Market(format!("Failed to fund wallet: {}", e)))?;
+
+        match self.inner.config.get_network_type() {
+            GolemBaseNetwork::Local => self
+                .fund_local_account(address)
+                .await
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+            GolemBaseNetwork::Kaolin => self
+                .fund_from_faucet(address)
+                .await
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+        }
 
         // Get balance after funding
         let balance = client

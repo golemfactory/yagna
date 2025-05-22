@@ -76,7 +76,7 @@ impl DiscoveryBuilder {
             DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
         })?;
 
-        let golem_base = GolemBaseClient::new_uninitialized(config.golem_base_rpc_url.clone())
+        let golem_base = GolemBaseClient::new_uninitialized(config.get_rpc_url().clone())
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
         let discovery = Discovery {

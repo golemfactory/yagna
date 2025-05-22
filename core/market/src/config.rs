@@ -1,4 +1,7 @@
+use anyhow::Result;
 use clap::Parser;
+use clap::ValueEnum;
+use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;
 
@@ -14,12 +17,80 @@ pub struct Config {
     pub db: DbConfig,
 }
 
+#[derive(Parser, Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]
+pub enum GolemBaseNetwork {
+    #[clap(name = "Kaolin")]
+    Kaolin,
+    #[clap(name = "Local")]
+    Local,
+}
+
+impl GolemBaseNetwork {
+    pub fn default_config() -> HashMap<GolemBaseNetwork, GolemBaseRpcConfig> {
+        let mut configs = HashMap::new();
+        configs.insert(
+            GolemBaseNetwork::Kaolin,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
+                rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+            },
+        );
+        configs.insert(
+            GolemBaseNetwork::Local,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("http://localhost:8545").unwrap(),
+                rpc_url: Url::parse("http://localhost:8545").unwrap(),
+                ws_url: Url::parse("ws://localhost:8545").unwrap(),
+            },
+        );
+        configs
+    }
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct GolemBaseRpcConfig {
+    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub faucet_url: Url,
+    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub rpc_url: Url,
+    #[clap(env, value_parser = parse_url, default_value = "ws://localhost:8545")]
+    pub ws_url: Url,
+}
+
 #[derive(Parser, Clone, Debug)]
 pub struct DiscoveryConfig {
-    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
-    pub golem_base_rpc_url: Url,
-    #[clap(env, value_parser = parse_url, default_value = "ws://localhost:8545")]
-    pub golem_base_ws_url: Url,
+    #[clap(skip = GolemBaseNetwork::default_config())]
+    pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
+    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Kaolin")]
+    pub network: GolemBaseNetwork,
+}
+
+impl DiscoveryConfig {
+    pub fn get_network_type(&self) -> &GolemBaseNetwork {
+        &self.network
+    }
+
+    pub fn get_rpc_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().rpc_url
+    }
+
+    pub fn get_ws_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().ws_url
+    }
+
+    pub fn get_faucet_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().faucet_url
+    }
+}
+
+impl Default for DiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            configs: GolemBaseNetwork::default_config(),
+            network: GolemBaseNetwork::Kaolin,
+        }
+    }
 }
 
 #[derive(Parser, Clone)]
