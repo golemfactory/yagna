@@ -323,6 +323,14 @@ impl YagnaCommand {
         self.run().await
     }
 
+    pub async fn market_fund(mut self, address: Option<&str>) -> anyhow::Result<()> {
+        self.cmd.args(["--json", "market", "golem-base", "fund"]);
+        if let Some(addr) = address {
+            self.cmd.args([addr]);
+        }
+        self.run().await
+    }
+
     pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {
         self.cmd.args(["--json", "payment", "invoice", "status"]);
         self.run().await

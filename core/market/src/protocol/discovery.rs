@@ -484,8 +484,9 @@ impl Discovery {
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
-                "Faucet request failed with status: {}",
-                response.status()
+                "Faucet request failed with status: {}, body: {}",
+                response.status(),
+                response.text().await?
             ));
         }
         Ok(())
@@ -511,7 +512,7 @@ impl Discovery {
                 .fund_local_account(address)
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
-            GolemBaseNetwork::Kaolin => self
+            _ => self
                 .fund_from_faucet(address)
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
