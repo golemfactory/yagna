@@ -175,21 +175,11 @@ impl Matcher {
         let offer =
             GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
 
-        // Offer will be sent to GolemBase. We don't update our local Offers store here, because
-        // we should get an update from GolemBase when it will be created. Matching will happen
-        // later as well.
         let offer = self
             .discovery
             .bcast_offer(offer)
             .await
             .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
-
-        log::info!(
-            "Subscribed new Offer: [{}] using identity: {} [{}]",
-            &offer.id,
-            id.name,
-            id.identity
-        );
 
         self.expiration_tracker
             .send(TrackDeadline {
@@ -200,7 +190,15 @@ impl Matcher {
             .await
             .ok();
 
-        self.store.notify();
+        let offer = self.store.register_offer(offer.clone()).await?;
+        self.resolver.receive(&offer);
+
+        log::info!(
+            "Subscribed new Offer: [{}] using identity: {} [{}]",
+            &offer.id,
+            id.name,
+            id.identity
+        );
         Ok(offer)
     }
 

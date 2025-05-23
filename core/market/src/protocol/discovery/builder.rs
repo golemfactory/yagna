@@ -1,5 +1,6 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use golem_base_sdk::client::GolemBaseClient;
@@ -85,6 +86,7 @@ impl DiscoveryBuilder {
                 offer_handlers,
                 config: config.clone(),
                 golem_base,
+                identities: std::sync::Mutex::new(HashSet::new()),
             }),
         };
 
