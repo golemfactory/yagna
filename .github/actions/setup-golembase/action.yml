@@ -1,0 +1,35 @@
+name: Setup GolemBase
+description: Setup local instance of GolemBase for testing
+
+env:
+  rust_stable: 1.84.0
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust ${{ env.rust_stable }}
+      uses: dtolnay/rust-toolchain@v1
+      with:
+        toolchain: ${{ env.rust_stable }}
+
+    - name: Clone rust-sdk repo
+      run: git clone https://github.com/Golem-Base/rust-sdk.git
+
+    - name: Build golem-base-cli
+      run: |
+        cargo build -p golem-base-cli
+        cp target/debug/golem-base-cli ./bin/golem-base-cli
+        chmod +x ./bin/golem-base-cli
+
+    - name: Install Docker Compose
+      run: sudo apt-get update && sudo apt-get install -y docker-compose
+
+    - name: Clone GolemBase OP-Geth repo
+      run: git clone https://github.com/Golem-Base/golembase-op-geth.git
+
+    - name: Start GolemBase services
+      run: docker-compose up -d
+      working-directory: ./golembase-op-geth
+
+    - name: Wait for node sync
+      run: ./bin/golem-base-cli wait-sync --timeout 120

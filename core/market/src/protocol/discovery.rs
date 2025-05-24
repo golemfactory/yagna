@@ -319,11 +319,6 @@ impl Discovery {
                 self.register_incoming_offers(vec![offer]).await?;
             }
             Event::EntityRemoved { entity_id, .. } => {
-                // let metadata = client.get_entity_metadata(entity_id).await?;
-                // if self.is_own_offer(&metadata) {
-                //     return Ok(());
-                // }
-
                 log::trace!("Entity removed from Golem Base: {}", entity_id);
 
                 let id = SubscriptionId::from_bytes(entity_id.0);
