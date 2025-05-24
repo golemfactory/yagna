@@ -1,35 +1,36 @@
 name: Setup GolemBase
 description: Setup local instance of GolemBase for testing
 
-env:
-  rust_stable: 1.84.0
-
 runs:
-  using: composite
+  using: "composite"
   steps:
+    - name: Run a gb-op-geth container
+      run: >
+        docker run -d -p 8545:8545 -e GITHUB_ACTIONS=true -e CI=true
+        quay.io/golemnetwork/gb-op-geth:latest --dev --http --http.api
+        'eth,web3,net,debug,golembase' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545
+        --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545
+      shell: bash
+
+    - name: Check out the gb-op-geth repo
+      uses: actions/checkout@v4
+      with:
+        repository: Golem-Base/golembase-op-geth
+        path: gb-op-geth
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.24.2"
+
+    - name: Create and fund an account
+      run: |
+        go run ./cmd/golembase account create
+        go run ./cmd/golembase account fund
+      working-directory: ./gb-op-geth
+      shell: bash
+
     - name: Install Rust ${{ env.rust_stable }}
       uses: dtolnay/rust-toolchain@v1
       with:
         toolchain: ${{ env.rust_stable }}
-
-    - name: Clone rust-sdk repo
-      run: git clone https://github.com/Golem-Base/rust-sdk.git
-
-    - name: Build golem-base-cli
-      run: |
-        cargo build -p golem-base-cli
-        cp target/debug/golem-base-cli ./bin/golem-base-cli
-        chmod +x ./bin/golem-base-cli
-
-    - name: Install Docker Compose
-      run: sudo apt-get update && sudo apt-get install -y docker-compose
-
-    - name: Clone GolemBase OP-Geth repo
-      run: git clone https://github.com/Golem-Base/golembase-op-geth.git
-
-    - name: Start GolemBase services
-      run: docker-compose up -d
-      working-directory: ./golembase-op-geth
-
-    - name: Wait for node sync
-      run: ./bin/golem-base-cli wait-sync --timeout 120

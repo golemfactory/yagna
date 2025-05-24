@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-latest, windows-latest, ubuntu-latest ]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -65,7 +65,7 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: "Get deb package: golem-nvidia-kernel"
+      - name: Setup GolemBase local instance
         uses: ./.github/actions/setup-golembase
 
       - name: Market Test Suite (semi-integration tests)
