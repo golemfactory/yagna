@@ -16,7 +16,6 @@ use ya_core_model::market::{
     RpcMessageError,
 };
 use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
 
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
@@ -219,9 +218,11 @@ impl Discovery {
     /// signing storage transactions.
     async fn initialize_account(&self) -> Result<()> {
         let node_ids = self.inner.identity.list_active_ids().await?;
-        let mut identities = self.inner.identities.lock().unwrap();
-        identities.clear();
-        identities.extend(node_ids.iter().cloned());
+        {
+            let mut identities = self.inner.identities.lock().unwrap();
+            identities.clear();
+            identities.extend(node_ids.iter().cloned());
+        }
 
         for node_id in node_ids {
             if let Err(e) = self.register_signer(node_id).await {
@@ -373,12 +374,10 @@ impl Discovery {
 
     async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), DiscoveryInitError> {
         log::debug!("Subscribing to identity events on endpoint: {}", endpoint);
-        bus::service(ya_core_model::identity::BUS_ID)
-            .send(ya_core_model::identity::Subscribe {
-                endpoint: endpoint.to_string(),
-            })
+        self.inner
+            .identity
+            .subscribe_to_events(endpoint)
             .await
-            .map(|_| ())
             .map_err(|e| DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string()))
     }
 
