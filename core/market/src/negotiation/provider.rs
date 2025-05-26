@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::NodeId;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
@@ -115,12 +116,8 @@ impl ProviderBroker {
         })
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), NegotiationInitError> {
-        Ok(self.api.bind_gsb(public_prefix, local_prefix).await?)
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), NegotiationInitError> {
+        Ok(self.api.bind_gsb(gsb).await?)
     }
 
     pub async fn subscribe_offer(&self, _offer: &Offer) -> Result<(), NegotiationError> {

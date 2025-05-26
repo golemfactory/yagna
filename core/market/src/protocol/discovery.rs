@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ya_client::model::NodeId;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
 use ya_core_model::market::local;
@@ -343,11 +344,7 @@ impl Discovery {
 
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
-    pub async fn bind_gsb(
-        &self,
-        _public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), DiscoveryInitError> {
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
         let client = self.inner.golem_base.clone();
 
         // Sync with GolemBase node
@@ -367,8 +364,8 @@ impl Discovery {
         // Start Golem Base listener that loads offers and listens for updates
         self.bind_offers_listener().await?;
 
-        self.bind_identity_handlers(local_prefix).await?;
-        self.bind_fund_handler(local_prefix).await?;
+        self.bind_identity_handlers(gsb.local_addr()).await?;
+        self.bind_fund_handler(gsb.local_addr()).await?;
         Ok(())
     }
 

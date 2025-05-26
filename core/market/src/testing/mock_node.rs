@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use ya_core_model::bus::GsbBindPoints;
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
@@ -77,33 +78,34 @@ pub enum MockNodeKind {
 }
 
 impl MockNodeKind {
-    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<String> {
-        let (gsb_public, gsb_local) = gsb_prefixes(test_name, name);
-        let (market_public, market_local) = gsb_market_prefixes(&gsb_public, &gsb_local);
+    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
+        let gsb = ya_core_model::market::bus_bindpoints(Some(
+            GsbBindPoints::default().prefix(&format!("/{}/{}", test_name, name)),
+        ));
 
         match self {
             MockNodeKind::Market(market) => {
-                market.bind_gsb(&market_public, &market_local).await?;
+                market.bind_gsb(gsb.clone()).await?;
                 market.matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
-                matcher.bind_gsb(&market_public, &market_local).await?;
+                matcher.bind_gsb(gsb.clone()).await?;
                 matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Discovery(discovery) => {
-                discovery.bind_gsb(&market_public, &market_local).await?;
+                discovery.bind_gsb(gsb.clone()).await?;
                 discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
             } => {
-                provider.bind_gsb(&market_public, &market_local).await?;
-                requestor.bind_gsb(&market_public, &market_local).await?;
+                provider.bind_gsb(gsb.clone()).await?;
+                requestor.bind_gsb(gsb.clone()).await?;
             }
         }
 
-        Ok(gsb_public)
+        Ok(gsb)
     }
 }
 
@@ -157,7 +159,7 @@ impl MarketsNetwork {
         identity_api: Arc<MockIdentity>,
         node_kind: MockNodeKind,
     ) -> MarketsNetwork {
-        let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
+        let gsb = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
 
         let node = MockNode {
             name: name.to_string(),
@@ -168,7 +170,7 @@ impl MarketsNetwork {
         let node_id = node.mock_identity.get_default_id().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         self.net.register_for_broadcasts(&node_id, &self.test_name);
-        self.net.register_node(&node_id, &public_gsb_prefix);
+        self.net.register_node(&node_id, gsb.public_addr());
 
         self.nodes.push(node);
         self
@@ -183,8 +185,8 @@ impl MarketsNetwork {
 
     pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
         for (_, id) in self.list_ids(node_name) {
-            let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-            self.net.register_node(&id.identity, &public_gsb_prefix);
+            let gsb = gsb_prefixes(&self.test_name, node_name);
+            self.net.register_node(&id.identity, &gsb.public_addr());
         }
         Ok(())
     }
@@ -429,9 +431,8 @@ impl MarketsNetwork {
             .unwrap();
         let id = mock_identity.new_identity(id_name);
 
-        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-
-        self.net.register_node(&id.identity, &public_gsb_prefix);
+        let gsb = gsb_prefixes(&self.test_name, node_name);
+        self.net.register_node(&id.identity, &gsb.public_addr());
         id
     }
 
@@ -461,7 +462,7 @@ impl MarketsNetwork {
 
     fn create_database(&self, name: &str) -> DbMixedExecutor {
         let db_path = self.instance_dir(name);
-        let db_name = self.node_gsb_prefixes(name).0;
+        let db_name = self.node_gsb_prefixes(name).local_addr().to_string();
 
         let disk_db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))
@@ -497,13 +498,12 @@ impl MarketsNetwork {
         dir
     }
 
-    pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+    pub fn node_gsb_prefixes(&self, node_name: &str) -> GsbBindPoints {
         gsb_prefixes(&self.test_name, node_name)
     }
 
-    pub fn market_gsb_prefixes(&self, node_name: &str) -> (String, String) {
-        let (gsb_public, gsb_local) = gsb_prefixes(&self.test_name, node_name);
-        gsb_market_prefixes(&gsb_public, &gsb_local)
+    pub fn market_gsb_prefixes(&self, node_name: &str) -> GsbBindPoints {
+        gsb_market_prefixes(gsb_prefixes(&self.test_name, node_name))
     }
 }
 

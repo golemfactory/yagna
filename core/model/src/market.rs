@@ -3,6 +3,7 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::bus::GsbBindPoints;
 use ya_client_model::market::{agreement::State, Role};
 pub use ya_client_model::market::{Agreement, AgreementListEntry};
 use ya_client_model::NodeId;
@@ -10,6 +11,17 @@ use ya_service_bus::RpcMessage;
 
 /// Public Market bus address.
 pub const BUS_ID: &str = "/public/market";
+pub const BUS_SERVICE_NAME: &str = "market";
+
+/// Use None for default bindpoints value.
+/// Override in case you are creating tests that need to separate
+/// bindpoints for different instances of Market.
+pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
+    match base {
+        Some(base) => base.service(BUS_SERVICE_NAME),
+        None => GsbBindPoints::default().service(BUS_SERVICE_NAME),
+    }
+}
 
 /// Internal Market bus address.
 pub mod local {

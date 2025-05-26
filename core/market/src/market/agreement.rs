@@ -6,10 +6,11 @@ use ya_service_bus::typed::ServiceBinder;
 use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, Owner};
 use crate::db::DbMixedExecutor;
+use crate::market::GsbBindPoints;
 
-pub async fn bind_gsb(db: DbMixedExecutor, _public_prefix: &str, local_prefix: &str) {
+pub async fn bind_gsb(db: DbMixedExecutor, gsb: GsbBindPoints) {
     log::trace!("Binding market agreement public service to service bus");
-    ServiceBinder::new(local_prefix, &db, ())
+    ServiceBinder::new(gsb.local_addr(), &db, ())
         .bind(list_agreements)
         .bind(get_agreement);
     log::debug!("Successfully bound market agreement public service to service bus");

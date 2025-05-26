@@ -15,7 +15,7 @@ use ya_market::testing::{
     AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
     MarketsNetwork, Owner, ProposalState, WaitForApprovalError,
 };
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::RpcEndpoint;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -55,7 +55,9 @@ async fn test_gsb_get_agreement() {
         .await
         .unwrap();
 
-    let agreement = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+    let agreement = network
+        .market_gsb_prefixes(REQ_NAME)
+        .local()
         .send(market::GetAgreement {
             agreement_id: agreement_id.into_client(),
             role: Role::Requestor,
@@ -103,7 +105,9 @@ async fn test_gsb_list_agreements() {
         .await
         .unwrap();
 
-    let agreements = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+    let agreements = network
+        .market_gsb_prefixes(REQ_NAME)
+        .local()
         .send(market::ListAgreements::default())
         .await
         .unwrap()
