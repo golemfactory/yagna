@@ -9,12 +9,12 @@ use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_market::testing::{
-    callback::*, discovery::error::*, negotiation::error::*, AgreementApproved, AgreementCancelled,
-    AgreementCommitted, AgreementReceived, AgreementRejected, AgreementTerminated, Config,
-    DbMixedExecutor, Discovery, DiscoveryBuilder, DiscoveryConfig, EventsListeners,
-    GolemBaseNetwork, IdentityApi, InitialProposalReceived, MarketService, MarketServiceExt,
-    Matcher, Offer, ProposalReceived, ProposalRejected, QueryOfferError, ScannerSet,
-    SubscriptionId, SubscriptionStore,
+    callback::*, discovery::error::*, mock_identity::MockIdentity, negotiation::error::*,
+    AgreementApproved, AgreementCancelled, AgreementCommitted, AgreementReceived,
+    AgreementRejected, AgreementTerminated, Config, DbMixedExecutor, Discovery, DiscoveryBuilder,
+    DiscoveryConfig, EventsListeners, GolemBaseNetwork, IdentityApi, InitialProposalReceived,
+    MarketService, MarketServiceExt, Matcher, Offer, ProposalReceived, ProposalRejected,
+    QueryOfferError, ScannerSet, SubscriptionId, SubscriptionStore,
 };
 
 use ya_core_model::bus::GsbBindPoints;
@@ -23,8 +23,6 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
 use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
-
-use super::mock_identity::MockIdentity;
 
 /// Instantiates market test nodes inside one process.
 ///

@@ -1,11 +1,9 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
-use ya_framework_mocks::net::MockNet;
 
-use ya_market::testing::{
-    client::{sample_demand, sample_offer},
-    MarketsNetwork,
-};
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::net::MockNet;
+use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
 
 /// Test adds Offer on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]

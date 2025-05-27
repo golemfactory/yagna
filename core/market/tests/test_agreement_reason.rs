@@ -2,11 +2,12 @@ use chrono::{Duration, Utc};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{AgreementEventType, Reason};
+use ya_framework_mocks::assert_err_eq;
+use ya_market::testing::{AgreementError, ApprovalStatus, Owner};
+
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_draft_proposals;
 use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
-use ya_market::testing::{
-    proposal_util::exchange_draft_proposals, AgreementError, ApprovalStatus, MarketsNetwork, Owner,
-};
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";

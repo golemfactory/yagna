@@ -7,11 +7,13 @@ use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
 use ya_market::testing::events_helper::{provider, requestor};
+use ya_market::testing::mock_offer::client::{
+    exclusive_demand, exclusive_offer, sample_demand, sample_offer,
+};
 use ya_market::testing::{DbProposal, Issuer, Negotiation, Owner, ProposalState};
 use ya_market::testing::{ProposalId, SubscriptionId};
 
 use super::mock_node::MarketsNetwork;
-use super::mock_offer::client::{exclusive_demand, exclusive_offer, sample_demand, sample_offer};
 
 pub fn generate_proposal(
     unifier: i64,

@@ -12,9 +12,11 @@ pub use super::matcher::{error::*, *};
 pub use super::negotiation::{error::*, ApprovalStatus};
 pub use super::protocol::*;
 
+pub mod dao;
 pub mod events_helper;
 pub mod market_ext;
-
+pub mod mock_identity;
+pub mod mock_offer;
 // Re-export commonly used types
 pub use crate::db::model::{
     Agreement, AgreementEventType, AgreementId, AgreementState, DbProposal, Demand, EventType,
@@ -46,6 +48,9 @@ pub use crate::db::schema::market_proposal::dsl as proposal_dsl;
 pub use crate::config::{Config, DiscoveryConfig};
 pub use crate::db::dao::ProposalDao;
 pub use crate::db::DbMixedExecutor;
+
+// Re-export cleaner function
+pub use crate::db::dao::cleaner::clean;
 
 pub use crate::matcher::error::{DemandError, QueryOfferError};
 pub use crate::negotiation::{ApprovalResult, ProviderBroker, RequestorBroker};

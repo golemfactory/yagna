@@ -10,17 +10,21 @@ use ya_client::model::market::{
 };
 use ya_client::model::ErrorMessage;
 use ya_client::web::QueryParamsBuilder;
-use ya_framework_mocks::net::MockNet;
-use ya_market::testing::agreement_utils::negotiate_agreement;
-use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::{
-    agreement_utils::gen_reason,
-    client::{sample_demand, sample_offer},
-    mock_node::{assert_offers_broadcasted, MarketServiceExt},
-    mock_offer::flatten_json,
-    proposal_util::exchange_draft_proposals,
-    DemandError, MarketsNetwork, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
+    mock_offer::{
+        client::{sample_demand, sample_offer},
+        flatten_json,
+    },
+    DemandError, MarketServiceExt, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
 };
+
+use ya_framework_mocks::market::legacy::{
+    agreement_utils::{gen_reason, negotiate_agreement},
+    events_helper::requestor::expect_approve,
+    mock_node::{assert_offers_broadcasted, MarketsNetwork},
+    proposal_util::exchange_draft_proposals,
+};
+use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";

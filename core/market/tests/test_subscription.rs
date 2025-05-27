@@ -1,9 +1,14 @@
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
 use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
-use ya_market::testing::client::{sample_demand, sample_offer};
-use ya_market::testing::mock_offer::flatten_json;
-use ya_market::testing::{DemandError, QueryOfferError};
-use ya_market::testing::{MarketServiceExt, MarketsNetwork};
+
+use ya_market::testing::{
+    mock_offer::{
+        client::{sample_demand, sample_offer},
+        flatten_json,
+    },
+    DemandError, MarketServiceExt, QueryOfferError,
+};
 
 /// Test subscribes offers, checks if offer is available
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.

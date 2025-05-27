@@ -1,13 +1,13 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use std::sync::{Arc, Mutex};
-use ya_core_model::identity::IdentityInfo;
-
-use ya_market::testing::{IdentityApi, IdentityError};
-
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use ya_client::model::NodeId;
+use ya_core_model::identity::IdentityInfo;
 use ya_service_api_web::middleware::Identity;
+
+use crate::testing::{IdentityApi, IdentityError};
 
 pub struct MockIdentity {
     inner: Arc<Mutex<MockIdentityInner>>,

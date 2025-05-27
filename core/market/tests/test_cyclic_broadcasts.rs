@@ -1,13 +1,12 @@
 use rand::seq::SliceRandom;
 use std::time::Duration;
-use ya_framework_mocks::net::MockNet;
+use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 
-use ya_market::assert_err_eq;
-use ya_market::testing::{
-    mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
-    mock_offer::client,
-    MarketServiceExt, MarketsNetwork, QueryOfferError,
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::mock_node::{
+    assert_offers_broadcasted, assert_unsunbscribes_broadcasted, MarketsNetwork,
 };
+use ya_framework_mocks::net::MockNet;
 
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should

@@ -1,16 +1,23 @@
 use chrono::{Duration, Utc};
 use ya_client::model::market::{proposal::State, RequestorEvent};
-use ya_framework_mocks::net::MockNet;
+
+use ya_framework_mocks::{
+    market::legacy::{
+        agreement_utils::gen_reason,
+        events_helper::{provider, requestor, ClientProposalHelper},
+        mock_node::{assert_offers_broadcasted, MarketsNetwork},
+        proposal_util::{exchange_draft_proposals, NegotiationHelper},
+    },
+    net::MockNet,
+};
 use ya_market::testing::{
-    agreement_utils::gen_reason,
-    events_helper::{provider, requestor, ClientProposalHelper},
-    mock_node::assert_offers_broadcasted,
-    mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
-    mock_offer::flatten_json,
+    mock_offer::{
+        client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+        flatten_json,
+    },
     negotiation::error::{CounterProposalError, RemoteProposalError},
-    proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementError, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
-    ProposalValidationError, SaveProposalError,
+    AgreementError, MarketServiceExt, Owner, ProposalError, ProposalState, ProposalValidationError,
+    SaveProposalError,
 };
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.

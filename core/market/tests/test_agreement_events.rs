@@ -1,14 +1,15 @@
 use chrono::{Duration, Utc};
 
-use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
-use ya_market::testing::events_helper::requestor::expect_approve;
-use ya_market::testing::proposal_util::exchange_draft_proposals;
-use ya_market::testing::MarketsNetwork;
+use ya_framework_mocks::net::MockNet;
+
+use ya_framework_mocks::market::legacy::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_framework_mocks::market::legacy::events_helper::requestor::expect_approve;
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_draft_proposals;
 use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementEventType;
-use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";

@@ -7,9 +7,7 @@ use ya_client::model::NodeId;
 
 use super::mock_identity::generate_identity;
 
-use ya_market::testing::RetrieveOffers;
-use ya_market::testing::SubscriptionId;
-use ya_market::testing::{Demand, Offer};
+use crate::testing::{Demand, Offer, RetrieveOffers, SubscriptionId};
 
 pub fn flatten_json(json: &Value) -> Value {
     let mapped = flatten(json.clone());

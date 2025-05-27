@@ -12,7 +12,7 @@ use crate::db::schema::market_negotiation_event::dsl as event_dsl;
 use crate::db::schema::market_offer::dsl as offer_dsl;
 use crate::db::schema::market_proposal::dsl as proposal_dsl;
 use crate::db::{DbError, DbResult};
-use ya_market::testing::events_helper::TestMarketEvent;
+use crate::testing::events_helper::TestMarketEvent;
 
 #[async_trait]
 pub trait TestingDao<M: 'static + Send> {

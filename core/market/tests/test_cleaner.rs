@@ -1,19 +1,20 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use clap::Parser;
 use std::ops::Not;
-use ya_framework_mocks::net::MockNet;
 
-use ya_market::testing::cleaner::clean;
-use ya_market::testing::dao::TestingDao;
 use ya_market::testing::events_helper::{generate_event, TestMarketEvent};
-use ya_market::testing::mock_agreement::generate_agreement;
-use ya_market::testing::mock_offer::{generate_demand, generate_offer};
-use ya_market::testing::proposal_util::{generate_negotiation, generate_proposal};
 use ya_market::testing::{
-    Agreement, AgreementDao, DbConfig, DbProposal, Demand, DemandDao, MarketsNetwork, Negotiation,
-    Offer, OfferDao,
+    clean,
+    dao::TestingDao,
+    mock_offer::{generate_demand, generate_offer},
+    Agreement, AgreementDao, DbConfig, DbProposal, Demand, DemandDao, Negotiation, Offer, OfferDao,
 };
 use ya_persistence::executor::PoolType;
+
+use ya_framework_mocks::market::legacy::mock_agreement::generate_agreement;
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::{generate_negotiation, generate_proposal};
+use ya_framework_mocks::net::MockNet;
 
 fn future() -> NaiveDateTime {
     (Utc::now() + Duration::days(10)).naive_utc()

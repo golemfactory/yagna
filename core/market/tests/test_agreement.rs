@@ -3,17 +3,21 @@ use chrono::{Duration, Utc};
 
 use ya_client::model::market::Role;
 use ya_core_model::market;
+
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_framework_mocks::market::legacy::events_helper::*;
+use ya_framework_mocks::market::legacy::mock_agreement::generate_agreement;
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::{
+    exchange_draft_proposals, NegotiationHelper,
+};
 use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
+
 use ya_market::testing::{
-    agreement_utils::{gen_reason, negotiate_agreement},
-    client::{sample_demand, sample_offer},
-    events_helper::*,
-    mock_agreement::generate_agreement,
-    mock_node::MarketServiceExt,
-    proposal_util::{exchange_draft_proposals, NegotiationHelper},
+    mock_offer::client::{sample_demand, sample_offer},
     AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
-    MarketsNetwork, Owner, ProposalState, WaitForApprovalError,
+    MarketServiceExt, Owner, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::RpcEndpoint;
 

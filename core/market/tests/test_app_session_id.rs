@@ -1,13 +1,15 @@
 use all_asserts::*;
 use chrono::{Duration, Utc};
 
-use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
-use ya_market::testing::proposal_util::exchange_proposals_exclusive;
-use ya_market::testing::MarketsNetwork;
-use ya_market::testing::Owner;
+use ya_framework_mocks::market::legacy::agreement_utils::{
+    negotiate_agreement, negotiate_agreement_with_ids,
+};
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_proposals_exclusive;
+use ya_framework_mocks::net::MockNet;
 
 use ya_client::model::market::AgreementEventType;
-use ya_framework_mocks::net::MockNet;
+use ya_market::testing::Owner;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";

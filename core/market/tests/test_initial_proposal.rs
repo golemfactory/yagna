@@ -1,16 +1,20 @@
-use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
-use ya_client::model::market::proposal::State;
-use ya_market::assert_err_eq;
-use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
-use ya_market::testing::events_helper::{requestor, ClientProposalHelper};
-use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
-use ya_market::testing::{MarketServiceExt, MarketsNetwork, Owner};
-use ya_market::testing::{QueryEventsError, TakeEventsError};
-use ya_market::MarketService;
-
 use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+
+use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
+use ya_client::model::market::proposal::State;
+
+use ya_market::testing::events_helper::{requestor, ClientProposalHelper};
+use ya_market::testing::{
+    mock_offer::client::{sample_demand, sample_offer},
+    MarketServiceExt, Owner, QueryEventsError, TakeEventsError,
+};
+use ya_market::MarketService;
+
 use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";

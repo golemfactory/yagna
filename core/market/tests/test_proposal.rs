@@ -1,17 +1,21 @@
-use ya_market::testing::{
-    mock_node::assert_offers_broadcasted,
-    mock_offer::client::{sample_demand, sample_offer},
-    proposal_util::exchange_draft_proposals,
-    GetProposalError, MarketServiceExt, MarketsNetwork, Owner, ProposalError,
-};
-use ya_market::{assert_err_eq, MarketService};
-
 use std::sync::Arc;
 use tokio::time::Duration;
+
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::{
+    mock_node::{assert_offers_broadcasted, MarketsNetwork},
+    proposal_util::exchange_draft_proposals,
+};
+use ya_framework_mocks::net::MockNet;
+
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::RequestorEvent;
 use ya_core_model::NodeId;
-use ya_framework_mocks::net::MockNet;
+use ya_market::testing::{
+    mock_offer::client::{sample_demand, sample_offer},
+    GetProposalError, MarketServiceExt, Owner, ProposalError,
+};
+use ya_market::MarketService;
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
