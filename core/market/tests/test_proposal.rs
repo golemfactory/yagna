@@ -29,7 +29,7 @@ async fn test_get_proposal() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let prov_id = network.get_default_id("Provider1");
+    let prov_id = network.get_default_id("Provider1").await;
 
     // Requestor side
     let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -108,7 +108,7 @@ async fn test_proposal_random_shuffle() {
     }
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -124,7 +124,7 @@ async fn test_proposal_random_shuffle() {
         let node_name = format!("Provider-{}", i);
         let market = network.get_market(&node_name);
         markets.push(market.clone());
-        let identity = network.get_default_id(&node_name);
+        let identity = network.get_default_id(&node_name).await;
 
         offers.push(
             market

@@ -24,10 +24,10 @@ async fn test_startup_offers_sharing() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     // Create some offers before we instantiate 3rd node.
     // This way this 3rd node won't get them in first broadcasts, that
@@ -79,13 +79,13 @@ async fn test_unsubscribes_cyclic_broadcasts() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     let mkt3 = network.get_market("Node-3");
-    let id3 = network.get_default_id("Node-3");
+    let id3 = network.get_default_id("Node-3").await;
 
     // create demands so that after #1474 nodes will be subscribed to broadcasts
     mkt1.subscribe_demand(&client::sample_demand(), &id1)
@@ -124,7 +124,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
     .await;
 
     // Break networking, so unsubscribe broadcasts won't come to Node-3.
-    network.break_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-3").await.unwrap();
 
     // Unsubscribe random Offers.
     // Only the first elements of the vectors will NOT be unsubscribed.
@@ -144,7 +144,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
 
     // Re-enable networking for Node-3. We should get only cyclic broadcast.
     // Immediate broadcast should be already lost.
-    network.enable_networking_for("Node-3").unwrap();
+    network.enable_networking_for("Node-3").await.unwrap();
     tokio::time::sleep(Duration::from_millis(320)).await;
 
     // Check if all expected Offers were unsubscribed.
@@ -181,9 +181,9 @@ async fn test_network_error_while_subscribing() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
-    network.break_networking_for("Node-1").unwrap();
+    network.break_networking_for("Node-1").await.unwrap();
 
     // It's not an error. Should pass.
     let subscription_id = mkt1
@@ -218,10 +218,10 @@ async fn test_sharing_someones_else_offers() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     // Create some offers before we instantiate 3rd node.
     // This way this 3rd node won't get them in first broadcasts, that
@@ -248,7 +248,7 @@ async fn test_sharing_someones_else_offers() {
     assert_offers_broadcasted(&[&mkt1, &mkt2], subscriptions.iter()).await;
 
     // Break networking for Node-1. Only Node-2 will be able to send Offers.
-    network.break_networking_for("Node-1").unwrap();
+    network.break_networking_for("Node-1").await.unwrap();
     let network = network.add_market_instance("Node-3").await;
     let mkt3 = network.get_market("Node-3");
 
@@ -273,13 +273,13 @@ async fn test_sharing_someones_else_unsubscribes() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     let mkt3 = network.get_market("Node-3");
-    let id3 = network.get_default_id("Node-3");
+    let id3 = network.get_default_id("Node-3").await;
 
     let mut subscriptions = vec![];
 
@@ -317,7 +317,7 @@ async fn test_sharing_someones_else_unsubscribes() {
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;
 
     // Break networking for Node-3, so he won't see any unsubscribes.
-    network.break_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-3").await.unwrap();
 
     for subscription in subscriptions[3..].iter() {
         mkt2.unsubscribe_offer(subscription, &id2).await.unwrap();
@@ -329,8 +329,8 @@ async fn test_sharing_someones_else_unsubscribes() {
     assert_offers_broadcasted(&[&mkt3], subscriptions.iter()).await;
 
     // Disconnect Node-2. Only Node-1 can propagate unsubscribes to Node-3.
-    network.break_networking_for("Node-2").unwrap();
-    network.enable_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-2").await.unwrap();
+    network.enable_networking_for("Node-3").await.unwrap();
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
     assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[3..]).await;

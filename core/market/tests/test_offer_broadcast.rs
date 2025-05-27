@@ -22,9 +22,9 @@ async fn test_broadcast_offer() {
         .await;
     // make nodes are subscribed to broadcasts
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
     let mkt3 = network.get_market("Node-3");
-    let id3 = network.get_default_id("Node-3");
+    let id3 = network.get_default_id("Node-3").await;
     mkt2.subscribe_demand(&client::sample_demand(), &id2)
         .await
         .unwrap();
@@ -34,7 +34,7 @@ async fn test_broadcast_offer() {
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let offer_id = mkt1
         .subscribe_offer(&client::sample_offer(), &id1)
@@ -306,7 +306,7 @@ async fn test_discovery_get_offers() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
     let discovery2 = network.get_discovery("Node-2");
 
     let subscription_id = mkt1

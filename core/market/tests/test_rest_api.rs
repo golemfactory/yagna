@@ -42,8 +42,8 @@ async fn test_rest_get_offers() {
     let market_local = network.get_market("Node-1");
     // Not really remote, but in this scenario will treat it as remote
     let market_remote = network.get_market("Node-2");
-    let identity_local = network.get_default_id("Node-1");
-    let identity_remote = network.get_default_id("Node-2");
+    let identity_local = network.get_default_id("Node-1").await;
+    let identity_remote = network.get_default_id("Node-2").await;
     // subscribe to broadcasts
     market_remote
         .subscribe_demand(&sample_demand(), &identity_remote)
@@ -101,7 +101,7 @@ async fn test_rest_get_demands() {
         .await;
 
     let market_local = network.get_market("Node-1");
-    let identity_local = network.get_default_id("Node-1");
+    let identity_local = network.get_default_id("Node-1").await;
     let demand_local = NewDemand::new(json!({}), "()".to_string());
     let subscription_id = market_local
         .subscribe_demand(&demand_local, &identity_local)
@@ -177,7 +177,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
-    let id = network.get_default_id("Node-1");
+    let id = network.get_default_id("Node-1").await;
     let market = network.get_market("Node-1");
     // when get from subscription store
     let stored_offer = market.get_offer(&subscription_id).await.unwrap();
@@ -239,7 +239,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
-    let id = network.get_default_id("Node-1");
+    let id = network.get_default_id("Node-1").await;
     let market = network.get_market("Node-1");
     // when
     let stored_demand = market.get_demand(&subscription_id).await.unwrap();
@@ -296,7 +296,7 @@ async fn test_rest_get_proposal() {
         .translate(Owner::Provider);
 
     // Not really remote, but in this scenario will treat it as remote
-    let identity_local = network.get_default_id("Provider");
+    let identity_local = network.get_default_id("Provider").await;
     let offers = prov_mkt.get_offers(Some(identity_local)).await.unwrap();
     let subscription_id = &offers.first().unwrap().offer_id;
     let proposal = prov_mkt
@@ -352,8 +352,8 @@ async fn test_rest_get_agreement() {
         .proposal_id;
     let req_market = network.get_market("Node-1");
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id("Node-1");
-    let prov_id = network.get_default_id("Node-2");
+    let req_id = network.get_default_id("Node-1").await;
+    let prov_id = network.get_default_id("Node-2").await;
 
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
@@ -452,8 +452,8 @@ async fn test_terminate_agreement() {
     .await
     .unwrap();
 
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let reason = Some(Reason {
         message: "coś".into(),
@@ -515,8 +515,8 @@ async fn test_terminate_agreement_without_reason() {
     .await
     .unwrap();
 
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let reason = Option::<Reason>::None;
     let url = format!(
@@ -572,8 +572,8 @@ async fn test_rest_agreement_rejected() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -634,8 +634,8 @@ async fn test_rest_agreement_cancelled() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(

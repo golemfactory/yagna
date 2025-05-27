@@ -21,7 +21,7 @@ async fn test_subscribe_offer() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let offer = sample_offer();
     let subscription_id = market1.subscribe_offer(&offer, &identity1).await.unwrap();
@@ -64,7 +64,7 @@ async fn test_subscribe_demand() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let demand = sample_demand();
     let subscription_id = market1.subscribe_demand(&demand, &identity1).await.unwrap();

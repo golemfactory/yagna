@@ -39,8 +39,8 @@ async fn test_agreement_cancelled() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -86,7 +86,7 @@ async fn test_cancel_agreement_in_wrong_state() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let negotiation = negotiate_agreement(
         &network,
@@ -169,7 +169,7 @@ async fn test_agreement_cancelled_wait_for_approval() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -192,7 +192,7 @@ async fn test_agreement_cancelled_wait_for_approval() {
         market
             .requestor_engine
             .cancel_agreement(
-                &network.get_default_id(REQ_NAME),
+                &network.get_default_id(REQ_NAME).await,
                 &agr_id.clone(),
                 Some(gen_reason("Changed my mind")),
             )
@@ -241,8 +241,8 @@ async fn test_agreement_simultaneous_reject_cancel() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -267,7 +267,7 @@ async fn test_agreement_simultaneous_reject_cancel() {
         market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &network.get_default_id(PROV_NAME).await,
                 &agr_id.clone(),
                 Some(gen_reason("Not-interested")),
             )
@@ -364,8 +364,8 @@ async fn test_agreement_simultaneous_approve_cancel() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -390,7 +390,7 @@ async fn test_agreement_simultaneous_approve_cancel() {
         market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                network.get_default_id(PROV_NAME).await,
                 &agr_id.clone(),
                 None,
                 1.0,

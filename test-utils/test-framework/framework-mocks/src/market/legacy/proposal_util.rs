@@ -64,8 +64,8 @@ pub async fn exchange_draft_proposals(
     req_name: &str,
     prov_name: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
+    let req_id = network.get_default_id(req_name).await;
+    let prov_id = network.get_default_id(prov_name).await;
 
     exchange_proposals_impl(
         network,
@@ -105,8 +105,8 @@ pub async fn exchange_proposals_exclusive(
     prov_name: &str,
     match_on: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
+    let req_id = network.get_default_id(req_name).await;
+    let prov_id = network.get_default_id(prov_name).await;
 
     exchange_proposals_impl(
         network,

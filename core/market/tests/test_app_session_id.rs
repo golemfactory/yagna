@@ -28,8 +28,8 @@ async fn test_session_events_filtering() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let num = 4;
@@ -77,7 +77,7 @@ async fn test_session_events_filtering() {
             prov_market
                 .provider_engine
                 .approve_agreement(
-                    network.get_default_id(PROV_NAME),
+                    prov_id.clone(),
                     &agreement_id.clone().translate(Owner::Provider),
                     Some(session_id.clone()),
                     0.1,
@@ -203,8 +203,8 @@ async fn test_session_should_be_independent_on_both_sides() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -256,8 +256,8 @@ async fn test_session_negotiation_on_the_same_node() {
         .await;
 
     let req_market = network.get_market("Node");
-    let req_id = network.get_default_id("Node");
-    let prov_id = network.create_identity("Node", "Provider");
+    let req_id = network.get_default_id("Node").await;
+    let prov_id = network.create_identity("Node", "Provider").await;
     let prov_market = req_market.clone();
 
     let negotiation = negotiate_agreement_with_ids(
@@ -311,8 +311,8 @@ async fn test_session_negotiation_on_the_same_node_same_session() {
         .await;
 
     let req_market = network.get_market("Node");
-    let req_id = network.get_default_id("Node");
-    let prov_id = network.create_identity("Node", "Provider");
+    let req_id = network.get_default_id("Node").await;
+    let prov_id = network.create_identity("Node", "Provider").await;
     let prov_market = req_market.clone();
 
     let negotiation = negotiate_agreement_with_ids(
@@ -369,8 +369,8 @@ async fn test_session_timestamp_filtering() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let num_before = 4;
@@ -559,7 +559,7 @@ async fn test_common_event_flow() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let num: i32 = 10;
     let timestamp_before = Utc::now();

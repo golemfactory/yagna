@@ -40,8 +40,8 @@ async fn test_gsb_get_agreement() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -91,7 +91,7 @@ async fn test_gsb_list_agreements() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -138,8 +138,8 @@ async fn test_get_agreement() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
@@ -171,7 +171,7 @@ async fn test_rest_get_not_existing_agreement() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Create invalid id. Translation to provider id should give us
     // something, that can't be found on Requestor.
@@ -205,7 +205,7 @@ async fn full_market_interaction_aka_happy_path() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -250,7 +250,7 @@ async fn full_market_interaction_aka_happy_path() {
         .get_market(PROV_NAME)
         .provider_engine
         .approve_agreement(
-            network.get_default_id(PROV_NAME),
+            network.get_default_id(PROV_NAME).await,
             &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
@@ -284,7 +284,7 @@ async fn second_creation_should_fail() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // when: expiration time is now
     let _agreement_id = req_engine
@@ -315,7 +315,7 @@ async fn second_confirmation_should_fail() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // when: expiration time is now
     let agreement_id = req_engine
@@ -365,7 +365,7 @@ async fn agreement_expired_before_confirmation() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // when: expiration time is now
     let agreement_id = req_engine
@@ -410,7 +410,7 @@ async fn agreement_expired_before_approval() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // when: expiration time is now
     let agreement_id = req_engine
@@ -453,7 +453,7 @@ async fn waiting_wo_confirmation_should_fail() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // when: expiration time is now
     let agreement_id = req_engine
@@ -486,8 +486,8 @@ async fn approval_before_confirmation_should_fail() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -527,8 +527,8 @@ async fn approval_without_waiting_should_pass() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -577,8 +577,8 @@ async fn waiting_after_approval_should_pass() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -633,8 +633,8 @@ async fn second_approval_should_fail() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -705,7 +705,7 @@ async fn second_waiting_should_pass() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -724,7 +724,7 @@ async fn second_waiting_should_pass() {
         .unwrap();
 
     // Provider successfully approves the Agreement
-    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME).await;
     network
         .get_market(PROV_NAME)
         .provider_engine
@@ -768,7 +768,7 @@ async fn net_err_while_confirming() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -781,7 +781,7 @@ async fn net_err_while_confirming() {
         .unwrap();
 
     // when
-    network.break_networking_for(PROV_NAME).unwrap();
+    network.break_networking_for(PROV_NAME).await.unwrap();
 
     // then confirm should
     let result = req_engine
@@ -809,7 +809,7 @@ async fn net_err_while_approving() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -828,10 +828,10 @@ async fn net_err_while_approving() {
         .unwrap();
 
     // when
-    network.break_networking_for(REQ_NAME).unwrap();
+    network.break_networking_for(REQ_NAME).await.unwrap();
 
     // then approve should fail
-    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let result = network
         .get_market(PROV_NAME)
         .provider_engine
@@ -871,7 +871,7 @@ async fn cant_promote_requestor_proposal() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let our_proposal = sample_demand();
     let our_proposal_id = req_market
@@ -907,9 +907,9 @@ async fn cant_promote_initial_proposal() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_identity = network.get_default_id(REQ_NAME);
+    let req_identity = network.get_default_id(REQ_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
-    let prov_identity = network.get_default_id(PROV_NAME);
+    let prov_identity = network.get_default_id(PROV_NAME).await;
 
     let demand_id = req_market
         .subscribe_demand(&sample_demand(), &req_identity)
@@ -961,7 +961,7 @@ async fn cant_promote_not_last_proposal() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let our_proposal = sample_demand();
     req_market
@@ -996,7 +996,7 @@ async fn test_terminate() {
         .await;
     let req_market = network.get_market(REQ_NAME);
     let prov_market = network.get_market(PROV_NAME);
-    let req_identity = network.get_default_id(REQ_NAME);
+    let req_identity = network.get_default_id(REQ_NAME).await;
     let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
     let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
     let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
@@ -1022,7 +1022,7 @@ async fn test_terminate_not_existing_agreement() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     negotiate_agreement(
         &network,
@@ -1072,7 +1072,7 @@ async fn test_terminate_from_wrong_states() {
         .proposal_id;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_market
@@ -1173,8 +1173,8 @@ async fn test_terminate_rejected_agreement() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(

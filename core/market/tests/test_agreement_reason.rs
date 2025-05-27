@@ -28,7 +28,7 @@ async fn test_get_agreement_termination_reason() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -72,7 +72,7 @@ async fn test_get_agreement_termination_reason() {
         .get_market(PROV_NAME)
         .provider_engine
         .approve_agreement(
-            network.get_default_id(PROV_NAME),
+            network.get_default_id(PROV_NAME).await,
             &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
@@ -129,7 +129,7 @@ async fn test_get_agreement_termination_reason() {
     let termination = network
         .get_market(PROV_NAME)
         .get_terminate_reason(
-            network.get_default_id(PROV_NAME),
+            network.get_default_id(PROV_NAME).await,
             agreement_id.into_client(),
         )
         .await

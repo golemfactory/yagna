@@ -49,8 +49,8 @@ async fn test_query_initial_proposal() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -96,8 +96,8 @@ async fn test_query_multiple_events() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity2)
@@ -150,8 +150,8 @@ async fn test_query_events_timeout() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -195,7 +195,7 @@ async fn test_query_events_unsubscribe_notification() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let subscription_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -241,8 +241,8 @@ async fn test_query_events_edge_cases() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity2)
@@ -310,8 +310,8 @@ async fn test_query_events_for_multiple_subscriptions() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     // Spawn 3 Demands and 1 Offer --> should result in 3 Proposals.
     let demand_id1 = market1
@@ -362,8 +362,8 @@ async fn test_simultaneous_query_events() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity2)
@@ -441,8 +441,8 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -503,8 +503,8 @@ async fn test_counter_initial_proposal() {
         .await;
 
     let market1: Arc<MarketService> = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.create_identity("Node-1", "Identity2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.create_identity("Node-1", "Identity2").await;
 
     let subscription_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -647,7 +647,7 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
 
     let req_market = network.get_market(REQ_NAME);
     let prov_market = network.get_market(PROV_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let agreement_id = info.r_agreement;
 
     let timestamp = Utc::now();
@@ -669,7 +669,7 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
     assert!(timestamp <= proposal.timestamp);
     assert_eq!(
         proposal.issuer_id,
-        network.get_default_id(PROV_NAME).identity
+        network.get_default_id(PROV_NAME).await.identity
     );
     assert_eq!(proposal.state, State::Initial);
     Ok(())

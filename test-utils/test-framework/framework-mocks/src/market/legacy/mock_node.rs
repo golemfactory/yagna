@@ -5,16 +5,16 @@ use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
-use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
+use ya_market::testing::IdentityGSB;
 use ya_market::testing::{
-    callback::*, discovery::error::*, mock_identity::MockIdentity, negotiation::error::*,
-    AgreementApproved, AgreementCancelled, AgreementCommitted, AgreementReceived,
-    AgreementRejected, AgreementTerminated, Config, DbMixedExecutor, Discovery, DiscoveryBuilder,
-    DiscoveryConfig, EventsListeners, GolemBaseNetwork, IdentityApi, InitialProposalReceived,
-    MarketService, MarketServiceExt, Matcher, Offer, ProposalReceived, ProposalRejected,
-    QueryOfferError, ScannerSet, SubscriptionId, SubscriptionStore,
+    callback::*, discovery::error::*, negotiation::error::*, AgreementApproved, AgreementCancelled,
+    AgreementCommitted, AgreementReceived, AgreementRejected, AgreementTerminated, Config,
+    DbMixedExecutor, Discovery, DiscoveryBuilder, DiscoveryConfig, EventsListeners,
+    GolemBaseNetwork, IdentityApi, InitialProposalReceived, MarketService, MarketServiceExt,
+    Matcher, Offer, ProposalReceived, ProposalRejected, QueryOfferError, ScannerSet,
+    SubscriptionId, SubscriptionStore,
 };
 
 use ya_core_model::bus::GsbBindPoints;
@@ -22,7 +22,10 @@ use ya_market::testing::negotiation::{provider, requestor};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
-use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
+use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBroadcast, IMockNet};
+
+use crate::identity::RealIdentity;
+use crate::net::MockNet;
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -30,7 +33,7 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet
 /// created since then (test-utils/test-framework/framework-mocks/src/node.rs) and the goal
 /// is to slowly unify both implementations.
 pub struct MarketsNetwork {
-    net: Box<dyn IMockNet>,
+    net: MockNet,
     nodes: Vec<MockNode>,
 
     test_dir: PathBuf,
@@ -42,7 +45,8 @@ pub struct MarketsNetwork {
 pub struct MockNode {
     pub name: String,
     /// For now only mock default Identity.
-    pub mock_identity: Arc<MockIdentity>,
+    pub identity_api: Arc<dyn IdentityApi>,
+    pub identity: RealIdentity,
     pub kind: MockNodeKind,
 }
 
@@ -100,7 +104,7 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: Option<&str>, net: impl IMockNet + 'static) -> Self {
+    pub async fn new(test_name: Option<&str>, net: MockNet) -> Self {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
 
@@ -112,7 +116,6 @@ impl MarketsNetwork {
         let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
         log::info!("Initializing MarketsNetwork. tn={}", test_name);
 
-        let net = Box::new(net);
         net.bind_gsb();
 
         MarketsNetwork {
@@ -133,18 +136,21 @@ impl MarketsNetwork {
     async fn add_node(
         mut self,
         name: &str,
-        identity_api: Arc<MockIdentity>,
+        identity_api: Arc<dyn IdentityApi>,
+        identity: RealIdentity,
         node_kind: MockNodeKind,
     ) -> MarketsNetwork {
         let gsb = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
 
         let node = MockNode {
             name: name.to_string(),
-            mock_identity: identity_api,
+            identity_api,
+            identity,
             kind: node_kind,
         };
 
-        let node_id = node.mock_identity.get_default_id().identity;
+        let node_id = node.identity_api.default_identity().await.unwrap();
+
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         self.net.register_for_broadcasts(&node_id, &self.test_name);
         self.net.register_node(&node_id, gsb.public_addr());
@@ -153,15 +159,15 @@ impl MarketsNetwork {
         self
     }
 
-    pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
-        for (_, id) in self.list_ids(node_name) {
+    pub async fn break_networking_for(&self, node_name: &str) -> Result<()> {
+        for id in self.list_ids(node_name).await {
             self.net.unregister_node(&id.identity)?
         }
         Ok(())
     }
 
-    pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
-        for (_, id) in self.list_ids(node_name) {
+    pub async fn enable_networking_for(&self, node_name: &str) -> Result<()> {
+        for id in self.list_ids(node_name).await {
             let gsb = gsb_prefixes(&self.test_name, node_name);
             self.net.register_node(&id.identity, &gsb.public_addr());
         }
@@ -170,7 +176,12 @@ impl MarketsNetwork {
 
     pub async fn add_market_instance(self, name: &str) -> Self {
         let db = self.create_database(name);
-        let identity_api = MockIdentity::new(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity =
+            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+
         let market = Arc::new(
             MarketService::new(
                 &db,
@@ -179,36 +190,52 @@ impl MarketsNetwork {
             )
             .unwrap(),
         );
-        self.add_node(name, identity_api, MockNodeKind::Market(market))
+
+        self.add_node(name, identity_api, identity, MockNodeKind::Market(market))
             .await
     }
 
     pub async fn add_matcher_instance(self, name: &str) -> Self {
         let db = self.init_database(name);
+        let gsb = self.node_gsb_prefixes(name);
         let scan_set = ScannerSet::new(db.clone());
 
         let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
-        let identity_api = MockIdentity::new(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity =
+            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
 
         let (matcher, listeners) =
             Matcher::new(store, identity_api.clone(), self.config.clone()).unwrap();
         self.add_node(
             name,
             identity_api,
+            identity,
             MockNodeKind::Matcher { matcher, listeners },
         )
         .await
     }
 
     pub async fn add_discovery_instance(self, name: &str, builder: DiscoveryBuilder) -> Self {
-        let identity_api = MockIdentity::new(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity =
+            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .with_config(self.config.discovery.clone())
             .build()
             .unwrap();
-        self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
-            .await
+        self.add_node(
+            name,
+            identity_api,
+            identity,
+            MockNodeKind::Discovery(discovery),
+        )
+        .await
     }
 
     pub fn discovery_builder(&self) -> DiscoveryBuilder {
@@ -311,11 +338,16 @@ impl MarketsNetwork {
             req_agreement_terminated,
         );
 
-        let identity_api = MockIdentity::new(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity =
+            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
 
         self.add_node(
             name,
             identity_api,
+            identity,
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
@@ -390,35 +422,55 @@ impl MarketsNetwork {
             .unwrap()
     }
 
-    pub fn get_default_id(&self, node_name: &str) -> Identity {
-        self.nodes
-            .iter()
-            .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.clone())
-            .unwrap()
-            .get_default_id()
-    }
-
-    pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
-        let mock_identity = self
+    pub async fn get_default_id(&self, node_name: &str) -> Identity {
+        let api = self
             .nodes
             .iter()
             .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.clone())
+            .map(|node| node.identity_api.clone())
             .unwrap();
-        let id = mock_identity.new_identity(id_name);
-
-        let gsb = gsb_prefixes(&self.test_name, node_name);
-        self.net.register_node(&id.identity, &gsb.public_addr());
-        id
+        let id = api.default_identity().await.unwrap();
+        Identity {
+            identity: id,
+            name: "".to_string(),
+            role: "".to_string(),
+        }
     }
 
-    pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
-        self.nodes
+    pub async fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
+        let node = self
+            .nodes
             .iter()
             .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.list_ids())
+            .unwrap();
+        let id = node.identity.create_identity(id_name).await.unwrap();
+
+        let gsb = gsb_prefixes(&self.test_name, node_name);
+        self.net.register_node(&id.node_id, &gsb.public_addr());
+        Identity {
+            identity: id.node_id,
+            name: id_name.to_string(),
+            role: "".to_string(),
+        }
+    }
+
+    pub async fn list_ids(&self, node_name: &str) -> Vec<Identity> {
+        let node = self
+            .nodes
+            .iter()
+            .find(|node| node.name == node_name)
+            .unwrap();
+        node.identity_api
+            .list()
+            .await
             .unwrap()
+            .into_iter()
+            .map(|info| Identity {
+                identity: info.node_id,
+                name: info.alias.unwrap_or_default(),
+                role: "".to_string(),
+            })
+            .collect()
     }
 
     pub async fn get_rest_app(
@@ -427,7 +479,7 @@ impl MarketsNetwork {
     ) -> impl ActixService<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error>
     {
         let market = self.get_market(node_name);
-        let identity = self.get_default_id(node_name);
+        let identity = self.get_default_id(node_name).await;
 
         test::init_service(
             App::new()

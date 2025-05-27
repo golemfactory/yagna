@@ -16,7 +16,7 @@ async fn test_single_not_resolve_offer() {
         .add_matcher_instance("Node-1")
         .await;
 
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
     let provider = network.get_matcher("Node-1");
     let offer = sample_offer();
 
@@ -41,9 +41,9 @@ async fn test_resolve_offer_demand() {
         .add_matcher_instance("Requestor-1")
         .await;
 
-    let id1 = network.get_default_id("Provider-1");
+    let id1 = network.get_default_id("Provider-1").await;
     let provider = network.get_matcher("Provider-1");
-    let id2 = network.get_default_id("Requestor-1");
+    let id2 = network.get_default_id("Requestor-1").await;
     let requestor = network.get_matcher("Requestor-1");
 
     // when: Add Offer on Provider
@@ -83,7 +83,7 @@ async fn test_single_not_resolve_demand() {
         .await;
 
     let demand = sample_demand();
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
     let requestor = network.get_matcher("Node-1");
 
     // when
@@ -109,11 +109,11 @@ async fn test_resolve_2xoffer_demand() {
         .add_matcher_instance("Requestor-1")
         .await;
 
-    let id1 = network.get_default_id("Provider-1");
+    let id1 = network.get_default_id("Provider-1").await;
     let provider1 = network.get_matcher("Provider-1");
-    let id2 = network.get_default_id("Provider-2");
+    let id2 = network.get_default_id("Provider-2").await;
     let provider2 = network.get_matcher("Provider-2");
-    let id3 = network.get_default_id("Requestor-1");
+    let id3 = network.get_default_id("Requestor-1").await;
     let requestor = network.get_matcher("Requestor-1");
 
     // when: Add Offer on Provider-1

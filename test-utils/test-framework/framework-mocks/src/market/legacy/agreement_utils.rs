@@ -25,8 +25,8 @@ pub async fn negotiate_agreement(
     r_session: &str,
     p_session: &str,
 ) -> Result<NegotiationAgreementHelper, anyhow::Error> {
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
+    let req_id = network.get_default_id(req_name).await;
+    let prov_id = network.get_default_id(prov_name).await;
 
     negotiate_agreement_with_ids(
         network, req_name, prov_name, match_on, r_session, p_session, &req_id, &prov_id,

@@ -34,8 +34,8 @@ async fn test_exchanging_draft_proposals() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -154,8 +154,8 @@ async fn test_counter_countered_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -239,8 +239,8 @@ async fn test_counter_own_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -332,8 +332,8 @@ async fn test_counter_unsubscribed_demand() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -389,8 +389,8 @@ async fn test_counter_unsubscribed_offer() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -460,8 +460,8 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -531,8 +531,8 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
     market2
@@ -588,8 +588,8 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let proposal1 = sample_demand();
     market1
@@ -645,7 +645,7 @@ async fn test_not_matching_counter_demand() {
         .unwrap();
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
     let proposal1 = not_matching_demand();
     let result = market1
         .requestor_engine
@@ -682,8 +682,8 @@ async fn test_not_matching_counter_offer() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let proposal1 = sample_demand();
     market1
@@ -725,7 +725,7 @@ async fn test_reject_negotiations_same_identity() {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -761,8 +761,8 @@ async fn test_reject_initial_offer() {
     let req_mkt = network.get_market("Req-1");
     let prov_mkt = network.get_market("Prov-1");
 
-    let req_id = network.get_default_id("Req-1");
-    let prov_id = network.get_default_id("Prov-1");
+    let req_id = network.get_default_id("Req-1").await;
+    let prov_id = network.get_default_id("Prov-1").await;
 
     let demand_id = req_mkt
         .subscribe_demand(&sample_demand(), &req_id)
@@ -813,8 +813,8 @@ async fn test_reject_demand() {
     let req_mkt = network.get_market("Req-1");
     let prov_mkt = network.get_market("Prov-1");
 
-    let req_id = network.get_default_id("Req-1");
-    let prov_id = network.get_default_id("Prov-1");
+    let req_id = network.get_default_id("Req-1").await;
+    let prov_id = network.get_default_id("Prov-1").await;
 
     let demand = sample_demand();
     let demand_id = req_mkt.subscribe_demand(&demand, &req_id).await.unwrap();
@@ -893,9 +893,9 @@ async fn test_proposal_events_last() {
     let market2 = network.get_market("Node-2");
     let market3 = network.get_market("Node-3");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
-    let identity3 = network.get_default_id("Node-3");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
+    let identity3 = network.get_default_id("Node-3").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -967,8 +967,8 @@ async fn test_restart_negotiations() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let req_id = network.get_default_id("Requestor1");
-    let prov_id = network.get_default_id("Provider1");
+    let req_id = network.get_default_id("Requestor1").await;
+    let prov_id = network.get_default_id("Provider1").await;
 
     // Requestor side
     let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -1091,7 +1091,7 @@ async fn test_create_agreement_on_rejected_proposal_should_fail() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let req_id = network.get_default_id("Requestor1");
+    let req_id = network.get_default_id("Requestor1").await;
 
     // Requestor side
     let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -1173,8 +1173,8 @@ async fn test_negotiations_after_agreement_rejected() {
     let prov_market = network.get_market("Provider1");
     let req_market = network.get_market("Requestor1");
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id("Requestor1");
-    let prov_id = network.get_default_id("Provider1");
+    let req_id = network.get_default_id("Requestor1").await;
+    let prov_id = network.get_default_id("Provider1").await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -1263,8 +1263,8 @@ async fn test_reject_initial_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)

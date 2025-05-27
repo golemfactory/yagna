@@ -30,8 +30,8 @@ async fn test_agreement_approved_event() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -57,7 +57,7 @@ async fn test_agreement_approved_event() {
         prov_market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
@@ -125,7 +125,8 @@ async fn test_agreement_events_and_wait_for_approval() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -161,7 +162,7 @@ async fn test_agreement_events_and_wait_for_approval() {
         prov_market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
@@ -205,8 +206,8 @@ async fn test_agreement_terminated_event() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -298,8 +299,8 @@ async fn test_waiting_for_agreement_event() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -355,8 +356,8 @@ async fn test_agreement_rejected_event() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -382,7 +383,7 @@ async fn test_agreement_rejected_event() {
         prov_market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 Some(gen_reason("Not-interested")),
             )
@@ -453,8 +454,8 @@ async fn test_agreement_cancelled_event() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine

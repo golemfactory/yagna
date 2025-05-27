@@ -37,8 +37,8 @@ async fn test_agreement_rejected() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -96,7 +96,7 @@ async fn test_agreement_rejected_wait_for_approval() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -118,7 +118,7 @@ async fn test_agreement_rejected_wait_for_approval() {
         prov_market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &network.get_default_id(PROV_NAME).await,
                 &agr_id.clone().translate(Owner::Provider),
                 Some(gen_reason("Not-interested")),
             )
@@ -155,10 +155,10 @@ async fn test_reject_agreement_in_wrong_state() {
         .add_market_instance(PROV_NAME)
         .await;
 
-    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let negotiation = negotiate_agreement(
         &network,
@@ -241,8 +241,8 @@ async fn test_reject_rejected_agreement() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let r_agreement = req_engine
         .create_agreement(

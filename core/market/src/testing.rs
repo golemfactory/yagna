@@ -7,7 +7,7 @@ pub use super::db::dao::*;
 pub use super::db::model::*;
 pub use super::db::schema::*;
 pub use super::db::{DbError, DbResult};
-pub use super::identity::{IdentityApi, IdentityError};
+pub use super::identity::{IdentityApi, IdentityError, IdentityGSB};
 pub use super::matcher::{error::*, *};
 pub use super::negotiation::{error::*, ApprovalStatus};
 pub use super::protocol::*;
