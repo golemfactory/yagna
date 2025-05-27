@@ -19,6 +19,7 @@ use ya_utils_actix::deadline_checker::{
 use crate::config::Config;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
+use crate::protocol::discovery::offer::GolemBaseOffer;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
 pub mod error;
@@ -27,7 +28,6 @@ pub(crate) mod resolver;
 pub(crate) mod store;
 
 use crate::db::dao::{DemandDao, DemandState};
-use crate::testing::discovery::offer::GolemBaseOffer;
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;

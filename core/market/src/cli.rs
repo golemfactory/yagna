@@ -135,7 +135,7 @@ impl GolemBaseCommand {
                     .await??;
 
                 CommandOutput::object(json!({
-                    "message": format!("GolemBase wallet {} funded with {} tGLM", response.wallet, response.balance)
+                    "message": format!("GolemBase wallet {} funded, balance {} tGLM", response.wallet, response.balance)
                 }))
             }
             GolemBaseCommand::Balance { wallet } => {

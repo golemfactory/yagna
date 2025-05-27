@@ -75,6 +75,14 @@ pub struct MarketService {
 }
 
 impl MarketService {
+    pub fn apply_migrations(db: &DbMixedExecutor) -> anyhow::Result<()> {
+        db.ram_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        db.disk_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        Ok(())
+    }
+
     pub fn new(
         db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
@@ -87,10 +95,7 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
-        db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
-        db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
+        MarketService::apply_migrations(&db)?;
 
         let scan_set = ScannerSet::new(db.clone());
         let store = SubscriptionStore::new(db.clone(), scan_set.clone(), config.clone());

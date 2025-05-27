@@ -47,4 +47,6 @@ test-context = "0.1.4"
 tokio = { version = "1", features = ["sync"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }
 url = "2.5"
+diesel = { version = "2.1.0", features = ["postgres", "r2d2", "chrono", "uuid"] }
+env_logger = "0.10.0"
 

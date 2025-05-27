@@ -1,10 +1,11 @@
 use chrono::{DateTime, Duration, Utc};
 
-use crate::db::model::AgreementId;
-use crate::testing::events_helper::provider::expect_agreement;
-use crate::testing::proposal_util::{exchange_proposals_exclusive_with_ids, NegotiationHelper};
-use crate::testing::MarketsNetwork;
-use crate::testing::Owner;
+use super::proposal_util::{exchange_proposals_exclusive_with_ids, NegotiationHelper};
+use crate::market::legacy::mock_node::MarketsNetwork;
+
+use ya_market::testing::events_helper::provider::expect_agreement;
+use ya_market::testing::AgreementId;
+use ya_market::testing::Owner;
 
 use ya_client::model::market::Reason;
 use ya_service_api_web::middleware::Identity;

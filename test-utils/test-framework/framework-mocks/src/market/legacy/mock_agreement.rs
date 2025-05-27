@@ -1,8 +1,8 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use std::str::FromStr;
 
-use crate::db::model::{Agreement, AgreementState, Owner, ProposalId, SubscriptionId};
 use ya_client::model::NodeId;
+use ya_market::testing::{Agreement, AgreementState, Owner, ProposalId, SubscriptionId};
 
 pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
     let id = ProposalId::generate_id(

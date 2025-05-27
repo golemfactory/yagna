@@ -4,39 +4,33 @@ use actix_http::body::BoxBody;
 use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
-use anyhow::{anyhow, bail, Context, Result};
-use regex::Regex;
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
-use ya_core_model::bus::GsbBindPoints;
 
-use ya_client::model::market::RequestorEvent;
+use ya_market::testing::{
+    callback::*, discovery::error::*, negotiation::error::*, AgreementApproved, AgreementCancelled,
+    AgreementCommitted, AgreementReceived, AgreementRejected, AgreementTerminated, Config,
+    DbMixedExecutor, Discovery, DiscoveryBuilder, DiscoveryConfig, EventsListeners,
+    GolemBaseNetwork, IdentityApi, InitialProposalReceived, MarketService, MarketServiceExt,
+    Matcher, Offer, ProposalReceived, ProposalRejected, QueryOfferError, ScannerSet,
+    SubscriptionId, SubscriptionStore,
+};
+
+use ya_core_model::bus::GsbBindPoints;
+use ya_market::testing::negotiation::{provider, requestor};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
-use crate::MarketService;
-
-use super::negotiation::{provider, requestor};
-use super::GolemBaseNetwork;
-use super::{store::SubscriptionStore, Matcher};
-use crate::config::{Config, DiscoveryConfig};
-use crate::db::dao::ProposalDao;
-use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
-use crate::db::DbMixedExecutor;
-use crate::identity::IdentityApi;
-use crate::matcher::error::{DemandError, QueryOfferError};
-use crate::matcher::EventsListeners;
-use crate::negotiation::error::*;
-use crate::negotiation::ScannerSet;
-use crate::protocol::callback::*;
-use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
-use crate::protocol::negotiation::messages::*;
-use crate::testing::mock_identity::MockIdentity;
-use crate::testing::mock_node::default::*;
-
 use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
 
+use super::mock_identity::MockIdentity;
+
 /// Instantiates market test nodes inside one process.
+///
+/// @note This is a legacy implementation used in market test suite. New testing tools were
+/// created since then (test-utils/test-framework/framework-mocks/src/node.rs) and the goal
+/// is to slowly unify both implementations.
 pub struct MarketsNetwork {
     net: Box<dyn IMockNet>,
     nodes: Vec<MockNode>,
@@ -79,22 +73,17 @@ pub enum MockNodeKind {
 
 impl MockNodeKind {
     pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
-        let gsb = ya_core_model::market::bus_bindpoints(Some(
-            GsbBindPoints::default().prefix(&format!("/{}/{}", test_name, name)),
-        ));
+        let gsb = gsb_market_prefixes(gsb_prefixes(test_name, name));
 
         match self {
             MockNodeKind::Market(market) => {
                 market.bind_gsb(gsb.clone()).await?;
-                market.matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
                 matcher.bind_gsb(gsb.clone()).await?;
-                matcher.discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Discovery(discovery) => {
                 discovery.bind_gsb(gsb.clone()).await?;
-                discovery.bind_offers_listener().await?;
             }
             MockNodeKind::Negotiation {
                 provider,
@@ -107,16 +96,6 @@ impl MockNodeKind {
 
         Ok(gsb)
     }
-}
-
-fn testname_from_backtrace(bn: &str) -> Option<String> {
-    log::info!("Test name to regex match: {}", &bn);
-    // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn)?;
-    let filename = captures.get(1).unwrap().as_str().to_string();
-    let testname = captures.get(2).unwrap().as_str().to_string();
-
-    Some(format!("{}.{}", filename, testname))
 }
 
 impl MarketsNetwork {
@@ -237,11 +216,11 @@ impl MarketsNetwork {
     pub fn discovery_builder(&self) -> DiscoveryBuilder {
         DiscoveryBuilder::default()
             .with_config(self.config.discovery.clone())
-            .add_handler(empty_on_offers_retrieved)
-            .add_handler(empty_on_offers_bcast)
-            .add_handler(empty_on_offer_unsubscribed_bcast)
-            .add_handler(empty_on_retrieve_offers)
-            .add_handler(empty_query_offers_handler)
+            .add_handler(default::empty_on_offers_retrieved)
+            .add_handler(default::empty_on_offers_bcast)
+            .add_handler(default::empty_on_offer_unsubscribed_bcast)
+            .add_handler(default::empty_on_retrieve_offers)
+            .add_handler(default::empty_query_offers_handler)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -482,13 +461,7 @@ impl MarketsNetwork {
 
     pub fn init_database(&self, name: &str) -> DbMixedExecutor {
         let db = self.create_database(name);
-
-        db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)
-            .unwrap();
-        db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)
-            .unwrap();
+        MarketService::apply_migrations(&db).unwrap();
         db
     }
 
@@ -541,67 +514,13 @@ macro_rules! assert_err_eq {
     };
 }
 
-#[async_trait::async_trait]
-pub trait MarketServiceExt {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError>;
-    async fn get_proposal_from_db(
-        &self,
-        proposal_id: &ProposalId,
-    ) -> Result<Proposal, anyhow::Error>;
-    async fn query_events(
-        &self,
-        subscription_id: &SubscriptionId,
-        timeout: f32,
-        max_events: Option<i32>,
-    ) -> Result<Vec<RequestorEvent>, QueryEventsError>;
-}
-
-#[async_trait::async_trait]
-impl MarketServiceExt for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
-        self.matcher.store.get_offer(id).await
-    }
-
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
-        self.matcher.store.get_demand(id).await
-    }
-
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError> {
-        self.provider_engine.common.get_proposal(None, id).await
-    }
-
-    async fn get_proposal_from_db(
-        &self,
-        proposal_id: &ProposalId,
-    ) -> Result<Proposal, anyhow::Error> {
-        let db = self.db.clone();
-        Ok(
-            match db.as_dao::<ProposalDao>().get_proposal(proposal_id).await? {
-                Some(proposal) => proposal,
-                None => bail!("Proposal [{}] not found", proposal_id),
-            },
-        )
-    }
-
-    async fn query_events(
-        &self,
-        subscription_id: &SubscriptionId,
-        timeout: f32,
-        max_events: Option<i32>,
-    ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-        self.requestor_engine
-            .query_events(subscription_id, timeout, max_events)
-            .await
-    }
-}
-
 pub mod default {
     use super::*;
-    use crate::protocol::negotiation::error::{
-        AgreementProtocolError, CommitAgreementError, CounterProposalError, ProposeAgreementError,
-        RejectProposalError, TerminateAgreementError,
+    use ya_market::testing::{
+        AgreementApproved, AgreementCancelled, AgreementCommitted, AgreementReceived,
+        AgreementRejected, AgreementTerminated, InitialProposalReceived, OffersBcast,
+        OffersRetrieved, ProposalReceived, ProposalRejected, QueryOffers, QueryOffersResult,
+        RetrieveOffers, UnsubscribedOffersBcast,
     };
 
     pub async fn empty_on_offers_retrieved(

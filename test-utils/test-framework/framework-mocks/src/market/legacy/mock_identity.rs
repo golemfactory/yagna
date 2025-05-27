@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 use std::sync::{Arc, Mutex};
 use ya_core_model::identity::IdentityInfo;
 
-use crate::identity::{IdentityApi, IdentityError};
+use ya_market::testing::{IdentityApi, IdentityError};
 
 use std::collections::HashMap;
 use ya_client::model::NodeId;
