@@ -73,6 +73,14 @@ pub enum MockNodeKind {
     },
 }
 
+impl MockNode {
+    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
+        self.identity.bind_gsb().await?;
+        let gsb = self.kind.bind_gsb(test_name, name).await?;
+        Ok(gsb)
+    }
+}
+
 impl MockNodeKind {
     pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
         let gsb = gsb_market_prefixes(gsb_prefixes(test_name, name));
@@ -140,8 +148,6 @@ impl MarketsNetwork {
         identity: RealIdentity,
         node_kind: MockNodeKind,
     ) -> MarketsNetwork {
-        let gsb = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
-
         let node = MockNode {
             name: name.to_string(),
             identity_api,
@@ -149,6 +155,7 @@ impl MarketsNetwork {
             kind: node_kind,
         };
 
+        let gsb = node.bind_gsb(&self.test_name, name).await.unwrap();
         let node_id = node.identity_api.default_identity().await.unwrap();
 
         log::info!("Creating mock node {}: [{}].", name, &node_id);

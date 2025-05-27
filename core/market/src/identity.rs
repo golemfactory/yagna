@@ -114,7 +114,7 @@ impl IdentityApi for IdentityGSB {
 impl IdentityGSB {
     pub fn new(gsb: GsbBindPoints) -> Arc<dyn IdentityApi> {
         Arc::new(IdentityGSB {
-            gsb: gsb.service(identity::BUS_ID),
+            gsb: gsb.service(identity::BUS_SERVICE_NAME),
         })
     }
 }
