@@ -59,7 +59,7 @@ pub enum MarketInitError {
     #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
     #[error("Failed to initialize config. Error: {0}.")]
-    Config(#[from] structopt::clap::Error),
+    Config(#[from] clap::Error),
     #[error("Failed to initialize in memory market database. Error: {0}.")]
     InMemory(anyhow::Error),
 }

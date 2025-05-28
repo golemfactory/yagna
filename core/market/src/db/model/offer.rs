@@ -1,7 +1,5 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
-use std::str::FromStr;
 
 use ya_agreement_utils::agreement::{expand, flatten};
 use ya_client::model::market::NewOffer;
@@ -127,33 +125,6 @@ impl PartialEq for Offer {
     }
 }
 
-impl TryFrom<ClientOffer> for Offer {
-    type Error = anyhow::Error;
-
-    fn try_from(offer: ClientOffer) -> Result<Self, Self::Error> {
-        let creation_ts = offer.timestamp.naive_utc();
-        let expiration_ts = offer.expiration.naive_utc();
-
-        let properties = serde_json::to_string(&flatten(offer.properties.clone()))
-            .map_err(|e| anyhow::anyhow!("Failed to serialize properties: {}", e))?;
-
-        let id = SubscriptionId::from_str(&offer.offer_id)
-            .map_err(|e| anyhow::anyhow!("Failed to parse offer ID: {}", e))?;
-
-        log::trace!("Offer [{}] properties: {}", id, properties);
-
-        Ok(Offer {
-            id,
-            properties,
-            constraints: offer.constraints,
-            node_id: offer.provider_id,
-            creation_ts,
-            insertion_ts: None,
-            expiration_ts,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,7 +135,8 @@ mod tests {
     #[test]
     // Offer with subscription id, that has wrong hash, should fail to create model.
     fn test_offer_validation_wrong_hash() {
-        let false_subscription_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53";
+        let false_subscription_id =
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53";
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
@@ -187,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_offer_validation_good_hash() {
-        let offer_id = "c76161077d0343ab85ac986eb5f6ea38-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55";
+        let offer_id = "85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55";
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {

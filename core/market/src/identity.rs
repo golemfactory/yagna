@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use golem_base_sdk::{account::TransactionSigner, keccak256, Address};
+use golem_base_sdk::{keccak256, signers::TransactionSigner, Address};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

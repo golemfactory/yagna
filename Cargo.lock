@@ -2259,6 +2259,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap"
+version = "4.5.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed93b9805f8ba930df42c2590f05453d5ec36cbb85d018868a5b24d31f6ac000"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.5.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "379026ff283facf611b0ea629334361c4211d1b12ee01024eec1591133b04120"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap_lex",
+ "strsim 0.11.1",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
+
+[[package]]
 name = "clicolors-control"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4244,7 +4284,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?branch=merge-yagna-functionalities#af8c882b0334be68b176eda4ab912d4cf9e422c6"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=sequential-transactions#fec5295b88e937480318b24a876abecc54ecefd0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4258,6 +4298,7 @@ dependencies = [
  "bytes 1.10.1",
  "dirs",
  "displaydoc",
+ "futures 0.3.30",
  "hex",
  "humantime 2.2.0",
  "log",
@@ -8973,7 +9014,7 @@ version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
 dependencies = [
- "clap",
+ "clap 2.34.0",
  "lazy_static",
  "structopt-derive",
 ]
@@ -11392,6 +11433,7 @@ dependencies = [
  "bigdecimal 0.4.8",
  "bincode",
  "chrono",
+ "clap 4.5.38",
  "derive_more 0.99.18",
  "diesel",
  "diesel_migrations",
@@ -11399,6 +11441,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.30",
  "golem-base-sdk",
+ "hex",
  "humantime 2.2.0",
  "lazy_static",
  "libsqlite3-sys",
@@ -11414,6 +11457,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "serde_json_canonicalizer",
  "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
  "sha3 0.8.2",
  "structopt",

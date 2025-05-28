@@ -26,6 +26,7 @@ pub(crate) mod resolver;
 pub(crate) mod store;
 
 use crate::db::dao::{DemandDao, DemandState};
+use crate::testing::discovery::offer::GolemBaseOffer;
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;
@@ -52,6 +53,7 @@ pub struct Matcher {
     pub(crate) discovery: Discovery,
     identity: Arc<dyn IdentityApi>,
     expiration_tracker: Addr<DeadlineChecker>,
+    config: Arc<Config>,
 }
 
 impl Matcher {
@@ -79,6 +81,7 @@ impl Matcher {
             discovery,
             identity: identity_api,
             expiration_tracker: DeadlineChecker::default().start(),
+            config,
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -169,14 +172,17 @@ impl Matcher {
         offer: &NewOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        let offer = self.store.create_offer(id, offer).await?;
+        let offer =
+            GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
 
-        self.discovery
-            .bcast_offer(&offer)
+        // Offer will be sent to GolemBase. We don't update our local Offers store here, because
+        // we should get an update from GolemBase when it will be created. Matching will happen
+        // later as well.
+        let offer = self
+            .discovery
+            .bcast_offer(offer)
             .await
             .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
-
-        self.resolver.receive(&offer);
 
         log::info!(
             "Subscribed new Offer: [{}] using identity: {} [{}]",
@@ -194,6 +200,7 @@ impl Matcher {
             .await
             .ok();
 
+        self.store.notify();
         Ok(offer)
     }
 
@@ -205,13 +212,6 @@ impl Matcher {
         self.store
             .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
-
-        log::info!(
-            "Unsubscribed Offer: [{}] using identity: {} [{}]",
-            &offer_id,
-            id.name,
-            id.identity
-        );
 
         self.expiration_tracker
             .send(StopTracking {
@@ -225,17 +225,21 @@ impl Matcher {
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
         // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
-        let _ = self
-            .discovery
+        self.discovery
             .bcast_unsubscribe(offer_id.clone())
             .await
             .map_err(|e| {
-                log::warn!(
-                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
-                    e,
-                    offer_id
-                );
-            });
+                MatcherError::GolemBaseOfferError(format!(
+                    "Failed to bcast unsubscribe offer [{offer_id}]. Error: {e}."
+                ))
+            })?;
+
+        log::info!(
+            "Unsubscribed Offer: [{}] using identity: {} [{}]",
+            &offer_id,
+            id.name,
+            id.identity
+        );
         Ok(())
     }
 

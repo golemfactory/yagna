@@ -17,6 +17,7 @@ on:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 env:
   rust_stable: 1.84.0

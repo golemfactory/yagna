@@ -1,13 +1,12 @@
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
+use futures::StreamExt;
+use offer::GolemBaseOffer;
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time;
 
-use ya_client::model::market::Offer as ClientOffer;
 use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
@@ -19,10 +18,11 @@ use ya_core_model::market::{
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
-use golem_base_sdk::account::TransactionSigner;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
+use golem_base_sdk::events::Event;
 use golem_base_sdk::rpc::SearchResult;
+use golem_base_sdk::signers::TransactionSigner;
 use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
@@ -40,7 +40,7 @@ const BLOCK_TIME_SECONDS: i64 = 2;
 pub mod builder;
 pub mod error;
 pub mod message;
-
+pub mod offer;
 /// Responsible for communication with Golem Base during discovery phase.
 #[derive(Clone)]
 pub struct Discovery {
@@ -58,33 +58,33 @@ pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
     golem_base: GolemBaseClient,
     offer_handlers: OfferHandlers,
+    #[allow(dead_code)]
     config: DiscoveryConfig,
 }
 
 impl Discovery {
     /// Broadcasts Offers to Golem Base
-    pub async fn bcast_offer(&self, offer: &ModelOffer) -> Result<(), DiscoveryError> {
+    pub async fn bcast_offer(&self, offer: GolemBaseOffer) -> Result<ModelOffer, DiscoveryError> {
         // Validate account to return more menaingfull error messages than create_entry would.
-        self.validate_account(offer.node_id).await?;
+        self.validate_account(offer.provider_id).await?;
 
         let client = &self.inner.golem_base;
-        let address = Address::from(&offer.node_id.into_array());
+        let address = Address::from(&offer.provider_id.into_array());
 
         // Serialize the offer to JSON
-        let payload = serde_json::to_vec(&offer.into_client_offer()?).map_err(|e| {
+        let payload = serde_json::to_vec(&offer).map_err(|e| {
             DiscoveryError::InternalError(format!("Failed to serialize offer: {}", e))
         })?;
 
         // Calculate TTL in blocks based on expiration time
         let now = Utc::now();
-        let expiration = Utc.from_utc_datetime(&offer.expiration_ts);
+        let expiration = Utc.from_utc_datetime(&offer.expiration.naive_utc());
         let ttl_seconds = (expiration - now).num_seconds();
         let ttl_blocks = (ttl_seconds / BLOCK_TIME_SECONDS) as u64;
 
         // Create entry with marketplace type and ID annotations
-        let entry = Create::new(payload, ttl_blocks)
-            .annotate_string("golem_marketplace_type", "Offer")
-            .annotate_string("golem_marketplace_id", offer.id.to_string());
+        let entry =
+            Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
 
         // Create entry on GolemBase
         let entry_id = client.create_entry(address, entry).await.map_err(|e| {
@@ -93,7 +93,9 @@ impl Discovery {
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 
-        Ok(())
+        offer.into_model_offer(entry_id).map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to convert offer to ModelOffer: {}", e))
+        })
     }
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
@@ -126,27 +128,17 @@ impl Discovery {
     pub async fn bcast_unsubscribe(&self, offer_id: SubscriptionId) -> Result<(), DiscoveryError> {
         let client = &self.inner.golem_base;
 
-        let entries: Vec<Hash> = self
-            .query_subscriptions(&[offer_id.clone()])
-            .await
-            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?
-            .into_iter()
-            .map(|result| result.key)
-            .collect();
-
-        if entries.is_empty() {
-            log::debug!("No entries found in GolemBase for offer ID: {}", offer_id);
-            return Ok(());
-        }
-
         // Get metadata to find owner
-        let metadata = client.get_entity_metadata(entries[0]).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to get entry metadata: {e}"))
+        let key = Hash::from(offer_id.to_bytes());
+        let metadata = client.get_entity_metadata(key).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!(
+                "Failed to get entry metadata for offer {offer_id}: {e}"
+            ))
         })?;
 
         // Remove the entry
         client
-            .remove_entries(metadata.owner, entries)
+            .remove_entries(metadata.owner, vec![key])
             .await
             .map_err(|e| {
                 DiscoveryError::GolemBaseError(format!(
@@ -171,29 +163,29 @@ impl Discovery {
             return Ok(Vec::new());
         }
 
-        // Build query with OR conditions for all offer IDs
-        let id_conditions: Vec<String> = offer_ids
+        let offer_ids: Vec<Hash> = offer_ids
             .iter()
-            .map(|id| format!(r#"golem_marketplace_id = "{}""#, id))
+            .map(|id| Hash::from(id.to_bytes()))
             .collect();
-        let query = format!(
-            r#"golem_marketplace_type = "Offer" && ({})"#,
-            id_conditions.join(" || ")
-        );
 
-        // Query for the entries
-        self.inner
-            .golem_base
-            .query_entities(&query)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to query entries: {}", e))
+        let mut results = Vec::new();
+        for key in offer_ids {
+            if let Ok(content) = self.inner.golem_base.get_storage_value(key).await {
+                results.push(SearchResult {
+                    key,
+                    value: content,
+                });
+            }
+        }
+
+        Ok(results)
     }
 
     /// Converts search results to ModelOffer objects
     fn parse_offers(results: Vec<SearchResult>) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let mut offers = Vec::new();
         for result in results {
-            match Self::parse_offer(result) {
+            match Self::offer_from_search(result) {
                 Ok(offer) => offers.push(offer),
                 Err(e) => log::trace!("Failed to parse offer: {}", e),
             }
@@ -202,12 +194,15 @@ impl Discovery {
     }
 
     /// Parses a single SearchResult into a ModelOffer
-    fn parse_offer(result: SearchResult) -> anyhow::Result<ModelOffer> {
+    fn offer_from_search(result: SearchResult) -> anyhow::Result<ModelOffer> {
         let value = result.value_as_string()?;
-        let offer: ClientOffer = serde_json::from_str(&value)
-            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+        Self::parse_offer(result.key, &value)
+    }
 
-        ModelOffer::try_from(offer)
+    fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
+        let offer: GolemBaseOffer = serde_json::from_str(string_utf)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+        offer.into_model_offer(key)
     }
 
     /// List all accounts and initialize YagnaIdSigners on GolemBase, so they can be used for
@@ -218,6 +213,103 @@ impl Discovery {
             if let Err(e) = self.register_signer(node_id).await {
                 log::error!("Failed to register signer for {}: {}", node_id, e);
             }
+        }
+        Ok(())
+    }
+
+    async fn offers_events_loop(&self, starting_block: u64) -> anyhow::Result<()> {
+        let events = self
+            .inner
+            .golem_base
+            .events_client_with_url(self.inner.config.golem_base_ws_url.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
+
+        let mut event_stream = events
+            .events_stream_from_block(starting_block)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get events stream: {}", e))?;
+
+        while let Some(event) = event_stream.next().await {
+            match event {
+                Ok(event) => {
+                    // Handle the event based on its type
+                    if let Err(e) = self.handle_golem_base_event(event).await {
+                        log::error!("Error handling Golem Base event: {}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error receiving Golem Base event: {}", e);
+                    // Try to reconnect after a delay, to protect against errors spam
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Spawns a task that listens for WebSocket events from Golem Base
+    pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
+        let discovery = self.clone();
+        let client = self.inner.golem_base.clone();
+
+        // Get current block number to start listening from
+        let current_block = client.get_current_block_number().await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {}", e))
+        })?;
+
+        // First, load all existing offers to setup initial state.
+        // Later we will listen only for state changes.
+        let offers = self.query_offers().await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to query offers: {}", e))
+        })?;
+        self.register_incoming_offers(offers).await.map_err(|e| {
+            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to register offers: {}", e))
+        })?;
+
+        tokio::spawn(async move {
+            discovery
+                .offers_events_loop(current_block)
+                .await
+                .inspect_err(|e| log::error!("Error in GolemBase events listener: {}", e))
+                .ok();
+        });
+
+        Ok(())
+    }
+
+    /// Handles incoming Golem Base events
+    async fn handle_golem_base_event(&self, event: Event) -> anyhow::Result<()> {
+        let client = self.inner.golem_base.clone();
+
+        match event {
+            Event::EntityCreated { entity_id, .. } => {
+                log::trace!("Entity created in Golem Base: {}", entity_id);
+
+                let offer = client.cat(entity_id).await?;
+                let offer = Self::parse_offer(entity_id, &offer)?;
+
+                self.register_incoming_offers(vec![offer]).await?;
+            }
+            Event::EntityRemoved { entity_id, .. } => {
+                log::trace!("Entity removed from Golem Base: {}", entity_id);
+
+                let id = SubscriptionId::from_bytes(entity_id.0);
+                self.inner
+                    .offer_handlers
+                    .offer_unsubscribe_handler
+                    .call(
+                        GOLEM_BASE_CALLER.to_string(),
+                        UnsubscribedOffersBcast {
+                            offer_ids: vec![id],
+                        },
+                    )
+                    .await
+                    .unwrap_or_default();
+            }
+            // Ignore EntityUpdated events, because market doesn't allow for updating entities.
+            _ => {}
         }
         Ok(())
     }
@@ -245,7 +337,9 @@ impl Discovery {
             .await
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
+        // Start Golem Base listener that loads offers and listens for updates
         self.bind_offers_listener().await?;
+
         self.bind_identity_handlers(local_prefix).await?;
         self.bind_fund_handler(local_prefix).await?;
         Ok(())
@@ -322,66 +416,6 @@ impl Discovery {
         bus::bind(&endpoint, move |msg: GetGolemBaseBalance| {
             let myself = discovery.clone();
             async move { myself.get_balance(msg).await }
-        });
-
-        Ok(())
-    }
-
-    pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
-        let discovery = self.clone();
-        // TODO: Add separate config value for offers query interval instead of reusing broadcast interval
-        let interval = discovery.inner.config.mean_cyclic_bcast_interval;
-
-        tokio::spawn(async move {
-            let mut interval = time::interval(interval);
-            loop {
-                interval.tick().await;
-
-                if let Err(e) = async {
-                    // Query all offers from GolemBase
-                    let offers = discovery.query_offers().await?;
-
-                    // Filter out known offers
-                    let ids = offers.iter().map(|offer| offer.id.clone()).collect();
-                    let unknown_offers = discovery
-                        .inner
-                        .offer_handlers
-                        .filter_out_known_ids
-                        .call(
-                            GOLEM_BASE_CALLER.to_string(),
-                            OffersBcast { offer_ids: ids },
-                        )
-                        .await
-                        .unwrap_or_default();
-
-                    // Add unknown Offers to local storage
-                    if !unknown_offers.is_empty() {
-                        let unknown_offer_ids: HashSet<_> = unknown_offers.iter().collect();
-                        let filtered_offers = offers
-                            .into_iter()
-                            .filter(|offer| unknown_offer_ids.contains(&offer.id))
-                            .collect();
-
-                        discovery
-                            .inner
-                            .offer_handlers
-                            .receive_remote_offers
-                            .call(
-                                GOLEM_BASE_CALLER.to_string(),
-                                OffersRetrieved {
-                                    offers: filtered_offers,
-                                },
-                            )
-                            .await
-                            .ok();
-                    }
-                    Ok::<(), DiscoveryError>(())
-                }
-                .await
-                {
-                    log::error!("Error in offers listener: {}", e);
-                }
-            }
         });
 
         Ok(())
@@ -468,5 +502,46 @@ impl Discovery {
             balance,
             token: "tETH".to_string(),
         })
+    }
+
+    /// Registers incoming offers by filtering out known ones and adding new ones to local storage
+    async fn register_incoming_offers(
+        &self,
+        offers: Vec<ModelOffer>,
+    ) -> Result<(), DiscoveryError> {
+        // Filter out known offers
+        let ids = offers.iter().map(|offer| offer.id.clone()).collect();
+        let unknown_offers = self
+            .inner
+            .offer_handlers
+            .filter_out_known_ids
+            .call(
+                GOLEM_BASE_CALLER.to_string(),
+                OffersBcast { offer_ids: ids },
+            )
+            .await
+            .unwrap_or_default();
+
+        // Add unknown Offers to local storage
+        if !unknown_offers.is_empty() {
+            let unknown_offer_ids: HashSet<_> = unknown_offers.iter().collect();
+            let filtered_offers = offers
+                .into_iter()
+                .filter(|offer| unknown_offer_ids.contains(&offer.id))
+                .collect();
+
+            self.inner
+                .offer_handlers
+                .receive_remote_offers
+                .call(
+                    GOLEM_BASE_CALLER.to_string(),
+                    OffersRetrieved {
+                        offers: filtered_offers,
+                    },
+                )
+                .await
+                .ok();
+        }
+        Ok(())
     }
 }

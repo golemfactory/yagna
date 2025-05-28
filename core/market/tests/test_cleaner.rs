@@ -1,6 +1,6 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use clap::Parser;
 use std::ops::Not;
-use structopt::StructOpt;
 use ya_framework_mocks::net::MockNet;
 
 use ya_market::testing::cleaner::clean;
@@ -24,7 +24,7 @@ fn past() -> NaiveDateTime {
 }
 
 fn db_config() -> DbConfig {
-    DbConfig::from_iter(&[""])
+    DbConfig::parse_from([""])
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]

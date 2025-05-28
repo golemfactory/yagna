@@ -1,6 +1,10 @@
+use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
 use structopt::StructOpt;
+use ya_agreement_utils::agreement::{expand, flatten};
 
 use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
@@ -14,6 +18,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 pub enum Command {
     Agreements(AgreementsCommand),
     GolemBase(GolemBaseCommand),
+    Offer(OfferCommand),
 }
 
 impl Command {
@@ -21,6 +26,7 @@ impl Command {
         match self {
             Command::Agreements(agreements_cmd) => agreements_cmd.run_command(ctx).await,
             Command::GolemBase(golembase_cmd) => golembase_cmd.run_command(ctx).await,
+            Command::Offer(offer_cmd) => offer_cmd.run_command(ctx).await,
         }
     }
 }
@@ -142,6 +148,38 @@ impl GolemBaseCommand {
                     "message": format!("GolemBase wallet {} balance: {} tGLM", response.wallet, response.balance)
                 }))
             }
+        }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+pub enum OfferCommand {
+    /// Format offer in flat structure
+    FormatFlat {
+        #[structopt(help = "Path to the offer file")]
+        file: PathBuf,
+    },
+    /// Format offer in expanded structure
+    FormatExpanded {
+        #[structopt(help = "Path to the offer file")]
+        file: PathBuf,
+    },
+}
+
+impl OfferCommand {
+    pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        let path = match &self {
+            OfferCommand::FormatFlat { file } | OfferCommand::FormatExpanded { file } => file,
+        };
+
+        let content = fs::read_to_string(path)
+            .map_err(|e| anyhow!("Failed to read file {}: {}", path.display(), e))?;
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| anyhow!("Failed to parse JSON from file: {}", e))?;
+
+        match self {
+            OfferCommand::FormatFlat { .. } => CommandOutput::object(flatten(json)),
+            OfferCommand::FormatExpanded { .. } => CommandOutput::object(expand(json)),
         }
     }
 }
