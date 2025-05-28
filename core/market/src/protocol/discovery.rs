@@ -4,7 +4,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use futures::StreamExt;
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ya_client::model::NodeId;
@@ -16,17 +16,17 @@ use ya_core_model::market::{
     RpcMessageError,
 };
 use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
 
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::events::Event;
-use golem_base_sdk::rpc::SearchResult;
+use golem_base_sdk::rpc::{EntityMetaData, SearchResult};
 use golem_base_sdk::signers::TransactionSigner;
 use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
+use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
@@ -41,6 +41,7 @@ pub mod builder;
 pub mod error;
 pub mod message;
 pub mod offer;
+
 /// Responsible for communication with Golem Base during discovery phase.
 #[derive(Clone)]
 pub struct Discovery {
@@ -50,7 +51,6 @@ pub struct Discovery {
 pub(super) struct OfferHandlers {
     filter_out_known_ids: HandlerSlot<OffersBcast>,
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
-    #[allow(dead_code)]
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
 }
 
@@ -58,8 +58,8 @@ pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
     golem_base: GolemBaseClient,
     offer_handlers: OfferHandlers,
-    #[allow(dead_code)]
     config: DiscoveryConfig,
+    identities: Mutex<HashSet<NodeId>>,
 }
 
 impl Discovery {
@@ -93,9 +93,18 @@ impl Discovery {
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 
-        offer.into_model_offer(entry_id).map_err(|e| {
+        let model_offer = offer.into_model_offer(entry_id).map_err(|e| {
             DiscoveryError::GolemBaseError(format!("Failed to convert offer to ModelOffer: {}", e))
-        })
+        })?;
+
+        Ok(model_offer)
+    }
+
+    /// Checks if an offer belongs to us based on metadata and entity_id
+    fn is_own_offer(&self, metadata: &EntityMetaData) -> bool {
+        let identities = self.inner.identities.lock().unwrap();
+        let owner_bytes = NodeId::from(metadata.owner.as_slice());
+        identities.contains(&owner_bytes)
     }
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
@@ -209,6 +218,12 @@ impl Discovery {
     /// signing storage transactions.
     async fn initialize_account(&self) -> Result<()> {
         let node_ids = self.inner.identity.list_active_ids().await?;
+        {
+            let mut identities = self.inner.identities.lock().unwrap();
+            identities.clear();
+            identities.extend(node_ids.iter().cloned());
+        }
+
         for node_id in node_ids {
             if let Err(e) = self.register_signer(node_id).await {
                 log::error!("Failed to register signer for {}: {}", node_id, e);
@@ -221,7 +236,7 @@ impl Discovery {
         let events = self
             .inner
             .golem_base
-            .events_client_with_url(self.inner.config.golem_base_ws_url.clone())
+            .events_client_with_url(self.inner.config.get_ws_url().clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
 
@@ -279,12 +294,24 @@ impl Discovery {
         Ok(())
     }
 
+    /// Validates if an entity is a Golem offer by checking its marketplace type annotation
+    fn is_golem_offer(metadata: &EntityMetaData) -> bool {
+        metadata.string_annotations.iter().any(|annotation| {
+            annotation.key == "golem_marketplace_type" && annotation.value == "Offer"
+        })
+    }
+
     /// Handles incoming Golem Base events
     async fn handle_golem_base_event(&self, event: Event) -> anyhow::Result<()> {
         let client = self.inner.golem_base.clone();
 
         match event {
             Event::EntityCreated { entity_id, .. } => {
+                let metadata = client.get_entity_metadata(entity_id).await?;
+                if !Self::is_golem_offer(&metadata) || self.is_own_offer(&metadata) {
+                    return Ok(());
+                }
+
                 log::trace!("Entity created in Golem Base: {}", entity_id);
 
                 let offer = client.cat(entity_id).await?;
@@ -347,12 +374,10 @@ impl Discovery {
 
     async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), DiscoveryInitError> {
         log::debug!("Subscribing to identity events on endpoint: {}", endpoint);
-        bus::service(ya_core_model::identity::BUS_ID)
-            .send(ya_core_model::identity::Subscribe {
-                endpoint: endpoint.to_string(),
-            })
+        self.inner
+            .identity
+            .subscribe_to_events(endpoint)
             .await
-            .map(|_| ())
             .map_err(|e| DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string()))
     }
 
@@ -372,9 +397,11 @@ impl Discovery {
         match event {
             IdentityEvent::AccountLocked { identity } => {
                 log::debug!("Account locked for {identity} - no new offers will be published");
+                self.inner.identities.lock().unwrap().remove(&identity);
             }
             IdentityEvent::AccountUnlocked { identity } => {
                 log::debug!("Account unlocked - registering new signer for {identity}");
+                self.inner.identities.lock().unwrap().insert(identity);
                 if let Err(e) = self.register_signer(identity).await {
                     log::error!("Failed to register new signer for {identity}: {e}");
                     return Err(Error::InternalErr(format!(
@@ -449,6 +476,36 @@ impl Discovery {
         Ok(())
     }
 
+    async fn fund_local_account(&self, address: Address) -> anyhow::Result<()> {
+        self.inner
+            .golem_base
+            .fund(address, BigDecimal::from(10))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fund local wallet: {}", e))
+            .map(|_| ())
+    }
+
+    async fn fund_from_faucet(&self, address: Address) -> anyhow::Result<()> {
+        let faucet_url = self.inner.config.get_faucet_url().join("/api/faucet")?;
+        let response = reqwest::Client::new()
+            .post(faucet_url.to_string())
+            .json(&serde_json::json!({
+                "address": address.to_string()
+            }))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to request funds from faucet: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Faucet request failed with status: {}, body: {}",
+                response.status(),
+                response.text().await?
+            ));
+        }
+        Ok(())
+    }
+
     async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
@@ -463,10 +520,17 @@ impl Discovery {
 
         let client = self.inner.golem_base.clone();
         let address = Address::from(&wallet.into_array());
-        client
-            .fund(address, BigDecimal::from(10))
-            .await
-            .map_err(|e| RpcMessageError::Market(format!("Failed to fund wallet: {}", e)))?;
+
+        match self.inner.config.get_network_type() {
+            GolemBaseNetwork::Local => self
+                .fund_local_account(address)
+                .await
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+            _ => self
+                .fund_from_faucet(address)
+                .await
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+        }
 
         // Get balance after funding
         let balance = client

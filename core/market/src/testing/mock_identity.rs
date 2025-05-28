@@ -41,6 +41,11 @@ impl IdentityApi for MockIdentity {
     async fn sign(&self, _node_id: &NodeId, _data: &[u8]) -> Result<Vec<u8>, IdentityError> {
         Err(IdentityError::SigningError("Not implemented".to_string()))
     }
+
+    async fn subscribe_to_events(&self, _endpoint: &str) -> Result<(), IdentityError> {
+        // Mock implementation just returns Ok
+        Ok(())
+    }
 }
 
 impl MockIdentity {

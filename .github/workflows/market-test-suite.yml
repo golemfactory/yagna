@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-latest, windows-latest, ubuntu-latest ]
+        os: [ ubuntu-latest ]
 
     steps:
       - name: Checkout
@@ -64,6 +64,9 @@ jobs:
           vcpkg install openssl:x64-windows openssl:x64-windows-static
           vcpkg list
           vcpkg integrate install
+
+      - name: Setup GolemBase local instance
+        uses: ./.github/actions/setup-golembase
 
       - name: Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1

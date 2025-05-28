@@ -30,6 +30,7 @@ pub trait IdentityApi: Send + Sync {
     async fn default_identity(&self) -> Result<NodeId, IdentityError>;
     async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError>;
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError>;
+    async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), IdentityError>;
 
     async fn list_ids(&self) -> Result<Vec<NodeId>, IdentityError> {
         Ok(self
@@ -84,6 +85,17 @@ impl IdentityApi for IdentityGSB {
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
             .map_err(|e| IdentityError::SigningError(e.to_string()))?)
+    }
+
+    async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), IdentityError> {
+        bus::service(identity::BUS_ID)
+            .send(identity::Subscribe {
+                endpoint: endpoint.to_string(),
+            })
+            .await
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?
+            .map(|_| ())
+            .map_err(|e| IdentityError::GsbError(e.to_string()))
     }
 }
 

@@ -1,5 +1,6 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use golem_base_sdk::client::GolemBaseClient;
@@ -76,7 +77,7 @@ impl DiscoveryBuilder {
             DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
         })?;
 
-        let golem_base = GolemBaseClient::new_uninitialized(config.golem_base_rpc_url.clone())
+        let golem_base = GolemBaseClient::new_uninitialized(config.get_rpc_url().clone())
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
         let discovery = Discovery {
@@ -85,6 +86,7 @@ impl DiscoveryBuilder {
                 offer_handlers,
                 config: config.clone(),
                 golem_base,
+                identities: std::sync::Mutex::new(HashSet::new()),
             }),
         };
 

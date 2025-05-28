@@ -122,6 +122,12 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     let provider_config = cmd.ya_provider()?.get_config().await?;
     let address =
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
+
+    // Fund account with toknes to pay fees for publishing Offers on GolemBase.
+    if let Err(e) = cmd.yagna()?.market_fund(Some(&address)).await {
+        log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+    }
+
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         for driver in DRIVERS.iter() {
             if driver.platform(nn).is_err() {
