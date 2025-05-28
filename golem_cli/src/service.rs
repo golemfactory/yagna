@@ -3,8 +3,12 @@ use crate::command::{YaCommand, DRIVERS, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 use crate::utils::payment_account;
 
+<<<<<<< HEAD
 use anyhow::{Context, Result};
 use bigdecimal::BigDecimal;
+=======
+use anyhow::{anyhow, Context, Result};
+>>>>>>> 0638f4a93 (golemsp funds indentity that will be used by provider)
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
@@ -125,11 +129,14 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     let provider_config = cmd.ya_provider()?.get_config().await?;
     let address =
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
+    let identity = appkey::get_identity_for_app_key()
+        .await?
+        .ok_or(anyhow!("Unexpected error: AppKey should have identity."))?;
 
     // Fund account with toknes to pay fees for publishing Offers on GolemBase.
-    if let Err(e) = cmd.yagna()?.market_fund(Some(&address)).await {
+    if let Err(e) = cmd.yagna()?.market_fund(Some(&identity)).await {
         // Only warn if balance is below threshold
-        if let Ok(balance) = cmd.yagna()?.market_balance(Some(&address)).await {
+        if let Ok(balance) = cmd.yagna()?.market_balance(Some(&identity)).await {
             if balance < BigDecimal::from_str("0.0003")? {
                 log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
             }
