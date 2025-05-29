@@ -11,7 +11,7 @@ use ya_client::model::market::{
 };
 
 use ya_core_model::bus::GsbBindPoints;
-use ya_core_model::{self as model, market};
+use ya_core_model::{self as model};
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
@@ -365,7 +365,7 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let identity_api = IdentityGSB::new(market::bus_bindpoints(None));
+            let identity_api = IdentityGSB::new(GsbBindPoints::default());
             let config = Arc::new(Config::from_env()?);
             let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());

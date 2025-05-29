@@ -131,7 +131,7 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     // ya-provider will publish Offers using default identity, so we need to fund
     // this account and not the one provided by the user.
     if let Err(e) = cmd.yagna()?.market_fund(Some(&identity)).await {
-        log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+        log::warn!("Failed to fund market with GolemBase tokens (account: {identity}). Error: {e}");
     }
 
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
