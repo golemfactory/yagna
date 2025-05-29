@@ -1,0 +1,11 @@
+FROM rust:bullseye AS builder
+WORKDIR /usr/src/yagna
+COPY . .
+RUN apt-get update && apt-get install -y build-essential libtool cmake && rm -rf /var/lib/apt/lists/*
+RUN cargo build --release --features require-consent,static-openssl -p yagna -p ya-exe-unit -p golemsp -p ya-provider
+
+FROM debian:bullseye-slim
+COPY --from=builder /usr/src/yagna/target/release/yagna /usr/local/bin/yagna
+COPY --from=builder /usr/src/yagna/target/release/ya-provider /usr/local/bin/ya-provider
+COPY --from=builder /usr/src/yagna/target/release/golemsp /usr/local/bin/golemsp
+CMD ["yagna"]
