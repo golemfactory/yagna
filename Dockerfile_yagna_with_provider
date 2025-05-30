@@ -1,0 +1,25 @@
+FROM rust:bullseye AS builder
+
+ENV YA_RUNTIME_VM_VERSION=v0.5.2
+WORKDIR /usr/src/yagna
+
+COPY . .
+RUN apt-get update && apt-get install -y build-essential libtool cmake wget && rm -rf /var/lib/apt/lists/*
+RUN wget https://github.com/golemfactory/ya-runtime-vm/releases/download/${YA_RUNTIME_VM_VERSION}/ya-runtime-vm-linux-${YA_RUNTIME_VM_VERSION}.tar.gz
+RUN tar -xzf ya-runtime-vm-linux-${YA_RUNTIME_VM_VERSION}.tar.gz
+RUN rm ya-runtime-vm-linux-${YA_RUNTIME_VM_VERSION}.tar.gz
+RUN mv ya-runtime-vm-linux-${YA_RUNTIME_VM_VERSION} ya-runtime-vm
+RUN cargo build --release --features require-consent,static-openssl -p yagna -p ya-exe-unit -p golemsp -p ya-provider
+
+
+FROM debian:bullseye-slim
+ENV EXE_UNIT_PATH=/usr/local/exe-unit
+RUN mkdir -p ${EXE_UNIT_PATH}
+
+COPY --from=builder /usr/src/yagna/target/release/yagna /usr/local/bin/yagna
+COPY --from=builder /usr/src/yagna/target/release/ya-provider /usr/local/bin/ya-provider
+COPY --from=builder /usr/src/yagna/target/release/golemsp /usr/local/bin/golemsp
+COPY --from=builder /usr/src/yagna/target/release/exe-unit ${EXE_UNIT_PATH}/exe-unit
+COPY --from=builder /usr/src/yagna/ya-runtime-vm/* ${EXE_UNIT_PATH}/
+
+CMD ["golemsp run"]

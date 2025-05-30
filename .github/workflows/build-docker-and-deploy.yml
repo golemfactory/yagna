@@ -13,7 +13,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-and-push-image:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,12 +32,16 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch,prefix=
+            type=ref,event=tag,prefix=
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile_yagna
+          file: Dockerfile_yagna_with_provider
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
