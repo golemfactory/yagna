@@ -10,7 +10,7 @@ use std::time::Duration;
 use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
-use ya_core_model::market::local;
+use ya_core_model::market::{local, GetGolemBaseOffer, GetGolemBaseOfferResponse};
 use ya_core_model::market::{
     FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
     RpcMessageError,
@@ -503,7 +503,48 @@ impl Discovery {
             async move { myself.get_balance(msg).await }
         });
 
+        // Bind get offer handler
+        let discovery = self.clone();
+        bus::bind(&endpoint, move |msg: GetGolemBaseOffer| {
+            let myself = discovery.clone();
+            async move {
+                myself
+                    .get_offer(msg)
+                    .await
+                    .map_err(|e| RpcMessageError::Market(e.to_string()))
+            }
+        });
+
         Ok(())
+    }
+
+    async fn get_offer(&self, msg: GetGolemBaseOffer) -> anyhow::Result<GetGolemBaseOfferResponse> {
+        let offer_id = msg
+            .offer_id
+            .parse::<Hash>()
+            .map_err(|e| anyhow::anyhow!("Invalid offer ID format: {}", e))?;
+
+        let client = self.inner.golem_base.clone();
+        let block_number = client
+            .get_current_block_number()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
+
+        let content = client.cat(offer_id).await?;
+        let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
+
+        let metadata = client
+            .get_entity_metadata(offer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
+        let metadata = serde_json::to_value(&metadata)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
+
+        Ok(GetGolemBaseOfferResponse {
+            offer,
+            current_block: block_number,
+            metadata,
+        })
     }
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {

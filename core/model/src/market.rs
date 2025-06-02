@@ -2,7 +2,9 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json;
 
+use ya_client_model::market::Offer as ClientOffer;
 use ya_client_model::market::{agreement::State, Role};
 pub use ya_client_model::market::{Agreement, AgreementListEntry};
 use ya_client_model::NodeId;
@@ -127,6 +129,24 @@ pub struct GetGolemBaseBalanceResponse {
     pub wallet: NodeId,
     pub balance: BigDecimal,
     pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseOffer {
+    pub offer_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseOfferResponse {
+    pub offer: ClientOffer,
+    pub current_block: u64,
+    pub metadata: serde_json::Value,
+}
+
+impl RpcMessage for GetGolemBaseOffer {
+    const ID: &'static str = "GetGolemBaseOffer";
+    type Item = GetGolemBaseOfferResponse;
+    type Error = RpcMessageError;
 }
 
 impl RpcMessage for GetGolemBaseBalance {
