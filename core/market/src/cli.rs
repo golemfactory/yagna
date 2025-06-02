@@ -172,7 +172,7 @@ impl GolemBaseCommand {
 
                 CommandOutput::object(json!({
                     "offer": offer,
-                    "current_block": response.current_block,
+                    "currentBlock": response.current_block,
                     "metadata": response.metadata
                 }))
             }
