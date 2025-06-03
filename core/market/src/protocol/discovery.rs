@@ -310,7 +310,7 @@ impl Discovery {
             Ok(accounts) => accounts,
             Err(e) => {
                 log::warn!("Removing outdated Offers: failed to list identities: `{e}`. Offers will remain.");
-                return ();
+                return;
             }
         };
 
