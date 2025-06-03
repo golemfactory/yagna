@@ -10,7 +10,7 @@ use std::time::Duration;
 use ya_client::model::NodeId;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
-use ya_core_model::market::local;
+use ya_core_model::market::{local, GetGolemBaseOffer, GetGolemBaseOfferResponse};
 use ya_core_model::market::{
     FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
     RpcMessageError,
@@ -269,6 +269,13 @@ impl Discovery {
         let discovery = self.clone();
         let client = self.inner.golem_base.clone();
 
+        // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
+        // any sense to keep them after restart and they polute GolemBase. Offers should expire
+        // after some period of time, so this step is not essential, but in case we restart after crash
+        // the old Offers would remain.
+        log::debug!("Removing all existing offers from previous runs..");
+        self.remove_all_node_offers().await;
+
         // Get current block number to start listening from
         let current_block = client.get_current_block_number().await.map_err(|e| {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {}", e))
@@ -290,6 +297,57 @@ impl Discovery {
                 .inspect_err(|e| log::error!("Error in GolemBase events listener: {}", e))
                 .ok();
         });
+
+        Ok(())
+    }
+
+    /// Removes all offers published by any of the node's identities
+    async fn remove_all_node_offers(&self) {
+        // Get all identities, excluding locked and removed ones. We won't be able to sign
+        // removal transaction. @Note We could use default identity as a signer, but it would
+        // work temporary until proper permission management on GolemBase is implemented.
+        let accounts = match self.inner.identity.list_active_ids().await {
+            Ok(accounts) => accounts,
+            Err(e) => {
+                log::warn!("Removing outdated Offers: failed to list identities: `{e}`. Offers will remain.");
+                return;
+            }
+        };
+
+        for account in accounts {
+            if let Err(e) = self.remove_identity_offers(account).await {
+                log::warn!("Failed to remove Offers for identity {account}: {e}");
+            }
+        }
+    }
+
+    /// Removes all offers published by a specific identity
+    async fn remove_identity_offers(&self, node_id: NodeId) -> anyhow::Result<()> {
+        let address = Address::from(&node_id.into_array());
+
+        // Get all entries owned by this address
+        let results = self.inner.golem_base.get_entities_of_owner(address).await?;
+
+        // Filter only offer entries
+        let mut offer_entries = Vec::new();
+        for result in results {
+            let metadata = self.inner.golem_base.get_entity_metadata(result).await?;
+
+            // It's important. If we would run on GolemBase chain that is not dedicated for marketplace
+            // only, we would remove entries published by other applications.
+            if Self::is_golem_offer(&metadata) {
+                offer_entries.push(result);
+            }
+        }
+
+        if !offer_entries.is_empty() {
+            let count = offer_entries.len();
+            self.inner
+                .golem_base
+                .remove_entries(address, offer_entries)
+                .await?;
+            log::info!("Removed {} offers for identity {}", count, node_id);
+        }
 
         Ok(())
     }
@@ -445,7 +503,48 @@ impl Discovery {
             async move { myself.get_balance(msg).await }
         });
 
+        // Bind get offer handler
+        let discovery = self.clone();
+        bus::bind(&endpoint, move |msg: GetGolemBaseOffer| {
+            let myself = discovery.clone();
+            async move {
+                myself
+                    .get_offer(msg)
+                    .await
+                    .map_err(|e| RpcMessageError::Market(e.to_string()))
+            }
+        });
+
         Ok(())
+    }
+
+    async fn get_offer(&self, msg: GetGolemBaseOffer) -> anyhow::Result<GetGolemBaseOfferResponse> {
+        let offer_id = msg
+            .offer_id
+            .parse::<Hash>()
+            .map_err(|e| anyhow::anyhow!("Invalid offer ID format: {}", e))?;
+
+        let client = self.inner.golem_base.clone();
+        let block_number = client
+            .get_current_block_number()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
+
+        let content = client.cat(offer_id).await?;
+        let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
+
+        let metadata = client
+            .get_entity_metadata(offer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
+        let metadata = serde_json::to_value(&metadata)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
+
+        Ok(GetGolemBaseOfferResponse {
+            offer,
+            current_block: block_number,
+            metadata,
+        })
     }
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
