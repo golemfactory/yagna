@@ -31,9 +31,9 @@ impl GolemBaseNetwork {
         configs.insert(
             GolemBaseNetwork::Kaolin,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
-                rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
-                ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                faucet_url: Url::parse("https://kaolin.holesky.golem-base.io/faucet/").unwrap(),
+                rpc_url: Url::parse("https://kaolin.holesky.golem-base.io/rpc").unwrap(),
+                ws_url: Url::parse("wss://kaolin.holesky.golem-base.io/rpc/ws").unwrap(),
             },
         );
         configs.insert(
