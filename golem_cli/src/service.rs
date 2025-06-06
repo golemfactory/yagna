@@ -2,12 +2,15 @@ use crate::appkey;
 use crate::command::{YaCommand, DRIVERS, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 use crate::utils::payment_account;
+
 use anyhow::{Context, Result};
+use bigdecimal::BigDecimal;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
 use std::io;
 use std::process::ExitStatus;
+use std::str::FromStr;
 use tokio::process::Child;
 use tokio::time::Duration;
 
@@ -125,7 +128,14 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
 
     // Fund account with toknes to pay fees for publishing Offers on GolemBase.
     if let Err(e) = cmd.yagna()?.market_fund(Some(&address)).await {
-        log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+        // Only warn if balance is below threshold
+        if let Ok(balance) = cmd.yagna()?.market_balance(Some(&address)).await {
+            if balance < BigDecimal::from_str("0.0003")? {
+                log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+            }
+        } else {
+            log::debug!("Failed to fund market with GolemBase tokens. Error: {e}");
+        }
     }
 
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {

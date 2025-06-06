@@ -23,7 +23,7 @@ ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-std-utils.workspace = true
 ya-utils-actix.workspace = true
-golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", branch = "sequential-transactions" }
+golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", rev = "462fe5beebc998e03d2f3f8646dd820cc96d0463" }
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"
