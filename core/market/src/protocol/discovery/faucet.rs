@@ -1,0 +1,168 @@
+use crate::config::DiscoveryConfig;
+use crate::protocol::discovery::pow::solve_pow;
+
+use anyhow::Result;
+use bigdecimal::BigDecimal;
+use golem_base_sdk::Address;
+use golem_base_sdk::{client::GolemBaseClient, Hash};
+use serde::{Deserialize, Serialize};
+use url::Url;
+
+/// Response from the challenge endpoint
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChallengeResponse {
+    /// List of challenges to solve
+    pub challenge: Vec<[String; 2]>,
+    /// Token to use for redeeming the solution
+    pub token: String,
+    /// Expiration timestamp for the challenge
+    pub expires: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaucetResponse {
+    pub tx_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedeemResponse {
+    pub success: bool,
+    pub token: String,
+    pub expires: i64,
+}
+
+pub struct FaucetClient {
+    config: DiscoveryConfig,
+    client: GolemBaseClient,
+}
+
+impl FaucetClient {
+    pub fn new(config: DiscoveryConfig, client: GolemBaseClient) -> Self {
+        Self { config, client }
+    }
+
+    pub async fn fund_local_account(&self, address: Address) -> Result<()> {
+        self.client
+            .fund(address, BigDecimal::from(10))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fund local wallet: {}", e))
+            .map(|_| ())
+    }
+
+    pub async fn fund_from_faucet(&self, address: &str) -> Result<()> {
+        let faucet_url = self.config.get_faucet_url().join("/api/faucet")?;
+        let request = serde_json::json!({
+            "address": address
+        });
+
+        self.post::<_, ()>(&faucet_url, request).await
+    }
+
+    pub async fn fund_from_faucet_with_pow(&self, address: &str) -> Result<()> {
+        log::info!("GolemBase: Funding address {address} from faucet with PoW");
+
+        // External PoW service is used to acquire access token to the faucet.
+        let pow_url = Url::parse("https://cap.gobas.me/05381a2cef5e/api/")?;
+
+        // First get the challenge from the faucet
+        let response: ChallengeResponse = self
+            .post::<(), ChallengeResponse>(&pow_url.join("challenge")?, ())
+            .await?;
+
+        let token = response.token.clone();
+        let total = response.challenge.len();
+        let log_interval = total / 10;
+
+        log::info!("GolemBase fund: Received {total} challenges to solve (address {address})");
+
+        let solutions = tokio::task::spawn_blocking(move || {
+            let mut solutions: Vec<serde_json::Value> = Vec::new();
+
+            for (i, [hash, target]) in response.challenge.into_iter().enumerate() {
+                let solution = solve_pow(&hash, &target);
+                solutions.push(serde_json::json!([hash, target, solution]));
+
+                let solved = i + 1;
+                if solved % log_interval == 0 || solved == total {
+                    log::debug!("GolemBase fund: Solved {solved}/{total} challenges");
+                }
+            }
+
+            solutions
+        })
+        .await?;
+
+        let redeem_response: RedeemResponse = self
+            .post::<_, RedeemResponse>(
+                &pow_url.join("redeem")?,
+                serde_json::json!({
+                    "token": token,
+                    "solutions": solutions
+                }),
+            )
+            .await?;
+
+        if !redeem_response.success {
+            return Err(anyhow::anyhow!(
+                "PoW server claims, that our challenge solutions are invalid (address {address})."
+            ));
+        }
+
+        // Request funds from faucet using the token
+        let faucet_request_url = self.config.get_faucet_url().join("api/faucet")?;
+        let request = serde_json::json!({
+            "address": address,
+            "captchaToken": redeem_response.token
+        });
+
+        log::info!("GolemBase fund: Requesting funds from faucet for address {address}");
+
+        let response: FaucetResponse = self
+            .post::<_, FaucetResponse>(&faucet_request_url, request)
+            .await?;
+
+        log::info!(
+            "GolemBase fund: Received tx hash: {}, waiting for it to be mined...",
+            response.tx_hash
+        );
+
+        // Wait for transaction to be mined
+        self.client
+            .wait_for_transaction(response.tx_hash.parse::<Hash>()?)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to wait for transaction: {}", e))?;
+
+        log::info!("GolemBase fund: Successfully funded address {address}");
+        Ok(())
+    }
+
+    /// Generic function to handle request/response flow with PoW challenge
+    async fn post<Req, Resp>(&self, url: &Url, request: Req) -> Result<Resp>
+    where
+        Req: Serialize,
+        Resp: for<'de> Deserialize<'de>,
+    {
+        let response = reqwest::Client::new()
+            .post(url.to_string())
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to make request: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Request failed with status: {}, body: {}",
+                response.status(),
+                response.text().await?
+            ));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse response: {}", e))
+    }
+}

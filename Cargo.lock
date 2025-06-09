@@ -4284,7 +4284,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?rev=462fe5beebc998e03d2f3f8646dd820cc96d0463#462fe5beebc998e03d2f3f8646dd820cc96d0463"
+source = "git+https://github.com/Golem-Base/rust-sdk?rev=81483fe5b7d7f1d704b3166f46c9c05678465254#81483fe5b7d7f1d704b3166f46c9c05678465254"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -11502,6 +11502,7 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
+ "sha2 0.10.8",
  "sha3 0.8.2",
  "structopt",
  "strum 0.24.1",

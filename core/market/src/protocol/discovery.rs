@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
 use futures::StreamExt;
 use offer::GolemBaseOffer;
@@ -30,6 +29,7 @@ use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
+use crate::protocol::discovery::faucet::FaucetClient;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
@@ -39,8 +39,10 @@ const BLOCK_TIME_SECONDS: i64 = 2;
 
 pub mod builder;
 pub mod error;
+pub mod faucet;
 pub mod message;
 pub mod offer;
+pub mod pow;
 
 /// Responsible for communication with Golem Base during discovery phase.
 #[derive(Clone)]
@@ -575,36 +577,6 @@ impl Discovery {
         Ok(())
     }
 
-    async fn fund_local_account(&self, address: Address) -> anyhow::Result<()> {
-        self.inner
-            .golem_base
-            .fund(address, BigDecimal::from(10))
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fund local wallet: {}", e))
-            .map(|_| ())
-    }
-
-    async fn fund_from_faucet(&self, address: Address) -> anyhow::Result<()> {
-        let faucet_url = self.inner.config.get_faucet_url().join("/api/faucet")?;
-        let response = reqwest::Client::new()
-            .post(faucet_url.to_string())
-            .json(&serde_json::json!({
-                "address": address.to_string()
-            }))
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to request funds from faucet: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Faucet request failed with status: {}, body: {}",
-                response.status(),
-                response.text().await?
-            ));
-        }
-        Ok(())
-    }
-
     async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
@@ -620,13 +592,14 @@ impl Discovery {
         let client = self.inner.golem_base.clone();
         let address = Address::from(&wallet.into_array());
 
+        let faucet_client = FaucetClient::new(self.inner.config.clone(), client.clone());
         match self.inner.config.get_network_type() {
-            GolemBaseNetwork::Local => self
+            GolemBaseNetwork::Local => faucet_client
                 .fund_local_account(address)
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
-            _ => self
-                .fund_from_faucet(address)
+            _ => faucet_client
+                .fund_from_faucet_with_pow(&address.to_string())
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
         }
