@@ -21,6 +21,8 @@ pub struct Config {
 pub enum GolemBaseNetwork {
     #[clap(name = "Kaolin")]
     Kaolin,
+    #[clap(name = "Marketplace")]
+    Marketplace,
     #[clap(name = "Local")]
     Local,
 }
@@ -34,6 +36,15 @@ impl GolemBaseNetwork {
                 faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
                 rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
                 ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+            },
+        );
+        configs.insert(
+            GolemBaseNetwork::Marketplace,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://marketplace.holesky.golem-base.io/faucet/")
+                    .unwrap(),
+                rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
+                ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
             },
         );
         configs.insert(
@@ -62,7 +73,7 @@ pub struct GolemBaseRpcConfig {
 pub struct DiscoveryConfig {
     #[clap(skip = GolemBaseNetwork::default_config())]
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
-    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Kaolin")]
+    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
 }
 
