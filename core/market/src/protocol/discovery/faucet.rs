@@ -154,6 +154,33 @@ impl FaucetClient {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to wait for transaction: {}", e))?;
 
+        // Transaction was mined on L2, but now we need to wait until funds will be available on L3.
+        // There is no simple way to check what L3 transaction corresponds to the L2 one.
+        // Instead we will poll balance until it increases and assume that the increase is a result
+        // of funding.
+        // If it's not than it isn't the problem, because the funds are anyway available.
+        let address = address.parse()?;
+        let mut last_balance = self.client.get_balance(address).await?;
+
+        loop {
+            let current_balance = self.client.get_balance(address).await?;
+            match current_balance.cmp(&last_balance) {
+                std::cmp::Ordering::Greater => {
+                    log::info!(
+                        "GolemBase fund: Detected balance increase, funds received (address {address})."
+                    );
+                    break;
+                }
+                std::cmp::Ordering::Less => {
+                    // Balance decreased - wallet is being used and funds are being spent.
+                    last_balance = current_balance.clone();
+                }
+                std::cmp::Ordering::Equal => {}
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+        }
+
         log::info!("GolemBase fund: Successfully funded address {address}");
         Ok(())
     }

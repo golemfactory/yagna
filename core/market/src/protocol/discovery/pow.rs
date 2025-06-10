@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 pub fn solve_pow(salt: &str, target: &str) -> u64 {
     let salt_bytes = salt.as_bytes();
 
-    let target_bytes = parse_hex_target(&target);
+    let target_bytes = parse_hex_target(target);
     let target_bits = target.len() * 4; // each hex char = 4 bits
 
     let mut nonce_buffer = [0u8; 20]; // u64::MAX has at most 20 digits
