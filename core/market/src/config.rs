@@ -36,8 +36,10 @@ impl GolemBaseNetwork {
                 faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
                 rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
                 ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
             },
         );
+        // Configuration: https://marketplace.holesky.golem-base.io/
         configs.insert(
             GolemBaseNetwork::Marketplace,
             GolemBaseRpcConfig {
@@ -45,6 +47,7 @@ impl GolemBaseNetwork {
                     .unwrap(),
                 rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
                 ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
             },
         );
         configs.insert(
@@ -53,6 +56,7 @@ impl GolemBaseNetwork {
                 faucet_url: Url::parse("http://localhost:8545").unwrap(),
                 rpc_url: Url::parse("http://localhost:8545").unwrap(),
                 ws_url: Url::parse("ws://localhost:8545").unwrap(),
+                l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
             },
         );
         configs
@@ -67,6 +71,8 @@ pub struct GolemBaseRpcConfig {
     pub rpc_url: Url,
     #[clap(env, value_parser = parse_url, default_value = "ws://localhost:8545")]
     pub ws_url: Url,
+    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub l2_rpc_url: Url,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -92,6 +98,10 @@ impl DiscoveryConfig {
 
     pub fn get_faucet_url(&self) -> &Url {
         &self.configs.get(&self.network).unwrap().faucet_url
+    }
+
+    pub fn get_l2_rpc_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().l2_rpc_url
     }
 }
 

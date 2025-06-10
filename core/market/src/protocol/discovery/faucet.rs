@@ -61,24 +61,12 @@ impl FaucetClient {
         self.post::<_, ()>(&faucet_url, request).await
     }
 
-    pub async fn fund_from_faucet_with_pow(&self, address: &str) -> Result<()> {
-        log::info!("GolemBase: Funding address {address} from faucet with PoW");
-
-        // External PoW service is used to acquire access token to the faucet.
-        let pow_url = Url::parse("https://cap.gobas.me/05381a2cef5e/api/")?;
-
-        // First get the challenge from the faucet
-        let response: ChallengeResponse = self
-            .post::<(), ChallengeResponse>(&pow_url.join("challenge")?, ())
-            .await?;
-
-        let token = response.token.clone();
+    /// Computes solutions for the given challenge response
+    pub async fn compute_solutions(response: ChallengeResponse) -> Result<Vec<serde_json::Value>> {
         let total = response.challenge.len();
         let log_interval = total / 10;
 
-        log::info!("GolemBase fund: Received {total} challenges to solve (address {address})");
-
-        let solutions = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let mut solutions: Vec<serde_json::Value> = Vec::new();
 
             for (i, [hash, target]) in response.challenge.into_iter().enumerate() {
@@ -93,7 +81,23 @@ impl FaucetClient {
 
             solutions
         })
-        .await?;
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to compute solutions: {}", e))
+    }
+
+    pub async fn fund_from_faucet_with_pow(&self, address: &str) -> Result<()> {
+        log::info!("GolemBase: Funding address {address} from PoW faucet");
+
+        // External PoW service is used to acquire access token to the faucet.
+        let pow_url = Url::parse("https://cap.gobas.me/05381a2cef5e/api/")?;
+
+        // First get the challenge from the faucet
+        let response: ChallengeResponse = self
+            .post::<(), ChallengeResponse>(&pow_url.join("challenge")?, ())
+            .await?;
+
+        let token = response.token.clone();
+        let solutions = Self::compute_solutions(response).await?;
 
         let redeem_response: RedeemResponse = self
             .post::<_, RedeemResponse>(
@@ -129,8 +133,10 @@ impl FaucetClient {
             response.tx_hash
         );
 
-        // Wait for transaction to be mined
-        self.client
+        // Wait for transaction to be mined.
+        // Note: Transaction hash references L2 bridge deposit, that's why we need a new client.
+        let client = GolemBaseClient::new(self.config.get_l2_rpc_url().clone())?;
+        client
             .wait_for_transaction(response.tx_hash.parse::<Hash>()?)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to wait for transaction: {}", e))?;
