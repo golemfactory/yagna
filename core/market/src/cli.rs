@@ -9,7 +9,9 @@ use ya_agreement_utils::agreement::{expand, flatten};
 use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
 use ya_core_model::market::local as market_bus;
-use ya_core_model::market::{FundGolemBase, GetAgreement, GetGolemBaseBalance, ListAgreements};
+use ya_core_model::market::{
+    FundGolemBase, GetAgreement, GetGolemBaseBalance, GetGolemBaseOffer, ListAgreements,
+};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -123,6 +125,13 @@ pub enum GolemBaseCommand {
         )]
         wallet: Option<NodeId>,
     },
+    /// Get offer from GolemBase
+    GetOffer {
+        #[structopt(help = "Offer ID to retrieve")]
+        offer_id: String,
+        #[structopt(long, help = "Flatten offer")]
+        flatten: bool,
+    },
 }
 
 impl GolemBaseCommand {
@@ -145,7 +154,27 @@ impl GolemBaseCommand {
                     .await??;
 
                 CommandOutput::object(json!({
-                    "message": format!("GolemBase wallet {} balance: {} tGLM", response.wallet, response.balance)
+                    "message": format!("GolemBase wallet {} balance: {} tGLM", response.wallet, response.balance),
+                    "balance": response.balance
+                }))
+            }
+            GolemBaseCommand::GetOffer { offer_id, flatten } => {
+                let request = GetGolemBaseOffer { offer_id };
+                let response = bus::service(market_bus::discovery_endpoint())
+                    .send(request)
+                    .await??;
+
+                let mut offer = response.offer;
+                offer.properties = if flatten {
+                    serde_json::to_value(ya_agreement_utils::agreement::flatten(offer.properties))?
+                } else {
+                    offer.properties
+                };
+
+                CommandOutput::object(json!({
+                    "offer": offer,
+                    "currentBlock": response.current_block,
+                    "metadata": response.metadata
                 }))
             }
         }

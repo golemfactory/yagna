@@ -262,22 +262,22 @@ Typically operation should take less than 1 minute.
 "#;
                 log::warn!("{}", warn_message);
 
-                // Fund payment wallet.
-                let driver_fund_result = wallet::fund(
-                    address.clone(),
-                    account.driver(),
-                    Some(account.network()),
-                    None,
-                    mint_only,
-                )
-                .await?;
-
-                // Fund GolemBase wallet for paying gas fees when publishing Offers.
-                let golembase_result = bus::service(market_bus::discovery_endpoint())
-                    .send(FundGolemBase {
+                // Fund payment wallet and GolemBase wallet concurrently
+                let (driver_fund_result, golembase_result) = tokio::join!(
+                    wallet::fund(
+                        address.clone(),
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                        mint_only,
+                    ),
+                    bus::service(market_bus::discovery_endpoint()).send(FundGolemBase {
                         wallet: Some(address.parse()?),
                     })
-                    .await??;
+                );
+
+                let driver_fund_result = driver_fund_result?;
+                let golembase_result = golembase_result??;
 
                 CommandOutput::object(json!({
                     "driver": driver_fund_result,

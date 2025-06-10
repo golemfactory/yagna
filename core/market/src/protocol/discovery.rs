@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
 use futures::StreamExt;
 use offer::GolemBaseOffer;
@@ -11,7 +10,7 @@ use ya_client::model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
-use ya_core_model::market::local;
+use ya_core_model::market::{local, GetGolemBaseOffer, GetGolemBaseOfferResponse};
 use ya_core_model::market::{
     FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
     RpcMessageError,
@@ -31,6 +30,7 @@ use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
+use crate::protocol::discovery::faucet::FaucetClient;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
@@ -40,8 +40,10 @@ const BLOCK_TIME_SECONDS: i64 = 2;
 
 pub mod builder;
 pub mod error;
+pub mod faucet;
 pub mod message;
 pub mod offer;
+pub mod pow;
 
 /// Responsible for communication with Golem Base during discovery phase.
 #[derive(Clone)]
@@ -270,6 +272,13 @@ impl Discovery {
         let discovery = self.clone();
         let client = self.inner.golem_base.clone();
 
+        // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
+        // any sense to keep them after restart and they polute GolemBase. Offers should expire
+        // after some period of time, so this step is not essential, but in case we restart after crash
+        // the old Offers would remain.
+        log::debug!("Removing all existing offers from previous runs..");
+        self.remove_all_node_offers().await;
+
         // Get current block number to start listening from
         let current_block = client.get_current_block_number().await.map_err(|e| {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {}", e))
@@ -291,6 +300,57 @@ impl Discovery {
                 .inspect_err(|e| log::error!("Error in GolemBase events listener: {}", e))
                 .ok();
         });
+
+        Ok(())
+    }
+
+    /// Removes all offers published by any of the node's identities
+    async fn remove_all_node_offers(&self) {
+        // Get all identities, excluding locked and removed ones. We won't be able to sign
+        // removal transaction. @Note We could use default identity as a signer, but it would
+        // work temporary until proper permission management on GolemBase is implemented.
+        let accounts = match self.inner.identity.list_active_ids().await {
+            Ok(accounts) => accounts,
+            Err(e) => {
+                log::warn!("Removing outdated Offers: failed to list identities: `{e}`. Offers will remain.");
+                return;
+            }
+        };
+
+        for account in accounts {
+            if let Err(e) = self.remove_identity_offers(account).await {
+                log::warn!("Failed to remove Offers for identity {account}: {e}");
+            }
+        }
+    }
+
+    /// Removes all offers published by a specific identity
+    async fn remove_identity_offers(&self, node_id: NodeId) -> anyhow::Result<()> {
+        let address = Address::from(&node_id.into_array());
+
+        // Get all entries owned by this address
+        let results = self.inner.golem_base.get_entities_of_owner(address).await?;
+
+        // Filter only offer entries
+        let mut offer_entries = Vec::new();
+        for result in results {
+            let metadata = self.inner.golem_base.get_entity_metadata(result).await?;
+
+            // It's important. If we would run on GolemBase chain that is not dedicated for marketplace
+            // only, we would remove entries published by other applications.
+            if Self::is_golem_offer(&metadata) {
+                offer_entries.push(result);
+            }
+        }
+
+        if !offer_entries.is_empty() {
+            let count = offer_entries.len();
+            self.inner
+                .golem_base
+                .remove_entries(address, offer_entries)
+                .await?;
+            log::info!("Removed {} offers for identity {}", count, node_id);
+        }
 
         Ok(())
     }
@@ -442,7 +502,48 @@ impl Discovery {
             async move { myself.get_balance(msg).await }
         });
 
+        // Bind get offer handler
+        let discovery = self.clone();
+        bus::bind(&endpoint, move |msg: GetGolemBaseOffer| {
+            let myself = discovery.clone();
+            async move {
+                myself
+                    .get_offer(msg)
+                    .await
+                    .map_err(|e| RpcMessageError::Market(e.to_string()))
+            }
+        });
+
         Ok(())
+    }
+
+    async fn get_offer(&self, msg: GetGolemBaseOffer) -> anyhow::Result<GetGolemBaseOfferResponse> {
+        let offer_id = msg
+            .offer_id
+            .parse::<Hash>()
+            .map_err(|e| anyhow::anyhow!("Invalid offer ID format: {}", e))?;
+
+        let client = self.inner.golem_base.clone();
+        let block_number = client
+            .get_current_block_number()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
+
+        let content = client.cat(offer_id).await?;
+        let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
+
+        let metadata = client
+            .get_entity_metadata(offer_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
+        let metadata = serde_json::to_value(&metadata)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
+
+        Ok(GetGolemBaseOfferResponse {
+            offer,
+            current_block: block_number,
+            metadata,
+        })
     }
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
@@ -473,36 +574,6 @@ impl Discovery {
         Ok(())
     }
 
-    async fn fund_local_account(&self, address: Address) -> anyhow::Result<()> {
-        self.inner
-            .golem_base
-            .fund(address, BigDecimal::from(10))
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fund local wallet: {}", e))
-            .map(|_| ())
-    }
-
-    async fn fund_from_faucet(&self, address: Address) -> anyhow::Result<()> {
-        let faucet_url = self.inner.config.get_faucet_url().join("/api/faucet")?;
-        let response = reqwest::Client::new()
-            .post(faucet_url.to_string())
-            .json(&serde_json::json!({
-                "address": address.to_string()
-            }))
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to request funds from faucet: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Faucet request failed with status: {}, body: {}",
-                response.status(),
-                response.text().await?
-            ));
-        }
-        Ok(())
-    }
-
     async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
@@ -518,13 +589,14 @@ impl Discovery {
         let client = self.inner.golem_base.clone();
         let address = Address::from(&wallet.into_array());
 
+        let faucet_client = FaucetClient::new(self.inner.config.clone(), client.clone());
         match self.inner.config.get_network_type() {
-            GolemBaseNetwork::Local => self
+            GolemBaseNetwork::Local => faucet_client
                 .fund_local_account(address)
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
-            _ => self
-                .fund_from_faucet(address)
+            _ => faucet_client
+                .fund_from_faucet_with_pow(&address.to_string())
                 .await
                 .map_err(|e| RpcMessageError::Market(e.to_string()))?,
         }
