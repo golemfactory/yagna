@@ -4284,7 +4284,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?rev=462fe5beebc998e03d2f3f8646dd820cc96d0463#462fe5beebc998e03d2f3f8646dd820cc96d0463"
+source = "git+https://github.com/Golem-Base/rust-sdk?rev=81483fe5b7d7f1d704b3166f46c9c05678465254#81483fe5b7d7f1d704b3166f46c9c05678465254"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4582,6 +4582,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
+name = "hermit-abi"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f154ce46856750ed433c8649605bf7ed2de3bc35fd9d2a9f30cddd873c80cb08"
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4809,7 +4815,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.7",
  "tokio",
  "tower-service",
  "tracing",
@@ -6106,11 +6112,11 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
- "hermit-abi 0.3.9",
+ "hermit-abi 0.5.1",
  "libc",
 ]
 
@@ -6903,7 +6909,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes 1.10.1",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap 0.10.0",
@@ -11492,6 +11498,7 @@ dependencies = [
  "mime",
  "num-derive",
  "num-traits",
+ "num_cpus",
  "parking_lot 0.12.3",
  "r2d2",
  "rand 0.8.5",
@@ -11502,6 +11509,7 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "serial_test 0.5.1 (git+https://github.com/golemfactory/serial_test.git?branch=actix_rt_test)",
+ "sha2 0.10.8",
  "sha3 0.8.2",
  "structopt",
  "strum 0.24.1",

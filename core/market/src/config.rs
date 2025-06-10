@@ -21,6 +21,8 @@ pub struct Config {
 pub enum GolemBaseNetwork {
     #[clap(name = "Kaolin")]
     Kaolin,
+    #[clap(name = "Marketplace")]
+    Marketplace,
     #[clap(name = "Local")]
     Local,
 }
@@ -31,9 +33,21 @@ impl GolemBaseNetwork {
         configs.insert(
             GolemBaseNetwork::Kaolin,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://kaolin.holesky.golem-base.io/faucet/").unwrap(),
-                rpc_url: Url::parse("https://kaolin.holesky.golem-base.io/rpc").unwrap(),
-                ws_url: Url::parse("wss://kaolin.holesky.golem-base.io/rpc/ws").unwrap(),
+                faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
+                rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+            },
+        );
+        // Configuration: https://marketplace.holesky.golem-base.io/
+        configs.insert(
+            GolemBaseNetwork::Marketplace,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://marketplace.holesky.golem-base.io/faucet/")
+                    .unwrap(),
+                rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
+                ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
             },
         );
         configs.insert(
@@ -42,6 +56,7 @@ impl GolemBaseNetwork {
                 faucet_url: Url::parse("http://localhost:8545").unwrap(),
                 rpc_url: Url::parse("http://localhost:8545").unwrap(),
                 ws_url: Url::parse("ws://localhost:8545").unwrap(),
+                l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
             },
         );
         configs
@@ -56,14 +71,21 @@ pub struct GolemBaseRpcConfig {
     pub rpc_url: Url,
     #[clap(env, value_parser = parse_url, default_value = "ws://localhost:8545")]
     pub ws_url: Url,
+    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub l2_rpc_url: Url,
 }
 
 #[derive(Parser, Clone, Debug)]
 pub struct DiscoveryConfig {
     #[clap(skip = GolemBaseNetwork::default_config())]
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
-    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Kaolin")]
+    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
+    // PoW faucets require to compute PoW solutions. This variable determines how many threads
+    // will be used to compute solutions. Note that this is margin realtive to maximal avaiable
+    // threads. If machine has N cores, then N - GOLEM_BASE_FUND_POW_THREADS_MARGIN will be used.
+    #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
+    pub pow_threads_margin: usize,
 }
 
 impl DiscoveryConfig {
@@ -82,6 +104,14 @@ impl DiscoveryConfig {
     pub fn get_faucet_url(&self) -> &Url {
         &self.configs.get(&self.network).unwrap().faucet_url
     }
+
+    pub fn get_l2_rpc_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().l2_rpc_url
+    }
+
+    pub fn get_pow_threads(&self) -> usize {
+        std::cmp::max(1, num_cpus::get() - self.pow_threads_margin)
+    }
 }
 
 impl Default for DiscoveryConfig {
@@ -89,6 +119,7 @@ impl Default for DiscoveryConfig {
         Self {
             configs: GolemBaseNetwork::default_config(),
             network: GolemBaseNetwork::Kaolin,
+            pow_threads_margin: 2,
         }
     }
 }
