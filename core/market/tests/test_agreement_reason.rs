@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{AgreementEventType, Reason};
@@ -14,8 +15,11 @@ const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_agreement_termination_reason() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_agreement_termination_reason() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_get_agreement_termination_reason")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -148,4 +152,6 @@ async fn test_get_agreement_termination_reason() {
         assert_eq!(reason, Some(reference_reason));
         assert_eq!(terminator, AgreementTerminator::Requestor);
     }
+
+    Ok(())
 }

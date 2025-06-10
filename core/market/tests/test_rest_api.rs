@@ -2,6 +2,7 @@ use actix_web::{body::MessageBody, dev::ServiceResponse, error::PathError, http:
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
 use ya_client::model::market::{
@@ -31,8 +32,11 @@ const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_get_offers() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_get_offers() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_get_offers")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -90,12 +94,17 @@ async fn test_rest_get_offers() {
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Offer> = read_response_json(resp).await;
     assert_eq!(vec![offer_local.into_client_offer().unwrap()], result);
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_get_demands() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_get_demands() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_get_demands")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -118,13 +127,17 @@ async fn test_rest_get_demands() {
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Demand> = read_response_json(resp).await;
     assert_eq!(vec![demand_local.into_client_demand().unwrap()], result);
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_invalid_subscription_id_should_return_400() {
-    // given
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_invalid_subscription_id_should_return_400")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -149,13 +162,16 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
         .to_string(),
         result.message.unwrap()
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_subscribe_unsubscribe_offer() {
-    // given
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_subscribe_unsubscribe_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -211,13 +227,16 @@ async fn test_rest_subscribe_unsubscribe_offer() {
         ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_subscribe_unsubscribe_demand() {
-    // given
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_subscribe_unsubscribe_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -276,12 +295,16 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_get_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_get_proposal() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_get_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Provider")
         .await
@@ -334,12 +357,16 @@ async fn test_rest_get_proposal() {
     assert_eq!(resp_demands.status(), StatusCode::OK);
     let resp_demands: Proposal = read_response_json(resp_demands).await;
     assert_eq!(proposal, resp_demands);
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_get_agreement() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_get_agreement() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_get_agreement")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -374,12 +401,16 @@ async fn test_rest_get_agreement() {
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_query_agreement_events() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_query_agreement_events")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -428,13 +459,16 @@ async fn test_rest_query_agreement_events() {
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
 
     expect_approve(events, "After agreementEvents").unwrap();
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_terminate_agreement() {
-    let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_terminate_agreement() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_terminate_agreement")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -491,13 +525,16 @@ async fn test_terminate_agreement() {
             .state,
         client_agreement::State::Terminated
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_terminate_agreement_without_reason() {
-    let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_terminate_agreement_without_reason() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_terminate_agreement_without_reason")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -551,13 +588,17 @@ async fn test_terminate_agreement_without_reason() {
             .state,
         client_agreement::State::Terminated
     );
+    Ok(())
 }
 
 /// Agreement rejection happy path.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_agreement_rejected() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_agreement_rejected() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_agreement_rejected")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -613,13 +654,17 @@ async fn test_rest_agreement_rejected() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Rejected);
+    Ok(())
 }
 
 /// Agreement cancellation happy path.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_rest_agreement_cancelled() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_rest_agreement_cancelled() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_rest_agreement_cancelled")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -675,13 +720,16 @@ async fn test_rest_agreement_cancelled() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Cancelled);
+    Ok(())
 }
 
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]
 // #[serial_test::serial]
 // async fn test_rest_get_proposal_wrong_subscription() {
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_rest_get_proposal_wrong_subscription")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await.unwrap()

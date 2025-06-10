@@ -1,6 +1,7 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
 
+use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
 use ya_framework_mocks::net::MockNet;
 use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
@@ -8,10 +9,12 @@ use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
 /// Test adds Offer on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_single_not_resolve_offer() {
-    // given
+async fn test_single_not_resolve_offer() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_single_not_resolve_offer")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_matcher_instance("Node-1")
         .await;
@@ -26,15 +29,18 @@ async fn test_single_not_resolve_offer() {
     // then
     let listener = network.get_event_listeners("Node-1");
     assert!(timeout3s(listener.proposal_receiver.recv()).await.is_err());
+    Ok(())
 }
 
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_resolve_offer_demand() {
-    // given
+async fn test_resolve_offer_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_resolve_offer_demand")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_matcher_instance("Provider-1")
         .await
@@ -69,15 +75,18 @@ async fn test_resolve_offer_demand() {
     // and: but not resolved on Provider.
     let listener = network.get_event_listeners("Provider-1");
     assert!(timeout3s(listener.proposal_receiver.recv()).await.is_err());
+    Ok(())
 }
 
 /// Test adds Demand on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_single_not_resolve_demand() {
-    // given
+async fn test_single_not_resolve_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_single_not_resolve_demand")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_matcher_instance("Node-1")
         .await;
@@ -92,15 +101,18 @@ async fn test_single_not_resolve_demand() {
     // then
     let listener = network.get_event_listeners("Node-1");
     assert!(timeout3s(listener.proposal_receiver.recv()).await.is_err());
+    Ok(())
 }
 
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_resolve_2xoffer_demand() {
-    // given
+async fn test_resolve_2xoffer_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_resolve_2xoffer_demand")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_matcher_instance("Provider-1")
         .await
@@ -158,6 +170,7 @@ async fn test_resolve_2xoffer_demand() {
     // and: not on Provider-2.
     let listener = network.get_event_listeners("Provider-2");
     assert!(timeout3s(listener.proposal_receiver.recv()).await.is_err());
+    Ok(())
 }
 
 fn timeout3s<T: Future>(fut: T) -> Timeout<T> {

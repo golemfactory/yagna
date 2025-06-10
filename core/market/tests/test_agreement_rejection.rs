@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
 use ya_client::model::market::{AgreementEventType, Reason};
@@ -21,8 +22,11 @@ const PROV_NAME: &str = "Node-2";
 /// Agreement rejection happy path.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_rejected")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -75,13 +79,17 @@ async fn test_agreement_rejected() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Rejected);
+    Ok(())
 }
 
 /// `wait_for_approval` should wake up after rejection.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected_wait_for_approval() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_rejected_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -142,13 +150,17 @@ async fn test_agreement_rejected_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+    Ok(())
 }
 
 /// Rejecting `Approved` and `Terminated` Agreement is not allowed.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_agreement_in_wrong_state() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_agreement_in_wrong_state() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_reject_agreement_in_wrong_state")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -221,12 +233,16 @@ async fn test_reject_agreement_in_wrong_state() {
         ),
         result
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_rejected_agreement() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_rejected_agreement() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_reject_rejected_agreement")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -335,4 +351,5 @@ async fn test_reject_rejected_agreement() {
             e
         ),
     };
+    Ok(())
 }

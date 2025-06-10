@@ -11,6 +11,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::RequestorEvent;
 use ya_core_model::NodeId;
+use ya_framework_basic::temp_dir;
 use ya_market::testing::{
     mock_offer::client::{sample_demand, sample_offer},
     GetProposalError, MarketServiceExt, Owner, ProposalError,
@@ -19,8 +20,11 @@ use ya_market::MarketService;
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_proposal() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_get_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -57,13 +61,18 @@ async fn test_get_proposal() {
     assert_eq!(proposal.proposal_id, proposal_id.to_string());
     assert_eq!(proposal.issuer_id, prov_id.identity);
     assert!(proposal.prev_proposal_id().is_ok());
+
+    Ok(())
 }
 
 /// Try to query not existing Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_proposal_not_found() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_proposal_not_found() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_get_proposal_not_found")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -88,14 +97,19 @@ async fn test_get_proposal_not_found() {
         ProposalError::Get(GetProposalError::NotFound(proposal_id, None)),
         result
     );
+
+    Ok(())
 }
 
 /// We don't want to give advantage for the oldest Offers, so we should shuffle
 /// results of `collect_offers` endpoint.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_proposal_random_shuffle() {
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+async fn test_proposal_random_shuffle() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_proposal_random_shuffle")?;
+    let dir = dir.path();
+
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -158,4 +172,6 @@ async fn test_proposal_random_shuffle() {
     // from initialization order.
     assert_eq!(incoming_ids.len(), ids.len());
     assert_ne!(incoming_ids, ids);
+
+    Ok(())
 }

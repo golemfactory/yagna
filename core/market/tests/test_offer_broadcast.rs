@@ -1,3 +1,4 @@
+use ya_framework_basic::temp_dir;
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::mock_node::{
     assert_offers_broadcasted, assert_unsunbscribes_broadcasted, MarketsNetwork,
@@ -10,9 +11,13 @@ use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 /// Than sending unsubscribe should remove Offer from other nodes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_broadcast_offer() {
+async fn test_broadcast_offer() -> anyhow::Result<()> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+
+    let dir = temp_dir!("test_broadcast_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -55,6 +60,8 @@ async fn test_broadcast_offer() {
     assert_err_eq!(expected_error, mkt1.get_offer(&offer_id).await);
     // Expect, that Offer will disappear on other nodes.
     assert_unsunbscribes_broadcasted(&[&mkt2, &mkt3], &[offer_id]).await;
+
+    Ok(())
 }
 
 #[allow(clippy::empty_line_after_outer_attr)]
@@ -70,7 +77,9 @@ async fn test_broadcast_offer() {
 // #[serial_test::serial]
 // async fn test_broadcast_offer_callbacks() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_broadcast_offer_callbacks")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await;
@@ -113,7 +122,9 @@ async fn test_broadcast_offer() {
 // #[serial_test::serial]
 // async fn test_broadcast_offer_id_validation() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_broadcast_offer_id_validation")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await;
@@ -152,7 +163,9 @@ async fn test_broadcast_offer() {
 // #[serial_test::serial]
 // async fn test_broadcast_expired_offer() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_broadcast_expired_offer")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await;
@@ -198,7 +211,9 @@ async fn test_broadcast_offer() {
 // #[serial_test::serial]
 // async fn test_broadcast_stop_conditions() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_broadcast_stop_conditions")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await
@@ -293,9 +308,13 @@ async fn test_broadcast_offer() {
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_discovery_get_offers() {
+async fn test_discovery_get_offers() -> anyhow::Result<()> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+
+    let dir = temp_dir!("test_discovery_get_offers")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -326,6 +345,8 @@ async fn test_discovery_get_offers() {
 
     assert_eq!(offers.len(), 1);
     assert_eq!(offers[0].id, subscription_id);
+
+    Ok(())
 }
 
 // /// Note: Test disabled since hybrid NET requires limiting number of Subscriptions.
@@ -338,7 +359,9 @@ async fn test_discovery_get_offers() {
 // #[serial_test::serial]
 // async fn test_broadcast_50k() {
 //     let _ = env_logger::builder().try_init();
-//     let network = MarketsNetwork::new(None, MockNet::new())
+//     let dir = temp_dir!("test_broadcast_50k")?;
+//     let dir = dir.path();
+//     let network = MarketsNetwork::new(dir, MockNet::new())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await;

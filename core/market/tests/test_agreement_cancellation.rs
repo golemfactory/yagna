@@ -17,14 +17,19 @@ use ya_market::testing::{
     AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, Owner,
 };
 
+use ya_framework_basic::temp_dir;
+
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 /// Agreement cancelled without any Provider-Requestor races.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_cancelled")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -72,13 +77,18 @@ async fn test_agreement_cancelled() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Cancelled);
+
+    Ok(())
 }
 
 /// Cancelling `Approved` and `Terminated` Agreement is not allowed.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_cancel_agreement_in_wrong_state() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_cancel_agreement_in_wrong_state() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_cancel_agreement_in_wrong_state")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -149,13 +159,18 @@ async fn test_cancel_agreement_in_wrong_state() {
         ),
         result
     );
+
+    Ok(())
 }
 
 /// `wait_for_approval` should wake up after cancelling Agreement.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled_wait_for_approval() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_cancelled_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -217,6 +232,8 @@ async fn test_agreement_cancelled_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// Provider sends Reject Agreement at the same time as Requestor
@@ -225,8 +242,11 @@ async fn test_agreement_cancelled_wait_for_approval() {
 /// should end in the same state.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_simultaneous_reject_cancel() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_simultaneous_reject_cancel() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_simultaneous_reject_cancel")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -340,6 +360,8 @@ async fn test_agreement_simultaneous_reject_cancel() {
         }
         _ => panic!("Expected ApprovalStatus::Rejected or ApprovalStatus::Cancelled"),
     }
+
+    Ok(())
 }
 
 /// Provider sends Approve Agreement at the same time as Requestor
@@ -348,8 +370,11 @@ async fn test_agreement_simultaneous_reject_cancel() {
 /// should end in the same state.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_simultaneous_approve_cancel() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_simultaneous_approve_cancel() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_simultaneous_approve_cancel")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -464,4 +489,6 @@ async fn test_agreement_simultaneous_approve_cancel() {
         }
         _ => panic!("Expected ApprovalStatus::Approved or ApprovalStatus::Cancelled"),
     }
+
+    Ok(())
 }

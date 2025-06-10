@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 use std::time::Duration;
+use ya_framework_basic::temp_dir;
 use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 
 use ya_framework_mocks::assert_err_eq;
@@ -13,10 +14,13 @@ use ya_framework_mocks::net::MockNet;
 /// get all Offers from them, if cyclic broadcasting works properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_startup_offers_sharing() {
+async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_startup_offers_sharing")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -56,6 +60,8 @@ async fn test_startup_offers_sharing() {
 
     // Make sure we got all offers that, were created.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions).await;
+
+    Ok(())
 }
 
 /// Unsubscribes are sent immediately after Offer is unsubscribed and
@@ -66,10 +72,13 @@ async fn test_startup_offers_sharing() {
 /// After networking will be reenabled, we expect, that 3rd Node will get all unsubscribes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_unsubscribes_cyclic_broadcasts() {
+async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_unsubscribes_cyclic_broadcasts")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -164,6 +173,8 @@ async fn test_unsubscribes_cyclic_broadcasts() {
             .chain(subscriptions2[0..10].iter()),
     )
     .await;
+
+    Ok(())
 }
 
 /// Subscribing and unsubscribing should work despite network errors.
@@ -171,9 +182,13 @@ async fn test_unsubscribes_cyclic_broadcasts() {
 /// later during cyclic broadcasts. The same applies to unsubscribes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_network_error_while_subscribing() {
+async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+
+    let dir = temp_dir!("test_network_error_while_subscribing")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -201,16 +216,21 @@ async fn test_network_error_while_subscribing() {
     let expected_error = QueryOfferError::NotFound(subscription_id.clone());
     let mkt2 = network.get_market("Node-2");
     assert_err_eq!(expected_error, mkt2.get_offer(&subscription_id).await);
+
+    Ok(())
 }
 
 /// Nodes send in cyclic broadcasts not only own Offers, but Offers
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_sharing_someones_else_offers() {
+async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_sharing_someones_else_offers")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -254,16 +274,21 @@ async fn test_sharing_someones_else_offers() {
 
     // Make sure Node-3 has all offers from both: Node-1 and Node-2.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;
+
+    Ok(())
 }
 
 /// Nodes send in cyclic broadcasts not only own Offers unsubscribes, but unsubscribes
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_sharing_someones_else_unsubscribes() {
+async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_sharing_someones_else_unsubscribes")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -337,4 +362,6 @@ async fn test_sharing_someones_else_unsubscribes() {
 
     // All other Offers should remain untouched.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[0..3]).await;
+
+    Ok(())
 }

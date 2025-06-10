@@ -1,3 +1,4 @@
+use ya_framework_basic::temp_dir;
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
 use ya_framework_mocks::net::MockNet;
@@ -14,8 +15,11 @@ use ya_market::testing::{
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_subscribe_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_subscribe_offer() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_subscribe_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -51,14 +55,19 @@ async fn test_subscribe_offer() {
         QueryOfferError::Unsubscribed(subscription_id.clone()),
         market1.get_offer(&subscription_id).await
     );
+
+    Ok(())
 }
 
 /// Test subscribes demand, checks if demand is available
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_subscribe_demand() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_subscribe_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_subscribe_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -93,4 +102,6 @@ async fn test_subscribe_demand() {
         DemandError::NotFound(subscription_id.clone()),
         market1.get_demand(&subscription_id).await
     );
+
+    Ok(())
 }

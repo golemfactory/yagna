@@ -11,6 +11,7 @@ use ya_market::testing::{
 };
 use ya_persistence::executor::PoolType;
 
+use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::mock_agreement::generate_agreement;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
 use ya_framework_mocks::market::legacy::proposal_util::{generate_negotiation, generate_proposal};
@@ -30,11 +31,13 @@ fn db_config() -> DbConfig {
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement() {
-    let _ = env_logger::builder().try_init();
+async fn test_agreement() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement")?;
+    let dir = dir.path();
+
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_agreement");
     let agreement_dao = db.as_dao::<AgreementDao>();
@@ -67,11 +70,16 @@ async fn test_agreement() {
     assert!(Not::not(
         <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, expired_agreement.id).await
     ));
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_demand() {
+async fn test_demand() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_demand")?;
+    let dir = dir.path();
+
     // insert two demands (expired & active) with negotiations
     let valid_demand = generate_demand(
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
@@ -81,7 +89,7 @@ async fn test_demand() {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_demand");
     let demand_dao = db.as_dao::<DemandDao>();
@@ -92,11 +100,16 @@ async fn test_demand() {
     assert!(Not::not(
         <PoolType as TestingDao<Demand>>::exists(&db.ram_db.pool, expired_demand.id).await
     ));
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_offer() {
+async fn test_offer() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_offer")?;
+    let dir = dir.path();
+
     // insert two offers with negotiations
     let valid_offer = generate_offer(
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
@@ -106,7 +119,7 @@ async fn test_offer() {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_offer");
     let offer_dao = db.as_dao::<OfferDao>();
@@ -124,13 +137,18 @@ async fn test_offer() {
     assert!(Not::not(
         <PoolType as TestingDao<Offer>>::exists(&db.ram_db.pool, expired_offer.id).await
     ));
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_events() {
+async fn test_events() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_events")?;
+    let dir = dir.path();
+
     // insert two events
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_events");
     let valid_event = generate_event(1, future());
@@ -148,13 +166,18 @@ async fn test_events() {
     assert!(Not::not(
         <PoolType as TestingDao<TestMarketEvent>>::exists(&db.ram_db.pool, expired_event.id).await
     ));
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_proposal() {
+async fn test_proposal() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_proposal")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_proposal");
     let valid_negotiation = generate_negotiation(None);
@@ -204,15 +227,18 @@ async fn test_proposal() {
             <PoolType as TestingDao<DbProposal>>::exists(&db.ram_db.pool, proposal.id).await
         ));
     }
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_proposal_lotsa_negotiations() {
-    // Due to diesel limitations we have to take care of processing
-    // big amount of negotiations (manually) #672
+async fn test_proposal_lotsa_negotiations() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_proposal_lotsa_negotiations")?;
+    let dir = dir.path();
+
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(None, MockNet::new())
+    let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_proposal_lotsa_negotiations");
     let mut expired_negotiations: Vec<Negotiation> = vec![];
@@ -236,4 +262,5 @@ async fn test_proposal_lotsa_negotiations() {
             <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, n.id).await
         ));
     }
+    Ok(())
 }

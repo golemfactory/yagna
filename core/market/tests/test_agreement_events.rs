@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::temp_dir;
 
 use ya_framework_mocks::net::MockNet;
 
@@ -16,8 +17,11 @@ const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_approved_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_approved_event() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_approved_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -106,13 +110,18 @@ async fn test_agreement_approved_event() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// Both endpoints Agreement events and wait_for_approval should work properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_events_and_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_events_and_wait_for_approval() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_events_and_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -191,14 +200,19 @@ async fn test_agreement_events_and_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// We expect to get AgreementTerminatedEvent on both sides Provider and Requestor
 /// after terminate_agreement endpoint was called.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_terminated_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_terminated_event() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_terminated_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -285,13 +299,18 @@ async fn test_agreement_terminated_event() {
             e
         ),
     };
+
+    Ok(())
 }
 
 /// Tests if AgreementEvents notifications work as expected.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_waiting_for_agreement_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_waiting_for_agreement_event() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_waiting_for_agreement_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -337,12 +356,17 @@ async fn test_waiting_for_agreement_event() {
         events[0].agreement_id,
         negotiation.r_agreement.into_client()
     );
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected_event() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_rejected_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -435,12 +459,17 @@ async fn test_agreement_rejected_event() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled_event() -> anyhow::Result<()> {
+    let dir = temp_dir!("test_agreement_cancelled_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -520,4 +549,6 @@ async fn test_agreement_cancelled_event() {
             e
         ),
     };
+
+    Ok(())
 }

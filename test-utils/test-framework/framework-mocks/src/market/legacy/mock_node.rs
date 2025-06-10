@@ -5,6 +5,7 @@ use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
+use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_market::testing::IdentityGSB;
@@ -112,7 +113,7 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: Option<&str>, net: MockNet) -> Self {
+    pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
 
@@ -121,15 +122,19 @@ impl MarketsNetwork {
             format!("test-{:#32x}", nonce)
         };
 
-        let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
-        log::info!("Initializing MarketsNetwork. tn={}", test_name);
+        let testdir = testdir.as_ref();
+        let test_name = testdir
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(gen_test_name);
+        log::info!("Initializing MarketsNetwork. TestName={}", test_name);
 
         net.bind_gsb();
 
         MarketsNetwork {
             net,
             nodes: vec![],
-            test_dir: prepare_test_dir(&test_name).unwrap(),
+            test_dir: prepare_test_dir(testdir).unwrap(),
             test_name,
             config: Arc::new(create_market_config_for_test()),
         }
@@ -537,20 +542,7 @@ impl MarketsNetwork {
     }
 }
 
-fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-workdir")
-}
-
-fn escape_path(path: &str) -> String {
-    // Windows can't handle colons
-    path.replace("::", "_")
-}
-
-pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
-    let test_dir: PathBuf = test_data_dir().join(escape_path(dir_name).as_str());
-
+pub fn prepare_test_dir(test_dir: &Path) -> Result<PathBuf> {
     log::info!(
         "[MockNode] Preparing test directory: {}",
         test_dir.display()
@@ -561,7 +553,7 @@ pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
     }
     fs::create_dir_all(&test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
-    Ok(test_dir)
+    Ok(test_dir.to_path_buf())
 }
 
 #[macro_export]

@@ -1,6 +1,7 @@
 use all_asserts::*;
 use chrono::{Duration, Utc};
 
+use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::agreement_utils::{
     negotiate_agreement, negotiate_agreement_with_ids,
 };
@@ -18,8 +19,11 @@ const PROV_NAME: &str = "Node-2";
 /// events using different session ids on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_events_filtering() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_session_events_filtering() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_session_events_filtering")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -188,14 +192,19 @@ async fn test_session_events_filtering() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// AppSessionId isn't propagated to Provider and vice versa.
 /// They are completely independent and this test checks this.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_should_be_independent_on_both_sides() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_session_should_be_independent_on_both_sides")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -244,13 +253,18 @@ async fn test_session_should_be_independent_on_both_sides() {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
+
+    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_session_negotiation_on_the_same_node")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node")
         .await;
@@ -299,13 +313,18 @@ async fn test_session_negotiation_on_the_same_node() {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
+
+    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node and use the same session.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node_same_session() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_session_negotiation_on_the_same_node_same_session")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node")
         .await;
@@ -355,13 +374,18 @@ async fn test_session_negotiation_on_the_same_node_same_session() {
     // we will get events for both. Note that we use the same Identity for both.
     assert_eq!(p_events.len(), 2);
     assert_eq!(r_events.len(), 2);
+
+    Ok(())
 }
 
 /// We expect to get only events after specified timestamp.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_timestamp_filtering() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_session_timestamp_filtering() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_session_timestamp_filtering")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -544,14 +568,19 @@ async fn test_session_timestamp_filtering() {
 
     assert_eq!(p_events.len(), 0);
     assert_eq!(r_events.len(), 0);
+
+    Ok(())
 }
 
 /// In the most common flow, user of the API queries events, saves timestamp
 /// of the newest event and uses this timestamp in next calls.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_common_event_flow() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_common_event_flow() -> Result<(), anyhow::Error> {
+    let dir = temp_dir!("test_common_event_flow")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -619,4 +648,6 @@ async fn test_common_event_flow() {
         .unwrap();
 
     assert_eq!(events.len(), 0);
+
+    Ok(())
 }
