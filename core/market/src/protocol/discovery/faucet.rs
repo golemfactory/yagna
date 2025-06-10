@@ -3,6 +3,7 @@ use crate::protocol::discovery::pow::solve_pow;
 
 use anyhow::Result;
 use bigdecimal::BigDecimal;
+use futures::stream::{self, StreamExt};
 use golem_base_sdk::Address;
 use golem_base_sdk::{client::GolemBaseClient, Hash};
 use serde::{Deserialize, Serialize};
@@ -62,27 +63,39 @@ impl FaucetClient {
     }
 
     /// Computes solutions for the given challenge response
-    pub async fn compute_solutions(response: ChallengeResponse) -> Result<Vec<serde_json::Value>> {
+    pub async fn compute_solutions(
+        &self,
+        response: ChallengeResponse,
+    ) -> Result<Vec<serde_json::Value>> {
         let total = response.challenge.len();
-        let log_interval = total / 10;
+        let log_interval = total / 20;
+        let mut solved = 0;
 
-        tokio::task::spawn_blocking(move || {
-            let mut solutions: Vec<serde_json::Value> = Vec::new();
+        log::info!(
+            "GolemBase fund: Received {total} challenges to solve on {threads} threads",
+            threads = self.config.get_pow_threads()
+        );
 
-            for (i, [hash, target]) in response.challenge.into_iter().enumerate() {
-                let solution = solve_pow(&hash, &target);
-                solutions.push(serde_json::json!([hash, target, solution]));
-
-                let solved = i + 1;
+        stream::iter(response.challenge)
+            .map(|[hash, target]| {
+                tokio::task::spawn_blocking(move || {
+                    let solution = solve_pow(&hash, &target);
+                    serde_json::json!([hash, target, solution])
+                })
+            })
+            .buffer_unordered(self.config.get_pow_threads())
+            .map(|result| {
+                solved += 1;
                 if solved % log_interval == 0 || solved == total {
                     log::debug!("GolemBase fund: Solved {solved}/{total} challenges");
                 }
-            }
-
-            solutions
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to compute solutions: {}", e))
+                result
+            })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow::anyhow!("Failed to compute PoW solutions: {e}"))
     }
 
     pub async fn fund_from_faucet_with_pow(&self, address: &str) -> Result<()> {
@@ -97,7 +110,7 @@ impl FaucetClient {
             .await?;
 
         let token = response.token.clone();
-        let solutions = Self::compute_solutions(response).await?;
+        let solutions = self.compute_solutions(response).await?;
 
         let redeem_response: RedeemResponse = self
             .post::<_, RedeemResponse>(

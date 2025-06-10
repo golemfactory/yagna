@@ -81,6 +81,11 @@ pub struct DiscoveryConfig {
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
     #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
+    // PoW faucets require to compute PoW solutions. This variable determines how many threads
+    // will be used to compute solutions. Note that this is margin realtive to maximal avaiable
+    // threads. If machine has N cores, then N - GOLEM_BASE_FUND_POW_THREADS_MARGIN will be used.
+    #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
+    pub pow_threads_margin: usize,
 }
 
 impl DiscoveryConfig {
@@ -103,6 +108,10 @@ impl DiscoveryConfig {
     pub fn get_l2_rpc_url(&self) -> &Url {
         &self.configs.get(&self.network).unwrap().l2_rpc_url
     }
+
+    pub fn get_pow_threads(&self) -> usize {
+        std::cmp::max(1, num_cpus::get() - self.pow_threads_margin)
+    }
 }
 
 impl Default for DiscoveryConfig {
@@ -110,6 +119,7 @@ impl Default for DiscoveryConfig {
         Self {
             configs: GolemBaseNetwork::default_config(),
             network: GolemBaseNetwork::Kaolin,
+            pow_threads_margin: 2,
         }
     }
 }

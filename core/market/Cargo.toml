@@ -52,6 +52,7 @@ metrics = "0.12"
 mime.workspace = true
 num-derive = "0.3"
 num-traits = "0.2"
+num_cpus = "1.17"
 parking_lot.workspace = true
 r2d2 = "0.8"
 rand = "0.8"
