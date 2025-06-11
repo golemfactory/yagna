@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 use std::time::Duration;
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 
@@ -15,6 +16,7 @@ use ya_framework_mocks::net::MockNet;
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_startup_offers_sharing")?;
@@ -73,6 +75,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_unsubscribes_cyclic_broadcasts")?;
@@ -183,6 +186,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_network_error_while_subscribing")?;
@@ -225,6 +229,7 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_sharing_someones_else_offers")?;
@@ -283,6 +288,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_sharing_someones_else_unsubscribes")?;

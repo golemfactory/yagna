@@ -11,6 +11,7 @@ use ya_market::testing::{
 };
 use ya_persistence::executor::PoolType;
 
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::mock_agreement::generate_agreement;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
@@ -32,6 +33,7 @@ fn db_config() -> DbConfig {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement")?;
     let dir = dir.path();
 
@@ -77,6 +79,7 @@ async fn test_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_demand")?;
     let dir = dir.path();
 
@@ -107,6 +110,7 @@ async fn test_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_offer")?;
     let dir = dir.path();
 
@@ -144,6 +148,7 @@ async fn test_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_events() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_events")?;
     let dir = dir.path();
 
@@ -173,6 +178,7 @@ async fn test_events() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_proposal")?;
     let dir = dir.path();
 
@@ -234,6 +240,7 @@ async fn test_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_proposal_lotsa_negotiations() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_proposal_lotsa_negotiations")?;
     let dir = dir.path();
 

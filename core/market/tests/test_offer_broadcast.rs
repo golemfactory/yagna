@@ -1,3 +1,4 @@
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::mock_node::{
@@ -12,6 +13,7 @@ use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_broadcast_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_broadcast_offer")?;
@@ -309,6 +311,7 @@ async fn test_broadcast_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_discovery_get_offers() -> anyhow::Result<()> {
+    enable_logs(false);
     let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_discovery_get_offers")?;

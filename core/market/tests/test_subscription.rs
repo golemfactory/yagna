@@ -1,3 +1,4 @@
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
@@ -16,6 +17,7 @@ use ya_market::testing::{
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_subscribe_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_subscribe_offer")?;
     let dir = dir.path();
 
@@ -64,6 +66,7 @@ async fn test_subscribe_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_subscribe_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_subscribe_demand")?;
     let dir = dir.path();
 

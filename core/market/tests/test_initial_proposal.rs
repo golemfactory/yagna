@@ -15,6 +15,7 @@ use ya_market::testing::{
 };
 use ya_market::MarketService;
 
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::net::MockNet;
 
@@ -25,6 +26,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_non_existent_subscription() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_events_non_existent_subscription")?;
     let dir = dir.path();
 
@@ -49,6 +51,7 @@ async fn test_query_events_non_existent_subscription() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_initial_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_initial_proposal")?;
     let dir = dir.path();
 
@@ -101,6 +104,7 @@ async fn test_query_initial_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_multiple_events() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_multiple_events")?;
     let dir = dir.path();
 
@@ -160,6 +164,7 @@ async fn test_query_multiple_events() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_timeout() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_events_timeout")?;
     let dir = dir.path();
 
@@ -209,6 +214,7 @@ async fn test_query_events_timeout() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_unsubscribe_notification() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_events_unsubscribe_notification")?;
     let dir = dir.path();
 
@@ -259,6 +265,7 @@ async fn test_query_events_unsubscribe_notification() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_edge_cases() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_events_edge_cases")?;
     let dir = dir.path();
 
@@ -333,6 +340,7 @@ async fn test_query_events_edge_cases() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_query_events_for_multiple_subscriptions() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_query_events_for_multiple_subscriptions")?;
     let dir = dir.path();
 
@@ -390,6 +398,7 @@ async fn test_query_events_for_multiple_subscriptions() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_simultaneous_query_events() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_simultaneous_query_events")?;
     let dir = dir.path();
 
@@ -474,6 +483,7 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_unsubscribe_demand_while_query_events_for_other() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_unsubscribe_demand_while_query_events_for_other")?;
     let dir = dir.path();
 
@@ -541,6 +551,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() -> anyhow::Resul
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_initial_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_initial_proposal")?;
     let dir = dir.path();
 
@@ -616,6 +627,7 @@ async fn test_counter_initial_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_respawn_proposal_after_terminate_by_provider")?;
     let dir = dir.path();
 

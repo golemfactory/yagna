@@ -2,6 +2,7 @@ use actix_web::{body::MessageBody, dev::ServiceResponse, error::PathError, http:
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
@@ -33,6 +34,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_offers() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_offers")?;
     let dir = dir.path();
 
@@ -101,6 +103,7 @@ async fn test_rest_get_offers() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_demands() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_demands")?;
     let dir = dir.path();
 
@@ -134,6 +137,7 @@ async fn test_rest_get_demands() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_invalid_subscription_id_should_return_400")?;
     let dir = dir.path();
 
@@ -168,6 +172,7 @@ async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_subscribe_unsubscribe_offer")?;
     let dir = dir.path();
 
@@ -233,6 +238,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_subscribe_unsubscribe_demand")?;
     let dir = dir.path();
 
@@ -301,6 +307,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_proposal")?;
     let dir = dir.path();
 
@@ -363,6 +370,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_agreement")?;
     let dir = dir.path();
 
@@ -407,6 +415,7 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_query_agreement_events")?;
     let dir = dir.path();
 
@@ -465,6 +474,7 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate_agreement")?;
     let dir = dir.path();
 
@@ -531,6 +541,7 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_agreement_without_reason() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate_agreement_without_reason")?;
     let dir = dir.path();
 
@@ -595,6 +606,7 @@ async fn test_terminate_agreement_without_reason() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_agreement_rejected() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_agreement_rejected")?;
     let dir = dir.path();
 
@@ -661,6 +673,7 @@ async fn test_rest_agreement_rejected() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_agreement_cancelled() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_agreement_cancelled")?;
     let dir = dir.path();
 

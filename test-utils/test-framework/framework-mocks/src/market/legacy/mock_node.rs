@@ -147,9 +147,6 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
-        std::env::set_var("RUST_LOG", "debug");
-        let _ = env_logger::builder().try_init();
-
         let gen_test_name = || {
             let nonce = rand::random::<u128>();
             format!("test-{:#32x}", nonce)

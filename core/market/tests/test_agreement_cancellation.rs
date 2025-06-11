@@ -17,6 +17,7 @@ use ya_market::testing::{
     AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, Owner,
 };
 
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 const REQ_NAME: &str = "Node-1";
@@ -26,6 +27,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_cancelled() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_cancelled")?;
     let dir = dir.path();
 
@@ -85,6 +87,7 @@ async fn test_agreement_cancelled() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_cancel_agreement_in_wrong_state() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_cancel_agreement_in_wrong_state")?;
     let dir = dir.path();
 
@@ -167,6 +170,7 @@ async fn test_cancel_agreement_in_wrong_state() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_cancelled_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_cancelled_wait_for_approval")?;
     let dir = dir.path();
 
@@ -243,6 +247,7 @@ async fn test_agreement_cancelled_wait_for_approval() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_simultaneous_reject_cancel() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_simultaneous_reject_cancel")?;
     let dir = dir.path();
 
@@ -371,6 +376,7 @@ async fn test_agreement_simultaneous_reject_cancel() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_simultaneous_approve_cancel() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_simultaneous_approve_cancel")?;
     let dir = dir.path();
 

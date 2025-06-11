@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 use ya_framework_mocks::net::MockNet;
@@ -18,6 +19,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_approved_event() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_approved_event")?;
     let dir = dir.path();
 
@@ -118,6 +120,7 @@ async fn test_agreement_approved_event() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_events_and_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_events_and_wait_for_approval")?;
     let dir = dir.path();
 
@@ -209,6 +212,7 @@ async fn test_agreement_events_and_wait_for_approval() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_terminated_event() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_terminated_event")?;
     let dir = dir.path();
 
@@ -307,6 +311,7 @@ async fn test_agreement_terminated_event() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_waiting_for_agreement_event() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_waiting_for_agreement_event")?;
     let dir = dir.path();
 
@@ -363,6 +368,7 @@ async fn test_waiting_for_agreement_event() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected_event() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_rejected_event")?;
     let dir = dir.path();
 
@@ -466,6 +472,7 @@ async fn test_agreement_rejected_event() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_cancelled_event() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_cancelled_event")?;
     let dir = dir.path();
 

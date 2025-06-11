@@ -11,6 +11,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::RequestorEvent;
 use ya_core_model::NodeId;
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_market::testing::{
     mock_offer::client::{sample_demand, sample_offer},
@@ -21,6 +22,7 @@ use ya_market::MarketService;
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_get_proposal")?;
     let dir = dir.path();
 
@@ -69,6 +71,7 @@ async fn test_get_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_get_proposal_not_found")?;
     let dir = dir.path();
 
@@ -106,6 +109,7 @@ async fn test_get_proposal_not_found() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_proposal_random_shuffle() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_proposal_random_shuffle")?;
     let dir = dir.path();
 

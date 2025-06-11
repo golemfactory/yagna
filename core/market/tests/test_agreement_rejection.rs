@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
@@ -23,6 +24,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_rejected")?;
     let dir = dir.path();
 
@@ -86,6 +88,7 @@ async fn test_agreement_rejected() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_rejected_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_agreement_rejected_wait_for_approval")?;
     let dir = dir.path();
 
@@ -157,6 +160,7 @@ async fn test_agreement_rejected_wait_for_approval() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_agreement_in_wrong_state() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_agreement_in_wrong_state")?;
     let dir = dir.path();
 
@@ -239,6 +243,7 @@ async fn test_reject_agreement_in_wrong_state() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_rejected_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_rejected_agreement")?;
     let dir = dir.path();
 

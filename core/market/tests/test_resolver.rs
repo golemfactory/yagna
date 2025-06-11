@@ -1,6 +1,7 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
 
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
 use ya_framework_mocks::net::MockNet;
@@ -10,6 +11,7 @@ use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_single_not_resolve_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_single_not_resolve_offer")?;
     let dir = dir.path();
 
@@ -36,6 +38,7 @@ async fn test_single_not_resolve_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_resolve_offer_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_resolve_offer_demand")?;
     let dir = dir.path();
 
@@ -82,6 +85,7 @@ async fn test_resolve_offer_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_single_not_resolve_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_single_not_resolve_demand")?;
     let dir = dir.path();
 
@@ -108,6 +112,7 @@ async fn test_single_not_resolve_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_resolve_2xoffer_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_resolve_2xoffer_demand")?;
     let dir = dir.path();
 

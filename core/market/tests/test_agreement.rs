@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, web::Bytes};
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
 
 use ya_client::model::market::Role;
 use ya_core_model::market;
@@ -28,6 +29,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_gsb_get_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_gsb_get_agreement")?;
     let dir = dir.path();
 
@@ -84,6 +86,7 @@ async fn test_gsb_get_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_gsb_list_agreements() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_gsb_list_agreements")?;
     let dir = dir.path();
 
@@ -136,6 +139,7 @@ async fn test_gsb_list_agreements() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_get_agreement")?;
     let dir = dir.path();
 
@@ -174,6 +178,7 @@ async fn test_get_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_not_existing_agreement")?;
     let dir = dir.path();
 
@@ -213,7 +218,7 @@ async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
     let dir = temp_dir!("full_market_interaction_aka_happy_path")?;
-    let dir = dir.into_path();
+    let dir = dir.path();
 
     let network = MarketsNetwork::new(dir, MockNet::new())
         .await
@@ -1078,6 +1083,7 @@ async fn cant_promote_not_last_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate")?;
     let dir = dir.path();
 
@@ -1109,6 +1115,7 @@ async fn test_terminate() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_not_existing_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate_not_existing_agreement")?;
     let dir = dir.path();
 
@@ -1159,6 +1166,7 @@ async fn test_terminate_not_existing_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_from_wrong_states() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate_from_wrong_states")?;
     let dir = dir.path();
 
@@ -1334,6 +1342,7 @@ async fn test_terminate_rejected_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_invalid_reason() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_terminate_invalid_reason")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())

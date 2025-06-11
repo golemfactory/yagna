@@ -1,6 +1,6 @@
 use all_asserts::*;
 use chrono::{Duration, Utc};
-
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 use ya_framework_mocks::market::legacy::agreement_utils::{
     negotiate_agreement, negotiate_agreement_with_ids,
@@ -20,6 +20,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_events_filtering() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_session_events_filtering")?;
     let dir = dir.path();
 
@@ -201,6 +202,7 @@ async fn test_session_events_filtering() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_session_should_be_independent_on_both_sides")?;
     let dir = dir.path();
 
@@ -261,6 +263,7 @@ async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_session_negotiation_on_the_same_node")?;
     let dir = dir.path();
 
@@ -321,6 +324,7 @@ async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_session_negotiation_on_the_same_node_same_session")?;
     let dir = dir.path();
 
@@ -382,6 +386,7 @@ async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_session_timestamp_filtering() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_session_timestamp_filtering")?;
     let dir = dir.path();
 
@@ -577,6 +582,7 @@ async fn test_session_timestamp_filtering() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_common_event_flow() -> Result<(), anyhow::Error> {
+    enable_logs(false);
     let dir = temp_dir!("test_common_event_flow")?;
     let dir = dir.path();
 

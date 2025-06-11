@@ -1,5 +1,6 @@
 use chrono::{Duration, Utc};
 use ya_client::model::market::{proposal::State, RequestorEvent};
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 use ya_framework_mocks::{
@@ -25,6 +26,7 @@ use ya_market::testing::{
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_exchanging_draft_proposals() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_exchanging_draft_proposals")?;
     let dir = dir.path();
 
@@ -150,6 +152,7 @@ async fn test_exchanging_draft_proposals() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_countered_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_countered_proposal")?;
     let dir = dir.path();
 
@@ -239,6 +242,7 @@ async fn test_counter_countered_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_own_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_own_proposal")?;
     let dir = dir.path();
 
@@ -336,6 +340,7 @@ async fn test_counter_own_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_unsubscribed_demand")?;
     let dir = dir.path();
 
@@ -397,6 +402,7 @@ async fn test_counter_unsubscribed_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_unsubscribed_offer")?;
     let dir = dir.path();
 
@@ -472,6 +478,7 @@ async fn test_counter_unsubscribed_offer() -> anyhow::Result<()> {
 #[ignore]
 #[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_initial_unsubscribed_remote_offer")?;
     let dir = dir.path();
 
@@ -539,6 +546,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> anyhow::Result<()> 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_draft_unsubscribed_remote_offer")?;
     let dir = dir.path();
 
@@ -600,6 +608,7 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_counter_draft_unsubscribed_remote_demand")?;
     let dir = dir.path();
 
@@ -663,6 +672,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_not_matching_counter_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_not_matching_counter_demand")?;
     let dir = dir.path();
 
@@ -702,6 +712,7 @@ async fn test_not_matching_counter_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_not_matching_counter_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_not_matching_counter_offer")?;
     let dir = dir.path();
 
@@ -761,6 +772,7 @@ async fn test_not_matching_counter_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_negotiations_same_identity() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_negotiations_same_identity")?;
     let dir = dir.path();
 
@@ -798,6 +810,7 @@ async fn test_reject_negotiations_same_identity() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_initial_offer() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_initial_offer")?;
     let dir = dir.path();
 
@@ -854,6 +867,7 @@ async fn test_reject_initial_offer() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_demand() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_demand")?;
     let dir = dir.path();
 
@@ -936,6 +950,7 @@ async fn test_reject_demand() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_proposal_events_last() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_proposal_events_last")?;
     let dir = dir.path();
 
@@ -1019,6 +1034,7 @@ async fn test_proposal_events_last() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_restart_negotiations() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_restart_negotiations")?;
     let dir = dir.path();
 
@@ -1147,6 +1163,7 @@ async fn test_restart_negotiations() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_create_agreement_on_rejected_proposal_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_create_agreement_on_rejected_proposal_should_fail")?;
     let dir = dir.path();
 
@@ -1227,6 +1244,7 @@ async fn test_create_agreement_on_rejected_proposal_should_fail() -> anyhow::Res
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_negotiations_after_agreement_rejected() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_negotiations_after_agreement_rejected")?;
     let dir = dir.path();
 
@@ -1326,6 +1344,7 @@ async fn test_negotiations_after_agreement_rejected() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_initial_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_reject_initial_proposal")?;
     let dir = dir.path();
 

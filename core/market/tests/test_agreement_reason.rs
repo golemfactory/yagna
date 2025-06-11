@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
@@ -16,6 +17,7 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_get_agreement_termination_reason() -> anyhow::Result<()> {
+    enable_logs(false);
     let dir = temp_dir!("test_get_agreement_termination_reason")?;
     let dir = dir.path();
 
