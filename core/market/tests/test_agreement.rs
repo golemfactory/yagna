@@ -213,7 +213,7 @@ async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
     let dir = temp_dir!("full_market_interaction_aka_happy_path")?;
-    let dir = dir.path();
+    let dir = dir.into_path();
 
     let network = MarketsNetwork::new(dir, MockNet::new())
         .await

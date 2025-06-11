@@ -191,8 +191,8 @@ impl MarketsNetwork {
         let gsb = self.node_gsb_prefixes(name);
 
         let identity_api = IdentityGSB::new(gsb.clone());
-        let identity =
-            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         let market = Arc::new(
             MarketService::new(
@@ -215,8 +215,8 @@ impl MarketsNetwork {
         let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
 
         let identity_api = IdentityGSB::new(gsb.clone());
-        let identity =
-            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         let (matcher, listeners) =
             Matcher::new(store, identity_api.clone(), self.config.clone()).unwrap();
@@ -233,8 +233,8 @@ impl MarketsNetwork {
         let gsb = self.node_gsb_prefixes(name);
 
         let identity_api = IdentityGSB::new(gsb.clone());
-        let identity =
-            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
@@ -353,8 +353,8 @@ impl MarketsNetwork {
         let gsb = self.node_gsb_prefixes(name);
 
         let identity_api = IdentityGSB::new(gsb.clone());
-        let identity =
-            RealIdentity::new(self.net.clone(), &self.test_dir, name).with_prefixed_gsb(Some(gsb));
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         self.add_node(
             name,
