@@ -48,6 +48,12 @@ impl IdentityApi for MockIdentity {
         // Mock implementation just returns Ok
         Ok(())
     }
+
+    async fn fund(&self, _wallet: NodeId) -> Result<(), IdentityError> {
+        Err(IdentityError::GsbError(
+            "[MockIdentity] Not implemented".to_string(),
+        ))
+    }
 }
 
 impl MockIdentity {

@@ -27,12 +27,19 @@ pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
 
 /// Internal Market bus address.
 pub mod local {
+    use crate::bus::GsbBindPoints;
+
     pub const BUS_ID: &str = "/local/market";
     pub const BUS_DISCOVERY: &str = "market-discovery";
 
     /// Builds the discovery bus endpoint with a custom prefix.
     pub fn build_discovery_endpoint(prefix: &str) -> String {
         format!("{}/{}", prefix, BUS_DISCOVERY)
+    }
+
+    /// Builds the discovery bus endpoint from GsbBindPoints.
+    pub fn build_discovery_bindpoint(gsb: &GsbBindPoints) -> GsbBindPoints {
+        gsb.clone().service(BUS_DISCOVERY)
     }
 
     /// Builds the discovery bus endpoint with the default prefix.

@@ -574,7 +574,7 @@ impl Discovery {
         Ok(())
     }
 
-    async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
+    pub async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
         let wallet = match msg.wallet {
             Some(wallet) => wallet,
             None => self.inner.identity.default_identity().await.map_err(|e| {

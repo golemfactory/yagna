@@ -8,6 +8,7 @@ use ya_client::model::NodeId;
 use ya_core_model::{
     bus::GsbBindPoints,
     identity::{self, IdentityInfo},
+    market,
 };
 use ya_service_bus::RpcEndpoint;
 
@@ -53,6 +54,8 @@ pub trait IdentityApi: Send + Sync {
             })
             .collect::<Vec<NodeId>>())
     }
+
+    async fn fund(&self, wallet: NodeId) -> Result<(), IdentityError>;
 }
 
 #[derive(Clone)]
@@ -107,6 +110,18 @@ impl IdentityApi for IdentityGSB {
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
             .map(|_| ())
             .map_err(|e| IdentityError::GsbError(e.to_string()))
+    }
+
+    async fn fund(&self, wallet: NodeId) -> Result<(), IdentityError> {
+        self.gsb
+            .local()
+            .send(market::FundGolemBase {
+                wallet: Some(wallet),
+            })
+            .await
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?;
+        Ok(())
     }
 }
 

@@ -7,6 +7,10 @@ use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
 use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use ya_core_model::market::local::{self};
+use ya_core_model::market::{self, FundGolemBaseResponse};
+use ya_core_model::NodeId;
+use ya_service_bus::RpcEndpoint;
 
 use ya_market::testing::IdentityGSB;
 use ya_market::testing::{
@@ -49,6 +53,7 @@ pub struct MockNode {
     pub identity_api: Arc<dyn IdentityApi>,
     pub identity: RealIdentity,
     pub kind: MockNodeKind,
+    pub gsb: GsbBindPoints,
 }
 
 /// Internal object associated with single Node
@@ -75,10 +80,38 @@ pub enum MockNodeKind {
 }
 
 impl MockNode {
+    pub fn new(
+        name: &str,
+        test_name: &str,
+        identity_api: Arc<dyn IdentityApi>,
+        identity: RealIdentity,
+        kind: MockNodeKind,
+    ) -> Self {
+        let gsb = gsb_prefixes(test_name, &name);
+        Self {
+            name: name.to_string(),
+            identity_api,
+            identity,
+            kind,
+            gsb,
+        }
+    }
+
     pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
         self.identity.bind_gsb().await?;
-        let gsb = self.kind.bind_gsb(test_name, name).await?;
-        Ok(gsb)
+        self.kind.bind_gsb(test_name, name).await?;
+        Ok(self.gsb.clone())
+    }
+
+    pub async fn fund(&self, wallet: NodeId) -> Result<FundGolemBaseResponse> {
+        let gsb = market::bus_bindpoints(Some(self.gsb.clone()));
+        let response = local::build_discovery_bindpoint(&gsb)
+            .local()
+            .send(market::FundGolemBase {
+                wallet: Some(wallet),
+            })
+            .await??;
+        Ok(response)
     }
 }
 
@@ -153,12 +186,7 @@ impl MarketsNetwork {
         identity: RealIdentity,
         node_kind: MockNodeKind,
     ) -> MarketsNetwork {
-        let node = MockNode {
-            name: name.to_string(),
-            identity_api,
-            identity,
-            kind: node_kind,
-        };
+        let node = MockNode::new(name, &self.test_name, identity_api, identity, node_kind);
 
         let gsb = node.bind_gsb(&self.test_name, name).await.unwrap();
         let node_id = node.identity_api.default_identity().await.unwrap();
@@ -166,6 +194,8 @@ impl MarketsNetwork {
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         self.net.register_for_broadcasts(&node_id, &self.test_name);
         self.net.register_node(&node_id, gsb.public_addr());
+
+        node.fund(node_id).await.unwrap();
 
         self.nodes.push(node);
         self
