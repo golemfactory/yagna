@@ -87,11 +87,11 @@ async fn test_demand() -> anyhow::Result<()> {
     let valid_demand = generate_demand(
         "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
         future(),
-        );
+    );
     let expired_demand = generate_demand(
-        "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
+        "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
-        );
+    );
     let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_demand");
@@ -118,11 +118,11 @@ async fn test_offer() -> anyhow::Result<()> {
     let valid_offer = generate_offer(
         "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
         future(),
-        );
+    );
     let expired_offer = generate_offer(
-        "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
+        "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
-        );
+    );
     let db = MarketsNetwork::new(dir, MockNet::new())
         .await
         .init_database("test_offer");
