@@ -210,7 +210,7 @@ impl MarketsNetwork {
         let gsb = node.bind_gsb(&self.test_name, name).await.unwrap();
         let node_id = node.identity_api.default_identity().await.unwrap();
 
-        log::info!("Creating mock node {}: [{}].", name, &node_id);
+        log::info!("Creating mock node '{}': [{}].", name, &node_id);
         self.net.register_for_broadcasts(&node_id, &self.test_name);
         self.net.register_node(&node_id, gsb.public_addr());
 
@@ -504,10 +504,10 @@ impl MarketsNetwork {
             .iter()
             .find(|node| node.name == node_name)
             .unwrap();
-        let id = node.identity.create_identity(id_name).await.unwrap();
 
-        let gsb = gsb_prefixes(&self.test_name, node_name);
-        self.net.register_node(&id.node_id, &gsb.public_addr());
+        let id = node.identity.create_identity(id_name).await.unwrap();
+        node.fund(id.node_id).await.unwrap();
+
         Identity {
             identity: id.node_id,
             name: id_name.to_string(),

@@ -264,6 +264,7 @@ async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error> {
     enable_logs(false);
+
     let dir = temp_dir!("test_session_negotiation_on_the_same_node")?;
     let dir = dir.path();
 
@@ -325,6 +326,7 @@ async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), anyhow::Error> {
     enable_logs(false);
+
     let dir = temp_dir!("test_session_negotiation_on_the_same_node_same_session")?;
     let dir = dir.path();
 
