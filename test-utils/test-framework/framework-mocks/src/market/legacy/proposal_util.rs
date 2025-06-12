@@ -22,8 +22,14 @@ pub fn generate_proposal(
 ) -> DbProposal {
     DbProposal {
         id: ProposalId::generate_id(
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
             // Add parametrized integer - unifier to ensure unique ids
             &(Utc::now() + Duration::days(unifier)).naive_utc(),
             Owner::Requestor,
@@ -43,9 +49,18 @@ pub fn generate_negotiation(agreement_id: Option<ProposalId>) -> Negotiation {
     use uuid::Uuid;
     Negotiation {
         id: format!("{}", Uuid::new_v4()),
-        subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        offer_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        demand_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+        subscription_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
+        offer_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
+        demand_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
         provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         agreement_id,

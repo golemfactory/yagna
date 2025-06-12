@@ -217,6 +217,8 @@ async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("full_market_interaction_aka_happy_path")?;
     let dir = dir.path();
 
@@ -301,6 +303,8 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_creation_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("second_creation_should_fail")?;
     let dir = dir.path();
 
@@ -337,6 +341,8 @@ async fn second_creation_should_fail() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_confirmation_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("second_confirmation_should_fail")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -391,6 +397,8 @@ async fn second_confirmation_should_fail() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn agreement_expired_before_confirmation() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("agreement_expired_before_confirmation")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -440,6 +448,8 @@ async fn agreement_expired_before_confirmation() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn agreement_expired_before_approval() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("agreement_expired_before_approval")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -487,6 +497,8 @@ async fn agreement_expired_before_approval() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("waiting_wo_confirmation_should_fail")?;
     let dir = dir.path();
 
@@ -525,6 +537,8 @@ async fn waiting_wo_confirmation_should_fail() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn approval_before_confirmation_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("approval_before_confirmation_should_fail")?;
     let dir = dir.path();
 
@@ -571,6 +585,8 @@ async fn approval_before_confirmation_should_fail() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn approval_without_waiting_should_pass() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("approval_without_waiting_should_pass")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -625,6 +641,8 @@ async fn approval_without_waiting_should_pass() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn waiting_after_approval_should_pass() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("waiting_after_approval_should_pass")?;
     let dir = dir.path();
 
@@ -686,6 +704,8 @@ async fn waiting_after_approval_should_pass() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_approval_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("second_approval_should_fail")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -762,6 +782,8 @@ async fn second_approval_should_fail() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn second_waiting_should_pass() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("second_waiting_should_pass")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -829,6 +851,8 @@ async fn second_waiting_should_pass() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn net_err_while_confirming() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("net_err_while_confirming")?;
     let dir = dir.path();
 
@@ -874,6 +898,8 @@ async fn net_err_while_confirming() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn net_err_while_approving() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("net_err_while_approving")?;
     let dir = dir.path();
 
@@ -937,6 +963,8 @@ async fn net_err_while_approving() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_requestor_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("cant_promote_requestor_proposal")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -986,6 +1014,8 @@ async fn cant_promote_requestor_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_initial_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("cant_promote_initial_proposal")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -1035,6 +1065,8 @@ async fn cant_promote_initial_proposal() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn cant_promote_not_last_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("cant_promote_not_last_proposal")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -1084,6 +1116,7 @@ async fn cant_promote_not_last_proposal() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_terminate() -> anyhow::Result<()> {
     enable_logs(false);
+
     let dir = temp_dir!("test_terminate")?;
     let dir = dir.path();
 
@@ -1116,6 +1149,7 @@ async fn test_terminate() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_terminate_not_existing_agreement() -> anyhow::Result<()> {
     enable_logs(false);
+
     let dir = temp_dir!("test_terminate_not_existing_agreement")?;
     let dir = dir.path();
 
@@ -1167,6 +1201,7 @@ async fn test_terminate_not_existing_agreement() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_terminate_from_wrong_states() -> anyhow::Result<()> {
     enable_logs(false);
+
     let dir = temp_dir!("test_terminate_from_wrong_states")?;
     let dir = dir.path();
 
@@ -1270,6 +1305,8 @@ async fn test_terminate_from_wrong_states() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_terminate_rejected_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
+
     let dir = temp_dir!("test_terminate_rejected_agreement")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())
@@ -1343,6 +1380,7 @@ async fn test_terminate_rejected_agreement() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_terminate_invalid_reason() -> anyhow::Result<()> {
     enable_logs(false);
+
     let dir = temp_dir!("test_terminate_invalid_reason")?;
     let dir = dir.path();
     let network = MarketsNetwork::new(dir, MockNet::new())

@@ -5,7 +5,10 @@ use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
+use bigdecimal::BigDecimal;
+use golem_base_sdk::GolemBaseClient;
 use std::path::Path;
+use std::str::FromStr;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
@@ -161,6 +164,8 @@ impl MarketsNetwork {
 
         net.bind_gsb();
 
+        Self::cleanup_entities().await.unwrap();
+
         MarketsNetwork {
             net,
             nodes: vec![],
@@ -168,6 +173,23 @@ impl MarketsNetwork {
             test_name,
             config: Arc::new(create_market_config_for_test()),
         }
+    }
+
+    /// Removes all existing entities from the GolemBase node
+    pub async fn cleanup_entities() -> Result<()> {
+        let config = create_market_config_for_test();
+        let client = GolemBaseClient::new(config.discovery.get_rpc_url().clone())?;
+
+        let account = client.account_generate("test").await?;
+        client.fund(account, BigDecimal::from_str("0.1")?).await?;
+
+        let all_entity_keys = client.get_all_entity_keys().await?;
+
+        log::info!("Removing all existing entities: {:?}", all_entity_keys);
+        if !all_entity_keys.is_empty() {
+            client.remove_entries(account, all_entity_keys).await?;
+        }
+        Ok(())
     }
 
     /// Config will be used to initialize all consecutive Nodes.

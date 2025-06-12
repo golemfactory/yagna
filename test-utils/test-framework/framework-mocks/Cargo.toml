@@ -24,6 +24,7 @@ ya-utils-path.workspace = true
 ya-std-utils.workspace = true
 
 ya-framework-basic.workspace = true
+golem-base-sdk.workspace = true
 
 actix-rt.workspace = true
 actix-web.workspace = true

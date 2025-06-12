@@ -85,7 +85,7 @@ async fn test_demand() -> anyhow::Result<()> {
 
     // insert two demands (expired & active) with negotiations
     let valid_demand = generate_demand(
-        "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
         future(),
         );
     let expired_demand = generate_demand(
@@ -116,7 +116,7 @@ async fn test_offer() -> anyhow::Result<()> {
 
     // insert two offers with negotiations
     let valid_offer = generate_offer(
-        "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
         future(),
         );
     let expired_offer = generate_offer(
