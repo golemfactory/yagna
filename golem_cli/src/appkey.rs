@@ -59,10 +59,6 @@ async fn get_existing_key() -> Result<Option<String>> {
 
 async fn get_existing_app_key() -> Result<Option<AppKey>> {
     let keys = get_command_json_output("yagna", &["app-key", "list", "--json"]).await?;
-    log::info!(
-        "get_existing_app_key keys: {:?}",
-        serde_json::to_string(&keys)?
-    );
     parse_appkey(keys)
 }
 
