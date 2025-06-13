@@ -38,10 +38,16 @@ async fn test_subscribe_offer() -> anyhow::Result<()> {
     assert_eq!(client_offer.offer_id, subscription_id.to_string());
     assert_eq!(client_offer.provider_id, identity1.identity);
     assert_eq!(client_offer.constraints, offer.constraints);
-    assert_eq!(client_offer.properties, flatten_json(&offer.properties));
+    assert_eq!(
+        flatten_json(&client_offer.properties),
+        flatten_json(&offer.properties)
+    );
 
     // Unsubscribe should fail on not existing subscription id.
-    let not_existent_subscription_id = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
+    let not_existent_subscription_id =
+        "0000000000000000000000000000000000000000000000000000000000000002"
+            .parse()
+            .unwrap();
     assert!(market1
         .unsubscribe_offer(&not_existent_subscription_id, &identity1)
         .await
@@ -89,7 +95,10 @@ async fn test_subscribe_demand() -> anyhow::Result<()> {
     assert_eq!(client_demand.constraints, demand.constraints);
     assert_eq!(client_demand.properties, flatten_json(&demand.properties));
     // Unsubscribe should fail on not existing subscription id.
-    let not_existent_subscription_id = "00000000000000000000000000000002-0000000000000000000000000000000000000000000000000000000000000003".parse().unwrap();
+    let not_existent_subscription_id =
+        "0000000000000000000000000000000000000000000000000000000000000003"
+            .parse()
+            .unwrap();
     assert!(market1
         .unsubscribe_demand(&not_existent_subscription_id, &identity1)
         .await

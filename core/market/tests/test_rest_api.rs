@@ -207,7 +207,10 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     assert_eq!(got_offer.offer_id, subscription_id.to_string());
     assert_eq!(got_offer.provider_id, id.identity);
     assert_eq!(&got_offer.constraints, &client_offer.constraints);
-    assert_eq!(got_offer.properties, flatten_json(&client_offer.properties));
+    assert_eq!(
+        flatten_json(&got_offer.properties),
+        flatten_json(&client_offer.properties)
+    );
 
     // given
     let req = actix_web::test::TestRequest::delete()

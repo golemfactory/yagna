@@ -282,6 +282,7 @@ impl MarketsNetwork {
     }
 
     pub async fn add_discovery_instance(self, name: &str, builder: DiscoveryBuilder) -> Self {
+        let _db = self.init_database(name);
         let gsb = self.node_gsb_prefixes(name);
 
         let identity_api = IdentityGSB::new(gsb.clone());

@@ -333,7 +333,9 @@ async fn test_discovery_get_offers() -> anyhow::Result<()> {
         .subscribe_offer(&client::sample_offer(), &id1)
         .await
         .unwrap();
-    let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
+    let invalid_subscription = "0000000000000000000000000000000000000000000000000000000000000002"
+        .parse()
+        .unwrap();
 
     let offers = discovery2
         .get_remote_offers(
