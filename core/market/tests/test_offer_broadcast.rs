@@ -14,7 +14,6 @@ use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 #[serial_test::serial]
 async fn test_broadcast_offer() -> anyhow::Result<()> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_broadcast_offer")?;
     let dir = dir.path();
@@ -312,7 +311,6 @@ async fn test_broadcast_offer() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_discovery_get_offers() -> anyhow::Result<()> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_discovery_get_offers")?;
     let dir = dir.path();

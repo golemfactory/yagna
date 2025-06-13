@@ -17,7 +17,6 @@ use ya_framework_mocks::net::MockNet;
 #[serial_test::serial]
 async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_startup_offers_sharing")?;
     let dir = dir.path();
@@ -76,7 +75,6 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_unsubscribes_cyclic_broadcasts")?;
     let dir = dir.path();
@@ -187,7 +185,6 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_network_error_while_subscribing")?;
     let dir = dir.path();
@@ -230,7 +227,6 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_sharing_someones_else_offers")?;
     let dir = dir.path();
@@ -289,7 +285,6 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
     enable_logs(false);
-    let _ = env_logger::builder().try_init();
 
     let dir = temp_dir!("test_sharing_someones_else_unsubscribes")?;
     let dir = dir.path();

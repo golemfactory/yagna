@@ -95,7 +95,7 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
-        MarketService::apply_migrations(&db)?;
+        MarketService::apply_migrations(db)?;
 
         let scan_set = ScannerSet::new(db.clone());
         let store = SubscriptionStore::new(db.clone(), scan_set.clone(), config.clone());

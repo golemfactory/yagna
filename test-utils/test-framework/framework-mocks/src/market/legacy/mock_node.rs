@@ -90,7 +90,7 @@ impl MockNode {
         identity: RealIdentity,
         kind: MockNodeKind,
     ) -> Self {
-        let gsb = gsb_prefixes(test_name, &name);
+        let gsb = gsb_prefixes(test_name, name);
         Self {
             name: name.to_string(),
             identity_api,
@@ -230,7 +230,7 @@ impl MarketsNetwork {
     pub async fn enable_networking_for(&self, node_name: &str) -> Result<()> {
         for id in self.list_ids(node_name).await {
             let gsb = gsb_prefixes(&self.test_name, node_name);
-            self.net.register_node(&id.identity, &gsb.public_addr());
+            self.net.register_node(&id.identity, gsb.public_addr());
         }
         Ok(())
     }
@@ -597,10 +597,10 @@ pub fn prepare_test_dir(test_dir: &Path) -> Result<PathBuf> {
         test_dir.display()
     );
     if test_dir.exists() {
-        fs::remove_dir_all(&test_dir)
+        fs::remove_dir_all(test_dir)
             .with_context(|| format!("Removing test directory: {}", test_dir.display()))?;
     }
-    fs::create_dir_all(&test_dir)
+    fs::create_dir_all(test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
     Ok(test_dir.to_path_buf())
 }
