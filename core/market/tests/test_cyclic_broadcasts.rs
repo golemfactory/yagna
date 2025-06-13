@@ -148,10 +148,6 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
         mkt2.unsubscribe_offer(subscription, &id2).await.unwrap();
     }
 
-    // Sanity check. We should have all Offers subscribed at this moment,
-    // since Node-3 network didn't work.
-    assert_offers_broadcasted(&[&mkt3], subscriptions1.iter().chain(subscriptions2.iter())).await;
-
     // Re-enable networking for Node-3. We should get only cyclic broadcast.
     // Immediate broadcast should be already lost.
     network.enable_networking_for("Node-3").await.unwrap();
@@ -179,8 +175,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 }
 
 /// Subscribing and unsubscribing should work despite network errors.
-/// Market should return subscription id and Offer propagation will take place
-/// later during cyclic broadcasts. The same applies to unsubscribes.
+/// Since Offers are stored on GolemBase, there is no propagation and network doesn't have to work.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
@@ -214,7 +209,7 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
     assert_err_eq!(expected_error, mkt1.get_offer(&subscription_id).await);
 
-    let expected_error = QueryOfferError::NotFound(subscription_id.clone());
+    let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
     let mkt2 = network.get_market("Node-2");
     assert_err_eq!(expected_error, mkt2.get_offer(&subscription_id).await);
 
@@ -351,8 +346,6 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
 
     // Check if all expected Offers were unsubscribed.
     assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2], subscriptions[3..].iter()).await;
-    // Sanity check. Node-3 should still see all Offers (not unsubscribed).
-    assert_offers_broadcasted(&[&mkt3], subscriptions.iter()).await;
 
     // Disconnect Node-2. Only Node-1 can propagate unsubscribes to Node-3.
     network.break_networking_for("Node-2").await.unwrap();

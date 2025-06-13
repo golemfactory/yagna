@@ -36,7 +36,9 @@ async fn test_query_events_non_existent_subscription() -> anyhow::Result<()> {
         .await;
 
     let market1 = network.get_market("Node-1");
-    let non_existent_id = "80da375cb604426fb6cddd64f4ccc715-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55".parse().unwrap();
+    let non_existent_id = "85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55"
+        .parse()
+        .unwrap();
 
     // We expect that no events are available for non existent subscription.
     let result = market1.query_events(&non_existent_id, 2.0, Some(5)).await;

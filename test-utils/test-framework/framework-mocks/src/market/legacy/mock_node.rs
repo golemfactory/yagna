@@ -184,10 +184,13 @@ impl MarketsNetwork {
         client.fund(account, BigDecimal::from_str("0.1")?).await?;
 
         let all_entity_keys = client.get_all_entity_keys().await?;
+        let batch_size = 20;
 
         log::info!("Removing all existing entities: {:?}", all_entity_keys);
         if !all_entity_keys.is_empty() {
-            client.remove_entries(account, all_entity_keys).await?;
+            for chunk in all_entity_keys.chunks(batch_size) {
+                client.remove_entries(account, chunk.to_vec()).await?;
+            }
         }
         Ok(())
     }
