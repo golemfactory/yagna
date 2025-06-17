@@ -185,7 +185,7 @@ impl MarketsNetwork {
     pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
         let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
         let image = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
-            .with_wait_for(WaitFor::Nothing)
+            .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
             .with_cmd([
                 "--dev",
