@@ -5,11 +5,10 @@ use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
-use bigdecimal::BigDecimal;
-use golem_base_sdk::GolemBaseClient;
 use std::path::Path;
-use std::str::FromStr;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use testcontainers::core::ContainerPort;
+use testcontainers::ContainerAsync;
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
 use ya_core_model::NodeId;
@@ -35,6 +34,8 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBro
 use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
+use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
+
 /// Instantiates market test nodes inside one process.
 ///
 /// @note This is a legacy implementation used in market test suite. New testing tools were
@@ -43,6 +44,10 @@ use crate::net::MockNet;
 pub struct MarketsNetwork {
     net: MockNet,
     nodes: Vec<MockNode>,
+
+    /// GolemBase which will be dropped on the end of the test.
+    #[allow(dead_code)]
+    golembase: ContainerAsync<GenericImage>,
 
     test_dir: PathBuf,
     test_name: String,
@@ -164,35 +169,51 @@ impl MarketsNetwork {
 
         net.bind_gsb();
 
-        Self::cleanup_entities().await.unwrap();
+        let config = create_market_config_for_test();
+        let golembase = Self::init_golembase(&config).await.unwrap();
 
         MarketsNetwork {
             net,
             nodes: vec![],
             test_dir: prepare_test_dir(testdir).unwrap(),
             test_name,
-            config: Arc::new(create_market_config_for_test()),
+            config: Arc::new(config),
+            golembase,
         }
     }
 
-    /// Removes all existing entities from the GolemBase node
-    pub async fn cleanup_entities() -> Result<()> {
-        let config = create_market_config_for_test();
-        let client = GolemBaseClient::new(config.discovery.get_rpc_url().clone())?;
-
-        let account = client.account_generate("test").await?;
-        client.fund(account, BigDecimal::from_str("0.1")?).await?;
-
-        let all_entity_keys = client.get_all_entity_keys().await?;
-        let batch_size = 20;
-
-        log::info!("Removing all existing entities: {:?}", all_entity_keys);
-        if !all_entity_keys.is_empty() {
-            for chunk in all_entity_keys.chunks(batch_size) {
-                client.remove_entries(account, chunk.to_vec()).await?;
-            }
-        }
-        Ok(())
+    pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
+        let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
+        let image = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
+            .with_wait_for(WaitFor::Nothing)
+            .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
+            .with_cmd([
+                "--dev",
+                "--http",
+                "--http.api",
+                "eth,web3,net,debug,golembase",
+                "--verbosity",
+                "3",
+                "--http.addr",
+                "0.0.0.0",
+                "--http.port",
+                &ws_port.to_string(),
+                "--http.corsdomain",
+                "*",
+                "--http.vhosts",
+                "*",
+                "--ws",
+                "--ws.addr",
+                "0.0.0.0",
+                "--ws.port",
+                &ws_port.to_string(),
+            ])
+            .with_env_var("GITHUB_ACTIONS", "true")
+            .with_env_var("CI", "true")
+            .start()
+            .await
+            .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
+        Ok(image)
     }
 
     /// Config will be used to initialize all consecutive Nodes.
