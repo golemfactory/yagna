@@ -100,7 +100,7 @@ impl YagnaMock {
             use std::os::unix::process::CommandExt;
 
             cmd.pre_exec(|| {
-                ::nix::unistd::setsid().map_err(|e| io::Error::other(e))?;
+                ::nix::unistd::setsid().map_err(io::Error::other)?;
                 let _ = prctl(PR_SET_PDEATHSIG, SIGTERM);
                 Ok(())
             });

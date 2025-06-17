@@ -28,7 +28,7 @@ pub fn solve_pow(salt: &str, target: &str) -> u64 {
 }
 
 fn parse_hex_target(target: &str) -> Vec<u8> {
-    let mut result = Vec::with_capacity((target.len() + 1) / 2);
+    let mut result = Vec::with_capacity(target.len().div_ceil(2));
     let chars: Vec<char> = target.chars().collect();
 
     for chunk in chars.chunks(2) {

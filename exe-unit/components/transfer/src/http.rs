@@ -75,9 +75,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                         tx.sink_map_err(Error::from)
                             .with(|b| ready(Ok(Ok(TransferData::from(b))))),
                     )
-                    .await
-                    .map_err(Error::from)
-            };
+                    .await};
 
             abortable_stream(fut, abort_reg, txc).await
         });

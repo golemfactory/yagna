@@ -52,9 +52,7 @@ impl ProgressReporter {
     pub fn report_progress(&self, progress: u64, size: Option<u64>) {
         let update_interval: Duration = self
             .config
-            .update_interval
-            .map(Into::into)
-            .unwrap_or(Duration::from_secs(1));
+            .update_interval.unwrap_or(Duration::from_secs(1));
         let _update_step = self.config.update_step;
 
         if let Some(inner) = self.inner.lock().unwrap().as_mut() {

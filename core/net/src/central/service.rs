@@ -53,13 +53,13 @@ async fn central_net_addr(
             let addr = (host, port)
                 .to_socket_addrs()?
                 .next()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "host not found"))?;
+                .ok_or_else(|| io::Error::other("host not found"))?;
             let cert = cert.and_then(|c| c.parse().ok());
 
             return Ok((addr, cert));
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "host not found"))
+    Err(io::Error::other("host not found"))
 }
 
 pub async fn bind_remote(
@@ -159,7 +159,7 @@ async fn bind_remote_for<
         central_bus
             .bind(addr.clone())
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("{}", e)))?;
         log::info!("network service bound at under: {}", addr);
     }
 
