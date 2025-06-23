@@ -69,5 +69,5 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests -p ya-market --features ya-market/test-suite --locked
+          args: full_market_interaction_aka_happy_path --tests -p ya-market --features ya-market/test-suite --locked
 
