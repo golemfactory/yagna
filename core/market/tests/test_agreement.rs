@@ -217,7 +217,7 @@ async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("full_market_interaction_aka_happy_path")?;
     let dir = dir.path();
