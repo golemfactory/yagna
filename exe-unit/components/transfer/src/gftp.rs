@@ -66,7 +66,8 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                             }))
                         },
                     ))
-                    .await};
+                    .await
+            };
 
             abortable_stream(fut, abort_reg, txc).await
         });
