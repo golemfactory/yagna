@@ -178,7 +178,7 @@ async fn test_get_agreement() -> anyhow::Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
     let dir = temp_dir!("test_rest_get_not_existing_agreement")?;
     let dir = dir.path();
 

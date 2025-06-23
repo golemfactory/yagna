@@ -531,6 +531,10 @@ impl MarketsNetwork {
             .unwrap();
 
         let id = node.identity.create_identity(id_name).await.unwrap();
+
+        // Sleep to allow propagating identity events to market to register the account
+        // related to the identity.
+        tokio::time::sleep(Duration::from_millis(100)).await;
         node.fund(id.node_id).await.unwrap();
 
         Identity {

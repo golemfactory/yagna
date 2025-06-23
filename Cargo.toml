@@ -255,6 +255,9 @@ actix-service = "2"
 actix-web = "4"
 actix = { version = "0.13", default-features = false }
 
+# Freeze dependency that breaks windows-fast builds
+crunchy = "=0.2.2"
+
 derive_more = "0.99.11"
 erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
 erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
