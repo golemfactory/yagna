@@ -25,6 +25,7 @@ use crate::config::Config;
 use crate::db::dao::AgreementEventsDao;
 use crate::db::model::ProposalState;
 use crate::utils::display::EnableDisplay;
+use ya_core_model::bus::GsbBindPoints;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
 pub enum ApprovalStatus {
@@ -112,12 +113,8 @@ impl RequestorBroker {
         Ok(engine)
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), NegotiationInitError> {
-        self.api.bind_gsb(public_prefix, local_prefix).await?;
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), NegotiationInitError> {
+        self.api.bind_gsb(gsb).await?;
         Ok(())
     }
 

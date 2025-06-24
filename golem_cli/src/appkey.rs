@@ -79,7 +79,7 @@ pub async fn get_identity_for_app_key() -> Result<Option<String>> {
     Ok(appkey.map(|appkey| appkey.id))
 }
 
-pub(self) fn parse_appkey(mut keys: serde_json::Value) -> Result<Option<AppKey>> {
+fn parse_appkey(mut keys: serde_json::Value) -> Result<Option<AppKey>> {
     Ok(match keys.get_mut("values") {
         Some(values) => get_existing_key_from_output_compat(values.take()),
         None => get_existing_key_from_output(keys),

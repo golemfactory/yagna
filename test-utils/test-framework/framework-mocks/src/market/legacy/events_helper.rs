@@ -1,55 +1,16 @@
-use chrono::{NaiveDateTime, Utc};
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use ya_client::model::market::Proposal;
-
-use crate::db::model::{EventType, Owner, ProposalId, SubscriptionId};
-use crate::db::schema::market_negotiation_event;
-use crate::MarketService;
-
-#[derive(Clone, Debug, Insertable, Queryable)]
-#[table_name = "market_negotiation_event"]
-pub struct TestMarketEvent {
-    pub id: i32,
-    pub subscription_id: SubscriptionId,
-    pub timestamp: NaiveDateTime,
-    pub event_type: EventType,
-    pub artifact_id: ProposalId,
-    pub reason: Option<String>,
-}
-
-pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
-    TestMarketEvent {
-        id,
-        subscription_id: SubscriptionId::from_str(
-            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
-        )
-        .unwrap(),
-        event_type: EventType::ProviderNewProposal,
-        artifact_id: ProposalId::generate_id(
-            &SubscriptionId::from_str(
-                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
-            )
-            .unwrap(),
-            &SubscriptionId::from_str(
-                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
-            )
-            .unwrap(),
-            &Utc::now().naive_utc(),
-            Owner::Requestor,
-        ),
-        timestamp,
-        reason: None,
-    }
-}
+use ya_market::testing::ProposalId;
 
 const QUERY_EVENTS_TIMEOUT: f32 = 5.0;
 
 pub mod requestor {
     use super::*;
+    use crate::market::legacy::MarketService;
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::{AgreementEventType, AgreementOperationEvent as AgreementEvent};
+    use ya_market::testing::SubscriptionId;
 
     pub fn expect_proposal(events: Vec<RequestorEvent>, stage: &str) -> anyhow::Result<Proposal> {
         assert_eq!(
@@ -98,6 +59,8 @@ pub mod provider {
     use super::*;
     use ya_client::model::market::event::ProviderEvent;
     use ya_client::model::market::Agreement;
+    use ya_market::testing::SubscriptionId;
+    use ya_market::MarketService;
 
     pub fn expect_proposal(events: Vec<ProviderEvent>, stage: &str) -> anyhow::Result<Proposal> {
         assert_eq!(

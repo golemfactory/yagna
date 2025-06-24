@@ -285,10 +285,7 @@ impl ExeUnitsRegistry {
             .descriptors
             .values()
             .map(|desc| desc.validate())
-            .filter_map(|result| match result {
-                Err(error) => Some(error),
-                Ok(_) => None,
-            })
+            .filter_map(|result| result.err())
             .collect::<Vec<ExeUnitValidation>>();
 
         if errors.is_empty() {
@@ -329,19 +326,23 @@ impl fmt::Display for RegistryError {
 #[derive(Error, Debug)]
 pub enum ExeUnitValidation {
     #[error("ExeUnit [{}] Supervisor binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
-    SupervisorNotFound { desc: ExeUnitDesc },
+    SupervisorNotFound { desc: Box<ExeUnitDesc> },
     #[error("ExeUnit [{}] Runtime binary [{:?}] doesn't exist.", .desc.name, .desc.runtime_path)]
-    RuntimeNotFound { desc: ExeUnitDesc },
+    RuntimeNotFound { desc: Box<ExeUnitDesc> },
 }
 
 impl ExeUnitDesc {
     pub fn validate(&self) -> Result<(), ExeUnitValidation> {
         if !self.supervisor_path.exists() {
-            return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
+            return Err(ExeUnitValidation::SupervisorNotFound {
+                desc: Box::new(self.clone()),
+            });
         }
         if let Some(runtime_path) = self.runtime_path.as_ref() {
             if !runtime_path.exists() {
-                return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
+                return Err(ExeUnitValidation::RuntimeNotFound {
+                    desc: Box::new(self.clone()),
+                });
             }
         }
         Ok(())

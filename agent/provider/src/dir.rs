@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_empty_dir_fail() {
-        let dir = tempfile::tempdir().unwrap().into_path();
+        let dir = tempfile::tempdir().unwrap().keep();
         let expected = anyhow::anyhow!("Not a provider data directory: {}", dir.display());
         let error = clean_provider_dir(&dir, "1d", true, false);
         assert_eq!(expected.to_string(), error.err().unwrap().to_string());
@@ -198,7 +198,7 @@ mod tests {
     }
 
     fn create_data_dir() -> DataDir {
-        let dir = tempfile::tempdir().unwrap().into_path();
+        let dir = tempfile::tempdir().unwrap().keep();
         let hardware_json = create_file(&dir, HARDWARE_JSON, "a");
         let presets_json = create_file(&dir, PRESETS_JSON, "b");
         let globals_json = create_file(&dir, GLOBALS_JSON, "c");

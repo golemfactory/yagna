@@ -1,3 +1,5 @@
+pub mod legacy;
+
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::collections::HashMap;

@@ -1,23 +1,36 @@
 use chrono::{Duration, Utc};
 use ya_client::model::market::{proposal::State, RequestorEvent};
-use ya_framework_mocks::net::MockNet;
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
+
+use ya_framework_mocks::{
+    market::legacy::{
+        agreement_utils::gen_reason,
+        events_helper::{provider, requestor, ClientProposalHelper},
+        mock_node::{assert_offers_broadcasted, MarketsNetwork},
+        proposal_util::{exchange_draft_proposals, NegotiationHelper},
+    },
+    net::MockNet,
+};
 use ya_market::testing::{
-    agreement_utils::gen_reason,
-    events_helper::{provider, requestor, ClientProposalHelper},
-    mock_node::assert_offers_broadcasted,
-    mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
-    mock_offer::flatten_json,
+    mock_offer::{
+        client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+        flatten_json,
+    },
     negotiation::error::{CounterProposalError, RemoteProposalError},
-    proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementError, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
-    ProposalValidationError, SaveProposalError,
+    AgreementError, MarketServiceExt, Owner, ProposalError, ProposalState, ProposalValidationError,
+    SaveProposalError,
 };
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_exchanging_draft_proposals() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_exchanging_draft_proposals() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_exchanging_draft_proposals")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -27,8 +40,8 @@ async fn test_exchanging_draft_proposals() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -130,14 +143,20 @@ async fn test_exchanging_draft_proposals() {
         proposal3_prov.prev_proposal_id,
         Some(proposal2_req_id.translate(Owner::Provider).to_string()),
     );
+
+    Ok(())
 }
 
 /// Can't counter proposal, that was already countered.
 /// Market should reject such attempts.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_countered_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_countered_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_countered_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -147,8 +166,8 @@ async fn test_counter_countered_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -216,13 +235,18 @@ async fn test_counter_countered_proposal() {
         }
         e => panic!("Expected AlreadyCountered error, got: {}", e),
     }
+    Ok(())
 }
 
 /// Can't counter own proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_own_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_own_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_own_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -232,8 +256,8 @@ async fn test_counter_own_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -309,13 +333,18 @@ async fn test_counter_own_proposal() {
         }
         e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
     }
+    Ok(())
 }
 
 /// Requestor can't counter Proposal, for which he has unsubscribed Demand.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_unsubscribed_demand() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_unsubscribed_demand() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_unsubscribed_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -325,8 +354,8 @@ async fn test_counter_unsubscribed_demand() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -366,13 +395,18 @@ async fn test_counter_unsubscribed_demand() {
             e
         ),
     }
+    Ok(())
 }
 
 /// Provider can't counter Proposal, for which he has unsubscribed Offer.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_unsubscribed_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_unsubscribed_offer() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_unsubscribed_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -382,8 +416,8 @@ async fn test_counter_unsubscribed_offer() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -436,14 +470,19 @@ async fn test_counter_unsubscribed_offer() {
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
+    Ok(())
 }
 
 /// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[ignore]
 #[serial_test::serial]
-async fn test_counter_initial_unsubscribed_remote_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_initial_unsubscribed_remote_offer() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_initial_unsubscribed_remote_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -453,8 +492,8 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -499,14 +538,19 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
+    Ok(())
 }
 
 /// Requestor tries to counter draft Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_draft_unsubscribed_remote_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_draft_unsubscribed_remote_offer() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_draft_unsubscribed_remote_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -524,8 +568,8 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
     market2
@@ -556,14 +600,19 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
+    Ok(())
 }
 
 /// Provider tries to counter draft Proposal, for which Demand was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Requestor Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_counter_draft_unsubscribed_remote_demand() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_counter_draft_unsubscribed_remote_demand() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_counter_draft_unsubscribed_remote_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -581,8 +630,8 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let proposal1 = sample_demand();
     market1
@@ -615,14 +664,19 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
         ProposalError::Send(..) => (),
         e => panic!("Expected ProposalError::Send, got: {}", e),
     }
+    Ok(())
 }
 
 /// Try to send not matching counter Proposal to Provider. Our market
 /// should reject such Proposal. Error should occur on Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_not_matching_counter_demand() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_not_matching_counter_demand() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_not_matching_counter_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -638,7 +692,7 @@ async fn test_not_matching_counter_demand() {
         .unwrap();
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
     let proposal1 = not_matching_demand();
     let result = market1
         .requestor_engine
@@ -650,14 +704,19 @@ async fn test_not_matching_counter_demand() {
         ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
         e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
+    Ok(())
 }
 
 /// Try to send not matching counter Proposal to Requestor. Our market
 /// should reject such Proposal. Error should occur on Provider side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_not_matching_counter_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_not_matching_counter_offer() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_not_matching_counter_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -675,8 +734,8 @@ async fn test_not_matching_counter_offer() {
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let proposal1 = sample_demand();
     market1
@@ -704,6 +763,7 @@ async fn test_not_matching_counter_offer() {
         ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
         e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
+    Ok(())
 }
 
 /// Negotiations between Provider and Requestor using the same Identity
@@ -711,14 +771,18 @@ async fn test_not_matching_counter_offer() {
 /// such Offer-Demand pairs.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_negotiations_same_identity() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_negotiations_same_identity() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_negotiations_same_identity")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -736,6 +800,8 @@ async fn test_reject_negotiations_same_identity() {
         .await
         .unwrap();
     assert_eq!(events.len(), 0);
+
+    Ok(())
 }
 
 /// Requestor tries to reject initial Proposal
@@ -743,8 +809,12 @@ async fn test_reject_negotiations_same_identity() {
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_initial_offer() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_initial_offer() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_initial_offer")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Req-1")
         .await
@@ -754,8 +824,8 @@ async fn test_reject_initial_offer() {
     let req_mkt = network.get_market("Req-1");
     let prov_mkt = network.get_market("Prov-1");
 
-    let req_id = network.get_default_id("Req-1");
-    let prov_id = network.get_default_id("Prov-1");
+    let req_id = network.get_default_id("Req-1").await;
+    let prov_id = network.get_default_id("Prov-1").await;
 
     let demand_id = req_mkt
         .subscribe_demand(&sample_demand(), &req_id)
@@ -789,14 +859,19 @@ async fn test_reject_initial_offer() {
     let proposal0updated = req_mkt.get_proposal(proposal0id).await.unwrap();
 
     assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
+    Ok(())
 }
 
 /// Provider rejects draft Proposal and succeeds.
 /// As a result Proposal is in Rejected state on both sides.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_demand() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_demand() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_demand")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Req-1")
         .await
@@ -806,8 +881,8 @@ async fn test_reject_demand() {
     let req_mkt = network.get_market("Req-1");
     let prov_mkt = network.get_market("Prov-1");
 
-    let req_id = network.get_default_id("Req-1");
-    let prov_id = network.get_default_id("Prov-1");
+    let req_id = network.get_default_id("Req-1").await;
+    let prov_id = network.get_default_id("Prov-1").await;
 
     let demand = sample_demand();
     let demand_id = req_mkt.subscribe_demand(&demand, &req_id).await.unwrap();
@@ -867,13 +942,19 @@ async fn test_reject_demand() {
         .await
         .unwrap();
     assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
+
+    Ok(())
 }
 
 // Events with proposals should come last
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_proposal_events_last() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_proposal_events_last() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_proposal_events_last")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -886,9 +967,9 @@ async fn test_proposal_events_last() {
     let market2 = network.get_market("Node-2");
     let market3 = network.get_market("Node-3");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
-    let identity3 = network.get_default_id("Node-3");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
+    let identity3 = network.get_default_id("Node-3").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -946,12 +1027,18 @@ async fn test_proposal_events_last() {
         RequestorEvent::ProposalEvent { .. } => {}
         _ => panic!("Invalid last event_type: {:#?}", events[0]),
     }
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_restart_negotiations() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_restart_negotiations() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_restart_negotiations")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -960,8 +1047,8 @@ async fn test_restart_negotiations() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let req_id = network.get_default_id("Requestor1");
-    let prov_id = network.get_default_id("Provider1");
+    let req_id = network.get_default_id("Requestor1").await;
+    let prov_id = network.get_default_id("Provider1").await;
 
     // Requestor side
     let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -1070,12 +1157,17 @@ async fn test_restart_negotiations() {
         )
         .await
         .unwrap();
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_create_agreement_on_rejected_proposal_should_fail() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_create_agreement_on_rejected_proposal_should_fail() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_create_agreement_on_rejected_proposal_should_fail")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -1084,7 +1176,7 @@ async fn test_create_agreement_on_rejected_proposal_should_fail() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let req_id = network.get_default_id("Requestor1");
+    let req_id = network.get_default_id("Requestor1").await;
 
     // Requestor side
     let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -1145,13 +1237,18 @@ async fn test_create_agreement_on_rejected_proposal_should_fail() {
         }
         e => panic!("Expected AgreementError::ProposalRejected, got: {:?}", e),
     }
+    Ok(())
 }
 
 /// Agent is allowed to restart negotiations after Agreement was rejected.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_negotiations_after_agreement_rejected() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_negotiations_after_agreement_rejected() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_negotiations_after_agreement_rejected")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -1166,8 +1263,8 @@ async fn test_negotiations_after_agreement_rejected() {
     let prov_market = network.get_market("Provider1");
     let req_market = network.get_market("Requestor1");
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id("Requestor1");
-    let prov_id = network.get_default_id("Provider1");
+    let req_id = network.get_default_id("Requestor1").await;
+    let prov_id = network.get_default_id("Provider1").await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -1241,12 +1338,17 @@ async fn test_negotiations_after_agreement_rejected() {
         )
         .await
         .unwrap();
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_initial_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_initial_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_initial_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -1256,8 +1358,8 @@ async fn test_reject_initial_proposal() {
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
 
-    let identity1 = network.get_default_id("Node-1");
-    let identity2 = network.get_default_id("Node-2");
+    let identity1 = network.get_default_id("Node-1").await;
+    let identity2 = network.get_default_id("Node-2").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -1313,4 +1415,5 @@ async fn test_reject_initial_proposal() {
             .state,
         ProposalState::Initial
     );
+    Ok(())
 }

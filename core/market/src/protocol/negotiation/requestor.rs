@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
@@ -288,36 +289,40 @@ impl NegotiationApi {
             .await
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        _local_prefix: &str,
-    ) -> Result<(), NegotiationApiInitError> {
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), NegotiationApiInitError> {
         log::info!("Negotiation (Requestor) protocol version: mk1");
 
-        ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
-            .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
-                let myself = myself;
-                myself.on_proposal_received(caller, msg)
-            })
-            .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
-                let myself = myself;
-                myself.on_proposal_rejected(caller, msg)
-            });
+        ServiceBinder::new(
+            &requestor::proposal_addr(gsb.public_addr()),
+            &(),
+            self.clone(),
+        )
+        .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
+            let myself = myself;
+            myself.on_proposal_received(caller, msg)
+        })
+        .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
+            let myself = myself;
+            myself.on_proposal_rejected(caller, msg)
+        });
 
-        ServiceBinder::new(&requestor::agreement_addr(public_prefix), &(), self.clone())
-            .bind_with_processor(move |_, myself, caller: String, msg: AgreementApproved| {
-                let myself = myself;
-                myself.on_agreement_approved(caller, msg)
-            })
-            .bind_with_processor(move |_, myself, caller: String, msg: AgreementRejected| {
-                let myself = myself;
-                myself.on_agreement_rejected(caller, msg)
-            })
-            .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
-                let myself = myself;
-                myself.on_agreement_terminated(caller, msg)
-            });
+        ServiceBinder::new(
+            &requestor::agreement_addr(gsb.public_addr()),
+            &(),
+            self.clone(),
+        )
+        .bind_with_processor(move |_, myself, caller: String, msg: AgreementApproved| {
+            let myself = myself;
+            myself.on_agreement_approved(caller, msg)
+        })
+        .bind_with_processor(move |_, myself, caller: String, msg: AgreementRejected| {
+            let myself = myself;
+            myself.on_agreement_rejected(caller, msg)
+        })
+        .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
+            let myself = myself;
+            myself.on_agreement_terminated(caller, msg)
+        });
         Ok(())
     }
 }

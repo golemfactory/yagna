@@ -10,7 +10,8 @@ use ya_client::model::market::{
     NewDemand, NewOffer, Offer, Reason, Role,
 };
 
-use ya_core_model::market::{local, BUS_ID};
+use ya_core_model::bus::GsbBindPoints;
+use ya_core_model::{self as model};
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
@@ -74,6 +75,14 @@ pub struct MarketService {
 }
 
 impl MarketService {
+    pub fn apply_migrations(db: &DbMixedExecutor) -> anyhow::Result<()> {
+        db.ram_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        db.disk_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        Ok(())
+    }
+
     pub fn new(
         db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
@@ -86,10 +95,7 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
-        db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
-        db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
+        MarketService::apply_migrations(db)?;
 
         let scan_set = ScannerSet::new(db.clone());
         let store = SubscriptionStore::new(db.clone(), scan_set.clone(), config.clone());
@@ -127,19 +133,11 @@ impl MarketService {
         })
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb(public_prefix, local_prefix).await?;
-        self.provider_engine
-            .bind_gsb(public_prefix, local_prefix)
-            .await?;
-        self.requestor_engine
-            .bind_gsb(public_prefix, local_prefix)
-            .await?;
-        agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), MarketInitError> {
+        self.matcher.bind_gsb(gsb.clone()).await?;
+        self.provider_engine.bind_gsb(gsb.clone()).await?;
+        self.requestor_engine.bind_gsb(gsb.clone()).await?;
+        agreement::bind_gsb(self.db.clone(), gsb).await;
         Ok(())
     }
 
@@ -147,7 +145,9 @@ impl MarketService {
         ctx: &Context,
     ) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID, local::BUS_ID).await?)
+        let gsb_market = model::market::bus_bindpoints(None);
+        market.bind_gsb(gsb_market).await?;
+        Ok(())
     }
 
     pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
@@ -365,7 +365,7 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let identity_api = IdentityGSB::new();
+            let identity_api = IdentityGSB::new(GsbBindPoints::default());
             let config = Arc::new(Config::from_env()?);
             let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());

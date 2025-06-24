@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::market::{GetLastBcastTs, RpcMessageError};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
@@ -18,6 +19,7 @@ use ya_utils_actix::deadline_checker::{
 use crate::config::Config;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
+use crate::protocol::discovery::offer::GolemBaseOffer;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
 pub mod error;
@@ -26,7 +28,6 @@ pub(crate) mod resolver;
 pub(crate) mod store;
 
 use crate::db::dao::{DemandDao, DemandState};
-use crate::testing::discovery::offer::GolemBaseOffer;
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;
@@ -101,12 +102,8 @@ impl Matcher {
         Ok((matcher, listeners))
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), MatcherInitError> {
-        self.discovery.bind_gsb(public_prefix, local_prefix).await?;
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), MatcherInitError> {
+        self.discovery.bind_gsb(gsb.clone()).await?;
 
         self.bind_expiration_tracker()
             .await
@@ -128,7 +125,7 @@ impl Matcher {
                 .map_err(|_| RpcMessageError::Timeout)
         }
 
-        ServiceBinder::new(local_prefix, &(), discovery).bind_with_processor(handler);
+        ServiceBinder::new(gsb.local_addr(), &(), discovery).bind_with_processor(handler);
 
         Ok(())
     }

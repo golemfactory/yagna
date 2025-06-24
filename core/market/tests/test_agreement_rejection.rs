@@ -1,14 +1,20 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
-
 use ya_client::model::market::{AgreementEventType, Reason};
-use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
-use ya_market::testing::{
+
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::{
     agreement_utils::{gen_reason, negotiate_agreement},
+    mock_node::MarketsNetwork,
     proposal_util::exchange_draft_proposals,
-    AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, MarketsNetwork, Owner,
+};
+use ya_framework_mocks::net::MockNet;
+
+use ya_market::testing::{
+    AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, Owner,
 };
 
 const REQ_NAME: &str = "Node-1";
@@ -17,8 +23,12 @@ const PROV_NAME: &str = "Node-2";
 /// Agreement rejection happy path.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_rejected")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -33,8 +43,8 @@ async fn test_agreement_rejected() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -71,13 +81,18 @@ async fn test_agreement_rejected() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Rejected);
+    Ok(())
 }
 
 /// `wait_for_approval` should wake up after rejection.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_rejected_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -92,7 +107,7 @@ async fn test_agreement_rejected_wait_for_approval() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -114,7 +129,7 @@ async fn test_agreement_rejected_wait_for_approval() {
         prov_market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &network.get_default_id(PROV_NAME).await,
                 &agr_id.clone().translate(Owner::Provider),
                 Some(gen_reason("Not-interested")),
             )
@@ -138,23 +153,28 @@ async fn test_agreement_rejected_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+    Ok(())
 }
 
 /// Rejecting `Approved` and `Terminated` Agreement is not allowed.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_agreement_in_wrong_state() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_agreement_in_wrong_state() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_agreement_in_wrong_state")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
         .await;
 
-    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let negotiation = negotiate_agreement(
         &network,
@@ -217,12 +237,17 @@ async fn test_reject_agreement_in_wrong_state() {
         ),
         result
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_reject_rejected_agreement() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_reject_rejected_agreement() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_reject_rejected_agreement")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -237,8 +262,8 @@ async fn test_reject_rejected_agreement() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let r_agreement = req_engine
         .create_agreement(
@@ -331,4 +356,5 @@ async fn test_reject_rejected_agreement() {
             e
         ),
     };
+    Ok(())
 }

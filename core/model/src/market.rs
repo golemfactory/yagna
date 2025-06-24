@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
+use crate::bus::GsbBindPoints;
 use ya_client_model::market::Offer as ClientOffer;
 use ya_client_model::market::{agreement::State, Role};
 pub use ya_client_model::market::{Agreement, AgreementListEntry};
@@ -12,15 +13,33 @@ use ya_service_bus::RpcMessage;
 
 /// Public Market bus address.
 pub const BUS_ID: &str = "/public/market";
+pub const BUS_SERVICE_NAME: &str = "market";
+
+/// Use None for default bindpoints value.
+/// Override in case you are creating tests that need to separate
+/// bindpoints for different instances of Market.
+pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
+    match base {
+        Some(base) => base.service(BUS_SERVICE_NAME),
+        None => GsbBindPoints::default().service(BUS_SERVICE_NAME),
+    }
+}
 
 /// Internal Market bus address.
 pub mod local {
+    use crate::bus::GsbBindPoints;
+
     pub const BUS_ID: &str = "/local/market";
     pub const BUS_DISCOVERY: &str = "market-discovery";
 
     /// Builds the discovery bus endpoint with a custom prefix.
     pub fn build_discovery_endpoint(prefix: &str) -> String {
         format!("{}/{}", prefix, BUS_DISCOVERY)
+    }
+
+    /// Builds the discovery bus endpoint from GsbBindPoints.
+    pub fn build_discovery_bindpoint(gsb: &GsbBindPoints) -> GsbBindPoints {
+        gsb.clone().service(BUS_DISCOVERY)
     }
 
     /// Builds the discovery bus endpoint with the default prefix.

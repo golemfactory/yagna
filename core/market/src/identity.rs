@@ -1,14 +1,16 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use golem_base_sdk::{keccak256, signers::TransactionSigner, Address};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use golem_base_sdk::{keccak256, signers::TransactionSigner, Address, Signature};
 use ya_client::model::NodeId;
-
-use golem_base_sdk::Signature;
-use ya_core_model::identity::{self, IdentityInfo};
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_core_model::{
+    bus::GsbBindPoints,
+    identity::{self, IdentityInfo},
+    market,
+};
+use ya_service_bus::RpcEndpoint;
 
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
 pub enum IdentityError {
@@ -52,14 +54,21 @@ pub trait IdentityApi: Send + Sync {
             })
             .collect::<Vec<NodeId>>())
     }
+
+    async fn fund(&self, wallet: NodeId) -> Result<(), IdentityError>;
 }
 
-pub struct IdentityGSB;
+#[derive(Clone)]
+pub struct IdentityGSB {
+    gsb: GsbBindPoints,
+}
 
 #[async_trait::async_trait(?Send)]
 impl IdentityApi for IdentityGSB {
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
-        Ok(bus::service(identity::BUS_ID)
+        Ok(self
+            .gsb
+            .local()
             .send(identity::Get::ByDefault)
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
@@ -69,7 +78,9 @@ impl IdentityApi for IdentityGSB {
     }
 
     async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError> {
-        Ok(bus::service(identity::BUS_ID)
+        Ok(self
+            .gsb
+            .local()
             .send(identity::List {})
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
@@ -77,7 +88,9 @@ impl IdentityApi for IdentityGSB {
     }
 
     async fn sign(&self, node_id: &NodeId, data: &[u8]) -> Result<Vec<u8>, IdentityError> {
-        Ok(bus::service(identity::BUS_ID)
+        Ok(self
+            .gsb
+            .local()
             .send(identity::Sign {
                 node_id: *node_id,
                 payload: data.to_vec(),
@@ -88,7 +101,8 @@ impl IdentityApi for IdentityGSB {
     }
 
     async fn subscribe_to_events(&self, endpoint: &str) -> Result<(), IdentityError> {
-        bus::service(identity::BUS_ID)
+        self.gsb
+            .local()
             .send(identity::Subscribe {
                 endpoint: endpoint.to_string(),
             })
@@ -97,12 +111,26 @@ impl IdentityApi for IdentityGSB {
             .map(|_| ())
             .map_err(|e| IdentityError::GsbError(e.to_string()))
     }
+
+    async fn fund(&self, wallet: NodeId) -> Result<(), IdentityError> {
+        self.gsb
+            .local()
+            .send(market::FundGolemBase {
+                wallet: Some(wallet),
+            })
+            .await
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?;
+        Ok(())
+    }
 }
 
 #[allow(clippy::new_ret_no_self)]
 impl IdentityGSB {
-    pub fn new() -> Arc<dyn IdentityApi> {
-        Arc::new(IdentityGSB)
+    pub fn new(gsb: GsbBindPoints) -> Arc<dyn IdentityApi> {
+        Arc::new(IdentityGSB {
+            gsb: gsb.service(identity::BUS_SERVICE_NAME),
+        })
     }
 }
 

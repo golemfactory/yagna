@@ -1,22 +1,32 @@
-use ya_market::testing::{
-    mock_node::assert_offers_broadcasted,
-    mock_offer::client::{sample_demand, sample_offer},
-    proposal_util::exchange_draft_proposals,
-    GetProposalError, MarketServiceExt, MarketsNetwork, Owner, ProposalError,
-};
-use ya_market::{assert_err_eq, MarketService};
-
 use std::sync::Arc;
 use tokio::time::Duration;
+
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::{
+    mock_node::{assert_offers_broadcasted, MarketsNetwork},
+    proposal_util::exchange_draft_proposals,
+};
+use ya_framework_mocks::net::MockNet;
+
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::RequestorEvent;
 use ya_core_model::NodeId;
-use ya_framework_mocks::net::MockNet;
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
+use ya_market::testing::{
+    mock_offer::client::{sample_demand, sample_offer},
+    GetProposalError, MarketServiceExt, Owner, ProposalError,
+};
+use ya_market::MarketService;
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_proposal() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_proposal() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_get_proposal")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -25,7 +35,7 @@ async fn test_get_proposal() {
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
-    let prov_id = network.get_default_id("Provider1");
+    let prov_id = network.get_default_id("Provider1").await;
 
     // Requestor side
     let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -53,13 +63,19 @@ async fn test_get_proposal() {
     assert_eq!(proposal.proposal_id, proposal_id.to_string());
     assert_eq!(proposal.issuer_id, prov_id.identity);
     assert!(proposal.prev_proposal_id().is_ok());
+
+    Ok(())
 }
 
 /// Try to query not existing Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_proposal_not_found() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_proposal_not_found() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_get_proposal_not_found")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Requestor1")
         .await
@@ -84,14 +100,20 @@ async fn test_get_proposal_not_found() {
         ProposalError::Get(GetProposalError::NotFound(proposal_id, None)),
         result
     );
+
+    Ok(())
 }
 
 /// We don't want to give advantage for the oldest Offers, so we should shuffle
 /// results of `collect_offers` endpoint.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_proposal_random_shuffle() {
-    let mut network = MarketsNetwork::new(None, MockNet::new())
+async fn test_proposal_random_shuffle() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_proposal_random_shuffle")?;
+    let dir = dir.path();
+
+    let mut network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -104,7 +126,7 @@ async fn test_proposal_random_shuffle() {
     }
 
     let market1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
+    let identity1 = network.get_default_id("Node-1").await;
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -120,7 +142,7 @@ async fn test_proposal_random_shuffle() {
         let node_name = format!("Provider-{}", i);
         let market = network.get_market(&node_name);
         markets.push(market.clone());
-        let identity = network.get_default_id(&node_name);
+        let identity = network.get_default_id(&node_name).await;
 
         offers.push(
             market
@@ -154,4 +176,6 @@ async fn test_proposal_random_shuffle() {
     // from initialization order.
     assert_eq!(incoming_ids.len(), ids.len());
     assert_ne!(incoming_ids, ids);
+
+    Ok(())
 }
