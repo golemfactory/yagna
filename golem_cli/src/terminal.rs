@@ -52,14 +52,10 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
 
     queue!(stderr, cursor::Hide)?;
     for frame in 0.. {
-        let mut nlines = 0;
+        let mut nlines: usize = 0;
         let mut next_frame: bool = false;
         for line in banner.lines() {
-            let offset = if 5 + (frame * 2 / 3) > nlines {
-                5 + (frame * 2 / 3) - nlines
-            } else {
-                0
-            };
+            let offset = (5 + (frame as usize * 2 / 3)).saturating_sub(nlines);
 
             let (pre, post) = if line.len() > offset {
                 next_frame = true;

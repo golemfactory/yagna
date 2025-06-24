@@ -83,7 +83,7 @@ impl AbortableChild {
         let (tx, rx) = oneshot::channel();
         let _ = self.0.take().unwrap().send(tx);
         rx.await
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "process exited too early"))?
+            .map_err(|_| io::Error::other("process exited too early"))?
     }
 }
 

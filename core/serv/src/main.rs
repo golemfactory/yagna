@@ -775,6 +775,7 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     #[cfg(feature = "static-openssl")]
+    #[allow(deprecated)]
     openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();
 
