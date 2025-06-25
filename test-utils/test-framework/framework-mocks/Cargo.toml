@@ -37,6 +37,7 @@ bigdecimal = "0.4"
 derive_more = { workspace = true }
 ethsign = "0.8"
 futures = "0.3"
+humantime = "2"
 lazy_static = "1.5"
 log = "0.4"
 portpicker = "0.1"
