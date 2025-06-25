@@ -23,9 +23,10 @@ pub enum NetType {
     ///  This conditional compilation is hack to make Goth integration tests work.
     ///  Current solution in Goth is to build separate binary with compilation flag.
     ///  This is only temporary for transition period, to make this PR as small as possible.
-    #[cfg_attr(feature = "central-net", default)]
+    //#[cfg_attr(feature = "central-net", default)]
+    #[default]
     Central,
-    #[cfg_attr(not(feature = "central-net"), default)]
+    //#[cfg_attr(not(feature = "central-net"), default)]
     Hybrid,
 }
 
@@ -56,7 +57,12 @@ impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
         // TODO: Temporary setting for GolemBase builds testing.
         // Remove when implementation will be production ready.
-        std::env::set_var("YA_NET_RELAY_HOST", "ya-golembase.dev.golem.network:7477");
+        if std::env::var("YA_NET_RELAY_HOST").is_err() {
+            std::env::set_var("YA_NET_RELAY_HOST", "ya-golembase.dev.golem.network:7477");
+        }
+        if std::env::var("CENTRAL_NET_HOST").is_err() {
+            std::env::set_var("CENTRAL_NET_HOST", "ya-golembase.dev.golem.network:7464");
+        }
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         Config::from_iter_safe(&[""])
