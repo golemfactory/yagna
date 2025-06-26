@@ -3,7 +3,10 @@ use std::env;
 
 pub fn enable_logs(enable: bool) {
     // Check if TEST_ENABLE_ALL_LOGS_OVERRIDE environment variable overrides the enable parameter
-    let should_enable = enable || env::var("TEST_ENABLE_ALL_LOGS_OVERRIDE").is_ok();
+    let env_override = env::var("TEST_ENABLE_ALL_LOGS_OVERRIDE")
+        .map(|val| val.parse::<bool>().unwrap_or(false))
+        .unwrap_or(false);
+    let should_enable = enable || env_override;
 
     if should_enable {
         if let Ok(_env) = env::var("RUST_LOG") {
