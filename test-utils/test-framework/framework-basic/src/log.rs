@@ -2,7 +2,10 @@ use env_logger::{Env, TimestampPrecision};
 use std::env;
 
 pub fn enable_logs(enable: bool) {
-    if enable {
+    // Check if TEST_ENABLE_ALL_LOGS_OVERRIDE environment variable overrides the enable parameter
+    let should_enable = enable || env::var("TEST_ENABLE_ALL_LOGS_OVERRIDE").is_ok();
+
+    if should_enable {
         if let Ok(_env) = env::var("RUST_LOG") {
             env_logger::try_init_from_env(Env::default()).ok();
         } else {
