@@ -21,6 +21,7 @@ use ya_market::testing::{
     AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
     MarketServiceExt, Owner, ProposalState, WaitForApprovalError,
 };
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
 const REQ_NAME: &str = "Node-1";
@@ -487,7 +488,11 @@ async fn agreement_expired_before_approval() -> anyhow::Result<()> {
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement
-    let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
+    let result = req_engine
+        .wait_for_approval(&agreement_id, 0.1)
+        .timeout(Some(std::time::Duration::from_millis(500)))
+        .await
+        .expect("`wait_for_approval` should timeout internally");
 
     assert_err_eq!(WaitForApprovalError::Expired(agreement_id), result);
 
@@ -834,14 +839,18 @@ async fn second_waiting_should_pass() -> anyhow::Result<()> {
     // Requestor successfully waits for the Agreement approval first time
     let approval_status = req_engine
         .wait_for_approval(&agreement_id, 0.1)
+        .timeout(Some(std::time::Duration::from_millis(500)))
         .await
+        .expect("`wait_for_approval` shoudl timeout internally")
         .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
 
     // second wait should also succeed
     let approval_status = req_engine
         .wait_for_approval(&agreement_id, 0.1)
+        .timeout(Some(std::time::Duration::from_millis(500)))
         .await
+        .expect("`wait_for_approval` shoudl timeout internally")
         .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
 
