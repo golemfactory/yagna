@@ -10,3 +10,6 @@ RUN chmod +x /usr/bin/* \
     && ln -s /usr/bin/exe-unit /usr/lib/yagna/plugins/exe-unit
 
 ENTRYPOINT /usr/bin/yagna
+
+ENV YA_NET_TYPE=hybrid
+ENV GOLEM_BASE_NETWORK=Local
