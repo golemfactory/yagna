@@ -5,6 +5,7 @@ use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use ya_client::model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
@@ -89,9 +90,20 @@ impl Discovery {
             Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
 
         // Create entry on GolemBase
-        let entry_id = client.create_entry(address, entry).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to create offer: {}", e))
-        })?;
+        let timeout = self.inner.config.offer_publish_timeout;
+        let entry_id = client
+            .create_entry(address, entry)
+            .timeout(Some(timeout))
+            .await
+            .map_err(|_| {
+                DiscoveryError::GolemBaseError(format!(
+                    "Timeout ({}) creating offer.",
+                    humantime::Duration::from(timeout)
+                ))
+            })?
+            .map_err(|e| {
+                DiscoveryError::GolemBaseError(format!("Failed to create offer: {}", e))
+            })?;
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 

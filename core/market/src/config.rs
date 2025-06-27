@@ -109,6 +109,9 @@ pub struct DiscoveryConfig {
     // threads. If machine has N cores, then N - GOLEM_BASE_FUND_POW_THREADS_MARGIN will be used.
     #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
     pub pow_threads_margin: usize,
+    /// Timeout for publishing offers on the market
+    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "10s")]
+    pub offer_publish_timeout: Duration,
 }
 
 impl DiscoveryConfig {
@@ -147,6 +150,7 @@ impl Default for DiscoveryConfig {
             configs: GolemBaseNetwork::default_config(),
             network: GolemBaseNetwork::Kaolin,
             pow_threads_margin: 2,
+            offer_publish_timeout: Duration::from_secs(30),
         }
     }
 }
