@@ -25,11 +25,20 @@ pub enum GolemBaseNetwork {
     Marketplace,
     #[clap(name = "Local")]
     Local,
+    #[clap(name = "Custom")]
+    Custom,
 }
 
 impl GolemBaseNetwork {
     pub fn default_config() -> HashMap<GolemBaseNetwork, GolemBaseRpcConfig> {
         let mut configs = HashMap::new();
+        let default = GolemBaseRpcConfig {
+            faucet_url: Url::parse("http://localhost:8545").unwrap(),
+            rpc_url: Url::parse("http://localhost:8545").unwrap(),
+            ws_url: Url::parse("ws://localhost:8545").unwrap(),
+            l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
+        };
+
         configs.insert(
             GolemBaseNetwork::Kaolin,
             GolemBaseRpcConfig {
@@ -50,14 +59,10 @@ impl GolemBaseNetwork {
                 l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
             },
         );
+        configs.insert(GolemBaseNetwork::Local, default.clone());
         configs.insert(
-            GolemBaseNetwork::Local,
-            GolemBaseRpcConfig {
-                faucet_url: Url::parse("http://localhost:8545").unwrap(),
-                rpc_url: Url::parse("http://localhost:8545").unwrap(),
-                ws_url: Url::parse("ws://localhost:8545").unwrap(),
-                l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
-            },
+            GolemBaseNetwork::Custom,
+            GolemBaseRpcConfig::from_env().unwrap_or_else(|_| default.clone()),
         );
         configs
     }
@@ -65,14 +70,22 @@ impl GolemBaseNetwork {
 
 #[derive(Parser, Clone, Debug)]
 pub struct GolemBaseRpcConfig {
-    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "GOLEM_BASE_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub faucet_url: Url,
-    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "GOLEM_BASE_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub rpc_url: Url,
-    #[clap(env, value_parser = parse_url, default_value = "ws://localhost:8545")]
+    #[clap(env = "GOLEM_BASE_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
     pub ws_url: Url,
-    #[clap(env, value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "GOLEM_BASE_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub l2_rpc_url: Url,
+}
+
+impl GolemBaseRpcConfig {
+    pub fn from_env() -> Result<GolemBaseRpcConfig, clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        GolemBaseRpcConfig::try_parse_from([""])
+    }
 }
 
 #[derive(Parser, Clone, Debug)]
