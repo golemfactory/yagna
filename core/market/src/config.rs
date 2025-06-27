@@ -17,7 +17,7 @@ pub struct Config {
     pub db: DbConfig,
 }
 
-#[derive(Parser, Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]
+#[derive(Parser, derive_more::Display, Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]
 pub enum GolemBaseNetwork {
     #[clap(name = "Kaolin")]
     Kaolin,
@@ -82,7 +82,11 @@ pub struct GolemBaseRpcConfig {
     #[clap(env = "GOLEM_BASE_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub l2_rpc_url: Url,
     // In local developer GolemBase environment, pre-allocated account is available to fund other accounts.
-    #[clap(env = "GOLEM_BASE_CUSTOM_FUND_PREALLOCATED", default_value = "false")]
+    #[clap(
+        env = "GOLEM_BASE_CUSTOM_FUND_PREALLOCATED",
+        default_value_t = false,
+        long
+    )]
     pub fund_preallocated: bool,
 }
 

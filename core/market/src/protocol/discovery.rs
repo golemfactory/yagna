@@ -404,6 +404,17 @@ impl Discovery {
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
     pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
+        log::info!("Golem Base Configuration:");
+        log::info!("  Network: {:?}", self.inner.config.get_network_type());
+        log::info!("  RPC URL: {}", self.inner.config.get_rpc_url());
+        log::info!("  WebSocket URL: {}", self.inner.config.get_ws_url());
+        log::info!("  Faucet URL: {}", self.inner.config.get_faucet_url());
+        log::info!("  L2 RPC URL: {}", self.inner.config.get_l2_rpc_url());
+        log::info!(
+            "  Fund Preallocated: {}",
+            self.inner.config.fund_preallocated()
+        );
+
         let client = self.inner.golem_base.clone();
 
         // Sync with GolemBase node
