@@ -26,7 +26,6 @@ use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
-use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
@@ -590,15 +589,17 @@ impl Discovery {
         let address = Address::from(&wallet.into_array());
 
         let faucet_client = FaucetClient::new(self.inner.config.clone(), client.clone());
-        match self.inner.config.get_network_type() {
-            GolemBaseNetwork::Local => faucet_client
+
+        if self.inner.config.fund_preallocated() {
+            faucet_client
                 .fund_local_account(address)
                 .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
-            _ => faucet_client
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
+        } else {
+            faucet_client
                 .fund_from_faucet_with_pow(&address.to_string())
                 .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
         }
 
         // Get balance after funding

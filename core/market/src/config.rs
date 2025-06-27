@@ -37,6 +37,7 @@ impl GolemBaseNetwork {
             rpc_url: Url::parse("http://localhost:8545").unwrap(),
             ws_url: Url::parse("ws://localhost:8545").unwrap(),
             l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
+            fund_preallocated: true,
         };
 
         configs.insert(
@@ -46,6 +47,7 @@ impl GolemBaseNetwork {
                 rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
                 ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
                 l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                fund_preallocated: false,
             },
         );
         // Configuration: https://marketplace.holesky.golem-base.io/
@@ -57,6 +59,7 @@ impl GolemBaseNetwork {
                 rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
                 ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
                 l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                fund_preallocated: false,
             },
         );
         configs.insert(GolemBaseNetwork::Local, default.clone());
@@ -78,6 +81,9 @@ pub struct GolemBaseRpcConfig {
     pub ws_url: Url,
     #[clap(env = "GOLEM_BASE_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub l2_rpc_url: Url,
+    // In local developer GolemBase environment, pre-allocated account is available to fund other accounts.
+    #[clap(env = "GOLEM_BASE_CUSTOM_FUND_PREALLOCATED", default_value = "false")]
+    pub fund_preallocated: bool,
 }
 
 impl GolemBaseRpcConfig {
@@ -124,6 +130,10 @@ impl DiscoveryConfig {
 
     pub fn get_pow_threads(&self) -> usize {
         std::cmp::max(1, num_cpus::get() - self.pow_threads_margin)
+    }
+
+    pub fn fund_preallocated(&self) -> bool {
+        self.configs.get(&self.network).unwrap().fund_preallocated
     }
 }
 
