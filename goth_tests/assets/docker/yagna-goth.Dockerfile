@@ -11,5 +11,4 @@ RUN chmod +x /usr/bin/* \
 
 ENTRYPOINT /usr/bin/yagna
 
-ENV YA_NET_TYPE=hybrid
 ENV GOLEM_BASE_NETWORK=Local

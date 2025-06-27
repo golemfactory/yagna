@@ -56,7 +56,9 @@ impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
         // TODO: Temporary setting for GolemBase builds testing.
         // Remove when implementation will be production ready.
-        std::env::set_var("YA_NET_RELAY_HOST", "ya-golembase.dev.golem.network:7477");
+        if std::env::var("YA_NET_RELAY_HOST").is_err() {
+            std::env::set_var("YA_NET_RELAY_HOST", "ya-golembase.dev.golem.network:7477");
+        }
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         Config::from_iter_safe(&[""])

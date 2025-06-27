@@ -7,3 +7,5 @@ RUN chmod +x /usr/bin/* \
     && yes | apt install -y ./*.deb
 
 ENTRYPOINT /usr/bin/yagna
+
+ENV GOLEM_BASE_NETWORK=Local
