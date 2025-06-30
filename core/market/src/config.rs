@@ -65,7 +65,11 @@ impl GolemBaseNetwork {
         configs.insert(GolemBaseNetwork::Local, default.clone());
         configs.insert(
             GolemBaseNetwork::Custom,
-            GolemBaseRpcConfig::from_env().unwrap_or_else(|_| default.clone()),
+            GolemBaseRpcConfig::from_env()
+                .map_err(|e| {
+                    log::error!("Error parsing GolemBase configuration: {e}");
+                })
+                .unwrap_or_else(|_| default.clone()),
         );
         configs
     }
