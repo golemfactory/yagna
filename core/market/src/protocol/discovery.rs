@@ -529,15 +529,15 @@ impl Discovery {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
 
-        let content = client.cat(offer_id).await?;
-        let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
-
         let metadata = client
             .get_entity_metadata(offer_id)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
         let metadata = serde_json::to_value(&metadata)
             .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
+
+        let content = client.cat(offer_id).await?;
+        let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
 
         Ok(GetGolemBaseOfferResponse {
             offer,
