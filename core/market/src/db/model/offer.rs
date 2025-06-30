@@ -1,7 +1,7 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
-use ya_agreement_utils::agreement::{expand, flatten};
+use ya_agreement_utils::agreement::{flatten, flatten_value};
 use ya_client::model::market::NewOffer;
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 
@@ -80,7 +80,7 @@ impl Offer {
             offer_id: self.id.to_string(),
             provider_id: self.node_id,
             constraints: self.constraints.clone(),
-            properties: expand(serde_json::from_str(&self.properties).map_err(|e| {
+            properties: flatten_value(serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
                     "Can't serialize Offer [{}] properties from database. Error: {}",
                     self.id, e
