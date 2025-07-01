@@ -198,7 +198,7 @@ jobs:
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
-
+          
       - name: Run test suite
         id: poetry_test
         continue-on-error: true

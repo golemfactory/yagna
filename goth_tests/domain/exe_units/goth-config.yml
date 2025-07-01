@@ -25,7 +25,6 @@ docker-compose:
     ethereum-mainnet: ".*Wallets supplied."
     ethereum-holesky: ".*Wallets supplied."
     ethereum-polygon: ".*Wallets supplied."
-    golem-base: ".*HTTP server started.*"
 
 
 key-dir: "../../assets/keys"
