@@ -26,6 +26,7 @@ pub mod error;
 pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
+pub(crate) mod sync;
 
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
@@ -172,6 +173,12 @@ impl Matcher {
         let offer =
             GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
 
+        // Reserve a placeholder before publishing. Since we use GolemBase identitfier as OfferId,
+        // we can't add Offer to store immediately. But this causes race condtions in case other Node
+        // retrieves Offer earlier and tries to communicate with us (sends initial proposal).
+        // To avoid this, placeholder gives us ability to synchronize and wait for Offer to be available.
+        let placeholder_guard = self.store.offer_sync().reserve_placeholder();
+
         let offer = self
             .discovery
             .bcast_offer(offer)
@@ -187,7 +194,10 @@ impl Matcher {
             .await
             .ok();
 
-        let offer = self.store.register_offer(offer.clone()).await?;
+        let offer = self
+            .store
+            .register_offer(offer.clone(), Some(placeholder_guard))
+            .await?;
         self.resolver.receive(&offer);
 
         log::info!(

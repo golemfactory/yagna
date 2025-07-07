@@ -8,4 +8,4 @@ mod scan;
 pub use notifier::EventNotifier;
 pub use provider::{ApprovalResult, ProviderBroker};
 pub use requestor::{ApprovalStatus, RequestorBroker};
-pub use scan::{ScanId, ScannerSet};
+pub use scan::{LastChange, ScanId, ScannerSet};
