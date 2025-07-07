@@ -489,8 +489,8 @@ async fn initial_proposal(
     let db = broker.db.clone();
     let store = broker.store.clone();
 
-    // Check subscription.
-    let offer = store.get_offer(&msg.offer_id).await?;
+    // Check subscription. Wait for Offers that are during publishing on GolemBase.
+    let offer = store.get_offer_synced(&msg.offer_id).await?;
 
     // In this step we add Proposal, that was generated on Requestor by market.
     // This way we have the same state on Provider as on Requestor and we can use
