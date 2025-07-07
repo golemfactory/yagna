@@ -214,6 +214,12 @@ impl LastChange {
     }
 }
 
+impl Default for LastChange {
+    fn default() -> Self {
+        LastChange::new()
+    }
+}
+
 pub struct ScannerSet {
     scanners: Mutex<HashMap<ScanId, Arc<AsyncMutex<Scanner>>>>,
     seq_no: AtomicU64,
