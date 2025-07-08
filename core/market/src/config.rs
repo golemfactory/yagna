@@ -23,6 +23,8 @@ pub enum GolemBaseNetwork {
     Kaolin,
     #[clap(name = "Marketplace")]
     Marketplace,
+    #[clap(name = "MarketplaceLoadTests")]
+    MarketplaceLoadTests,
     #[clap(name = "Local")]
     Local,
     #[clap(name = "Custom")]
@@ -62,7 +64,22 @@ impl GolemBaseNetwork {
                 fund_preallocated: false,
             },
         );
-        configs.insert(GolemBaseNetwork::Local, default.clone());
+        // Configuration: https://marketplaceloadtests.holesky.golem-base.io/
+        configs.insert(
+            GolemBaseNetwork::MarketplaceLoadTests,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse(
+                    "https://marketplaceloadtests.holesky.golem-base.io/faucet/",
+                )
+                .unwrap(),
+                rpc_url: Url::parse("https://marketplaceloadtests.holesky.golem-base.io/rpc")
+                    .unwrap(),
+                ws_url: Url::parse("wss://marketplaceloadtests.holesky.golem-base.io/rpc/ws")
+                    .unwrap(),
+                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                fund_preallocated: false,
+            },
+        );
         configs.insert(
             GolemBaseNetwork::Custom,
             GolemBaseRpcConfig::from_env()
