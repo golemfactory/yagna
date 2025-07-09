@@ -12,6 +12,7 @@ use testcontainers::ContainerAsync;
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
 use ya_core_model::NodeId;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
 use ya_market::testing::IdentityGSB;
@@ -184,6 +185,8 @@ impl MarketsNetwork {
 
     pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
         let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
+        let timeout = Duration::from_secs(60);
+
         let image = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
             .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
@@ -211,7 +214,14 @@ impl MarketsNetwork {
             .with_env_var("GITHUB_ACTIONS", "true")
             .with_env_var("CI", "true")
             .start()
+            .timeout(Some(timeout))
             .await
+            .map_err(|e| {
+                anyhow!(
+                    "Timeout ({}) starting GolemBase instance: {e}",
+                    humantime::format_duration(timeout)
+                )
+            })?
             .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
         Ok(image)
     }

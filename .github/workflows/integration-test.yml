@@ -1,4 +1,4 @@
-name: Goth integration tests (hybrid-net)
+name: Goth integration tests
 
 on:
   workflow_dispatch:
@@ -198,7 +198,7 @@ jobs:
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
-
+          
       - name: Run test suite
         id: poetry_test
         continue-on-error: true
@@ -207,11 +207,6 @@ jobs:
         run: |
           poetry run pytest -W ignore::DeprecationWarning -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
-      - name: Check test result
-        if: ${{ steps.poetry_test.outcome != 'success' }}
-        run: |
-          echo "::warning::Test ${{ matrix.test_name }} failed"
-
       - name: Upload test logs
         uses: actions/upload-artifact@v4
         if: always()
@@ -219,8 +214,14 @@ jobs:
           name: goth-logs-${{ matrix.test_name }}
           path: /tmp/goth-tests
 
+      - name: Check test result
+        if: ${{ steps.poetry_test.outcome != 'success' }}
+        run: |
+          echo "::warning::Test ${{ matrix.test_name }} failed"
+          exit 1
+          
   integration-test:
-    name: Integration Tests (hybrid-net)
+    name: Integration Tests
     runs-on: ubuntu-24.04
     needs: [ integration-test-groups ]
     steps:

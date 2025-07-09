@@ -5,6 +5,7 @@ use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use ya_client::model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
@@ -26,7 +27,6 @@ use golem_base_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
-use crate::config::GolemBaseNetwork;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
@@ -90,9 +90,20 @@ impl Discovery {
             Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
 
         // Create entry on GolemBase
-        let entry_id = client.create_entry(address, entry).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to create offer: {}", e))
-        })?;
+        let timeout = self.inner.config.offer_publish_timeout;
+        let entry_id = client
+            .create_entry(address, entry)
+            .timeout(Some(timeout))
+            .await
+            .map_err(|_| {
+                DiscoveryError::GolemBaseError(format!(
+                    "Timeout ({}) creating offer.",
+                    humantime::Duration::from(timeout)
+                ))
+            })?
+            .map_err(|e| {
+                DiscoveryError::GolemBaseError(format!("Failed to create offer: {}", e))
+            })?;
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 
@@ -405,6 +416,17 @@ impl Discovery {
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
     pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
+        log::info!("Golem Base Configuration:");
+        log::info!("  Network: {:?}", self.inner.config.get_network_type());
+        log::info!("  RPC URL: {}", self.inner.config.get_rpc_url());
+        log::info!("  WebSocket URL: {}", self.inner.config.get_ws_url());
+        log::info!("  Faucet URL: {}", self.inner.config.get_faucet_url());
+        log::info!("  L2 RPC URL: {}", self.inner.config.get_l2_rpc_url());
+        log::info!(
+            "  Fund Preallocated: {}",
+            self.inner.config.fund_preallocated()
+        );
+
         let client = self.inner.golem_base.clone();
 
         // Sync with GolemBase node
@@ -590,15 +612,17 @@ impl Discovery {
         let address = Address::from(&wallet.into_array());
 
         let faucet_client = FaucetClient::new(self.inner.config.clone(), client.clone());
-        match self.inner.config.get_network_type() {
-            GolemBaseNetwork::Local => faucet_client
+
+        if self.inner.config.fund_preallocated() {
+            faucet_client
                 .fund_local_account(address)
                 .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
-            _ => faucet_client
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
+        } else {
+            faucet_client
                 .fund_from_faucet_with_pow(&address.to_string())
                 .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?,
+                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
         }
 
         // Get balance after funding

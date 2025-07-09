@@ -75,6 +75,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUST_TEST_THREADS: 1
+          TEST_ENABLE_ALL_LOGS_OVERRIDE: true
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked

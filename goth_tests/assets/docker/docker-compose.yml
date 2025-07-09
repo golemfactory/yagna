@@ -4,7 +4,18 @@ services:
 
     router:
         image: yagna-goth
-        entrypoint: /usr/bin/ya-relay-server
+        entrypoint: /usr/bin/ya-sb-router
+        command: ["-l", "tcp://0.0.0.0:7477"]
+
+    golem-base:
+        image: quay.io/golemnetwork/gb-op-geth:latest
+        ports:
+            - "8545:8545"
+        environment:
+            - GITHUB_ACTIONS=true
+            - CI=true
+        command: --dev --http --http.api 'eth,web3,net,debug,golembase' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545
+
 
     proxy-nginx:
         # A service that runs `nginx` and routes API calls to

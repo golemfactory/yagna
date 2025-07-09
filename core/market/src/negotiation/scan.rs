@@ -192,24 +192,31 @@ impl Drop for Scanner {
     }
 }
 
-struct LastChange {
+#[derive(Clone)]
+pub struct LastChange {
     watch: watch::Sender<Instant>,
 }
 
 impl LastChange {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let (watch, _) = watch::channel(Instant::now());
         Self { watch }
     }
 
-    fn subscribe(&self) -> watch::Receiver<Instant> {
+    pub fn subscribe(&self) -> watch::Receiver<Instant> {
         let rx = self.watch.subscribe();
         log::debug!("active scanners: {}", self.watch.receiver_count());
         rx
     }
 
-    fn notify(&self) {
+    pub fn notify(&self) {
         self.watch.send(Instant::now()).ok();
+    }
+}
+
+impl Default for LastChange {
+    fn default() -> Self {
+        LastChange::new()
     }
 }
 
@@ -275,6 +282,11 @@ impl ScannerSet {
 
     fn subscribe(&self) -> watch::Receiver<Instant> {
         self.watch.subscribe()
+    }
+
+    /// Gets the LastChange instance for synchronization
+    pub fn offers_watch(&self) -> &LastChange {
+        &self.watch
     }
 
     fn clean(&self) {

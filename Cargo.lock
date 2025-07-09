@@ -11843,6 +11843,7 @@ dependencies = [
  "ethsign",
  "futures 0.3.31",
  "golem-base-sdk",
+ "humantime 2.2.0",
  "lazy_static",
  "log",
  "portpicker",
