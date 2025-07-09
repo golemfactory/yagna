@@ -42,7 +42,7 @@ provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
 
 _build-yagna = "cargo build -j 3 --features require-consent,static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor"
-_test_local_build = "pytest -W ignore::DeprecationWarning -svx ./e2e/vm/test_e2e_outbound_perf.py --config-override docker-compose.build-environment.binary-path=$POE_ROOT/../target/goth/"
+_test_local_build = "pytest -W ignore::DeprecationWarning -svx . --config-override docker-compose.build-environment.binary-path=$POE_ROOT/../target/goth/"
 _copy_binaries = "./copy_binaries.sh"
 
 [tool.poe]
