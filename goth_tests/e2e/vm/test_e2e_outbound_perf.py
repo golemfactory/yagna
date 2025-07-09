@@ -73,6 +73,7 @@ async def test_e2e_outbound_perf(
               {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
               {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
               {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
+              {"read-write": f"~/Repos/Golem/yagna/workdir/goth", "destination": "/root/.local/share/ya-provider/exe-unit/work"},
          ],
          "privileged-mode": True,
        },
