@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::anyhow;
 use clap::Parser;
 use rand::{seq::SliceRandom, RngCore};
 use serde_json::Value;
@@ -116,8 +117,9 @@ fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
 fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
     let requests = [
         "https://s3.amazonaws.com/data-production-walltime-info/production/dynamic/walltime-info.json?now=1528962473468.679.0000000000873",
-        "http://worldtimeapi.org/api/timezone",
-        "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
+        // Those addresses are taking to long to respond lately, so were removed, but it would be good to find a replacement.
+        //"http://worldtimeapi.org/api/timezone",
+        //"https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
         "http://api.citybik.es/v2/networks",
     ];
 
@@ -134,7 +136,20 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
         .block_on(async move {
             let mut set = JoinSet::new();
             for url in requests_to_run {
-                set.spawn(reqwest::get(url));
+                set.spawn(async move {
+                    let started_at = Instant::now();
+                    let res = reqwest::get(url)
+                        .await
+                        .map_err(|e| anyhow!("Request to url {} failed: {:?}", url, e));
+
+                    let elapsed = started_at.elapsed().as_secs_f32();
+                    eprintln!("URL {} took {:.3}s", url, elapsed);
+                    if res.is_err() {
+                        eprintln!("URL {} failed: {:?}", url, res);
+                    }
+
+                    res
+                });
             }
 
             while let Some(res) = set.join_next().await {
@@ -144,7 +159,19 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
             Ok::<(), Box<dyn Error>>(())
         });
 
-    Ok(result.is_ok() && started_at.elapsed().as_secs_f32() < max_secs)
+    let elapsed = started_at.elapsed().as_secs_f32();
+    let timeout_occurred = elapsed >= max_secs;
+    let success = result.is_ok() && !timeout_occurred;
+
+    eprintln!("test_many_reqs result: {:?}", result);
+    if timeout_occurred {
+        eprintln!(
+            "test_many_reqs timeout: elapsed {:.2}s, expected < {:.2}s",
+            elapsed, max_secs
+        );
+    }
+
+    Ok(success)
 }
 
 #[derive(Parser, Debug)]
