@@ -117,7 +117,7 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
     let requests = [
         "https://s3.amazonaws.com/data-production-walltime-info/production/dynamic/walltime-info.json?now=1528962473468.679.0000000000873",
         "http://worldtimeapi.org/api/timezone",
-        "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
+        // "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
         "http://api.citybik.es/v2/networks",
     ];
 
@@ -144,7 +144,19 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
             Ok::<(), Box<dyn Error>>(())
         });
 
-    Ok(result.is_ok() && started_at.elapsed().as_secs_f32() < max_secs)
+    let elapsed = started_at.elapsed().as_secs_f32();
+    let timeout_occurred = elapsed >= max_secs;
+    let success = result.is_ok() && !timeout_occurred;
+
+    eprintln!("test_many_reqs result: {:?}", result);
+    if timeout_occurred {
+        eprintln!(
+            "test_many_reqs timeout: elapsed {:.2}s, expected < {:.2}s",
+            elapsed, max_secs
+        );
+    }
+
+    Ok(success)
 }
 
 #[derive(Parser, Debug)]

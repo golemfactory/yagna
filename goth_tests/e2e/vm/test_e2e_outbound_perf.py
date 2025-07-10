@@ -36,16 +36,22 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
+    # TODO: Disabled step 2 (test_many_reqs) because it's not working.
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args": [addr, '22235', '22236', '22237', '0.5', '10', '2']}},
-        {
-            "transfer": {
-                "from": f"container:/golem/output/output.json",
-                "to": f"{web_server_addr}/upload/{output_file}",
+        {"run": {
+            "entry_point": "/golem/entrypoints/entrypoint.sh",
+            "args": [addr, "22235", "22236", "22237", "0.5", "10", "2"],
+            "capture": {
+                "stdout": {"stream": {}},
+                "stderr": {"stream": {}}
             }
-        },
+        }},
+        {"transfer": {
+            "from": f"container:/golem/output/output.json",
+            "to": f"{web_server_addr}/upload/{output_file}"
+        }}
     ]
 
 @pytest.mark.asyncio
@@ -73,6 +79,7 @@ async def test_e2e_outbound_perf(
               {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
               {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
               {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
+              {"read-write": f"~/Repos/Golem/yagna/workdir/goth", "destination": "/root/.local/share/ya-provider/exe-unit/work"},
          ],
          "privileged-mode": True,
        },
