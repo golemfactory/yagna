@@ -137,6 +137,9 @@ impl FaucetClient {
 
         log::info!("GolemBase fund: Requesting funds from faucet for address {address}");
 
+        let address = address.parse()?;
+        let mut last_balance = self.client.get_balance(address).await?;
+
         let response: FaucetResponse = self
             .post::<_, FaucetResponse>(&faucet_request_url, request)
             .await?;
@@ -159,9 +162,6 @@ impl FaucetClient {
         // Instead we will poll balance until it increases and assume that the increase is a result
         // of funding.
         // If it's not than it isn't the problem, because the funds are anyway available.
-        let address = address.parse()?;
-        let mut last_balance = self.client.get_balance(address).await?;
-
         loop {
             let current_balance = self.client.get_balance(address).await?;
             match current_balance.cmp(&last_balance) {
