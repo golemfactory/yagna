@@ -10,7 +10,6 @@ use futures::prelude::*;
 use futures::StreamExt;
 use std::io;
 use std::process::ExitStatus;
-use std::str::FromStr;
 use tokio::process::Child;
 use tokio::time::Duration;
 
@@ -114,13 +113,13 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
     }
 }
 
-async fn fund(identity: &str, threshold: BigDecimal) -> Result<()> {
+async fn fund(identity: &str, threshold: &BigDecimal) -> Result<()> {
     let cmd = YaCommand::new()?;
 
     let identity = identity.to_string();
     let balance = cmd.yagna()?.market_balance(Some(&identity)).await?;
 
-    if balance < threshold {
+    if balance < *threshold {
         log::debug!(
             "Balance below threshold ({}), waiting for funding to complete...",
             threshold
@@ -162,8 +161,7 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
         .await?
         .ok_or(anyhow!("Unexpected error: AppKey should have identity."))?;
 
-    let threshold = BigDecimal::from_str(&config.funding_threshold)?;
-    fund(&identity, threshold).await?;
+    fund(&identity, &config.funding_threshold).await?;
 
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         for driver in DRIVERS.iter() {

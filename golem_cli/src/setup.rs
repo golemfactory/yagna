@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -57,7 +58,7 @@ pub struct RunConfig {
     /// the system will wait for funding to complete before proceeding. When above threshold,
     /// funding happens asynchronously in the background.
     #[structopt(long, env = "YA_FUNDING_THRESHOLD", default_value = "0.03")]
-    pub funding_threshold: String,
+    pub funding_threshold: BigDecimal,
 }
 
 pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
