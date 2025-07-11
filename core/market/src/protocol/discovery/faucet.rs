@@ -157,6 +157,11 @@ impl FaucetClient {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to wait for transaction: {}", e))?;
 
+        log::info!(
+            "GolemBase fund: tx {} mined on L2. Waiting for deposit on L3...",
+            response.tx_hash
+        );
+
         // Transaction was mined on L2, but now we need to wait until funds will be available on L3.
         // There is no simple way to check what L3 transaction corresponds to the L2 one.
         // Instead we will poll balance until it increases and assume that the increase is a result
