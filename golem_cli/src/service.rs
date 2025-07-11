@@ -114,9 +114,8 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
     }
 }
 
-async fn fund(identity: &str) -> Result<()> {
+async fn fund(identity: &str, threshold: BigDecimal) -> Result<()> {
     let cmd = YaCommand::new()?;
-    let threshold = BigDecimal::from_str("0.03")?;
 
     let identity = identity.to_string();
     let balance = cmd.yagna()?.market_balance(Some(&identity)).await?;
@@ -163,7 +162,8 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
         .await?
         .ok_or(anyhow!("Unexpected error: AppKey should have identity."))?;
 
-    fund(&identity).await?;
+    let threshold = BigDecimal::from_str(&config.funding_threshold)?;
+    fund(&identity, threshold).await?;
 
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         for driver in DRIVERS.iter() {

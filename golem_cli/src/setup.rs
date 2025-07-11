@@ -52,6 +52,12 @@ pub struct RunConfig {
     /// It can result in a large amount of disk space being used after some time.
     #[structopt(long, env)]
     pub disable_auto_cleanup: bool,
+
+    /// Funding threshold for market balance. When balance is below this threshold,
+    /// the system will wait for funding to complete before proceeding. When above threshold,
+    /// funding happens asynchronously in the background.
+    #[structopt(long, env = "YA_FUNDING_THRESHOLD", default_value = "0.03")]
+    pub funding_threshold: String,
 }
 
 pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
