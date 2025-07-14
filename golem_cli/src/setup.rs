@@ -57,7 +57,7 @@ pub struct RunConfig {
     /// Funding threshold for market balance. When balance is below this threshold,
     /// the system will wait for funding to complete before proceeding. When above threshold,
     /// funding happens asynchronously in the background.
-    #[structopt(long, env = "YA_FUNDING_THRESHOLD", default_value = "0.03")]
+    #[structopt(long, env = "YA_FUNDING_THRESHOLD", default_value = "0.003")]
     pub funding_threshold: BigDecimal,
 }
 
