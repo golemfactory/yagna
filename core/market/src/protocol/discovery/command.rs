@@ -1,5 +1,5 @@
-use alloy::network::BlockResponse;
-use alloy::providers::Provider;
+use alloy::network::{AnyNetwork, BlockResponse};
+use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use anyhow::{anyhow, Result};
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::{Address, Hash};
@@ -19,6 +19,7 @@ pub struct GolemBaseCommandHandler {
     identity: std::sync::Arc<dyn IdentityApi>,
     golem_base: GolemBaseClient,
     config: DiscoveryConfig,
+    optimism_client: DynProvider<AnyNetwork>,
 }
 
 impl GolemBaseCommandHandler {
@@ -27,19 +28,29 @@ impl GolemBaseCommandHandler {
         golem_base: GolemBaseClient,
         config: DiscoveryConfig,
     ) -> Self {
+        let optimism_provider = Self::create_optimism_provider(&config);
+
         Self {
             identity,
             golem_base,
             config,
+            optimism_client: optimism_provider,
         }
     }
 
     pub fn from_discovery(discovery: &super::Discovery) -> Self {
-        Self {
-            identity: discovery.inner.identity.clone(),
-            golem_base: discovery.inner.golem_base.clone(),
-            config: discovery.inner.config.clone(),
-        }
+        Self::new(
+            discovery.inner.identity.clone(),
+            discovery.inner.golem_base.clone(),
+            discovery.inner.config.clone(),
+        )
+    }
+
+    fn create_optimism_provider(config: &DiscoveryConfig) -> DynProvider<AnyNetwork> {
+        ProviderBuilder::new()
+            .network::<AnyNetwork>()
+            .connect_http(config.get_rpc_url().clone())
+            .erased()
     }
 
     pub async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
@@ -149,13 +160,12 @@ impl GolemBaseCommandHandler {
         &self,
         transaction_id: String,
     ) -> anyhow::Result<GolemBaseCommandResponse> {
-        let client = self.golem_base.clone();
+        let client = self.optimism_client.clone();
         let transaction_hash = transaction_id
             .parse::<Hash>()
             .map_err(|e| anyhow!("Invalid transaction ID format: {}", e))?;
 
         let transaction = client
-            .get_rpc_client()
             .get_transaction_by_hash(transaction_hash)
             .await
             .map_err(|e| anyhow!("Failed to get transaction: {}", e))?
