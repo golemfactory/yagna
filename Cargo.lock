@@ -4440,7 +4440,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?rev=81483fe5b7d7f1d704b3166f46c9c05678465254#81483fe5b7d7f1d704b3166f46c9c05678465254"
+source = "git+https://github.com/Golem-Base/rust-sdk?branch=yagna%2Fmaster#76314b83b3db2a808007c4a048d9a219d5e91661"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -12074,6 +12074,7 @@ dependencies = [
  "actix-service",
  "actix-web",
  "all_asserts",
+ "alloy",
  "anyhow",
  "async-trait",
  "backtrace",

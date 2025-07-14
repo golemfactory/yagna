@@ -10,7 +10,8 @@ use ya_client::model::market::{agreement::State, Role};
 use ya_client::model::NodeId;
 use ya_core_model::market::local as market_bus;
 use ya_core_model::market::{
-    FundGolemBase, GetAgreement, GetGolemBaseBalance, GetGolemBaseOffer, ListAgreements,
+    FundGolemBase, GetAgreement, GetGolemBaseBalance, GetGolemBaseOffer, GolemBaseCommand,
+    GolemBaseCommandType, ListAgreements,
 };
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -19,7 +20,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum Command {
     Agreements(AgreementsCommand),
-    GolemBase(GolemBaseCommand),
+    GolemBase(GolemBaseCliCommand),
     Offer(OfferCommand),
 }
 
@@ -110,7 +111,7 @@ impl AgreementsCommand {
 }
 
 #[derive(StructOpt, Debug)]
-pub enum GolemBaseCommand {
+pub enum GolemBaseCliCommand {
     /// Fund GolemBase wallet
     Fund {
         #[structopt(
@@ -132,12 +133,22 @@ pub enum GolemBaseCommand {
         #[structopt(long, help = "Flatten offer")]
         flatten: bool,
     },
+    /// Get transaction from GolemBase
+    GetTransaction {
+        #[structopt(help = "Transaction ID to retrieve")]
+        transaction_id: String,
+    },
+    /// Get block from GolemBase
+    GetBlock {
+        #[structopt(help = "Block number to retrieve")]
+        block_number: u64,
+    },
 }
 
-impl GolemBaseCommand {
+impl GolemBaseCliCommand {
     pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            GolemBaseCommand::Fund { wallet } => {
+            GolemBaseCliCommand::Fund { wallet } => {
                 let request = FundGolemBase { wallet };
                 let response = bus::service(market_bus::discovery_endpoint())
                     .send(request)
@@ -147,7 +158,7 @@ impl GolemBaseCommand {
                     "message": format!("GolemBase wallet {} funded, balance {} tGLM", response.wallet, response.balance)
                 }))
             }
-            GolemBaseCommand::Balance { wallet } => {
+            GolemBaseCliCommand::Balance { wallet } => {
                 let request = GetGolemBaseBalance { wallet };
                 let response = bus::service(market_bus::discovery_endpoint())
                     .send(request)
@@ -158,7 +169,7 @@ impl GolemBaseCommand {
                     "balance": response.balance
                 }))
             }
-            GolemBaseCommand::GetOffer { offer_id, flatten } => {
+            GolemBaseCliCommand::GetOffer { offer_id, flatten } => {
                 let request = GetGolemBaseOffer { offer_id };
                 let response = bus::service(market_bus::discovery_endpoint())
                     .send(request)
@@ -176,6 +187,26 @@ impl GolemBaseCommand {
                     "currentBlock": response.current_block,
                     "metadata": response.metadata
                 }))
+            }
+            GolemBaseCliCommand::GetTransaction { transaction_id } => {
+                let request = GolemBaseCommand {
+                    command: GolemBaseCommandType::GetTransaction { transaction_id },
+                };
+                let response = bus::service(market_bus::discovery_endpoint())
+                    .send(request)
+                    .await??;
+
+                CommandOutput::object(response.response)
+            }
+            GolemBaseCliCommand::GetBlock { block_number } => {
+                let request = GolemBaseCommand {
+                    command: GolemBaseCommandType::GetBlock { block_number },
+                };
+                let response = bus::service(market_bus::discovery_endpoint())
+                    .send(request)
+                    .await??;
+
+                CommandOutput::object(response.response)
             }
         }
     }
