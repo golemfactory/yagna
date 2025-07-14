@@ -80,6 +80,7 @@ impl GolemBaseNetwork {
                 fund_preallocated: false,
             },
         );
+        configs.insert(GolemBaseNetwork::Local, default.clone());
         configs.insert(
             GolemBaseNetwork::Custom,
             GolemBaseRpcConfig::from_env()
