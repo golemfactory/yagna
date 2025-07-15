@@ -10,7 +10,6 @@ use futures::prelude::*;
 use futures::StreamExt;
 use std::io;
 use std::process::ExitStatus;
-use std::str::FromStr;
 use tokio::process::Child;
 use tokio::time::Duration;
 
@@ -114,6 +113,39 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
     }
 }
 
+async fn fund(identity: &str, threshold: &BigDecimal) -> Result<()> {
+    let cmd = YaCommand::new()?;
+
+    let identity = identity.to_string();
+    let balance = cmd.yagna()?.market_balance(Some(&identity)).await?;
+
+    if balance < *threshold {
+        log::debug!(
+            "Balance below threshold ({}), waiting for funding to complete...",
+            threshold
+        );
+        if let Err(e) = cmd.yagna()?.market_fund(Some(&identity)).await {
+            log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+        }
+    } else {
+        log::debug!(
+            "Balance above threshold ({}), funding asynchronously",
+            threshold
+        );
+
+        tokio::task::spawn(async move {
+            let cmd = cmd.yagna()?;
+
+            if let Err(e) = cmd.market_fund(Some(&identity)).await {
+                log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
+            }
+            Ok::<(), anyhow::Error>(())
+        });
+    }
+
+    Ok(())
+}
+
 pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&config, false).await?;
 
@@ -129,17 +161,7 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
         .await?
         .ok_or(anyhow!("Unexpected error: AppKey should have identity."))?;
 
-    // Fund account with toknes to pay fees for publishing Offers on GolemBase.
-    if let Err(e) = cmd.yagna()?.market_fund(Some(&identity)).await {
-        // Only warn if balance is below threshold
-        if let Ok(balance) = cmd.yagna()?.market_balance(Some(&identity)).await {
-            if balance < BigDecimal::from_str("0.0003")? {
-                log::warn!("Failed to fund market with GolemBase tokens. Error: {e}");
-            }
-        } else {
-            log::debug!("Failed to fund market with GolemBase tokens. Error: {e}");
-        }
-    }
+    fund(&identity, &config.funding_threshold).await?;
 
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         for driver in DRIVERS.iter() {

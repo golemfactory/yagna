@@ -30,6 +30,7 @@ actix-http = "3"
 actix-rt = "2.7"
 actix-service = "2"
 actix-web = "4"
+alloy = { version = "0.15", features = ["full"] }
 anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"

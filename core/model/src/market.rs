@@ -173,3 +173,31 @@ impl RpcMessage for GetGolemBaseBalance {
     type Item = GetGolemBaseBalanceResponse;
     type Error = RpcMessageError;
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolemBaseCommand {
+    pub command: GolemBaseCommandType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GolemBaseCommandType {
+    GetTransaction { transaction_id: String },
+    GetBlock { block_number: u64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolemBaseCommandResponse {
+    pub response: GolemBaseResponseType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GolemBaseResponseType {
+    Transaction { transaction: serde_json::Value },
+    Block { block: serde_json::Value }, // Empty implementation for now
+}
+
+impl RpcMessage for GolemBaseCommand {
+    const ID: &'static str = "GolemBaseCommand";
+    type Item = GolemBaseCommandResponse;
+    type Error = RpcMessageError;
+}

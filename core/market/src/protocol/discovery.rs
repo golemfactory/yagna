@@ -13,8 +13,7 @@ use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::identity::Error;
 use ya_core_model::market::{local, GetGolemBaseOffer, GetGolemBaseOfferResponse};
 use ya_core_model::market::{
-    FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
-    RpcMessageError,
+    FundGolemBase, GetGolemBaseBalance, GolemBaseCommand, RpcMessageError,
 };
 use ya_service_bus::typed as bus;
 
@@ -30,7 +29,6 @@ use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
-use crate::protocol::discovery::faucet::FaucetClient;
 use crate::protocol::discovery::message::*;
 
 const GOLEM_BASE_CALLER: &str = "GolemBase";
@@ -39,6 +37,7 @@ const GOLEM_BASE_CALLER: &str = "GolemBase";
 const BLOCK_TIME_SECONDS: i64 = 2;
 
 pub mod builder;
+pub mod command;
 pub mod error;
 pub mod faucet;
 pub mod message;
@@ -509,19 +508,21 @@ impl Discovery {
     }
 
     async fn bind_fund_handler(&self, local_prefix: &str) -> Result<(), DiscoveryInitError> {
-        let discovery = self.clone();
         let endpoint = local::build_discovery_endpoint(local_prefix);
+        let command_handler = command::GolemBaseCommandHandler::from_discovery(self);
 
+        // Bind fund handler
+        let command_handler_ = command_handler.clone();
         bus::bind(&endpoint, move |msg: FundGolemBase| {
-            let myself = discovery.clone();
-            async move { myself.fund(msg).await }
+            let handler = command_handler_.clone();
+            async move { handler.fund(msg).await }
         });
 
         // Bind balance check handler
-        let discovery = self.clone();
+        let command_handler_ = command_handler.clone();
         bus::bind(&endpoint, move |msg: GetGolemBaseBalance| {
-            let myself = discovery.clone();
-            async move { myself.get_balance(msg).await }
+            let handler = command_handler_.clone();
+            async move { handler.get_balance(msg).await }
         });
 
         // Bind get offer handler
@@ -531,6 +532,18 @@ impl Discovery {
             async move {
                 myself
                     .get_offer(msg)
+                    .await
+                    .map_err(|e| RpcMessageError::Market(e.to_string()))
+            }
+        });
+
+        // Bind GolemBase command handler
+        let command_handler_ = command_handler.clone();
+        bus::bind(&endpoint, move |msg: GolemBaseCommand| {
+            let handler = command_handler_.clone();
+            async move {
+                handler
+                    .handle_golem_base_command(msg)
                     .await
                     .map_err(|e| RpcMessageError::Market(e.to_string()))
             }
@@ -594,71 +607,6 @@ impl Discovery {
         }
 
         Ok(())
-    }
-
-    pub async fn fund(&self, msg: FundGolemBase) -> Result<FundGolemBaseResponse, RpcMessageError> {
-        let wallet = match msg.wallet {
-            Some(wallet) => wallet,
-            None => self.inner.identity.default_identity().await.map_err(|e| {
-                RpcMessageError::Market(format!("Failed to get default identity: {e}"))
-            })?,
-        };
-
-        self.validate_account(wallet)
-            .await
-            .map_err(|e| RpcMessageError::Market(e.to_string()))?;
-
-        let client = self.inner.golem_base.clone();
-        let address = Address::from(&wallet.into_array());
-
-        let faucet_client = FaucetClient::new(self.inner.config.clone(), client.clone());
-
-        if self.inner.config.fund_preallocated() {
-            faucet_client
-                .fund_local_account(address)
-                .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
-        } else {
-            faucet_client
-                .fund_from_faucet_with_pow(&address.to_string())
-                .await
-                .map_err(|e| RpcMessageError::Market(e.to_string()))?;
-        }
-
-        // Get balance after funding
-        let balance = client
-            .get_balance(address)
-            .await
-            .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
-
-        log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
-        Ok(FundGolemBaseResponse { wallet, balance })
-    }
-
-    async fn get_balance(
-        &self,
-        msg: GetGolemBaseBalance,
-    ) -> Result<GetGolemBaseBalanceResponse, RpcMessageError> {
-        let wallet = match msg.wallet {
-            Some(wallet) => wallet,
-            None => self.inner.identity.default_identity().await.map_err(|e| {
-                RpcMessageError::Market(format!("Failed to get default identity: {e}"))
-            })?,
-        };
-
-        let client = self.inner.golem_base.clone();
-        let address = Address::from(&wallet.into_array());
-
-        let balance = client
-            .get_balance(address)
-            .await
-            .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
-
-        Ok(GetGolemBaseBalanceResponse {
-            wallet,
-            balance,
-            token: "tETH".to_string(),
-        })
     }
 
     /// Registers incoming offers by filtering out known ones and adding new ones to local storage
