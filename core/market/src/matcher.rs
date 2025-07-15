@@ -170,6 +170,12 @@ impl Matcher {
         offer: &NewOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
+        log::info!(
+            "Subscribing a new Offer using identity: {} [{}]",
+            id.name,
+            id.identity
+        );
+
         let offer =
             GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
 
