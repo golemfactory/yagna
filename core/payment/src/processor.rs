@@ -1,4 +1,4 @@
-use crate::api::allocations::{forced_release_allocation, release_allocation_after};
+use crate::api::allocations::{forced_release_allocation, schedule_release_allocation};
 use crate::cycle::BatchCycleTaskManager;
 use crate::dao::{
     ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, BatchItemFilter, PaymentDao,
@@ -1365,7 +1365,7 @@ impl PaymentProcessor {
                             )
                             .await
                         } else {
-                            release_allocation_after(
+                            schedule_release_allocation(
                                 db.clone(),
                                 allocation.allocation_id.clone(),
                                 allocation.timeout,
@@ -1386,7 +1386,6 @@ impl PaymentProcessor {
                                         NodeId::default()
                                     }),
                             )
-                            .await
                         }
                     }
                 } else {
