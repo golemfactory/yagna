@@ -1,9 +1,9 @@
+use crate::processor::AllocationReleaseTasks;
 use actix_web::web::{self, Data};
 use actix_web::Scope;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
-use crate::processor::AllocationReleaseTasks;
 
 mod accounts;
 pub mod allocations;

@@ -6,6 +6,7 @@ pub use crate::config::Config;
 use crate::processor::{AllocationReleaseTasks, PaymentProcessor};
 
 use futures::FutureExt;
+use lazy_static::lazy_static;
 use std::{sync::Arc, time::Duration};
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
@@ -52,11 +53,38 @@ lazy_static::lazy_static! {
 }
 
 pub struct PaymentService {
-    payment_processor: PaymentProcessor
+    payment_processor: PaymentProcessor,
 }
 
 impl Service for PaymentService {
     type Cli = cli::PaymentCli;
+}
+
+lazy_static! {
+    static ref ALLOC: Arc<parking_lot::Mutex<Option<AllocationReleaseTasks>>> =
+        Arc::new(parking_lot::Mutex::new(None));
+}
+
+pub fn init_allocation_release_tasks(tasks: Option<AllocationReleaseTasks>) {
+    let mut alloc = ALLOC.lock();
+    if alloc.is_none() {
+        if let Some(tasks) = tasks {
+            *alloc = Some(tasks);
+        } else {
+            *alloc = Some(AllocationReleaseTasks::new());
+        }
+    } else {
+        panic!("Allocation release tasks are already initialized");
+    }
+}
+
+fn get_allocation_release_tasks() -> AllocationReleaseTasks {
+    let alloc = ALLOC.lock();
+    if let Some(tasks) = &*alloc {
+        tasks.clone()
+    } else {
+        panic!("Call init_allocation_release_tasks function before using payment service");
+    }
 }
 
 impl PaymentService {
@@ -66,7 +94,7 @@ impl PaymentService {
             .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
-        let allocation_release_tasks = AllocationReleaseTasks::new();
+        let allocation_release_tasks = get_allocation_release_tasks();
 
         let processor = Arc::new(PaymentProcessor::new(db.clone(), allocation_release_tasks));
         self::service::bind_service(&db, processor.clone(), config).await?;
@@ -81,7 +109,7 @@ impl PaymentService {
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        api::web_scope(&ctx.component())
+        api::web_scope(&ctx.component(), get_allocation_release_tasks())
     }
 
     pub async fn shut_down() {

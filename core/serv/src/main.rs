@@ -27,7 +27,7 @@ use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
-use ya_payment::PaymentService;
+use ya_payment::{init_allocation_release_tasks, PaymentService};
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -774,6 +774,8 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    init_allocation_release_tasks(None);
+
     #[cfg(feature = "static-openssl")]
     openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();

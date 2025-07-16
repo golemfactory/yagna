@@ -53,6 +53,8 @@ pub struct RealPayment {
     processor: Arc<PaymentProcessor>,
 
     config: Arc<Config>,
+
+    allocation_release_tasks: AllocationReleaseTasks,
 }
 
 impl RealPayment {
@@ -70,6 +72,7 @@ impl RealPayment {
             db,
             processor,
             config: Arc::new(config),
+            allocation_release_tasks: AllocationReleaseTasks::new(),
         }
     }
 
@@ -99,7 +102,7 @@ impl RealPayment {
 
     pub fn bind_rest(&self) -> actix_web::Scope {
         let db = self.db.clone();
-        web_scope(&db)
+        web_scope(&db, self.allocation_release_tasks.clone())
     }
 
     pub async fn start_dummy_driver(&self) -> anyhow::Result<()> {
