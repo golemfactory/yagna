@@ -8,15 +8,15 @@ pub struct AllocationReleaseTasks {
 }
 
 impl AllocationReleaseTasks {
-    pub fn new() -> Self {
+    fn new_internal() -> Self {
         Self {
             tasks: Arc::new(parking_lot::Mutex::new(HashMap::new())),
         }
     }
-}
-impl Default for AllocationReleaseTasks {
-    fn default() -> Self {
-        Self::new()
+
+    /// Creates a new instance of `AllocationReleaseTasks` for use in tests or mocks.
+    pub fn new_for_mocks_only() -> Self {
+        Self::new_internal()
     }
 }
 
@@ -25,14 +25,10 @@ lazy_static! {
         Arc::new(parking_lot::Mutex::new(None));
 }
 
-pub fn init_allocation_release_tasks(tasks: Option<AllocationReleaseTasks>) {
+pub fn init_allocation_release_tasks() {
     let mut alloc = ALLOC.lock();
     if alloc.is_none() {
-        if let Some(tasks) = tasks {
-            *alloc = Some(tasks);
-        } else {
-            *alloc = Some(AllocationReleaseTasks::new());
-        }
+        *alloc = Some(AllocationReleaseTasks::new_internal());
     } else {
         panic!("Allocation release tasks are already initialized");
     }

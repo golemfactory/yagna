@@ -61,10 +61,8 @@ pub struct RealPayment {
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
-        let processor = Arc::new(PaymentProcessor::new(
-            db.clone(),
-            AllocationReleaseTasks::new(),
-        ));
+        let proc = AllocationReleaseTasks::new_for_mocks_only();
+        let processor = Arc::new(PaymentProcessor::new(db.clone(), proc.clone()));
         let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {
@@ -73,7 +71,7 @@ impl RealPayment {
             db,
             processor,
             config: Arc::new(config),
-            allocation_release_tasks: AllocationReleaseTasks::new(),
+            allocation_release_tasks: proc.clone(),
         }
     }
 

@@ -775,7 +775,7 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    init_allocation_release_tasks(None);
+    init_allocation_release_tasks();
 
     #[cfg(feature = "static-openssl")]
     openssl_probe::init_ssl_cert_env_vars();
