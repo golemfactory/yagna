@@ -27,7 +27,7 @@ use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
-use ya_payment::{init_allocation_release_tasks, PaymentService};
+use ya_payment::PaymentService;
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -53,6 +53,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_payment::alloc_release_task::init_allocation_release_tasks;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 use ya_utils_consent::{
     consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,

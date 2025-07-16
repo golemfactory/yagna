@@ -3,10 +3,9 @@
 #![allow(non_local_definitions)] // Due to Diesel macros.
 
 pub use crate::config::Config;
-use crate::processor::{AllocationReleaseTasks, PaymentProcessor};
+use crate::processor::PaymentProcessor;
 
 use futures::FutureExt;
-use lazy_static::lazy_static;
 use std::{sync::Arc, time::Duration};
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
@@ -17,6 +16,7 @@ use ya_service_bus::typed as bus;
 extern crate diesel;
 
 pub mod accounts;
+pub mod alloc_release_task;
 pub mod api;
 mod batch;
 mod cli;
@@ -41,6 +41,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
+use crate::alloc_release_task::get_allocation_release_tasks;
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -58,33 +59,6 @@ pub struct PaymentService {
 
 impl Service for PaymentService {
     type Cli = cli::PaymentCli;
-}
-
-lazy_static! {
-    static ref ALLOC: Arc<parking_lot::Mutex<Option<AllocationReleaseTasks>>> =
-        Arc::new(parking_lot::Mutex::new(None));
-}
-
-pub fn init_allocation_release_tasks(tasks: Option<AllocationReleaseTasks>) {
-    let mut alloc = ALLOC.lock();
-    if alloc.is_none() {
-        if let Some(tasks) = tasks {
-            *alloc = Some(tasks);
-        } else {
-            *alloc = Some(AllocationReleaseTasks::new());
-        }
-    } else {
-        panic!("Allocation release tasks are already initialized");
-    }
-}
-
-fn get_allocation_release_tasks() -> AllocationReleaseTasks {
-    let alloc = ALLOC.lock();
-    if let Some(tasks) = &*alloc {
-        tasks.clone()
-    } else {
-        panic!("Call init_allocation_release_tasks function before using payment service");
-    }
 }
 
 impl PaymentService {

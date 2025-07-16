@@ -17,13 +17,14 @@ use ya_core_model::NodeId;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
-use ya_payment::processor::{AllocationReleaseTasks, PaymentProcessor};
+use ya_payment::processor::PaymentProcessor;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 use ya_service_bus::typed::Endpoint;
 
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_payment::alloc_release_task::AllocationReleaseTasks;
 
 pub mod fake_payment;
 

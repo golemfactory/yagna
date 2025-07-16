@@ -32,7 +32,7 @@ mod api_error;
 mod platform_triple;
 mod token_name;
 
-use crate::processor::AllocationReleaseTasks;
+use crate::alloc_release_task::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
 
 pub fn register_endpoints(scope: Scope) -> Scope {

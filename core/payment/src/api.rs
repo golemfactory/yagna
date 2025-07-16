@@ -1,4 +1,4 @@
-use crate::processor::AllocationReleaseTasks;
+use crate::alloc_release_task::AllocationReleaseTasks;
 use actix_web::web::{self, Data};
 use actix_web::Scope;
 use ya_client_model::payment::PAYMENT_API_PATH;

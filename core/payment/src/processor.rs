@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::alloc_release_task::AllocationReleaseTasks;
 use crate::post_migrations::process_post_migration_jobs;
 use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
@@ -304,24 +305,6 @@ impl DriverRegistry {
 pub(crate) const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[derive(Debug, Clone)]
-pub struct AllocationReleaseTasks {
-    pub tasks: Arc<parking_lot::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
-}
-
-impl AllocationReleaseTasks {
-    pub fn new() -> Self {
-        Self {
-            tasks: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-        }
-    }
-}
-impl Default for AllocationReleaseTasks {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 pub struct PaymentProcessor {
     batch_cycle_tasks: Arc<std::sync::Mutex<BatchCycleTaskManager>>,
