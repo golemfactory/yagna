@@ -1,8 +1,8 @@
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use test_context::test_context;
 
-use ya_client_model::payment::allocation::{DepositUpdate, PaymentPlatform, PaymentPlatformEnum};
+use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
 use ya_client_model::payment::{Acceptance, AllocationUpdate, NewAllocation, NewInvoice};
 use ya_core_model::payment::local::GetStatus;
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -184,7 +184,7 @@ async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow:
         .await?;
     let provider_appkey = node.get_identity()?.create_identity_key("provider").await?;
 
-    let provider = node.rest_payments(&provider_appkey.key)?;
+    let _provider = node.rest_payments(&provider_appkey.key)?;
     let requestor = node.rest_payments(&requestor_appkey.key)?;
 
     node.get_payment()?
@@ -195,14 +195,12 @@ async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow:
         PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
 
     log::info!("Creating allocation...");
-    let allocation = requestor
+    let _allocation = requestor
         .create_allocation(&NewAllocation {
             address: Some(requestor_appkey.identity.to_string()),
             payment_platform: Some(payment_platform.clone()),
             total_amount: BigDecimal::from(10u64),
-            timeout: Some(chrono::DateTime::from(
-                Utc::now() + chrono::Duration::seconds(1),
-            )),
+            timeout: Some(Utc::now() + chrono::Duration::seconds(1)),
             make_deposit: false,
             deposit: None,
             extend_timeout: None,
@@ -248,7 +246,7 @@ async fn test_auto_release_allocation_and_amend(
         .await?;
     let provider_appkey = node.get_identity()?.create_identity_key("provider").await?;
 
-    let provider = node.rest_payments(&provider_appkey.key)?;
+    let _provider = node.rest_payments(&provider_appkey.key)?;
     let requestor = node.rest_payments(&requestor_appkey.key)?;
 
     node.get_payment()?
@@ -264,9 +262,7 @@ async fn test_auto_release_allocation_and_amend(
             address: Some(requestor_appkey.identity.to_string()),
             payment_platform: Some(payment_platform.clone()),
             total_amount: BigDecimal::from(10u64),
-            timeout: Some(chrono::DateTime::from(
-                Utc::now() + chrono::Duration::seconds(1),
-            )),
+            timeout: Some(Utc::now() + chrono::Duration::seconds(1)),
             make_deposit: false,
             deposit: None,
             extend_timeout: None,
@@ -283,9 +279,7 @@ async fn test_auto_release_allocation_and_amend(
             &allocation.allocation_id,
             &AllocationUpdate {
                 total_amount: None,
-                timeout: Some(chrono::DateTime::from(
-                    Utc::now() + chrono::Duration::seconds(3),
-                )),
+                timeout: Some(Utc::now() + chrono::Duration::seconds(3)),
                 deposit: None,
             },
         )
