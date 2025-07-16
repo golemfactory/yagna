@@ -3,11 +3,10 @@
 #![allow(non_local_definitions)] // Due to Diesel macros.
 
 pub use crate::config::Config;
-use crate::processor::PaymentProcessor;
+use crate::processor::{AllocationReleaseTasks, PaymentProcessor};
 
 use futures::FutureExt;
 use std::{sync::Arc, time::Duration};
-
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -52,7 +51,9 @@ lazy_static::lazy_static! {
         );
 }
 
-pub struct PaymentService;
+pub struct PaymentService {
+    payment_processor: PaymentProcessor
+}
 
 impl Service for PaymentService {
     type Cli = cli::PaymentCli;
@@ -65,8 +66,9 @@ impl PaymentService {
             .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
+        let allocation_release_tasks = AllocationReleaseTasks::new();
 
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let processor = Arc::new(PaymentProcessor::new(db.clone(), allocation_release_tasks));
         self::service::bind_service(&db, processor.clone(), config).await?;
 
         processor.process_post_migration_jobs().await?;

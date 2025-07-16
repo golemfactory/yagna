@@ -1,13 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
-use actix_web::{HttpResponse, Scope};
+use actix_web::{web, HttpResponse, Scope};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use lazy_static::lazy_static;
 use serde_json::value::Value::Null;
-use tokio::task::JoinHandle;
 use ya_client_model::NodeId;
 
 // Workspace uses
@@ -36,6 +32,7 @@ mod api_error;
 mod platform_triple;
 mod token_name;
 
+use crate::processor::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
@@ -63,6 +60,7 @@ async fn create_allocation(
     db: Data<DbExecutor>,
     body: Json<NewAllocation>,
     id: Identity,
+    allocation_release_tasks: web::Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
     let allocation = body.into_inner();
     let node_id = id.identity;
@@ -178,7 +176,13 @@ async fn create_allocation(
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
 
-                schedule_release_allocation(db.clone(), allocation_id, allocation.timeout, node_id);
+                schedule_release_allocation(
+                    db.clone(),
+                    allocation_id,
+                    allocation.timeout,
+                    node_id,
+                    (*allocation_release_tasks.into_inner()).clone(),
+                );
 
                 response::created(allocation)
             }
@@ -289,6 +293,7 @@ async fn amend_allocation(
     path: Path<params::AllocationId>,
     body: Json<AllocationUpdate>,
     id: Identity,
+    allocation_release_tasks: Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
@@ -366,6 +371,7 @@ async fn amend_allocation(
         amended_allocation.allocation_id.clone(),
         amended_allocation.timeout,
         node_id,
+        (*allocation_release_tasks.into_inner()).clone(),
     );
 
     match dao.replace(amended_allocation, node_id).await {
@@ -470,18 +476,14 @@ async fn get_demand_decorations(
     })
 }
 
-lazy_static! {
-    static ref allocation_release_task_map: Arc<parking_lot::Mutex<HashMap<String, JoinHandle<()>>>> =
-        Arc::new(parking_lot::Mutex::new(HashMap::new()));
-}
-
 pub fn schedule_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
     allocation_timeout: Option<DateTime<Utc>>,
     node_id: NodeId,
+    allocation_release_tasks: AllocationReleaseTasks,
 ) {
-    let mut task_map = allocation_release_task_map.lock();
+    let mut task_map = allocation_release_tasks.tasks.lock();
     //clear finished tasks from the map to prevent infinite growth
     task_map.retain(|_, hdl| !hdl.is_finished());
 
@@ -537,8 +539,11 @@ pub fn schedule_release_allocation(
     }
 }
 
-pub fn cancel_release_allocation_task(allocation_id: &str) -> bool {
-    let mut task_map = allocation_release_task_map.lock();
+pub fn cancel_release_allocation_task(
+    allocation_id: &str,
+    allocation_release_tasks: AllocationReleaseTasks,
+) -> bool {
+    let mut task_map = allocation_release_tasks.tasks.lock();
     // Cancel any existing task for the same allocation_id
     if let Some(existing_hdl) = task_map.remove(allocation_id) {
         existing_hdl.abort();
@@ -552,9 +557,10 @@ pub async fn forced_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
     node_id: NodeId,
+    allocation_release_tasks: AllocationReleaseTasks,
 ) {
     //first, we need to cancel any existing task for the release of this allocation
-    let cancelled = cancel_release_allocation_task(&allocation_id);
+    let cancelled = cancel_release_allocation_task(&allocation_id, allocation_release_tasks);
     if !cancelled {
         log::warn!(
             "No existing release task found for allocation {}, proceeding with forced release.",

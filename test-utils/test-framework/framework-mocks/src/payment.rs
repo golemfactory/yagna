@@ -17,7 +17,7 @@ use ya_core_model::NodeId;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
-use ya_payment::processor::PaymentProcessor;
+use ya_payment::processor::{AllocationReleaseTasks, PaymentProcessor};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 use ya_service_bus::typed::Endpoint;
@@ -58,7 +58,10 @@ pub struct RealPayment {
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let processor = Arc::new(PaymentProcessor::new(
+            db.clone(),
+            AllocationReleaseTasks::new(),
+        ));
         let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {

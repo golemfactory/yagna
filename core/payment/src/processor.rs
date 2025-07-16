@@ -305,12 +305,31 @@ pub(crate) const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Debug, Clone)]
+pub struct AllocationReleaseTasks {
+    pub tasks: Arc<parking_lot::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+}
+
+impl AllocationReleaseTasks {
+    pub fn new() -> Self {
+        Self {
+            tasks: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+        }
+    }
+}
+impl Default for AllocationReleaseTasks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct PaymentProcessor {
     batch_cycle_tasks: Arc<std::sync::Mutex<BatchCycleTaskManager>>,
     db_executor: Arc<Mutex<DbExecutor>>,
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
     schedule_payment_guard: Arc<Mutex<()>>,
+    allocation_tasks: AllocationReleaseTasks,
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -363,13 +382,14 @@ struct PaymentNotificationValue {
 }
 
 impl PaymentProcessor {
-    pub fn new(db_executor: DbExecutor) -> Self {
+    pub fn new(db_executor: DbExecutor, allocation_release_tasks: AllocationReleaseTasks) -> Self {
         Self {
             db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
             schedule_payment_guard: Arc::new(Mutex::new(())),
             batch_cycle_tasks: Arc::new(std::sync::Mutex::new(BatchCycleTaskManager::new())),
+            allocation_tasks: allocation_release_tasks,
         }
     }
 
@@ -1362,6 +1382,7 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
                             .await
                         } else {
@@ -1385,6 +1406,7 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
                         }
                     }

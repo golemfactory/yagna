@@ -3,6 +3,7 @@ use actix_web::Scope;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
+use crate::processor::AllocationReleaseTasks;
 
 mod accounts;
 pub mod allocations;
@@ -30,9 +31,10 @@ pub fn api_scope(scope: Scope) -> Scope {
         .extend(cycle::register_endpoints)
 }
 
-pub fn web_scope(db: &DbExecutor) -> Scope {
+pub fn web_scope(db: &DbExecutor, allocation_release_tasks: AllocationReleaseTasks) -> Scope {
     Scope::new(PAYMENT_API_PATH)
         .app_data(Data::new(db.clone()))
+        .app_data(Data::new(allocation_release_tasks))
         .service(api_scope(Scope::new("")))
     // TODO: TEST
     // Scope::new(PAYMENT_API_PATH).extend(api_scope).app_data(Data::new(db.clone()))
