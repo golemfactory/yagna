@@ -520,7 +520,13 @@ pub fn schedule_release_allocation(
                     tokio::time::sleep(timeout.to_std().expect("Value has to be ok")).await;
                 }
 
-                forced_release_allocation_internal(db, allocation_id, node_id).await;
+                log::info!(
+                    "Allocation {} for node {} expired and it's being released",
+                    allocation_id,
+                    node_id
+                );
+
+                release_allocation_internal(db, allocation_id, node_id).await;
             }),
         );
     } else {
@@ -556,24 +562,15 @@ pub async fn forced_release_allocation(
         );
     } else {
         log::info!(
-            "Cancelled existing release task for allocation {}",
+            "Cancelled existing release task for allocation {}. Releasing allocation now.",
             allocation_id
         );
     }
 
-    forced_release_allocation_internal(db, allocation_id.clone(), node_id).await;
+    release_allocation_internal(db, allocation_id.clone(), node_id).await;
 }
 
-async fn forced_release_allocation_internal(
-    db: Data<DbExecutor>,
-    allocation_id: String,
-    node_id: NodeId,
-) {
-    log::debug!(
-        "Forced release of allocation {} for node {}",
-        allocation_id,
-        node_id
-    );
+async fn release_allocation_internal(db: Data<DbExecutor>, allocation_id: String, node_id: NodeId) {
     match db
         .as_dao::<AllocationDao>()
         .release(allocation_id.clone(), node_id)
