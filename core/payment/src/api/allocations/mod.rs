@@ -471,8 +471,8 @@ async fn get_demand_decorations(
 }
 
 lazy_static! {
-    static ref allocation_release_task_map: Arc<std::sync::Mutex<HashMap<String, JoinHandle<()>>>> =
-        Arc::new(std::sync::Mutex::new(HashMap::new()));
+    static ref allocation_release_task_map: Arc<parking_lot::Mutex<HashMap<String, JoinHandle<()>>>> =
+        Arc::new(parking_lot::Mutex::new(HashMap::new()));
 }
 
 pub fn schedule_release_allocation(
@@ -481,7 +481,7 @@ pub fn schedule_release_allocation(
     allocation_timeout: Option<DateTime<Utc>>,
     node_id: NodeId,
 ) {
-    let mut task_map = allocation_release_task_map.lock().expect("mutex poisoned");
+    let mut task_map = allocation_release_task_map.lock();
     //clear finished tasks from the map to prevent infinite growth
     task_map.retain(|_, hdl| !hdl.is_finished());
 
@@ -520,7 +520,7 @@ pub fn schedule_release_allocation(
                     tokio::time::sleep(timeout.to_std().expect("Value has to be ok")).await;
                 }
 
-                priv_forced_release_allocation(db, allocation_id, node_id).await;
+                forced_release_allocation_internal(db, allocation_id, node_id).await;
             }),
         );
     } else {
@@ -530,31 +530,41 @@ pub fn schedule_release_allocation(
         );
     }
 }
+
+pub fn cancel_release_allocation_task(allocation_id: &str) -> bool {
+    let mut task_map = allocation_release_task_map.lock();
+    // Cancel any existing task for the same allocation_id
+    if let Some(existing_hdl) = task_map.remove(allocation_id) {
+        existing_hdl.abort();
+        true
+    } else {
+        false
+    }
+}
+
 pub async fn forced_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
     node_id: NodeId,
 ) {
-    {
-        //first, we need to cancel any existing task for the release of this allocation
-        let mut task_map = allocation_release_task_map.lock().expect("mutex poisoned");
-        // Cancel any existing task for the same allocation_id
-        if let Some(existing_hdl) = task_map.remove(&allocation_id) {
-            existing_hdl.abort();
-            log::info!(
-                "Cancelled existing release task for allocation {}",
-                allocation_id
-            );
-        } else {
-            log::warn!(
-                "No existing release task found for allocation {}, proceeding with forced release.",
-                allocation_id
-            );
-        }
+    //first, we need to cancel any existing task for the release of this allocation
+    let cancelled = cancel_release_allocation_task(&allocation_id);
+    if !cancelled {
+        log::warn!(
+            "No existing release task found for allocation {}, proceeding with forced release.",
+            allocation_id
+        );
+    } else {
+        log::info!(
+            "Cancelled existing release task for allocation {}",
+            allocation_id
+        );
     }
-    priv_forced_release_allocation(db, allocation_id.clone(), node_id).await;
+
+    forced_release_allocation_internal(db, allocation_id.clone(), node_id).await;
 }
-async fn priv_forced_release_allocation(
+
+async fn forced_release_allocation_internal(
     db: Data<DbExecutor>,
     allocation_id: String,
     node_id: NodeId,
