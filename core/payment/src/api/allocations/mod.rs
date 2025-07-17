@@ -1,7 +1,6 @@
-use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
-use actix_web::{HttpResponse, Scope};
+use actix_web::{web, HttpResponse, Scope};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde_json::value::Value::Null;
@@ -33,6 +32,7 @@ mod api_error;
 mod platform_triple;
 mod token_name;
 
+use crate::alloc_release_task::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
@@ -60,6 +60,7 @@ async fn create_allocation(
     db: Data<DbExecutor>,
     body: Json<NewAllocation>,
     id: Identity,
+    allocation_release_tasks: web::Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
     let allocation = body.into_inner();
     let node_id = id.identity;
@@ -175,8 +176,13 @@ async fn create_allocation(
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
 
-                release_allocation_after(db.clone(), allocation_id, allocation.timeout, node_id)
-                    .await;
+                schedule_release_allocation(
+                    db.clone(),
+                    allocation_id,
+                    allocation.timeout,
+                    node_id,
+                    (*allocation_release_tasks.into_inner()).clone(),
+                );
 
                 response::created(allocation)
             }
@@ -287,6 +293,7 @@ async fn amend_allocation(
     path: Path<params::AllocationId>,
     body: Json<AllocationUpdate>,
     id: Identity,
+    allocation_release_tasks: Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
@@ -357,6 +364,15 @@ async fn amend_allocation(
         }
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
+
+    // Ensure that the allocation is not released before we update it. Additionally, it will set up new allocation auto release task
+    schedule_release_allocation(
+        db.clone(),
+        amended_allocation.allocation_id.clone(),
+        amended_allocation.timeout,
+        node_id,
+        (*allocation_release_tasks.into_inner()).clone(),
+    );
 
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
@@ -460,38 +476,107 @@ async fn get_demand_decorations(
     })
 }
 
-pub async fn release_allocation_after(
+pub fn schedule_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
     allocation_timeout: Option<DateTime<Utc>>,
     node_id: NodeId,
+    allocation_release_tasks: AllocationReleaseTasks,
 ) {
-    tokio::task::spawn(async move {
-        if let Some(timeout) = allocation_timeout {
-            //FIXME when upgrading to tokio 1.0 or greater. In tokio 0.2 timer panics when maximum duration of delay is exceeded.
-            let max_duration: i64 = 1 << 35;
+    let mut task_map = allocation_release_tasks.tasks.lock();
+    //clear finished tasks from the map to prevent infinite growth
+    task_map.retain(|_, hdl| !hdl.is_finished());
 
-            loop {
-                let time_diff = timeout.timestamp_millis() - Utc::now().timestamp_millis();
+    // Cancel any existing task for the same allocation_id
+    if let Some(existing_hdl) = task_map.remove(&allocation_id) {
+        existing_hdl.abort();
+        log::info!(
+            "Cancelled existing release task for allocation {}",
+            allocation_id
+        );
+    }
+    if let Some(timeout) = allocation_timeout {
+        log::info!(
+            "Scheduling release of allocation {} for node {} at {}",
+            allocation_id,
+            node_id,
+            allocation_timeout
+                .map(|t| t.to_rfc3339())
+                .unwrap_or_else(|| "no timeout set".to_string())
+        );
 
-                if time_diff.is_negative() {
-                    break;
+        task_map.insert(
+            allocation_id.clone(),
+            tokio::task::spawn(async move {
+                //do not sleep to long, it allows to accommodate clock drift
+                let max_sleep_time = chrono::Duration::seconds(60);
+
+                loop {
+                    let time_diff = timeout - Utc::now();
+
+                    if time_diff <= chrono::Duration::zero() {
+                        break;
+                    }
+
+                    let timeout = time_diff.min(max_sleep_time);
+                    tokio::time::sleep(timeout.to_std().expect("Value has to be ok")).await;
                 }
 
-                let timeout = time_diff.min(max_duration) as u64;
-                tokio::time::sleep(Duration::from_millis(timeout)).await;
-            }
+                log::info!(
+                    "Allocation {} for node {} expired and it's being released",
+                    allocation_id,
+                    node_id
+                );
 
-            forced_release_allocation(db, allocation_id, node_id).await;
-        }
-    });
+                release_allocation_internal(db, allocation_id, node_id).await;
+            }),
+        );
+    } else {
+        log::warn!(
+            "No timeout set for allocation {}, skipping scheduling release.",
+            allocation_id
+        );
+    }
+}
+
+pub fn cancel_release_allocation_task(
+    allocation_id: &str,
+    allocation_release_tasks: AllocationReleaseTasks,
+) -> bool {
+    let mut task_map = allocation_release_tasks.tasks.lock();
+    // Cancel any existing task for the same allocation_id
+    if let Some(existing_hdl) = task_map.remove(allocation_id) {
+        existing_hdl.abort();
+        true
+    } else {
+        false
+    }
 }
 
 pub async fn forced_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
     node_id: NodeId,
+    allocation_release_tasks: AllocationReleaseTasks,
 ) {
+    //first, we need to cancel any existing task for the release of this allocation
+    let cancelled = cancel_release_allocation_task(&allocation_id, allocation_release_tasks);
+    if !cancelled {
+        log::warn!(
+            "No existing release task found for allocation {}, proceeding with forced release.",
+            allocation_id
+        );
+    } else {
+        log::info!(
+            "Cancelled existing release task for allocation {}. Releasing allocation now.",
+            allocation_id
+        );
+    }
+
+    release_allocation_internal(db, allocation_id.clone(), node_id).await;
+}
+
+async fn release_allocation_internal(db: Data<DbExecutor>, allocation_id: String, node_id: NodeId) {
     match db
         .as_dao::<AllocationDao>()
         .release(allocation_id.clone(), node_id)

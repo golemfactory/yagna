@@ -7,7 +7,6 @@ use crate::processor::PaymentProcessor;
 
 use futures::FutureExt;
 use std::{sync::Arc, time::Duration};
-
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -17,6 +16,7 @@ use ya_service_bus::typed as bus;
 extern crate diesel;
 
 pub mod accounts;
+pub mod alloc_release_task;
 pub mod api;
 mod batch;
 mod cli;
@@ -41,6 +41,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
+use crate::alloc_release_task::get_allocation_release_tasks;
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -65,8 +66,9 @@ impl PaymentService {
             .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
+        let allocation_release_tasks = get_allocation_release_tasks();
 
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let processor = Arc::new(PaymentProcessor::new(db.clone(), allocation_release_tasks));
         self::service::bind_service(&db, processor.clone(), config).await?;
 
         processor.process_post_migration_jobs().await?;
@@ -79,7 +81,7 @@ impl PaymentService {
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        api::web_scope(&ctx.component())
+        api::web_scope(&ctx.component(), get_allocation_release_tasks())
     }
 
     pub async fn shut_down() {
