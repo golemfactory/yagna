@@ -53,9 +53,7 @@ lazy_static::lazy_static! {
         );
 }
 
-pub struct PaymentService {
-    payment_processor: PaymentProcessor,
-}
+pub struct PaymentService;
 
 impl Service for PaymentService {
     type Cli = cli::PaymentCli;
