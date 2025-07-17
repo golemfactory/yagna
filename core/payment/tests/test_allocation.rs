@@ -212,7 +212,7 @@ async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow:
     let allocations = requestor.get_allocations::<Utc>(None, None).await?;
     assert_eq!(allocations.len(), 1);
 
-    tokio::time::sleep(chrono::Duration::seconds(2).to_std()?).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     log::info!("Verifying allocation released...");
     let allocations = requestor.get_allocations::<Utc>(None, None).await?;
