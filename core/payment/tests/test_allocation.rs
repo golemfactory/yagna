@@ -167,7 +167,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
 async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
     enable_logs(false);
 
-    let dir = temp_dir!("test_release_allocation")?;
+    let dir = temp_dir!("test_auto_release_allocation")?;
 
     let net = MockNet::new().bind();
 
@@ -229,7 +229,7 @@ async fn test_auto_release_allocation_and_amend(
 ) -> anyhow::Result<()> {
     enable_logs(false);
 
-    let dir = temp_dir!("test_release_allocation")?;
+    let dir = temp_dir!("test_auto_release_allocation")?;
 
     let net = MockNet::new().bind();
 
