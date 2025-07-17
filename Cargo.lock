@@ -12299,7 +12299,7 @@ dependencies = [
  "metrics 0.12.1",
  "num-bigint 0.4.6",
  "open",
- "parking_lot 0.12.3",
+ "parking_lot 0.12.4",
  "problem_details",
  "r2d2",
  "rand 0.8.5",
