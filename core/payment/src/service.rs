@@ -548,7 +548,7 @@ mod local {
             Some(driver) => vec![driver.clone()],
             None => {
                 #[allow(clippy::iter_kv_map)]
-                // Unwrap is provably safe because NoError can't be instanciated
+                // Unwrap is provably safe because NoError can't be instantiated
                 match service(PAYMENT_BUS_ID)
                     .call(GetDrivers {
                         ignore_legacy_networks: false,
