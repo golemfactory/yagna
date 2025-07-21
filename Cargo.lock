@@ -4440,7 +4440,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Golem-Base/rust-sdk?rev=a1feb6060afca186fb70c7356380c6e46374ec0e#a1feb6060afca186fb70c7356380c6e46374ec0e"
+source = "git+https://github.com/Golem-Base/rust-sdk?rev=30c2f343a98ce075784b017ac6f5db202b494ec8#30c2f343a98ce075784b017ac6f5db202b494ec8"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

@@ -1,9 +1,10 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Mul;
 use std::sync::Arc;
 
-use golem_base_sdk::client::GolemBaseClient;
+use golem_base_sdk::client::{GolemBaseClient, TransactionConfig};
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
@@ -78,7 +79,14 @@ impl DiscoveryBuilder {
         })?;
 
         let golem_base = GolemBaseClient::new_uninitialized(config.get_rpc_url().clone())
-            .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
+            .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?
+            .override_config(TransactionConfig {
+                max_retries: config.publish_max_retries,
+                transaction_receipt_timeout: config
+                    .offer_publish_timeout
+                    .mul(config.publish_max_retries),
+                ..TransactionConfig::default()
+            });
 
         let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
