@@ -132,7 +132,7 @@ pub struct DiscoveryConfig {
     #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
     pub pow_threads_margin: usize,
     /// Timeout for publishing offers on the market
-    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "10s")]
+    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
     pub offer_publish_timeout: Duration,
 }
 
