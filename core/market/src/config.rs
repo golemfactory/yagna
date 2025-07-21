@@ -136,6 +136,17 @@ pub struct DiscoveryConfig {
     pub offer_publish_timeout: Duration,
 }
 
+impl Default for DiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            configs: GolemBaseNetwork::default_config(),
+            network: GolemBaseNetwork::Kaolin,
+            pow_threads_margin: 2,
+            offer_publish_timeout: Duration::from_secs(30),
+        }
+    }
+}
+
 impl DiscoveryConfig {
     pub fn get_network_type(&self) -> &GolemBaseNetwork {
         &self.network
@@ -163,17 +174,6 @@ impl DiscoveryConfig {
 
     pub fn fund_preallocated(&self) -> bool {
         self.configs.get(&self.network).unwrap().fund_preallocated
-    }
-}
-
-impl Default for DiscoveryConfig {
-    fn default() -> Self {
-        Self {
-            configs: GolemBaseNetwork::default_config(),
-            network: GolemBaseNetwork::Kaolin,
-            pow_threads_margin: 2,
-            offer_publish_timeout: Duration::from_secs(30),
-        }
     }
 }
 
@@ -209,6 +209,14 @@ impl Config {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         Config::try_parse_from([""])
+    }
+}
+
+impl DiscoveryConfig {
+    pub fn from_env() -> Result<DiscoveryConfig, clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        DiscoveryConfig::try_parse_from([""])
     }
 }
 

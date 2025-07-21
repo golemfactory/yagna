@@ -786,7 +786,7 @@ pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
         network: GolemBaseNetwork::Local,
-        ..Default::default()
+        ..DiscoveryConfig::from_env().unwrap()
     };
 
     let mut cfg = Config::from_env().unwrap();
