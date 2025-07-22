@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Mul;
+use std::ops::Div;
 use std::sync::Arc;
 
 use golem_base_sdk::client::{GolemBaseClient, TransactionConfig};
@@ -84,7 +84,7 @@ impl DiscoveryBuilder {
                 max_retries: config.publish_max_retries,
                 transaction_receipt_timeout: config
                     .offer_publish_timeout
-                    .mul(config.publish_max_retries),
+                    .div(config.publish_max_retries),
                 ..TransactionConfig::default()
             });
 
