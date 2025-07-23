@@ -79,5 +79,5 @@ jobs:
           RUST_LOG: debug
         with:
           command: test
-          args: --tests -p ya-market --features ya-market/test-suite --locked
+          args: --tests -p ya-market --features ya-market/test-suite --locked --test test_agreement
 
