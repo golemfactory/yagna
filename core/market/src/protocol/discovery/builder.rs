@@ -85,6 +85,7 @@ impl DiscoveryBuilder {
                 transaction_receipt_timeout: config
                     .offer_publish_timeout
                     .div(config.publish_max_retries),
+                price_bump_percent: 100,
                 ..TransactionConfig::default()
             });
 
