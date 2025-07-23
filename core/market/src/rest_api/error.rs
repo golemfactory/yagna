@@ -125,7 +125,7 @@ impl ResponseError for QueryEventsError {
         match self {
             QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
             | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
-                HttpResponse::NotFound().json(msg)
+                HttpResponse::Gone().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
                 HttpResponse::BadRequest().json(msg)

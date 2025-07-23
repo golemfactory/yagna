@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::time::timeout;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
+use ya_client::error::Error as ClientError;
 use ya_client::market::MarketProviderApi;
 use ya_client::model::market::agreement_event::AgreementEventType;
 use ya_client::model::market::proposal::State;
@@ -208,7 +209,17 @@ async fn subscribe(
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
     for subscription in subscriptions.iter() {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(subscription).await?;
+
+        match api.unsubscribe(subscription).await {
+            // Subscription expired, so we don't need to unsubscribe it. Silence error.
+            Err(ClientError::HttpError { code, .. }) if code.as_u16() == 410 => {}
+            Err(error) => {
+                log::warn!(
+                    "Failed to unsubscribe Offer [{subscription}] from the market. Error: {error}"
+                );
+            }
+            Ok(_) => {}
+        }
     }
     Ok(())
 }
@@ -516,17 +527,17 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
     loop {
         match ctx.api.collect(&id, Some(timeout), Some(5)).await {
             Err(error) => {
-                log::warn!("Can't query market events. Error: {}", error);
                 match error {
-                    ya_client::error::Error::HttpError { code, .. } => {
-                        // this causes Offer refresh after its expiration
-                        if code.as_u16() == 404 {
+                    ClientError::HttpError { code, .. } => {
+                        // Offer expired, so we need to resubscribe it.
+                        if code.as_u16() == 410 {
                             log::info!("Resubscribing subscription [{}]", id);
                             ctx.market.do_send(ReSubscribe(id.clone()));
                             return;
                         }
                     }
-                    _ => {
+                    error => {
+                        log::warn!("Can't query market events. Error: {error}");
                         // We need to wait after failure, because in most cases it happens immediately
                         // and we are spammed with error logs.
                         tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
