@@ -266,7 +266,7 @@ erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", r
 #erc20_payment_lib = { version = "0.4.7" }
 #erc20_processor = { version = "0.4.7" }
 gftp = { version = "0.4.1", path = "core/gftp" }
-golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", rev = "90ad24586a396b24249822687f115f8949192297" }
+golem-base-sdk = { git = "https://github.com/Golem-Base/rust-sdk", rev = "1ce308d7dcd51e8da0d0e2d380afb2ede4818b52" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
 openssl = "0.10"
