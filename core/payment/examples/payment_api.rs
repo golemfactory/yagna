@@ -23,6 +23,7 @@ use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
 use ya_net::Config as NetConfig;
+use ya_payment::alloc_release_task::AllocationReleaseTasks;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::Config as PaymentConfig;
 use ya_payment::{migrations, utils, PaymentService};
@@ -229,7 +230,10 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("bind_gsb_router()");
 
-    let processor = Arc::new(PaymentProcessor::new(db.clone()));
+    let processor = Arc::new(PaymentProcessor::new(
+        db.clone(),
+        AllocationReleaseTasks::new_for_mocks_only(),
+    ));
     ya_payment::service::bind_service(
         &db,
         processor.clone(),
