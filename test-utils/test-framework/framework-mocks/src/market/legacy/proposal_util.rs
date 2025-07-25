@@ -82,7 +82,7 @@ pub async fn exchange_draft_proposals(
     let req_id = network.get_default_id(req_name).await;
     let prov_id = network.get_default_id(prov_name).await;
 
-    exchange_proposals_impl(
+    match exchange_proposals_impl(
         network,
         req_name,
         prov_name,
@@ -92,6 +92,19 @@ pub async fn exchange_draft_proposals(
         &prov_id,
     )
     .await
+    {
+        Ok(helper) => Ok(helper),
+        Err(e) if e.to_string().contains("Timeout") => {
+            let prov_mkt = network.get_market(prov_name);
+            let prov_id = network.get_default_id(prov_name).await;
+            prov_mkt
+                .subscribe_offer(&exclusive_offer("test-match-on"), &prov_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to subscribe offer after timeout: {e}"))?;
+            Err(e)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn exchange_proposals_exclusive_with_ids(
