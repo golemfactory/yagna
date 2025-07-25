@@ -1,3 +1,4 @@
+use anyhow::bail;
 use chrono::{Duration, NaiveDateTime, Utc};
 use std::str::FromStr;
 
@@ -101,7 +102,7 @@ pub async fn exchange_draft_proposals(
                 .subscribe_offer(&exclusive_offer("test-match-on"), &prov_id)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to subscribe offer after timeout: {e}"))?;
-            Err(e)
+            bail!("Second transaction succeeded, but first one failed with: {e}");
         }
         Err(e) => Err(e),
     }
