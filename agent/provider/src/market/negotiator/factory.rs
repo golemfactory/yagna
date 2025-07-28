@@ -2,6 +2,7 @@ use actix::Addr;
 use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
+use ya_utils_cli::define_from_env;
 
 use ya_manifest_utils::PolicyConfig;
 
@@ -110,3 +111,5 @@ impl Default for NegotiatorAddr {
         NegotiatorAddr::from(AcceptAllNegotiator)
     }
 }
+
+define_from_env!(NegotiatorsConfig);

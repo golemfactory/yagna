@@ -4,6 +4,7 @@ use clap::ValueEnum;
 use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;
+use ya_utils_cli::define_from_env;
 
 #[derive(Parser, Clone)]
 pub struct Config {
@@ -112,13 +113,7 @@ pub struct GolemBaseRpcConfig {
     pub fund_preallocated: bool,
 }
 
-impl GolemBaseRpcConfig {
-    pub fn from_env() -> Result<GolemBaseRpcConfig, clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        GolemBaseRpcConfig::try_parse_from([""])
-    }
-}
+define_from_env!(GolemBaseRpcConfig);
 
 #[derive(Parser, Clone, Debug)]
 pub struct DiscoveryConfig {
@@ -208,21 +203,9 @@ pub struct DbConfig {
     pub event_store_days: i32,
 }
 
-impl Config {
-    pub fn from_env() -> Result<Config, clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        Config::try_parse_from([""])
-    }
-}
+define_from_env!(Config);
 
-impl DiscoveryConfig {
-    pub fn from_env() -> Result<DiscoveryConfig, clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        DiscoveryConfig::try_parse_from([""])
-    }
-}
+define_from_env!(DiscoveryConfig);
 
 fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
     Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)

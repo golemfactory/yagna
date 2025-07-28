@@ -8,14 +8,19 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use actix_web::web::{Data, Json, Path as WebPath, Query};
+use actix_web::{HttpResponse, Responder, Scope};
 use ya_agreement_utils::agreement::expand;
 use ya_agreement_utils::{OfferTemplate, ProposalView};
-use ya_client_model::market::agreement;
-use ya_client_model::market::proposal;
-use ya_client_model::market::{Agreement, AgreementListEntry, Demand, Offer, Role};
-use ya_client_model::NodeId;
+use ya_client::model::market::agreement;
+use ya_client::model::market::proposal;
+use ya_client::model::market::{Agreement, AgreementListEntry, Demand, Offer, Role};
+use ya_client::model::market::{NewDemand, NewOffer, NewProposal, Reason};
+use ya_client::model::ErrorMessage;
+use ya_client::model::NodeId;
 use ya_core_model::market;
 use ya_market::testing::{AgreementId, Owner, ProposalId, SubscriptionId};
+use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
 
 /// Market that doesn't wrap real Market module, but simulates it's
@@ -41,6 +46,14 @@ impl FakeMarket {
                 agreements: HashMap::new(),
             })),
         }
+    }
+
+    pub fn bind_rest(&self) -> Scope {
+        actix_web::web::scope("/market-api/v1")
+            .app_data(Data::new(self.clone()))
+            .extend(register_common_endpoints)
+            .extend(register_provider_endpoints)
+            .extend(register_requestor_endpoints)
     }
 
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
@@ -237,6 +250,286 @@ impl FakeMarket {
         let id = subscription_id_from(&demand)?.to_string();
         Ok(ProposalView { id, ..demand })
     }
+}
+
+fn register_common_endpoints(scope: Scope) -> Scope {
+    scope
+        .service(list_agreements)
+        .service(collect_agreement_events)
+        .service(get_agreement)
+        .service(terminate_agreement)
+        .service(get_agreement_terminate_reason)
+        .service(scan_begin)
+        .service(scan_collect)
+        .service(scan_end)
+}
+
+fn register_provider_endpoints(scope: Scope) -> Scope {
+    scope
+        .service(subscribe_offer)
+        .service(get_offers)
+        .service(unsubscribe_offer)
+        .service(collect_offer_events)
+        .service(counter_proposal_offer)
+        .service(get_proposal_offer)
+        .service(reject_proposal_offer)
+        .service(approve_agreement)
+        .service(reject_agreement)
+}
+
+fn register_requestor_endpoints(scope: Scope) -> Scope {
+    scope
+        .service(subscribe_demand)
+        .service(get_demands)
+        .service(unsubscribe_demand)
+        .service(collect_demand_events)
+        .service(counter_proposal_demand)
+        .service(get_proposal_demand)
+        .service(reject_proposal_demand)
+        .service(create_agreement)
+        .service(confirm_agreement)
+        .service(wait_for_approval)
+        .service(cancel_agreement)
+}
+
+// Common endpoints
+#[actix_web::get("/agreements")]
+async fn list_agreements(market: Data<FakeMarket>, _query: Query<()>) -> impl Responder {
+    let lock = market.inner.read().await;
+    let agreements: Vec<AgreementListEntry> = lock
+        .agreements
+        .iter()
+        .map(|(id, agreement)| AgreementListEntry {
+            id: agreement.agreement_id.clone(),
+            timestamp: agreement.timestamp,
+            approved_date: agreement.approved_date,
+            role: match id.owner() {
+                Owner::Provider => Role::Provider,
+                Owner::Requestor => Role::Requestor,
+            },
+        })
+        .collect();
+    HttpResponse::Ok().json(agreements)
+}
+
+#[actix_web::get("/agreementEvents")]
+async fn collect_agreement_events(_market: Data<FakeMarket>, _query: Query<()>) -> impl Responder {
+    // Return empty events for now
+    HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
+}
+
+#[actix_web::get("/agreements/{agreement_id}")]
+async fn get_agreement(market: Data<FakeMarket>, path: WebPath<String>) -> impl Responder {
+    let agreement_id = path.into_inner();
+    let lock = market.inner.read().await;
+
+    // Try to find agreement by ID
+    for (_, agreement) in &lock.agreements {
+        if agreement.agreement_id == agreement_id {
+            return HttpResponse::Ok().json(agreement);
+        }
+    }
+
+    HttpResponse::NotFound().json(ErrorMessage::new("Agreement not found"))
+}
+
+#[actix_web::post("/agreements/{agreement_id}/terminate")]
+async fn terminate_agreement(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _body: Json<Option<Reason>>,
+) -> impl Responder {
+    HttpResponse::Ok().finish()
+}
+
+#[actix_web::get("/agreements/{agreement_id}/terminate/reason")]
+async fn get_agreement_terminate_reason(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+) -> impl Responder {
+    HttpResponse::Ok().json(Reason::new("Mock termination reason"))
+}
+
+#[actix_web::post("/scan")]
+async fn scan_begin(_market: Data<FakeMarket>, _body: Json<serde_json::Value>) -> impl Responder {
+    HttpResponse::Created().json("mock-scan-id")
+}
+
+#[actix_web::get("/scan/{scan_id}/events")]
+async fn scan_collect(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::Ok().json(Vec::<Offer>::new())
+}
+
+#[actix_web::delete("/scan/{scan_id}")]
+async fn scan_end(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+// Provider endpoints
+#[actix_web::post("/offers")]
+async fn subscribe_offer(_market: Data<FakeMarket>, _body: Json<NewOffer>) -> impl Responder {
+    HttpResponse::Created().json("mock-offer-subscription-id")
+}
+
+#[actix_web::get("/offers")]
+async fn get_offers(_market: Data<FakeMarket>) -> impl Responder {
+    HttpResponse::Ok().json(Vec::<Offer>::new())
+}
+
+#[actix_web::delete("/offers/{subscription_id}")]
+async fn unsubscribe_offer(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::get("/offers/{subscription_id}/events")]
+async fn collect_offer_events(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
+}
+
+#[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}")]
+async fn counter_proposal_offer(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+    _body: Json<NewProposal>,
+) -> impl Responder {
+    HttpResponse::Ok().json("mock-proposal-id")
+}
+
+#[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]
+async fn get_proposal_offer(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+) -> impl Responder {
+    HttpResponse::Ok().json(serde_json::json!({
+        "proposalId": "mock-proposal-id",
+        "properties": {},
+        "constraints": "()"
+    }))
+}
+
+#[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}/reject")]
+async fn reject_proposal_offer(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+    _body: Json<Option<Reason>>,
+) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/approve")]
+async fn approve_agreement(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/reject")]
+async fn reject_agreement(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _body: Json<Option<Reason>>,
+) -> impl Responder {
+    HttpResponse::Ok().finish()
+}
+
+// Requestor endpoints
+#[actix_web::post("/demands")]
+async fn subscribe_demand(_market: Data<FakeMarket>, _body: Json<NewDemand>) -> impl Responder {
+    HttpResponse::Created().json("mock-demand-subscription-id")
+}
+
+#[actix_web::get("/demands")]
+async fn get_demands(_market: Data<FakeMarket>) -> impl Responder {
+    HttpResponse::Ok().json(Vec::<Demand>::new())
+}
+
+#[actix_web::delete("/demands/{subscription_id}")]
+async fn unsubscribe_demand(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::get("/demands/{subscription_id}/events")]
+async fn collect_demand_events(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
+}
+
+#[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}")]
+async fn counter_proposal_demand(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+    _body: Json<NewProposal>,
+) -> impl Responder {
+    HttpResponse::Ok().json("mock-proposal-id")
+}
+
+#[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]
+async fn get_proposal_demand(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+) -> impl Responder {
+    HttpResponse::Ok().json(serde_json::json!({
+        "proposalId": "mock-proposal-id",
+        "properties": {},
+        "constraints": "()"
+    }))
+}
+
+#[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}/reject")]
+async fn reject_proposal_demand(
+    _market: Data<FakeMarket>,
+    _path: WebPath<(String, String)>,
+    _body: Json<Option<Reason>>,
+) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::post("/agreements")]
+async fn create_agreement(
+    _market: Data<FakeMarket>,
+    _body: Json<serde_json::Value>,
+) -> impl Responder {
+    HttpResponse::Ok().json("mock-agreement-id")
+}
+
+#[actix_web::post("/agreements/{agreement_id}/confirm")]
+async fn confirm_agreement(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/wait")]
+async fn wait_for_approval(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _query: Query<()>,
+) -> impl Responder {
+    HttpResponse::NoContent().finish()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/cancel")]
+async fn cancel_agreement(
+    _market: Data<FakeMarket>,
+    _path: WebPath<String>,
+    _body: Json<Option<Reason>>,
+) -> impl Responder {
+    HttpResponse::Ok().finish()
 }
 
 fn subscription_id_from(template: &ProposalView) -> anyhow::Result<SubscriptionId> {

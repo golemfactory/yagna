@@ -531,7 +531,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
                     ClientError::HttpError { code, .. } => {
                         // Offer expired, so we need to resubscribe it.
                         if code.as_u16() == 410 {
-                            log::info!("Resubscribing subscription [{}]", id);
+                            log::info!("Resubscribing Offer [{}]", id);
                             ctx.market.do_send(ReSubscribe(id.clone()));
                             return;
                         }
@@ -766,18 +766,45 @@ async fn resubscribe_offers(
         _ => (),
     }
 
-    for (_, sub) in subscriptions {
-        let offer = sub.offer;
-        let preset = sub.preset;
-        let preset_name = preset.name.clone();
+    let mut remaining = subscriptions;
+    let mut backoff = get_backoff();
 
-        subscribe(market.clone(), api.clone(), offer, preset)
-            .await
-            .log_warn_msg(&format!(
-                "Unable to create subscription for preset {}",
-                preset_name,
-            ))
-            .ok();
+    while !remaining.is_empty() {
+        let subscriptions = remaining.drain().collect::<Vec<_>>();
+        for (id, sub) in subscriptions {
+            let offer = sub.offer.clone();
+            let preset = sub.preset.clone();
+            let preset_name = preset.name.clone();
+
+            match subscribe(market.clone(), api.clone(), offer, preset).await {
+                Ok(_) => {
+                    log::info!("Successfully re-subscribed Offer for preset: {preset_name}");
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Failed to resubscribe Offer for preset [{preset_name}]. Error: {error}. Will retry."
+                    );
+                    remaining.insert(id, sub);
+                }
+            }
+        }
+
+        if !remaining.is_empty() {
+            if let Some(delay) = backoff.next_backoff() {
+                log::info!(
+                    "Retrying {} failed subscriptions after {} delay",
+                    remaining.len(),
+                    humantime::format_duration(delay)
+                );
+                tokio::time::sleep(delay).await;
+            } else {
+                log::error!(
+                    "Max backoff time exceeded. Giving up on {} failed subscriptions",
+                    remaining.len()
+                );
+                break;
+            }
+        }
     }
 }
 

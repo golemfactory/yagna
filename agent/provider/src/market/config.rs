@@ -1,4 +1,5 @@
 use structopt::StructOpt;
+use ya_utils_cli::define_from_env;
 
 use crate::market::negotiator::factory::NegotiatorsConfig;
 
@@ -20,3 +21,5 @@ pub struct MarketConfig {
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
 }
+
+define_from_env!(MarketConfig);
