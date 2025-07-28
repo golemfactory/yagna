@@ -1,5 +1,4 @@
 use structopt::StructOpt;
-use ya_utils_cli::define_from_env;
 
 use crate::market::negotiator::factory::NegotiatorsConfig;
 
@@ -22,4 +21,11 @@ pub struct MarketConfig {
     pub process_market_events_timeout: std::time::Duration,
 }
 
-define_from_env!(MarketConfig);
+// TODO: Change to use clap::Parser and define_from_env! macro in the future
+impl MarketConfig {
+    pub fn from_env() -> Result<MarketConfig, structopt::clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        MarketConfig::from_iter_safe([""])
+    }
+}

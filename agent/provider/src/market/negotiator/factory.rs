@@ -2,7 +2,6 @@ use actix::Addr;
 use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
-use ya_utils_cli::define_from_env;
 
 use ya_manifest_utils::PolicyConfig;
 
@@ -112,4 +111,11 @@ impl Default for NegotiatorAddr {
     }
 }
 
-define_from_env!(NegotiatorsConfig);
+// TODO: Change to use clap::Parser and define_from_env! macro in the future
+impl NegotiatorsConfig {
+    pub fn from_env() -> Result<NegotiatorsConfig, structopt::clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        NegotiatorsConfig::from_iter_safe([""])
+    }
+}
