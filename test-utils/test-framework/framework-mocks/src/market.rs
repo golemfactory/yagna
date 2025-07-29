@@ -57,8 +57,8 @@ pub struct FakeMarket {
 
 pub struct FakeMarketInner {
     agreements: HashMap<AgreementId, Agreement>,
-    offer_subscriptions: HashMap<SubscriptionId, OfferEntry>,
-    demand_subscriptions: HashMap<SubscriptionId, DemandEntry>,
+    offers: HashMap<SubscriptionId, OfferEntry>,
+    demands: HashMap<SubscriptionId, DemandEntry>,
 }
 
 impl FakeMarket {
@@ -68,8 +68,8 @@ impl FakeMarket {
             _testdir: testdir.to_path_buf(),
             inner: Arc::new(RwLock::new(FakeMarketInner {
                 agreements: HashMap::new(),
-                offer_subscriptions: HashMap::new(),
-                demand_subscriptions: HashMap::new(),
+                offers: HashMap::new(),
+                demands: HashMap::new(),
             })),
         }
     }
@@ -179,13 +179,13 @@ impl FakeMarket {
 
     pub async fn add_offer_subscription(&self, offer_entry: OfferEntry) {
         let mut lock = self.inner.write().await;
-        lock.offer_subscriptions
+        lock.offers
             .insert(offer_entry.offer.id.clone(), offer_entry);
     }
 
     pub async fn add_demand_subscription(&self, demand_entry: DemandEntry) {
         let mut lock = self.inner.write().await;
-        lock.demand_subscriptions
+        lock.demands
             .insert(demand_entry.demand.id.clone(), demand_entry);
     }
 
@@ -194,7 +194,7 @@ impl FakeMarket {
         subscription_id: &SubscriptionId,
     ) -> Option<OfferEntry> {
         let lock = self.inner.read().await;
-        lock.offer_subscriptions.get(subscription_id).cloned()
+        lock.offers.get(subscription_id).cloned()
     }
 
     pub async fn get_demand_subscription(
@@ -202,7 +202,7 @@ impl FakeMarket {
         subscription_id: &SubscriptionId,
     ) -> Option<DemandEntry> {
         let lock = self.inner.read().await;
-        lock.demand_subscriptions.get(subscription_id).cloned()
+        lock.demands.get(subscription_id).cloned()
     }
 
     pub async fn remove_offer_subscription(
@@ -210,7 +210,7 @@ impl FakeMarket {
         subscription_id: &SubscriptionId,
     ) -> Option<OfferEntry> {
         let mut lock = self.inner.write().await;
-        lock.offer_subscriptions.remove(subscription_id)
+        lock.offers.remove(subscription_id)
     }
 
     pub async fn remove_demand_subscription(
@@ -218,17 +218,27 @@ impl FakeMarket {
         subscription_id: &SubscriptionId,
     ) -> Option<DemandEntry> {
         let mut lock = self.inner.write().await;
-        lock.demand_subscriptions.remove(subscription_id)
+        lock.demands.remove(subscription_id)
     }
 
     pub async fn list_offer_subscriptions(&self) -> Vec<OfferEntry> {
         let lock = self.inner.read().await;
-        lock.offer_subscriptions.values().cloned().collect()
+        lock.offers.values().cloned().collect()
     }
 
     pub async fn list_demand_subscriptions(&self) -> Vec<DemandEntry> {
         let lock = self.inner.read().await;
-        lock.demand_subscriptions.values().cloned().collect()
+        lock.demands.values().cloned().collect()
+    }
+
+    pub async fn expire_offer(&self, subscription_id: &SubscriptionId) -> anyhow::Result<()> {
+        let mut lock = self.inner.write().await;
+        if let Some(offer_entry) = lock.offers.get_mut(subscription_id) {
+            offer_entry.offer.expiration_ts = Utc::now().naive_utc();
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Offer [{subscription_id}] not found"))
+        }
     }
 
     pub fn create_fake_agreement(
@@ -497,24 +507,59 @@ async fn get_offers(market: Data<FakeMarket>, id: Identity) -> impl Responder {
 #[actix_web::delete("/offers/{subscription_id}")]
 async fn unsubscribe_offer(
     market: Data<FakeMarket>,
-    path: WebPath<String>,
-    _id: Identity,
+    path: WebPath<PathSubscription>,
+    id: Identity,
 ) -> impl Responder {
-    let subscription_id_str = path.into_inner();
-    if let Ok(subscription_id) = SubscriptionId::from_str(&subscription_id_str) {
+    let subscription_id = path.into_inner().subscription_id;
+
+    // Check if offer exists and is expired
+    if let Some(offer_entry) = market.get_offer_subscription(&subscription_id).await {
+        let now = Utc::now().naive_utc();
+        if offer_entry.offer.expiration_ts <= now {
+            return HttpResponse::Gone().json(ErrorMessage::new(format!(
+                "Can't unsubscribe expired Offer [{subscription_id}]."
+            )));
+        }
+
+        // Check if the identity matches the offer owner
+        if offer_entry.offer.node_id != id.identity {
+            return HttpResponse::Unauthorized().json(ErrorMessage::new(format!(
+                "Unauthorized operation attempt on Offer [{subscription_id}] from [{identity}].",
+                identity = id.identity
+            )));
+        }
+
+        // Offer exists, is not expired, and identity matches, remove it
         if let Some(_) = market.remove_offer_subscription(&subscription_id).await {
             return HttpResponse::NoContent().finish();
         }
     }
+
     HttpResponse::NotFound().finish()
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
 async fn collect_offer_events(
-    _market: Data<FakeMarket>,
-    _path: WebPath<PathSubscription>,
+    market: Data<FakeMarket>,
+    path: WebPath<PathSubscription>,
     query: Query<QueryTimeoutMaxEvents>,
 ) -> impl Responder {
+    let subscription_id = path.into_inner().subscription_id;
+
+    // Check if offer exists and is not expired
+    if let Some(offer_entry) = market.get_offer_subscription(&subscription_id).await {
+        let now = Utc::now().naive_utc();
+        if offer_entry.offer.expiration_ts <= now {
+            return HttpResponse::Gone().json(ErrorMessage::new(format!(
+                "Offer [{subscription_id}] expired."
+            )));
+        }
+    } else {
+        return HttpResponse::NotFound().json(ErrorMessage::new(format!(
+            "Offer [{subscription_id}] not found."
+        )));
+    }
+
     let timeout = std::time::Duration::from_secs_f32(query.into_inner().timeout);
     tokio::time::sleep(timeout).await;
     HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
@@ -612,12 +657,24 @@ async fn get_demands(market: Data<FakeMarket>, id: Identity) -> impl Responder {
 async fn unsubscribe_demand(
     market: Data<FakeMarket>,
     path: WebPath<String>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let subscription_id_str = path.into_inner();
     if let Ok(subscription_id) = SubscriptionId::from_str(&subscription_id_str) {
-        if let Some(_) = market.remove_demand_subscription(&subscription_id).await {
-            return HttpResponse::NoContent().finish();
+        // Check if demand exists and check authorization
+        if let Some(demand_entry) = market.get_demand_subscription(&subscription_id).await {
+            // Check if the identity matches the demand owner
+            if demand_entry.demand.node_id != id.identity {
+                return HttpResponse::Unauthorized().json(ErrorMessage::new(format!(
+                    "Unauthorized operation attempt on Demand [{subscription_id}] from [{identity}].",
+                    identity = id.identity
+                )));
+            }
+
+            // Demand exists and identity matches, remove it
+            if let Some(_) = market.remove_demand_subscription(&subscription_id).await {
+                return HttpResponse::NoContent().finish();
+            }
         }
     }
     HttpResponse::NotFound().finish()

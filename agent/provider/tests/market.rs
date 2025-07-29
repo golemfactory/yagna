@@ -14,7 +14,7 @@ use ya_framework_mocks::node::MockNode;
 
 use ya_client::market::MarketProviderApi;
 use ya_provider::market::config::MarketConfig;
-use ya_provider::market::provider_market::ProviderMarket;
+use ya_provider::market::provider_market::{ProviderMarket, Shutdown};
 use ya_provider::provider_agent::AgentNegotiatorsConfig;
 use ya_provider::rules::RulesManager;
 
@@ -58,6 +58,7 @@ async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let dir = temp_dir!("test_provider_market")?;
 
     let node = start_mock_yagna(ctx, dir.path()).await?;
+    let market = node.get_market()?;
     let appkey = node.get_identity()?.create_identity_key("provider").await?;
 
     let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
@@ -76,5 +77,19 @@ async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<
         })
         .await??;
 
+    let offers = market.list_offer_subscriptions().await;
+    assert_eq!(offers.len(), 1);
+
+    // Expire Offer - this should trigger re-subscribing Offer by the Provider.
+    let id = offers[0].offer.id.clone();
+    market.expire_offer(&id).await?;
+
+    log::info!("Offer expired and should be resubscribed by the Provider. Waiting...");
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    let offers = market.list_offer_subscriptions().await;
+    assert_eq!(offers.len(), 2);
+
+    agent.send(Shutdown {}).await??;
     Ok(())
 }
