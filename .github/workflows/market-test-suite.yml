@@ -4,21 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Profile (unused right now)'
+        description: "Profile (unused right now)"
         required: true
-        default: 'debug'
+        default: "debug"
   push:
     branches:
       - master
       - deposits
       - release/*
-      - '**/all-tests'
+      - "**/all-tests"
   pull_request:
     branches:
       - master
       - deposits
       - release/*
-      - '**/master'
+      - "**/master"
 
 env:
   rust_stable: 1.87.0
@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -76,8 +76,7 @@ jobs:
         env:
           RUST_TEST_THREADS: 1
           TEST_ENABLE_ALL_LOGS_OVERRIDE: true
-          RUST_LOG: debug
+          RUST_LOG: trace
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked --test test_agreement
-
