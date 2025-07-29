@@ -782,7 +782,7 @@ async fn resubscribe_offers(
                 }
                 Err(error) => {
                     log::warn!(
-                        "Failed to resubscribe Offer for preset [{preset_name}]. Error: {error}. Will retry."
+                        "Failed to resubscribe Offer for preset [{preset_name}]. Error: {error}"
                     );
                     remaining.insert(id, sub);
                 }
@@ -792,7 +792,7 @@ async fn resubscribe_offers(
         if !remaining.is_empty() {
             if let Some(delay) = backoff.next_backoff() {
                 log::info!(
-                    "Retrying {} failed subscriptions after {} delay",
+                    "Number of failed subscriptions: {}. Will retry after {} delay",
                     remaining.len(),
                     humantime::format_duration(delay)
                 );

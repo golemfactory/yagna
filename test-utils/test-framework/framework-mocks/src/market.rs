@@ -1,15 +1,15 @@
 pub mod legacy;
 
 use actix_web::web::{Data, Json, Path as WebPath, Query};
-use actix_web::{HttpResponse, Responder, Scope};
+use actix_web::{HttpResponse, Responder, ResponseError, Scope};
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use ya_client_model::market::MARKET_API_PATH;
+use tokio::sync::{oneshot, RwLock};
 
 use ya_agreement_utils::agreement::expand;
 use ya_agreement_utils::{OfferTemplate, ProposalView};
@@ -20,14 +20,93 @@ use ya_client::model::market::{Agreement, AgreementListEntry, Demand, Offer, Rol
 use ya_client::model::market::{NewDemand, NewOffer, NewProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_client::model::NodeId;
+use ya_client_model::market::MARKET_API_PATH;
 use ya_core_model::market;
-use ya_market::testing::{
-    AgreementId, Demand as MarketDemand, Offer as MarketOffer, Owner, PathSubscription, ProposalId,
-    QueryAgreementEvents, QueryTimeoutMaxEvents, SubscriptionId,
+pub use ya_market::testing::{
+    AgreementId, Demand as MarketDemand, MarketError, MatcherError, Offer as MarketOffer, Owner,
+    PathSubscription, ProposalId, QueryAgreementEvents, QueryTimeoutMaxEvents, SubscriptionId,
 };
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
+
+/// Result of waiting for an endpoint to be triggered
+#[derive(Debug)]
+pub enum CallbackResult {
+    /// The endpoint was triggered and a response was sent
+    Triggered,
+    /// The notification channel was dropped (e.g., market was dropped)
+    ChannelDropped,
+}
+
+/// Wrapper object that provides an await function to wait for endpoint trigger
+pub struct EndpointCallback {
+    receiver: oneshot::Receiver<()>,
+}
+
+impl EndpointCallback {
+    /// Wait for the endpoint to be triggered with a timeout
+    pub async fn wait_for_trigger(
+        self,
+        timeout: std::time::Duration,
+    ) -> Result<CallbackResult, anyhow::Error> {
+        match tokio::time::timeout(timeout, self.receiver).await {
+            Ok(Ok(())) => Ok(CallbackResult::Triggered),
+            Ok(Err(_)) => Ok(CallbackResult::ChannelDropped),
+            Err(_elapsed) => Err(anyhow::anyhow!(
+                "Timeout {} waiting for endpoint",
+                humantime::format_duration(timeout)
+            )),
+        }
+    }
+}
+
+/// Generic wrapper for any response type that can include notification
+#[derive(Debug)]
+pub struct WithCallback<T: Display> {
+    pub response: T,
+    pub callback: Option<oneshot::Sender<()>>,
+    pub endpoint_name: String,
+}
+
+impl<T: Display> WithCallback<T> {
+    pub fn new(response: T, sender: oneshot::Sender<()>, endpoint_name: String) -> Self {
+        Self {
+            response,
+            callback: Some(sender),
+            endpoint_name,
+        }
+    }
+}
+
+impl<T: Display> Drop for WithCallback<T> {
+    fn drop(&mut self) {
+        if let Some(sender) = self.callback.take() {
+            log::debug!(
+                "{}: sending callback for triggered response: {}",
+                self.endpoint_name,
+                self.response
+            );
+            let _ = sender.send(());
+        }
+    }
+}
+
+/// Controller for managing mock market responses
+#[derive(Debug, Default)]
+pub struct MarketController {
+    /// Queue of responses for `subscribe_offer` endpoint.
+    pub next_subscribe_offer_result: Vec<WithCallback<SubscribeOfferResponse>>,
+}
+
+/// Response types that can be forced for `subscribe_offer` endpoint
+#[derive(Debug, derive_more::Display)]
+pub enum SubscribeOfferResponse {
+    /// Return a specific error with the same type as real market implementation
+    Error(MarketError),
+    /// Execute normal `subscribe_offer` logic (don't force any response)
+    Success,
+}
 
 /// Wrapper struct for Offer that can be extended with control elements for mocking market
 #[derive(Clone, Debug)]
@@ -59,6 +138,7 @@ pub struct FakeMarketInner {
     agreements: HashMap<AgreementId, Agreement>,
     offers: HashMap<SubscriptionId, OfferEntry>,
     demands: HashMap<SubscriptionId, DemandEntry>,
+    controller: MarketController,
 }
 
 impl FakeMarket {
@@ -70,6 +150,7 @@ impl FakeMarket {
                 agreements: HashMap::new(),
                 offers: HashMap::new(),
                 demands: HashMap::new(),
+                controller: MarketController::default(),
             })),
         }
     }
@@ -238,6 +319,36 @@ impl FakeMarket {
             Ok(())
         } else {
             Err(anyhow::anyhow!("Offer [{subscription_id}] not found"))
+        }
+    }
+
+    /// Add a response to the queue for the subscribe_offer endpoint
+    /// Returns a notifier that can be used to wait for the endpoint to be triggered
+    pub async fn next_subscribe_offer_response(
+        &self,
+        response: SubscribeOfferResponse,
+    ) -> EndpointCallback {
+        let (sender, receiver) = oneshot::channel();
+        let response_with_notification =
+            WithCallback::new(response, sender, "subscribe_offer".to_string());
+
+        let mut lock = self.inner.write().await;
+        lock.controller
+            .next_subscribe_offer_result
+            .push(response_with_notification);
+
+        EndpointCallback { receiver }
+    }
+
+    /// Get the next response from the queue for the subscribe_offer endpoint
+    async fn get_next_subscribe_offer_response(
+        &self,
+    ) -> Option<WithCallback<SubscribeOfferResponse>> {
+        let mut lock = self.inner.write().await;
+        if !lock.controller.next_subscribe_offer_result.is_empty() {
+            Some(lock.controller.next_subscribe_offer_result.remove(0))
+        } else {
+            None
         }
     }
 
@@ -418,7 +529,7 @@ async fn get_agreement(market: Data<FakeMarket>, path: WebPath<String>) -> impl 
     let lock = market.inner.read().await;
 
     // Try to find agreement by ID
-    for (_, agreement) in &lock.agreements {
+    for agreement in lock.agreements.values() {
         if agreement.agreement_id == agreement_id {
             return HttpResponse::Ok().json(agreement);
         }
@@ -470,6 +581,18 @@ async fn subscribe_offer(
     body: Json<NewOffer>,
     id: Identity,
 ) -> impl Responder {
+    // Check for forced response first set by `next_subscribe_offer_response` function.
+    // Otherwise, execute normal logic.
+    let trigger = market.get_next_subscribe_offer_response().await;
+    if let Some(WithCallback {
+        response: SubscribeOfferResponse::Error(error),
+        callback: _,
+        endpoint_name: _,
+    }) = &trigger
+    {
+        return error.error_response();
+    }
+
     let new_offer = body.into_inner();
     let creation_ts = Utc::now().naive_utc();
     let expiration_ts = creation_ts + Duration::hours(1);
@@ -530,7 +653,11 @@ async fn unsubscribe_offer(
         }
 
         // Offer exists, is not expired, and identity matches, remove it
-        if let Some(_) = market.remove_offer_subscription(&subscription_id).await {
+        if market
+            .remove_offer_subscription(&subscription_id)
+            .await
+            .is_some()
+        {
             return HttpResponse::NoContent().finish();
         }
     }
@@ -672,7 +799,11 @@ async fn unsubscribe_demand(
             }
 
             // Demand exists and identity matches, remove it
-            if let Some(_) = market.remove_demand_subscription(&subscription_id).await {
+            if market
+                .remove_demand_subscription(&subscription_id)
+                .await
+                .is_some()
+            {
                 return HttpResponse::NoContent().finish();
             }
         }

@@ -47,7 +47,7 @@ impl ResponseError for MatcherError {
             MatcherError::SaveOffer(e) => e.error_response(),
             MatcherError::ModifyOffer(e) => e.error_response(),
             e @ MatcherError::GolemBaseOfferError(_) => {
-                HttpResponse::InternalServerError().json(e.to_string())
+                HttpResponse::InternalServerError().json(ErrorMessage::new(e))
             }
         }
     }

@@ -4,6 +4,7 @@ use std::path::Path;
 use ya_agreement_utils::{
     ComInfo, InfNodeInfo, NodeInfo, OfferDefinition, OfferTemplate, ServiceInfo,
 };
+use ya_framework_mocks::market::{MatcherError, SubscribeOfferResponse};
 use ya_provider::market::{CreateOffer, Preset};
 
 use ya_framework_basic::async_drop::DroppableTestContext;
@@ -52,7 +53,7 @@ async fn start_mock_yagna(ctx: &mut DroppableTestContext, dir: &Path) -> anyhow:
 //#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
-async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
     enable_logs(true);
 
     let dir = temp_dir!("test_provider_market")?;
@@ -80,7 +81,8 @@ async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 1);
 
-    // Expire Offer - this should trigger re-subscribing Offer by the Provider.
+    // Scenario 1:
+    // Provider should resubscribe Offer after it expires.
     let id = offers[0].offer.id.clone();
     market.expire_offer(&id).await?;
 
@@ -90,6 +92,40 @@ async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 2);
 
+    // Scenario 2:
+    // Error when creating offer on GolemBase, should result in retry attempt with exponential backoff.
+    log::info!("Running scenario 2: retrying when creating Offer on market failed");
+    let id = offers[1].offer.id.clone();
+
+    // Get callbacks first before triggering expiration to avoid race conditions.
+    let failure_callback = market
+        .next_subscribe_offer_response(SubscribeOfferResponse::Error(
+            MatcherError::GolemBaseOfferError("Timeout creating offer".to_string()).into(),
+        ))
+        .await;
+    let success_callback = market
+        .next_subscribe_offer_response(SubscribeOfferResponse::Success)
+        .await;
+    market.expire_offer(&id).await?;
+
+    log::info!("Waiting for Offer expiration to trigger re-subscribe attempt.");
+    log::info!("Re-publishing Offer is expected to fail.");
+    failure_callback
+        .wait_for_trigger(std::time::Duration::from_secs(40))
+        .await
+        .unwrap();
+
+    log::info!("Publishing Offer failed on first attempt. Waiting for retry..");
+    success_callback
+        .wait_for_trigger(std::time::Duration::from_secs(10))
+        .await
+        .unwrap();
+    log::info!("Offer should be published at this moment.");
+
+    let offers = market.list_offer_subscriptions().await;
+    assert_eq!(offers.len(), 3);
+
+    log::info!("Confirming that Offer was published successfully. Shutting down agent.");
     agent.send(Shutdown {}).await??;
     Ok(())
 }
