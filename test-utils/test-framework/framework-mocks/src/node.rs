@@ -6,6 +6,8 @@ use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
 use ya_client::market::MarketProviderApi;
+use ya_client_model::market::MARKET_API_PATH;
+use ya_client_model::payment::PAYMENT_API_PATH;
 
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
@@ -237,13 +239,13 @@ impl MockNode {
                     payments
                         .clone()
                         .map(|payment| payment.bind_rest())
-                        .unwrap_or_else(|| Scope::new("")),
+                        .unwrap_or_else(|| Scope::new(PAYMENT_API_PATH)),
                 )
                 .service(
                     market
                         .clone()
                         .map(|market| market.bind_rest())
-                        .unwrap_or_else(|| Scope::new("")),
+                        .unwrap_or_else(|| Scope::new(MARKET_API_PATH)),
                 )
         })
         .bind(rest_api_host_port(self.rest_url.clone()))

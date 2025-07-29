@@ -59,4 +59,7 @@ pub use crate::protocol::discovery::message::{
     UnsubscribedOffersBcast,
 };
 
+// Re-export REST API types
+pub use crate::rest_api::{PathSubscription, QueryAgreementEvents, QueryTimeoutMaxEvents};
+
 pub use market_ext::MarketServiceExt;

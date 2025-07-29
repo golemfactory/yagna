@@ -1,5 +1,7 @@
 pub mod legacy;
 
+use actix_web::web::{Data, Json, Path as WebPath, Query};
+use actix_web::{HttpResponse, Responder, Scope};
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::collections::HashMap;
@@ -7,21 +9,41 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use ya_client_model::market::MARKET_API_PATH;
 
-use actix_web::web::{Data, Json, Path as WebPath, Query};
-use actix_web::{HttpResponse, Responder, Scope};
 use ya_agreement_utils::agreement::expand;
 use ya_agreement_utils::{OfferTemplate, ProposalView};
 use ya_client::model::market::agreement;
 use ya_client::model::market::proposal;
+use ya_client::model::market::AgreementOperationEvent;
 use ya_client::model::market::{Agreement, AgreementListEntry, Demand, Offer, Role};
 use ya_client::model::market::{NewDemand, NewOffer, NewProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_client::model::NodeId;
 use ya_core_model::market;
-use ya_market::testing::{AgreementId, Owner, ProposalId, SubscriptionId};
+use ya_market::testing::{
+    AgreementId, Demand as MarketDemand, Offer as MarketOffer, Owner, PathSubscription, ProposalId,
+    QueryAgreementEvents, QueryTimeoutMaxEvents, SubscriptionId,
+};
+use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
+
+/// Wrapper struct for Offer that can be extended with control elements for mocking market
+#[derive(Clone, Debug)]
+pub struct OfferEntry {
+    pub offer: MarketOffer,
+    // TODO: Add control elements here for mocking market behavior
+    // pub control_elements: MarketControlElements,
+}
+
+/// Wrapper struct for Demand that can be extended with control elements for mocking market
+#[derive(Clone, Debug)]
+pub struct DemandEntry {
+    pub demand: MarketDemand,
+    // TODO: Add control elements here for mocking market behavior
+    // pub control_elements: MarketControlElements,
+}
 
 /// Market that doesn't wrap real Market module, but simulates it's
 /// behavior by providing GSB bindings for crucial messages.
@@ -35,6 +57,8 @@ pub struct FakeMarket {
 
 pub struct FakeMarketInner {
     agreements: HashMap<AgreementId, Agreement>,
+    offer_subscriptions: HashMap<SubscriptionId, OfferEntry>,
+    demand_subscriptions: HashMap<SubscriptionId, DemandEntry>,
 }
 
 impl FakeMarket {
@@ -44,12 +68,14 @@ impl FakeMarket {
             _testdir: testdir.to_path_buf(),
             inner: Arc::new(RwLock::new(FakeMarketInner {
                 agreements: HashMap::new(),
+                offer_subscriptions: HashMap::new(),
+                demand_subscriptions: HashMap::new(),
             })),
         }
     }
 
     pub fn bind_rest(&self) -> Scope {
-        actix_web::web::scope("/market-api/v1")
+        actix_web::web::scope(MARKET_API_PATH)
             .app_data(Data::new(self.clone()))
             .extend(register_common_endpoints)
             .extend(register_provider_endpoints)
@@ -149,6 +175,60 @@ impl FakeMarket {
         let mut lock = self.inner.write().await;
         lock.agreements.insert(provider_id, agreement.clone());
         lock.agreements.insert(requestor_id, agreement);
+    }
+
+    pub async fn add_offer_subscription(&self, offer_entry: OfferEntry) {
+        let mut lock = self.inner.write().await;
+        lock.offer_subscriptions
+            .insert(offer_entry.offer.id.clone(), offer_entry);
+    }
+
+    pub async fn add_demand_subscription(&self, demand_entry: DemandEntry) {
+        let mut lock = self.inner.write().await;
+        lock.demand_subscriptions
+            .insert(demand_entry.demand.id.clone(), demand_entry);
+    }
+
+    pub async fn get_offer_subscription(
+        &self,
+        subscription_id: &SubscriptionId,
+    ) -> Option<OfferEntry> {
+        let lock = self.inner.read().await;
+        lock.offer_subscriptions.get(subscription_id).cloned()
+    }
+
+    pub async fn get_demand_subscription(
+        &self,
+        subscription_id: &SubscriptionId,
+    ) -> Option<DemandEntry> {
+        let lock = self.inner.read().await;
+        lock.demand_subscriptions.get(subscription_id).cloned()
+    }
+
+    pub async fn remove_offer_subscription(
+        &self,
+        subscription_id: &SubscriptionId,
+    ) -> Option<OfferEntry> {
+        let mut lock = self.inner.write().await;
+        lock.offer_subscriptions.remove(subscription_id)
+    }
+
+    pub async fn remove_demand_subscription(
+        &self,
+        subscription_id: &SubscriptionId,
+    ) -> Option<DemandEntry> {
+        let mut lock = self.inner.write().await;
+        lock.demand_subscriptions.remove(subscription_id)
+    }
+
+    pub async fn list_offer_subscriptions(&self) -> Vec<OfferEntry> {
+        let lock = self.inner.read().await;
+        lock.offer_subscriptions.values().cloned().collect()
+    }
+
+    pub async fn list_demand_subscriptions(&self) -> Vec<DemandEntry> {
+        let lock = self.inner.read().await;
+        lock.demand_subscriptions.values().cloned().collect()
     }
 
     pub fn create_fake_agreement(
@@ -313,9 +393,13 @@ async fn list_agreements(market: Data<FakeMarket>, _query: Query<()>) -> impl Re
 }
 
 #[actix_web::get("/agreementEvents")]
-async fn collect_agreement_events(_market: Data<FakeMarket>, _query: Query<()>) -> impl Responder {
-    // Return empty events for now
-    HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
+async fn collect_agreement_events(
+    _market: Data<FakeMarket>,
+    query: Query<QueryAgreementEvents>,
+) -> impl Responder {
+    let timeout = std::time::Duration::from_secs_f32(query.into_inner().timeout);
+    tokio::time::sleep(timeout).await;
+    HttpResponse::Ok().json(Vec::<AgreementOperationEvent>::new())
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -371,26 +455,68 @@ async fn scan_end(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Res
 
 // Provider endpoints
 #[actix_web::post("/offers")]
-async fn subscribe_offer(_market: Data<FakeMarket>, _body: Json<NewOffer>) -> impl Responder {
-    HttpResponse::Created().json("mock-offer-subscription-id")
+async fn subscribe_offer(
+    market: Data<FakeMarket>,
+    body: Json<NewOffer>,
+    id: Identity,
+) -> impl Responder {
+    let new_offer = body.into_inner();
+    let creation_ts = Utc::now().naive_utc();
+    let expiration_ts = creation_ts + Duration::hours(1);
+
+    let market_offer =
+        match MarketOffer::from_new(&new_offer, id.identity, creation_ts, expiration_ts) {
+            Ok(offer) => offer,
+            Err(e) => {
+                return HttpResponse::BadRequest()
+                    .json(ErrorMessage::new(format!("Unable to create offer: {e}")))
+            }
+        };
+
+    let id = market_offer.id.to_string();
+    market
+        .add_offer_subscription(OfferEntry {
+            offer: market_offer,
+        })
+        .await;
+
+    HttpResponse::Created().json(id)
 }
 
 #[actix_web::get("/offers")]
-async fn get_offers(_market: Data<FakeMarket>) -> impl Responder {
-    HttpResponse::Ok().json(Vec::<Offer>::new())
+async fn get_offers(market: Data<FakeMarket>, id: Identity) -> impl Responder {
+    let offer_entries = market.list_offer_subscriptions().await;
+    let offers: Vec<Offer> = offer_entries
+        .into_iter()
+        .filter(|entry| entry.offer.node_id == id.identity)
+        .filter_map(|entry| entry.offer.into_client_offer().ok())
+        .collect();
+    HttpResponse::Ok().json(offers)
 }
 
 #[actix_web::delete("/offers/{subscription_id}")]
-async fn unsubscribe_offer(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Responder {
-    HttpResponse::NoContent().finish()
+async fn unsubscribe_offer(
+    market: Data<FakeMarket>,
+    path: WebPath<String>,
+    _id: Identity,
+) -> impl Responder {
+    let subscription_id_str = path.into_inner();
+    if let Ok(subscription_id) = SubscriptionId::from_str(&subscription_id_str) {
+        if let Some(_) = market.remove_offer_subscription(&subscription_id).await {
+            return HttpResponse::NoContent().finish();
+        }
+    }
+    HttpResponse::NotFound().finish()
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
 async fn collect_offer_events(
     _market: Data<FakeMarket>,
-    _path: WebPath<String>,
-    _query: Query<()>,
+    _path: WebPath<PathSubscription>,
+    query: Query<QueryTimeoutMaxEvents>,
 ) -> impl Responder {
+    let timeout = std::time::Duration::from_secs_f32(query.into_inner().timeout);
+    tokio::time::sleep(timeout).await;
     HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
 }
 
@@ -444,26 +570,67 @@ async fn reject_agreement(
 
 // Requestor endpoints
 #[actix_web::post("/demands")]
-async fn subscribe_demand(_market: Data<FakeMarket>, _body: Json<NewDemand>) -> impl Responder {
-    HttpResponse::Created().json("mock-demand-subscription-id")
+async fn subscribe_demand(
+    market: Data<FakeMarket>,
+    body: Json<NewDemand>,
+    id: Identity,
+) -> impl Responder {
+    let new_demand = body.into_inner();
+    let creation_ts = Utc::now().naive_utc();
+    let expiration_ts = creation_ts + Duration::hours(1);
+
+    let market_demand = match MarketDemand::from_new(&new_demand, &id, creation_ts, expiration_ts) {
+        Ok(demand) => demand,
+        Err(e) => {
+            return HttpResponse::BadRequest()
+                .json(ErrorMessage::new(format!("Unable to create demand: {e}")))
+        }
+    };
+
+    let id = market_demand.id.to_string();
+    market
+        .add_demand_subscription(DemandEntry {
+            demand: market_demand,
+        })
+        .await;
+
+    HttpResponse::Created().json(id)
 }
 
 #[actix_web::get("/demands")]
-async fn get_demands(_market: Data<FakeMarket>) -> impl Responder {
-    HttpResponse::Ok().json(Vec::<Demand>::new())
+async fn get_demands(market: Data<FakeMarket>, id: Identity) -> impl Responder {
+    let demand_entries = market.list_demand_subscriptions().await;
+    let demands: Vec<Demand> = demand_entries
+        .into_iter()
+        .filter(|entry| entry.demand.node_id == id.identity)
+        .filter_map(|entry| entry.demand.into_client_demand().ok())
+        .collect();
+    HttpResponse::Ok().json(demands)
 }
 
 #[actix_web::delete("/demands/{subscription_id}")]
-async fn unsubscribe_demand(_market: Data<FakeMarket>, _path: WebPath<String>) -> impl Responder {
-    HttpResponse::NoContent().finish()
+async fn unsubscribe_demand(
+    market: Data<FakeMarket>,
+    path: WebPath<String>,
+    _id: Identity,
+) -> impl Responder {
+    let subscription_id_str = path.into_inner();
+    if let Ok(subscription_id) = SubscriptionId::from_str(&subscription_id_str) {
+        if let Some(_) = market.remove_demand_subscription(&subscription_id).await {
+            return HttpResponse::NoContent().finish();
+        }
+    }
+    HttpResponse::NotFound().finish()
 }
 
 #[actix_web::get("/demands/{subscription_id}/events")]
 async fn collect_demand_events(
     _market: Data<FakeMarket>,
     _path: WebPath<String>,
-    _query: Query<()>,
+    query: Query<QueryTimeoutMaxEvents>,
 ) -> impl Responder {
+    let timeout = std::time::Duration::from_secs_f32(query.into_inner().timeout);
+    tokio::time::sleep(timeout).await;
     HttpResponse::Ok().json(Vec::<serde_json::Value>::new())
 }
 

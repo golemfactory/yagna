@@ -1,4 +1,10 @@
+use actix::prelude::*;
+use serde_json::Value;
 use std::path::Path;
+use ya_agreement_utils::{
+    ComInfo, InfNodeInfo, NodeInfo, OfferDefinition, OfferTemplate, ServiceInfo,
+};
+use ya_provider::market::{CreateOffer, Preset};
 
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
@@ -47,14 +53,28 @@ async fn start_mock_yagna(ctx: &mut DroppableTestContext, dir: &Path) -> anyhow:
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_provider_market(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(false);
+    enable_logs(true);
 
     let dir = temp_dir!("test_provider_market")?;
 
     let node = start_mock_yagna(ctx, dir.path()).await?;
     let appkey = node.get_identity()?.create_identity_key("provider").await?;
 
-    let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?;
+    let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
+
+    agent
+        .send(CreateOffer {
+            offer_definition: OfferDefinition {
+                node_info: NodeInfo::default(),
+                srv_info: ServiceInfo::new(InfNodeInfo::default(), Value::Null)
+                    .support_payload_manifest(false)
+                    .support_multi_activity(true),
+                com_info: ComInfo::default(),
+                offer: OfferTemplate::default(),
+            },
+            preset: Preset::default(),
+        })
+        .await??;
 
     Ok(())
 }
