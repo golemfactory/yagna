@@ -194,7 +194,7 @@ impl MarketsNetwork {
             |line: &LogFrame| log::info!("[GolemBase]: {}", String::from_utf8_lossy(&line.bytes()));
 
         let container = GenericImage::new("golemnetwork/golembase-op-geth", "latest")
-            .with_wait_for(WaitFor::message_on_stderr("Started log indexer"))
+            .with_wait_for(WaitFor::message_on_stderr("FS scan times"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
             .with_log_consumer(log_consumer)
             .with_cmd([
@@ -230,7 +230,7 @@ impl MarketsNetwork {
             .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
 
         // Slow down a bit to allow GolemBase to start
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         Ok(container)
     }
