@@ -36,11 +36,7 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBro
 use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
-use testcontainers::{
-    core::{logs::LogFrame, WaitFor},
-    runners::AsyncRunner,
-    GenericImage, ImageExt,
-};
+use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -191,8 +187,6 @@ impl MarketsNetwork {
     pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
         let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
         let timeout = Duration::from_secs(60);
-        let log_consumer =
-            |line: &LogFrame| log::info!("[GolemBase]: {}", String::from_utf8_lossy(&line.bytes()));
 
         let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
             .with_wait_for(WaitFor::message_on_stderr("Started log indexer"))
