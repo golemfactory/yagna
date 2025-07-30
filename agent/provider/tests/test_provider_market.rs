@@ -51,10 +51,10 @@ async fn start_mock_yagna(ctx: &mut DroppableTestContext, dir: &Path) -> anyhow:
     Ok(node)
 }
 
-fn create_default_offer() -> CreateOffer {
+fn create_default_offer(name: &str) -> CreateOffer {
     CreateOffer {
         offer_definition: OfferDefinition {
-            node_info: NodeInfo::default(),
+            node_info: NodeInfo::with_name(name.to_string()),
             srv_info: ServiceInfo::new(InfNodeInfo::default(), Value::Null)
                 .support_payload_manifest(false)
                 .support_multi_activity(true),
@@ -68,10 +68,13 @@ fn create_default_offer() -> CreateOffer {
 //#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
-async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+/// Provider should resubscribe Offer after it expires.
+async fn test_offer_resubscription_after_expiration(
+    ctx: &mut DroppableTestContext,
+) -> anyhow::Result<()> {
+    enable_logs(false);
 
-    let dir = temp_dir!("test_provider_market")?;
+    let dir = temp_dir!("test_offer_resubscription_after_expiration")?;
 
     let node = start_mock_yagna(ctx, dir.path()).await?;
     let market = node.get_market()?;
@@ -79,12 +82,11 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
 
     let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
 
-    agent.send(create_default_offer()).await??;
+    agent.send(create_default_offer("first-offer")).await??;
 
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 1);
 
-    // Scenario 1:
     // Provider should resubscribe Offer after it expires.
     let id = offers[0].offer.id.clone();
     market.expire_offer(&id).await?;
@@ -95,12 +97,40 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 2);
 
-    // Scenario 2:
+    log::info!("Shutting down agent.");
+    agent.send(Shutdown {}).await??;
+    Ok(())
+}
+
+//#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context::test_context(DroppableTestContext)]
+#[serial_test::serial]
+/// Error when creating offer on GolemBase, should result in retry attempt with exponential backoff.
+async fn test_offer_resubscription_retry_on_creation_error(
+    ctx: &mut DroppableTestContext,
+) -> anyhow::Result<()> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_offer_resubscription_retry_on_creation_error")?;
+
+    let node = start_mock_yagna(ctx, dir.path()).await?;
+    let market = node.get_market()?;
+    let appkey = node.get_identity()?.create_identity_key("provider").await?;
+
+    let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
+
+    agent.send(create_default_offer("first-offer")).await??;
+
+    let offers = market.list_offer_subscriptions().await;
+    assert_eq!(offers.len(), 1);
+
     // Error when creating offer on GolemBase, should result in retry attempt with exponential backoff.
     log::info!("Running scenario 2: retrying when creating Offer on market failed");
-    let id = offers[1].offer.id.clone();
+    let id = offers[0].offer.id.clone();
 
-    // Get callbacks first before triggering expiration to avoid race conditions.
+    // Let's trigger a failure during next Offer creation. When the Offer expires later,
+    // re-subscription will be triggered, but it will fail.
+    // Provider Agent should attempt to publish Offer after delay.
     let failure_callback = market
         .next_subscribe_offer_response(SubscribeOfferResponse::Error(
             MatcherError::GolemBaseOfferError("Timeout creating offer".to_string()).into(),
@@ -109,6 +139,7 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
     let success_callback = market
         .next_subscribe_offer_response(SubscribeOfferResponse::Success)
         .await;
+    // Get callbacks first before triggering expiration to avoid race conditions.
     market.expire_offer(&id).await?;
 
     log::info!("Waiting for Offer expiration to trigger re-subscribe attempt.");
@@ -118,22 +149,47 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
         .await
         .unwrap();
 
-    log::info!("Publishing Offer failed on first attempt. Waiting for retry..");
+    log::info!("Publishing Offer failed on first attempt. Waiting for next attempt after delay..");
     success_callback
         .wait_for_trigger(std::time::Duration::from_secs(10))
         .await
         .unwrap();
-    log::info!("Offer should be published at this moment.");
+    log::info!("Offer is published.");
 
     let offers = market.list_offer_subscriptions().await;
-    assert_eq!(offers.len(), 3);
+    assert_eq!(offers.len(), 2);
 
     log::info!("Confirming that Offer was published successfully.");
 
-    // Scenario 3:
+    log::info!("Shutting down agent.");
+    agent.send(Shutdown {}).await??;
+    Ok(())
+}
+
+//#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context::test_context(DroppableTestContext)]
+#[serial_test::serial]
+/// When Offer retry is triggered and at the same time the preset change happens, we shouldn't
+/// allow for 2 Offers to be published.
+async fn test_preset_change_during_retry(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(true);
+
+    let dir = temp_dir!("test_preset_change_during_retry")?;
+
+    let node = start_mock_yagna(ctx, dir.path()).await?;
+    let market = node.get_market()?;
+    let appkey = node.get_identity()?.create_identity_key("provider").await?;
+
+    let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
+
+    agent.send(create_default_offer("first-offer")).await??;
+
+    let offers = market.list_offer_subscriptions().await;
+    assert_eq!(offers.len(), 1);
+
     // When Offer retry is triggered and at the same time the preset change happens, we shouldn't
     // allow for 2 Offers to be published.
-    let id = offers[2].offer.id.clone();
+    let id = offers[0].offer.id.clone();
     let failure_callback = market
         .next_subscribe_offer_response(SubscribeOfferResponse::Error(
             MatcherError::GolemBaseOfferError("Timeout creating offer".to_string()).into(),
@@ -146,14 +202,31 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
         .await
         .unwrap();
 
+    // At this moment agent already failed to subscribe Offer. We should wait a little bit more
+    // to update preset during retry delay period.
     log::info!("Updating preset");
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    agent.send(create_default_offer()).await??;
+    // New preset will trigger subscribing a new Offer. We don't wait for any event, because
+    // it will be done after message sending returns.
+    agent.send(create_default_offer("second-offer")).await??;
 
-    let success_callback = market
+    log::info!(
+        "Preset updated and Offer published. Checking if retry won't trigger a new subscription."
+    );
+
+    // We register a callback which in correct implementation should never be triggered.
+    // Retry attempt should be cancelled if preset was changed.
+    let callback_result = market
         .next_subscribe_offer_response(SubscribeOfferResponse::Success)
+        .await
+        .wait_for_trigger(std::time::Duration::from_secs(40))
         .await;
+    assert!(callback_result.is_err());
+    assert_eq!(
+        callback_result.unwrap_err().to_string(),
+        "Timeout 40s waiting for endpoint"
+    );
 
     log::info!("Shutting down agent.");
     agent.send(Shutdown {}).await??;
