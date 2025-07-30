@@ -9,7 +9,6 @@ use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use testcontainers::core::ContainerPort;
 use testcontainers::ContainerAsync;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
 use ya_core_model::NodeId;
@@ -36,7 +35,11 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBro
 use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
-use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
+use testcontainers::{
+    core::{logs::LogFrame, WaitFor},
+    runners::AsyncRunner,
+    GenericImage, ImageExt,
+};
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -187,10 +190,13 @@ impl MarketsNetwork {
     pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
         let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
         let timeout = Duration::from_secs(60);
+        let log_consumer =
+            |line: &LogFrame| log::info!("[GolemBase]: {}", String::from_utf8_lossy(&line.bytes()));
 
-        let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
+        let container = GenericImage::new("golemnetwork/golembase-op-geth", "latest")
             .with_wait_for(WaitFor::message_on_stderr("Started log indexer"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
+            .with_log_consumer(log_consumer)
             .with_cmd([
                 "--dev",
                 "--http",
@@ -223,28 +229,10 @@ impl MarketsNetwork {
             })?
             .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
 
-        // Spawn a background task to monitor container logs for debugging purposes
-        Self::spawn_log_monitor(&container);
+        // Slow down a bit to allow GolemBase to start
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         Ok(container)
-    }
-
-    /// Spawns a background task to monitor GolemBase container logs for debugging purposes.
-    /// The task will read from the container's stderr and log messages with a [GolemBase] prefix.
-    fn spawn_log_monitor(container: &ContainerAsync<GenericImage>) {
-        let stream = container.stderr(true);
-        tokio::spawn(async move {
-            let mut reader = BufReader::new(stream);
-            let mut line = String::new();
-
-            while let Ok(n) = reader.read_line(&mut line).await {
-                if n == 0 {
-                    break;
-                }
-                log::debug!("[GolemBase] {}", line.trim());
-                line.clear();
-            }
-        });
     }
 
     /// Config will be used to initialize all consecutive Nodes.
