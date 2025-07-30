@@ -33,8 +33,9 @@ fn create_provider_market(
     rest_api: MarketProviderApi,
     data_dir: &Path,
 ) -> anyhow::Result<ProviderMarket> {
-    let config = MarketConfig::from_env()?;
+    let mut config = MarketConfig::from_env()?;
     let negotiators_cfg = create_agent_negotiators_config(data_dir)?;
+    config.negotiation_events_interval = 5.0;
 
     Ok(ProviderMarket::new(rest_api, config, negotiators_cfg))
 }
@@ -48,6 +49,20 @@ async fn start_mock_yagna(ctx: &mut DroppableTestContext, dir: &Path) -> anyhow:
     node.start_server(ctx).await?;
 
     Ok(node)
+}
+
+fn create_default_offer() -> CreateOffer {
+    CreateOffer {
+        offer_definition: OfferDefinition {
+            node_info: NodeInfo::default(),
+            srv_info: ServiceInfo::new(InfNodeInfo::default(), Value::Null)
+                .support_payload_manifest(false)
+                .support_multi_activity(true),
+            com_info: ComInfo::default(),
+            offer: OfferTemplate::default(),
+        },
+        preset: Preset::default(),
+    }
 }
 
 //#[cfg_attr(not(feature = "system-test"), ignore)]
@@ -64,19 +79,7 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
 
     let agent = create_provider_market(node.rest_market(&appkey.key)?, dir.path())?.start();
 
-    agent
-        .send(CreateOffer {
-            offer_definition: OfferDefinition {
-                node_info: NodeInfo::default(),
-                srv_info: ServiceInfo::new(InfNodeInfo::default(), Value::Null)
-                    .support_payload_manifest(false)
-                    .support_multi_activity(true),
-                com_info: ComInfo::default(),
-                offer: OfferTemplate::default(),
-            },
-            preset: Preset::default(),
-        })
-        .await??;
+    agent.send(create_default_offer()).await??;
 
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 1);
@@ -125,7 +128,34 @@ async fn test_provider_market_resubscribing(ctx: &mut DroppableTestContext) -> a
     let offers = market.list_offer_subscriptions().await;
     assert_eq!(offers.len(), 3);
 
-    log::info!("Confirming that Offer was published successfully. Shutting down agent.");
+    log::info!("Confirming that Offer was published successfully.");
+
+    // Scenario 3:
+    // When Offer retry is triggered and at the same time the preset change happens, we shouldn't
+    // allow for 2 Offers to be published.
+    let id = offers[2].offer.id.clone();
+    let failure_callback = market
+        .next_subscribe_offer_response(SubscribeOfferResponse::Error(
+            MatcherError::GolemBaseOfferError("Timeout creating offer".to_string()).into(),
+        ))
+        .await;
+
+    market.expire_offer(&id).await?;
+    failure_callback
+        .wait_for_trigger(std::time::Duration::from_secs(40))
+        .await
+        .unwrap();
+
+    log::info!("Updating preset");
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    agent.send(create_default_offer()).await??;
+
+    let success_callback = market
+        .next_subscribe_offer_response(SubscribeOfferResponse::Success)
+        .await;
+
+    log::info!("Shutting down agent.");
     agent.send(Shutdown {}).await??;
     Ok(())
 }
