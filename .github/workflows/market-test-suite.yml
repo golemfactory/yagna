@@ -76,7 +76,7 @@ jobs:
         env:
           RUST_TEST_THREADS: 1
           TEST_ENABLE_ALL_LOGS_OVERRIDE: true
-          RUST_LOG: trace
+          RUST_LOG: debug
         with:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked --test test_agreement

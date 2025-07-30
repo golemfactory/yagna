@@ -195,7 +195,7 @@ impl MarketsNetwork {
             |line: &LogFrame| log::info!("[GolemBase]: {}", String::from_utf8_lossy(&line.bytes()));
 
         let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
-            .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
+            .with_wait_for(WaitFor::message_on_stderr("Started log indexer"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
             .with_cmd([
                 "--dev",
@@ -218,9 +218,6 @@ impl MarketsNetwork {
                 "--ws.port",
                 &ws_port.to_string(),
             ])
-            .with_env_var("GITHUB_ACTIONS", "true")
-            .with_env_var("CI", "true")
-            .with_log_consumer(log_consumer)
             .start()
             .timeout(Some(timeout))
             .await
