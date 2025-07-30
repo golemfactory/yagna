@@ -63,6 +63,11 @@ pub enum OfferKind {
     WithIds(Vec<String>),
 }
 
+/// Get subscription by preset name.
+#[derive(Message)]
+#[rtype(result = "Result<Option<Subscription>>")]
+pub struct GetSubscriptionByPreset(pub String);
+
 /// Async code emits this event to ProviderMarket, which reacts to it
 /// and broadcasts same event to external world.
 #[derive(Clone, Debug, Message)]
@@ -78,10 +83,10 @@ pub struct NewAgreement {
 /// Sent when subscribing offer to the market will be finished.
 #[derive(Debug, Clone, Message)]
 #[rtype(result = "Result<()>")]
-struct Subscription {
-    id: String,
-    preset: Preset,
-    offer: NewOffer,
+pub struct Subscription {
+    pub id: String,
+    pub preset: Preset,
+    pub offer: NewOffer,
 }
 
 #[derive(Message)]
@@ -192,6 +197,13 @@ impl ProviderMarket {
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
     }
+
+    /// Get subscription by preset name
+    fn get_subscription_by_preset(&self, preset_name: &str) -> Option<&Subscription> {
+        self.subscriptions
+            .values()
+            .find(|sub| sub.preset.name == preset_name)
+    }
 }
 
 async fn subscribe(
@@ -201,7 +213,6 @@ async fn subscribe(
     preset: Preset,
 ) -> Result<()> {
     let id = api.subscribe(&offer).await?;
-
     let _ = market.send(Subscription { id, offer, preset }).await?;
     Ok(())
 }
@@ -776,6 +787,17 @@ async fn resubscribe_offers(
             let preset = sub.preset.clone();
             let preset_name = preset.name.clone();
 
+            // Check if subscription for this preset already exists.
+            // This handles situation when user forced changing preset and new Offer was created.
+            // In this scenario Offer that we are trying to publish is outdated.
+            if let Ok(Ok(Some(_))) = market
+                .send(GetSubscriptionByPreset(preset_name.clone()))
+                .await
+            {
+                log::info!("Subscription for preset [{preset_name}] already exists, skipping resubscription");
+                continue;
+            }
+
             match subscribe(market.clone(), api.clone(), offer, preset).await {
                 Ok(_) => {
                     log::info!("Successfully re-subscribed Offer for preset: {preset_name}");
@@ -903,6 +925,15 @@ impl Handler<AgreementBroken> for ProviderMarket {
         let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
+    }
+}
+
+impl Handler<GetSubscriptionByPreset> for ProviderMarket {
+    type Result = Result<Option<Subscription>>;
+
+    fn handle(&mut self, msg: GetSubscriptionByPreset, _ctx: &mut Context<Self>) -> Self::Result {
+        let subscription = self.get_subscription_by_preset(&msg.0).cloned();
+        Ok(subscription)
     }
 }
 

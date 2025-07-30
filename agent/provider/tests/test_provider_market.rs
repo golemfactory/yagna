@@ -172,7 +172,7 @@ async fn test_offer_resubscription_retry_on_creation_error(
 /// When Offer retry is triggered and at the same time the preset change happens, we shouldn't
 /// allow for 2 Offers to be published.
 async fn test_preset_change_during_retry(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
-    enable_logs(true);
+    enable_logs(false);
 
     let dir = temp_dir!("test_preset_change_during_retry")?;
 
