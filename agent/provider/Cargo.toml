@@ -12,6 +12,9 @@ path = "src/lib.rs"
 name = "ya-provider"
 path = "src/main.rs"
 
+[features]
+system-test = []
+
 [dependencies]
 ya-agreement-utils = { workspace = true }
 ya-manifest-utils.workspace = true

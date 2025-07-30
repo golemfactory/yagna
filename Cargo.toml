@@ -21,6 +21,7 @@ system-test = [
   'ya-exe-unit/system-test',
   'ya-payment/system-test',
   'ya-identity/system-test',
+  'ya-provider/system-test'
 ]
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']

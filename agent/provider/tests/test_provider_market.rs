@@ -65,7 +65,7 @@ fn create_default_offer(name: &str) -> CreateOffer {
     }
 }
 
-//#[cfg_attr(not(feature = "system-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
 /// Provider should resubscribe Offer after it expires.
@@ -102,7 +102,7 @@ async fn test_offer_resubscription_after_expiration(
     Ok(())
 }
 
-//#[cfg_attr(not(feature = "system-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
 /// Error when creating offer on GolemBase, should result in retry attempt with exponential backoff.
@@ -166,7 +166,7 @@ async fn test_offer_resubscription_retry_on_creation_error(
     Ok(())
 }
 
-//#[cfg_attr(not(feature = "system-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context::test_context(DroppableTestContext)]
 #[serial_test::serial]
 /// When Offer retry is triggered and at the same time the preset change happens, we shouldn't
