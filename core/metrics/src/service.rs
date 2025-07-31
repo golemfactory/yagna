@@ -169,7 +169,7 @@ pub async fn export_metrics_for_push() -> String {
         .consent
         .unwrap_or(false);
     let filter = if stats_consent {
-        log::info!("Pushing all metrics, because stats consent is given");
+        log::debug!("Pushing all metrics, because stats consent is given");
         None
     } else {
         // !internal_consent && !external_consent

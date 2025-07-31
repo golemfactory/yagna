@@ -9,6 +9,7 @@ use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use testcontainers::core::ContainerPort;
 use testcontainers::ContainerAsync;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
 use ya_core_model::NodeId;
@@ -187,7 +188,7 @@ impl MarketsNetwork {
         let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
         let timeout = Duration::from_secs(60);
 
-        let image = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
+        let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
             .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
             .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
             .with_cmd([
@@ -223,7 +224,29 @@ impl MarketsNetwork {
                 )
             })?
             .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
-        Ok(image)
+
+        // Spawn a background task to monitor container logs for debugging purposes
+        Self::spawn_log_monitor(&container);
+
+        Ok(container)
+    }
+
+    /// Spawns a background task to monitor GolemBase container logs for debugging purposes.
+    /// The task will read from the container's stderr and log messages with a [GolemBase] prefix.
+    fn spawn_log_monitor(container: &ContainerAsync<GenericImage>) {
+        let stream = container.stderr(true);
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+
+            while let Ok(n) = reader.read_line(&mut line).await {
+                if n == 0 {
+                    break;
+                }
+                log::debug!("[GolemBase] {}", line.trim());
+                line.clear();
+            }
+        });
     }
 
     /// Config will be used to initialize all consecutive Nodes.
@@ -763,7 +786,7 @@ pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
         network: GolemBaseNetwork::Local,
-        ..Default::default()
+        ..DiscoveryConfig::from_env().unwrap()
     };
 
     let mut cfg = Config::from_env().unwrap();

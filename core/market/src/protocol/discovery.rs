@@ -97,7 +97,7 @@ impl Discovery {
             .map_err(|_| {
                 DiscoveryError::GolemBaseError(format!(
                     "Timeout ({}) creating offer.",
-                    humantime::Duration::from(timeout)
+                    humantime::format_duration(timeout)
                 ))
             })?
             .map_err(|e| {

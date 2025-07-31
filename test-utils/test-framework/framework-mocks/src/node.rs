@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
+use ya_client::market::MarketProviderApi;
+use ya_client_model::market::MARKET_API_PATH;
+use ya_client_model::payment::PAYMENT_API_PATH;
 
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
@@ -195,6 +198,21 @@ impl MockNode {
         Ok(provider)
     }
 
+    /// Query REST API client for market module.
+    ///
+    /// You need to provider access token, which can be generated together with identity
+    /// using `MockIdentity::create_identity_key` function.
+    /// Token is not validated. Incorrect token can be useful in some testing scenarios.
+    pub fn rest_market(&self, token: &str) -> anyhow::Result<MarketProviderApi> {
+        let market: MarketProviderApi = WebClient::builder()
+            .auth_token(token)
+            .timeout(Duration::from_secs(600 * 60))
+            .api_url(self.rest_url.clone())
+            .build()
+            .interface()?;
+        Ok(market)
+    }
+
     /// Start actix server with all requested modules and some additional middlewares, that are
     /// normally used by yagna.
     /// You can make REST API requests using client created with `rest_payments` function.
@@ -208,6 +226,7 @@ impl MockNode {
         );
 
         let payments = self.payment.clone();
+        let market = self.market.clone();
 
         let cors = AppKeyCors::new(&CorsConfig::default()).await?;
 
@@ -220,7 +239,13 @@ impl MockNode {
                     payments
                         .clone()
                         .map(|payment| payment.bind_rest())
-                        .unwrap_or_else(|| Scope::new("")),
+                        .unwrap_or_else(|| Scope::new(PAYMENT_API_PATH)),
+                )
+                .service(
+                    market
+                        .clone()
+                        .map(|market| market.bind_rest())
+                        .unwrap_or_else(|| Scope::new(MARKET_API_PATH)),
                 )
         })
         .bind(rest_api_host_port(self.rest_url.clone()))

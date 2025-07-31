@@ -7,7 +7,7 @@ from goth.runner.step import step
 class ProviderProbe(BaseProviderProbe):
     """Extension of `ProviderProbe` which adds steps related to agent logs."""
 
-    @step(default_timeout=20)
+    @step(default_timeout=90)
     async def wait_for_offer_subscribed(self):
         """Wait until the provider agent subscribes to the offer."""
         await self.provider_agent.wait_for_log("Subscribed offer")

@@ -110,3 +110,12 @@ impl Default for NegotiatorAddr {
         NegotiatorAddr::from(AcceptAllNegotiator)
     }
 }
+
+// TODO: Change to use clap::Parser and define_from_env! macro in the future
+impl NegotiatorsConfig {
+    pub fn from_env() -> Result<NegotiatorsConfig, structopt::clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        NegotiatorsConfig::from_iter_safe([""])
+    }
+}
