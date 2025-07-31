@@ -179,7 +179,7 @@ impl GolemBaseCliCommand {
                 offer.properties = if flatten {
                     serde_json::to_value(ya_agreement_utils::agreement::flatten(offer.properties))?
                 } else {
-                    offer.properties
+                    serde_json::to_value(ya_agreement_utils::agreement::expand(offer.properties))?
                 };
 
                 CommandOutput::object(json!({

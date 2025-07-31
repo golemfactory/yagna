@@ -20,3 +20,12 @@ pub struct MarketConfig {
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
 }
+
+// TODO: Change to use clap::Parser and define_from_env! macro in the future
+impl MarketConfig {
+    pub fn from_env() -> Result<MarketConfig, structopt::clap::Error> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        MarketConfig::from_iter_safe([""])
+    }
+}

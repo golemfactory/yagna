@@ -4,6 +4,7 @@ use clap::ValueEnum;
 use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;
+use ya_utils_cli::define_from_env;
 
 #[derive(Parser, Clone)]
 pub struct Config {
@@ -112,13 +113,7 @@ pub struct GolemBaseRpcConfig {
     pub fund_preallocated: bool,
 }
 
-impl GolemBaseRpcConfig {
-    pub fn from_env() -> Result<GolemBaseRpcConfig, clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        GolemBaseRpcConfig::try_parse_from([""])
-    }
-}
+define_from_env!(GolemBaseRpcConfig);
 
 #[derive(Parser, Clone, Debug)]
 pub struct DiscoveryConfig {
@@ -132,8 +127,23 @@ pub struct DiscoveryConfig {
     #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
     pub pow_threads_margin: usize,
     /// Timeout for publishing offers on the market
-    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "10s")]
+    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
     pub offer_publish_timeout: Duration,
+    /// Number of retries for GolemBase transactions
+    #[clap(env = "GOLEM_BASE_PUBLISH_MAX_RETRIES", default_value = "2")]
+    pub publish_max_retries: u32,
+}
+
+impl Default for DiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            configs: GolemBaseNetwork::default_config(),
+            network: GolemBaseNetwork::Kaolin,
+            pow_threads_margin: 2,
+            offer_publish_timeout: Duration::from_secs(30),
+            publish_max_retries: 3,
+        }
+    }
 }
 
 impl DiscoveryConfig {
@@ -166,17 +176,6 @@ impl DiscoveryConfig {
     }
 }
 
-impl Default for DiscoveryConfig {
-    fn default() -> Self {
-        Self {
-            configs: GolemBaseNetwork::default_config(),
-            network: GolemBaseNetwork::Kaolin,
-            pow_threads_margin: 2,
-            offer_publish_timeout: Duration::from_secs(30),
-        }
-    }
-}
-
 #[derive(Parser, Clone)]
 pub struct SubscriptionConfig {
     #[clap(env = "DEFAULT_SUBSCRIPTION_TTL", value_parser = parse_chrono_duration, default_value = "1h")]
@@ -204,13 +203,9 @@ pub struct DbConfig {
     pub event_store_days: i32,
 }
 
-impl Config {
-    pub fn from_env() -> Result<Config, clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        Config::try_parse_from([""])
-    }
-}
+define_from_env!(Config);
+
+define_from_env!(DiscoveryConfig);
 
 fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
     Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)

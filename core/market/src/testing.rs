@@ -52,11 +52,15 @@ pub use crate::db::DbMixedExecutor;
 // Re-export cleaner function
 pub use crate::db::dao::cleaner::clean;
 
+pub use crate::market::MarketError;
 pub use crate::matcher::error::{DemandError, QueryOfferError};
 pub use crate::negotiation::{ApprovalResult, ProviderBroker, RequestorBroker};
 pub use crate::protocol::discovery::message::{
     OffersBcast, OffersRetrieved, QueryOffers, QueryOffersResult, RetrieveOffers,
     UnsubscribedOffersBcast,
 };
+
+// Re-export REST API types
+pub use crate::rest_api::{PathSubscription, QueryAgreementEvents, QueryTimeoutMaxEvents};
 
 pub use market_ext::MarketServiceExt;
