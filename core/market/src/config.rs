@@ -133,6 +133,9 @@ pub struct DiscoveryConfig {
     /// Number of retries for GolemBase transactions
     #[clap(env = "GOLEM_BASE_PUBLISH_MAX_RETRIES", default_value = "2")]
     pub publish_max_retries: u32,
+    /// Number of confirmations required for GolemBase transactions
+    #[clap(env = "GOLEM_BASE_REQUIRED_CONFIRMATIONS", default_value = "1")]
+    pub required_confirmations: u64,
 }
 
 impl Default for DiscoveryConfig {
@@ -143,6 +146,7 @@ impl Default for DiscoveryConfig {
             pow_threads_margin: 2,
             offer_publish_timeout: Duration::from_secs(30),
             publish_max_retries: 3,
+            required_confirmations: 1,
         }
     }
 }

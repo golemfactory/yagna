@@ -86,6 +86,7 @@ impl DiscoveryBuilder {
                     .offer_publish_timeout
                     .div(config.publish_max_retries),
                 price_bump_percent: 100,
+                required_confirmations: config.required_confirmations,
                 ..TransactionConfig::default()
             });
 
