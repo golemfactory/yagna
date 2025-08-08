@@ -43,12 +43,13 @@ impl GolemBaseNetwork {
             fund_preallocated: true,
         };
 
+        // Configuration: https://kaolin.holesky.golem-base.io/
         configs.insert(
             GolemBaseNetwork::Kaolin,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://faucet.kaolin.holesky.golem-base.io/").unwrap(),
-                rpc_url: Url::parse("https://rpc.kaolin.holesky.golem-base.io/").unwrap(),
-                ws_url: Url::parse("wss://ws.rpc.kaolin.holesky.golem-base.io/").unwrap(),
+                faucet_url: Url::parse("https://kaolin.holesky.golem-base.io/faucet/").unwrap(),
+                rpc_url: Url::parse("https://kaolin.holesky.golem-base.io/rpc").unwrap(),
+                ws_url: Url::parse("wss://kaolin.holesky.golem-base.io/rpc/ws").unwrap(),
                 l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
                 fund_preallocated: false,
             },
@@ -132,6 +133,9 @@ pub struct DiscoveryConfig {
     /// Number of retries for GolemBase transactions
     #[clap(env = "GOLEM_BASE_PUBLISH_MAX_RETRIES", default_value = "2")]
     pub publish_max_retries: u32,
+    /// Number of confirmations required for GolemBase transactions
+    #[clap(env = "GOLEM_BASE_REQUIRED_CONFIRMATIONS", default_value = "1")]
+    pub required_confirmations: u64,
 }
 
 impl Default for DiscoveryConfig {
@@ -142,6 +146,7 @@ impl Default for DiscoveryConfig {
             pow_threads_margin: 2,
             offer_publish_timeout: Duration::from_secs(30),
             publish_max_retries: 3,
+            required_confirmations: 1,
         }
     }
 }
