@@ -4,40 +4,52 @@ use actix_http::body::BoxBody;
 use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
-use anyhow::{anyhow, bail, Context, Result};
-use regex::Regex;
-use std::collections::HashMap;
+use anyhow::{anyhow, Context, Result};
+use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use testcontainers::core::ContainerPort;
+use testcontainers::ContainerAsync;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use ya_core_model::market::local::{self};
+use ya_core_model::market::{self, FundGolemBaseResponse};
+use ya_core_model::NodeId;
+use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::RpcEndpoint;
 
-use ya_client::model::market::RequestorEvent;
+use ya_market::testing::IdentityGSB;
+use ya_market::testing::{
+    callback::*, discovery::error::*, negotiation::error::*, AgreementApproved, AgreementCancelled,
+    AgreementCommitted, AgreementReceived, AgreementRejected, AgreementTerminated, Config,
+    DbMixedExecutor, Discovery, DiscoveryBuilder, DiscoveryConfig, EventsListeners,
+    GolemBaseNetwork, IdentityApi, InitialProposalReceived, MarketService, MarketServiceExt,
+    Matcher, Offer, ProposalReceived, ProposalRejected, QueryOfferError, ScannerSet,
+    SubscriptionId, SubscriptionStore,
+};
+
+use ya_core_model::bus::GsbBindPoints;
+use ya_market::testing::negotiation::{provider, requestor};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
-use crate::MarketService;
+use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBroadcast, IMockNet};
 
-use super::negotiation::{provider, requestor};
-use super::{store::SubscriptionStore, Matcher};
-use crate::config::{Config, DiscoveryConfig};
-use crate::db::dao::ProposalDao;
-use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
-use crate::db::DbMixedExecutor;
-use crate::identity::IdentityApi;
-use crate::matcher::error::{DemandError, QueryOfferError};
-use crate::matcher::EventsListeners;
-use crate::negotiation::error::*;
-use crate::negotiation::ScannerSet;
-use crate::protocol::callback::*;
-use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
-use crate::protocol::negotiation::messages::*;
-use crate::testing::mock_identity::MockIdentity;
-use crate::testing::mock_node::default::*;
+use crate::identity::RealIdentity;
+use crate::net::MockNet;
 
-use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockNet};
+use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
 
 /// Instantiates market test nodes inside one process.
+///
+/// @note This is a legacy implementation used in market test suite. New testing tools were
+/// created since then (test-utils/test-framework/framework-mocks/src/node.rs) and the goal
+/// is to slowly unify both implementations.
 pub struct MarketsNetwork {
-    net: Box<dyn IMockNet>,
+    net: MockNet,
     nodes: Vec<MockNode>,
+
+    /// GolemBase which will be dropped on the end of the test.
+    #[allow(dead_code)]
+    golembase: ContainerAsync<GenericImage>,
 
     test_dir: PathBuf,
     test_name: String,
@@ -48,8 +60,10 @@ pub struct MarketsNetwork {
 pub struct MockNode {
     pub name: String,
     /// For now only mock default Identity.
-    pub mock_identity: Arc<MockIdentity>,
+    pub identity_api: Arc<dyn IdentityApi>,
+    pub identity: RealIdentity,
     pub kind: MockNodeKind,
+    pub gsb: GsbBindPoints,
 }
 
 /// Internal object associated with single Node
@@ -75,73 +89,164 @@ pub enum MockNodeKind {
     },
 }
 
+impl MockNode {
+    pub fn new(
+        name: &str,
+        test_name: &str,
+        identity_api: Arc<dyn IdentityApi>,
+        identity: RealIdentity,
+        kind: MockNodeKind,
+    ) -> Self {
+        let gsb = gsb_prefixes(test_name, name);
+        Self {
+            name: name.to_string(),
+            identity_api,
+            identity,
+            kind,
+            gsb,
+        }
+    }
+
+    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
+        self.identity.bind_gsb().await?;
+        self.kind.bind_gsb(test_name, name).await?;
+        Ok(self.gsb.clone())
+    }
+
+    pub async fn fund(&self, wallet: NodeId) -> Result<FundGolemBaseResponse> {
+        let gsb = market::bus_bindpoints(Some(self.gsb.clone()));
+        let response = local::build_discovery_bindpoint(&gsb)
+            .local()
+            .send(market::FundGolemBase {
+                wallet: Some(wallet),
+            })
+            .await??;
+        Ok(response)
+    }
+}
+
 impl MockNodeKind {
-    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<String> {
-        let (gsb_public, gsb_local) = gsb_prefixes(test_name, name);
-        let (market_public, market_local) = gsb_market_prefixes(&gsb_public, &gsb_local);
+    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<GsbBindPoints> {
+        let gsb = gsb_market_prefixes(gsb_prefixes(test_name, name));
 
         match self {
             MockNodeKind::Market(market) => {
-                market.bind_gsb(&market_public, &market_local).await?;
-                market.matcher.discovery.bind_gsb_broadcast().await?;
+                market.bind_gsb(gsb.clone()).await?;
             }
             MockNodeKind::Matcher { matcher, .. } => {
-                matcher.bind_gsb(&market_public, &market_local).await?;
-                matcher.discovery.bind_gsb_broadcast().await?;
+                matcher.bind_gsb(gsb.clone()).await?;
             }
             MockNodeKind::Discovery(discovery) => {
-                discovery.bind_gsb(&market_public, &market_local).await?;
-                discovery.bind_gsb_broadcast().await?;
+                discovery.bind_gsb(gsb.clone()).await?;
             }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
             } => {
-                provider.bind_gsb(&market_public, &market_local).await?;
-                requestor.bind_gsb(&market_public, &market_local).await?;
+                provider.bind_gsb(gsb.clone()).await?;
+                requestor.bind_gsb(gsb.clone()).await?;
             }
         }
 
-        Ok(gsb_public)
+        Ok(gsb)
     }
-}
-
-fn testname_from_backtrace(bn: &str) -> Option<String> {
-    log::info!("Test name to regex match: {}", &bn);
-    // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn)?;
-    let filename = captures.get(1).unwrap().as_str().to_string();
-    let testname = captures.get(2).unwrap().as_str().to_string();
-
-    Some(format!("{}.{}", filename, testname))
 }
 
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: Option<&str>, net: impl IMockNet + 'static) -> Self {
-        std::env::set_var("RUST_LOG", "debug");
-        let _ = env_logger::builder().try_init();
-
+    pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
         let gen_test_name = || {
             let nonce = rand::random::<u128>();
             format!("test-{:#32x}", nonce)
         };
 
-        let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
-        log::info!("Initializing MarketsNetwork. tn={}", test_name);
+        let testdir = testdir.as_ref();
+        let test_name = testdir
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(gen_test_name);
+        log::info!("Initializing MarketsNetwork. TestName={}", test_name);
 
-        let net = Box::new(net);
         net.bind_gsb();
+
+        let config = create_market_config_for_test();
+        let golembase = Self::init_golembase(&config).await.unwrap();
 
         MarketsNetwork {
             net,
             nodes: vec![],
-            test_dir: prepare_test_dir(&test_name).unwrap(),
+            test_dir: prepare_test_dir(testdir).unwrap(),
             test_name,
-            config: Arc::new(create_market_config_for_test()),
+            config: Arc::new(config),
+            golembase,
         }
+    }
+
+    pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
+        let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
+        let timeout = Duration::from_secs(60);
+
+        let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
+            .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
+            .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
+            .with_cmd([
+                "--dev",
+                "--http",
+                "--http.api",
+                "eth,web3,net,debug,golembase",
+                "--verbosity",
+                "3",
+                "--http.addr",
+                "0.0.0.0",
+                "--http.port",
+                &ws_port.to_string(),
+                "--http.corsdomain",
+                "*",
+                "--http.vhosts",
+                "*",
+                "--ws",
+                "--ws.addr",
+                "0.0.0.0",
+                "--ws.port",
+                &ws_port.to_string(),
+            ])
+            .with_env_var("GITHUB_ACTIONS", "true")
+            .with_env_var("CI", "true")
+            .start()
+            .timeout(Some(timeout))
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "Timeout ({}) starting GolemBase instance: {e}",
+                    humantime::format_duration(timeout)
+                )
+            })?
+            .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
+
+        // Spawn a background task to monitor container logs for debugging purposes
+        Self::spawn_log_monitor(&container);
+
+        Ok(container)
+    }
+
+    /// Spawns a background task to monitor GolemBase container logs for debugging purposes.
+    /// The task will read from the container's stderr and log messages with a [GolemBase] prefix.
+    fn spawn_log_monitor(container: &ContainerAsync<GenericImage>) {
+        let stream = container.stderr(true);
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+
+            while let Ok(n) = reader.read_line(&mut line).await {
+                if n == 0 {
+                    break;
+                }
+                log::debug!("[GolemBase] {}", line.trim());
+                line.clear();
+            }
+        });
     }
 
     /// Config will be used to initialize all consecutive Nodes.
@@ -153,44 +258,48 @@ impl MarketsNetwork {
     async fn add_node(
         mut self,
         name: &str,
-        identity_api: Arc<MockIdentity>,
+        identity_api: Arc<dyn IdentityApi>,
+        identity: RealIdentity,
         node_kind: MockNodeKind,
     ) -> MarketsNetwork {
-        let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
+        let node = MockNode::new(name, &self.test_name, identity_api, identity, node_kind);
 
-        let node = MockNode {
-            name: name.to_string(),
-            mock_identity: identity_api,
-            kind: node_kind,
-        };
+        let gsb = node.bind_gsb(&self.test_name, name).await.unwrap();
+        let node_id = node.identity_api.default_identity().await.unwrap();
 
-        let node_id = node.mock_identity.get_default_id().identity;
-        log::info!("Creating mock node {}: [{}].", name, &node_id);
+        log::info!("Creating mock node '{}': [{}].", name, &node_id);
         self.net.register_for_broadcasts(&node_id, &self.test_name);
-        self.net.register_node(&node_id, &public_gsb_prefix);
+        self.net.register_node(&node_id, gsb.public_addr());
+
+        node.fund(node_id).await.unwrap();
 
         self.nodes.push(node);
         self
     }
 
-    pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
-        for (_, id) in self.list_ids(node_name) {
+    pub async fn break_networking_for(&self, node_name: &str) -> Result<()> {
+        for id in self.list_ids(node_name).await {
             self.net.unregister_node(&id.identity)?
         }
         Ok(())
     }
 
-    pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
-        for (_, id) in self.list_ids(node_name) {
-            let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-            self.net.register_node(&id.identity, &public_gsb_prefix);
+    pub async fn enable_networking_for(&self, node_name: &str) -> Result<()> {
+        for id in self.list_ids(node_name).await {
+            let gsb = gsb_prefixes(&self.test_name, node_name);
+            self.net.register_node(&id.identity, gsb.public_addr());
         }
         Ok(())
     }
 
     pub async fn add_market_instance(self, name: &str) -> Self {
         let db = self.create_database(name);
-        let identity_api = MockIdentity::new(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
+
         let market = Arc::new(
             MarketService::new(
                 &db,
@@ -199,45 +308,63 @@ impl MarketsNetwork {
             )
             .unwrap(),
         );
-        self.add_node(name, identity_api, MockNodeKind::Market(market))
+
+        self.add_node(name, identity_api, identity, MockNodeKind::Market(market))
             .await
     }
 
     pub async fn add_matcher_instance(self, name: &str) -> Self {
         let db = self.init_database(name);
+        let gsb = self.node_gsb_prefixes(name);
         let scan_set = ScannerSet::new(db.clone());
 
         let store = SubscriptionStore::new(db.clone(), scan_set, self.config.clone());
-        let identity_api = MockIdentity::new(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         let (matcher, listeners) =
             Matcher::new(store, identity_api.clone(), self.config.clone()).unwrap();
         self.add_node(
             name,
             identity_api,
+            identity,
             MockNodeKind::Matcher { matcher, listeners },
         )
         .await
     }
 
     pub async fn add_discovery_instance(self, name: &str, builder: DiscoveryBuilder) -> Self {
-        let identity_api = MockIdentity::new(name);
+        let _db = self.init_database(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
+
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .with_config(self.config.discovery.clone())
-            .build();
-        self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
-            .await
+            .build()
+            .unwrap();
+        self.add_node(
+            name,
+            identity_api,
+            identity,
+            MockNodeKind::Discovery(discovery),
+        )
+        .await
     }
 
     pub fn discovery_builder(&self) -> DiscoveryBuilder {
         DiscoveryBuilder::default()
             .with_config(self.config.discovery.clone())
-            .add_handler(empty_on_offers_retrieved)
-            .add_handler(empty_on_offers_bcast)
-            .add_handler(empty_on_offer_unsubscribed_bcast)
-            .add_handler(empty_on_retrieve_offers)
-            .add_handler(empty_query_offers_handler)
+            .add_handler(default::empty_on_offers_retrieved)
+            .add_handler(default::empty_on_offers_bcast)
+            .add_handler(default::empty_on_offer_unsubscribed_bcast)
+            .add_handler(default::empty_on_retrieve_offers)
+            .add_handler(default::empty_query_offers_handler)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -330,11 +457,16 @@ impl MarketsNetwork {
             req_agreement_terminated,
         );
 
-        let identity_api = MockIdentity::new(name);
+        let gsb = self.node_gsb_prefixes(name);
+
+        let identity_api = IdentityGSB::new(gsb.clone());
+        let identity = RealIdentity::new(self.net.clone(), &self.test_dir.join(name), name)
+            .with_prefixed_gsb(Some(gsb));
 
         self.add_node(
             name,
             identity_api,
+            identity,
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
@@ -409,36 +541,59 @@ impl MarketsNetwork {
             .unwrap()
     }
 
-    pub fn get_default_id(&self, node_name: &str) -> Identity {
-        self.nodes
-            .iter()
-            .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.clone())
-            .unwrap()
-            .get_default_id()
-    }
-
-    pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
-        let mock_identity = self
+    pub async fn get_default_id(&self, node_name: &str) -> Identity {
+        let api = self
             .nodes
             .iter()
             .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.clone())
+            .map(|node| node.identity_api.clone())
             .unwrap();
-        let id = mock_identity.new_identity(id_name);
-
-        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-
-        self.net.register_node(&id.identity, &public_gsb_prefix);
-        id
+        let id = api.default_identity().await.unwrap();
+        Identity {
+            identity: id,
+            name: "".to_string(),
+            role: "".to_string(),
+        }
     }
 
-    pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
-        self.nodes
+    pub async fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
+        let node = self
+            .nodes
             .iter()
             .find(|node| node.name == node_name)
-            .map(|node| node.mock_identity.list_ids())
+            .unwrap();
+
+        let id = node.identity.create_identity(id_name).await.unwrap();
+
+        // Sleep to allow propagating identity events to market to register the account
+        // related to the identity.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        node.fund(id.node_id).await.unwrap();
+
+        Identity {
+            identity: id.node_id,
+            name: id_name.to_string(),
+            role: "".to_string(),
+        }
+    }
+
+    pub async fn list_ids(&self, node_name: &str) -> Vec<Identity> {
+        let node = self
+            .nodes
+            .iter()
+            .find(|node| node.name == node_name)
+            .unwrap();
+        node.identity_api
+            .list()
+            .await
             .unwrap()
+            .into_iter()
+            .map(|info| Identity {
+                identity: info.node_id,
+                name: info.alias.unwrap_or_default(),
+                role: "".to_string(),
+            })
+            .collect()
     }
 
     pub async fn get_rest_app(
@@ -447,7 +602,7 @@ impl MarketsNetwork {
     ) -> impl ActixService<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error>
     {
         let market = self.get_market(node_name);
-        let identity = self.get_default_id(node_name);
+        let identity = self.get_default_id(node_name).await;
 
         test::init_service(
             App::new()
@@ -459,7 +614,7 @@ impl MarketsNetwork {
 
     fn create_database(&self, name: &str) -> DbMixedExecutor {
         let db_path = self.instance_dir(name);
-        let db_name = self.node_gsb_prefixes(name).0;
+        let db_name = self.node_gsb_prefixes(name).local_addr().to_string();
 
         let disk_db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))
@@ -479,13 +634,7 @@ impl MarketsNetwork {
 
     pub fn init_database(&self, name: &str) -> DbMixedExecutor {
         let db = self.create_database(name);
-
-        db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)
-            .unwrap();
-        db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)
-            .unwrap();
+        MarketService::apply_migrations(&db).unwrap();
         db
     }
 
@@ -495,41 +644,27 @@ impl MarketsNetwork {
         dir
     }
 
-    pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+    pub fn node_gsb_prefixes(&self, node_name: &str) -> GsbBindPoints {
         gsb_prefixes(&self.test_name, node_name)
     }
 
-    pub fn market_gsb_prefixes(&self, node_name: &str) -> (String, String) {
-        let (gsb_public, gsb_local) = gsb_prefixes(&self.test_name, node_name);
-        gsb_market_prefixes(&gsb_public, &gsb_local)
+    pub fn market_gsb_prefixes(&self, node_name: &str) -> GsbBindPoints {
+        gsb_market_prefixes(gsb_prefixes(&self.test_name, node_name))
     }
 }
 
-fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-workdir")
-}
-
-fn escape_path(path: &str) -> String {
-    // Windows can't handle colons
-    path.replace("::", "_")
-}
-
-pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
-    let test_dir: PathBuf = test_data_dir().join(escape_path(dir_name).as_str());
-
+pub fn prepare_test_dir(test_dir: &Path) -> Result<PathBuf> {
     log::info!(
         "[MockNode] Preparing test directory: {}",
         test_dir.display()
     );
     if test_dir.exists() {
-        fs::remove_dir_all(&test_dir)
+        fs::remove_dir_all(test_dir)
             .with_context(|| format!("Removing test directory: {}", test_dir.display()))?;
     }
-    fs::create_dir_all(&test_dir)
+    fs::create_dir_all(test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
-    Ok(test_dir)
+    Ok(test_dir.to_path_buf())
 }
 
 #[macro_export]
@@ -539,67 +674,13 @@ macro_rules! assert_err_eq {
     };
 }
 
-#[async_trait::async_trait]
-pub trait MarketServiceExt {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError>;
-    async fn get_proposal_from_db(
-        &self,
-        proposal_id: &ProposalId,
-    ) -> Result<Proposal, anyhow::Error>;
-    async fn query_events(
-        &self,
-        subscription_id: &SubscriptionId,
-        timeout: f32,
-        max_events: Option<i32>,
-    ) -> Result<Vec<RequestorEvent>, QueryEventsError>;
-}
-
-#[async_trait::async_trait]
-impl MarketServiceExt for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
-        self.matcher.store.get_offer(id).await
-    }
-
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
-        self.matcher.store.get_demand(id).await
-    }
-
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError> {
-        self.provider_engine.common.get_proposal(None, id).await
-    }
-
-    async fn get_proposal_from_db(
-        &self,
-        proposal_id: &ProposalId,
-    ) -> Result<Proposal, anyhow::Error> {
-        let db = self.db.clone();
-        Ok(
-            match db.as_dao::<ProposalDao>().get_proposal(proposal_id).await? {
-                Some(proposal) => proposal,
-                None => bail!("Proposal [{}] not found", proposal_id),
-            },
-        )
-    }
-
-    async fn query_events(
-        &self,
-        subscription_id: &SubscriptionId,
-        timeout: f32,
-        max_events: Option<i32>,
-    ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-        self.requestor_engine
-            .query_events(subscription_id, timeout, max_events)
-            .await
-    }
-}
-
 pub mod default {
     use super::*;
-    use crate::protocol::negotiation::error::{
-        AgreementProtocolError, CommitAgreementError, CounterProposalError, ProposeAgreementError,
-        RejectProposalError, TerminateAgreementError,
+    use ya_market::testing::{
+        AgreementApproved, AgreementCancelled, AgreementCommitted, AgreementReceived,
+        AgreementRejected, AgreementTerminated, InitialProposalReceived, OffersBcast,
+        OffersRetrieved, ProposalReceived, ProposalRejected, QueryOffers, QueryOffersResult,
+        RetrieveOffers, UnsubscribedOffersBcast,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -704,15 +785,8 @@ pub mod default {
 pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
-        max_bcasted_offers: 100,
-        max_bcasted_unsubscribes: 100,
-        bcast_receiving_queue_size: 14,
-        mean_cyclic_bcast_interval: Duration::from_millis(200),
-        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
-        offer_broadcast_delay: Duration::from_millis(200),
-        unsub_broadcast_delay: Duration::from_millis(200),
-        bcast_tile_time_margin: Duration::from_millis(0),
-        bcast_node_ban_timeout: Duration::from_millis(10),
+        network: GolemBaseNetwork::Local,
+        ..DiscoveryConfig::from_env().unwrap()
     };
 
     let mut cfg = Config::from_env().unwrap();

@@ -2,19 +2,18 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use std::str::FromStr;
 
 use ya_client::model::market::Proposal;
-
-use crate::db::model::{DbProposal, Issuer, Negotiation, ProposalState};
-use crate::db::model::{ProposalId, SubscriptionId};
-use crate::testing::events_helper::{provider, requestor};
-use crate::testing::mock_offer::client::{
-    exclusive_demand, exclusive_offer, sample_demand, sample_offer,
-};
-use crate::testing::MarketsNetwork;
-use crate::testing::Owner;
-
 use ya_client::model::market::{NewDemand, NewOffer};
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
+
+use ya_market::testing::events_helper::{provider, requestor};
+use ya_market::testing::mock_offer::client::{
+    exclusive_demand, exclusive_offer, sample_demand, sample_offer,
+};
+use ya_market::testing::{DbProposal, Issuer, Negotiation, Owner, ProposalState};
+use ya_market::testing::{ProposalId, SubscriptionId};
+
+use super::mock_node::MarketsNetwork;
 
 pub fn generate_proposal(
     unifier: i64,
@@ -23,8 +22,14 @@ pub fn generate_proposal(
 ) -> DbProposal {
     DbProposal {
         id: ProposalId::generate_id(
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
             // Add parametrized integer - unifier to ensure unique ids
             &(Utc::now() + Duration::days(unifier)).naive_utc(),
             Owner::Requestor,
@@ -44,9 +49,18 @@ pub fn generate_negotiation(agreement_id: Option<ProposalId>) -> Negotiation {
     use uuid::Uuid;
     Negotiation {
         id: format!("{}", Uuid::new_v4()),
-        subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        offer_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        demand_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+        subscription_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
+        offer_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
+        demand_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
         provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         agreement_id,
@@ -65,8 +79,8 @@ pub async fn exchange_draft_proposals(
     req_name: &str,
     prov_name: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
+    let req_id = network.get_default_id(req_name).await;
+    let prov_id = network.get_default_id(prov_name).await;
 
     exchange_proposals_impl(
         network,
@@ -106,8 +120,8 @@ pub async fn exchange_proposals_exclusive(
     prov_name: &str,
     match_on: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
+    let req_id = network.get_default_id(req_name).await;
+    let prov_id = network.get_default_id(prov_name).await;
 
     exchange_proposals_impl(
         network,

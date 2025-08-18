@@ -155,14 +155,18 @@ impl Agreement {
             constraints: self.demand_constraints,
             requestor_id: self.requestor_id,
             demand_id: self.demand_id.to_string(),
+            // Those values don't reflect original Offer and Demand expiration times.
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
+            expiration: Utc.from_utc_datetime(&self.valid_to),
         };
         let offer = ClientOffer {
             properties: offer_properties,
             constraints: self.offer_constraints,
             provider_id: self.provider_id,
             offer_id: self.offer_id.to_string(),
+            // Those values don't reflect original Offer and Demand expiration times.
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
+            expiration: Utc.from_utc_datetime(&self.valid_to),
         };
         Ok(ClientAgreement {
             agreement_id: self.id.into_client(),

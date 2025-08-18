@@ -1,14 +1,10 @@
 //! Discovery protocol messages handlers
 use futures::prelude::*;
-use metrics::{counter, value};
+use metrics::counter;
 
-use crate::db::model::{Offer, SubscriptionId};
+use crate::db::model::SubscriptionId;
 use crate::matcher::error::ModifyOfferError;
-use crate::protocol::discovery::message::{QueryOffers, QueryOffersResult};
-use crate::protocol::discovery::{
-    error::DiscoveryRemoteError,
-    message::{OffersBcast, OffersRetrieved, RetrieveOffers, UnsubscribedOffersBcast},
-};
+use crate::protocol::discovery::message::{OffersBcast, OffersRetrieved, UnsubscribedOffersBcast};
 
 use super::{resolver::Resolver, store::SubscriptionStore};
 
@@ -64,38 +60,6 @@ pub(super) async fn receive_remote_offers(
         resolver.store.notify();
     }
     Ok(added_offers_ids)
-}
-
-pub(super) async fn get_local_offers(
-    store: SubscriptionStore,
-    _caller: String,
-    msg: RetrieveOffers,
-) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    value!(
-        "market.offers.retrieved_by_remotes",
-        msg.offer_ids.len() as u64
-    );
-
-    match store.get_offers(msg.offer_ids).await {
-        Ok(offers) => Ok(offers),
-        Err(e) => {
-            log::error!("Failed to get batch offers. Error: {}", e);
-            Err(DiscoveryRemoteError::InternalError(
-                "Failed to get offers from db.".to_string(),
-            ))
-        }
-    }
-}
-
-pub(super) async fn query_offers(
-    store: SubscriptionStore,
-    _caller: String,
-    msg: QueryOffers,
-) -> Result<QueryOffersResult, DiscoveryRemoteError> {
-    store
-        .query_offers(msg)
-        .await
-        .map_err(|e| DiscoveryRemoteError::InternalError(e.to_string()))
 }
 
 /// Returns only those of input offer ids, that were able to be unsubscribed locally.

@@ -13,6 +13,7 @@ use ya_client_model::NodeId;
 use ya_core_model::payment::local::{NetworkName, ProcessBatchCycleResponse};
 
 // Workspace uses
+use ya_core_model::market::{local as market_bus, FundGolemBase, GetGolemBaseBalance};
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -201,6 +202,14 @@ fn round_duration_humantime(d: chrono::Duration) -> String {
     humantime::format_duration(round_duration_to_sec_chrono(d)).to_string()
 }
 
+fn format_balance(balance: &BigDecimal, currency: &str, precise: bool) -> String {
+    if precise {
+        format!("{} {}", balance, currency)
+    } else {
+        format!("{:.4} {}", balance, currency)
+    }
+}
+
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
@@ -253,16 +262,29 @@ Typically operation should take less than 1 minute.
 "#;
                 log::warn!("{}", warn_message);
 
-                CommandOutput::object(
+                // Fund payment wallet and GolemBase wallet concurrently
+                let (driver_fund_result, golembase_result) = tokio::join!(
                     wallet::fund(
-                        address,
+                        address.clone(),
                         account.driver(),
                         Some(account.network()),
                         None,
                         mint_only,
-                    )
-                    .await?,
-                )
+                    ),
+                    bus::service(market_bus::discovery_endpoint()).send(FundGolemBase {
+                        wallet: Some(address.parse()?),
+                    })
+                );
+
+                let driver_fund_result = driver_fund_result?;
+                let golembase_result = golembase_result??;
+
+                CommandOutput::object(json!({
+                    "driver": driver_fund_result,
+                    "GolemBase": {
+                        "balance": golembase_result.balance
+                    }
+                }))
             }
             PaymentCli::Init {
                 account,
@@ -306,20 +328,22 @@ Typically operation should take less than 1 minute.
 
                 let gas_info = match status.gas.as_ref() {
                     Some(details) => {
-                        if precise {
-                            format!("{} {}", details.balance, details.currency_short_name)
-                        } else {
-                            format!("{:.4} {}", details.balance, details.currency_short_name)
-                        }
+                        format_balance(&details.balance, &details.currency_short_name, precise)
                     }
                     None => "N/A".to_string(),
                 };
 
-                let token_info = if precise {
-                    format!("{} {}", status.amount, status.token)
-                } else {
-                    format!("{:.4} {}", status.amount, status.token)
+                let golem_base_gas = match bus::service(market_bus::discovery_endpoint())
+                    .send(GetGolemBaseBalance {
+                        wallet: Some(address.parse()?),
+                    })
+                    .await
+                {
+                    Ok(Ok(response)) => format_balance(&response.balance, &response.token, precise),
+                    _ => "Error".to_string(),
                 };
+
+                let token_info = format_balance(&status.amount, &status.token, precise);
 
                 let driver_status_props = bus::service(pay::BUS_ID)
                     .call(pay::PaymentDriverStatus {
@@ -392,7 +416,7 @@ Typically operation should take less than 1 minute.
                             "accepted",
                             format!("{} {}", status.incoming.accepted.total_amount, status.token),
                             format!("{} {}", status.outgoing.accepted.total_amount, status.token),
-                            gas_info,
+                            gas_info
                         ]},
                         serde_json::json! {[
                             format!("network: {}", status.network),
@@ -401,7 +425,7 @@ Typically operation should take less than 1 minute.
                             "confirmed",
                             format!("{} {}", status.incoming.confirmed.total_amount, status.token),
                             format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
-                            ""
+                            format!("GolemBase: {}", golem_base_gas)
                         ]},
                         serde_json::json! {[
                             format!("token: {}", status.token),

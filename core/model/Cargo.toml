@@ -28,7 +28,7 @@ appkey = []
 driver = ['bigdecimal', 'bitflags']
 gftp = []
 identity = []
-market = []
+market = ['bigdecimal']
 net = []
 payment = ['bigdecimal', 'bitflags', 'anyhow', 'serde_json_canonicalizer', 'sha3']
 sgx = ['graphene-sgx']
@@ -39,7 +39,7 @@ ya-client-model.workspace = true
 ya-service-bus = { workspace = true }
 
 anyhow = { version = "1.0", optional = true }
-bigdecimal = { version = "0.2", features = ["serde"], optional = true }
+bigdecimal = { version = "0.4", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = { workspace = true }

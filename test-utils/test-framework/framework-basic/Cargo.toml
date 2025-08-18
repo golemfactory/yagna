@@ -11,7 +11,7 @@ bcast-singleton = []
 [dependencies]
 ya-client-model.workspace = true
 ya-client.workspace = true
-ya-core-model.workspace = true
+ya-core-model = { workspace = true, features = ["market"] }
 ya-service-bus = { workspace = true }
 ya-utils-path = { version = "0.1", path = "../../../utils/path" }
 ya-utils-futures.workspace = true

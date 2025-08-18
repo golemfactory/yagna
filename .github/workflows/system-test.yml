@@ -17,9 +17,10 @@ on:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 env:
-  rust_stable: 1.84.0
+  rust_stable: 1.87.0
 
 jobs:
   build:
@@ -71,4 +72,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features system-test
+          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity -p ya-provider --features system-test

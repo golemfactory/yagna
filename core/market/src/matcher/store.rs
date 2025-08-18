@@ -2,8 +2,9 @@ use actix_web::web::Data;
 use chrono::{NaiveDateTime, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
-use ya_client::model::market::{Demand as ClientDemand, NewDemand, NewOffer, Offer as ClientOffer};
+use ya_client::model::market::{Demand as ClientDemand, NewDemand, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
@@ -15,6 +16,7 @@ use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryDemandsError, QueryOfferError, QueryOffersError,
     SaveOfferError,
 };
+use crate::matcher::sync::{OfferPlaceholderGuard, OfferSync};
 use crate::negotiation::ScannerSet;
 use crate::protocol::discovery::message::{QueryOffers, QueryOffersResult};
 
@@ -23,37 +25,42 @@ pub struct SubscriptionStore {
     pub(crate) db: DbMixedExecutor,
     config: Arc<Config>,
     scan_set: Data<ScannerSet>,
+    offer_sync: OfferSync,
 }
 
 impl SubscriptionStore {
     pub fn new(db: DbMixedExecutor, scan_set: Data<ScannerSet>, config: Arc<Config>) -> Self {
+        let offer_sync = OfferSync::new(scan_set.offers_watch().clone());
         SubscriptionStore {
             db,
             config,
             scan_set,
+            offer_sync,
         }
     }
 
     /// returns newly created offer with insertion_ts
-    pub async fn create_offer(
+    pub async fn register_offer(
         &self,
-        id: &Identity,
-        offer: &NewOffer,
+        offer: Offer,
+        placeholder_guard: Option<OfferPlaceholderGuard>,
     ) -> Result<Offer, SaveOfferError> {
-        let creation_ts = Utc::now().naive_utc();
-        // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, id, creation_ts, expiration_ts)?;
         let r = self.insert_offer(offer).await;
+
+        // Drop the guard before sending notification
+        if let Some(guard) = placeholder_guard {
+            drop(guard);
+        }
+
         if r.is_ok() {
             self.scan_set.notify();
         }
+
         r
     }
 
     /// returns saved offer with insertion_ts
     pub async fn save_offer(&self, offer: Offer) -> Result<Offer, SaveOfferError> {
-        offer.validate()?;
         self.insert_offer(offer).await
     }
 
@@ -185,12 +192,6 @@ impl SubscriptionStore {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        // Make sure we only process ids up to limit from config
-        let max_bcasted_offers = self.config.discovery.max_bcasted_offers as usize;
-        let offers_idx =
-            offer_ids.len() - [offer_ids.len(), max_bcasted_offers].iter().min().unwrap();
-        let offer_ids = offer_ids[offers_idx..].to_vec();
-
         let known_ids = self
             .db
             .as_dao::<OfferDao>()
@@ -215,6 +216,25 @@ impl SubscriptionStore {
             Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
             Ok(OfferState::Expired(_)) => Err(QueryOfferError::Expired(id.clone())),
             Ok(OfferState::NotFound) => Err(QueryOfferError::NotFound(id.clone())),
+        }
+    }
+
+    /// Gets an offer waiting for synchronization with GolemBase. Our Offers are not avaiable immediately
+    /// in store.
+    pub async fn get_offer_synced(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
+        match self.get_offer(id).await {
+            Ok(offer) => Ok(offer),
+            Err(QueryOfferError::NotFound(_)) => {
+                // Offer not found. Try to wait for Offers that are during publishing on GolemBase.
+                let context = self.offer_sync.get_placeholder_snapshot();
+                // TODO: We should use the same timeout as in Discovery for Offer publication.
+                context
+                    .wait_for_offer_availability(Duration::from_secs(10))
+                    .await;
+                // Check Offers again. If still not found, it means that it wasn't our Offer..
+                self.get_offer(id).await
+            }
+            Err(e) => Err(e), // Return other errors as-is
         }
     }
 
@@ -351,5 +371,10 @@ impl SubscriptionStore {
 
     pub fn notify(&self) {
         self.scan_set.notify();
+    }
+
+    /// Gets the OfferSync instance for offer synchronization
+    pub fn offer_sync(&self) -> &OfferSync {
+        &self.offer_sync
     }
 }

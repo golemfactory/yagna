@@ -1,23 +1,27 @@
 use rand::seq::SliceRandom;
 use std::time::Duration;
-use ya_framework_mocks::net::MockNet;
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
+use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 
-use ya_market::assert_err_eq;
-use ya_market::testing::{
-    mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
-    mock_offer::client,
-    MarketServiceExt, MarketsNetwork, QueryOfferError,
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::mock_node::{
+    assert_offers_broadcasted, assert_unsunbscribes_broadcasted, MarketsNetwork,
 };
+use ya_framework_mocks::net::MockNet;
 
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should
 /// get all Offers from them, if cyclic broadcasting works properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_startup_offers_sharing() {
-    let _ = env_logger::builder().try_init();
+async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
+    enable_logs(false);
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_startup_offers_sharing")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -25,10 +29,10 @@ async fn test_startup_offers_sharing() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     // Create some offers before we instantiate 3rd node.
     // This way this 3rd node won't get them in first broadcasts, that
@@ -57,6 +61,8 @@ async fn test_startup_offers_sharing() {
 
     // Make sure we got all offers that, were created.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions).await;
+
+    Ok(())
 }
 
 /// Unsubscribes are sent immediately after Offer is unsubscribed and
@@ -67,10 +73,13 @@ async fn test_startup_offers_sharing() {
 /// After networking will be reenabled, we expect, that 3rd Node will get all unsubscribes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_unsubscribes_cyclic_broadcasts() {
-    let _ = env_logger::builder().try_init();
+async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
+    enable_logs(false);
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_unsubscribes_cyclic_broadcasts")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -80,13 +89,13 @@ async fn test_unsubscribes_cyclic_broadcasts() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     let mkt3 = network.get_market("Node-3");
-    let id3 = network.get_default_id("Node-3");
+    let id3 = network.get_default_id("Node-3").await;
 
     // create demands so that after #1474 nodes will be subscribed to broadcasts
     mkt1.subscribe_demand(&client::sample_demand(), &id1)
@@ -125,7 +134,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
     .await;
 
     // Break networking, so unsubscribe broadcasts won't come to Node-3.
-    network.break_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-3").await.unwrap();
 
     // Unsubscribe random Offers.
     // Only the first elements of the vectors will NOT be unsubscribed.
@@ -139,13 +148,9 @@ async fn test_unsubscribes_cyclic_broadcasts() {
         mkt2.unsubscribe_offer(subscription, &id2).await.unwrap();
     }
 
-    // Sanity check. We should have all Offers subscribed at this moment,
-    // since Node-3 network didn't work.
-    assert_offers_broadcasted(&[&mkt3], subscriptions1.iter().chain(subscriptions2.iter())).await;
-
     // Re-enable networking for Node-3. We should get only cyclic broadcast.
     // Immediate broadcast should be already lost.
-    network.enable_networking_for("Node-3").unwrap();
+    network.enable_networking_for("Node-3").await.unwrap();
     tokio::time::sleep(Duration::from_millis(320)).await;
 
     // Check if all expected Offers were unsubscribed.
@@ -165,16 +170,21 @@ async fn test_unsubscribes_cyclic_broadcasts() {
             .chain(subscriptions2[0..10].iter()),
     )
     .await;
+
+    Ok(())
 }
 
 /// Subscribing and unsubscribing should work despite network errors.
-/// Market should return subscription id and Offer propagation will take place
-/// later during cyclic broadcasts. The same applies to unsubscribes.
+/// Since Offers are stored on GolemBase, there is no propagation and network doesn't have to work.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_network_error_while_subscribing() {
-    let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_network_error_while_subscribing")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -182,9 +192,9 @@ async fn test_network_error_while_subscribing() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
-    network.break_networking_for("Node-1").unwrap();
+    network.break_networking_for("Node-1").await.unwrap();
 
     // It's not an error. Should pass.
     let subscription_id = mkt1
@@ -199,19 +209,24 @@ async fn test_network_error_while_subscribing() {
     let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
     assert_err_eq!(expected_error, mkt1.get_offer(&subscription_id).await);
 
-    let expected_error = QueryOfferError::NotFound(subscription_id.clone());
+    let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
     let mkt2 = network.get_market("Node-2");
     assert_err_eq!(expected_error, mkt2.get_offer(&subscription_id).await);
+
+    Ok(())
 }
 
 /// Nodes send in cyclic broadcasts not only own Offers, but Offers
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_sharing_someones_else_offers() {
-    let _ = env_logger::builder().try_init();
+async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
+    enable_logs(false);
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_sharing_someones_else_offers")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -219,10 +234,10 @@ async fn test_sharing_someones_else_offers() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     // Create some offers before we instantiate 3rd node.
     // This way this 3rd node won't get them in first broadcasts, that
@@ -249,22 +264,27 @@ async fn test_sharing_someones_else_offers() {
     assert_offers_broadcasted(&[&mkt1, &mkt2], subscriptions.iter()).await;
 
     // Break networking for Node-1. Only Node-2 will be able to send Offers.
-    network.break_networking_for("Node-1").unwrap();
+    network.break_networking_for("Node-1").await.unwrap();
     let network = network.add_market_instance("Node-3").await;
     let mkt3 = network.get_market("Node-3");
 
     // Make sure Node-3 has all offers from both: Node-1 and Node-2.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;
+
+    Ok(())
 }
 
 /// Nodes send in cyclic broadcasts not only own Offers unsubscribes, but unsubscribes
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_sharing_someones_else_unsubscribes() {
-    let _ = env_logger::builder().try_init();
+async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
+    enable_logs(false);
 
-    let network = MarketsNetwork::new(None, MockNet::new())
+    let dir = temp_dir!("test_sharing_someones_else_unsubscribes")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -274,13 +294,13 @@ async fn test_sharing_someones_else_unsubscribes() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
+    let id1 = network.get_default_id("Node-1").await;
 
     let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
+    let id2 = network.get_default_id("Node-2").await;
 
     let mkt3 = network.get_market("Node-3");
-    let id3 = network.get_default_id("Node-3");
+    let id3 = network.get_default_id("Node-3").await;
 
     let mut subscriptions = vec![];
 
@@ -318,7 +338,7 @@ async fn test_sharing_someones_else_unsubscribes() {
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;
 
     // Break networking for Node-3, so he won't see any unsubscribes.
-    network.break_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-3").await.unwrap();
 
     for subscription in subscriptions[3..].iter() {
         mkt2.unsubscribe_offer(subscription, &id2).await.unwrap();
@@ -326,16 +346,16 @@ async fn test_sharing_someones_else_unsubscribes() {
 
     // Check if all expected Offers were unsubscribed.
     assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2], subscriptions[3..].iter()).await;
-    // Sanity check. Node-3 should still see all Offers (not unsubscribed).
-    assert_offers_broadcasted(&[&mkt3], subscriptions.iter()).await;
 
     // Disconnect Node-2. Only Node-1 can propagate unsubscribes to Node-3.
-    network.break_networking_for("Node-2").unwrap();
-    network.enable_networking_for("Node-3").unwrap();
+    network.break_networking_for("Node-2").await.unwrap();
+    network.enable_networking_for("Node-3").await.unwrap();
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
     assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[3..]).await;
 
     // All other Offers should remain untouched.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[0..3]).await;
+
+    Ok(())
 }

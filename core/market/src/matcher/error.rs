@@ -109,6 +109,8 @@ pub enum MatcherError {
     SaveOffer(#[from] SaveOfferError),
     #[error(transparent)]
     ModifyOffer(#[from] ModifyOfferError),
+    #[error("Failed to store offer on GolemBase. Error: {0}.")]
+    GolemBaseOfferError(String),
 }
 
 #[derive(thiserror::Error, Debug)]

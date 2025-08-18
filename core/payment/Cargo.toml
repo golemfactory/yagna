@@ -30,7 +30,7 @@ ya-std-utils.workspace = true
 actix-web = "4"
 anyhow = "1.0"
 base64 = "0.12"
-bigdecimal = "0.2"
+bigdecimal = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 cron = "0.12"
 derive_more = "0.99.18"
@@ -52,7 +52,7 @@ lazy_static = "1.4"
 libsqlite3-sys = { workspace = true }
 log = "0.4"
 metrics = "0.12"
-num-bigint = "0.3"
+num-bigint = "0.4"
 open = "5.1.2"
 parking_lot = { workspace = true }
 problem_details = "0.6.0"

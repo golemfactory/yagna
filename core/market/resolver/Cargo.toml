@@ -8,7 +8,7 @@ edition = "2018"
 ya-agreement-utils = { workspace = true }
 
 asnom = { git = "https://github.com/golemfactory/asnom" }
-bigdecimal = "0.2"
+bigdecimal = "0.4"
 chrono = "0.4"
 log = "0.4"
 nom = "2.0"

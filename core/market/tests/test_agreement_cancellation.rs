@@ -3,15 +3,22 @@ use tokio::join;
 use tokio::time::timeout;
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
-
 use ya_client::model::market::{AgreementEventType, Reason};
-use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
-use ya_market::testing::{
+
+use ya_framework_mocks::assert_err_eq;
+use ya_framework_mocks::market::legacy::{
     agreement_utils::{gen_reason, negotiate_agreement},
+    mock_node::MarketsNetwork,
     proposal_util::exchange_draft_proposals,
-    AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, MarketsNetwork, Owner,
 };
+use ya_framework_mocks::net::MockNet;
+
+use ya_market::testing::{
+    AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, Owner,
+};
+
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -19,8 +26,12 @@ const PROV_NAME: &str = "Node-2";
 /// Agreement cancelled without any Provider-Requestor races.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_cancelled")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -35,8 +46,8 @@ async fn test_agreement_cancelled() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -68,13 +79,19 @@ async fn test_agreement_cancelled() {
         .await
         .unwrap();
     assert_eq!(agreement.state, ClientAgreementState::Cancelled);
+
+    Ok(())
 }
 
 /// Cancelling `Approved` and `Terminated` Agreement is not allowed.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_cancel_agreement_in_wrong_state() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_cancel_agreement_in_wrong_state() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_cancel_agreement_in_wrong_state")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -82,7 +99,7 @@ async fn test_cancel_agreement_in_wrong_state() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let negotiation = negotiate_agreement(
         &network,
@@ -145,13 +162,19 @@ async fn test_cancel_agreement_in_wrong_state() {
         ),
         result
     );
+
+    Ok(())
 }
 
 /// `wait_for_approval` should wake up after cancelling Agreement.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_cancelled_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -165,7 +188,7 @@ async fn test_agreement_cancelled_wait_for_approval() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -188,7 +211,7 @@ async fn test_agreement_cancelled_wait_for_approval() {
         market
             .requestor_engine
             .cancel_agreement(
-                &network.get_default_id(REQ_NAME),
+                &network.get_default_id(REQ_NAME).await,
                 &agr_id.clone(),
                 Some(gen_reason("Changed my mind")),
             )
@@ -213,6 +236,8 @@ async fn test_agreement_cancelled_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// Provider sends Reject Agreement at the same time as Requestor
@@ -221,8 +246,12 @@ async fn test_agreement_cancelled_wait_for_approval() {
 /// should end in the same state.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_simultaneous_reject_cancel() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_simultaneous_reject_cancel() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_simultaneous_reject_cancel")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -237,8 +266,8 @@ async fn test_agreement_simultaneous_reject_cancel() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -263,7 +292,7 @@ async fn test_agreement_simultaneous_reject_cancel() {
         market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &network.get_default_id(PROV_NAME).await,
                 &agr_id.clone(),
                 Some(gen_reason("Not-interested")),
             )
@@ -336,6 +365,8 @@ async fn test_agreement_simultaneous_reject_cancel() {
         }
         _ => panic!("Expected ApprovalStatus::Rejected or ApprovalStatus::Cancelled"),
     }
+
+    Ok(())
 }
 
 /// Provider sends Approve Agreement at the same time as Requestor
@@ -344,8 +375,12 @@ async fn test_agreement_simultaneous_reject_cancel() {
 /// should end in the same state.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_simultaneous_approve_cancel() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_simultaneous_approve_cancel() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_simultaneous_approve_cancel")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -360,8 +395,8 @@ async fn test_agreement_simultaneous_approve_cancel() {
     let prov_market = network.get_market(PROV_NAME);
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
 
     let agreement_id = req_engine
         .create_agreement(
@@ -386,7 +421,7 @@ async fn test_agreement_simultaneous_approve_cancel() {
         market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                network.get_default_id(PROV_NAME).await,
                 &agr_id.clone(),
                 None,
                 1.0,
@@ -460,4 +495,6 @@ async fn test_agreement_simultaneous_approve_cancel() {
         }
         _ => panic!("Expected ApprovalStatus::Approved or ApprovalStatus::Cancelled"),
     }
+
+    Ok(())
 }

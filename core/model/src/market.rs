@@ -1,17 +1,51 @@
 //! Market service bus API.
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json;
 
+use crate::bus::GsbBindPoints;
+use ya_client_model::market::Offer as ClientOffer;
 use ya_client_model::market::{agreement::State, Role};
 pub use ya_client_model::market::{Agreement, AgreementListEntry};
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 /// Public Market bus address.
 pub const BUS_ID: &str = "/public/market";
+pub const BUS_SERVICE_NAME: &str = "market";
+
+/// Use None for default bindpoints value.
+/// Override in case you are creating tests that need to separate
+/// bindpoints for different instances of Market.
+pub fn bus_bindpoints(base: Option<GsbBindPoints>) -> GsbBindPoints {
+    match base {
+        Some(base) => base.service(BUS_SERVICE_NAME),
+        None => GsbBindPoints::default().service(BUS_SERVICE_NAME),
+    }
+}
 
 /// Internal Market bus address.
 pub mod local {
+    use crate::bus::GsbBindPoints;
+
     pub const BUS_ID: &str = "/local/market";
+    pub const BUS_DISCOVERY: &str = "market-discovery";
+
+    /// Builds the discovery bus endpoint with a custom prefix.
+    pub fn build_discovery_endpoint(prefix: &str) -> String {
+        format!("{}/{}", prefix, BUS_DISCOVERY)
+    }
+
+    /// Builds the discovery bus endpoint from GsbBindPoints.
+    pub fn build_discovery_bindpoint(gsb: &GsbBindPoints) -> GsbBindPoints {
+        gsb.clone().service(BUS_DISCOVERY)
+    }
+
+    /// Builds the discovery bus endpoint with the default prefix.
+    pub fn discovery_endpoint() -> String {
+        build_discovery_endpoint(BUS_ID)
+    }
 }
 
 /// Returns the Agreement.
@@ -85,4 +119,85 @@ pub enum RpcMessageError {
     Forbidden(String),
     #[error("Timeout")]
     Timeout,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FundGolemBase {
+    pub wallet: Option<NodeId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FundGolemBaseResponse {
+    pub wallet: NodeId,
+    pub balance: BigDecimal,
+}
+
+impl RpcMessage for FundGolemBase {
+    const ID: &'static str = "FundGolemBase";
+    type Item = FundGolemBaseResponse;
+    type Error = RpcMessageError;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseBalance {
+    pub wallet: Option<NodeId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseBalanceResponse {
+    pub wallet: NodeId,
+    pub balance: BigDecimal,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseOffer {
+    pub offer_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetGolemBaseOfferResponse {
+    pub offer: ClientOffer,
+    pub current_block: u64,
+    pub metadata: serde_json::Value,
+}
+
+impl RpcMessage for GetGolemBaseOffer {
+    const ID: &'static str = "GetGolemBaseOffer";
+    type Item = GetGolemBaseOfferResponse;
+    type Error = RpcMessageError;
+}
+
+impl RpcMessage for GetGolemBaseBalance {
+    const ID: &'static str = "GetGolemBaseBalance";
+    type Item = GetGolemBaseBalanceResponse;
+    type Error = RpcMessageError;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolemBaseCommand {
+    pub command: GolemBaseCommandType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GolemBaseCommandType {
+    GetTransaction { transaction_id: String },
+    GetBlock { block_number: u64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolemBaseCommandResponse {
+    pub response: GolemBaseResponseType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GolemBaseResponseType {
+    Transaction { transaction: serde_json::Value },
+    Block { block: serde_json::Value }, // Empty implementation for now
+}
+
+impl RpcMessage for GolemBaseCommand {
+    const ID: &'static str = "GolemBaseCommand";
+    type Item = GolemBaseCommandResponse;
+    type Error = RpcMessageError;
 }

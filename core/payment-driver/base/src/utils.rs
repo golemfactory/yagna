@@ -6,7 +6,6 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_types::U256;
-use num_bigint::ToBigInt;
 
 // Local uses
 use crate::db::models::PaymentEntity;
@@ -57,7 +56,7 @@ pub fn u256_from_big_endian_hex(bytes: String) -> U256 {
 
 pub fn big_dec_to_u256(v: &BigDecimal) -> U256 {
     let v = v * Into::<BigDecimal>::into(PRECISION);
-    let v = v.to_bigint().unwrap();
+    let v = v.into_bigint_and_exponent().0;
     let v = &v.to_string();
     U256::from_dec_str(v).unwrap()
 }

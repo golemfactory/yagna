@@ -778,6 +778,7 @@ async fn main() -> Result<()> {
     init_allocation_release_tasks();
 
     #[cfg(feature = "static-openssl")]
+    #[allow(deprecated)]
     openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();
 

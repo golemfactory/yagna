@@ -23,9 +23,10 @@ pub enum NetType {
     ///  This conditional compilation is hack to make Goth integration tests work.
     ///  Current solution in Goth is to build separate binary with compilation flag.
     ///  This is only temporary for transition period, to make this PR as small as possible.
-    #[cfg_attr(feature = "central-net", default)]
+    //#[cfg_attr(feature = "central-net", default)]
+    #[default]
     Central,
-    #[cfg_attr(not(feature = "central-net"), default)]
+    //#[cfg_attr(not(feature = "central-net"), default)]
     Hybrid,
 }
 
@@ -38,9 +39,13 @@ pub struct Config {
     pub host: Option<String>,
     #[structopt(env = "YA_NET_BIND_URL", default_value = "udp://0.0.0.0:11500")]
     pub bind_url: Url,
+    /// Node can use different broadcast size depending if it has public IP or not.
+    /// This value is used in case Node is hidden behind NAT.
     #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "5")]
     pub broadcast_size: u32,
-    #[structopt(env = "YA_NET_PUB_BROADCAST_SIZE", default_value = "30")]
+    /// Node can use different broadcast size depending if it has public IP or not.
+    /// This value is used in case Node has publicly exposed ports.
+    #[structopt(env = "YA_NET_PUB_BROADCAST_SIZE", default_value = "10")]
     pub pub_broadcast_size: u32,
     #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
     pub session_expiration: Duration,
@@ -50,6 +55,14 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
+        // TODO: Temporary setting for GolemBase builds testing.
+        // Remove when implementation will be production ready.
+        if std::env::var("YA_NET_RELAY_HOST").is_err() {
+            std::env::set_var("YA_NET_RELAY_HOST", "ya-golembase.dev.golem.network:7477");
+        }
+        if std::env::var("CENTRAL_NET_HOST").is_err() {
+            std::env::set_var("CENTRAL_NET_HOST", "ya-golembase.dev.golem.network:7464");
+        }
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         Config::from_iter_safe(&[""])

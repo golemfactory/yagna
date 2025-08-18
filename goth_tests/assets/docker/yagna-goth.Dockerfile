@@ -10,3 +10,4 @@ RUN chmod +x /usr/bin/* \
     && ln -s /usr/bin/exe-unit /usr/lib/yagna/plugins/exe-unit
 
 ENTRYPOINT /usr/bin/yagna
+

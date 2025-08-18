@@ -85,7 +85,7 @@ async fn payment_sync(
             )
             .await
             .map_err(GenericError::new)?;
-        if let Some(event) = events.into_iter().last() {
+        if let Some(event) = events.into_iter().next_back() {
             if let InvoiceEventType::InvoiceRejectedEvent { rejection } = event.event_type {
                 invoice_rejects.push(RejectInvoiceV2 {
                     invoice_id: invoice.invoice_id,

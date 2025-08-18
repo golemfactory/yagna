@@ -1,22 +1,29 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
 
-use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
-use ya_market::testing::events_helper::requestor::expect_approve;
-use ya_market::testing::proposal_util::exchange_draft_proposals;
-use ya_market::testing::MarketsNetwork;
+use ya_framework_mocks::net::MockNet;
+
+use ya_framework_mocks::market::legacy::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_framework_mocks::market::legacy::events_helper::requestor::expect_approve;
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_draft_proposals;
 use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementEventType;
-use ya_framework_mocks::net::MockNet;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_approved_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_approved_event() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_approved_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -29,8 +36,8 @@ async fn test_agreement_approved_event() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -56,7 +63,7 @@ async fn test_agreement_approved_event() {
         prov_market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
@@ -105,13 +112,19 @@ async fn test_agreement_approved_event() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// Both endpoints Agreement events and wait_for_approval should work properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_events_and_wait_for_approval() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_events_and_wait_for_approval() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_events_and_wait_for_approval")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -124,7 +137,8 @@ async fn test_agreement_events_and_wait_for_approval() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -160,7 +174,7 @@ async fn test_agreement_events_and_wait_for_approval() {
         prov_market
             .provider_engine
             .approve_agreement(
-                network.get_default_id(PROV_NAME),
+                prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
@@ -189,14 +203,20 @@ async fn test_agreement_events_and_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// We expect to get AgreementTerminatedEvent on both sides Provider and Requestor
 /// after terminate_agreement endpoint was called.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_terminated_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_terminated_event() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_terminated_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -204,8 +224,8 @@ async fn test_agreement_terminated_event() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -283,13 +303,19 @@ async fn test_agreement_terminated_event() {
             e
         ),
     };
+
+    Ok(())
 }
 
 /// Tests if AgreementEvents notifications work as expected.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_waiting_for_agreement_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_waiting_for_agreement_event() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_waiting_for_agreement_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -297,8 +323,8 @@ async fn test_waiting_for_agreement_event() {
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -335,12 +361,18 @@ async fn test_waiting_for_agreement_event() {
         events[0].agreement_id,
         negotiation.r_agreement.into_client()
     );
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_rejected_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_rejected_event() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_rejected_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -354,8 +386,8 @@ async fn test_agreement_rejected_event() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -381,7 +413,7 @@ async fn test_agreement_rejected_event() {
         prov_market
             .provider_engine
             .reject_agreement(
-                &network.get_default_id(PROV_NAME),
+                &prov_id.clone(),
                 &agr_id.clone().translate(Owner::Provider),
                 Some(gen_reason("Not-interested")),
             )
@@ -433,12 +465,18 @@ async fn test_agreement_rejected_event() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_agreement_cancelled_event() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_agreement_cancelled_event() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_agreement_cancelled_event")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -452,8 +490,8 @@ async fn test_agreement_cancelled_event() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -518,4 +556,6 @@ async fn test_agreement_cancelled_event() {
             e
         ),
     };
+
+    Ok(())
 }

@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::market::{GetLastBcastTs, RpcMessageError};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::typed::ServiceBinder;
@@ -18,25 +19,21 @@ use ya_utils_actix::deadline_checker::{
 use crate::config::Config;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
+use crate::protocol::discovery::offer::GolemBaseOffer;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
-pub(crate) mod cyclic;
 pub mod error;
 pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
+pub(crate) mod sync;
 
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
-use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
 use tracing::Level;
-use ya_core_model::net::local::{
-    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
-};
-use ya_net::bind_broadcast_with_caller;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -57,8 +54,8 @@ pub struct Matcher {
     pub resolver: Resolver,
     pub(crate) discovery: Discovery,
     identity: Arc<dyn IdentityApi>,
-    config: Arc<Config>,
     expiration_tracker: Addr<DeadlineChecker>,
+    config: Arc<Config>,
 }
 
 impl Matcher {
@@ -76,19 +73,17 @@ impl Matcher {
             .add_data(resolver.clone())
             .add_data_handler(handlers::filter_out_known_offer_ids)
             .add_data_handler(handlers::receive_remote_offers)
-            .add_data_handler(handlers::get_local_offers)
             .add_data_handler(handlers::receive_remote_offer_unsubscribes)
-            .add_data_handler(handlers::query_offers)
             .with_config(config.discovery.clone())
-            .build();
+            .build()?;
 
         let matcher = Matcher {
             store,
             resolver,
             discovery,
-            config,
             identity: identity_api,
             expiration_tracker: DeadlineChecker::default().start(),
+            config,
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -108,19 +103,8 @@ impl Matcher {
         Ok((matcher, listeners))
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        local_prefix: &str,
-    ) -> Result<(), MatcherInitError> {
-        self.discovery.bind_gsb(public_prefix, local_prefix).await?;
-
-        // We can't spawn broadcasts, before gsb is bound.
-        // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
-        tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
-
-        self.bind_neighbourhood_bcast(local_prefix).await.ok();
+    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), MatcherInitError> {
+        self.discovery.bind_gsb(gsb.clone()).await?;
 
         self.bind_expiration_tracker()
             .await
@@ -142,26 +126,9 @@ impl Matcher {
                 .map_err(|_| RpcMessageError::Timeout)
         }
 
-        ServiceBinder::new(local_prefix, &(), discovery).bind_with_processor(handler);
+        ServiceBinder::new(gsb.local_addr(), &(), discovery).bind_with_processor(handler);
 
         Ok(())
-    }
-
-    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> Result<(), BindBroadcastError> {
-        let bcast_address = format!("{local_prefix}/{}", NewNeighbour::TOPIC);
-        let myself = self.clone();
-        bind_broadcast_with_caller(
-            &bcast_address,
-            move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
-                let myself = myself.clone();
-                async move {
-                    debug!("Received new neighbour broadcast from [{}].", &caller);
-                    cyclic::bcast_offers_once(myself.clone()).await;
-                    Ok(())
-                }
-            },
-        )
-        .await
     }
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {
@@ -203,15 +170,26 @@ impl Matcher {
         offer: &NewOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        let offer = self.store.create_offer(id, offer).await?;
-        self.resolver.receive(&offer);
-
         log::info!(
-            "Subscribed new Offer: [{}] using identity: {} [{}]",
-            &offer.id,
+            "Subscribing a new Offer using identity: {} [{}]",
             id.name,
             id.identity
         );
+
+        let offer =
+            GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
+
+        // Reserve a placeholder before publishing. Since we use GolemBase identitfier as OfferId,
+        // we can't add Offer to store immediately. But this causes race condtions in case other Node
+        // retrieves Offer earlier and tries to communicate with us (sends initial proposal).
+        // To avoid this, placeholder gives us ability to synchronize and wait for Offer to be available.
+        let placeholder_guard = self.store.offer_sync().reserve_placeholder();
+
+        let offer = self
+            .discovery
+            .bcast_offer(offer)
+            .await
+            .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
 
         self.expiration_tracker
             .send(TrackDeadline {
@@ -222,15 +200,18 @@ impl Matcher {
             .await
             .ok();
 
-        // Ignore error and don't retry to broadcast Offer. It will be broadcasted
-        // anyway during random broadcast, so nothing bad happens here in case of error.
-        let _ = self
-            .discovery
-            .bcast_offers(vec![offer.id.clone()])
-            .await
-            .map_err(|e| {
-                log::warn!("Failed to bcast offer [{}]. Error: {}.", offer.id, e,);
-            });
+        let offer = self
+            .store
+            .register_offer(offer.clone(), Some(placeholder_guard))
+            .await?;
+        self.resolver.receive(&offer);
+
+        log::info!(
+            "Subscribed new Offer: [{}] using identity: {} [{}]",
+            &offer.id,
+            id.name,
+            id.identity
+        );
         Ok(offer)
     }
 
@@ -242,13 +223,6 @@ impl Matcher {
         self.store
             .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
-
-        log::info!(
-            "Unsubscribed Offer: [{}] using identity: {} [{}]",
-            &offer_id,
-            id.name,
-            id.identity
-        );
 
         self.expiration_tracker
             .send(StopTracking {
@@ -262,17 +236,21 @@ impl Matcher {
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
         // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
-        let _ = self
-            .discovery
-            .bcast_unsubscribes(vec![offer_id.clone()])
+        self.discovery
+            .bcast_unsubscribe(offer_id.clone())
             .await
             .map_err(|e| {
-                log::warn!(
-                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
-                    e,
-                    offer_id
-                );
-            });
+                MatcherError::GolemBaseOfferError(format!(
+                    "Failed to bcast unsubscribe offer [{offer_id}]. Error: {e}."
+                ))
+            })?;
+
+        log::info!(
+            "Unsubscribed Offer: [{}] using identity: {} [{}]",
+            &offer_id,
+            id.name,
+            id.identity
+        );
         Ok(())
     }
 
@@ -281,15 +259,6 @@ impl Matcher {
         demand: &NewDemand,
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
-        if !self.discovery.re_broadcast_enabled() {
-            // If re-broadcasts are disabled, fallback to lazy broadcast binding
-            self.discovery.bind_gsb_broadcast().await.map_or_else(
-                |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
-                },
-                |_| (),
-            );
-        }
         let demand = self.store.create_demand(id, demand).await?;
         self.resolver.receive(&demand);
 
@@ -324,14 +293,14 @@ impl Matcher {
     }
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        let our_node_ids = self.identity.list().await?;
+        let our_node_ids = self.identity.list_ids().await?;
         self.store.get_active_offer_ids(Some(our_node_ids)).await
     }
 
     pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        let our_node_ids = self.identity.list().await?;
+        let our_node_ids = self.identity.list_ids().await?;
         self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
             .await

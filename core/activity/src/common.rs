@@ -143,7 +143,7 @@ pub(crate) async fn get_agreement(
     agreement_id: impl ToString,
     role: Role,
 ) -> Result<Agreement, Error> {
-    Ok(bus::service(market::BUS_ID)
+    Ok(bus::service(market::local::BUS_ID)
         .send(market::GetAgreement::as_role(
             agreement_id.to_string(),
             role,
@@ -173,7 +173,7 @@ pub(crate) async fn get_agreements_by_state(
         state: Some(state),
         ..Default::default()
     };
-    let agreements = bus::service(market::BUS_ID)
+    let agreements = bus::service(market::local::BUS_ID)
         .send(list_agreements_query)
         .await??;
     Ok(agreements)

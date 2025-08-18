@@ -22,11 +22,20 @@ pub struct TestMarketEvent {
 pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
     TestMarketEvent {
         id,
-        subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+        subscription_id: SubscriptionId::from_str(
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+        )
+        .unwrap(),
         event_type: EventType::ProviderNewProposal,
         artifact_id: ProposalId::generate_id(
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
+            &SubscriptionId::from_str(
+                "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",
+            )
+            .unwrap(),
             &Utc::now().naive_utc(),
             Owner::Requestor,
         ),
@@ -79,7 +88,7 @@ pub mod requestor {
         );
 
         match events[0].event_type {
-            AgreementEventType::AgreementApprovedEvent { .. } => Ok(events[0].clone().agreement_id),
+            AgreementEventType::AgreementApprovedEvent => Ok(events[0].clone().agreement_id),
             _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         }
     }

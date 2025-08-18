@@ -14,17 +14,20 @@ pub(crate) async fn identities() -> anyhow::Result<(NodeId, Vec<NodeId>)> {
         .map_err(anyhow::Error::msg)??;
 
     let mut default_id = None;
-    let ids = ids
-        .into_iter()
-        .map(|id| {
-            if id.is_default {
-                default_id = Some(id.node_id);
-            }
-            id.node_id
-        })
-        .collect::<Vec<NodeId>>();
+    let mut other_ids = Vec::new();
+
+    // Separate default identity from others to ensure it appears first in the final list
+    for id in ids {
+        if id.is_default {
+            default_id = Some(id.node_id);
+        } else {
+            other_ids.push(id.node_id);
+        }
+    }
 
     let default_id = default_id.ok_or_else(|| anyhow::anyhow!("no default identity"))?;
+    let mut ids = vec![default_id];
+    ids.extend(other_ids);
     Ok((default_id, ids))
 }
 

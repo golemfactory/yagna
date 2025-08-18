@@ -1,12 +1,13 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::identity::{IdentityApi, IdentityError};
-
-use std::collections::HashMap;
 use ya_client::model::NodeId;
+use ya_core_model::identity::IdentityInfo;
 use ya_service_api_web::middleware::Identity;
+
+use crate::testing::{IdentityApi, IdentityError};
 
 pub struct MockIdentity {
     inner: Arc<Mutex<MockIdentityInner>>,
@@ -23,12 +24,35 @@ impl IdentityApi for MockIdentity {
         Ok(self.get_default_id().identity)
     }
 
-    async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
+    async fn list(&self) -> Result<Vec<IdentityInfo>, IdentityError> {
         Ok(self
             .list_ids()
             .into_values()
-            .map(|id| id.identity)
-            .collect())
+            .map(|id| IdentityInfo {
+                alias: None,
+                node_id: id.identity,
+                is_locked: false,
+                is_default: false,
+                deleted: false,
+            })
+            .collect::<Vec<IdentityInfo>>())
+    }
+
+    async fn sign(&self, _node_id: &NodeId, _data: &[u8]) -> Result<Vec<u8>, IdentityError> {
+        Err(IdentityError::SigningError(
+            "[MockIdentity] Not implemented".to_string(),
+        ))
+    }
+
+    async fn subscribe_to_events(&self, _endpoint: &str) -> Result<(), IdentityError> {
+        // Mock implementation just returns Ok
+        Ok(())
+    }
+
+    async fn fund(&self, _wallet: NodeId) -> Result<(), IdentityError> {
+        Err(IdentityError::GsbError(
+            "[MockIdentity] Not implemented".to_string(),
+        ))
     }
 }
 

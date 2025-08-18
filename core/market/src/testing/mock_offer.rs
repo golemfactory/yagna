@@ -5,10 +5,9 @@ use std::str::FromStr;
 use ya_agreement_utils::agreement::flatten;
 use ya_client::model::NodeId;
 
-use crate::db::model::{Demand, Offer};
-use crate::protocol::discovery::message::RetrieveOffers;
-use crate::testing::mock_identity::generate_identity;
-use crate::testing::SubscriptionId;
+use super::mock_identity::generate_identity;
+
+use crate::testing::{Demand, Offer, RetrieveOffers, SubscriptionId};
 
 pub fn flatten_json(json: &Value) -> Value {
     let mapped = flatten(json.clone());
@@ -27,7 +26,7 @@ pub fn sample_offer() -> Offer {
     let expiration_ts = creation_ts + Duration::hours(1);
     Offer::from_new(
         &client::sample_offer(),
-        &generate_identity(""),
+        generate_identity("").identity,
         creation_ts,
         expiration_ts,
     )
@@ -38,7 +37,7 @@ pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
     let creation_ts = Utc::now().naive_utc();
     Offer::from_new(
         &client::sample_offer(),
-        &generate_identity(""),
+        generate_identity("").identity,
         creation_ts,
         expiration_ts,
     )

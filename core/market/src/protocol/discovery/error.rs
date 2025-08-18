@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
-use ya_core_model::net::local::BindBroadcastError;
 
 use crate::identity::IdentityError;
 
@@ -16,6 +15,8 @@ pub enum DiscoveryError {
     InternalError(String),
     #[error(transparent)]
     Identity(#[from] IdentityError),
+    #[error("GolemBase error: {0}")]
+    GolemBaseError(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -24,25 +25,16 @@ pub enum DiscoveryRemoteError {
     InternalError(String),
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Debug, Error)]
 pub enum DiscoveryInitError {
-    #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
+    #[error("Failed to bind GSB handler for {0}: {1}")]
     BindingGsbFailed(String, String),
-    #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
-    BroadcastSubscribeFailed(String, String),
-}
 
-impl DiscoveryInitError {
-    pub(super) fn from_pair(addr: String, e: BindBroadcastError) -> Self {
-        match e {
-            BindBroadcastError::GsbError(e) => {
-                DiscoveryInitError::BindingGsbFailed(addr, e.to_string())
-            }
-            BindBroadcastError::SubscribeError(e) => {
-                DiscoveryInitError::BroadcastSubscribeFailed(addr, e.to_string())
-            }
-        }
-    }
+    #[error("Failed to initialize Golem Base client: {0}")]
+    GolemBaseInitFailed(String),
+
+    #[error("Builder initialization incomplete: {0}")]
+    BuilderIncomplete(String),
 }
 
 impl From<ya_service_bus::error::Error> for DiscoveryError {

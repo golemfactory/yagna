@@ -1,20 +1,27 @@
 use chrono::{Duration, Utc};
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{AgreementEventType, Reason};
+use ya_framework_mocks::assert_err_eq;
+use ya_market::testing::{AgreementError, ApprovalStatus, Owner};
+
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_draft_proposals;
 use ya_framework_mocks::net::MockNet;
-use ya_market::assert_err_eq;
-use ya_market::testing::{
-    proposal_util::exchange_draft_proposals, AgreementError, ApprovalStatus, MarketsNetwork, Owner,
-};
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_get_agreement_termination_reason() {
-    let network = MarketsNetwork::new(None, MockNet::new())
+async fn test_get_agreement_termination_reason() -> anyhow::Result<()> {
+    enable_logs(false);
+    let dir = temp_dir!("test_get_agreement_termination_reason")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await
@@ -27,7 +34,7 @@ async fn test_get_agreement_termination_reason() {
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -71,7 +78,7 @@ async fn test_get_agreement_termination_reason() {
         .get_market(PROV_NAME)
         .provider_engine
         .approve_agreement(
-            network.get_default_id(PROV_NAME),
+            network.get_default_id(PROV_NAME).await,
             &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
@@ -128,7 +135,7 @@ async fn test_get_agreement_termination_reason() {
     let termination = network
         .get_market(PROV_NAME)
         .get_terminate_reason(
-            network.get_default_id(PROV_NAME),
+            network.get_default_id(PROV_NAME).await,
             agreement_id.into_client(),
         )
         .await
@@ -147,4 +154,6 @@ async fn test_get_agreement_termination_reason() {
         assert_eq!(reason, Some(reference_reason));
         assert_eq!(terminator, AgreementTerminator::Requestor);
     }
+
+    Ok(())
 }
