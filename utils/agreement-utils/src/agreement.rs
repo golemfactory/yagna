@@ -313,12 +313,13 @@ fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) 
                     if k.as_str() == PROPERTY_TAG {
                         result.insert(prefix.clone(), v);
                         continue;
+
+                        let p = match prefix.is_empty() {
+                            true => k,
+                            _ => format!("{}.{}", prefix, k),
+                        };
+                        flatten_inner(p, result, v);
                     }
-                    let p = match prefix.is_empty() {
-                        true => k,
-                        _ => format!("{}.{}", prefix, k),
-                    };
-                    flatten_inner(p, result, v);
                 }
             }
         }
