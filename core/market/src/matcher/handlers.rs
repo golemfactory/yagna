@@ -74,7 +74,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
             let caller = caller.parse().ok();
             async move {
                 store
-                    .unsubscribe_offer(&offer_id, false, caller)
+                    .unsubscribe_offer(&offer_id, caller)
                     .await
                     // Some errors don't mean we shouldn't propagate unsubscription.
                     .or_else(|e| match e {

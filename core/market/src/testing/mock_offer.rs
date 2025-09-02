@@ -53,6 +53,7 @@ pub fn generate_offer(id: &str, expiration_ts: NaiveDateTime) -> Offer {
         creation_ts: Utc::now().naive_utc(),
         insertion_ts: None,
         expiration_ts,
+        owned: None,
     }
 }
 

@@ -42,10 +42,11 @@ impl SubscriptionStore {
     /// returns newly created offer with insertion_ts
     pub async fn register_offer(
         &self,
-        offer: Offer,
+        mut offer: Offer,
         placeholder_guard: Option<OfferPlaceholderGuard>,
     ) -> Result<Offer, SaveOfferError> {
-        let r = self.insert_offer(offer).await;
+        offer.owned = Some(true);
+        let r = self.insert_offer(offer.clone()).await;
 
         // Drop the guard before sending notification
         if let Some(guard) = placeholder_guard {
@@ -238,14 +239,17 @@ impl SubscriptionStore {
         }
     }
 
-    async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
+    async fn mark_offer_unsubscribed(
+        &self,
+        id: &SubscriptionId,
+    ) -> Result<Offer, ModifyOfferError> {
         self.db
             .as_dao::<OfferDao>()
             .unsubscribe(id, Utc::now().naive_utc())
             .await
             .map_err(|e| ModifyOfferError::Unsubscribe(e, id.clone()))
             .and_then(|state| match state {
-                OfferState::Active(_) => Ok(()),
+                OfferState::Active(offer) => Ok(offer),
                 OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
                 OfferState::Unsubscribed(_) => {
                     Err(ModifyOfferError::AlreadyUnsubscribed(id.clone()))
@@ -258,7 +262,6 @@ impl SubscriptionStore {
     pub async fn unsubscribe_offer(
         &self,
         offer_id: &SubscriptionId,
-        local_caller: bool,
         _caller_id: Option<NodeId>,
     ) -> Result<(), ModifyOfferError> {
         // TODO: We can't check caller_id to authorize this operation, because
@@ -275,9 +278,9 @@ impl SubscriptionStore {
 
         // If this fn was called before, we won't remove our Offer below,
         // because `Unsubscribed` error will pop-up here.
-        self.mark_offer_unsubscribed(offer_id).await?;
+        let offer = self.mark_offer_unsubscribed(offer_id).await?;
 
-        if local_caller {
+        if offer.owned.unwrap_or(false) {
             // Local Offers we mark as unsubscribed only
             return Ok(());
         }

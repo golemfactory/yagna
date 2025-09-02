@@ -54,6 +54,7 @@ impl GolemBaseOffer {
             creation_ts,
             insertion_ts: None,
             expiration_ts,
+            owned: None,
         })
     }
 }
