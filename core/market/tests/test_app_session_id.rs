@@ -24,8 +24,10 @@ async fn test_session_events_filtering() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_session_events_filtering")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -206,8 +208,10 @@ async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow
     let dir = temp_dir!("test_session_should_be_independent_on_both_sides")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -268,8 +272,10 @@ async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error
     let dir = temp_dir!("test_session_negotiation_on_the_same_node")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance("Node")
         .await;
 
@@ -330,8 +336,10 @@ async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), 
     let dir = temp_dir!("test_session_negotiation_on_the_same_node_same_session")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance("Node")
         .await;
 
@@ -392,8 +400,10 @@ async fn test_session_timestamp_filtering() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_session_timestamp_filtering")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -588,8 +598,10 @@ async fn test_common_event_flow() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_common_event_flow")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)

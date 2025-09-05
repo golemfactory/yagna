@@ -346,11 +346,6 @@ pub(super) fn query_state(
     expiry_validation_ts: &NaiveDateTime,
 ) -> DbResult<OfferState> {
     let offer: Option<Offer> = query_offer(conn, id)?;
-    log::warn!(
-        "[query_state] Offer: {:?}, validation ts: {}",
-        offer,
-        expiry_validation_ts.format("%Y-%m-%d %H:%M:%S%.f")
-    );
 
     if is_unsubscribed(conn, id)? {
         return Ok(OfferState::Unsubscribed(offer));
