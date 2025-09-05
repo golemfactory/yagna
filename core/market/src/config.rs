@@ -55,6 +55,7 @@ impl GolemBaseNetwork {
             },
         );
         // Configuration: https://marketplace.holesky.golem-base.io/
+        // Explorer: https://explorer.marketplace.holesky.golem-base.io/
         configs.insert(
             GolemBaseNetwork::Marketplace,
             GolemBaseRpcConfig {

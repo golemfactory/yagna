@@ -17,12 +17,16 @@ use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
-    #[error("Subscription [{0}] not found. Could be unsubscribed.")]
+    // We don't keep unsubscribe information for inifinity, so we can't always know.
+    #[error("Subscription [{0}] not found. Could be unsubscribed as well.")]
     NotFound(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
     Expired(SubscriptionId),
     #[error("Failed to get events from DB: {0}.")]
     Db(DbError),
+    // We are not always able to distinguish NotFound and Unsubscribed.
+    #[error("Subscription [{0}] unsubscribed.")]
+    Unsubscribed(SubscriptionId),
 }
 
 pub struct NegotiationEventsDao<'c> {
@@ -189,6 +193,9 @@ fn validate_subscription(
         Owner::Provider => match query_state(conn, subscription_id, &Utc::now().naive_utc())? {
             OfferState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
             OfferState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
+            OfferState::Unsubscribed(_) => {
+                Err(TakeEventsError::Unsubscribed(subscription_id.clone()))?
+            }
             _ => Ok(()),
         },
     }

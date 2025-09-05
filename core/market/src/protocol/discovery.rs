@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
@@ -79,10 +79,7 @@ impl Discovery {
         })?;
 
         // Calculate TTL in blocks based on expiration time
-        let now = Utc::now();
-        let expiration = Utc.from_utc_datetime(&offer.expiration.naive_utc());
-        let ttl_seconds = (expiration - now).num_seconds();
-        let ttl_blocks = (ttl_seconds / BLOCK_TIME_SECONDS) as u64;
+        let ttl_blocks = offer.calculate_ttl_blocks(BLOCK_TIME_SECONDS);
 
         // Create entry with marketplace type and ID annotations
         let entry =

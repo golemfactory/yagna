@@ -89,11 +89,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
                         | ModifyOfferError::Expired(..)
                         | ModifyOfferError::NotFound(..) => e,
                         _ => {
-                            log::warn!(
-                                "Failed to unsubscribe Offer [{}]. Error: {}",
-                                &offer_id,
-                                &e
-                            );
+                            log::warn!("Failed to unsubscribe Offer [{offer_id}]. Error: {e}");
                             e
                         }
                     })
