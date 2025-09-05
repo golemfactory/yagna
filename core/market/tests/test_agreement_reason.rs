@@ -21,8 +21,10 @@ async fn test_get_agreement_termination_reason() -> anyhow::Result<()> {
     let dir = temp_dir!("test_get_agreement_termination_reason")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
