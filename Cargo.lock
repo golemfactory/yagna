@@ -4450,7 +4450,7 @@ dependencies = [
 [[package]]
 name = "golem-base-mock"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=12e215158a3698f20ec70b29e059e95d12f4434a#12e215158a3698f20ec70b29e059e95d12f4434a"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=3f558ca3ef155d9799cce265338314649755a402#3f558ca3ef155d9799cce265338314649755a402"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4476,7 +4476,7 @@ dependencies = [
 [[package]]
 name = "golem-base-sdk"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=12e215158a3698f20ec70b29e059e95d12f4434a#12e215158a3698f20ec70b29e059e95d12f4434a"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=3f558ca3ef155d9799cce265338314649755a402#3f558ca3ef155d9799cce265338314649755a402"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4505,7 +4505,7 @@ dependencies = [
 [[package]]
 name = "golem-base-test-utils"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=12e215158a3698f20ec70b29e059e95d12f4434a#12e215158a3698f20ec70b29e059e95d12f4434a"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=3f558ca3ef155d9799cce265338314649755a402#3f558ca3ef155d9799cce265338314649755a402"
 dependencies = [
  "alloy",
  "anyhow",
