@@ -151,7 +151,12 @@ impl FaucetClient {
 
         // Wait for transaction to be mined.
         // Note: Transaction hash references L2 bridge deposit, that's why we need a new client.
-        let client = GolemBaseClient::new(self.config.get_l2_rpc_url().clone())?;
+        let client = GolemBaseClient::new_uninitialized(self.config.get_l2_rpc_url().clone())
+            .map_err(|e| anyhow::anyhow!("Failed to initialize L2 client: {}", e))?
+            .override_config(golem_base_sdk::client::TransactionConfig {
+                chain_id: Some(self.config.get_chain_id()),
+                ..golem_base_sdk::client::TransactionConfig::default()
+            });
         client
             .wait_for_transaction(response.tx_hash.parse::<Hash>()?)
             .await

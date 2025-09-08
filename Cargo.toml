@@ -268,9 +268,9 @@ erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", r
 #erc20_processor = { version = "0.4.7" }
 gftp = { version = "0.4.1", path = "core/gftp" }
 
-golem-base-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "e928b70f5cfd8254623f2ddcffc454034f6af954" }
-golem-base-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "e928b70f5cfd8254623f2ddcffc454034f6af954" }
-golem-base-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "e928b70f5cfd8254623f2ddcffc454034f6af954" }
+golem-base-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "12e215158a3698f20ec70b29e059e95d12f4434a" }
+golem-base-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "12e215158a3698f20ec70b29e059e95d12f4434a" }
+golem-base-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "12e215158a3698f20ec70b29e059e95d12f4434a" }
 #golem-base-sdk = { path = "../../GolemBase/rust-sdk" }
 #golem-base-mock = { path = "../../GolemBase/rust-sdk/test-utils/golem-base-mock" }
 #golem-base-test-utils = { path = "../../GolemBase/rust-sdk/test-utils" }
