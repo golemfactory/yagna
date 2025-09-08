@@ -26,8 +26,10 @@ async fn test_get_proposal() -> anyhow::Result<()> {
     let dir = temp_dir!("test_get_proposal")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance("Requestor1")
         .await
         .add_market_instance("Provider1")
@@ -75,8 +77,10 @@ async fn test_get_proposal_not_found() -> anyhow::Result<()> {
     let dir = temp_dir!("test_get_proposal_not_found")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance("Requestor1")
         .await
         .add_market_instance("Provider1")
@@ -113,8 +117,10 @@ async fn test_proposal_random_shuffle() -> anyhow::Result<()> {
     let dir = temp_dir!("test_proposal_random_shuffle")?;
     let dir = dir.path();
 
-    let mut network = MarketsNetwork::new(dir, MockNet::new())
+    let mut network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance("Node-1")
         .await;
 
