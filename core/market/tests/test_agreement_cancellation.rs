@@ -31,8 +31,10 @@ async fn test_agreement_cancelled() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_cancelled")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -91,8 +93,10 @@ async fn test_cancel_agreement_in_wrong_state() -> anyhow::Result<()> {
     let dir = temp_dir!("test_cancel_agreement_in_wrong_state")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -174,8 +178,10 @@ async fn test_agreement_cancelled_wait_for_approval() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_cancelled_wait_for_approval")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -251,8 +257,10 @@ async fn test_agreement_simultaneous_reject_cancel() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_simultaneous_reject_cancel")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -380,8 +388,10 @@ async fn test_agreement_simultaneous_approve_cancel() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_simultaneous_approve_cancel")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)

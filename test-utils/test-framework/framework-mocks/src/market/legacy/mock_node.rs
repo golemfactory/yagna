@@ -7,13 +7,9 @@ use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
 use std::path::Path;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
-use testcontainers::core::ContainerPort;
-use testcontainers::ContainerAsync;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use ya_core_model::market::local::{self};
 use ya_core_model::market::{self, FundGolemBaseResponse};
 use ya_core_model::NodeId;
-use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
 use ya_market::testing::IdentityGSB;
@@ -36,7 +32,8 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBro
 use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
-use testcontainers::{core::WaitFor, runners::AsyncRunner, GenericImage, ImageExt};
+use golem_base_mock::GolemBaseMockServer;
+use golem_base_test_utils::golembase::{Config as GolemBaseConfig, GolemBaseContainer};
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -49,7 +46,9 @@ pub struct MarketsNetwork {
 
     /// GolemBase which will be dropped on the end of the test.
     #[allow(dead_code)]
-    golembase: ContainerAsync<GenericImage>,
+    golembase: Option<GolemBaseContainer>,
+    #[allow(dead_code)]
+    golembase_mock: Option<GolemBaseMockServer>,
 
     test_dir: PathBuf,
     test_name: String,
@@ -153,10 +152,8 @@ impl MockNodeKind {
 }
 
 impl MarketsNetwork {
-    /// Remember that test_name should be unique between all tests.
-    /// It will be used to create directories and GSB binding points,
-    /// to avoid potential name clashes.
-    pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
+    /// Internal constructor that initializes without mock and container.
+    pub async fn new_raw(testdir: impl AsRef<Path>, net: MockNet) -> Self {
         let gen_test_name = || {
             let nonce = rand::random::<u128>();
             format!("test-{:#32x}", nonce)
@@ -172,7 +169,6 @@ impl MarketsNetwork {
         net.bind_gsb();
 
         let config = create_market_config_for_test();
-        let golembase = Self::init_golembase(&config).await.unwrap();
 
         MarketsNetwork {
             net,
@@ -180,73 +176,41 @@ impl MarketsNetwork {
             test_dir: prepare_test_dir(testdir).unwrap(),
             test_name,
             config: Arc::new(config),
-            golembase,
+            golembase: None,
+            golembase_mock: None,
         }
     }
 
-    pub async fn init_golembase(config: &Config) -> Result<ContainerAsync<GenericImage>> {
-        let ws_port = config.discovery.get_ws_url().port().unwrap_or(8545);
-        let timeout = Duration::from_secs(60);
-
-        let container = GenericImage::new("quay.io/golemnetwork/gb-op-geth", "latest")
-            .with_wait_for(WaitFor::message_on_stderr("HTTP server started"))
-            .with_mapped_port(ws_port, ContainerPort::Tcp(ws_port))
-            .with_cmd([
-                "--dev",
-                "--http",
-                "--http.api",
-                "eth,web3,net,debug,golembase",
-                "--verbosity",
-                "3",
-                "--http.addr",
-                "0.0.0.0",
-                "--http.port",
-                &ws_port.to_string(),
-                "--http.corsdomain",
-                "*",
-                "--http.vhosts",
-                "*",
-                "--ws",
-                "--ws.addr",
-                "0.0.0.0",
-                "--ws.port",
-                &ws_port.to_string(),
-            ])
-            .with_env_var("GITHUB_ACTIONS", "true")
-            .with_env_var("CI", "true")
-            .start()
-            .timeout(Some(timeout))
-            .await
-            .map_err(|e| {
-                anyhow!(
-                    "Timeout ({}) starting GolemBase instance: {e}",
-                    humantime::format_duration(timeout)
-                )
-            })?
-            .map_err(|e| anyhow!("Failed to start GolemBase instance: {}", e))?;
-
-        // Spawn a background task to monitor container logs for debugging purposes
-        Self::spawn_log_monitor(&container);
-
-        Ok(container)
+    /// Remember that test_name should be unique between all tests.
+    /// It will be used to create directories and GSB binding points,
+    /// to avoid potential name clashes.
+    pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
+        let mut network = Self::new_raw(testdir, net).await;
+        network.golembase = Some(Self::init_golembase(&network.config).await.unwrap());
+        network
     }
 
-    /// Spawns a background task to monitor GolemBase container logs for debugging purposes.
-    /// The task will read from the container's stderr and log messages with a [GolemBase] prefix.
-    fn spawn_log_monitor(container: &ContainerAsync<GenericImage>) {
-        let stream = container.stderr(true);
-        tokio::spawn(async move {
-            let mut reader = BufReader::new(stream);
-            let mut line = String::new();
+    async fn init_golembase(config: &Config) -> Result<GolemBaseContainer> {
+        let ws_port = config.discovery.get_rpc_url().port().unwrap_or(8545);
+        let golembase_config = GolemBaseConfig::default().with_port(ws_port);
+        GolemBaseContainer::new(golembase_config)
+            .await
+            .map_err(|e| anyhow!("Failed to start GolemBase container: {}", e))
+    }
 
-            while let Ok(n) = reader.read_line(&mut line).await {
-                if n == 0 {
-                    break;
-                }
-                log::debug!("[GolemBase] {}", line.trim());
-                line.clear();
-            }
-        });
+    /// Use mocked GolemBase instead of container. This will disable the container initialization.
+    pub async fn with_mocked_golembase(mut self) -> anyhow::Result<Self> {
+        let rpc_url = self.config.discovery.get_rpc_url().clone();
+        log::info!("Using GolemBase mock server URL: {}", rpc_url);
+
+        let server = GolemBaseMockServer::new()
+            .with_chain_id(1337)
+            .with_url(rpc_url);
+
+        let mock_server = server.default_start().await?;
+        self.golembase_mock = Some(mock_server);
+
+        Ok(self)
     }
 
     /// Config will be used to initialize all consecutive Nodes.
@@ -786,6 +750,7 @@ pub fn create_market_config_for_test() -> Config {
     // Discovery config to be used only in tests.
     let discovery = DiscoveryConfig {
         network: GolemBaseNetwork::Local,
+        required_confirmations: 0,
         ..DiscoveryConfig::from_env().unwrap()
     };
 

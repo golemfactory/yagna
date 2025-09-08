@@ -50,11 +50,12 @@ impl GolemBaseNetwork {
                 faucet_url: Url::parse("https://kaolin.holesky.golem-base.io/faucet/").unwrap(),
                 rpc_url: Url::parse("https://kaolin.holesky.golem-base.io/rpc").unwrap(),
                 ws_url: Url::parse("wss://kaolin.holesky.golem-base.io/rpc/ws").unwrap(),
-                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/").unwrap(),
                 fund_preallocated: false,
             },
         );
         // Configuration: https://marketplace.holesky.golem-base.io/
+        // Explorer: https://explorer.marketplace.holesky.golem-base.io/
         configs.insert(
             GolemBaseNetwork::Marketplace,
             GolemBaseRpcConfig {
@@ -62,7 +63,7 @@ impl GolemBaseNetwork {
                     .unwrap(),
                 rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
                 ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
-                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/").unwrap(),
                 fund_preallocated: false,
             },
         );
@@ -78,7 +79,7 @@ impl GolemBaseNetwork {
                     .unwrap(),
                 ws_url: Url::parse("wss://marketplaceloadtests.holesky.golem-base.io/rpc/ws")
                     .unwrap(),
-                l2_rpc_url: Url::parse("https://execution.holesky.l2.gobas.me").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/").unwrap(),
                 fund_preallocated: false,
             },
         );

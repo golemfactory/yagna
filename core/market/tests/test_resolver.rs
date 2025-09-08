@@ -16,8 +16,10 @@ async fn test_single_not_resolve_offer() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(dir, MockNet::new())
+    let mut network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_matcher_instance("Node-1")
         .await;
 
@@ -43,8 +45,10 @@ async fn test_resolve_offer_demand() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(dir, MockNet::new())
+    let mut network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_matcher_instance("Provider-1")
         .await
         .add_matcher_instance("Requestor-1")
@@ -90,8 +94,10 @@ async fn test_single_not_resolve_demand() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(dir, MockNet::new())
+    let mut network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_matcher_instance("Node-1")
         .await;
 
@@ -117,8 +123,10 @@ async fn test_resolve_2xoffer_demand() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new(dir, MockNet::new())
+    let mut network = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
+        .with_mocked_golembase()
+        .await?
         .add_matcher_instance("Provider-1")
         .await
         .add_matcher_instance("Provider-2")

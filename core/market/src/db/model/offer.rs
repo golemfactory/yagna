@@ -16,6 +16,10 @@ pub struct Offer {
     pub properties: String,
     pub constraints: String,
     pub node_id: NodeId,
+    // Database information telling if we are the owner of the Offer.
+    // None means that we don't have this information yet (for example in case when
+    // the Offer didn't come from our database).
+    pub owned: Option<bool>,
 
     /// Creation time of Offer on Provider side.
     pub creation_ts: NaiveDateTime,
@@ -72,6 +76,7 @@ impl Offer {
             creation_ts,
             insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
+            owned: None,
         })
     }
 
@@ -153,6 +158,7 @@ mod tests {
                 NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
                 NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
+            owned: Some(false),
         };
         assert!(offer.validate().is_err());
     }
@@ -176,6 +182,7 @@ mod tests {
                 NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
                 NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
+            owned: Some(false),
         };
         let id = SubscriptionId::generate_id(
             &offer.properties,

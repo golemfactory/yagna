@@ -221,7 +221,7 @@ impl Matcher {
         id: &Identity,
     ) -> Result<(), MatcherError> {
         self.store
-            .unsubscribe_offer(offer_id, true, Some(id.identity))
+            .unsubscribe_offer(offer_id, Some(id.identity))
             .await?;
 
         self.expiration_tracker

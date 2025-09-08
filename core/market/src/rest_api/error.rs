@@ -124,7 +124,8 @@ impl ResponseError for QueryEventsError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
-            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
+            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::Unsubscribed(_)) => {
                 HttpResponse::Gone().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {

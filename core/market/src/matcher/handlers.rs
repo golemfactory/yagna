@@ -74,7 +74,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
             let caller = caller.parse().ok();
             async move {
                 store
-                    .unsubscribe_offer(&offer_id, false, caller)
+                    .unsubscribe_offer(&offer_id, caller)
                     .await
                     // Some errors don't mean we shouldn't propagate unsubscription.
                     .or_else(|e| match e {
@@ -89,11 +89,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
                         | ModifyOfferError::Expired(..)
                         | ModifyOfferError::NotFound(..) => e,
                         _ => {
-                            log::warn!(
-                                "Failed to unsubscribe Offer [{}]. Error: {}",
-                                &offer_id,
-                                &e
-                            );
+                            log::warn!("Failed to unsubscribe Offer [{offer_id}]. Error: {e}");
                             e
                         }
                     })

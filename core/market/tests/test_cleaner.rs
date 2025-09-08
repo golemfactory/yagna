@@ -39,7 +39,7 @@ async fn test_agreement() -> anyhow::Result<()> {
 
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_agreement");
     let agreement_dao = db.as_dao::<AgreementDao>();
@@ -92,7 +92,7 @@ async fn test_demand() -> anyhow::Result<()> {
         "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
     );
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_demand");
     let demand_dao = db.as_dao::<DemandDao>();
@@ -123,7 +123,7 @@ async fn test_offer() -> anyhow::Result<()> {
         "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
     );
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_offer");
     let offer_dao = db.as_dao::<OfferDao>();
@@ -153,7 +153,7 @@ async fn test_events() -> anyhow::Result<()> {
     let dir = dir.path();
 
     // insert two events
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_events");
     let valid_event = generate_event(1, future());
@@ -183,7 +183,7 @@ async fn test_proposal() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_proposal");
     let valid_negotiation = generate_negotiation(None);
@@ -245,7 +245,7 @@ async fn test_proposal_lotsa_negotiations() -> anyhow::Result<()> {
     let dir = dir.path();
 
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new(dir, MockNet::new())
+    let db = MarketsNetwork::new_raw(dir, MockNet::new())
         .await
         .init_database("test_proposal_lotsa_negotiations");
     let mut expired_negotiations: Vec<Negotiation> = vec![];

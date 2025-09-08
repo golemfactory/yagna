@@ -25,6 +25,8 @@ ya-std-utils.workspace = true
 
 ya-framework-basic.workspace = true
 golem-base-sdk.workspace = true
+golem-base-mock.workspace = true
+golem-base-test-utils.workspace = true
 
 actix-rt.workspace = true
 actix-web.workspace = true
