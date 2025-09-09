@@ -87,6 +87,7 @@ impl DiscoveryBuilder {
                     .div(config.publish_max_retries),
                 price_bump_percent: 100,
                 required_confirmations: config.required_confirmations,
+                chain_id: Some(config.get_chain_id()),
                 ..TransactionConfig::default()
             });
 
