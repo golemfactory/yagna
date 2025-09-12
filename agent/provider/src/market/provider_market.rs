@@ -578,9 +578,14 @@ impl Handler<ReSubscribe> for ProviderMarket {
 
         if !to_resubscribe.is_empty() {
             return ActorResponse::r#async(
-                resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
-                    .into_actor(self)
-                    .map(|_, _, _| Ok(())),
+                resubscribe_offers(
+                    ctx.address(),
+                    self.api.clone(),
+                    to_resubscribe,
+                    self.config.clone(),
+                )
+                .into_actor(self)
+                .map(|_, _, _| Ok(())),
             );
         };
         ActorResponse::reply(Ok(()))
@@ -717,7 +722,11 @@ impl Handler<CreateOffer> for ProviderMarket {
     }
 }
 
-async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalized) {
+async fn terminate_agreement(
+    api: Arc<MarketProviderApi>,
+    msg: AgreementFinalized,
+    config: Arc<MarketConfig>,
+) {
     let id = msg.id;
     let reason = match &msg.result {
         AgreementResult::ClosedByUs => GolemReason::success(),
@@ -735,7 +744,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         &reason.message,
     );
 
-    let mut repeats = get_backoff();
+    let mut repeats = config.get_backoff();
     while let Err(e) = api.terminate_agreement(&id, &reason.to_client()).await {
         let delay = match repeats.next_backoff() {
             Some(delay) => delay,
@@ -766,6 +775,7 @@ async fn resubscribe_offers(
     market: Addr<ProviderMarket>,
     api: Arc<MarketProviderApi>,
     subscriptions: HashMap<String, Subscription>,
+    config: Arc<MarketConfig>,
 ) {
     let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
     match market
@@ -778,7 +788,7 @@ async fn resubscribe_offers(
     }
 
     let mut remaining = subscriptions;
-    let mut backoff = get_backoff();
+    let mut backoff = config.get_resubscribe_backoff();
 
     while !remaining.is_empty() {
         let subscriptions = remaining.drain().collect::<Vec<_>>();
@@ -891,7 +901,10 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         }
         .into_actor(self)
         .map(|_, myself, ctx| {
-            ctx.spawn(terminate_agreement(myself.api.clone(), msg).into_actor(myself));
+            ctx.spawn(
+                terminate_agreement(myself.api.clone(), msg, myself.config.clone())
+                    .into_actor(myself),
+            );
 
             log::info!("Re-negotiating all demands");
 
@@ -985,18 +998,6 @@ forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
 forward_actix_handler!(ProviderMarket, NewAgreement, on_agreement_approved);
 actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
 actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
-
-fn get_backoff() -> backoff::ExponentialBackoff {
-    // TODO: We could have config for Market actor to be able to set at least initial interval.
-    backoff::ExponentialBackoff {
-        current_interval: std::time::Duration::from_secs(5),
-        initial_interval: std::time::Duration::from_secs(5),
-        multiplier: 1.5f64,
-        max_interval: std::time::Duration::from_secs(60 * 60),
-        max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
-        ..Default::default()
-    }
-}
 
 // =========================================== //
 // Messages creation helpers
