@@ -329,7 +329,8 @@ impl YagnaCommand {
         if let Some(addr) = address {
             self.cmd.args([addr]);
         }
-        self.run().await
+        self.run::<serde_json::Value>().await?;
+        Ok(())
     }
 
     pub async fn market_balance(mut self, address: Option<&str>) -> anyhow::Result<BigDecimal> {
