@@ -185,6 +185,17 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
+        Self::new_containerized(testdir, net).await
+    }
+
+    /// Creates a new MarketsNetwork with mocked GolemBase. Equivalent to calling new_raw and with_mocked_golembase.
+    pub async fn new_mocked(testdir: impl AsRef<Path>, net: MockNet) -> anyhow::Result<Self> {
+        let network = Self::new_raw(testdir, net).await;
+        network.with_mocked_golembase().await
+    }
+
+    /// Creates a new MarketsNetwork with containerized GolemBase. Equivalent to calling new.
+    pub async fn new_containerized(testdir: impl AsRef<Path>, net: MockNet) -> Self {
         let mut network = Self::new_raw(testdir, net).await;
         network.golembase = Some(Self::init_golembase(&network.config).await.unwrap());
         network
@@ -211,12 +222,6 @@ impl MarketsNetwork {
         self.golembase_mock = Some(mock_server);
 
         Ok(self)
-    }
-
-    /// Creates a new MarketsNetwork with mocked GolemBase. Equivalent to calling new_raw and with_mocked_golembase.
-    pub async fn new_mocked(testdir: impl AsRef<Path>, net: MockNet) -> anyhow::Result<Self> {
-        let network = Self::new_raw(testdir, net).await;
-        network.with_mocked_golembase().await
     }
 
     /// Config will be used to initialize all consecutive Nodes.

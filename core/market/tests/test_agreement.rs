@@ -223,7 +223,7 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
     let dir = temp_dir!("full_market_interaction_aka_happy_path")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

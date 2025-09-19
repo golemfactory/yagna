@@ -22,7 +22,7 @@ async fn test_golembase_offer_expiration_correct() -> Result<(), anyhow::Error> 
 
     let mut config = create_market_config_for_test();
     config.subscription.default_ttl = chrono::Duration::seconds(5);
-    let network = MarketsNetwork::new(dir, MockNet::new())
+    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
         .await
         .with_config(Arc::new(config))
         .add_market_instance("Node-1")
