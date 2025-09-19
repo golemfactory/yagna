@@ -213,6 +213,12 @@ impl MarketsNetwork {
         Ok(self)
     }
 
+    /// Creates a new MarketsNetwork with mocked GolemBase. Equivalent to calling new_raw and with_mocked_golembase.
+    pub async fn new_mocked(testdir: impl AsRef<Path>, net: MockNet) -> anyhow::Result<Self> {
+        let network = Self::new_raw(testdir, net).await;
+        network.with_mocked_golembase().await
+    }
+
     /// Config will be used to initialize all consecutive Nodes.
     pub fn with_config(mut self, config: Arc<Config>) -> Self {
         self.config = config;

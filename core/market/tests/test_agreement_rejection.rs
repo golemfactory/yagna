@@ -28,9 +28,7 @@ async fn test_agreement_rejected() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_rejected")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -94,9 +92,7 @@ async fn test_agreement_rejected_wait_for_approval() -> anyhow::Result<()> {
     let dir = temp_dir!("test_agreement_rejected_wait_for_approval")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -168,9 +164,7 @@ async fn test_reject_agreement_in_wrong_state() -> anyhow::Result<()> {
     let dir = temp_dir!("test_reject_agreement_in_wrong_state")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -253,9 +247,7 @@ async fn test_reject_rejected_agreement() -> anyhow::Result<()> {
     let dir = temp_dir!("test_reject_rejected_agreement")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
