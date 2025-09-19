@@ -185,7 +185,7 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(testdir: impl AsRef<Path>, net: MockNet) -> Self {
-        Self::new_containerized(testdir, net).await
+        Self::new_mocked(testdir, net).await.unwrap()
     }
 
     /// Creates a new MarketsNetwork with mocked GolemBase. Equivalent to calling new_raw and with_mocked_golembase.
