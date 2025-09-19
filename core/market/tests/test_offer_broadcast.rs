@@ -18,7 +18,7 @@ async fn test_broadcast_offer() -> anyhow::Result<()> {
     let dir = temp_dir!("test_broadcast_offer")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
