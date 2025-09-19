@@ -30,7 +30,7 @@ async fn test_query_events_non_existent_subscription() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_events_non_existent_subscription")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -57,7 +57,7 @@ async fn test_query_initial_proposal() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_initial_proposal")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -110,7 +110,7 @@ async fn test_query_multiple_events() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_multiple_events")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -170,7 +170,7 @@ async fn test_query_events_timeout() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_events_timeout")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -220,7 +220,7 @@ async fn test_query_events_unsubscribe_notification() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_events_unsubscribe_notification")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -271,7 +271,7 @@ async fn test_query_events_edge_cases() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_events_edge_cases")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -346,7 +346,7 @@ async fn test_query_events_for_multiple_subscriptions() -> anyhow::Result<()> {
     let dir = temp_dir!("test_query_events_for_multiple_subscriptions")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -404,7 +404,7 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let dir = temp_dir!("test_simultaneous_query_events")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -489,7 +489,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() -> anyhow::Resul
     let dir = temp_dir!("test_unsubscribe_demand_while_query_events_for_other")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -557,7 +557,7 @@ async fn test_counter_initial_proposal() -> anyhow::Result<()> {
     let dir = temp_dir!("test_counter_initial_proposal")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -633,7 +633,7 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
     let dir = temp_dir!("test_respawn_proposal_after_terminate_by_provider")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(REQ_NAME)
         .await

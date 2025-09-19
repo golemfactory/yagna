@@ -17,7 +17,7 @@ async fn test_gsb_market_golembase_get_offer() -> anyhow::Result<()> {
     let dir = temp_dir!("test_gsb_market_golembase_get_offer")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance(PROV_NAME)
         .await;

@@ -21,7 +21,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_startup_offers_sharing")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -184,7 +184,7 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_network_error_while_subscribing")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -226,7 +226,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_sharing_someones_else_offers")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
@@ -284,7 +284,7 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     let dir = temp_dir!("test_sharing_someones_else_unsubscribes")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await
