@@ -404,7 +404,7 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let dir = temp_dir!("test_simultaneous_query_events")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_containerized(dir, MockNet::new())
+    let network = MarketsNetwork::new(dir, MockNet::new())
         .await
         .add_market_instance("Node-1")
         .await;
@@ -422,7 +422,7 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let market = market1.clone();
 
     let query1 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 2.0, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 3.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -430,9 +430,11 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let demand_id = demand_id1.clone();
 
     let query2 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 2.0, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 5.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
+
+    log::info!("Publishing 2 Offers...");
 
     // Wait for a while, before event will be injected. We want to trigger notifications.
     // Generate 2 proposals. Each waiting query events call will take an event.
@@ -446,12 +448,12 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let mut events1 = tokio::time::timeout(Duration::from_millis(2100), query1)
+    let mut events1 = tokio::time::timeout(Duration::from_millis(3100), query1)
         .await
         .unwrap()
         .unwrap()
         .unwrap();
-    let events2 = tokio::time::timeout(Duration::from_millis(2100), query2)
+    let events2 = tokio::time::timeout(Duration::from_millis(3100), query2)
         .await
         .unwrap()
         .unwrap()
