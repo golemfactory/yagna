@@ -38,9 +38,7 @@ async fn test_rest_get_offers() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_get_offers")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await
@@ -109,9 +107,7 @@ async fn test_rest_get_demands() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_get_demands")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await;
@@ -145,9 +141,7 @@ async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result
     let dir = temp_dir!("test_rest_invalid_subscription_id_should_return_400")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await;
@@ -182,9 +176,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_subscribe_unsubscribe_offer")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await;
@@ -253,9 +245,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_subscribe_unsubscribe_demand")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await;
@@ -324,9 +314,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_get_proposal")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Provider")
         .await
@@ -389,9 +377,7 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_get_agreement")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await
@@ -436,9 +422,7 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_query_agreement_events")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance("Node-1")
         .await
@@ -497,9 +481,7 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
     let dir = temp_dir!("test_terminate_agreement")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -566,9 +548,7 @@ async fn test_terminate_agreement_without_reason() -> anyhow::Result<()> {
     let dir = temp_dir!("test_terminate_agreement_without_reason")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -633,9 +613,7 @@ async fn test_rest_agreement_rejected() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_agreement_rejected")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await
@@ -702,9 +680,7 @@ async fn test_rest_agreement_cancelled() -> anyhow::Result<()> {
     let dir = temp_dir!("test_rest_agreement_cancelled")?;
     let dir = dir.path();
 
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
         .add_market_instance(REQ_NAME)
         .await

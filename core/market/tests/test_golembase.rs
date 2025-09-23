@@ -70,11 +70,9 @@ async fn test_golembase_offer_expiration_desync_before() -> Result<(), anyhow::E
     // This will cause desynchronization between market expiration counter and Golem Base.
     let mut config = create_market_config_for_test();
     config.subscription.default_ttl = chrono::Duration::milliseconds(5300);
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_config(Arc::new(config))
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await;
 
@@ -130,11 +128,9 @@ async fn test_golembase_offer_expiration_desync_after() -> Result<(), anyhow::Er
     // This will cause desynchronization between market expiration counter and Golem Base.
     let mut config = create_market_config_for_test();
     config.subscription.default_ttl = chrono::Duration::milliseconds(6300);
-    let network = MarketsNetwork::new_raw(dir, MockNet::new())
-        .await
-        .with_config(Arc::new(config))
-        .with_mocked_golembase()
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await;
 
