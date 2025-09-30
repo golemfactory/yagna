@@ -44,47 +44,44 @@ impl GolemBaseNetwork {
             fund_preallocated: true,
         };
 
-        // Configuration: https://kaolin.holesky.golem-base.io/
-        // Explorer: https://explorer.kaolin.holesky.golemdb.io/
+        // Configuration: https://kaolin.hoodi.arkiv.network/
+        // Explorer: https://explorer.kaolin.hoodi.arkiv.network/
         configs.insert(
             GolemBaseNetwork::Kaolin,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://kaolin.holesky.golem-base.io/faucet/").unwrap(),
-                rpc_url: Url::parse("https://kaolin.holesky.golem-base.io/rpc").unwrap(),
-                ws_url: Url::parse("wss://kaolin.holesky.golem-base.io/rpc/ws").unwrap(),
-                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/rpc").unwrap(),
+                faucet_url: Url::parse("https://kaolin.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://kaolin.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://kaolin.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
                 chain_id: 60138453025,
                 fund_preallocated: false,
             },
         );
-        // Configuration: https://marketplace.holesky.golem-base.io/
-        // Explorer: https://explorer.marketplace.holesky.golem-base.io/
+        // Configuration: https://marketplace.hoodi.arkiv.network/
+        // Explorer: https://explorer.marketplace.hoodi.arkiv.network/
         configs.insert(
             GolemBaseNetwork::Marketplace,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://marketplace.holesky.golem-base.io/faucet/")
-                    .unwrap(),
-                rpc_url: Url::parse("https://marketplace.holesky.golem-base.io/rpc").unwrap(),
-                ws_url: Url::parse("wss://marketplace.holesky.golem-base.io/rpc/ws").unwrap(),
-                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/rpc").unwrap(),
+                faucet_url: Url::parse("https://marketplace.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://marketplace.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://marketplace.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
                 chain_id: 60138453027,
                 fund_preallocated: false,
             },
         );
-        // Configuration: https://marketplaceloadtests.holesky.golem-base.io/
-        // Explorer: https://explorer.marketplaceloadtests.holesky.golem-base.io/
+        // Configuration: https://marketplaceloadtests.hoodi.arkiv.network/
+        // Explorer: https://explorer.marketplaceloadtests.hoodi.arkiv.network/
         configs.insert(
             GolemBaseNetwork::MarketplaceLoadTests,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse(
-                    "https://marketplaceloadtests.holesky.golem-base.io/faucet/",
-                )
-                .unwrap(),
-                rpc_url: Url::parse("https://marketplaceloadtests.holesky.golem-base.io/rpc")
+                faucet_url: Url::parse("https://marketplaceloadtests.hoodi.arkiv.network/faucet/")
                     .unwrap(),
-                ws_url: Url::parse("wss://marketplaceloadtests.holesky.golem-base.io/rpc/ws")
+                rpc_url: Url::parse("https://marketplaceloadtests.hoodi.arkiv.network/rpc")
                     .unwrap(),
-                l2_rpc_url: Url::parse("https://l2.holesky.golem-base.io/rpc").unwrap(),
+                ws_url: Url::parse("wss://marketplaceloadtests.hoodi.arkiv.network/rpc/ws")
+                    .unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
                 chain_id: 60138453005,
                 fund_preallocated: false,
             },
