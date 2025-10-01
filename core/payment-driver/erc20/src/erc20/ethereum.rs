@@ -543,7 +543,7 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         }
         Network::Holesky => collect_rpc_addr_from(
             "HOLESKY_GETH_ADDR",
-            "https://ethereum-holesky.publicnode.com",
+            "https://ethereum-hoodi.publicnode.com",
         ),
         Network::Hoodi => collect_rpc_addr_from(
             "HOODI_GETH_ADDR",
