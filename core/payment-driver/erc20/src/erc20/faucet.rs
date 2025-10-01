@@ -140,7 +140,7 @@ async fn faucet_donate(address: H160, network: Network) -> Result<(), GenericErr
     let faucet_url = resolve_faucet_url(network).await?;
     let request_url = format!("{}/0x{:x}", faucet_url, address);
     let request_url = resolver::try_resolve_dns_record(&request_url).await;
-    log::info!("Faucet request url: {}", request_url);
+    debug!("Faucet request url: {}", request_url);
     let response = client
         .get(request_url)
         .send()
