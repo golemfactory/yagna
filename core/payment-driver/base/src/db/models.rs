@@ -116,9 +116,9 @@ pub enum Network {
     Rinkeby = 4,        //Rinkeby is an Ethereum testnet
     Goerli = 5,         //Goerli is an Ethereum testnet
     Sepolia = 11155111, //Sepolia is an Ethereum testnet
-    Holesky = 17000, //Holesky is testnet for Holesky network
+    Holesky = 17000,    //Holesky is testnet for Holesky network
     #[default]
-    Hoodi = 560048,      //Hoodi is testnet for Hoodi network
+    Hoodi = 560048, //Hoodi is testnet for Hoodi network
     Polygon = 137,      //Polygon is Polygon production network
     Mumbai = 80001,     //Mumbai is the legacy testnet for Polygon network
     Amoy = 80002,       //Amoy is the new testnet for Polygon network
