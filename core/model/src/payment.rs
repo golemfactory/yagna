@@ -596,6 +596,8 @@ pub mod local {
         Goerli,
         #[strum(props(token = "tGLM"))]
         Holesky,
+        #[strum(props(token = "tGLM"))]
+        Hoodi,
         #[strum(props(token = "GLM"))]
         Polygon,
         #[strum(props(token = "tGLM"))]
@@ -619,7 +621,7 @@ pub mod local {
     impl NetworkName {
         pub fn is_fundable(&self) -> bool {
             use NetworkName::*;
-            matches!(self, Sepolia | Goerli | Holesky | Amoy)
+            matches!(self, Sepolia | Goerli | Holesky | Hoodi | Amoy)
         }
 
         pub fn all_fundable() -> Vec<NetworkName> {
@@ -656,7 +658,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Holesky.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Hoodi.into())]
         pub network: NetworkName,
     }
 
@@ -687,7 +689,7 @@ pub mod local {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
             assert_eq!("erc20", a.driver());
-            assert_eq!("holesky", a.network());
+            assert_eq!("hoodi", a.network());
             assert_eq!("tGLM", a.token());
         }
     }

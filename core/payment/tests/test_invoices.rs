@@ -55,7 +55,7 @@ async fn test_invoice_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .await?;
 
     let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+        PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     let invoice_date = Utc::now();
 

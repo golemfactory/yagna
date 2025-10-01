@@ -61,7 +61,7 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .await?;
 
     let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+        PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     let debit_note_date = Utc::now();
     let debit_note = NewDebitNote {

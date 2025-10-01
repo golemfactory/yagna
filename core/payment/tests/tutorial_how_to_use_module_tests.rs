@@ -85,7 +85,7 @@ async fn tutorial_how_to_use_module_tests(ctx: &mut DroppableTestContext) -> any
 
     let payment_platform = PaymentPlatform {
         driver: Some(Driver::Erc20.gsb_name()),
-        network: Some("holesky".to_string()),
+        network: Some("hoodi".to_string()),
         token: Some("tglm".to_string()),
     };
 

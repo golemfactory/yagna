@@ -250,3 +250,16 @@ max-timeout-ms = 5000
 verify-interval-secs = 300
 allowed-head-behind-secs = 120
 dns-source = "hoodi.rpc-node.dev.golem.network."
+
+[[chain.hoodi.rpc-endpoints]]
+names = """
+    hoodi.rpc-node.dev.golem.network
+"""
+
+endpoints = """
+    https://hoodi.rpc-node.dev.golem.network/
+"""
+priority = 0
+max-timeout-ms = 5000
+verify-interval-secs = 60
+allowed-head-behind-secs = 120

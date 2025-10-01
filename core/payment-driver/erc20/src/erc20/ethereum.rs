@@ -545,6 +545,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
             "HOLESKY_GETH_ADDR",
             "https://ethereum-holesky.publicnode.com",
         ),
+        Network::Hoodi => collect_rpc_addr_from(
+            "HOODI_GETH_ADDR",
+            "https://hoodi.publicnode.com",
+        ),
         Network::Polygon => collect_rpc_addr_from(
             "POLYGON_GETH_ADDR",
             "https://bor.golem.network,https://polygon-rpc.com",
@@ -604,6 +608,7 @@ fn get_env(network: Network) -> config::EnvConfiguration {
         Network::Goerli => *config::GOERLI_CONFIG,
         Network::Sepolia => *config::SEPOLIA_CONFIG,
         Network::Holesky => *config::HOLESKY_CONFIG,
+        Network::Hoodi => *config::HOODI_CONFIG,
         Network::Mumbai => *config::MUMBAI_CONFIG,
         Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
         Network::Amoy => *config::AMOY_CONFIG,
