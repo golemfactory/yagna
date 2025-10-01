@@ -260,8 +260,8 @@ erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib",
 erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "95d137e31b6bf8167150c9874f10c02f5443aa63" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
-#erc20_payment_lib = { version = "0.4.7" }
-#erc20_processor = { version = "0.4.7" }
+#erc20_payment_lib = { version = "0.5.0" }
+#erc20_processor = { version = "0.5.0" }
 gftp = { version = "0.4.1", path = "core/gftp" }
 hex = "0.4.3"
 libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
