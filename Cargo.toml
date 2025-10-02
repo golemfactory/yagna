@@ -193,8 +193,11 @@ blocks_in_conditions = "allow"
 get_first = "allow"
 doc_lazy_continuation = "allow"
 len_zero = "allow"
-mismatched_lifetime_syntaxes = "allow"
 result_large_err = "allow"
+
+[workspace.lints.rust]
+mismatched_lifetime_syntaxes = "allow"
+
 
 [workspace]
 members = [

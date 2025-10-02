@@ -1,6 +1,3 @@
-/*
-    Database Access Object, all you need to interact with the database.
-*/
 
 use web3::types::U256;
 

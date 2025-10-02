@@ -1,4 +1,3 @@
-#![allow(mismatched_lifetime_syntaxes)]
 
 #[macro_use]
 extern crate nom;
