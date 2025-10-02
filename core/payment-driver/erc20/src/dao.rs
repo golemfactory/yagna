@@ -196,7 +196,8 @@ impl Erc20Dao {
         (self
             .payment()
             .get_first_by_tx_hash(tx_hash.to_string())
-            .await).ok()
+            .await)
+            .ok()
     }
 
     pub async fn transaction_saved(&self, tx_id: &str, order_id: &str) {
