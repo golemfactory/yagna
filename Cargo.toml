@@ -194,10 +194,10 @@ get_first = "allow"
 doc_lazy_continuation = "allow"
 len_zero = "allow"
 result_large_err = "allow"
+cloned_ref_to_slice_refs = "allow"
 
 [workspace.lints.rust]
 mismatched_lifetime_syntaxes = "allow"
-
 
 [workspace]
 members = [
