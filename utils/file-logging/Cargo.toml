@@ -14,3 +14,6 @@ yansi = "0.5.0"
 [features]
 packet-trace-enable = []
 default = []
+
+[lints]
+workspace = true
