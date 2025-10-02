@@ -155,6 +155,7 @@ lazy_static! {
             NetworkGroup::Testnet,
             vec![
                 NetworkName::Holesky,
+                NetworkName::Hoodi,
                 NetworkName::Amoy,
                 NetworkName::Sepolia,
             ],
