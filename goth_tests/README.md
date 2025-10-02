@@ -283,7 +283,7 @@ docker-compose:
 
   compose-log-patterns:                         # Log message patterns used for container ready checks
     ethereum-mainnet: ".*Wallets supplied."
-    ethereum-holesky: ".*Wallets supplied."
+    ethereum-hoodi: ".*Wallets supplied."
     ethereum-polygon: ".*Wallets supplied."
     ...
 

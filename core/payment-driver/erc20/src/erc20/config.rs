@@ -114,6 +114,26 @@ lazy_static! {
             }
         }
     };
+    pub static ref HOODI_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("HOODI_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or_else(|_| "0x55555555555556AcFf9C332Ed151758858bd7a26".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("HOODI_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or_else(|_| "0x500F965199C63865A3E666cA3fF55B64F1c8Bc8b".to_string())
+            )
+            .unwrap()
+        ),
+        required_confirmations: {
+            match env::var("ERC20_HOODI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
     pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("MUMBAI_TGLM_CONTRACT_ADDRESS")
