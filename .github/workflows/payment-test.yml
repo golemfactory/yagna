@@ -12,7 +12,7 @@ on:
     - cron: '0 4 * * *'
 
 env:
-  rust_stable: 1.84.0
+  rust_stable: 1.90.0
 
 jobs:
   build:
