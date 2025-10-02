@@ -349,7 +349,7 @@ impl SignatureVerifier for X509SignatureVerifier {
         let cert_store = self
             .cert_store
             .read()
-            .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
+            .map_err(|err| anyhow::anyhow!("Err: {}", err))?;
         let pub_key = verify_cert_chain(&cert_store, &self.cert_chain)?;
 
         let msg_digest =
@@ -513,7 +513,7 @@ impl X509Keystore {
         let cert_store = self
             .store
             .read()
-            .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
+            .map_err(|err| anyhow::anyhow!("Err: {}", err))?;
         verify_cert_chain(&cert_store, &cert_chain)
     }
 

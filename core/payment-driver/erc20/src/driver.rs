@@ -783,7 +783,7 @@ impl PaymentDriver for Erc20Driver {
 
         log::debug!(
             "Getting balance for network: {}, address: {}",
-            network.to_string(),
+            network,
             address_str
         );
 

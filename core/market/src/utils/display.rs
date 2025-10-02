@@ -7,11 +7,11 @@ use ya_service_api_web::middleware::Identity;
 pub struct DisplayEnabler<'a, Type>(pub &'a Type);
 
 pub trait EnableDisplay<Type> {
-    fn display(&self) -> DisplayEnabler<'_, Type>;
+    fn display(&self) -> DisplayEnabler<Type>;
 }
 
 impl<Type> EnableDisplay<Type> for Type {
-    fn display(&self) -> DisplayEnabler<'_, Type> {
+    fn display(&self) -> DisplayEnabler<Type> {
         DisplayEnabler(self)
     }
 }
