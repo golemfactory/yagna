@@ -10010,7 +10010,7 @@ name = "ya-relay-stack"
 version = "0.5.0"
 source = "git+https://github.com/golemfactory/ya-relay.git?rev=c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5#c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5"
 dependencies = [
- "derive_more",
+ "derive_more 0.99.18",
  "futures 0.3.30",
  "lazy_static",
  "log",
@@ -10051,8 +10051,8 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "306a73f6ce2286987c9da25bc0c2ef81f4f0b2b58bb8d9aeedc34d27407603ff"
 dependencies = [
- "bytes 1.7.2",
- "derive_more",
+ "bytes 1.10.1",
+ "derive_more 0.99.18",
 ]
 
 [[package]]
@@ -10538,7 +10538,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.17.3"
+version = "0.17.4"
 dependencies = [
  "actix-rt",
  "actix-service",
