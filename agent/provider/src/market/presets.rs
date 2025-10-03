@@ -244,7 +244,7 @@ pub struct PresetDisplay<'a, 'b> {
     registry: &'b ExeUnitsRegistry,
 }
 
-impl<'a, 'b> fmt::Display for PresetDisplay<'a, 'b> {
+impl fmt::Display for PresetDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         display_preset(f, self.preset, self.registry)
     }

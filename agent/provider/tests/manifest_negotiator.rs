@@ -219,28 +219,28 @@ fn manifest_negotiator_test_with_valid_payload_signature(
 }
 
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-invalid-signature.signed.json",
     Some("Partner verification of node descriptor failed: Invalid signature"); // error msg
     "Rejected because descriptor is not valid"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-different-node.signed.json",
     Some("Partner rule nodes mismatch"); // error msg
     "Rejected because descriptor is meant for different node id"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-no-permissions.signed.json",
     Some("Partner No outbound permissions"); // error msg
     "Rejected because descriptor doesn't have any permissions"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#,
     &["https://different-domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     Some("Partner Partner rule forbidden url requested: https://different-domain.com/"); // error msg
@@ -254,21 +254,21 @@ fn manifest_negotiator_test_with_valid_payload_signature(
     "Rejected because cert chain is not trusted"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "whitelist", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "whitelist", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     None; // error msg
     "Accepted because valid descriptor is trusted to valid whitelist"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     None; // error msg
     "Accepted because valid descriptor is trusted to all"
 )]
 #[test_case(
-    r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "none", "description": ""}"#,
+    r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "none", "description": ""}"#,
     &["https://domain.com"], // compManifest.net.inet.out.urls
     "node-descriptor-happy-path.signed.json",
     Some("Partner rule is disabled"); // error msg
@@ -327,7 +327,7 @@ fn manifest_negotiator_rejected_because_whitelist_doesnt_allow_unrestricted_acce
 #[serial]
 fn manifest_negotiator_with_node_identity_rejected_because_descriptor_doesnt_allow_unrestricted_access(
 ) {
-    let partner_rule = r#""cb16a2ed213c1cf7e14faa7cf05743bc145b8555ec2eedb6b12ba0d31d17846d2ed4341b048f2e43b1ca5195a347bfeb0cd663c9e6002a4adb7cc7385112d3cc": { "mode": "all", "description": ""}"#;
+    let partner_rule = r#""c525ae05cd9441d9b7922d40f27dd70338b44cb34815a28be17fe82beab6c6413be7ddb888b051128203b99a19febfd85a4234fd9db74414614e2887285cce3a": { "mode": "all", "description": ""}"#;
 
     let rulestore = format!(
         r#"{{"outbound": {{"enabled": true, "everyone": "none", "audited-payload": {{"default": {{"mode": "none", "description": ""}}}}, "partner": {{ {} }}}}}}"#,

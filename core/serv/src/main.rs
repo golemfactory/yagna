@@ -53,6 +53,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_payment::alloc_release_task::init_allocation_release_tasks;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 use ya_utils_consent::{
     consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
@@ -774,6 +775,8 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    init_allocation_release_tasks();
+
     #[cfg(feature = "static-openssl")]
     openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();

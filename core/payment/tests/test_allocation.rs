@@ -3,7 +3,7 @@ use chrono::Utc;
 use test_context::test_context;
 
 use ya_client_model::payment::allocation::{PaymentPlatform, PaymentPlatformEnum};
-use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
+use ya_client_model::payment::{Acceptance, AllocationUpdate, NewAllocation, NewInvoice};
 use ya_core_model::payment::local::GetStatus;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
@@ -13,7 +13,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::Driver;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -161,7 +161,146 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_auto_release_allocation")?;
+
+    let net = MockNet::new().bind();
+
+    let node = MockNode::new(net, "node-1", dir.path())
+        .with_identity()
+        .with_payment(None)
+        .with_fake_market();
+    node.bind_gsb().await?;
+    node.start_server(ctx).await?;
+
+    let requestor_appkey = node
+        .get_identity()?
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
+    let provider_appkey = node.get_identity()?.create_identity_key("provider").await?;
+
+    let _provider = node.rest_payments(&provider_appkey.key)?;
+    let requestor = node.rest_payments(&requestor_appkey.key)?;
+
+    node.get_payment()?
+        .fund_account(Driver::Erc20, &requestor_appkey.identity.to_string())
+        .await?;
+
+    let payment_platform =
+        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+
+    log::info!("Creating allocation...");
+    let _allocation = requestor
+        .create_allocation(&NewAllocation {
+            address: Some(requestor_appkey.identity.to_string()),
+            payment_platform: Some(payment_platform.clone()),
+            total_amount: BigDecimal::from(10u64),
+            timeout: Some(Utc::now() + chrono::Duration::seconds(1)),
+            make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
+        })
+        .await?;
+    log::info!("Allocation created.");
+
+    log::info!("Verifying allocation created...");
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
+    assert_eq!(allocations.len(), 1);
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    log::info!("Verifying allocation released...");
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
+    assert_eq!(allocations.len(), 0);
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_auto_release_allocation_and_amend(
+    ctx: &mut DroppableTestContext,
+) -> anyhow::Result<()> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_auto_release_allocation")?;
+
+    let net = MockNet::new().bind();
+
+    let node = MockNode::new(net, "node-1", dir.path())
+        .with_identity()
+        .with_payment(None)
+        .with_fake_market();
+    node.bind_gsb().await?;
+    node.start_server(ctx).await?;
+
+    let requestor_appkey = node
+        .get_identity()?
+        .create_from_private_key(&resource!("ci-requestor-1.key.priv"))
+        .await?;
+    let provider_appkey = node.get_identity()?.create_identity_key("provider").await?;
+
+    let _provider = node.rest_payments(&provider_appkey.key)?;
+    let requestor = node.rest_payments(&requestor_appkey.key)?;
+
+    node.get_payment()?
+        .fund_account(Driver::Erc20, &requestor_appkey.identity.to_string())
+        .await?;
+
+    let payment_platform =
+        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+
+    log::info!("Creating allocation...");
+    let allocation = requestor
+        .create_allocation(&NewAllocation {
+            address: Some(requestor_appkey.identity.to_string()),
+            payment_platform: Some(payment_platform.clone()),
+            total_amount: BigDecimal::from(10u64),
+            timeout: Some(Utc::now() + chrono::Duration::seconds(1)),
+            make_deposit: false,
+            deposit: None,
+            extend_timeout: None,
+        })
+        .await?;
+    log::info!("Allocation created.");
+
+    log::info!("Verifying allocation created...");
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
+    assert_eq!(allocations.len(), 1);
+
+    requestor
+        .amend_allocation(
+            &allocation.allocation_id,
+            &AllocationUpdate {
+                total_amount: None,
+                timeout: Some(Utc::now() + chrono::Duration::seconds(3)),
+                deposit: None,
+            },
+        )
+        .await?;
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    log::info!("Verifying allocation not released...");
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
+    assert_eq!(allocations.len(), 1);
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    log::info!("Verifying allocation released...");
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
+    assert_eq!(allocations.len(), 0);
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {

@@ -201,7 +201,7 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
     }
 }
 
-impl<'a> AgreementDao<'a> {
+impl AgreementDao<'_> {
     /*pub async fn list(&self, role: Option<Role>) -> DbResult<Vec<ReadObj>> {
         readonly_transaction(self.pool, "pay_agreement_dao_list", move |conn| {
             let agreements = dsl::pay_agreement.load(conn)?;

@@ -24,7 +24,7 @@ sgx = [
   'ya-core-model/sgx',
   'ya-transfer/sgx',
 ]
-framework-test = []
+system-test = []
 
 [dependencies]
 ya-agreement-utils = {workspace = true}

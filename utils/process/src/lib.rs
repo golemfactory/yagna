@@ -18,15 +18,17 @@ pub use unix::*;
 
 #[cfg(windows)]
 mod win;
-#[cfg(windows)]
-pub use win::*;
-
 #[cfg(unix)]
 use shared_child::unix::SharedChildExt;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+pub use win::*;
 
 #[cfg(windows)]
 use winapi::um::{
     errhandlingapi,
+    winbase::CREATE_NEW_PROCESS_GROUP,
     wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT},
 };
 
@@ -111,6 +113,9 @@ impl ProcessHandle {
         // Create a JobObject before spawning a process.
         #[cfg(windows)]
         let job_object = JobObject::try_new_current()?;
+        #[cfg(windows)]
+        let command = command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+
         let process = Arc::new(SharedChild::spawn(command)?);
         Ok(ProcessHandle {
             process,

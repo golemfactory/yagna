@@ -22,7 +22,7 @@ impl<'a> AsDao<'a> for AppKeyDao<'a> {
     }
 }
 
-impl<'c> AppKeyDao<'c> {
+impl AppKeyDao<'_> {
     pub async fn with_connection<R: Send + 'static, F>(&self, f: F) -> Result<R>
     where
         F: Send + 'static + FnOnce(&ConnType) -> Result<R>,

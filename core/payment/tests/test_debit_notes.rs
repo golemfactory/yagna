@@ -13,7 +13,7 @@ use ya_framework_mocks::net::MockNet;
 use ya_framework_mocks::node::MockNode;
 use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -56,8 +56,11 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
         .await?;
 
-    let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+    node.get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
+        .await?;
+
+    let payment_platform = PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     let debit_note_date = Utc::now();
     let debit_note = NewDebitNote {

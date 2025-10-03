@@ -19,7 +19,7 @@ impl<'a> AsDao<'a> for ReleaseDAO<'a> {
     }
 }
 
-impl<'c> ReleaseDAO<'c> {
+impl ReleaseDAO<'_> {
     pub async fn save_new(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
         do_with_transaction(
             self.pool,
