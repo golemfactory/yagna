@@ -43,8 +43,7 @@ async fn test_release_allocation(ctx: &mut DroppableTestContext) -> anyhow::Resu
         .fund_account(Driver::Erc20, &requestor_appkey.identity.to_string())
         .await?;
 
-    let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+    let payment_platform = PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     log::info!("Creating allocation...");
     let allocation = requestor
@@ -191,8 +190,7 @@ async fn test_auto_release_allocation(ctx: &mut DroppableTestContext) -> anyhow:
         .fund_account(Driver::Erc20, &requestor_appkey.identity.to_string())
         .await?;
 
-    let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+    let payment_platform = PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     log::info!("Creating allocation...");
     let _allocation = requestor
@@ -253,8 +251,7 @@ async fn test_auto_release_allocation_and_amend(
         .fund_account(Driver::Erc20, &requestor_appkey.identity.to_string())
         .await?;
 
-    let payment_platform =
-        PaymentPlatformEnum::PaymentPlatformName("erc20-holesky-tglm".to_string());
+    let payment_platform = PaymentPlatformEnum::PaymentPlatformName("erc20-hoodi-tglm".to_string());
 
     log::info!("Creating allocation...");
     let allocation = requestor

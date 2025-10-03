@@ -207,9 +207,9 @@ impl FakeMarket {
 
     pub fn create_default_demand(requestor_id: NodeId) -> anyhow::Result<ProposalView> {
         let basic_props = json!({
-            "golem.com.payment.platform.erc20-holesky-tglm.address": requestor_id.to_string(),
+            "golem.com.payment.platform.erc20-hoodi-tglm.address": requestor_id.to_string(),
             "golem.com.payment.protocol.version": 3,
-            "golem.com.payment.chosen-platform": "erc20-holesky-tglm",
+            "golem.com.payment.chosen-platform": "erc20-hoodi-tglm",
         });
 
         let template = OfferTemplate {
