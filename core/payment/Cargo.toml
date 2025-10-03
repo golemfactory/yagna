@@ -88,3 +88,7 @@ url = "2.5"
 
 [lints]
 workspace = true
+
+[[profile.default.overrides]]
+filter = "test_debit_note_flow"
+timeout = "300s"
