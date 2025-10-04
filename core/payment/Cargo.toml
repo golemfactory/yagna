@@ -54,6 +54,7 @@ log = "0.4"
 metrics = "0.12"
 num-bigint = "0.3"
 open = "5.1.2"
+parking_lot = { workspace = true }
 problem_details = "0.6.0"
 r2d2 = "0.8"
 serde = { version = "1.0", features = ["derive"] }

@@ -1,5 +1,3 @@
-#![allow(elided_named_lifetimes)]
-
 #[macro_use]
 extern crate nom;
 

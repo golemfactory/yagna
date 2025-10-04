@@ -4,8 +4,7 @@ use diesel::sqlite::Sqlite;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client::model::NodeId;
 
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
-
+use crate::config::is_market_memory_on_disk;
 use crate::db::model::SubscriptionId;
 use crate::db::model::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl as offer;
@@ -13,6 +12,7 @@ use crate::db::schema::market_offer::dsl::market_offer;
 use crate::db::schema::market_offer_unsubscribed::dsl as unsubscribed;
 use crate::db::schema::market_offer_unsubscribed::dsl::market_offer_unsubscribed;
 use crate::db::{AsMixedDao, DbError, DbResult};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 const QUERY_OFFERS_PAGE: usize = 150;
 
@@ -21,8 +21,12 @@ pub struct OfferDao<'c> {
 }
 
 impl<'a> AsMixedDao<'a> for OfferDao<'a> {
-    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
-        Self { pool: ram_pool }
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        if is_market_memory_on_disk() {
+            Self { pool: disk_pool }
+        } else {
+            Self { pool: ram_pool }
+        }
     }
 }
 

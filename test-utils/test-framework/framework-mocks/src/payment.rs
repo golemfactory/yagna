@@ -24,6 +24,7 @@ use ya_service_bus::typed::Endpoint;
 
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_payment::alloc_release_task::AllocationReleaseTasks;
 
 pub mod fake_payment;
 
@@ -53,12 +54,18 @@ pub struct RealPayment {
     processor: Arc<PaymentProcessor>,
 
     config: Arc<Config>,
+
+    allocation_release_tasks: AllocationReleaseTasks,
 }
 
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let allocation_release_tasks = AllocationReleaseTasks::new_for_mocks_only();
+        let processor = Arc::new(PaymentProcessor::new(
+            db.clone(),
+            allocation_release_tasks.clone(),
+        ));
         let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {
@@ -67,6 +74,7 @@ impl RealPayment {
             db,
             processor,
             config: Arc::new(config),
+            allocation_release_tasks,
         }
     }
 
@@ -96,7 +104,7 @@ impl RealPayment {
 
     pub fn bind_rest(&self) -> actix_web::Scope {
         let db = self.db.clone();
-        web_scope(&db)
+        web_scope(&db, self.allocation_release_tasks.clone())
     }
 
     pub async fn start_dummy_driver(&self) -> anyhow::Result<()> {
@@ -113,7 +121,7 @@ impl RealPayment {
         bus::service(driver_bus_id(driver.gsb_name()))
             .call(Fund::new(
                 address.to_string(),
-                Some("holesky".to_string()),
+                Some("hoodi".to_string()),
                 None,
                 false,
             ))
@@ -149,6 +157,7 @@ impl RealPayment {
         let drivers = vec![Driver::Dummy, Driver::Erc20];
         let networks = vec![
             NetworkName::Holesky,
+            NetworkName::Hoodi,
             NetworkName::Amoy,
             NetworkName::Mumbai,
             NetworkName::Rinkeby,
