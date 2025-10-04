@@ -615,7 +615,7 @@ mod test {
     async fn process_rx_buffer_stream(mode: TxMode, size: usize) {
         let src = (0..=255u8)
             .flat_map(|e| {
-                let vec = Vec::from_iter(std::iter::repeat(e).take(size));
+                let vec = Vec::from_iter(std::iter::repeat_n(e, size));
                 mode.split(vec)
                     .into_iter()
                     .map(|mut v| {
