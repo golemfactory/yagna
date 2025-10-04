@@ -55,6 +55,7 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
         let mut nlines = 0;
         let mut next_frame: bool = false;
         for line in banner.lines() {
+            #[allow(clippy::implicit_saturating_sub)]
             let offset = if 5 + (frame * 2 / 3) > nlines {
                 5 + (frame * 2 / 3) - nlines
             } else {

@@ -1,7 +1,3 @@
-/*
-    Database Access Object, all you need to interact with the database.
-*/
-
 use web3::types::U256;
 
 // Workspace uses
@@ -193,14 +189,11 @@ impl Erc20Dao {
     }
 
     pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {
-        match self
+        (self
             .payment()
             .get_first_by_tx_hash(tx_hash.to_string())
-            .await
-        {
-            Ok(payment) => Some(payment),
-            Err(_) => None,
-        }
+            .await)
+            .ok()
     }
 
     pub async fn transaction_saved(&self, tx_id: &str, order_id: &str) {

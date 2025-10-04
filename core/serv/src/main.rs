@@ -778,7 +778,9 @@ async fn main() -> Result<()> {
     init_allocation_release_tasks();
 
     #[cfg(feature = "static-openssl")]
-    openssl_probe::init_ssl_cert_env_vars();
+    unsafe {
+        openssl_probe::init_openssl_env_vars();
+    }
     let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
