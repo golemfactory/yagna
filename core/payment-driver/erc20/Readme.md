@@ -33,7 +33,7 @@ Be aware that options not prefixed with `ERC20` are also applicable to the old E
 
 ### Via TOML file
 * The default configuration can be seen in `config-payments.toml`.
-* It can be overriden by placing a `config-payments.toml` file in yagna data directory. This is not recommended and is not guaranteed to work across versions.
+* It can be overridden by placing a `config-payments.toml` file in yagna data directory. This is not recommended and is not guaranteed to work across versions.
 
 ## Statuses
 The Erc20 driver can report a selection of statuses which indicate possible issues.
@@ -47,7 +47,7 @@ The Erc20 driver can report a selection of statuses which indicate possible issu
   * A transaction has been scheduled on a chain that is not present in the configuration. This can only happen if `payments-config.toml` has been changed in an incorrect manner.
   * Contains: `driver`, `chainId`.
 * `CantSign`:
-  * The transaction cannot be signed. This means that yagna cannot access the identitiy used for this transfer, which can be caused by it being removed or locked.
+  * The transaction cannot be signed. This means that yagna cannot access the identity used for this transfer, which can be caused by it being removed or locked.
   * Contains: `driver`, `network`, `address`.
 * `TxStuck`:
   * A transaction cannot proceed despite being sent to the blockchain. The most likely reason is too low `max fee` setting.
