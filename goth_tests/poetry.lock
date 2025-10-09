@@ -599,7 +599,7 @@ dev = ["jsonref", "matplotlib"]
 
 [[package]]
 name = "goth"
-version = "0.21.0"
+version = "0.22.0"
 description = "Golem Test Harness - integration testing framework"
 optional = false
 python-versions = "^3.10.1"
@@ -624,8 +624,8 @@ ya-tmp-pyapi = "=0.7.0"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "b38f3582d47a02bc232909b3b90962bc853fee6e"
-resolved_reference = "b38f3582d47a02bc232909b3b90962bc853fee6e"
+reference = "1f1d9adb07aeae02712b8a17edac694d324f55ac"
+resolved_reference = "1f1d9adb07aeae02712b8a17edac694d324f55ac"
 
 [[package]]
 name = "idna"
@@ -1554,4 +1554,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10.1"
-content-hash = "9c32be8bc504cafb06231a3139fdddca7585928a5d625e3749f65834bb7bc4aa"
+content-hash = "5f09afaed1ca98188b4d847d785085e3b6c64f2e7bd60c729d197f78468f162c"
