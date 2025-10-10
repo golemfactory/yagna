@@ -57,7 +57,7 @@ def log_dir() -> Path:
         try:
             if latest_link.is_symlink() or latest_link.exists():
                 latest_link.unlink()
-            latest_link.symlink_to(log_dir, target_is_directory=True)
+            latest_link.symlink_to(f"goth_{date_str}", target_is_directory=True)
         except OSError as e:
             print(f"Warning: could not create symlink {latest_link} -> {log_dir}: {e}")
 
