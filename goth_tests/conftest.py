@@ -1,3 +1,5 @@
+import os
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
@@ -6,6 +8,12 @@ import pytest
 
 from goth.configuration import Override
 from goth.runner.log import configure_logging
+
+from dotenv import load_dotenv
+
+def pytest_configure(config):
+    """Configure environment variables from .env file."""
+    load_dotenv(dotenv_path=os.path.join(os.getcwd(), '.env'))
 
 
 def pytest_addoption(parser):
