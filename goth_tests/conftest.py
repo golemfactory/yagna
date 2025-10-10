@@ -1,3 +1,4 @@
+import logging
 import os
 import platform
 
@@ -61,7 +62,7 @@ def log_dir() -> Path:
             print(f"Warning: could not create symlink {latest_link} -> {log_dir}: {e}")
 
     configure_logging(log_dir)
-
+    logging.getLogger('aiohttp.access').setLevel(logging.DEBUG)
     return log_dir
 
 
