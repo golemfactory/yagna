@@ -107,12 +107,11 @@ async def test_custom_runtime_counter(
 
         await provider.wait_for_exeunit_finished()
 
-        await asyncio.sleep(60) # wait for the debit note to be created
+        await asyncio.sleep(20) # wait for the debit note to be created
 
         debit_notes = await requestor.api.payment.get_debit_notes()
 
-        if not debit_notes:
-            pytest.fail("No debit notes found")
+        assert len(debit_notes) > 0
 
         last_debit_note = debit_notes[len(debit_notes) - 1]
         logger.info("last debit note: %r", last_debit_note)
