@@ -1,3 +1,4 @@
+cache
 logs
 .mypy_cache
 .pytest_cache
