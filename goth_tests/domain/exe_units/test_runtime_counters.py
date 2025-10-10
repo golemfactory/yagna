@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -104,16 +105,15 @@ async def test_custom_runtime_counter(
 
         await requestor.destroy_activity(activity_id)
 
-        logger.info("waiting for last debit note to be send")
-        await provider.provider_agent.wait_for_log(r"(.*)Sending debit note(.*)")
-        logger.info("waiting for last debit note to be received")
-        await requestor.container.logs.wait_for_entry(
-            r"(.*)DebitNote \[(.+)\] received from node(.*)"
-        )
-
         await provider.wait_for_exeunit_finished()
 
+        await asyncio.sleep(60) # wait for the debit note to be created
+
         debit_notes = await requestor.api.payment.get_debit_notes()
+
+        if not debit_notes:
+            pytest.fail("No debit notes found")
+
         last_debit_note = debit_notes[len(debit_notes) - 1]
         logger.info("last debit note: %r", last_debit_note)
 
