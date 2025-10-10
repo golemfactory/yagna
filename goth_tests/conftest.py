@@ -46,14 +46,14 @@ def default_config() -> Path:
 @pytest.fixture(scope="session")
 def log_dir() -> Path:
     """Fixture providing unique directory for logs from a test run."""
-    base_dir = Path("/tmp/goth-tests")
+    base_dir = Path("logs")
     date_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     log_dir = base_dir / f"goth_{date_str}"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Create symlink to latest on Linux
     if os.name != "nt":
-        latest_link = base_dir / "goth_latest"
+        latest_link = base_dir / "latest"
         try:
             if latest_link.is_symlink() or latest_link.exists():
                 latest_link.unlink()
