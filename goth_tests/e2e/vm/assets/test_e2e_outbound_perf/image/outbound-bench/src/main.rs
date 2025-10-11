@@ -115,10 +115,12 @@ fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
 
 fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
     let requests = [
-        "https://s3.amazonaws.com/data-production-walltime-info/production/dynamic/walltime-info.json?now=1528962473468.679.0000000000873",
+        "http://ftp.cl.debian.org/debian/",
         "http://worldtimeapi.org/api/timezone",
         "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
         "http://api.citybik.es/v2/networks",
+        "http://ftp.au.debian.org/",
+        "https://vanity.market/assets/logo_dark.svg"
     ];
 
     let mut requests_to_run = Vec::new();
