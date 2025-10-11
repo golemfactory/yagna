@@ -147,6 +147,8 @@ async def test_e2e_outbound_perf(
         output_text = open(output_path).read()
         output_json = json.loads(output_text)
 
+        logger.info(f"Output file content:\n{output_json}")
+
         pass_set = [{'Ok': True}, {'Err': 'skipped'}]
         assert output_json['roundtrip'] in pass_set
         assert output_json['many_reqs'] in pass_set
