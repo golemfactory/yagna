@@ -116,8 +116,6 @@ fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
 fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
     let requests = [
         "http://ftp.cl.debian.org/debian/",
-        "http://worldtimeapi.org/api/timezone",
-        "https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam",
         "http://api.citybik.es/v2/networks",
         "http://ftp.au.debian.org/",
         "https://vanity.market/assets/logo_dark.svg"
