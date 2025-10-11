@@ -624,8 +624,8 @@ ya-tmp-pyapi = "=0.7.0"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "074d7304fa7bbacf1e35d32afa80e8b76bd5cba5"
-resolved_reference = "074d7304fa7bbacf1e35d32afa80e8b76bd5cba5"
+reference = "6394d13e4e8467e49ea5b547e78a6296c707c66b"
+resolved_reference = "6394d13e4e8467e49ea5b547e78a6296c707c66b"
 
 [[package]]
 name = "idna"
@@ -1569,4 +1569,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10.1"
-content-hash = "211d74e7ab986fe51f452e9ad1635709015aaab5622d162b1be511d0580610d8"
+content-hash = "131d6c58983cb56bbba7e93603df6f6c6ce508443c1bd9567a947722a06d2c34"

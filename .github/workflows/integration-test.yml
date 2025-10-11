@@ -216,7 +216,7 @@ jobs:
         if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}
-          path: /tmp/goth-tests
+          path: logs/goth-tests
 
   integration-test:
     name: Integration Tests (hybrid-net)
