@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::{Read, Write},
     net::TcpStream,
     process, thread,
@@ -220,6 +221,9 @@ struct Args {
 
     #[arg(long, help = "list of external addresses to check")]
     address_list: Option<String>,
+
+    #[arg(long, help = "file to write output json to")]
+    output: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -240,6 +244,7 @@ fn main() {
         requests_count,
         stages,
         address_list,
+        output,
     } = Args::parse();
 
     let stream_echo = || TcpStream::connect(format!("{addr}:{port_echo}")).unwrap();
@@ -294,12 +299,15 @@ fn main() {
         Err(anyhow::anyhow!("skipped"))
     };
 
-    let output = Output {
+    let output_json = Output {
         roundtrip: test_roundtrip_result.map_err(|e| e.to_string()),
         many_reqs: test_many_reqs_result.map_err(|e| e.to_string()),
         iperf3: test_iperf3_result.map_err(|e| e.to_string()),
         stress: test_stress_result.map_err(|e| e.to_string()),
     };
 
-    println!("{}", serde_json::to_string(&output).unwrap());
+    if let Some(output_file) = output {
+        fs::write(output_file, serde_json::to_string(&output_json).unwrap()).unwrap();
+    }
+    println!("{}", serde_json::to_string(&output_json).unwrap());
 }
