@@ -23,6 +23,7 @@
     "version": "0.1.0",
     "script": {
       "commands": [
+        "run .*ls.*",
         "run .*curl.*",
         "run .*request.sh.*",
         "transfer .*output.txt"
