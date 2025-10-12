@@ -26,6 +26,7 @@ from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
 
+
 def vm_exe_script(runner: Runner, addr: str, output_file: str):
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
@@ -36,11 +37,21 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
+    list = 'http://vanity.market'
+    command = f"--addr={addr}"
+    command += f" --port-echo={22235}"
+    command += f"  --port-sink={22236}"
+    command += f" --port-iperf={22237}"
+    command += f" --mib-per-sec={0.5}"
+    command += f" --requests-count={10}"
+    command += f" --stages={2}"
+    command += f" --address-list={list}"
+
+    logger.info(f"Command to run: {command}")
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/golem/entrypoints/entrypoint.sh", "args":
-            [addr, '22235', '22236', '22237', '0.5', '10', '2', 'http://vanity.market']}},
+        {"run": {"entry_point": "/usr/bin/outbound-bench", "args": command.split(" ")}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
@@ -49,34 +60,39 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
         },
     ]
 
+
 @pytest.mark.asyncio
 async def test_e2e_outbound_perf(
-    common_assets: Path,
-    default_config: Path,
-    config_overrides: List[Override],
-    log_dir: Path,
+        common_assets: Path,
+        default_config: Path,
+        config_overrides: List[Override],
+        log_dir: Path,
 ):
     """Test successful flow requesting a task using outbound network feature. X.509 cert negotiation scenario."""
 
     # Test external api request just one Requestor and one Provider
     nodes = [
-        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
+        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7"},
+        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0",
+         "use-proxy": True},
     ]
 
     assets_root = Path(__file__).parent / "assets"
     node_types = [
-       {"name": "Requestor", "class": "goth.runner.probe.RequestorProbe"},
-       {
-         "name": "VM-Wasm-Provider",
-         "class": "goth_tests.helpers.probe.ProviderProbe",
-         "mount": [
-              {"read-only": "assets/provider/presets.json", "destination": "/root/.local/share/ya-provider/presets.json"},
-              {"read-only": "assets/provider/hardware.json", "destination": "/root/.local/share/ya-provider/hardware.json"},
-              {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json", "destination": "/root/.local/share/ya-provider/rules.json"},
-         ],
-         "privileged-mode": True,
-       },
+        {"name": "Requestor", "class": "goth.runner.probe.RequestorProbe"},
+        {
+            "name": "VM-Wasm-Provider",
+            "class": "goth_tests.helpers.probe.ProviderProbe",
+            "mount": [
+                {"read-only": "assets/provider/presets.json",
+                 "destination": "/root/.local/share/ya-provider/presets.json"},
+                {"read-only": "assets/provider/hardware.json",
+                 "destination": "/root/.local/share/ya-provider/hardware.json"},
+                {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json",
+                 "destination": "/root/.local/share/ya-provider/rules.json"},
+            ],
+            "privileged-mode": True,
+        },
     ]
 
     config_overrides.append(("nodes", nodes))
@@ -96,7 +112,7 @@ async def test_e2e_outbound_perf(
             if 'outbound-test' in info.aliases:
                 server_addr = info.address
                 break
-        assert(server_addr is not None)  # "Can't find container `outbound-test`"
+        assert (server_addr is not None)  # "Can't find container `outbound-test`"
         logger.info("outbound-test container found at %s", server_addr)
 
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
@@ -107,7 +123,7 @@ async def test_e2e_outbound_perf(
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(task_package = None)
+            .props_from_template(task_package=None)
             .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
             .constraints("(&(golem.runtime.name=vm))")
             .build()
@@ -144,7 +160,7 @@ async def test_e2e_outbound_perf(
 
         assert output_path.is_file()
         assert len(output_path.read_text()) > 0
-        
+
         output_text = open(output_path).read()
         output_json = json.loads(output_text)
 
