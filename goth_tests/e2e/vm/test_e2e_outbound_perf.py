@@ -147,9 +147,12 @@ async def test_e2e_outbound_perf(
         activity_id = await requestor.create_activity(agreement_id)
         await provider.wait_for_exeunit_started()
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
-        await requestor.collect_results(
+        exe_results = await requestor.collect_results(
             activity_id, batch_id, num_commands, timeout=300
         )
+
+        logger.info(f"stdout: {exe_results[2].stdout}")
+        logger.info(f"stderr: {exe_results[2].stderr}")
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
