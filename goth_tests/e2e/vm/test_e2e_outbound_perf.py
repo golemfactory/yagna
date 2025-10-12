@@ -40,6 +40,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     list = 'https://api.stats.golem.network/v1/network/versions,' \
            'https://raw.githubusercontent.com/golemfactory/goth/refs/heads/master/LICENSE,' \
            'https://vanity.market/assets/logo_dark.svg,' \
+           'https://en.wikipedia.org/wiki/Ethereum,' \
            'http://ftp.au.debian.org/,' \
            'http://api.citybik.es/v2/networks'
 
