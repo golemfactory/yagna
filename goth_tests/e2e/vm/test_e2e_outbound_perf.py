@@ -27,7 +27,7 @@ from goth_tests.helpers.probe import ProviderProbe
 logger = logging.getLogger("goth.test.outbound_perf")
 
 
-def vm_exe_script(runner: Runner, addr: str, output_file: str):
+def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
 
@@ -56,16 +56,24 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
 
     exe = "/usr/bin/outbound-bench"
     logger.info(f"Command to run: {exe} {command}")
+
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": exe, "args": command.split()}},
+        {"run": {"entry_point": "/bin/bash", "args": ["-c", command, "2>/golem/output/error.txt"]}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
                 "to": f"{web_server_addr}/upload/{output_file}",
             }
         },
+        {
+            "transfer": {
+                "from": f"container:/golem/output/error.txt",
+                "to": f"{web_server_addr}/upload/{error_file}",
+            }
+        },
+
     ]
 
 
@@ -150,9 +158,16 @@ async def test_e2e_outbound_perf(
 
         output_file = "output.json"
         output_path = Path(runner.web_root_path) / "upload" / output_file
+        error_file = "error.txt"
+        error_path = Path(runner.web_root_path) / "upload" / error_file
 
-        exe_script = vm_exe_script(runner, server_addr, output_file)
+        exe_script = vm_exe_script(runner, server_addr, output_file, error_file)
         print(exe_script)
+
+        with open(error_path, 'r'):
+            err = error_path.read()
+            logger.info("Contents of error.txt (if any):")
+            logger.info(err)
 
         num_commands = len(exe_script)
 
