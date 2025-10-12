@@ -47,17 +47,12 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     command += f" --stages={2}"
     command += f" --address-list={list}"
 
-    logger.info(f"Command to run: {command}")
+    exe = "/usr/bin/outbound-bench"
+    logger.info(f"Command to run: {exe} {command}")
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/usr/bin/outbound-bench", "args": command.split(" ")}},
-        {
-            "transfer": {
-                "from": f"container:/golem/output/output.json",
-                "to": f"{web_server_addr}/upload/{output_file}",
-            }
-        },
+        {"run": {"entry_point": exe, "args": command.split(" ")}},
     ]
 
 
