@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     io::{Read, Write},
     net::TcpStream,
     process, thread,
@@ -113,38 +112,78 @@ fn test_iperf3(mib_per_s: f32, host: &str, port: u16) -> anyhow::Result<bool> {
     Ok(bits_per_second as f32 >= mib_per_s * 1024.0 * 1024.0 * 8.0)
 }
 
-fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
-    let requests = [
-        "http://ftp.cl.debian.org/debian/",
-        "http://api.citybik.es/v2/networks",
-        "http://ftp.au.debian.org/",
-        "https://vanity.market/assets/logo_dark.svg"
-    ];
+struct ResponseEntry {
+    success: bool,
+}
 
+async fn run_request(url: String) -> ResponseEntry {
+    eprintln!("Start request {}", &url);
+    let elapsed = Instant::now();
+    let res = reqwest::get(&url).await;
+
+    match res {
+        Ok(response) => {
+            if response.status().is_success() {
+                eprintln!(
+                    "Success: {} {:.01}ms",
+                    &url,
+                    elapsed.elapsed().as_secs_f64() * 1000.0
+                );
+                ResponseEntry { success: true }
+            } else {
+                eprintln!(
+                    "Http error: {} {:.01}ms {}",
+                    &url,
+                    elapsed.elapsed().as_secs_f64() * 1000.0,
+                    response.status()
+                );
+                ResponseEntry { success: false }
+            }
+        }
+        Err(err) => {
+            eprintln!(
+                "Request error: {} {:.01}ms {}",
+                &url,
+                elapsed.elapsed().as_secs_f64() * 1000.0,
+                err
+            );
+            ResponseEntry { success: false }
+        }
+    }
+}
+
+fn test_many_reqs(
+    address_list: &[String],
+    total_reqs: usize,
+    max_secs: f32,
+) -> anyhow::Result<bool> {
     let mut requests_to_run = Vec::new();
     for i in 0..total_reqs {
-        requests_to_run.push(requests[i % requests.len()]);
+        requests_to_run.push(address_list[i % address_list.len()].clone());
     }
 
     requests_to_run.shuffle(&mut rand::thread_rng());
 
     let started_at = Instant::now();
-    let result = tokio::runtime::Runtime::new()
+    let success_count = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
             let mut set = JoinSet::new();
+
             for url in requests_to_run {
-                set.spawn(reqwest::get(url));
+                set.spawn(run_request(url));
             }
 
-            while let Some(res) = set.join_next().await {
-                res??;
+            let mut results = vec![];
+            while let Some(join_result) = set.join_next().await {
+                let response: ResponseEntry = join_result.expect("task panicked");
+                results.push(response);
             }
 
-            Ok::<(), Box<dyn Error>>(())
+            results.iter().filter(|r| r.success).count()
         });
 
-    Ok(result.is_ok() && started_at.elapsed().as_secs_f32() < max_secs)
+    Ok((success_count == total_reqs) && started_at.elapsed().as_secs_f32() < max_secs)
 }
 
 #[derive(Parser, Debug)]
@@ -152,26 +191,35 @@ fn test_many_reqs(total_reqs: usize, max_secs: f32) -> anyhow::Result<bool> {
 struct Args {
     #[arg(long, help = "host running the server", default_value_t = String::from("127.0.0.1"))]
     addr: String,
+
     #[arg(long, help = "port with the echo service", default_value_t = 2235)]
     port_echo: u16,
+
     #[arg(long, help = "port with the sink service", default_value_t = 2236)]
     port_sink: u16,
+
     #[arg(long, help = "port with the iperf3 service", default_value_t = 2237)]
     port_iperf: u16,
+
     #[arg(
         long,
         help = "throughput for the throughput, iperf3 and stress tests",
         default_value_t = 1.0
     )]
     mib_per_sec: f32,
+
     #[arg(
         long,
         help = "number of requests for the requests tests",
         default_value_t = 20
     )]
     requests_count: usize,
+
     #[arg(long, help = "only do first <stages> tests", default_value_t = 4)]
     stages: usize,
+
+    #[arg(long, help = "list of external addresses to check")]
+    address_list: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -191,6 +239,7 @@ fn main() {
         mib_per_sec,
         requests_count,
         stages,
+        address_list,
     } = Args::parse();
 
     let stream_echo = || TcpStream::connect(format!("{addr}:{port_echo}")).unwrap();
@@ -204,8 +253,25 @@ fn main() {
         Err(anyhow::anyhow!("skipped"))
     };
 
+    let addr_list = if let Some(address_list) = address_list {
+        address_list
+            .split(",")
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<String>>()
+    } else {
+        Vec::from(
+            [
+                "http://ftp.cl.debian.org/debian/",
+                "http://api.citybik.es/v2/networks",
+                "http://ftp.au.debian.org/",
+                "https://vanity.market/assets/logo_dark.svg",
+            ]
+            .map(|url| url.to_string()),
+        )
+    };
+
     let test_many_reqs_result = if stages >= 2 {
-        let result = test_many_reqs(requests_count, requests_count as f32);
+        let result = test_many_reqs(&addr_list, requests_count, requests_count as f32);
         eprintln!("{:?}", result);
         result
     } else {
