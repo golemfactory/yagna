@@ -23,6 +23,7 @@
         "version": "0.1.0",
         "script": {
             "commands": [
+                "run .*ls.*",
                 "run .*outbound-bench.*",
                 "run .*iperf3.*",
                 "run .*entrypoint.sh.*",
