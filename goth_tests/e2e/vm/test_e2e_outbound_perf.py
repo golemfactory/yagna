@@ -52,7 +52,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": exe, "args": ["--help"]}},
+        {"run": {"entry_point": exe, "args": command.split()} },
     ]
 
 
