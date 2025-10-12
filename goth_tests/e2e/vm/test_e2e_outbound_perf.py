@@ -37,7 +37,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
-    list = 'http://vanity.market'
+    list = 'https://rock.vanity.market/assets/logo_dark.svg'
     command = f"--addr={addr}"
     command += f" --port-echo={22235}"
     command += f" --port-sink={22236}"
