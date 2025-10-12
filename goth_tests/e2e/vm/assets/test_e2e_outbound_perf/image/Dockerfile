@@ -1,14 +1,8 @@
 FROM ubuntu:latest
 
 RUN apt update \
-    && apt install -y libssl-dev ca-certificates \
-    && update-ca-certificates \
     && apt install -y iperf3
 
-COPY outbound-bench/target/release/outbound-bench /usr/bin/outbound-bench
-COPY entrypoint.sh /golem/entrypoints/entrypoint.sh
-
-RUN chmod +x /usr/bin/outbound-bench
-RUN chmod +x /golem/entrypoints/entrypoint.sh
+COPY outbound-bench/target/x86_64-unknown-linux-musl/release/outbound-bench /usr/bin/outbound-bench
 
 VOLUME /golem/work /golem/output /golem/resource
