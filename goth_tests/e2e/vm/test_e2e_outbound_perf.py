@@ -40,7 +40,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str):
     list = 'http://vanity.market'
     command = f"--addr={addr}"
     command += f" --port-echo={22235}"
-    command += f"  --port-sink={22236}"
+    command += f" --port-sink={22236}"
     command += f" --port-iperf={22237}"
     command += f" --mib-per-sec={0.5}"
     command += f" --requests-count={10}"
