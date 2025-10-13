@@ -62,6 +62,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     return [
         {"deploy": {}},
         {"start": {}},
+        {"run": {"entry_point": "/bin/ls", "args": ["-la"]}},
         {"run": {"entry_point": "/bin/bash", "args": ["-c", command]}},
         {
             "transfer": {
