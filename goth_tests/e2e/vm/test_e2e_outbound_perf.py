@@ -29,9 +29,9 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
-    list = 'https://api.stats.golem.network/v1/network/versions,' \
+    list = 'https://vanity.market/assets/logo_dark.svg,' \
+           'https://api.stats.golem.network/v1/network/versions,' \
            'https://raw.githubusercontent.com/golemfactory/goth/refs/heads/master/LICENSE,' \
-           'https://vanity.market/assets/logo_dark.svg,' \
            'http://ftp.au.debian.org/,' \
            'http://api.citybik.es/v2/networks'
 
@@ -56,6 +56,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     return [
         {"deploy": {}},
         {"start": {}},
+        {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
         {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
         {
             "transfer": {
