@@ -57,13 +57,25 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/usr/bin/dig",
-                 "args": ["vanity.market",
-                          "api.stats.golem.network",
-                          "raw.githubusercontent.com",
-                          "ftp.au.debian.org",
-                          "api.citybik.es"], "capture": capture}},
-        {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
+        {
+            "run": {
+                "entry_point": "/usr/bin/dig",
+                "args": ["vanity.market",
+                         "api.stats.golem.network",
+                         "raw.githubusercontent.com",
+                         "ftp.au.debian.org",
+                         "api.citybik.es"],
+                "capture": capture}},
+        {
+            "run": {
+                "entry_point": "/usr/bin/curl",
+                "args": ["-sSL", "https://vanity.market/assets/logo_dark.svg"],
+                "capture": capture}},
+        {
+            "run": {
+                "entry_point": exe,
+                "args": command.split(' '),
+                "capture": capture}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
