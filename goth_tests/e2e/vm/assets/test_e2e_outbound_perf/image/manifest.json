@@ -14,9 +14,9 @@
                 "os": "linux"
             },
             "urls": [
-                "https://registry.golem.network/download/0754d650a1090e9821dc6db333234732aa746fa8c5e7d04e5f0bcef852e9c830"
+                "https://registry.golem.network/download/4c8385259156258e9a4afd68a77472cd700c70dbb7f51adcc296320bb6c6a3c0"
             ],
-            "hash": "sha3:51d8fa50fa34646d19e8a5f7253ec14345fa0f6574c052f2076dca4a"
+            "hash": "sha3:1959547b740150b295c9997be4d43f8032e31b19a7216fbe85e430f2"
         }
     ],
     "compManifest": {
