@@ -1,14 +1,28 @@
-FROM ubuntu:22.04
+FROM ubuntu:latest
 
-RUN apt update \
-    && apt install -y libssl-dev ca-certificates \
-    && update-ca-certificates \
-    && apt install -y iperf3
+# Update & install networking tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iproute2 \
+    iputils-ping \
+    net-tools \
+    curl \
+    wget \
+    dnsutils \
+    telnet \
+    traceroute \
+    nmap \
+    tcpdump \
+    netcat-openbsd \
+    mtr-tiny \
+    whois \
+    ethtool \
+    iftop \
+    iperf3 \
+    socat \
+    lsof \
+    ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY outbound-bench/target/release/outbound-bench /usr/bin/outbound-bench
-COPY entrypoint.sh /golem/entrypoints/entrypoint.sh
-
-RUN chmod +x /usr/bin/outbound-bench
-RUN chmod +x /golem/entrypoints/entrypoint.sh
+COPY outbound-bench/target/x86_64-unknown-linux-musl/release/outbound-bench /usr/bin/outbound-bench
 
 VOLUME /golem/work /golem/output /golem/resource

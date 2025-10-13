@@ -1,3 +1,7 @@
+import logging
+import os
+import platform
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
@@ -6,6 +10,12 @@ import pytest
 
 from goth.configuration import Override
 from goth.runner.log import configure_logging
+
+from dotenv import load_dotenv
+
+def pytest_configure(config):
+    """Configure environment variables from .env file."""
+    load_dotenv(dotenv_path=os.path.join(os.getcwd(), '.env'))
 
 
 def pytest_addoption(parser):
@@ -36,13 +46,23 @@ def default_config() -> Path:
 @pytest.fixture(scope="session")
 def log_dir() -> Path:
     """Fixture providing unique directory for logs from a test run."""
-    base_dir = Path("/", "tmp", "goth-tests")
-    date_str = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S%z")
+    base_dir = Path("logs")
+    date_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     log_dir = base_dir / f"goth_{date_str}"
-    log_dir.mkdir(parents=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create symlink to latest on Linux
+    if os.name != "nt":
+        latest_link = base_dir / "latest"
+        try:
+            if latest_link.is_symlink() or latest_link.exists():
+                latest_link.unlink()
+            latest_link.symlink_to(f"goth_{date_str}", target_is_directory=True)
+        except OSError as e:
+            print(f"Warning: could not create symlink {latest_link} -> {log_dir}: {e}")
 
     configure_logging(log_dir)
-
+    logging.getLogger('aiohttp.access').setLevel(logging.DEBUG)
     return log_dir
 
 

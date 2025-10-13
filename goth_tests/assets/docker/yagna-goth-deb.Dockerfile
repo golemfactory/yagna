@@ -1,6 +1,4 @@
-FROM ghcr.io/golemfactory/goth/yagna-goth-base:1.0.0
-
-RUN update-ca-certificates
+FROM ubuntu:latest
 
 COPY deb/* ./
 RUN chmod +x /usr/bin/* \
