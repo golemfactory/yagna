@@ -12,7 +12,7 @@ import pytest
 from goth.configuration import load_yaml, Override
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
-from src.goth.goth.runner.probe.mixin import stdout_safe_decode
+from goth.runner.probe.mixin import stdout_safe_decode
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
