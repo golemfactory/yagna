@@ -181,8 +181,10 @@ async def test_e2e_outbound_perf(
             activity_id, batch_id, num_commands, timeout=300
         )
 
-        logger.info(f"stdout: {exe_results[2].stdout}")
-        logger.info(f"stderr: {exe_results[2].stderr}")
+        for i, res in enumerate(exe_results):
+            logger.info(f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
+            logger.info(f"Result: {res.to_dict()}")
+
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
