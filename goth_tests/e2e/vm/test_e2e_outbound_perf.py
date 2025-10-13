@@ -19,6 +19,15 @@ from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
 
+curl_timing_report = "\n\
+================ CURL TIMING REPORT ================\n\
+DNS lookup:        %{time_namelookup}s\n\
+TCP connect:       %{time_connect}s\n\
+TLS handshake:     %{time_appconnect}s\n\
+Server processing: %{time_starttransfer}s\n\
+Total time:        %{time_total}s\n\
+====================================================\n"
+
 
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
@@ -69,7 +78,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
         {
             "run": {
                 "entry_point": "/usr/bin/curl",
-                "args": ["-sSL", "https://vanity.market/assets/logo_dark.svg"],
+                "args": ["-sSL", "-o", "/dev/null", "-w", curl_timing_report, "https://vanity.market/assets/logo_dark.svg"],
                 "capture": capture}},
         {
             "run": {
