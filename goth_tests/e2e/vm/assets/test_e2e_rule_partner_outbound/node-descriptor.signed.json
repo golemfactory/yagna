@@ -25,8 +25,8 @@
       "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
       "certificate": {
         "validityPeriod": {
-          "notBefore": "2023-01-01T00:00:00Z",
-          "notAfter": "2025-01-01T00:00:00Z"
+          "notBefore": "2025-10-13T00:00:00Z",
+          "notAfter": "2027-10-12T00:00:00Z"
         },
         "keyUsage": [
           "signNode"
