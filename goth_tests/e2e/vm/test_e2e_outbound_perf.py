@@ -56,7 +56,6 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/usr/bin/ping", "args": ["-c", "4", "golem.network"], "capture": capture}},
         {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
         {
             "transfer": {
