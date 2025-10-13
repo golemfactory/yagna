@@ -61,8 +61,8 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
         {"deploy": {}},
         {"start": {}},
         {"run": {"entry_point": exe, "args": command.split(' '), "capture": {
-            "stdout": {"atEnd": {"format": "string"}},
-            "stderr": {"atEnd": {"format": "string"}},
+            "stdout": {"atEnd": {"format": "binary"}},
+            "stderr": {"atEnd": {"format": "binary"}},
         }}},
         {
             "transfer": {
