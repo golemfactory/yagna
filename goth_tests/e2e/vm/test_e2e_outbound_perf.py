@@ -19,6 +19,7 @@ from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
 
+
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
@@ -56,12 +57,12 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/usr/bin/dig", "args": ["vanity.market"], "capture": capture}},
-        {"run": {"entry_point": "/usr/bin/dig", "args": ["api.stats.golem.network"], "capture": capture}},
-        {"run": {"entry_point": "/usr/bin/dig", "args": ["raw.githubusercontent.com"], "capture": capture}},
-        {"run": {"entry_point": "/usr/bin/dig", "args": ["ftp.au.debian.org"], "capture": capture}},
-        {"run": {"entry_point": "/usr/bin/dig", "args": ["api.citybik.es"], "capture": capture}},
-        {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
+        {"run": {"entry_point": "/usr/bin/dig",
+                 "args": ["vanity.market",
+                          "api.stats.golem.network",
+                          "raw.githubusercontent.com",
+                          "ftp.au.debian.org",
+                          "api.citybik.es"], "capture": capture}},
         {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
         {
             "transfer": {
