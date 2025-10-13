@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iperf3 \
     socat \
     lsof \
+    ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY outbound-bench/target/x86_64-unknown-linux-musl/release/outbound-bench /usr/bin/outbound-bench
