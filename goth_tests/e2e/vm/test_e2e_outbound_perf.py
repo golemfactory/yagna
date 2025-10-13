@@ -91,14 +91,16 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     exe = "/usr/bin/outbound-bench"
     logger.info(f"Command to run: {exe} {command}")
 
+    capture = {
+        "stdout": {"atEnd": {"format": "binary"}},
+        "stderr": {"atEnd": {"format": "binary"}},
+    }
+    # Remember to add capture to each command to get stdout/stderr in results
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/usr/bin/ping", "args": ["-c", "4", "www.google.com"]}},
-        {"run": {"entry_point": exe, "args": command.split(' '), "capture": {
-            "stdout": {"atEnd": {"format": "binary"}},
-            "stderr": {"atEnd": {"format": "binary"}},
-        }}},
+        {"run": {"entry_point": "/usr/bin/ping", "args": ["-c", "4", "www.google.com"], "capture": capture}},
+        {"run": {"entry_point": exe, "args": command.split(' '), "capture": capture}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
