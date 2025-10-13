@@ -9,24 +9,30 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
-from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
-from src.goth.goth.runner.probe.mixin import safe_decode
 
-from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
 
+def safe_decode(output):
+    if output is None:
+        return ""
+
+    if isinstance(output, bytes):
+        try:
+            return output.decode("utf-8", errors="replace")
+        except Exception:
+            # fallback in case of unexpected encoding
+            return str(output)
+
+    if isinstance(output, str):
+        return output
+
+    return "Cannot decode"
 
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
