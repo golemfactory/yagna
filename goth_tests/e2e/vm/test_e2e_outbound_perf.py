@@ -19,6 +19,7 @@ from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
+from src.goth.goth.runner.probe.mixin import safe_decode
 
 from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
@@ -172,7 +173,13 @@ async def test_e2e_outbound_perf(
         for i, res in enumerate(exe_results):
             logger.info(
                 f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
-            logger.info(f"Result: {res.to_dict()}")
+            if res.stdout:
+                logger.info("Command stdout:")
+                logger.info(safe_decode(res.stdout))
+            if res.stderr:
+                logger.info("Command stderr:")
+                logger.info(safe_decode(res.stderr))
+
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
