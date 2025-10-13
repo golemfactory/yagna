@@ -1,5 +1,5 @@
 """End to end tests for requesting VM tasks using goth REST API client."""
-
+import ast
 import json
 import logging
 import os
@@ -18,10 +18,25 @@ from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
 
+
 def safe_decode(output):
     if output is None:
         return ""
 
+    if isinstance(output, str):
+        if output.startswith("[") and output.endswith("]"):
+            try:
+                vec = ast.literal_eval(output)
+                if (
+                        isinstance(vec, list)
+                        and all(isinstance(x, int) and 0 <= x <= 255 for x in vec)
+                ):
+                    b = bytes(vec)
+                    output = b
+                else:
+                    print("Error: String must represent a list of integers 0–255")
+            except (ValueError, SyntaxError):
+                print("Error: Invalid string format")
 
     if isinstance(output, bytes):
         try:
@@ -35,15 +50,17 @@ def safe_decode(output):
             try:
                 # Try to parse as JSON array
                 parsed = json.loads(output)
+                data = []
                 if isinstance(parsed, list):
                     # Join list elements into a single string
-                    return "\n".join(str(item) for item in parsed)
+                    return [str(item) for item in parsed]
             except json.JSONDecodeError:
                 pass
 
         return output
 
     return "Cannot decode"
+
 
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
@@ -196,7 +213,6 @@ async def test_e2e_outbound_perf(
             if res.stderr:
                 logger.info("Command stderr:")
                 logger.info(safe_decode(res.stderr))
-
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
