@@ -55,14 +55,16 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     command += f" > /golem/output/output.json"
     command += f" 2> /golem/output/error.txt"
 
-
     exe = "/usr/bin/outbound-bench"
     logger.info(f"Command to run: {exe} {command}")
 
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/bin/ls", "args": ["-la"]}},
+        {"run": {"entry_point": "/bin/ls", "args": ["-la"], "capture": {
+            "stdout": {"atEnd": {"format": "string"}},
+            "stderr": {"atEnd": {"format": "string"}},
+        }}},
     ]
 
 
@@ -163,9 +165,9 @@ async def test_e2e_outbound_perf(
         )
 
         for i, res in enumerate(exe_results):
-            logger.info(f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
+            logger.info(
+                f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
             logger.info(f"Result: {res.to_dict()}")
-
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
