@@ -63,19 +63,6 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
         {"deploy": {}},
         {"start": {}},
         {"run": {"entry_point": "/bin/ls", "args": ["-la"]}},
-        {"run": {"entry_point": "/bin/bash", "args": ["-c", command]}},
-        {
-            "transfer": {
-                "from": f"container:/golem/output/output.json",
-                "to": f"{web_server_addr}/upload/{output_file}",
-            }
-        },
-        {
-            "transfer": {
-                "from": f"container:/golem/output/error.txt",
-                "to": f"{web_server_addr}/upload/{error_file}",
-            }
-        },
     ]
 
 
