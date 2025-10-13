@@ -22,6 +22,7 @@ def safe_decode(output):
     if output is None:
         return ""
 
+
     if isinstance(output, bytes):
         try:
             return output.decode("utf-8", errors="replace")
@@ -30,6 +31,16 @@ def safe_decode(output):
             return str(output)
 
     if isinstance(output, str):
+        if output.startswith("[") and output.endswith("]"):
+            try:
+                # Try to parse as JSON array
+                parsed = json.loads(output)
+                if isinstance(parsed, list):
+                    # Join list elements into a single string
+                    return "\n".join(str(item) for item in parsed)
+            except json.JSONDecodeError:
+                pass
+
         return output
 
     return "Cannot decode"
