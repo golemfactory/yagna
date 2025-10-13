@@ -12,55 +12,12 @@ import pytest
 from goth.configuration import load_yaml, Override
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
+from src.goth.goth.runner.probe.mixin import stdout_safe_decode
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
-
-
-def safe_decode(output):
-    if output is None:
-        return ""
-
-    if isinstance(output, str):
-        if output.startswith("[") and output.endswith("]"):
-            try:
-                vec = ast.literal_eval(output)
-                if (
-                        isinstance(vec, list)
-                        and all(isinstance(x, int) and 0 <= x <= 255 for x in vec)
-                ):
-                    b = bytes(vec)
-                    output = b
-                else:
-                    print("Error: String must represent a list of integers 0–255")
-            except (ValueError, SyntaxError):
-                print("Error: Invalid string format")
-
-    if isinstance(output, bytes):
-        try:
-            return output.decode("utf-8", errors="replace")
-        except Exception:
-            # fallback in case of unexpected encoding
-            return str(output)
-
-    if isinstance(output, str):
-        if output.startswith("[") and output.endswith("]"):
-            try:
-                # Try to parse as JSON array
-                parsed = json.loads(output)
-                data = []
-                if isinstance(parsed, list):
-                    # Join list elements into a single string
-                    return [str(item) for item in parsed]
-            except json.JSONDecodeError:
-                pass
-
-        return output
-
-    return "Cannot decode"
-
 
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
     """VM exe script builder."""
@@ -211,10 +168,10 @@ async def test_e2e_outbound_perf(
                 f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
             if res.stdout:
                 logger.info("Command stdout:")
-                logger.info(safe_decode(res.stdout))
+                logger.info(stdout_safe_decode(res.stdout))
             if res.stderr:
                 logger.info("Command stderr:")
-                logger.info(safe_decode(res.stderr))
+                logger.info(stdout_safe_decode(res.stderr))
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
