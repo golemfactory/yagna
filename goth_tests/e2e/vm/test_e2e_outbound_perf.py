@@ -151,12 +151,6 @@ async def test_e2e_outbound_perf(
         error_path = Path(runner.web_root_path) / "upload" / error_file
 
         exe_script = vm_exe_script(runner, server_addr, output_file, error_file)
-        print(exe_script)
-
-        with open(error_path, 'r'):
-            err = error_path.read()
-            logger.info("Contents of error.txt (if any):")
-            logger.info(err)
 
         num_commands = len(exe_script)
 
@@ -171,6 +165,7 @@ async def test_e2e_outbound_perf(
         for i, res in enumerate(exe_results):
             logger.info(f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
             logger.info(f"Result: {res.to_dict()}")
+
 
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
