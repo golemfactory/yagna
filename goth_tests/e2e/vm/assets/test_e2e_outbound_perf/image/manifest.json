@@ -23,6 +23,7 @@
         "version": "0.1.0",
         "script": {
             "commands": [
+                "run .*ping.*",
                 "run .*ls.*",
                 "run .*outbound-bench.*",
                 "run .*iperf3.*",
