@@ -23,6 +23,7 @@
         "version": "0.1.0",
         "script": {
             "commands": [
+                "run .*curl.*",
                 "run .*dig.*",
                 "run .*ping.*",
                 "run .*ls.*",
