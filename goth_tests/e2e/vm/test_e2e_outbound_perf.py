@@ -40,7 +40,7 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     command += f" --port-sink={22236}"
     command += f" --port-iperf={22237}"
     command += f" --mib-per-sec={0.5}"
-    command += f" --requests-count={10}"
+    command += f" --requests-count={1}"
     command += f" --stages={2}"
     command += f" --address-list={list}"
     command += f" --output=/golem/output/output.json"
