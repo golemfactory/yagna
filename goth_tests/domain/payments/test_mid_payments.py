@@ -23,6 +23,7 @@ PAYMENT_TIMEOUT_SEC = 5
 ITERATION_COUNT = 10
 ITERATION_STOP_JOB = 4
 
+
 def build_demand(
     requestor: RequestorProbe,
 ):
@@ -84,7 +85,9 @@ async def test_mid_agreement_payments(
         stats = DebitNoteStats()
 
         async with AllocationCtx(requestor, 50.0) as allocation:
-            debit_note_task = asyncio.create_task(accept_debit_notes(allocation, requestor, stats))
+            debit_note_task = asyncio.create_task(
+                accept_debit_notes(allocation, requestor, stats)
+            )
 
             agreement_id, provider = agreement_providers[0]
             activity_id = await requestor.create_activity(agreement_id)
@@ -99,8 +102,10 @@ async def test_mid_agreement_payments(
                 for payment in payments:
                     number_of_payments += 1
                     amount += float(payment.amount)
-                    logger.info(f"Received payment: amount {payment.amount}."
-                                f" Total amount {amount}. Number of payments {number_of_payments}")
+                    logger.info(
+                        f"Received payment: amount {payment.amount}."
+                        f" Total amount {amount}. Number of payments {number_of_payments}"
+                    )
                     ts = payment.timestamp if payment.timestamp > ts else ts
 
                 # prevent new debit notes in the last iteration
