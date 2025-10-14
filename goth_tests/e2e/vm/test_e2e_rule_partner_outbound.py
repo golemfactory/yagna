@@ -94,7 +94,6 @@ async def test_e2e_rule_partner_outbound(
         await requestor.collect_results(
             activity_id, batch_id, num_commands, timeout=300
         )
-
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 

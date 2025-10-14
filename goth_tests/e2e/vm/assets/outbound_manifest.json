@@ -14,16 +14,15 @@
         "os": "linux"
       },
       "urls": [
-        "https://registry.golem.network/download/04db93169187b473b72517175cbd8f5ca3c5f9bf69723f95e2d4d386c4ba0053"
+        "http://yacn2.dev.golem.network:8000/docker-golem-script-curl-latest-d75268e752.gvmi"
       ],
-      "hash": "sha3:d7458a3491b558ae756ec94a33b3568c585b36fd1c9e77a53c65bef0"
+      "hash": "sha3:e5f5ddfd649525dbe25d93d9ed51d1bdd0849933d9a5720adb4b5810"
     }
   ],
   "compManifest": {
     "version": "0.1.0",
     "script": {
       "commands": [
-        "run .*ls.*",
         "run .*curl.*",
         "run .*request.sh.*",
         "transfer .*output.txt"
