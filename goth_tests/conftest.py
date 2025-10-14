@@ -13,9 +13,10 @@ from goth.runner.log import configure_logging
 
 from dotenv import load_dotenv
 
+
 def pytest_configure(config):
     """Configure environment variables from .env file."""
-    load_dotenv(dotenv_path=os.path.join(os.getcwd(), '.env'))
+    load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
 
 def pytest_addoption(parser):
@@ -62,7 +63,7 @@ def log_dir() -> Path:
             print(f"Warning: could not create symlink {latest_link} -> {log_dir}: {e}")
 
     configure_logging(log_dir)
-    logging.getLogger('aiohttp.access').setLevel(logging.DEBUG)
+    logging.getLogger("aiohttp.access").setLevel(logging.DEBUG)
     return log_dir
 
 

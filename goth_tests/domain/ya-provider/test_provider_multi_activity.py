@@ -1,4 +1,5 @@
 """End to end tests for requesting WASM tasks using goth REST API clients."""
+
 import json
 import logging
 import re
@@ -338,7 +339,9 @@ async def test_prov_renegotiate_proposal(
                 counter_providers.append((counter_proposal_id, provider))
             return counter_providers
 
-        async def renegotiate(requestor, providers: List[ProviderProbe], subscription_id):
+        async def renegotiate(
+            requestor, providers: List[ProviderProbe], subscription_id
+        ):
             logger.info("%s: renegotiate()", requestor.name)
             agreement_providers = []
             logger.info(
@@ -346,9 +349,7 @@ async def test_prov_renegotiate_proposal(
                 requestor.name,
             )
 
-            events = await requestor.api.market.collect_offers(
-                subscription_id
-            )
+            events = await requestor.api.market.collect_offers(subscription_id)
             logger.info("collected offers: %s", events)
             assert len(events) == 2
             assert (
@@ -356,7 +357,9 @@ async def test_prov_renegotiate_proposal(
                 == "No capacity available. Reached Agreements limit: 1"
             )
             offer = events[1].proposal
-            provider = [p for p in providers if p.address == events[1].proposal.issuer_id][0]
+            provider = [
+                p for p in providers if p.address == events[1].proposal.issuer_id
+            ][0]
 
             agreement_id = await requestor.create_agreement(offer)
             await requestor.confirm_agreement(agreement_id)
@@ -440,7 +443,9 @@ async def test_prov_renegotiate_proposal(
         await run(requestor1, agreement_providers1)
         # First requestor terminated agreement, so provider should renegotiate with second requestor
         agreement_providers2 = await renegotiate(
-            requestor2, providers, subscription_id2,
+            requestor2,
+            providers,
+            subscription_id2,
         )
         logger.info("agreement_providers2: %s", agreement_providers2)
         await run(requestor2, agreement_providers2)

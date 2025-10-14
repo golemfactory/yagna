@@ -1,4 +1,5 @@
 """End to end tests for requesting VM tasks using goth REST API client."""
+
 import ast
 import json
 import logging
@@ -29,7 +30,9 @@ Total time:        %{time_total}s\n\
 ====================================================\n"
 
 
-def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
+def vm_exe_script(
+    runner: Runner, addr: str, output_file: str, error_file: str
+) -> List[dict]:
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
 
@@ -39,11 +42,13 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
-    list = 'https://vanity.market/assets/logo_dark.svg,' \
-           'https://api.stats.golem.network/v1/network/versions,' \
-           'https://raw.githubusercontent.com/golemfactory/goth/refs/heads/master/LICENSE,' \
-           'http://ftp.au.debian.org/,' \
-           'http://api.citybik.es/v2/networks'
+    list = (
+        "https://vanity.market/assets/logo_dark.svg,"
+        "https://api.stats.golem.network/v1/network/versions,"
+        "https://raw.githubusercontent.com/golemfactory/goth/refs/heads/master/LICENSE,"
+        "http://ftp.au.debian.org/,"
+        "http://api.citybik.es/v2/networks"
+    )
 
     command = f"--addr={addr}"
     command += f" --port-echo={22235}"
@@ -69,22 +74,31 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
         {
             "run": {
                 "entry_point": "/usr/bin/dig",
-                "args": ["vanity.market",
-                         "api.stats.golem.network",
-                         "raw.githubusercontent.com",
-                         "ftp.au.debian.org",
-                         "api.citybik.es"],
-                "capture": capture}},
+                "args": [
+                    "vanity.market",
+                    "api.stats.golem.network",
+                    "raw.githubusercontent.com",
+                    "ftp.au.debian.org",
+                    "api.citybik.es",
+                ],
+                "capture": capture,
+            }
+        },
         {
             "run": {
                 "entry_point": "/usr/bin/curl",
-                "args": ["-sSL", "-o", "/dev/null", "-w", curl_timing_report, "https://vanity.market/assets/logo_dark.svg"],
-                "capture": capture}},
-        {
-            "run": {
-                "entry_point": exe,
-                "args": command.split(' '),
-                "capture": capture}},
+                "args": [
+                    "-sSL",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    curl_timing_report,
+                    "https://vanity.market/assets/logo_dark.svg",
+                ],
+                "capture": capture,
+            }
+        },
+        {"run": {"entry_point": exe, "args": command.split(" "), "capture": capture}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
@@ -96,18 +110,26 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
 
 @pytest.mark.asyncio
 async def test_e2e_outbound_perf(
-        common_assets: Path,
-        default_config: Path,
-        config_overrides: List[Override],
-        log_dir: Path,
+    common_assets: Path,
+    default_config: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test successful flow requesting a task using outbound network feature. X.509 cert negotiation scenario."""
 
     # Test external api request just one Requestor and one Provider
     nodes = [
-        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7"},
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0",
-         "use-proxy": True},
+        {
+            "name": "requestor",
+            "type": "Requestor",
+            "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7",
+        },
+        {
+            "name": "provider-1",
+            "type": "VM-Wasm-Provider",
+            "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0",
+            "use-proxy": True,
+        },
     ]
 
     assets_root = Path(__file__).parent / "assets"
@@ -117,12 +139,18 @@ async def test_e2e_outbound_perf(
             "name": "VM-Wasm-Provider",
             "class": "goth_tests.helpers.probe.ProviderProbe",
             "mount": [
-                {"read-only": "assets/provider/presets.json",
-                 "destination": "/root/.local/share/ya-provider/presets.json"},
-                {"read-only": "assets/provider/hardware.json",
-                 "destination": "/root/.local/share/ya-provider/hardware.json"},
-                {"read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json",
-                 "destination": "/root/.local/share/ya-provider/rules.json"},
+                {
+                    "read-only": "assets/provider/presets.json",
+                    "destination": "/root/.local/share/ya-provider/presets.json",
+                },
+                {
+                    "read-only": "assets/provider/hardware.json",
+                    "destination": "/root/.local/share/ya-provider/hardware.json",
+                },
+                {
+                    "read-write": f"{assets_root}/test_e2e_outbound_perf/provider/rules.json",
+                    "destination": "/root/.local/share/ya-provider/rules.json",
+                },
             ],
             "privileged-mode": True,
         },
@@ -142,22 +170,26 @@ async def test_e2e_outbound_perf(
     async with runner(goth_config.containers):
         server_addr = None
         for info in runner.get_container_info().values():
-            if 'outbound-test' in info.aliases:
+            if "outbound-test" in info.aliases:
                 server_addr = info.address
                 break
-        assert (server_addr is not None)  # "Can't find container `outbound-test`"
+        assert server_addr is not None  # "Can't find container `outbound-test`"
         logger.info("outbound-test container found at %s", server_addr)
 
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
-        manifest = open(f"{runner.web_root_path}/test_e2e_outbound_perf/image/manifest.json").read()
+        manifest = open(
+            f"{runner.web_root_path}/test_e2e_outbound_perf/image/manifest.json"
+        ).read()
 
         # Market
         demand = (
             DemandBuilder(requestor)
             .props_from_template(task_package=None)
-            .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
+            .property(
+                "golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode()
+            )
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )
@@ -192,7 +224,8 @@ async def test_e2e_outbound_perf(
 
         for i, res in enumerate(exe_results):
             logger.info(
-                f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
+                f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}"
+            )
             if res.stdout:
                 logger.info("Command stdout:")
                 logger.info(stdout_safe_decode(res.stdout))
@@ -211,8 +244,8 @@ async def test_e2e_outbound_perf(
 
         logger.info(f"Output file content:\n{output_json}")
 
-        pass_set = [{'Ok': True}, {'Err': 'skipped'}]
-        assert output_json['roundtrip'] in pass_set
-        assert output_json['many_reqs'] in pass_set
-        assert output_json['iperf3'] in pass_set
-        assert output_json['stress'] in pass_set
+        pass_set = [{"Ok": True}, {"Err": "skipped"}]
+        assert output_json["roundtrip"] in pass_set
+        assert output_json["many_reqs"] in pass_set
+        assert output_json["iperf3"] in pass_set
+        assert output_json["stress"] in pass_set

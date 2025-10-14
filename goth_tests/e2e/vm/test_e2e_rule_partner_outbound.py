@@ -38,8 +38,17 @@ async def test_e2e_rule_partner_outbound(
 
     # Test external api request just one Requestor and one Provider
     nodes = [
-        {"name": "requestor", "type": "Requestor", "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7" },
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0", "use-proxy": True},
+        {
+            "name": "requestor",
+            "type": "Requestor",
+            "address": "d1d84f0e28d6fedf03c73151f98df95139700aa7",
+        },
+        {
+            "name": "provider-1",
+            "type": "VM-Wasm-Provider",
+            "address": "63fc2ad3d021a4d7e64323529a55a9442c444da0",
+            "use-proxy": True,
+        },
     ]
 
     config_overrides.append(("nodes", nodes))
@@ -57,13 +66,19 @@ async def test_e2e_rule_partner_outbound(
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
         manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
-        node_descriptor = json.loads(open(f"{runner.web_root_path}/test_e2e_rule_partner_outbound/node-descriptor.signed.json").read())
+        node_descriptor = json.loads(
+            open(
+                f"{runner.web_root_path}/test_e2e_rule_partner_outbound/node-descriptor.signed.json"
+            ).read()
+        )
 
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(task_package = None)
-            .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
+            .props_from_template(task_package=None)
+            .property(
+                "golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode()
+            )
             .property("golem.!exp.gap-31.v0.node.descriptor", node_descriptor)
             .constraints("(&(golem.runtime.name=vm))")
             .build()

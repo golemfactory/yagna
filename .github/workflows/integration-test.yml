@@ -204,7 +204,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run pytest -W ignore::DeprecationWarning -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run pytest -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Check test result
         if: ${{ steps.poetry_test.outcome != 'success' }}

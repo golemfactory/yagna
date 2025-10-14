@@ -107,7 +107,7 @@ async def test_custom_runtime_counter(
 
         await provider.wait_for_exeunit_finished()
 
-        await asyncio.sleep(20) # wait for the debit note to be created
+        await asyncio.sleep(20)  # wait for the debit note to be created
 
         debit_notes = await requestor.api.payment.get_debit_notes()
 
