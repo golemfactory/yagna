@@ -112,12 +112,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 2.2.1
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -182,9 +182,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 2.2.1
