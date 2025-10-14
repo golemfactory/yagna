@@ -1,7 +1,27 @@
 FROM ubuntu:latest
 
-RUN apt update \
-    && apt install -y iperf3
+# Update & install networking tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iproute2 \
+    iputils-ping \
+    net-tools \
+    curl \
+    wget \
+    dnsutils \
+    telnet \
+    traceroute \
+    nmap \
+    tcpdump \
+    netcat-openbsd \
+    mtr-tiny \
+    whois \
+    ethtool \
+    iftop \
+    iperf3 \
+    socat \
+    lsof \
+    ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY outbound-bench/target/x86_64-unknown-linux-musl/release/outbound-bench /usr/bin/outbound-bench
 

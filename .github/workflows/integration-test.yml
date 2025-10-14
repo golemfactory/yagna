@@ -210,13 +210,14 @@ jobs:
         if: ${{ steps.poetry_test.outcome != 'success' }}
         run: |
           echo "::warning::Test ${{ matrix.test_name }} failed"
+          exit 1
 
       - name: Upload test logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}
-          path: logs/goth-tests
+          path: goth_tests/logs
 
   integration-test:
     name: Integration Tests (hybrid-net)

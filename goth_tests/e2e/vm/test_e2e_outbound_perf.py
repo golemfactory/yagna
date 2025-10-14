@@ -1,5 +1,5 @@
 """End to end tests for requesting VM tasks using goth REST API client."""
-
+import ast
 import json
 import logging
 import os
@@ -9,22 +9,24 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
-from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
+from goth.runner.probe.mixin import stdout_safe_decode
 
-from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.outbound_perf")
+
+curl_timing_report = "\n\
+================ CURL TIMING REPORT ================\n\
+DNS lookup:        %{time_namelookup}s\n\
+TCP connect:       %{time_connect}s\n\
+TLS handshake:     %{time_appconnect}s\n\
+Server processing: %{time_starttransfer}s\n\
+Total time:        %{time_total}s\n\
+====================================================\n"
 
 
 def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) -> List[dict]:
@@ -37,10 +39,9 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
 
     web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
 
-    list = 'https://api.stats.golem.network/v1/network/versions,' \
+    list = 'https://vanity.market/assets/logo_dark.svg,' \
+           'https://api.stats.golem.network/v1/network/versions,' \
            'https://raw.githubusercontent.com/golemfactory/goth/refs/heads/master/LICENSE,' \
-           'https://vanity.market/assets/logo_dark.svg,' \
-           'https://en.wikipedia.org/wiki/Ethereum,' \
            'http://ftp.au.debian.org/,' \
            'http://api.citybik.es/v2/networks'
 
@@ -49,30 +50,45 @@ def vm_exe_script(runner: Runner, addr: str, output_file: str, error_file: str) 
     command += f" --port-sink={22236}"
     command += f" --port-iperf={22237}"
     command += f" --mib-per-sec={0.5}"
-    command += f" --requests-count={10}"
+    command += f" --requests-count={5}"
     command += f" --stages={2}"
     command += f" --address-list={list}"
-    command += f" > /golem/output/output.json"
-    command += f" 2> /golem/output/error.txt"
-
+    command += f" --output=/golem/output/output.json"
 
     exe = "/usr/bin/outbound-bench"
     logger.info(f"Command to run: {exe} {command}")
 
+    capture = {
+        "stdout": {"atEnd": {"format": "binary"}},
+        "stderr": {"atEnd": {"format": "binary"}},
+    }
+    # Remember to add capture to each command to get stdout/stderr in results
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "/bin/bash", "args": ["-c", command]}},
+        {
+            "run": {
+                "entry_point": "/usr/bin/dig",
+                "args": ["vanity.market",
+                         "api.stats.golem.network",
+                         "raw.githubusercontent.com",
+                         "ftp.au.debian.org",
+                         "api.citybik.es"],
+                "capture": capture}},
+        {
+            "run": {
+                "entry_point": "/usr/bin/curl",
+                "args": ["-sSL", "-o", "/dev/null", "-w", curl_timing_report, "https://vanity.market/assets/logo_dark.svg"],
+                "capture": capture}},
+        {
+            "run": {
+                "entry_point": exe,
+                "args": command.split(' '),
+                "capture": capture}},
         {
             "transfer": {
                 "from": f"container:/golem/output/output.json",
                 "to": f"{web_server_addr}/upload/{output_file}",
-            }
-        },
-        {
-            "transfer": {
-                "from": f"container:/golem/output/error.txt",
-                "to": f"{web_server_addr}/upload/{error_file}",
             }
         },
     ]
@@ -163,12 +179,6 @@ async def test_e2e_outbound_perf(
         error_path = Path(runner.web_root_path) / "upload" / error_file
 
         exe_script = vm_exe_script(runner, server_addr, output_file, error_file)
-        print(exe_script)
-
-        with open(error_path, 'r'):
-            err = error_path.read()
-            logger.info("Contents of error.txt (if any):")
-            logger.info(err)
 
         num_commands = len(exe_script)
 
@@ -180,8 +190,16 @@ async def test_e2e_outbound_perf(
             activity_id, batch_id, num_commands, timeout=300
         )
 
-        logger.info(f"stdout: {exe_results[2].stdout}")
-        logger.info(f"stderr: {exe_results[2].stderr}")
+        for i, res in enumerate(exe_results):
+            logger.info(
+                f"Command {i} result index: {res.index}, event_date: {res.event_date}, result: {res.result}, is_batch_finished: {res.is_batch_finished}")
+            if res.stdout:
+                logger.info("Command stdout:")
+                logger.info(stdout_safe_decode(res.stdout))
+            if res.stderr:
+                logger.info("Command stderr:")
+                logger.info(stdout_safe_decode(res.stderr))
+
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
