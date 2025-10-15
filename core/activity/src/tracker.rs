@@ -104,7 +104,7 @@ impl TrackerRef {
         agreement: &Agreement,
     ) -> anyhow::Result<()> {
         let activity_id: String = activity_id.into();
-
+        log::info!("Start activity {}", activity_id);
         fn extract_agreement(
             agreement: &Agreement,
         ) -> anyhow::Result<(Option<String>, Vec<String>, NodeId, String)> {
@@ -144,6 +144,7 @@ impl TrackerRef {
     }
 
     pub async fn stop_activity(&mut self, activity_id: String) -> anyhow::Result<()> {
+        log::info!("Stop activity {}", activity_id);
         self.tx
             .send(Command::Stop { activity_id })
             .await
@@ -151,6 +152,7 @@ impl TrackerRef {
     }
 
     pub async fn update_state(&mut self, activity_id: String, state: State) -> anyhow::Result<()> {
+        log::info!("Update state of activity {} to {:?}", activity_id, state);
         self.tx
             .send(Command::UpdateState { activity_id, state })
             .await
