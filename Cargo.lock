@@ -10496,6 +10496,7 @@ dependencies = [
  "predicates 2.1.5",
  "pretty_assertions",
  "regex",
+ "reqwest",
  "semver 0.11.0",
  "serde",
  "serde_json",
