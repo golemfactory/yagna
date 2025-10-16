@@ -20,7 +20,7 @@ use ya_service_bus::typed as bus;
 use golem_base_sdk::client::GolemBaseClient;
 use golem_base_sdk::entity::Create;
 use golem_base_sdk::events::Event;
-use golem_base_sdk::rpc::{EntityMetaData, SearchResult};
+use golem_base_sdk::rpc::SearchResult;
 use golem_base_sdk::signers::TransactionSigner;
 use golem_base_sdk::{Address, Hash};
 
@@ -111,7 +111,7 @@ impl Discovery {
     }
 
     /// Checks if an offer belongs to us based on metadata and entity_id
-    fn is_own_offer(&self, metadata: &EntityMetaData) -> bool {
+    fn is_own_offer(&self, metadata: &SearchResult) -> bool {
         let identities = self.inner.identities.lock().unwrap();
         let owner_bytes = NodeId::from(metadata.owner.as_slice());
         identities.contains(&owner_bytes)
@@ -120,27 +120,42 @@ impl Discovery {
     /// Queries GolemBase for all offers with marketplace type "Offer"
     pub async fn query_offers(&self) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let client = &self.inner.golem_base;
+        let batch_size = self.inner.config.offer_query_batch_size;
 
-        // Query for entities with golem_marketplace_type = "Offer"
+        // First, get all entity keys to determine how many batches we need
         let query = r#"golem_marketplace_type = "Offer""#;
-        let results = client.query_entities(query).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to query offers: {}", e))
+        let entity_keys = client.query_entity_keys(query).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to query offer keys: {}", e))
         })?;
 
-        Self::parse_offers(results)
-    }
+        let mut all_results = Vec::new();
+        let total = entity_keys.len();
 
-    /// Retrieves Offers from Golem Base
-    pub async fn get_remote_offers(
-        &self,
-        _target_node_id: String,
-        offer_ids: Vec<SubscriptionId>,
-    ) -> Result<Vec<ModelOffer>, DiscoveryError> {
-        let results = self
-            .query_subscriptions(&offer_ids)
-            .await
-            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?;
-        Self::parse_offers(results)
+        log::debug!("Found {total} offer keys, processing in batches of {batch_size}..");
+
+        for chunk in entity_keys.chunks(batch_size) {
+            // Build query for this batch of keys
+            let key_conditions: Vec<String> =
+                chunk.iter().map(|key| format!("$key = {}", key)).collect();
+            let batch_query = format!("({})", key_conditions.join(" || "));
+
+            // Query next batch of Offers.
+            // Note: If one batch query fails, whole fucntion will return an error.
+            // This can interfere with rate limiting.
+            let results = client.query_entities(&batch_query).await.map_err(|e| {
+                DiscoveryError::GolemBaseError(format!("Failed to query offers: {e}"))
+            })?;
+
+            all_results.extend(results);
+
+            log::debug!(
+                "Fetched {}/{total} offers in current batch",
+                all_results.len()
+            );
+        }
+
+        log::debug!("Successfully fetched {} total offers", all_results.len());
+        Self::parse_offers(all_results)
     }
 
     /// Broadcasts unsubscribe to Golem Base
@@ -171,33 +186,6 @@ impl Discovery {
             offer_id
         );
         Ok(())
-    }
-
-    /// Queries GolemBase for entries matching the given subscription IDs
-    async fn query_subscriptions(
-        &self,
-        offer_ids: &[SubscriptionId],
-    ) -> anyhow::Result<Vec<SearchResult>> {
-        if offer_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let offer_ids: Vec<Hash> = offer_ids
-            .iter()
-            .map(|id| Hash::from(id.to_bytes()))
-            .collect();
-
-        let mut results = Vec::new();
-        for key in offer_ids {
-            if let Ok(content) = self.inner.golem_base.get_storage_value(key).await {
-                results.push(SearchResult {
-                    key,
-                    value: content,
-                });
-            }
-        }
-
-        Ok(results)
     }
 
     /// Converts search results to ModelOffer objects
@@ -363,7 +351,7 @@ impl Discovery {
     }
 
     /// Validates if an entity is a Golem offer by checking its marketplace type annotation
-    fn is_golem_offer(metadata: &EntityMetaData) -> bool {
+    fn is_golem_offer(metadata: &SearchResult) -> bool {
         metadata.string_annotations.iter().any(|annotation| {
             annotation.key == "golem_marketplace_type" && annotation.value == "Offer"
         })
@@ -382,9 +370,7 @@ impl Discovery {
 
                 log::trace!("Entity created in Golem Base: {}", entity_id);
 
-                let offer = client.cat(entity_id).await?;
-                let offer = Self::parse_offer(entity_id, &offer)?;
-
+                let offer = Self::offer_from_search(metadata)?;
                 self.register_incoming_offers(vec![offer]).await?;
             }
             Event::EntityRemoved { entity_id, .. } => {
@@ -561,15 +547,18 @@ impl Discovery {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
 
-        let metadata = client
+        let mut search = client
             .get_entity_metadata(offer_id)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
-        let metadata = serde_json::to_value(&metadata)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
 
-        let content = client.cat(offer_id).await?;
+        let content = search.value_as_string()?;
         let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
+
+        // We don't want to display whole content as metadata, to avoid polluting output.
+        search.value.take();
+        let metadata = serde_json::to_value(&search)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
 
         Ok(GetGolemBaseOfferResponse {
             offer,
