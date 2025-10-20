@@ -93,6 +93,20 @@ def vm_exe_script(
                     "/dev/null",
                     "-w",
                     curl_timing_report,
+                    "http://api.citybik.es/v2/networks",
+                ],
+                "capture": capture,
+            }
+        },
+        {
+            "run": {
+                "entry_point": "/usr/bin/curl",
+                "args": [
+                    "-sSL",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    curl_timing_report,
                     "https://vanity.market/assets/logo_dark.svg",
                 ],
                 "capture": capture,
