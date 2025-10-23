@@ -112,8 +112,13 @@ impl Discovery {
 
     /// Checks if an offer belongs to us based on metadata and entity_id
     fn is_own_offer(&self, metadata: &SearchResult) -> bool {
+        let Some(owner) = metadata.owner.as_ref() else {
+            log::warn!("[Programming error] Entity metadata should contain owner!");
+            return false;
+        };
+
         let identities = self.inner.identities.lock().unwrap();
-        let owner_bytes = NodeId::from(metadata.owner.as_slice());
+        let owner_bytes = NodeId::from(owner.as_slice());
         identities.contains(&owner_bytes)
     }
 
@@ -170,16 +175,14 @@ impl Discovery {
             ))
         })?;
 
-        // Remove the entry
-        client
-            .remove_entries(metadata.owner, vec![key])
-            .await
-            .map_err(|e| {
-                DiscoveryError::GolemBaseError(format!(
-                    "Failed to remove entry for owner {}: {e}",
-                    metadata.owner
-                ))
-            })?;
+        let owner = metadata
+            .owner
+            .ok_or(DiscoveryError::ProgrammingError(format!(
+                "Entity metadata doesn't contain owner for offer {offer_id}"
+            )))?;
+        client.remove_entries(owner, vec![key]).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to remove entry for owner {owner}: {e}"))
+        })?;
 
         log::info!(
             "Successfully removed entry from GolemBase for offer {}",
@@ -207,8 +210,9 @@ impl Discovery {
     }
 
     fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
+        log::debug!("Parsing Offer {key} json: {string_utf}");
         let offer: GolemBaseOffer = serde_json::from_str(string_utf)
-            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer {key} json: {e}"))?;
         offer.into_model_offer(key)
     }
 
