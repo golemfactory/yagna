@@ -8,13 +8,13 @@ services:
         command: ["-l", "tcp://0.0.0.0:7477"]
 
     golem-base:
-        image: quay.io/golemnetwork/gb-op-geth:latest
+        image: golemnetwork/golembase-op-geth:latest
         ports:
             - "8545:8545"
         environment:
             - GITHUB_ACTIONS=true
             - CI=true
-        command: --dev --http --http.api 'eth,web3,net,debug,golembase' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545
+        command: --dev --http --http.api 'eth,web3,net,debug,golembase,arkiv' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545
 
 
     proxy-nginx:
