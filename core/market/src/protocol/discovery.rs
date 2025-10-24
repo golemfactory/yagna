@@ -20,7 +20,7 @@ use ya_service_bus::typed as bus;
 use arkiv_sdk::client::ArkivClient;
 use arkiv_sdk::entity::Create;
 use arkiv_sdk::events::Event;
-use arkiv_sdk::rpc::SearchResult;
+use arkiv_sdk::rpc::{QueryOptions, SearchResult};
 use arkiv_sdk::signers::TransactionSigner;
 use arkiv_sdk::{Address, Hash};
 
@@ -127,40 +127,19 @@ impl Discovery {
         let client = &self.inner.golem_base;
         let batch_size = self.inner.config.offer_query_batch_size;
 
-        // First, get all entity keys to determine how many batches we need
+        // Use arkiv-sdk's built-in batching
         let query = r#"golem_marketplace_type = "Offer""#;
-        let entity_keys = client.query_entity_keys(query).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to query offer keys: {}", e))
-        })?;
+        let options = QueryOptions::with_all().with_page_size(batch_size as u64);
 
-        let mut all_results = Vec::new();
-        let total = entity_keys.len();
+        log::debug!("Querying offers with batch size {batch_size}..");
 
-        log::debug!("Found {total} offer keys, processing in batches of {batch_size}..");
+        let results = client
+            .query_with_options(query, &options)
+            .await
+            .map_err(|e| DiscoveryError::GolemBaseError(format!("Failed to query offers: {e}")))?;
 
-        for chunk in entity_keys.chunks(batch_size) {
-            // Build query for this batch of keys
-            let key_conditions: Vec<String> =
-                chunk.iter().map(|key| format!("$key = {}", key)).collect();
-            let batch_query = format!("({})", key_conditions.join(" || "));
-
-            // Query next batch of Offers.
-            // Note: If one batch query fails, whole fucntion will return an error.
-            // This can interfere with rate limiting.
-            let results = client.query_entities(&batch_query).await.map_err(|e| {
-                DiscoveryError::GolemBaseError(format!("Failed to query offers: {e}"))
-            })?;
-
-            all_results.extend(results);
-
-            log::debug!(
-                "Fetched {}/{total} offers in current batch",
-                all_results.len()
-            );
-        }
-
-        log::debug!("Successfully fetched {} total offers", all_results.len());
-        Self::parse_offers(all_results)
+        log::debug!("Successfully fetched {} total offers", results.len());
+        Self::parse_offers(results)
     }
 
     /// Broadcasts unsubscribe to Golem Base
