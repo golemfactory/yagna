@@ -32,8 +32,8 @@ use ya_framework_basic::mocks::net::{gsb_market_prefixes, gsb_prefixes, IMockBro
 use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
-use golem_base_mock::GolemBaseMockServer;
-use golem_base_test_utils::golembase::{Config as GolemBaseConfig, GolemBaseContainer};
+use arkiv_mock::ArkivMockServer;
+use arkiv_test_utils::arkiv::{Config as ArkivConfig, ArkivContainer};
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -46,9 +46,9 @@ pub struct MarketsNetwork {
 
     /// GolemBase which will be dropped on the end of the test.
     #[allow(dead_code)]
-    golembase: Option<GolemBaseContainer>,
+    golembase: Option<ArkivContainer>,
     #[allow(dead_code)]
-    golembase_mock: Option<GolemBaseMockServer>,
+    golembase_mock: Option<ArkivMockServer>,
 
     test_dir: PathBuf,
     test_name: String,
@@ -201,10 +201,10 @@ impl MarketsNetwork {
         network
     }
 
-    async fn init_golembase(config: &Config) -> Result<GolemBaseContainer> {
+    async fn init_golembase(config: &Config) -> Result<ArkivContainer> {
         let ws_port = config.discovery.get_rpc_url().port().unwrap_or(8545);
-        let golembase_config = GolemBaseConfig::default().with_port(ws_port);
-        GolemBaseContainer::new(golembase_config)
+        let golembase_config = ArkivConfig::default().with_port(ws_port);
+        ArkivContainer::new(golembase_config)
             .await
             .map_err(|e| anyhow!("Failed to start GolemBase container: {}", e))
     }
@@ -214,7 +214,7 @@ impl MarketsNetwork {
         let rpc_url = self.config.discovery.get_rpc_url().clone();
         log::info!("Using GolemBase mock server URL: {}", rpc_url);
 
-        let server = GolemBaseMockServer::new()
+        let server = ArkivMockServer::new()
             .with_chain_id(1337)
             .with_url(rpc_url);
 

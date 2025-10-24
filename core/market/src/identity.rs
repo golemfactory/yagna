@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use golem_base_sdk::{keccak256, signers::TransactionSigner, Address, Signature};
+use arkiv_sdk::{keccak256, signers::TransactionSigner, Address, Signature};
 use ya_client::model::NodeId;
 use ya_core_model::{
     bus::GsbBindPoints,

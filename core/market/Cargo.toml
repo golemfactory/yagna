@@ -24,7 +24,7 @@ ya-service-bus = { workspace = true }
 ya-std-utils.workspace = true
 ya-utils-actix.workspace = true
 ya-utils-cli.workspace = true
-golem-base-sdk.workspace = true
+arkiv-sdk.workspace = true
 
 actix = { version = "0.13", default-features = false }
 actix-http = "3"

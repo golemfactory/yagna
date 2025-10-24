@@ -17,12 +17,12 @@ use ya_core_model::market::{
 };
 use ya_service_bus::typed as bus;
 
-use golem_base_sdk::client::GolemBaseClient;
-use golem_base_sdk::entity::Create;
-use golem_base_sdk::events::Event;
-use golem_base_sdk::rpc::SearchResult;
-use golem_base_sdk::signers::TransactionSigner;
-use golem_base_sdk::{Address, Hash};
+use arkiv_sdk::client::ArkivClient;
+use arkiv_sdk::entity::Create;
+use arkiv_sdk::events::Event;
+use arkiv_sdk::rpc::SearchResult;
+use arkiv_sdk::signers::TransactionSigner;
+use arkiv_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
@@ -31,7 +31,7 @@ use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
-const GOLEM_BASE_CALLER: &str = "GolemBase";
+const ARKIV_CALLER: &str = "Arkiv";
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;
@@ -58,7 +58,7 @@ pub(super) struct OfferHandlers {
 
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
-    golem_base: GolemBaseClient,
+    golem_base: ArkivClient,
     offer_handlers: OfferHandlers,
     config: DiscoveryConfig,
     identities: Mutex<HashSet<NodeId>>,
@@ -385,7 +385,7 @@ impl Discovery {
                     .offer_handlers
                     .offer_unsubscribe_handler
                     .call(
-                        GOLEM_BASE_CALLER.to_string(),
+                        ARKIV_CALLER.to_string(),
                         UnsubscribedOffersBcast {
                             offer_ids: vec![id],
                         },
@@ -610,10 +610,7 @@ impl Discovery {
             .inner
             .offer_handlers
             .filter_out_known_ids
-            .call(
-                GOLEM_BASE_CALLER.to_string(),
-                OffersBcast { offer_ids: ids },
-            )
+            .call(ARKIV_CALLER.to_string(), OffersBcast { offer_ids: ids })
             .await
             .unwrap_or_default();
 
@@ -629,7 +626,7 @@ impl Discovery {
                 .offer_handlers
                 .receive_remote_offers
                 .call(
-                    GOLEM_BASE_CALLER.to_string(),
+                    ARKIV_CALLER.to_string(),
                     OffersRetrieved {
                         offers: filtered_offers,
                     },
