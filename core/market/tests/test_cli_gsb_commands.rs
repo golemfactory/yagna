@@ -68,7 +68,7 @@ async fn test_gsb_market_golembase_get_offer() -> anyhow::Result<()> {
 
     // The error should contain information about the non-existing offer
     assert!(
-        error_string.contains("not found"),
+        error_string.contains("No entity found"),
         "Error message should contain appropriate string about non-existing offer, got: {}",
         error_string
     );

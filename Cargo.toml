@@ -268,9 +268,9 @@ erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", r
 #erc20_processor = { version = "0.4.7" }
 gftp = { version = "0.4.1", path = "core/gftp" }
 
-arkiv-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "d44832a3a47688c2a8eff5bc5164ec33bd4beab9" }
-arkiv-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "d44832a3a47688c2a8eff5bc5164ec33bd4beab9" }
-arkiv-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "d44832a3a47688c2a8eff5bc5164ec33bd4beab9" }
+arkiv-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
+arkiv-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
+arkiv-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
 #arkiv-sdk = { path = "../../GolemBase/rust-sdk" }
 #arkiv-mock = { path = "../../GolemBase/rust-sdk/test-utils/golem-base-mock" }
 #arkiv-test-utils = { path = "../../GolemBase/rust-sdk/test-utils" }
