@@ -33,7 +33,7 @@ use crate::identity::RealIdentity;
 use crate::net::MockNet;
 
 use arkiv_mock::ArkivMockServer;
-use arkiv_test_utils::arkiv::{Config as ArkivConfig, ArkivContainer};
+use arkiv_test_utils::arkiv::{ArkivContainer, Config as ArkivConfig};
 
 /// Instantiates market test nodes inside one process.
 ///
@@ -214,9 +214,7 @@ impl MarketsNetwork {
         let rpc_url = self.config.discovery.get_rpc_url().clone();
         log::info!("Using GolemBase mock server URL: {}", rpc_url);
 
-        let server = ArkivMockServer::new()
-            .with_chain_id(1337)
-            .with_url(rpc_url);
+        let server = ArkivMockServer::new().with_chain_id(1337).with_url(rpc_url);
 
         let mock_server = server.default_start().await?;
         self.golembase_mock = Some(mock_server);
