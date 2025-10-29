@@ -2,13 +2,13 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use ya_client::model::NodeId;
-use ya_persistence::executor::ConnType;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, PoolType};
-
+use crate::config::is_market_memory_on_disk;
 use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
 use crate::db::{AsMixedDao, DbError, DbResult};
+use ya_client::model::NodeId;
+use ya_persistence::executor::ConnType;
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, PoolType};
 
 #[allow(unused)]
 pub struct DemandDao<'c> {
@@ -16,8 +16,12 @@ pub struct DemandDao<'c> {
 }
 
 impl<'a> AsMixedDao<'a> for DemandDao<'a> {
-    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
-        Self { pool: ram_pool }
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        if is_market_memory_on_disk() {
+            Self { pool: disk_pool }
+        } else {
+            Self { pool: ram_pool }
+        }
     }
 }
 

@@ -67,7 +67,7 @@ struct Args {
     driver: Driver,
     #[structopt(long)]
     network: Option<String>,
-    #[structopt(long, default_value = "erc20-holesky-tglm")]
+    #[structopt(long, default_value = "erc20-hoodi-tglm")]
     platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,

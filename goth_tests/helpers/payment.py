@@ -16,8 +16,8 @@ global_deposits = []
 
 
 async def pay_all(
-        requestor: RequestorProbe,
-        agreements: List[Tuple[str, ProviderProbe]],
+    requestor: RequestorProbe,
+    agreements: List[Tuple[str, ProviderProbe]],
 ):
     """Pay for all Agreements."""
     for agreement_id, provider in agreements:
@@ -30,9 +30,9 @@ async def pay_all(
 
 
 async def accept_debit_notes(
-        allocation,
-        requestor: RequestorProbe,
-        stats: "DebitNoteStats",
+    allocation,
+    requestor: RequestorProbe,
+    stats: "DebitNoteStats",
 ):
     ts = datetime.now(timezone.utc)
     logger.info("Listening for debit note events")
@@ -86,7 +86,7 @@ async def accept_debit_notes(
 
 
 async def get_debit_note_events_raw(
-        requestor: RequestorProbe, ts: datetime
+    requestor: RequestorProbe, ts: datetime
 ) -> List[Dict]:
     client = requestor.api.payment.api_client
 
@@ -124,7 +124,9 @@ class AllocationCtx:
         if global_deposits:
             for global_deposit in global_deposits:
                 try:
-                    logger.info("Creating allocation for deposit {}".format(global_deposit))
+                    logger.info(
+                        "Creating allocation for deposit {}".format(global_deposit)
+                    )
 
                     allocation_arg = ya_payment.Allocation(
                         allocation_id="",
@@ -137,9 +139,15 @@ class AllocationCtx:
                         payment_platform=self.requestor.payment_config.platform_string,
                         deposit=global_deposit,
                     )
-                    allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
+                    allocation = await self.requestor.api.payment.create_allocation(
+                        allocation_arg
+                    )
                 except Exception as ex:
-                    logger.warning("Failed to create allocation for deposit {} - {}".format(global_deposit["id"], ex))
+                    logger.warning(
+                        "Failed to create allocation for deposit {} - {}".format(
+                            global_deposit["id"], ex
+                        )
+                    )
                     continue
         else:
             logger.info("Creating allocation without deposit")
@@ -156,7 +164,9 @@ class AllocationCtx:
                 deposit=None,
             )
 
-            allocation = await self.requestor.api.payment.create_allocation(allocation_arg)
+            allocation = await self.requestor.api.payment.create_allocation(
+                allocation_arg
+            )
 
         if not allocation:
             raise RuntimeError("Failed to create allocation at all")

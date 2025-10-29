@@ -53,7 +53,7 @@ use crate::{dns, Error, Result};
 const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
 const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
-const DEFAULT_MAX_PACKET_SIZE: usize = 1400;
+const DEFAULT_MAX_PACKET_SIZE: usize = 0xff00;
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;

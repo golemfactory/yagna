@@ -136,7 +136,7 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
 }
 
 pub async fn register_account(
-    driver: &(dyn PaymentDriver),
+    driver: &dyn PaymentDriver,
     address: &str,
     network: &str,
     token: &str,
